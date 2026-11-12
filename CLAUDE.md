@@ -8,7 +8,7 @@
 - 스택: **Unity 6.3 LTS (6000.3.x) + URP + Fish-Net**, 구현은 **Unity Editor 커맨드라인(Unity CLI, batchmode)**. 폴백: Godot 4 (M0 검증 실패 시).
 
 ## 읽는 순서
-1. 이 파일 → 2. `docs/KICKOFF.md`(첫 프롬프트) → 3. `docs/SETUP.md`(환경·스킬 설치) → 4. `docs/WORKFLOW.md`(루프) → 5. `docs/PROGRESS.md`(현재 위치) → 6. 필요 시 SPEC/ROADMAP/TECH/UNITY_CLI/ASSETS/AUDIO/LICENSE_POLICY/DECISIONS/PERF_BUDGET/GLOSSARY/RISKS_OPEN_QUESTIONS.
+1. 이 파일 → 2. `docs/KICKOFF.md`(첫 프롬프트) → 3. `docs/SETUP.md`(환경·스킬 설치) → 4. `docs/WORKFLOW.md`(루프) → 5. `docs/PROGRESS.md`(현재 위치) → 6. `docs/handoff/README.md`(역할·준환 성향·플레이 피드백·타이틀 큐, 그 안의 읽는 순서를 따른다) → 7. 필요 시 SPEC/ROADMAP/TECH/UNITY_CLI/ASSETS/AUDIO/LICENSE_POLICY/DECISIONS/PERF_BUDGET/GLOSSARY/RISKS_OPEN_QUESTIONS.
 
 ## 절대 규칙 (어기면 작업 중단)
 1. **라이선스 무결성**: 모든 에셋(모델·텍스처·사운드·폰트·코드 패키지)은 CC0/로열티프리 상업 사용 가능만. 실존 브랜드·총기·자동차 상표/이름/로고 금지. NC/Editorial/Reference-Only 금지. 에셋 추가 시 `docs/ASSET_LEDGER.md`에 **반드시** 기록(출처 URL·라이선스·수정 여부·날짜). 기록 없는 에셋은 커밋 금지.
