@@ -22,6 +22,7 @@
 
 ## 작업 방식 요약
 - 타이틀(기능 단위) 하나마다: **grilling → wayfinder 지도 → to-spec → to-tickets → implement(테스트 우선) → code-review → issue close → PROGRESS.md 갱신 → 다음 타이틀**. 상세는 `docs/WORKFLOW.md`.
+- 스킬 호출(ADR-022): grilling/tdd/code-review/prototype/research는 Skill 도구로 호출. wayfinder/to-spec/to-tickets/implement 등 user-only 스킬은 플러그인 캐시의 SKILL.md를 직접 읽어 지침 그대로 따른다.
 - 사용자에게 묻지 않는다. 모호하면 가장 합리적인 해석을 택해 **DECISIONS.md에 가정으로 기록**하고 진행. (예외: 되돌릴 수 없고 양쪽 다 합리적인 결정 → 준비 후 중단하고 요약 보고)
 - 무거운 작업(빌드, 테스트, 베이크)은 M1 13" 부담 때문에 **한 번에 하나씩 순차 실행**.
 - 모든 Unity 작업은 `tools/unity.sh`(또는 `docs/UNITY_CLI.md`의 명령)로 **헤드리스** 수행. 에디터 GUI 클릭이 필요한 작업은 코드(Editor 스크립트)로 대체.

@@ -4,14 +4,14 @@
 - 마일스톤: M0 (진행 중: SETUP 완료, M0-1~5 완료. 남음: M0-6 Fish-Net 스모크, M0-7, M0-8)
 - 진행 중 타이틀: 없음
 - 열린 지도 이슈: 없음(#3 종료) (blocked: #2 Fish-Net 라이선스 검토. #1은 6000.3.28f1 전환으로 해결·종료)
-- 다음 세션: M0-6 Fish-Net 호스트+클라 스모크부터(wayfinder 지도 새로 생성). 이번 세션엔 wayfinder/to-spec/to-tickets/implement 스킬이 Skill 목록에 없어 gh로 직접 지도·티켓 운영.
+- 다음 세션: M0-6 Fish-Net 호스트+클라 스모크부터(wayfinder 지도 새로 생성). 스킬 공백 해소(ADR-022): wayfinder/to-spec/to-tickets/implement는 user-only라 Skill 도구 호출 불가 → SKILL.md를 직접 읽어 절차 수행. grilling/tdd/code-review/prototype/research는 Skill 도구로 호출.
 
 ## 환경 (SETUP 완료 후 채움)
 | 항목 | 값 |
 |---|---|
 | Unity 버전 | 6000.3.28f1 (ADR-021) |
 | 설치 모듈 | mac-il2cpp, windows-mono (windows-il2cpp는 사람이 나중에 추가) |
-| 설치된 스킬 | mattpocock-skills 1.3.1 (플러그인, user scope): grill-with-docs, grill-me, to-spec, wayfinder, to-tickets, implement, tdd, code-review, setup-matt-pocock-skills 확인 |
+| 설치된 스킬 | mattpocock-skills 1.3.1 (플러그인, user scope): grilling, wayfinder, to-spec, to-tickets, implement, tdd, code-review 등 (호출 규칙은 ADR-022) |
 | 이슈 트래커 | GitHub Issues (junans0boi/sublevel, private), 라벨 생성 완료 |
 | mac 빌드 | 성공 (IL2CPP, 앱 193MB, 6분 9초) |
 | win 빌드 | 성공 (Mono, 94MB, 32s) |

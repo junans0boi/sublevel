@@ -1,4 +1,4 @@
-# GLOSSARY — 용어집 (스킬 grill-with-docs가 참조)
+# GLOSSARY — 용어집 (스킬 grilling/wayfinder 등이 참조)
 
 | 용어 | 정의 |
 |---|---|

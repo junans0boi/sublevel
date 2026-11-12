@@ -8,14 +8,17 @@
 
 | 단계 | 스킬 | 에이전트가 하는 일 | 산출물 |
 |---|---|---|---|
-| ① grilling | `grill-with-docs` | **스스로에게** 질문해 모호함 제거. 답은 SPEC/DECISIONS/GLOSSARY에서 찾고, 없으면 가장 합리적인 가정을 선택 | DECISIONS.md에 가정/결정 추가 (ADR) |
-| ② wayfinder 지도 | `wayfinder` | 타이틀 범위의 지도 이슈 생성(`wayfinder:map` 라벨), 리서치/프로토타입/그릴링/작업 티켓 후보 도출 | 지도 이슈 #N |
-| ③ to-spec | `to-spec` (`/to-spec #N`) | 지도에서 구현 스펙 문서화 | 스펙 이슈 또는 `docs/` 스펙 |
-| ④ to-tickets | `to-tickets` | 스펙을 **수직 슬라이스** 티켓으로 분해(라벨 `wayfinder:*`), 의존 순서 부여 | 티켓 이슈들 |
-| ⑤ implement | `implement` (내부 `tdd`, 끝에 `code-review`) | 티켓 1개씩: 테스트 먼저 → 구현 → `tools/unity.sh test` → 성능 확인 → 커밋 | 커밋/PR |
+| ① grilling | `grilling` (Skill 도구 호출; 답은 docs/ 에서 찾음) | **스스로에게** 질문해 모호함 제거. 답은 SPEC/DECISIONS/GLOSSARY에서 찾고, 없으면 가장 합리적인 가정을 선택 | DECISIONS.md에 가정/결정 추가 (ADR) |
+| ② wayfinder 지도 | `wayfinder` (user-only → SKILL.md 직접 읽기) | 타이틀 범위의 지도 이슈 생성(`wayfinder:map` 라벨), 리서치/프로토타입/그릴링/작업 티켓 후보 도출 | 지도 이슈 #N |
+| ③ to-spec | `to-spec` (user-only → SKILL.md 직접 읽기) | 지도에서 구현 스펙 문서화 | 스펙 이슈 또는 `docs/` 스펙 |
+| ④ to-tickets | `to-tickets` (user-only → SKILL.md 직접 읽기) | 스펙을 **수직 슬라이스** 티켓으로 분해(라벨 `wayfinder:*`), 의존 순서 부여 | 티켓 이슈들 |
+| ⑤ implement | `implement`(user-only → SKILL.md 직접 읽기) + `tdd`, `code-review`(Skill 도구 호출) | 티켓 1개씩: 테스트 먼저 → 구현 → `tools/unity.sh test` → 성능 확인 → 커밋 | 커밋/PR |
 | ⑥ close | — | 모든 티켓 DoD 충족 → 이슈 close → `PROGRESS.md` 갱신 → 한국어 3줄 요약 | 갱신된 문서 |
 
-스킬 이름이 다르면 SETUP.md 2단계의 매핑 기록을 따른다.
+### 스킬 호출 규칙 (ADR-022)
+- **Skill 도구로 호출 가능**: `grilling`, `tdd`, `code-review`, `prototype`, `research`.
+- **user-only(Skill 도구 호출 불가)**: `wayfinder`, `to-spec`, `to-tickets`, `implement`, `implement-spec`, `grill-with-docs`, `setup-matt-pocock-skills`. `~/.claude/plugins/cache/claude-plugins-official/mattpocock-skills/<버전>/skills/engineering/<이름>/SKILL.md`를 직접 Read하여 그 지침 그대로 수행한다. 스킬 내용을 임의로 바꾸지 않는다.
+- grilling 단계는 `grill-with-docs` 대신 `grilling`을 쓴다.
 
 ## Definition of Done (티켓 단위)
 - [ ] 테스트 작성·통과 (`tools/unity.sh test editmode`, 필요 시 playmode)

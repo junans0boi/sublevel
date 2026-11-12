@@ -5,7 +5,7 @@
 ```
 이 저장소의 CLAUDE.md를 읽고, 거기 적힌 순서대로 docs/ 문서를 모두 읽어라.
 그다음 docs/SETUP.md의 "초기 세팅"을 위에서 아래로 수행한다.
-특히 SETUP.md 2단계에서 grilling, to-spec, wayfinder, to-tickets, implement 스킬(mattpocock/skills)을 반드시 설치하고,
+특히 SETUP.md 2단계에서 grilling, wayfinder, to-spec, to-tickets, implement 스킬(mattpocock/skills)을 반드시 설치하고,
 setup-matt-pocock-skills 로 이슈 트래커와 docs 위치를 설정해라.
 세팅이 끝나면 docs/ROADMAP.md의 M0(기술 검증)부터 docs/WORKFLOW.md의 루프대로 자율 진행한다.
 나에게 질문하지 않는다. 모호한 점은 가정을 DECISIONS.md에 기록하고 진행한다.

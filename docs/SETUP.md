@@ -18,7 +18,7 @@ git add CLAUDE.md docs tools .gitignore .gitattributes && git commit -m "chore: 
 (커밋 메시지 끝에 시스템이 지정한 Co-Authored-By/Claude-Session 줄을 붙인다.)
 
 ## 2. 스킬 설치 (필수) — Matt Pocock `mattpocock/skills` (MIT)
-이 프로젝트의 루프는 다음 스킬에 의존한다: **grilling(grill-me / grill-with-docs), to-spec, wayfinder, to-tickets, implement(+tdd, code-review), setup-matt-pocock-skills**.
+이 프로젝트의 루프는 다음 스킬에 의존한다: **grilling, wayfinder, to-spec, to-tickets, implement(+tdd, code-review)** (+ 초기 설정용 setup-matt-pocock-skills). 일부는 user-only라 Skill 도구로 호출되지 않는다 → SKILL.md 직접 읽기 (ADR-022, WORKFLOW.md '스킬 호출 규칙').
 
 방법 A(플러그인, 권장):
 ```bash
@@ -27,9 +27,9 @@ claude plugins install mattpocock-skills
 ```
 방법 B(npx) — A가 실패할 때만 (두 방법을 동시에 쓰지 않는다):
 ```bash
-npx skills@latest add mattpocock/skills --skill "grill-with-docs" --skill "grill-me" --skill "to-spec" --skill "wayfinder" --skill "to-tickets" --skill "implement" --skill "tdd" --skill "code-review" --skill "setup-matt-pocock-skills" -a claude-code -y
+npx skills@latest add mattpocock/skills --skill "grilling" --skill "to-spec" --skill "wayfinder" --skill "to-tickets" --skill "implement" --skill "tdd" --skill "code-review" --skill "setup-matt-pocock-skills" -a claude-code -y
 ```
-설치 확인: 세션에서 `/skills` 또는 `ListSkills`로 위 스킬들이 보이는지 확인. 하나라도 없으면 `npx skills@latest add mattpocock/skills -a claude-code -y`(전체)로 재시도. 이름이 다르면(버전 변경) 실제 목록에서 가장 가까운 스킬을 찾아 `docs/DECISIONS.md`에 매핑을 기록.
+설치 확인: 세션에서 `/skills`로 보이는지, 또는 플러그인 캐시의 SKILL.md 존재를 확인(user-only 스킬은 목록에 안 보일 수 있음). 하나라도 없으면 `npx skills@latest add mattpocock/skills -a claude-code -y`(전체)로 재시도. 이름이 다르면(버전 변경) 실제 목록에서 가장 가까운 스킬을 찾아 `docs/DECISIONS.md`에 매핑을 기록.
 
 ### 2-1. 스킬 구성: setup-matt-pocock-skills 실행
 - 이슈 트래커: **GitHub Issues** (`gh` 사용). 불가하면 `docs/issues/` 로컬 마크다운 트래커로 대체하고 ADR 기록.
