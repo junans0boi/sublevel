@@ -1,14 +1,14 @@
 # PROGRESS — 진행 상황 (타이틀 종료 때마다 갱신)
 
 ## 현재 위치
-- 마일스톤: M0·M1 완료. **M1.5 에셋 도입 진행 중(ADR-035/036/037) — 조건부 승인 보정 5건을 반영해 룩 확인 스크린샷을 다시 만들었고, 사용자 재승인 대기 중.** M2는 지시 전까지 시작하지 않음.
-- 진행 중 타이틀: M1.5 에셋 도입(스펙 #26). 승인 대기: #27 룩 확인 장면(`tools/unity.sh run-gfx LookDevBuilder.Build` → `Logs/lookdev/lookdev_{wide,character,weapon}.png`). 승인 후 할 일: 무기 3종 추가, 캐릭터·애니메이션을 플레이어/더미 프리팹에 연결(무기 파지 포함), 테스트 박스 머티리얼·하늘·포스트 적용, 효과음, mac 빌드 성능 재측정.
-- M1.5 작업물은 톤 승인 전이라 **아직 커밋하지 않음**. 현재 상태: 대장 검증 0건, EditMode 30/30, PlayMode 15/15. 포스트프로세싱 켠 뒤 실측은 PERF_BUDGET.md "M1.5 포스트프로세싱 실측". 원본 다운로드는 `AssetStaging/`(gitignore).
-- 주의: Unity 실행 후 `ProjectSettings/{GraphicsSettings,QualitySettings}.asset`이 저절로 바뀜 → 커밋하지 않고 되돌린다.
-- blocked/검토(사람): #2 Fish-Net 라이선스 검토, 무기 이름 상표 검토(RISKS), windows-il2cpp 모듈 추가.
+- 마일스톤: **M0, M1, M1.5 완료(게이트 통과)**. 사용자 지시에 따라 M1.5에서 멈춤. 다음은 M2(구역 D, 봇 AI, 엘리베이터 투입) — 시작하려면 지시 필요.
+- 진행 중 타이틀: 없음. 열린 이슈: 없음(#2 Fish-Net 라이선스 검토 제외).
+- M1.5 결과물 보기: `Logs/lookdev/lookdev_{wide,character,weapon}.png`(승인된 룩), `m15_weapons.png`(무기 4종 파지), `m15_poses.png`(애니메이션 자세), `Logs/perf/player.png`(mac 빌드 화면). 다시 만들기: `tools/unity.sh run-gfx LookDevBuilder.Build`, `run-gfx CharacterKit.RenderPreview`, `run-gfx TestBoxBuilder.Build`.
+- 주의: Unity 실행·빌드 후 `ProjectSettings/*.asset`이 저절로 바뀜 → 커밋하지 않고 되돌린다. 원본 다운로드는 `AssetStaging/`(gitignore, 텍스처 마스크 재생성 때만 필요).
+- blocked/검토(사람): #2 Fish-Net 라이선스 검토, 무기 이름 상표 검토(RISKS), 무기 형상·총성 라이선스 표기 확인(RISKS "M1.5 중 누적"), windows-il2cpp 모듈 추가.
 - 스킬 호출 규칙: ADR-022. 안개 없는 작은 타이틀은 지도 생략(ADR-025).
 - 직접 해보기: `Build/mac/Sublevel.app` 실행(또는 `tools/unity.sh build mac` 후). 조작: WASD 이동, Shift 달리기, Space 점프, 마우스 조준·좌클릭 사격, F 줍기, R 재장전, 1/2 무기 전환, H 회복, V 시점 전환, Q 어깨 전환, 사망 후 Enter 재시작.
-- M2 시작 전 알아둘 것: (1) 사람이 키보드·마우스로 직접 플레이한 확인은 아직 없음(자동 테스트는 입력 주입 방식) (2) 플레이어 빌드에서 66ms 끊김 1회 관측, 원인 미조사 (3) 샷건은 산탄마다 이펙트 RPC를 보냄(9회/발) — 봇이 늘면 묶어 보내기 (4) 소지품 SyncVar가 슬롯·탄종별로 흩어져 있어 탄종/슬롯 추가 시 여러 파일 수정 필요 (5) 사운드·실제 아트 없음(ADR-033).
+- M2 시작 전 알아둘 것: (1) 사람이 키보드·마우스로 직접 플레이한 확인은 아직 없음(자동 테스트는 입력 주입 방식) (2) 플레이어 빌드에서 66ms 끊김 1회 관측, 원인 미조사 (3) 샷건은 산탄마다 이펙트 RPC를 보냄(9회/발) — 봇이 늘면 묶어 보내기 (4) 소지품 SyncVar가 슬롯·탄종별로 흩어져 있어 탄종/슬롯 추가 시 여러 파일 수정 필요 (5) 무기·효과음 매핑이 코드에 있음, 사운드 풀링·믹서 없음(ADR-038) (6) 무기 파지는 조준 자세 기준 오프셋뿐이라 달리기·피격 자세에서는 손과 어긋남, 빈손도 조준 자세 (7) 효과음은 귀로 확인하지 않음(재생 호출만 테스트) (8) SSAO가 프레임 비용의 절반 — 구역 D에서 빠듯하면 먼저 끈다.
 
 ## 환경 (SETUP 완료 후 채움)
 | 항목 | 값 |
@@ -17,9 +17,9 @@
 | 설치 모듈 | mac-il2cpp, windows-mono (windows-il2cpp는 사람이 나중에 추가) |
 | 설치된 스킬 | mattpocock-skills 1.3.1 (플러그인, user scope): grilling, wayfinder, to-spec, to-tickets, implement, tdd, code-review 등 (호출 규칙은 ADR-022) |
 | 이슈 트래커 | GitHub Issues (junans0boi/sublevel, private), 라벨 생성 완료 |
-| mac 빌드 | 성공 (IL2CPP, 앱 193MB, 6분 9초) |
-| win 빌드 | 성공 (Mono, 94MB, 32s) |
-| EditMode 테스트 | 1/1 통과 (6000.3.28f1, 헤드리스) |
+| mac 빌드 | 성공 (IL2CPP, 앱 221MB) |
+| win 빌드 | 성공 (Mono, 123MB) |
+| 테스트 | EditMode 35/35, PlayMode 17/17 (M1.5 종료 시점) |
 
 ## 완료 타이틀 로그
 | 날짜 | 마일스톤 | 타이틀 | 결과 | 요약(3줄 이내) |
@@ -30,6 +30,7 @@
 | 2026-11-12 | M0 | M0-7 에셋 임포트 파이프라인 + 대장 검증 (#13, #14) | 완료 | Art/Audio 임포트 규칙(최대 2048·압축·읽기 비활성·노멀/마스크 이름 규칙), ASSET_LEDGER 미기록·LICENSE.txt 누락 시 빌드/CLI 실패. EditMode 12/12.<br>KTX2는 Unity 네이티브 압축으로 해석(ADR-026), 에셋 단위 규칙(ADR-027).<br>별도 code-review는 M1 리뷰 때 함께 수행 예정. |
 | 2026-11-12 | M0 | M0-8 PERF_BUDGET 측정·확정 (#15) | 완료 | 부하 씬 7단계 실측으로 드로우콜 ≤2,500·삼각형 ≤1.5M·렌더 ≤10ms 확정(ADR-028). PlayMode 7/7, mac·win 빌드 성공.<br>한계: 에디터 오프스크린 측정 → M1 게이트에서 플레이어 빌드로 재확인.<br>메모리·로딩·빌드 크기는 잠정치. |
 | 2026-11-12 | M1 | 코어 루프 (#16~#25) | 완료 | 테스트 박스에서 호스트로 이동·TPP/FPP 카메라·루팅·무기 2슬롯·사격·재장전·회복·더미 교전·사망·재시작이 동작. 체력·사격·탄약·루팅은 서버 결정(ADR-029), 수치는 JSON(ADR-032).<br>EditMode 28/28, PlayMode 14/14, mac(IL2CPP)·win(Mono) 빌드 성공. mac 플레이어 빌드 실측 평균 0.86ms·p99 3.73ms(1080p), 빌드 안에서 플레이어·더미·루팅 스폰 확인.<br>code-review 2축 수행 후 반영(사격 시작점 서버 고정, 재시작 서버 요청, 시드 난수, 교체 무기 드롭, 테스트 보강). 세부 룰 가정은 ADR-034. |
+| 2026-11-12 | M1.5 | 에셋 도입 (#26~#32) | 완료 | 캐릭터(Swat)+애니메이션 8상태, 무기 4종 모델(손·바닥 루팅), 테스트 박스 PBR·HDRI·주광/보조광·포스트프로세싱, 총성·재장전·발소리·피격음 적용. 전부 CC0 직접 다운로드, 대장 11건·검증 0건.<br>EditMode 35/35, PlayMode 17/17, mac·win 빌드 성공. mac 빌드 평균 2.0ms·p99 10~13.5ms(무제한), 60Hz에서 누락 프레임 0. 에디터 렌더 p99 5.82ms.<br>code-review 2축 반영(이동 중 피격 애니메이션, 죽은 코드 제거, ADR-코드 수치 일치, 라이선스 사본 보관). 가정은 ADR-036~038. |
 
 ## blocked 목록 (사람 필요)
 | 날짜 | 티켓 | 사유 | 사람이 할 일 |

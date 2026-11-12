@@ -85,12 +85,12 @@ public static class RenderSetup
         Prop(so, "Downsample").boolValue = true;
         Prop(so, "AfterOpaque").boolValue = true;
         Prop(so, "Source").intValue = 0;        // Depth
-        Prop(so, "NormalSamples").intValue = 0; // Low
+        Prop(so, "NormalSamples").intValue = 2; // High: fewer smudges on small props when normals come from depth
         Prop(so, "Samples").intValue = 1;       // Medium (8 samples); Low leaves visible grain
         Prop(so, "BlurQuality").intValue = 0;   // High (bilateral)
-        Prop(so, "Intensity").floatValue = 0.5f;
+        Prop(so, "Intensity").floatValue = 0.4f;
         Prop(so, "DirectLightingStrength").floatValue = 0.25f;
-        Prop(so, "Radius").floatValue = 0.2f;
+        Prop(so, "Radius").floatValue = 0.12f;
         Prop(so, "Falloff").floatValue = 50f;
         so.ApplyModifiedPropertiesWithoutUndo();
     }

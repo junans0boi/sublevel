@@ -3,21 +3,19 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // Client-side look of a combatant: shot tracers (pooled) and falling over on death.
+    // Client-side shot tracers (pooled) of a combatant. Body animation lives in CombatantAnimation.
     [RequireComponent(typeof(Combatant))]
     public class CombatantView : MonoBehaviour
     {
         const int PoolSize = 12;
         const float TracerLife = 0.06f;
 
-        [SerializeField] Transform _visual;
         [SerializeField] Material _tracerMaterial;
 
         Combatant _combatant;
         LineRenderer[] _tracers;
         float[] _tracerOff;
         int _next;
-        bool _shownDead;
 
         void Awake()
         {
@@ -56,14 +54,6 @@ namespace Game.Gameplay
         {
             for (int i = 0; i < PoolSize; i++)
                 if (_tracers[i].enabled && Time.time >= _tracerOff[i]) _tracers[i].enabled = false;
-
-            bool dead = _combatant.Dead.Value;
-            if (dead != _shownDead && _visual != null)
-            {
-                _shownDead = dead;
-                _visual.localRotation = dead ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
-                _visual.localPosition = dead ? new Vector3(0f, 0.35f, 0f) : Vector3.zero;
-            }
         }
     }
 }

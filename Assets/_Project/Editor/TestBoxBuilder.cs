@@ -11,34 +11,35 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-// Generates the M1 test box: materials, prefabs and scene, all from primitives (ADR-033).
+// Generates the test box: prefabs and scene. Layout and gameplay objects date from M1; since M1.5 the
+// characters, weapons, surfaces, sky and sounds use the CC0 assets (ADR-035..037, replacing ADR-033's primitives).
 // Run headless: tools/unity.sh run TestBoxBuilder.Build
 public static class TestBoxBuilder
 {
     public const string ScenePath = "Assets/_Project/Scenes/TestBox.unity";
     const string PrefabDir = "Assets/_Project/Prefabs/M1";
     const string MaterialDir = PrefabDir + "/Materials";
+    const string WeaponAudioDir = "Assets/_Project/Audio/Weapons/";
+    const string FoleyDir = "Assets/_Project/Audio/Foley/KenneyImpactSounds/";
     const float Half = 30f;
 
     public static void Build()
     {
         Directory.CreateDirectory(MaterialDir);
-        var floorMat = Lit("Floor", new Color(0.32f, 0.33f, 0.35f));
-        var wallMat = Lit("Wall", new Color(0.45f, 0.43f, 0.40f));
-        var coverMat = Lit("Cover", new Color(0.55f, 0.42f, 0.25f));
-        var playerMat = Lit("Player", new Color(0.20f, 0.40f, 0.75f));
-        var dummyMat = Lit("Dummy", new Color(0.75f, 0.22f, 0.20f));
+        SceneLook.PrepareTextures();
+        var postProfile = RenderSetup.Apply();
+        CharacterKit.Prepare();
         var lootMats = new[] { Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f)), Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f)), Lit("LootMedkit", new Color(0.92f, 0.92f, 0.92f)) };
         var tracerMat = Unlit("Tracer", new Color(1f, 0.9f, 0.5f));
 
-        var player = BuildPlayerPrefab(playerMat, tracerMat);
-        var dummy = BuildDummyPrefab(dummyMat, tracerMat);
+        var player = BuildPlayerPrefab(tracerMat);
+        var dummy = BuildDummyPrefab(tracerMat);
         var loot = BuildLootPrefab(lootMats);
         AssetDatabase.SaveAssets();
         RebuildSpawnablePrefabs();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        BuildLevel(floorMat, wallMat, coverMat);
+        BuildLevel(postProfile);
         BuildMatch(player, dummy, loot);
         EditorSceneManager.SaveScene(scene, ScenePath);
         EditorBuildSettings.scenes = new[]
@@ -106,15 +107,44 @@ public static class TestBoxBuilder
         });
     }
 
-    // Body + visor under a "Visual" node so the whole figure can tip over on death.
-    static Transform Figure(Transform root, Material mat, out Renderer[] renderers)
+    // Model, animation, held weapons and sounds shared by every combatant prefab.
+    static Renderer[] AddCharacter(GameObject go)
     {
-        var visual = new GameObject("Visual").transform;
-        visual.SetParent(root, false);
-        var body = Shape(PrimitiveType.Capsule, "Body", visual, new Vector3(0, 0.9f, 0), new Vector3(0.7f, 0.9f, 0.7f), mat, false);
-        var visor = Shape(PrimitiveType.Cube, "Visor", visual, new Vector3(0, 1.55f, 0.3f), new Vector3(0.4f, 0.15f, 0.2f), mat, false);
-        renderers = new[] { body.GetComponent<Renderer>(), visor.GetComponent<Renderer>() };
-        return visual;
+        var visual = CharacterKit.AddTo(go.transform);
+        go.AddComponent<CombatantMotion>();
+        Set(go.AddComponent<CombatantAnimation>(), "_animator", p => p.objectReferenceValue = visual.Animator);
+        SetArray(go.AddComponent<WeaponVisual>(), "_modelsByWeaponId", visual.WeaponModels);
+
+        var audio = go.AddComponent<CombatantAudio>();
+        Set(audio, "_weaponSource", p => p.objectReferenceValue = Source(go.transform, "WeaponAudio", 1.3f, 3f, 70f));
+        Set(audio, "_bodySource", p => p.objectReferenceValue = Source(go.transform, "BodyAudio", 0.3f, 1.5f, 25f));
+        // Indexed by weapon id: none, VK-9, Ordo, Warden, Breacher.
+        SetArray(audio, "_shotByWeapon", Clips(WeaponAudioDir + "FreeFirearmLibrary/", null, "shot_pistol.wav", "shot_smg.wav", "shot_rifle.wav", "shot_shotgun.wav"));
+        SetArray(audio, "_reloadByWeapon", Clips(WeaponAudioDir + "OgaGunReload/", null, "reload_pistol.wav", "reload_rifle.wav", "reload_rifle.wav", "reload_shotgun.wav"));
+        SetArray(audio, "_footsteps", Clips(FoleyDir, "footstep_concrete_000.ogg", "footstep_concrete_001.ogg", "footstep_concrete_002.ogg", "footstep_concrete_003.ogg", "footstep_concrete_004.ogg"));
+        SetArray(audio, "_hits", Clips(FoleyDir, "impactPunch_medium_000.ogg", "impactPunch_medium_001.ogg", "impactPunch_medium_002.ogg"));
+        return visual.Renderers;
+    }
+
+    static AudioSource Source(Transform parent, string name, float height, float minDistance, float maxDistance)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = new Vector3(0, height, 0);
+        var source = go.AddComponent<AudioSource>();
+        source.playOnAwake = false;
+        source.spatialBlend = 1f;
+        source.minDistance = minDistance;
+        source.maxDistance = maxDistance;
+        return source;
+    }
+
+    static Object[] Clips(string dir, params string[] files)
+    {
+        var clips = new Object[files.Length];
+        for (int i = 0; i < files.Length; i++)
+            if (files[i] != null) clips[i] = SceneLook.Load<AudioClip>(dir + files[i]);
+        return clips;
     }
 
     static NetworkObject SavePrefab(GameObject go, string name)
@@ -124,7 +154,7 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    static NetworkObject BuildPlayerPrefab(Material mat, Material tracer)
+    static NetworkObject BuildPlayerPrefab(Material tracer)
     {
         var go = new GameObject("Player");
         var cc = go.AddComponent<CharacterController>();
@@ -134,15 +164,14 @@ public static class TestBoxBuilder
         var combatant = go.AddComponent<Combatant>();
         var controller = go.AddComponent<PlayerController>();
         var view = go.AddComponent<CombatantView>();
-        var visual = Figure(go.transform, mat, out var renderers);
+        var renderers = AddCharacter(go);
         Set(combatant, "_isPlayer", p => p.boolValue = true);
         SetArray(controller, "_bodyRenderers", renderers);
-        Set(view, "_visual", p => p.objectReferenceValue = visual);
         Set(view, "_tracerMaterial", p => p.objectReferenceValue = tracer);
         return SavePrefab(go, "Player");
     }
 
-    static NetworkObject BuildDummyPrefab(Material mat, Material tracer)
+    static NetworkObject BuildDummyPrefab(Material tracer)
     {
         var go = new GameObject("TrainingDummy");
         var capsule = go.AddComponent<CapsuleCollider>();
@@ -151,8 +180,7 @@ public static class TestBoxBuilder
         go.AddComponent<Combatant>();
         go.AddComponent<TrainingDummy>();
         var view = go.AddComponent<CombatantView>();
-        var visual = Figure(go.transform, mat, out _);
-        Set(view, "_visual", p => p.objectReferenceValue = visual);
+        AddCharacter(go);
         Set(view, "_tracerMaterial", p => p.objectReferenceValue = tracer);
         return SavePrefab(go, "TrainingDummy");
     }
@@ -169,24 +197,36 @@ public static class TestBoxBuilder
         var cube = Shape(PrimitiveType.Cube, "Cube", go.transform, Vector3.zero, Vector3.one * 0.4f, mats[0], false);
         Set(view, "_renderer", p => p.objectReferenceValue = cube.GetComponent<Renderer>());
         SetArray(view, "_materialsByKind", mats);
+        // Weapon pickups show the weapon itself, lying across the pickup point.
+        var models = new GameObject[CharacterKit.WeaponSlots];
+        foreach (var weapon in CharacterKit.Weapons)
+        {
+            var model = CharacterKit.InstantiateWeapon(weapon);
+            model.transform.position -= SceneLook.WorldBounds(model).center;
+            model.transform.SetParent(go.transform, false);
+            model.SetActive(false);
+            models[weapon.Id] = model;
+        }
+        SetArray(view, "_weaponModelsById", models);
         return SavePrefab(go, "LootItem");
     }
 
-    static void Box(Transform parent, string name, Vector3 center, Vector3 size, Material mat) =>
-        Shape(PrimitiveType.Cube, name, parent, center, size, mat, true).isStatic = true;
-
-    static void BuildLevel(Material floorMat, Material wallMat, Material coverMat)
+    static void BuildLevel(UnityEngine.Rendering.VolumeProfile postProfile)
     {
+        SceneLook.SetupSky();
+        SceneLook.AddLights();
+        SceneLook.AddPostVolume(postProfile);
+
         var level = new GameObject("Level").transform;
-        Box(level, "Floor", new Vector3(0, -0.5f, 0), new Vector3(Half * 2, 1, Half * 2), floorMat);
-        Box(level, "WallN", new Vector3(0, 2, Half), new Vector3(Half * 2, 4, 1), wallMat);
-        Box(level, "WallS", new Vector3(0, 2, -Half), new Vector3(Half * 2, 4, 1), wallMat);
-        Box(level, "WallE", new Vector3(Half, 2, 0), new Vector3(1, 4, Half * 2), wallMat);
-        Box(level, "WallW", new Vector3(-Half, 2, 0), new Vector3(1, 4, Half * 2), wallMat);
+        SceneLook.WorldBox("Floor", level, new Vector3(0, -0.5f, 0), new Vector3(Half * 2, 1, Half * 2), SceneLook.Floor, 2.5f);
+        SceneLook.WorldBox("WallN", level, new Vector3(0, 2, Half), new Vector3(Half * 2, 4, 1), SceneLook.Wall, 3f);
+        SceneLook.WorldBox("WallS", level, new Vector3(0, 2, -Half), new Vector3(Half * 2, 4, 1), SceneLook.Wall, 3f);
+        SceneLook.WorldBox("WallE", level, new Vector3(Half, 2, 0), new Vector3(1, 4, Half * 2), SceneLook.Wall, 3f);
+        SceneLook.WorldBox("WallW", level, new Vector3(-Half, 2, 0), new Vector3(1, 4, Half * 2), SceneLook.Wall, 3f);
         // Sight blockers: the spawn area is hidden from every dummy, and the dummies from each other's approach.
-        Box(level, "BlockSpawn", new Vector3(0, 1.5f, -14), new Vector3(24, 3, 1), wallMat);
-        Box(level, "BlockMiddle", new Vector3(0, 1.5f, 1), new Vector3(1, 3, 22), wallMat);
-        Box(level, "BlockNorth", new Vector3(0, 1.5f, 12), new Vector3(20, 3, 1), wallMat);
+        SceneLook.WorldBox("BlockSpawn", level, new Vector3(0, 1.5f, -14), new Vector3(24, 3, 1), SceneLook.Panel, 2.5f);
+        SceneLook.WorldBox("BlockMiddle", level, new Vector3(0, 1.5f, 1), new Vector3(1, 3, 22), SceneLook.Panel, 2.5f);
+        SceneLook.WorldBox("BlockNorth", level, new Vector3(0, 1.5f, 12), new Vector3(20, 3, 1), SceneLook.Panel, 2.5f);
 
         var covers = new[]
         {
@@ -195,16 +235,15 @@ public static class TestBoxBuilder
             new Vector3(-16, 0, 18), new Vector3(16, 0, 18), new Vector3(-5, 0, 24), new Vector3(5, 0, 24),
         };
         for (int i = 0; i < covers.Length; i++)
-            Box(level, "Cover" + i, covers[i] + Vector3.up * 0.6f, new Vector3(2f, 1.2f, 1f), coverMat);
-
-        var sun = new GameObject("Sun").AddComponent<Light>();
-        sun.type = LightType.Directional;
-        sun.shadows = LightShadows.Soft;
-        sun.transform.rotation = Quaternion.Euler(50, -30, 0);
+            // Every third cover is the muted red accent; the rest are plate metal.
+            SceneLook.WorldBox("Cover" + i, level, covers[i] + Vector3.up * 0.6f, new Vector3(2f, 1.2f, 1f),
+                i % 3 == 0 ? SceneLook.Accent : SceneLook.Plates, i % 3 == 0 ? 1.2f : 0.25f);
 
         var cam = new GameObject("Main Camera");
         cam.tag = "MainCamera";
-        cam.AddComponent<Camera>().nearClipPlane = 0.05f;
+        var camera = cam.AddComponent<Camera>();
+        camera.nearClipPlane = 0.05f;
+        SceneLook.EnablePost(camera);
         cam.AddComponent<AudioListener>();
         cam.transform.position = new Vector3(0, 12, -34);
         cam.transform.LookAt(Vector3.zero);

@@ -38,3 +38,9 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 ## M1 중 누적 (2026-11-12)
 - [ ] **무기 이름 상표 검토(사람)**: 현재 임시 이름 VK-9, Ordo, Warden, Breacher. 에이전트는 상표 충돌 여부를 판단하지 않는다. (초안의 "Rattler"는 실존 총기 제품명과 겹칠 수 있다는 리뷰 지적으로 "Ordo"로 교체.) 릴리스 전 전문가 확인.
 - 이동은 M6까지 소유자 권위(ADR-029)라 이동 치트 방지 없음. 멀티 공개 전 M6 필수.
+
+## M1.5 중 누적 (2026-11-12) — 릴리스 전 사람이 확인
+- 무기 모델 4종(Quaternius Ultimate Guns: Pistol_1, SubmachineGun_1, Bullpup_1, Shotgun_1)은 각인·상표·텍스처가 없는 로우폴리지만 **실존 총기와 형상이 닮았는지는 검토하지 않았다**(디자인권 판단은 사람 몫).
+- 총성(S-0001, The Free Firearm Sound Library)은 OpenGameArt 페이지에 CC0로 표기돼 있으나 **압축 파일 안에 라이선스 문서가 없다**. 페이지 사본은 `docs/licenses/S-0001/`. 원 배포처 표기 확인 필요. 원본은 실총 녹음이며 프로젝트 파일명에는 실총 명칭을 넣지 않았다.
+- OpenGameArt "Gunshot Sounds"(Tabasco)는 페이지는 CC0, 압축 파일 안 문서는 CC-BY 3.0으로 **표기가 엇갈려 사용하지 않았다**.
+- 캐릭터가 Universal Base Characters가 아닌 Ultimate Modular Men(Swat)이다(ADR-036). Humanoid 리타깃은 하지 않았다(애니메이션이 같은 파일에 내장).

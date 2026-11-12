@@ -11,8 +11,13 @@
 | A-0004 | HDRI | Overcast Soil (Pure Sky) 2K | https://polyhaven.com/a/overcast_soil_puresky | CC0 1.0 | 아니오 | 아니오(임포트 시 큐브맵 변환) | Assets/_Project/Art/HDRI/OvercastSoilPuresky | 테스트 맵 하늘·환경광 | 2026-11-12 | agent |
 | A-0005 | 텍스처(PBR) | Concrete 015 (1K) | https://ambientcg.com/view?id=Concrete015 | CC0 1.0 | 아니오 | 파일명 변경, 러프니스→스무스니스 마스크 패킹(`_mask.png`) | Assets/_Project/Art/Materials/Concrete015 | 테스트 맵 바닥 | 2026-11-12 | agent |
 | A-0006 | 텍스처(PBR) | Metal 032 (1K) | https://ambientcg.com/view?id=Metal032 | CC0 1.0 | 아니오 | 파일명 변경, 메탈릭·스무스니스 마스크 패킹 | Assets/_Project/Art/Materials/Metal032 | 테스트 맵 벽·구조물 | 2026-11-12 | agent |
-| W-0001 | 무기 모델 | Quaternius Ultimate Guns Pack — 사용 파일: Bullpup_1.fbx | https://quaternius.com/packs/ultimategun.html | CC0 1.0 | 아니오 | 아니오. 상표·각인·텍스처 없음(단색 머티리얼), 게임 내 명칭은 오리지널(ADR-032) | Assets/_Project/Art/Weapons/QuaterniusUltimateGuns | 무기 외형 | 2026-11-12 | agent |
+| W-0001 | 무기 모델 | Quaternius Ultimate Guns Pack — 사용 파일: Pistol_1.fbx, SubmachineGun_1.fbx, Bullpup_1.fbx, Shotgun_1.fbx | https://quaternius.com/packs/ultimategun.html | CC0 1.0 | 아니오 | 아니오. 상표·각인·텍스처 없음(단색 머티리얼), 게임 내 명칭은 오리지널(ADR-032) | Assets/_Project/Art/Weapons/QuaterniusUltimateGuns | 무기 외형 | 2026-11-12 | agent |
 | C-0001 | 캐릭터+애니메이션 | Quaternius Ultimate Modular Men Pack — 사용 파일: Swat.fbx (애니메이션 24개 내장) | https://quaternius.com/packs/ultimatemodularcharacters.html | CC0 1.0 | 아니오 | 모델 파일은 그대로. 임포트 시 노멀 재계산(75°), 머티리얼은 프로젝트 머티리얼로 대체 | Assets/_Project/Art/Characters/QuaterniusModularMen | 플레이어·더미 외형 | 2026-11-12 | agent |
+| S-0001 | 효과음(총성) | The Free Firearm Sound Library — 사용: 근거리 단발 녹음 4개(권총·기관단총·소총·산탄총)에서 잘라낸 shot_pistol/smg/rifle/shotgun.wav | https://opengameart.org/content/the-free-firearm-sound-library | CC0 1.0 (OpenGameArt 페이지 표기. 압축 파일 안에는 라이선스 문서 없음) | 아니오 | 단발 구간 자르기, 16bit 44.1kHz 모노 변환, 음량 정규화, 파일명 변경(원본 폴더의 실총 명칭은 프로젝트에 넣지 않음) | Assets/_Project/Audio/Weapons/FreeFirearmLibrary | 총성 4종 | 2026-11-12 | agent |
+| S-0002 | 효과음(재장전) | Gun reload sounds (SpringySpringo) — gunreload1, assaultriflereload1_0, shotguncock_0 | https://opengameart.org/content/gun-reload-sounds | CC0 1.0 | 아니오 | 파일명 변경 | Assets/_Project/Audio/Weapons/OgaGunReload | 재장전 | 2026-11-12 | agent |
+| S-0003 | 효과음(발소리·피격) | Kenney Impact Sounds 1.0 — footstep_concrete_000~004, impactPunch_medium_000~002 | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 아니오 | 아니오 | Assets/_Project/Audio/Foley/KenneyImpactSounds | 발소리(콘크리트), 피격 | 2026-11-12 | agent |
+
+자체 제작(외부 출처 없음, Art/Audio 밖에 둠 — ADR-027): `Assets/_Project/Prefabs/M1_5/Textures/FabricNoise.png`은 `CharacterKit`이 코드(고정 시드 값 노이즈)로 만든 텍스처다. AI 생성물 아님.
 
 ## 분류 코드
 A=환경/머티리얼, W=무기, C=캐릭터, N=애니메이션, V=차량, S=사운드, M=음악, F=폰트, U=UI, P=코드 패키지
