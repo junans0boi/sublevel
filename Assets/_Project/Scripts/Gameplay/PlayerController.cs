@@ -71,11 +71,21 @@ namespace Game.Gameplay
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
             Yaw = transform.eulerAngles.y;
-            if (!Application.isBatchMode && InputOverride == null)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-            }
+            UiFocus.Close();
+            UpdateCursor();
+            // The screens only the local player uses. They live in the match scene and go away with it.
+            var screens = new GameObject("Screens");
+            screens.AddComponent<InventoryScreen>();
+            screens.AddComponent<PauseMenu>();
+        }
+
+        // The mouse steers the view while playing and becomes a pointer while a screen is open.
+        void UpdateCursor()
+        {
+            if (Application.isBatchMode || InputOverride != null) return;
+            bool playing = UiFocus.Current == UiScreen.None;
+            Cursor.lockState = playing ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !playing;
         }
 
         public override void OnStopClient() => ReleaseOwnership();
@@ -89,6 +99,7 @@ namespace Game.Gameplay
             _owner = false;
             _combatant.ShotFired -= OnOwnShot;
             if (Local == this) Local = null;
+            UiFocus.Close();
             if (_weaponVisual != null) _weaponVisual.ShowInHand();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -98,7 +109,13 @@ namespace Game.Gameplay
         {
             if (!_owner) return;
             var f = _input.Read();
-            if (f.Quit) Application.Quit(); // until there is a menu (M1.6c)
+            // Screens that take over the mouse (pause menu, inventory): the keys that open and close them still
+            // work, everything else is ignored so the character stands still and does not shoot.
+            if (f.Menu) UiFocus.Toggle(UiScreen.Menu);
+            else if (f.Inventory && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Inventory);
+            if (UiFocus.Current != UiScreen.None)
+                f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
+            UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
 
             if (_combatant.Dead.Value)

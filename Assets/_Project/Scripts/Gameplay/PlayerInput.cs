@@ -18,7 +18,8 @@ namespace Game.Gameplay
         public bool AimHeld;       // right button: hold = shoulder, tap = toggle sights
         public bool LeanLeft;
         public bool LeanRight;
-        public bool Quit;
+        public bool Menu;          // Esc: open or close the pause menu
+        public bool Inventory;     // Tab: open or close the inventory
         public bool Heal;
         public bool Restart;
         public int SelectSlot;     // -1 = none
@@ -32,7 +33,9 @@ namespace Game.Gameplay
     // Keyboard + mouse through the Input System (ADR-031).
     public class DeviceInput : IPlayerInput
     {
-        public float MouseSensitivity = 0.12f;
+        public const float DefaultMouseSensitivity = 0.12f;
+        // Shared by every device input; the settings screen changes it.
+        public static float MouseSensitivity = DefaultMouseSensitivity;
 
         public PlayerInputFrame Read()
         {
@@ -49,7 +52,8 @@ namespace Game.Gameplay
                 f.ToggleView = k.vKey.wasPressedThisFrame;
                 f.LeanLeft = k.qKey.isPressed;
                 f.LeanRight = k.eKey.isPressed;
-                f.Quit = k.escapeKey.wasPressedThisFrame;
+                f.Menu = k.escapeKey.wasPressedThisFrame;
+                f.Inventory = k.tabKey.wasPressedThisFrame;
                 f.Heal = k.hKey.wasPressedThisFrame;
                 f.Restart = k.enterKey.wasPressedThisFrame;
                 if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
