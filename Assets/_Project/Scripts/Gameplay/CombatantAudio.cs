@@ -21,6 +21,7 @@ namespace Game.Gameplay
         [SerializeField] float _shotVolume = 0.8f;
         [SerializeField] float _reloadVolume = 0.6f;
         [SerializeField] float _footstepVolume = 0.35f;
+        [SerializeField] float _landingVolume = 0.6f;
         [SerializeField] float _hitVolume = 0.7f;
 
         readonly ShotGrouper _shots = new ShotGrouper(PelletWindow);
@@ -34,6 +35,7 @@ namespace Game.Gameplay
         public int ShotsPlayed { get; private set; }
         public int ReloadsPlayed { get; private set; }
         public int FootstepsPlayed { get; private set; }
+        public int LandingsPlayed { get; private set; }
         public int HitsPlayed { get; private set; }
 
         void Awake()
@@ -42,20 +44,34 @@ namespace Game.Gameplay
             _animation = GetComponent<CombatantAnimation>();
             _combatant.ShotFired += OnShot;
             _animation.FootDown += OnFootDown;
+            _animation.Landed += OnLanded;
         }
 
         void OnDestroy()
         {
             _combatant.ShotFired -= OnShot;
             _animation.FootDown -= OnFootDown;
+            _animation.Landed -= OnLanded;
+        }
+
+        // Both feet at once: a footstep, louder.
+        void OnLanded()
+        {
+            if (PlayFootstep(_landingVolume)) LandingsPlayed++;
         }
 
         void OnFootDown()
         {
-            if (_footsteps.Length == 0) return;
+            if (PlayFootstep(_footstepVolume)) FootstepsPlayed++;
+        }
+
+        bool PlayFootstep(float volume)
+        {
+            if (_footsteps.Length == 0) return false;
             // Cycle instead of picking at random so the same clip never plays twice in a row.
-            if (Play(_bodySource, _footsteps[_nextFootstep], _footstepVolume)) FootstepsPlayed++;
+            bool played = Play(_bodySource, _footsteps[_nextFootstep], volume);
             _nextFootstep = (_nextFootstep + 1) % _footsteps.Length;
+            return played;
         }
 
         void OnShot(Vector3 origin, Vector3 end)

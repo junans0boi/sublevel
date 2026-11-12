@@ -7,6 +7,8 @@
     "Shoulder": { "MoveFactor": 0.8,  "SpreadFactor": 0.55, "RecoilFactor": 0.8,  "Fov": 50.0 },
     "Sights":   { "MoveFactor": 0.55, "SpreadFactor": 0.25, "RecoilFactor": 0.6,  "Fov": 38.0 }
   },
-  "Lean": { "OffsetMeters": 0.45, "EyeDropMeters": 0.08, "CameraRollDeg": 12.0, "BodyRollDeg": 18.0, "ChangePerSecond": 7.0, "MoveFactor": 0.85 },
-  "Recoil": { "RecoverDegPerSecond": 14.0, "MaxPitchDeg": 12.0 }
+  "Lean": { "OffsetMeters": 0.25, "EyeDropMeters": 0.04, "EyeViewRollDeg": 6.0, "ThirdPersonRollDeg": 0.0, "BodyRollDeg": 10.0, "ChangePerSecond": 8.0, "MoveFactor": 0.85 },
+  "Recoil": { "RecoverDegPerSecond": 14.0, "MaxPitchDeg": 12.0 },
+  "Gait": { "LegPaceFollow": 0.5, "MaxLegPace": 1.75, "MaxLegTurnDeg": 60.0, "LegTurnDegPerSecond": 360.0, "LegTurnMinSpeed": 0.5 },
+  "Jump": { "RisePhase": 0.25, "FallPhase": 0.375, "LandPhase": 0.4, "PoseSpeed": 3.0, "LandSeconds": 0.12, "GroundProbeMeters": 0.35 }
 }

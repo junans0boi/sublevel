@@ -101,14 +101,26 @@ public static class TestBoxBuilder
         var animation = go.AddComponent<CombatantAnimation>();
         Set(animation, "_animator", p => p.objectReferenceValue = visual.Animator);
         Set(animation, "_spine", p => p.objectReferenceValue = visual.Spine);
+        Set(animation, "_hips", p => p.objectReferenceValue = visual.Hips);
         Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
         Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
         Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
         Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
-        Set(animation, "_sideClipSpeed", p => p.floatValue = (visual.Gait.LeftSpeed + visual.Gait.RightSpeed) * 0.5f);
         Set(animation, "_footPlantHeight", p => p.floatValue = visual.Gait.FootPlantHeight);
         Set(animation, "_footLiftHeight", p => p.floatValue = visual.Gait.FootLiftHeight);
-        SetArray(go.AddComponent<WeaponVisual>(), "_modelsByWeaponId", visual.WeaponModels);
+        var weaponVisual = go.AddComponent<WeaponVisual>();
+        SetArray(weaponVisual, "_modelsByWeaponId", visual.WeaponModels);
+        Set(weaponVisual, "_fitByWeaponId", p =>
+        {
+            p.arraySize = visual.WeaponFits.Length;
+            for (int i = 0; i < visual.WeaponFits.Length; i++)
+            {
+                var fit = p.GetArrayElementAtIndex(i);
+                fit.FindPropertyRelative("Rotation").quaternionValue = visual.WeaponFits[i].Rotation;
+                fit.FindPropertyRelative("CenterOffset").vector3Value = visual.WeaponFits[i].CenterOffset;
+                fit.FindPropertyRelative("Size").vector3Value = visual.WeaponFits[i].Size;
+            }
+        });
 
         var audio = go.AddComponent<CombatantAudio>();
         Set(audio, "_weaponSource", p => p.objectReferenceValue = Source(go.transform, "WeaponAudio", 1.3f, 3f, 70f));
@@ -118,7 +130,7 @@ public static class TestBoxBuilder
         SetArray(audio, "_reloadByWeapon", Clips(WeaponAudioDir + "OgaGunReload/", null, "reload_pistol.wav", "reload_rifle.wav", "reload_rifle.wav", "reload_shotgun.wav"));
         SetArray(audio, "_footsteps", Clips(FoleyDir, "footstep_concrete_000.ogg", "footstep_concrete_001.ogg", "footstep_concrete_002.ogg", "footstep_concrete_003.ogg", "footstep_concrete_004.ogg"));
         SetArray(audio, "_hits", Clips(FoleyDir, "impactPunch_medium_000.ogg", "impactPunch_medium_001.ogg", "impactPunch_medium_002.ogg"));
-        return visual.Renderers;
+        return visual.BodyRenderers;
     }
 
     static AudioSource Source(Transform parent, string name, float height, float minDistance, float maxDistance)

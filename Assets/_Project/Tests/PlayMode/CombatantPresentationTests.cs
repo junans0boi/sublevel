@@ -109,10 +109,10 @@ namespace Game.Tests
             yield return WaitUntil(() => audio.ReloadsPlayed == 1, 2f, "reload sound");
 
             _input.Frame.Move = new Vector2(0, 1);
-            yield return WaitUntil(() => animation.MoveBlend.y > 3f, 2f, "forward movement reaches the blend");
+            yield return WaitUntil(() => animation.MoveDrive > 3f, 2f, "forward movement reaches the blend");
             yield return WaitUntil(() => audio.FootstepsPlayed >= 2, 3f, "footsteps while walking (feet touching down)");
             _input.Frame.Move = Vector2.zero;
-            yield return WaitUntil(() => animation.MoveBlend.magnitude < 0.2f, 2f, "blend back to standing");
+            yield return WaitUntil(() => Mathf.Abs(animation.MoveDrive) < 0.2f, 2f, "blend back to standing");
             yield return new WaitForSeconds(0.3f); // let a foot that was mid-step come down
             int steps = audio.FootstepsPlayed;
             yield return new WaitForSeconds(0.5f);

@@ -11,6 +11,10 @@ namespace Game.Gameplay
         int _hash = int.MinValue;
         LootItem _promptFor;
         GUIStyle _style, _centered;
+        float _gap = -1f;
+
+        const float CrosshairLine = 9f, CrosshairThickness = 2f, MinGap = 3f, DotSize = 3f;
+        const float GapChangePerSecond = 14f;
 
         // Fixed rects only: skipping the layout pass avoids its per-frame allocations.
         void Awake() => useGUILayout = false;
@@ -33,7 +37,7 @@ namespace Game.Gameplay
                 _status = BuildStatus(me);
             }
             GUI.Label(new Rect(20, Screen.height - 140, 700, 130), _status, _style);
-            GUI.Label(new Rect(Screen.width / 2 - 10, Screen.height / 2 - 14, 20, 28), "+", _centered);
+            if (!me.Dead.Value) DrawCrosshair(me);
 
             if (me.Dead.Value)
             {
@@ -49,6 +53,40 @@ namespace Game.Gameplay
             }
             if (_prompt.Length > 0)
                 GUI.Label(new Rect(0, Screen.height / 2 + 40, Screen.width, 30), _prompt, _centered);
+        }
+
+        // Shows how the weapon is aimed (ADR-048): four lines at the edge of the spread cone from the hip, closer
+        // together when shouldered, a single dot when looking down the sights or with empty hands.
+        void DrawCrosshair(Combatant me)
+        {
+            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            var weapon = me.ActiveWeapon;
+            var aim = me.AimMode;
+            var camera = PlayerController.Local != null ? PlayerController.Local.Camera : null;
+            if (weapon == null || aim == AimMode.Sights || camera == null)
+            {
+                _gap = -1f;
+                Bar(cx - DotSize * 0.5f, cy - DotSize * 0.5f, DotSize, DotSize);
+                return;
+            }
+            float wanted = Mathf.Max(MinGap, Crosshair.GapPixels(weapon.SpreadDeg * GameData.Rules.Aim.For(aim).SpreadFactor, camera.fieldOfView, Screen.height));
+            _gap = _gap < 0f ? wanted : Mathf.Lerp(_gap, wanted, 1f - Mathf.Exp(-GapChangePerSecond * Time.unscaledDeltaTime));
+            float half = CrosshairThickness * 0.5f;
+            Bar(cx - _gap - CrosshairLine, cy - half, CrosshairLine, CrosshairThickness);
+            Bar(cx + _gap, cy - half, CrosshairLine, CrosshairThickness);
+            Bar(cx - half, cy - _gap - CrosshairLine, CrosshairThickness, CrosshairLine);
+            Bar(cx - half, cy + _gap, CrosshairThickness, CrosshairLine);
+        }
+
+        // A light bar with a dark rim so it reads on bright and dark backgrounds alike.
+        static void Bar(float x, float y, float width, float height)
+        {
+            var previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.DrawTexture(new Rect(x - 1f, y - 1f, width + 2f, height + 2f), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, 0.92f);
+            GUI.DrawTexture(new Rect(x, y, width, height), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         static int Hash(Combatant c)

@@ -223,5 +223,87 @@ namespace Game.Tests
             Assert.AreEqual(p.GroundedStick, Locomotion.VerticalVelocity(-9, true, false, 0.02f, p));
             Assert.AreEqual(1f + p.Gravity * 0.5f, Locomotion.VerticalVelocity(1f, false, true, 0.5f, p), 1e-4f);
         }
+
+        [Test]
+        public void LegPace_MakesUpOnlyPartOfTheMissingSpeed_AndIsCapped()
+        {
+            var gait = new GaitRules { LegPaceFollow = 0.5f, MaxLegPace = 1.75f };
+            Assert.AreEqual(1f, Locomotion.LegPace(2f, 2.86f, gait), 1e-4f, "slower than the clip: the blend covers it");
+            Assert.AreEqual(1.287f, Locomotion.LegPace(4.5f, 2.86f, gait), 0.005f, "normal movement");
+            Assert.AreEqual(1.724f, Locomotion.LegPace(7f, 2.86f, gait), 0.005f, "sprinting");
+            Assert.AreEqual(1.75f, Locomotion.LegPace(20f, 2.86f, gait), 1e-4f, "never faster than the cap");
+        }
+
+        [Test]
+        public void AirPhase_ShowsTheRisePoseGoingUp_AndTheFallPoseComingDown()
+        {
+            var jump = new JumpRules { RisePhase = 0.25f, FallPhase = 0.375f, PoseSpeed = 3f };
+            Assert.AreEqual(0.25f, Locomotion.AirPhase(4.8f, jump), 1e-4f);
+            Assert.AreEqual(0.375f, Locomotion.AirPhase(-6f, jump), 1e-4f);
+            Assert.AreEqual(0.3125f, Locomotion.AirPhase(0f, jump), 1e-4f, "half way at the top of the jump");
+        }
+
+        [Test]
+        public void CrosshairGap_IsTheSpreadConeOnScreen()
+        {
+            // A 3 degree cone is 1.5 degrees either side: tan(1.5) / tan(30) * 540 px.
+            Assert.AreEqual(24.49f, Crosshair.GapPixels(3f, 60f, 1080f), 0.05f);
+            Assert.Less(Crosshair.GapPixels(3f * 0.55f, 50f, 1080f), 24.49f, "shouldering tightens it even though the view zooms in");
+            Assert.AreEqual(0f, Crosshair.GapPixels(0f, 60f, 1080f), 1e-4f);
+        }
+
+        static LegHeading Settled(float vx, float vz, GaitRules gait, LegHeading legs = null)
+        {
+            legs ??= new LegHeading();
+            for (int i = 0; i < 100; i++) legs.Tick(vx, vz, 0.02f, gait);
+            return legs;
+        }
+
+        [Test]
+        public void Legs_TurnTowardTheWayTheCharacterMoves_AndRunBackwardWhenRetreating()
+        {
+            var gait = new GaitRules { MaxLegTurnDeg = 60f, LegTurnDegPerSecond = 360f, LegTurnMinSpeed = 0.5f };
+            var forward = Settled(0, 4.5f, gait);
+            Assert.AreEqual(0f, forward.TurnDeg, 1e-3f);
+            Assert.IsFalse(forward.Backward);
+
+            var diagonal = Settled(3f, 3f, gait);
+            Assert.AreEqual(45f, diagonal.TurnDeg, 1e-3f, "forward-right: legs turned half right");
+            Assert.IsFalse(diagonal.Backward);
+
+            var sideways = Settled(4.5f, 0, gait);
+            Assert.AreEqual(60f, sideways.TurnDeg, 1e-3f, "sideways: as far as the waist allows");
+            Assert.IsFalse(sideways.Backward);
+
+            var back = Settled(0, -4.5f, gait);
+            Assert.AreEqual(0f, back.TurnDeg, 1e-3f);
+            Assert.IsTrue(back.Backward);
+
+            var backRight = Settled(3f, -3f, gait);
+            Assert.AreEqual(-45f, backRight.TurnDeg, 1e-3f, "backing off to the right: legs turned left, running backward");
+            Assert.IsTrue(backRight.Backward);
+
+            var stopped = Settled(0, 0, gait, backRight);
+            Assert.AreEqual(0f, stopped.TurnDeg, 1e-3f, "standing: legs face forward again");
+        }
+
+        [Test]
+        public void Legs_TurnGradually_AndDoNotFlickerWhenMovingAlmostSideways()
+        {
+            var gait = new GaitRules { MaxLegTurnDeg = 60f, LegTurnDegPerSecond = 360f, LegTurnMinSpeed = 0.5f };
+            var legs = new LegHeading();
+            legs.Tick(3f, 3f, 0.05f, gait);
+            Assert.AreEqual(18f, legs.TurnDeg, 1e-3f, "360 degrees a second for 0.05 s");
+
+            // Sideways and a touch backward, then a touch forward: still running forward-turned, no flip.
+            legs = Settled(4.5f, 0f, gait);
+            legs.Tick(4.5f, -0.3f, 0.02f, gait);
+            Assert.IsFalse(legs.Backward);
+            legs.Tick(4.5f, 0.3f, 0.02f, gait);
+            Assert.IsFalse(legs.Backward);
+            // Clearly backward: flips.
+            legs.Tick(3f, -3f, 0.02f, gait);
+            Assert.IsTrue(legs.Backward);
+        }
     }
 }

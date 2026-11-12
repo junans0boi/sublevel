@@ -41,6 +41,7 @@ namespace Game.Gameplay
         bool _bodyHidden;
         CharacterController _controller;
         Combatant _combatant;
+        WeaponVisual _weaponVisual;
         IPlayerInput _input;
         float _verticalVelocity;
         float _nextLocalFire;
@@ -50,6 +51,7 @@ namespace Game.Gameplay
         {
             _controller = GetComponent<CharacterController>();
             _combatant = GetComponent<Combatant>();
+            _weaponVisual = GetComponent<WeaponVisual>();
             _controller.enabled = false;
             _rules = GameData.Rules;
             _locomotion = _rules.Locomotion;
@@ -87,6 +89,7 @@ namespace Game.Gameplay
             _owner = false;
             _combatant.ShotFired -= OnOwnShot;
             if (Local == this) Local = null;
+            if (_weaponVisual != null) _weaponVisual.ShowInHand();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -178,7 +181,7 @@ namespace Game.Gameplay
             {
                 Aim = _aim.Mode,
                 Lean = _combatant.LeanAmount,
-                LeanRollDeg = _rules.Lean.CameraRollDeg,
+                LeanRollDeg = Rig.IsEyeView(_aim.Mode) ? _rules.Lean.EyeViewRollDeg : _rules.Lean.ThirdPersonRollDeg,
                 RecoilPitch = Mathf.Min(_recoil.Pitch, MaxViewPitch - Pitch), // never past straight up
                 RecoilYaw = _recoil.Yaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
@@ -187,8 +190,15 @@ namespace Game.Gameplay
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
             Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, aimRules.For(_aim.Mode).Fov, ease);
 
-            // Hide our own body whenever the camera sits at the eyes so it does not block the view.
+            // Hide our own body whenever the camera sits at the eyes so it does not block the view; the weapon
+            // moves in front of the camera instead.
             bool hide = Rig.IsEyeView(_aim.Mode);
+            if (_weaponVisual != null)
+            {
+                // The dead hold nothing up: the weapon stays with the body.
+                if (hide && !_combatant.Dead.Value) _weaponVisual.ShowAtEye(Camera.transform, _aim.Mode == AimMode.Sights);
+                else _weaponVisual.ShowInHand();
+            }
             if (hide == _bodyHidden) return;
             _bodyHidden = hide;
             foreach (var r in _bodyRenderers) r.enabled = !hide;

@@ -19,30 +19,40 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Locomotion_IsATwoAxisBlend_CoveringAllFourSidesWithDistinctClips()
+        public void Locomotion_BlendsBackPedal_Idle_Walk_AndRun_BySpeed()
         {
             var tree = Controller().layers[0].stateMachine.defaultState.motion as BlendTree;
             Assert.IsNotNull(tree, "the base layer's default state should be a blend tree");
-            Assert.AreEqual(BlendTreeType.FreeformCartesian2D, tree.blendType, "diagonals come from blending two axes");
+            Assert.AreEqual(BlendTreeType.Simple1D, tree.blendType, "direction comes from turning the legs, not from sidestep clips");
             var children = tree.children;
-            Assert.IsTrue(children.Any(c => c.position == Vector2.zero), "standing still");
-            Assert.IsTrue(children.Any(c => c.position.y > 0.5f && Mathf.Abs(c.position.x) < 0.01f), "forward");
-            Assert.IsTrue(children.Any(c => c.position.y < -0.5f && Mathf.Abs(c.position.x) < 0.01f), "backward");
-            Assert.IsTrue(children.Any(c => c.position.x < -0.5f && Mathf.Abs(c.position.y) < 0.01f), "left");
-            Assert.IsTrue(children.Any(c => c.position.x > 0.5f && Mathf.Abs(c.position.y) < 0.01f), "right");
-            Assert.AreEqual(children.Length, children.Select(c => c.motion).Distinct().Count(), "every direction has its own clip");
+            Assert.IsTrue(children.Any(c => c.threshold == 0f), "standing still");
+            Assert.IsTrue(children.Any(c => c.threshold < -0.5f), "back-pedalling");
+            Assert.AreEqual(2, children.Count(c => c.threshold > 0.5f), "walk and run");
+            Assert.AreEqual(children.Length, children.Select(c => c.motion).Distinct().Count(), "every speed has its own clip");
             Assert.IsTrue(children.All(c => c.motion != null && ((AnimationClip)c.motion).isLooping), "movement clips loop");
+            Assert.IsFalse(children.Any(c => c.motion.name.Contains("Left") || c.motion.name.Contains("Right")), "the file's side runs turn the whole body: not usable for sidestepping");
         }
 
         [Test]
         public void Locomotion_ClipSpeedsAreBelievableForAHuman()
         {
             var tree = (BlendTree)Controller().layers[0].stateMachine.defaultState.motion;
-            float walk = tree.children.Where(c => c.position.y > 0.01f).Min(c => c.position.y);
-            float run = tree.children.Max(c => c.position.y);
+            float walk = tree.children.Where(c => c.threshold > 0.01f).Min(c => c.threshold);
+            float run = tree.children.Max(c => c.threshold);
             Assert.That(walk, Is.InRange(0.8f, 2.5f), "walk clip ground speed (m/s)");
             Assert.That(run, Is.InRange(2.5f, 8f), "run clip ground speed (m/s)");
             Assert.Greater(run, walk * 1.5f);
+        }
+
+        [Test]
+        public void BaseLayer_HasAnAirState_WhosePoseIsPickedByAParameter()
+        {
+            var controller = Controller();
+            var air = controller.layers[0].stateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Air");
+            Assert.IsNotNull(air, "jumping needs its own state");
+            Assert.IsNotNull(air.motion);
+            Assert.IsTrue(air.timeParameterActive, "the pose is held, not played");
+            Assert.IsTrue(controller.parameters.Any(p => p.name == air.timeParameter && p.type == AnimatorControllerParameterType.Float));
         }
 
         [Test]

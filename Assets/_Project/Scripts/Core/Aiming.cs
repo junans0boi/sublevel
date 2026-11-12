@@ -32,11 +32,12 @@ namespace Game.Core
     [Serializable]
     public class LeanRules
     {
-        public float OffsetMeters = 0.45f;   // how far the eyes move sideways at full lean
-        public float EyeDropMeters = 0.08f;
-        public float CameraRollDeg = 12f;
-        public float BodyRollDeg = 18f;
-        public float ChangePerSecond = 7f;   // full lean takes 1 / this seconds
+        public float OffsetMeters = 0.25f;      // how far the eyes move sideways at full lean
+        public float EyeDropMeters = 0.04f;
+        public float EyeViewRollDeg = 6f;       // camera roll when it sits at the eyes (first person, sights)
+        public float ThirdPersonRollDeg = 0f;   // the over-the-shoulder camera only follows the head sideways
+        public float BodyRollDeg = 10f;
+        public float ChangePerSecond = 8f;      // full lean takes 1 / this seconds
         public float MoveFactor = 0.85f;
     }
 
@@ -45,6 +46,17 @@ namespace Game.Core
     {
         public float RecoverDegPerSecond = 14f;
         public float MaxPitchDeg = 12f;
+    }
+
+    public static class Crosshair
+    {
+        // Distance from the screen centre to the edge of the spread cone, in pixels: where the crosshair lines sit.
+        // `spreadDeg` is the full cone angle after the stance factor; `fovDeg` is the camera's vertical field of view.
+        public static float GapPixels(float spreadDeg, float fovDeg, float screenHeight)
+        {
+            const double rad = Math.PI / 180.0;
+            return (float)(Math.Tan(spreadDeg * 0.5 * rad) / Math.Tan(fovDeg * 0.5 * rad) * screenHeight * 0.5);
+        }
     }
 
     // Turns the aim button into an aim mode: hold = shoulder while held, tap = toggle sights.

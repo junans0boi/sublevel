@@ -1,3 +1,4 @@
+using Game.Net;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -6,12 +7,17 @@ namespace Game.Gameplay
     // works for the local player, remote players and server-driven characters.
     public class CombatantMotion : MonoBehaviour
     {
-        const float AirborneVerticalSpeed = 1.5f;
+        // A ball rather than a ray, so standing with the middle of the body just past an edge still counts as on
+        // the ground; small enough not to touch a slope before it is cast.
+        const float ProbeRadius = 0.2f;
+        const float ProbeStartHeight = 0.5f;
         const float TeleportDistance = 5f;
 
         Vector3 _lastPosition;
 
         public Vector3 LocalVelocity { get; private set; }
+        public float VerticalSpeed { get; private set; }
+        // No ground close under the feet. Unlike a speed test this holds through the top of a jump.
         public bool Airborne { get; private set; }
 
         void OnEnable() => _lastPosition = transform.position;
@@ -25,12 +31,16 @@ namespace Game.Gameplay
             {
                 // Paused: nothing moved this frame.
                 LocalVelocity = Vector3.zero;
+                VerticalSpeed = 0f;
                 return;
             }
             // A teleport (spawn, test hook) is not movement.
             if (delta.sqrMagnitude > TeleportDistance * TeleportDistance) delta = Vector3.zero;
             LocalVelocity = transform.InverseTransformDirection(delta / dt);
-            Airborne = Mathf.Abs(delta.y / dt) > AirborneVerticalSpeed;
+            VerticalSpeed = delta.y / dt;
+            // The cast starts inside this combatant's own collider, which a cast does not report.
+            Airborne = !Physics.SphereCast(transform.position + Vector3.up * ProbeStartHeight, ProbeRadius, Vector3.down, out _,
+                ProbeStartHeight - ProbeRadius + GameData.Rules.Jump.GroundProbeMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
         }
     }
 }

@@ -17,8 +17,8 @@ namespace Game.Gameplay
     }
 
     // Self-contained camera placement (ADR-031): over-the-shoulder TPP with wall collision, or FPP at the eyes.
-    // Aiming down sights uses the eye view in either mode; shouldering pulls the TPP camera in; leaning rolls the
-    // view and, in TPP, carries the camera over to the shoulder on the leaning side (ADR-045).
+    // Aiming down sights uses the eye view in either mode; shouldering pulls the TPP camera in; leaning moves the
+    // view sideways with the head and rolls it a little at the eyes (ADR-045, ADR-048).
     public class PlayerCameraRig
     {
         public float Distance = 3.2f;
@@ -48,10 +48,10 @@ namespace Game.Gameplay
                 return;
             }
 
-            // The eye already carries the lean offset; the camera also swings to the leaning side's shoulder.
-            float side = Mathf.Lerp(1f, Mathf.Sign(view.Lean), Mathf.Abs(view.Lean));
+            // The eye already carries the lean offset, so the camera follows the head sideways. It stays over the
+            // right shoulder whichever way the body leans (ADR-048).
             var aimRotation = Quaternion.Euler(-(pitch + view.RecoilPitch), yaw + view.RecoilYaw, 0f);
-            var offset = aimRotation * new Vector3(ShoulderOffset * side, 0f, -_distance);
+            var offset = aimRotation * new Vector3(ShoulderOffset, 0f, -_distance);
             float length = offset.magnitude;
             var dir = offset / length;
             // Pull the camera in front of anything between the pivot and its ideal spot.

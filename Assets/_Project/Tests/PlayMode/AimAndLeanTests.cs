@@ -23,7 +23,7 @@ namespace Game.Tests
             public PlayerInputFrame Read()
             {
                 var f = Frame;
-                Frame.FirePressed = false;
+                Frame.FirePressed = Frame.Jump = false;
                 return f;
             }
         }
@@ -203,12 +203,6 @@ namespace Game.Tests
             yield return GiveRifle();
             float EyeSide() => pc.transform.InverseTransformPoint(me.EyePosition).x;
             Assert.AreEqual(0f, EyeSide(), 0.01f);
-
-            _input.Frame.LeanLeft = true;
-            yield return WaitUntil(() => me.Lean.Value == -1, 2f, "lean left on the server");
-            yield return WaitUntil(() => EyeSide() < -lean.OffsetMeters + 0.02f, 2f, "eyes moved left");
-            Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(pc.Camera.transform.eulerAngles.z, 0f)), lean.CameraRollDeg - 1f, "camera rolled");
-            // The body leans with the view: the head ends up well to the left of the hips.
             Transform head = null, hips = null;
             foreach (var t in me.GetComponentsInChildren<Transform>())
             {
@@ -217,9 +211,22 @@ namespace Game.Tests
             }
             Assert.IsNotNull(head, "Head bone");
             Assert.IsNotNull(hips, "Hips bone");
+            float HeadSide() => pc.transform.InverseTransformPoint(head.position).x - pc.transform.InverseTransformPoint(hips.position).x;
+            yield return new WaitForSeconds(0.5f); // weapon pose settled
+            float uprightHeadSide = HeadSide();
+
+            _input.Frame.LeanLeft = true;
+            yield return WaitUntil(() => me.Lean.Value == -1, 2f, "lean left on the server");
+            yield return WaitUntil(() => EyeSide() < -lean.OffsetMeters + 0.02f, 2f, "eyes moved left");
+            // PT-3: the lean was too much. Small numbers, and the third-person camera neither rolls nor changes shoulder.
+            Assert.AreEqual(0.25f, lean.OffsetMeters, 1e-4f);
+            Assert.AreEqual(10f, lean.BodyRollDeg, 1e-4f);
+            yield return new WaitForSeconds(0.3f);
+            Assert.Less(Mathf.Abs(Mathf.DeltaAngle(pc.Camera.transform.eulerAngles.z, 0f)), 0.5f, "third-person camera stays level");
+            Assert.Greater(pc.transform.InverseTransformPoint(pc.Camera.transform.position).x, 0.1f, "camera stays over the right shoulder when leaning left");
+            // The body leans with the view: the head moves to the left over the hips.
             yield return null; // a frame for LateUpdate to pose the torso
-            float headSide = pc.transform.InverseTransformPoint(head.position).x - pc.transform.InverseTransformPoint(hips.position).x;
-            Assert.Less(headSide, -0.08f, "torso tilted toward the lean");
+            Assert.That(HeadSide() - uprightHeadSide, Is.InRange(-0.2f, -0.05f), "torso tilted toward the lean, but only a little");
 
             Vector3 origin = default;
             bool fired = false;
@@ -241,6 +248,8 @@ namespace Game.Tests
             _input.Frame.LeanRight = true;
             yield return WaitUntil(() => EyeSide() > lean.OffsetMeters - 0.02f, 2f, "eyes moved right in first person");
             Assert.Less(Vector3.Distance(pc.Camera.transform.position, me.EyePosition), 0.05f);
+            yield return new WaitForSeconds(0.3f);
+            Assert.AreEqual(6f, Mathf.Abs(Mathf.DeltaAngle(pc.Camera.transform.eulerAngles.z, 0f)), 0.5f, "the eye view rolls a little");
         }
 
         [UnityTest]
@@ -249,25 +258,101 @@ namespace Game.Tests
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
             var pc = PlayerController.Local;
-            // Stand with the west wall (inner face at x = -29.5) 0.45 m to the left, facing north.
-            pc.Teleport(new Vector3(-29.05f, 0.1f, -24f));
-            pc.LookAt(new Vector3(-29.05f, 1.6f, 0f));
+            // Stand with the west wall (inner face at x = -29.5) 0.37 m to the left, facing north: closer than a full lean reaches.
+            pc.Teleport(new Vector3(-29.13f, 0.1f, -24f));
+            pc.LookAt(new Vector3(-29.13f, 1.6f, 0f));
             yield return null;
             _input.Frame.LeanLeft = true;
             yield return new WaitForSeconds(0.6f);
             Assert.AreEqual(-1, me.Lean.Value);
             Assert.Greater(me.EyePosition.x, -29.5f + 0.1f, "eyes stay on this side of the wall");
+            Assert.Greater(me.EyePosition.x, -29.13f - 0.2f, "the lean was cut short, not just lucky");
+            Assert.Less(me.EyePosition.x, -29.13f - 0.02f, "but there is still some lean");
         }
 
         [UnityTest]
-        public IEnumerator DiagonalMovement_BlendsBothDirections_AndTheUpperBodyFollowsTheSituation()
+        public IEnumerator MovingSideways_TurnsTheLegs_WhileTheUpperBodyKeepsFacingTheAim()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var pc = PlayerController.Local;
+            var bones = new System.Collections.Generic.Dictionary<string, Transform>();
+            foreach (var t in me.GetComponentsInChildren<Transform>()) bones[t.name] = t;
+            // Which way a left-right pair of joints faces, in degrees from the player's facing (right positive).
+            float Facing(string left, string right)
+            {
+                var across = pc.transform.InverseTransformDirection(bones[right].position - bones[left].position);
+                return Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg;
+            }
+            // Averaged over a stride: the hips and shoulders sway with every step.
+            IEnumerator Average(string left, string right, Action<float> done)
+            {
+                float sum = 0f;
+                int n = 0;
+                for (float end = Time.time + 0.8f; Time.time < end; n++)
+                {
+                    yield return null; // the bones still hold the last frame's finished pose here
+                    sum += Facing(left, right);
+                }
+                done(sum / n);
+            }
+
+            yield return GiveRifle();
+            float hips = 0f, shoulders = 0f;
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.6f);
+            yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            Assert.AreEqual(0f, hips, 12f, "running forward: legs face forward");
+            // The weapon pose itself holds the shoulders at an angle; that is the reference for "facing the aim".
+            float shouldersForward = 0f;
+            yield return Average("UpperArm.L", "UpperArm.R", a => shouldersForward = a);
+
+            _input.Frame.Move = new Vector2(1, 1);
+            yield return new WaitForSeconds(0.6f);
+            yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
+            Assert.AreEqual(45f, hips, 15f, "forward-right: the legs point where the body goes");
+            Assert.AreEqual(shouldersForward, shoulders, 12f, "the shoulders still face the aim");
+
+            _input.Frame.Move = new Vector2(-1, 0);
+            yield return new WaitForSeconds(0.6f);
+            yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
+            Assert.AreEqual(-60f, hips, 15f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(shouldersForward, shoulders, 12f);
+
+            // With the weapon up it must point where the player aims, moving or not.
+            float aimStanding = 0f, aimMoving = 0f;
+            _input.Frame.Move = Vector2.zero;
+            _input.Frame.AimHeld = true;
+            yield return new WaitForSeconds(0.8f);
+            yield return Average("UpperArm.L", "UpperArm.R", a => aimStanding = a);
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.6f);
+            yield return Average("UpperArm.L", "UpperArm.R", a => aimMoving = a);
+            Assert.AreEqual(aimStanding, aimMoving, 8f, "aiming while moving forward: same shoulder line as standing");
+            _input.Frame.Move = new Vector2(-1, 0);
+            yield return new WaitForSeconds(0.6f);
+            yield return Average("UpperArm.L", "UpperArm.R", a => aimMoving = a);
+            Assert.AreEqual(aimStanding, aimMoving, 8f, "aiming while sidestepping: same shoulder line as standing");
+            _input.Frame.AimHeld = false;
+
+            _input.Frame.Move = new Vector2(0, -1);
+            yield return new WaitForSeconds(0.6f);
+            Assert.Less(me.GetComponent<CombatantAnimation>().MoveDrive, -2f, "backing off: the back-pedal clip, not a turn-around");
+            yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            Assert.AreEqual(0f, hips, 12f);
+        }
+
+        [UnityTest]
+        public IEnumerator UpperBodyPose_FollowsTheSituation()
         {
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
             var animation = me.GetComponent<CombatantAnimation>();
 
             _input.Frame.Move = new Vector2(1, 1);
-            yield return WaitUntil(() => animation.MoveBlend.x > 1.5f && animation.MoveBlend.y > 1.5f, 2f, "both blend axes driven when moving diagonally");
+            yield return WaitUntil(() => animation.MoveDrive > 3f, 2f, "moving");
             Assert.IsNull(animation.UpperState, "empty hands: plain run");
 
             yield return GiveRifle();
@@ -284,6 +369,101 @@ namespace Game.Tests
             yield return WaitUntil(() => animation.UpperState == CombatantAnimation.Shoot || animation.UpperState == CombatantAnimation.Aim, 2f, "firing raises the weapon");
             _input.Frame.FireHeld = false;
             yield return WaitUntil(() => animation.UpperState == CombatantAnimation.Lowered, 3f, "and it comes down a moment after the last shot");
+        }
+
+        [UnityTest]
+        public IEnumerator Jumping_ShowsTheAirPose_UntilLanding_ThenSoundsTheLanding()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var pc = PlayerController.Local;
+            var animation = me.GetComponent<CombatantAnimation>();
+            var motion = me.GetComponent<CombatantMotion>();
+            var audio = me.GetComponent<CombatantAudio>();
+            yield return new WaitForSeconds(0.3f); // settled on the floor
+            Assert.IsFalse(motion.Airborne, "standing on the ground");
+            Assert.AreEqual(CombatantAnimation.Locomotion, animation.BaseState);
+            float ground = pc.transform.position.y;
+            int steps = audio.FootstepsPlayed;
+
+            _input.Frame.Jump = true;
+            yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Air, 1f, "air pose after take-off");
+            // The top of the jump is where a speed-based check would lose track.
+            yield return WaitUntil(() => motion.VerticalSpeed <= 0f, 2f, "top of the jump");
+            Assert.Greater(pc.transform.position.y - ground, 0.5f, "actually up in the air");
+            Assert.IsTrue(motion.Airborne, "still airborne at the top");
+            Assert.AreEqual(CombatantAnimation.Air, animation.BaseState);
+            Assert.AreEqual(0, audio.LandingsPlayed);
+
+            yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Locomotion, 2f, "back to normal after landing");
+            Assert.Less(pc.transform.position.y - ground, 0.1f);
+            Assert.AreEqual(1, audio.LandingsPlayed, "one landing sound");
+            yield return new WaitForSeconds(0.4f);
+            Assert.AreEqual(steps, audio.FootstepsPlayed, "a standing jump makes no footsteps besides the landing");
+            Assert.AreEqual(1, audio.LandingsPlayed);
+
+            // A running jump: the legs are not stepping while off the ground. A hit in mid-air must not lose the landing.
+            pc.LookAt(pc.transform.position + Vector3.right * 10f + Vector3.up * 1.6f);
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.5f);
+            _input.Frame.Jump = true;
+            yield return WaitUntil(() => motion.Airborne, 1f, "off the ground");
+            steps = audio.FootstepsPlayed;
+            me.ServerTakeDamage(5);
+            yield return WaitUntil(() => !motion.Airborne, 2f, "down again");
+            Assert.AreEqual(steps, audio.FootstepsPlayed, "no footsteps in the air");
+            yield return WaitUntil(() => audio.LandingsPlayed == 2, 1f, "landing sound even though the flinch was playing");
+            _input.Frame.Move = Vector2.zero;
+            yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Locomotion, 2f, "back to normal");
+
+            // The other combatants use the same parts: a dummy on the floor is not airborne.
+            foreach (var other in Combatant.All)
+                if (other != me) Assert.IsFalse(other.GetComponent<CombatantMotion>().Airborne, "dummy standing on the floor");
+        }
+
+        [UnityTest]
+        public IEnumerator LookingDownTheSights_ShowsTheWeaponInFrontOfTheCamera_AndItReturnsToTheHand()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var pc = PlayerController.Local;
+            var weapon = me.GetComponent<WeaponVisual>();
+            yield return GiveRifle();
+            yield return WaitUntil(() => weapon.ShownWeaponId == 3, 2f, "rifle model shown");
+            Renderer rifle = null;
+            Transform wrist = null;
+            foreach (var t in me.GetComponentsInChildren<Transform>())
+            {
+                if (t.name == "Wrist.R") wrist = t;
+                else if (t.name == "Weapon3") rifle = t.GetComponentInChildren<Renderer>();
+            }
+            Assert.IsNotNull(rifle, "rifle renderer");
+            yield return null;
+            Assert.IsFalse(weapon.AtEye, "third person: the weapon is in the hand");
+
+            yield return Tap();
+            yield return WaitUntil(() => me.AimMode == AimMode.Sights && weapon.AtEye, 2f, "sights on, weapon at the eye");
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsTrue(rifle.enabled && rifle.gameObject.activeInHierarchy, "the weapon stays visible while the body is hidden");
+            var onScreen = pc.Camera.WorldToViewportPoint(rifle.bounds.center);
+            Assert.Greater(onScreen.z, 0.1f, "in front of the camera");
+            Assert.AreEqual(0.5f, onScreen.x, 0.05f, "centred under the aim point");
+            Assert.That(onScreen.y, Is.InRange(0.05f, 0.5f), "below the aim point, inside the screen");
+
+            yield return Tap();
+            yield return WaitUntil(() => me.AimMode == AimMode.Hip && !weapon.AtEye, 2f, "sights off");
+            yield return null;
+            Assert.Less(Vector3.Distance(rifle.bounds.center, wrist.position), 0.6f, "back in the hand");
+
+            // First person from the hip: visible too, off to the right.
+            _input.Frame.ToggleView = true;
+            yield return null;
+            _input.Frame.ToggleView = false;
+            yield return WaitUntil(() => weapon.AtEye, 2f, "first person shows the weapon");
+            yield return new WaitForSeconds(0.3f);
+            onScreen = pc.Camera.WorldToViewportPoint(rifle.bounds.center);
+            Assert.Greater(onScreen.x, 0.55f, "held to the right from the hip");
+            Assert.Less(onScreen.y, 0.5f);
         }
 
         [UnityTest]

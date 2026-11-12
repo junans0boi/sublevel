@@ -12,9 +12,10 @@
 | 환경 | Hub에서 windows-il2cpp 모듈 추가(그 전까지 win 빌드는 Mono) | 대기 |
 | 환경 | Windows 테스트 PC 확보, Alt+F4 종료 후 프로세스 잔존 확인 | 대기 |
 | 환경 | 6000.6.8f1 에디터 삭제(Hub, 선택) 및 `../sublevel-6.6-backup` 정리 | 선택 |
-| 에셋 | Quaternius Universal Base Characters / Animation Library: itch.io에서 0원 다운로드 가능한지 확인, 가능하면 받아서 프로젝트에 넣기(캐릭터 품질 비교용) | 선택 |
+| 에셋 | Quaternius Universal Base Characters / **Universal Animation Library**: itch.io에서 0원 다운로드 가능한지 확인, 가능하면 받아서 `AssetStaging/`에 넣기. **점프·게걸음(8방향 이동) 애니메이션이 지금 캐릭터 파일에 없어 임시 방식으로 처리 중**(ADR-048, 049) — 받아 주면 교체한다 | 권장 |
 | 에셋 | Sonniss GameAudioGDC 번들: 가입 후 직접 다운로드(약관 사본 보관) | 선택 |
 | 예산 | 유료 에셋 예산 한도 결정(더 나은 캐릭터/무기가 필요하다고 판단될 때) | 미정 |
-| 플레이 | 직접 플레이 확인 목록(`PLAYTEST_LOG.md` 하단과 각 타이틀 완료 보고)을 처리하고 피드백 전달 | 상시 |
+| 플레이 | **M1.6a-fix 직접 확인 10항목**(`docs/PROGRESS.md` "사람이 직접 확인할 항목") — Windows 빌드 `Build/Sublevel-win64.zip` | 대기 |
+| 플레이 | 직접 플레이 확인 목록(각 타이틀 완료 보고)을 처리하고 피드백 전달 | 상시 |
 | 플레이 | 구역 D를 직접 걸어 보고 크기감·엄폐 밀도·동선 피드백(`Build/mac/Sublevel.app/Contents/MacOS/Sublevel -scene ZoneD`) | 대기 |
 | 결정 | 플레이어 규모(인원), 팀 인원, 출시 플랫폼(Steam 등)과 가격 모델 | 미정 |
