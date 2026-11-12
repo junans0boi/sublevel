@@ -35,4 +35,5 @@
 | ADR-025 | 2026-11-12 | 가정 | 안개(미결정)가 없는 작은 타이틀은 wayfinder 지도를 만들지 않고 스펙 이슈 + 티켓으로 바로 간다(M0-7, M0-8에 적용). 미결정이 있는 타이틀(M1 등)은 지도부터 | wayfinder SKILL.md: "no fog → you don't need a map". 사용자에게 묻지 않는 규칙에 따라 가정으로 기록 / 영향: WORKFLOW ② 단계가 타이틀에 따라 생략됨 |
 | ADR-026 | 2026-11-12 | 가정 | 텍스처 "KTX2" 요구는 **Unity 플랫폼 네이티브 압축(Standalone: BC/DXT 계열, Compressed 품질) + 최대 2048**로 해석한다. KTX2 컨테이너는 쓰지 않는다 | PC 전용(Standalone)에서 Unity 임포터는 KTX2를 기본 지원하지 않고 런타임 이점도 없음. 목적(용량·VRAM 제한)은 네이티브 압축으로 달성 / 영향: PERF_BUDGET·TECH·ASSETS의 "KTX2" 표기는 이 뜻으로 읽는다 |
 | ADR-027 | 2026-11-12 | 가정 | 에셋 단위는 `Assets/_Project/{Art,Audio}/<분류>/<에셋>/` 폴더. 각 폴더는 ASSET_LEDGER의 "프로젝트 경로"에 있어야 하고 `LICENSE.txt`를 동봉해야 한다. 위반 시 빌드 실패(AssetValidator) | ASSETS.md 8절, ASSET_LEDGER "검증 스크립트 요구" / 영향: 프로시저럴·자체 제작 콘텐츠는 Art/Audio 밖(Prefabs, Data, Scenes)에 둔다 |
+| ADR-028 | 2026-11-12 | 확정 | PERF_BUDGET 확정: 렌더 ≤10ms(p99), 드로우콜 ≤2,500(최대 4,000), 삼각형 ≤1.5M(최대 2.5M), SetPass ≤60, GC ≤1KB/프레임. 메모리(≤3GB)·로딩(≤5초)·빌드 크기(≤4GB)는 잠정 | M0-8 실측(M1 13", 1080p, 에디터 오프스크린). 근거 표는 PERF_BUDGET.md / 영향: 플레이어 빌드 실측은 M1 게이트에서 재확인. 기준 장비 RAM은 16GB로 확인(문서의 8GB 가정 정정) |
 
