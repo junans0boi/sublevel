@@ -38,3 +38,17 @@
 /Assets/_Project/{Scripts,Editor,Scenes,Art,Audio,Prefabs,Tests}
 /placeholder/     ← 임시 에셋(릴리스 전 제거)
 ```
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues (`junans0boi/sublevel`, via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context; glossary is `docs/GLOSSARY.md`, ADRs are rows in `docs/DECISIONS.md`. See `docs/agents/domain.md`.
