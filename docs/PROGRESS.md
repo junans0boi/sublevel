@@ -1,10 +1,16 @@
 # PROGRESS — 진행 상황 (타이틀 종료 때마다 갱신)
 
 ## 현재 위치
-- 마일스톤: M0 (진행 중: SETUP 완료, M0-1~5 완료. 남음: M0-6 Fish-Net 스모크, M0-7, M0-8)
-- 진행 중 타이틀: 없음
-- 열린 지도 이슈: 없음(#3 종료) (blocked: #2 Fish-Net 라이선스 검토. #1은 6000.3.28f1 전환으로 해결·종료)
-- 다음 세션: M0-6 Fish-Net 호스트+클라 스모크부터(wayfinder 지도 새로 생성). 스킬 공백 해소(ADR-022): wayfinder/to-spec/to-tickets/implement는 user-only라 Skill 도구 호출 불가 → SKILL.md를 직접 읽어 절차 수행. grilling/tdd/code-review/prototype/research는 Skill 도구로 호출.
+- 마일스톤: M0 (M0-1~5 완료, **M0-6 구현 진행 중(사용자 지시로 중단)**, 남음: M0-7, M0-8)
+- 열린 이슈: 지도 #6, 스펙 #10, 티켓 #12(구현·테스트 5/5 통과, 리뷰 반영분 커밋됨, 이슈 미종료). #11·#7·#8·#9 종료. blocked: #2 Fish-Net 라이선스 검토
+- 상태: Fish-Net 4.7.3 두 NetworkManager 스모크(연결·스폰 관측·SyncVar 복제·클라 쓰기 불변) PlayMode 5/5, EditMode 4/4 통과. code-review 지적 반영(ADR-024 수정, try/finally, 같은 포트 재연결 테스트).
+- 스킬 호출 규칙: ADR-022(user-only 스킬은 SKILL.md 직접 읽기).
+- 다음에 할 일(순서대로):
+  1. `Assets/DefaultPrefabObjects.asset`이 Unity 실행 때마다 스모크 프리팹을 등록해 수정됨 → 커밋하지 말고 `git checkout bf6fa76 -- Assets/DefaultPrefabObjects.asset`로 되돌릴 것(현재 작업트리에 변경 남아 있을 수 있음).
+  2. mac 빌드(`tools/unity.sh build mac`) 성공 확인(DoD), GLOSSARY에 용어(스모크 픽스처, 서버 권위 검증) 추가.
+  3. 리서치 문서를 main으로 이관(`git show research/fishnet-headless-host-client:docs/research/fishnet-headless-host-client.md` → docs/research/), 그 후 원격·로컬 브랜치 `research/fishnet-headless-host-client` 정리(force push·PR 없이 `git push origin --delete`).
+  4. #12·#10·#6 종료, 이 문서에 스모크 결과 로그 첨부(Logs/net-smoke/*.log 내용 요약 또는 발췌), 한국어 3줄 요약.
+- 미반영 리뷰 지적(선택): NetSmokeFixtures 전역 네임스페이스, SmokeNetObject 릴리스 전 제거/스트립(ADR-024 기록).
 
 ## 환경 (SETUP 완료 후 채움)
 | 항목 | 값 |

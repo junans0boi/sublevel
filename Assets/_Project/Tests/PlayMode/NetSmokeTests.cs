@@ -49,10 +49,14 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator ServerAndClient_ConnectAgainAfterTeardown()
+        public IEnumerator Teardown_ThenReconnectOnSamePort()
         {
-            Assert.IsTrue(_net.Client.IsClientStarted);
-            yield return null;
+            yield return _net.Teardown();
+            var again = new NetHarness(_prefab, _net.Port);
+            yield return again.Connect(Log);
+            Assert.IsTrue(again.Server.IsServerStarted);
+            Assert.IsTrue(again.Client.IsClientStarted);
+            yield return again.Teardown();
         }
 
         IEnumerator SpawnOnServer(System.Action<NetworkObject, NetworkObject> done)
@@ -70,7 +74,7 @@ namespace Game.Tests
         [UnityTest]
         public IEnumerator ServerSpawn_IsObservedOnClient()
         {
-            yield return SpawnOnServer((s, c) => Assert.AreEqual(s.ObjectId, c.ObjectId));
+            yield return SpawnOnServer((s, c) => Assert.IsTrue(c.IsSpawned));
         }
 
         [UnityTest]
@@ -93,8 +97,8 @@ namespace Game.Tests
 
             var prev = LogAssert.ignoreFailingMessages;
             LogAssert.ignoreFailingMessages = true; // Fish-Net logs the rejected write
-            c.GetComponent<SmokeNetObject>().Counter.Value = 999;
-            LogAssert.ignoreFailingMessages = prev;
+            try { c.GetComponent<SmokeNetObject>().Counter.Value = 999; }
+            finally { LogAssert.ignoreFailingMessages = prev; }
             Log("client attempted Counter=999");
 
             // Let several ticks pass so a (wrongly accepted) write would have replicated.

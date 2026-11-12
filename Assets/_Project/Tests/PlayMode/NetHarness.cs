@@ -24,10 +24,10 @@ namespace Game.Tests
 
         static ushort _nextPort = 17770;
 
-        public NetHarness(NetworkObject prefab)
+        public NetHarness(NetworkObject prefab, ushort? port = null)
         {
             _prefab = prefab;
-            Port = _nextPort++;
+            Port = port ?? _nextPort++;
         }
 
         NetworkManager Create(string name, out SinglePrefabObjects prefabs)
@@ -37,8 +37,9 @@ namespace Game.Tests
             // Editor-only: NetworkManager.Reset logs "SpawnablePrefabs is null" on AddComponent; we assign it right after.
             var prevIgnore = LogAssert.ignoreFailingMessages;
             LogAssert.ignoreFailingMessages = true;
-            var nm = go.AddComponent<NetworkManager>();
-            LogAssert.ignoreFailingMessages = prevIgnore;
+            NetworkManager nm;
+            try { nm = go.AddComponent<NetworkManager>(); }
+            finally { LogAssert.ignoreFailingMessages = prevIgnore; }
             typeof(NetworkManager).GetField("_persistence", Priv).SetValue(nm, NetworkManager.PersistenceType.AllowMultiple);
             prefabs = ScriptableObject.CreateInstance<SinglePrefabObjects>();
             prefabs.AddObject(_prefab, false, false);
@@ -66,6 +67,8 @@ namespace Game.Tests
             while ((Client != null && Client.ClientManager.Started || Server != null && Server.ServerManager.Started)
                    && Time.realtimeSinceStartup < end)
                 yield return null;
+            if (Client != null && Client.ClientManager.Started || Server != null && Server.ServerManager.Started)
+                Debug.LogError("NetHarness.Teardown: connections did not stop in time");
             if (Client != null) UnityEngine.Object.Destroy(Client.gameObject);
             if (Server != null) UnityEngine.Object.Destroy(Server.gameObject);
             if (_clientPrefabs != null) UnityEngine.Object.Destroy(_clientPrefabs);
