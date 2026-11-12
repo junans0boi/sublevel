@@ -12,6 +12,7 @@ namespace Game.Gameplay
     {
         const int Frames = 600;
         const float WarmupSeconds = 3f;
+        const float SpawnTimeoutSeconds = 30f;
         const float SpikeThresholdMs = 8f;
         const float VsyncSpikeThresholdMs = 20f; // a missed 60 Hz refresh
 
@@ -26,6 +27,8 @@ namespace Game.Gameplay
             public int LootItems;
             public int Width;
             public int Height;
+            public float DisplayHz; // the 60 fps check (-perfvsync) is only valid on a 60 Hz display
+            public bool TimedOut;   // no local player appeared; the numbers are not a match measurement
             // Frames well above the average, to tell a steady cost from isolated hitches.
             public int[] SpikeFrames;
             public float[] SpikeMs;
@@ -64,6 +67,12 @@ namespace Game.Gameplay
                 if (Time.frameCount >= _quitAtFrame) Application.Quit();
                 return;
             }
+            // Warm-up counts from the moment the player is in the match, so a `-scene` switch is not part of the sample.
+            if (Combatant.LocalPlayer == null && Time.realtimeSinceStartup < SpawnTimeoutSeconds)
+            {
+                _startAt = Time.realtimeSinceStartup + WarmupSeconds;
+                return;
+            }
             if (Time.realtimeSinceStartup < _startAt) return;
             _times[_count++] = Time.unscaledDeltaTime * 1000f;
             if (_count < Frames) return;
@@ -80,6 +89,8 @@ namespace Game.Gameplay
                 LootItems = LootItem.All.Count,
                 Width = Screen.width,
                 Height = Screen.height,
+                DisplayHz = (float)Screen.currentResolution.refreshRateRatio.value,
+                TimedOut = Combatant.LocalPlayer == null,
                 SpikeFrames = spikeFrames.ToArray(),
                 SpikeMs = spikeMs.ToArray(),
             };

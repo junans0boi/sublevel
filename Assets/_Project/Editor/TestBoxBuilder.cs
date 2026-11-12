@@ -10,6 +10,7 @@ using Game.Net;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using static EditorFields;
 
 // Generates the test box: prefabs and scene. Layout and gameplay objects date from M1; since M1.5 the
 // characters, weapons, surfaces, sky and sounds use the CC0 assets (ADR-035..037, replacing ADR-033's primitives).
@@ -17,7 +18,7 @@ using UnityEngine;
 public static class TestBoxBuilder
 {
     public const string ScenePath = "Assets/_Project/Scenes/TestBox.unity";
-    const string PrefabDir = "Assets/_Project/Prefabs/M1";
+    public const string PrefabDir = "Assets/_Project/Prefabs/M1";
     const string MaterialDir = PrefabDir + "/Materials";
     const string WeaponAudioDir = "Assets/_Project/Audio/Weapons/";
     const string FoleyDir = "Assets/_Project/Audio/Foley/KenneyImpactSounds/";
@@ -40,13 +41,16 @@ public static class TestBoxBuilder
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         BuildLevel(postProfile);
-        BuildMatch(player, dummy, loot);
+        MatchKit.AddMatch(
+            new[] { MatchKit.At(0, 0.1f, -24) },
+            new[]
+            {
+                MatchKit.At(0, 0.3f, -21), MatchKit.At(-6, 0.3f, -20), MatchKit.At(6, 0.3f, -20), MatchKit.At(-20, 0.3f, -18), MatchKit.At(20, 0.3f, -18),
+                MatchKit.At(-22, 0.3f, 8), MatchKit.At(22, 0.3f, 8), MatchKit.At(-8, 0.3f, 22), MatchKit.At(8, 0.3f, 22), MatchKit.At(0, 0.3f, 26),
+            },
+            new[] { MatchKit.At(-15, 0, 0, 180f), MatchKit.At(15, 0, 0, 180f), MatchKit.At(0, 0, 20, 180f) });
         EditorSceneManager.SaveScene(scene, ScenePath);
-        EditorBuildSettings.scenes = new[]
-        {
-            new EditorBuildSettingsScene(ScenePath, true),
-            new EditorBuildSettingsScene(SceneBuilder.BootstrapPath, true),
-        };
+        SceneBuilder.RegisterBuildScenes();
         AssetDatabase.SaveAssets();
         Debug.Log("[TestBoxBuilder] Saved " + ScenePath);
         EditorApplication.Exit(0);
@@ -87,24 +91,6 @@ public static class TestBoxBuilder
         go.GetComponent<Renderer>().sharedMaterial = mat;
         if (!keepCollider) Object.DestroyImmediate(go.GetComponent<Collider>());
         return go;
-    }
-
-    static void Set(Object target, string field, System.Action<SerializedProperty> assign)
-    {
-        var so = new SerializedObject(target);
-        var prop = so.FindProperty(field);
-        if (prop == null) throw new System.Exception($"{target.GetType().Name} has no serialized field {field}");
-        assign(prop);
-        so.ApplyModifiedPropertiesWithoutUndo();
-    }
-
-    static void SetArray(Object target, string field, Object[] values)
-    {
-        Set(target, field, p =>
-        {
-            p.arraySize = values.Length;
-            for (int i = 0; i < values.Length; i++) p.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
-        });
     }
 
     // Model, animation, held weapons and sounds shared by every combatant prefab.
@@ -247,49 +233,5 @@ public static class TestBoxBuilder
         cam.AddComponent<AudioListener>();
         cam.transform.position = new Vector3(0, 12, -34);
         cam.transform.LookAt(Vector3.zero);
-    }
-
-    static Transform[] Points(Transform parent, string prefix, Vector3[] positions, float yaw = 0f)
-    {
-        var points = new Transform[positions.Length];
-        for (int i = 0; i < positions.Length; i++)
-        {
-            var t = new GameObject(prefix + i).transform;
-            t.SetParent(parent, false);
-            t.position = positions[i];
-            t.rotation = Quaternion.Euler(0, yaw, 0);
-            points[i] = t;
-        }
-        return points;
-    }
-
-    static void BuildMatch(NetworkObject player, NetworkObject dummy, NetworkObject loot)
-    {
-        var go = new GameObject("Match");
-        var nm = go.AddComponent<NetworkManager>();
-        // The manager lives and dies with the match scene so a restart gets a fresh one.
-        Set(nm, "_dontDestroyOnLoad", p => p.boolValue = false);
-        nm.SpawnablePrefabs = AssetDatabase.LoadAssetAtPath<DefaultPrefabObjects>("Assets/DefaultPrefabObjects.asset");
-        EditorUtility.SetDirty(nm);
-        go.AddComponent<Tugboat>();
-        var director = go.AddComponent<MatchDirector>();
-
-        var playerSpawns = Points(go.transform, "PlayerSpawn", new[] { new Vector3(0, 0.1f, -24) });
-        var lootSpawns = Points(go.transform, "LootSpawn", new[]
-        {
-            new Vector3(0, 0.3f, -21), new Vector3(-6, 0.3f, -20), new Vector3(6, 0.3f, -20), new Vector3(-20, 0.3f, -18), new Vector3(20, 0.3f, -18),
-            new Vector3(-22, 0.3f, 8), new Vector3(22, 0.3f, 8), new Vector3(-8, 0.3f, 22), new Vector3(8, 0.3f, 22), new Vector3(0, 0.3f, 26),
-        });
-        var dummySpawns = Points(go.transform, "DummySpawn", new[] { new Vector3(-15, 0, 0), new Vector3(15, 0, 0), new Vector3(0, 0, 20) }, 180f);
-
-        Set(director, "_networkManager", p => p.objectReferenceValue = nm);
-        Set(director, "_playerPrefab", p => p.objectReferenceValue = player);
-        Set(director, "_lootPrefab", p => p.objectReferenceValue = loot);
-        Set(director, "_dummyPrefab", p => p.objectReferenceValue = dummy);
-        SetArray(director, "_playerSpawns", playerSpawns);
-        SetArray(director, "_lootSpawns", lootSpawns);
-        SetArray(director, "_dummySpawns", dummySpawns);
-
-        new GameObject("HUD").AddComponent<Hud>();
     }
 }

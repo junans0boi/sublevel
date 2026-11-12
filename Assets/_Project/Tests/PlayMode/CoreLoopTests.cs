@@ -1,12 +1,10 @@
 using System;
 using System.Collections;
-using System.Diagnostics;
 using System.IO;
 using Game.Core;
 using Game.Gameplay;
 using Game.Net;
 using NUnit.Framework;
-using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -242,58 +240,11 @@ namespace Game.Tests
         [Category("Perf")]
         public IEnumerator TestBox_RendersWithinBudget()
         {
-            const int frames = 90, warmup = 30;
-            var cam = PlayerController.Local.Camera;
-            cam.enabled = false; // rendered manually so only our call is timed
-            var rt = new RenderTexture(1920, 1080, 24);
-            cam.targetTexture = rt;
-            var probe = new Texture2D(1, 1, TextureFormat.RGB24, false);
-            var draws = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
-            var tris = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles Count");
-            var setPass = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
-
-            var times = new float[frames];
-            var sw = new Stopwatch();
-            for (int i = 0; i < frames; i++)
-            {
-                yield return null;
-                sw.Restart();
-                cam.Render();
-                var prev = RenderTexture.active;
-                RenderTexture.active = rt;
-                probe.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
-                RenderTexture.active = prev;
-                sw.Stop();
-                times[i] = (float)sw.Elapsed.TotalMilliseconds;
-            }
-            var stats = FrameStats.Compute(times, warmup);
-            long drawCalls = draws.LastValue, triangles = tris.LastValue, setPasses = setPass.LastValue;
-            draws.Dispose(); tris.Dispose(); setPass.Dispose();
-            // Keep one frame as an image so the scene can be checked by eye.
-            var shot = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
-            RenderTexture.active = rt;
-            shot.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-            RenderTexture.active = null;
-            Directory.CreateDirectory("Logs/perf");
-            File.WriteAllBytes("Logs/perf/testbox.png", shot.EncodeToPNG());
-            UnityEngine.Object.Destroy(shot);
-
-            cam.targetTexture = null;
-            cam.enabled = true;
-            rt.Release();
-            UnityEngine.Object.Destroy(rt);
-            UnityEngine.Object.Destroy(probe);
-
-            Directory.CreateDirectory("Logs/perf");
-            File.WriteAllText("Logs/perf/testbox.json",
-                $"{{\"AvgMs\":{stats.AvgMs:F3},\"P99Ms\":{stats.P99Ms:F3},\"DrawCalls\":{drawCalls},\"Triangles\":{triangles},\"SetPass\":{setPasses}}}");
-            UnityEngine.Debug.Log($"[Perf] testbox: avg {stats.AvgMs:F2}ms p99 {stats.P99Ms:F2}ms draw {drawCalls} tris {triangles} setpass {setPasses}");
-
-            // PERF_BUDGET targets (ADR-028). Lower bounds prove the counters were live.
-            Assert.That(stats.P99Ms, Is.GreaterThan(0f).And.LessThanOrEqualTo(10f), "render time p99");
-            Assert.That(drawCalls, Is.GreaterThan(0).And.LessThanOrEqualTo(2500));
-            Assert.That(triangles, Is.GreaterThan(0).And.LessThanOrEqualTo(1500000));
-            Assert.That(setPasses, Is.GreaterThan(0).And.LessThanOrEqualTo(60));
+            RenderProbe.Result result = default;
+            yield return RenderProbe.Measure(PlayerController.Local.Camera, r => result = r, screenshotPath: "Logs/perf/testbox.png");
+            RenderProbe.WriteReport("Logs/perf/testbox.json", result.ToJson());
+            UnityEngine.Debug.Log("[Perf] testbox: " + result);
+            RenderProbe.AssertWithinBudget(result);
         }
     }
 }
