@@ -4,9 +4,9 @@ namespace Game.Core
     public class Loadout
     {
         public const int SlotCount = 2;
-        public const float MedkitHeal = 50f;
 
         readonly WeaponTable _table;
+        readonly float _medkitHeal;
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
         readonly int[] _reserve = new int[3];
@@ -17,16 +17,22 @@ namespace Game.Core
         public int Medkits { get; private set; }
         public bool IsReloading => _reloadEndTime >= 0;
 
-        public Loadout(WeaponTable table) => _table = table;
+        public Loadout(WeaponTable table, float medkitHeal = 50f)
+        {
+            _table = table;
+            _medkitHeal = medkitHeal;
+        }
 
         public int WeaponInSlot(int slot) => _slotWeapon[slot];
         public int MagInSlot(int slot) => _slotMag[slot];
         public int Reserve(AmmoType type) => _reserve[(int)type];
         public WeaponDef ActiveWeapon => _table.Find(_slotWeapon[ActiveSlot]);
 
-        // Puts the weapon in the first empty slot, or replaces the active one. Returns the replaced weapon id (0 if none).
-        public int AddWeapon(int weaponId, int ammoInMag)
+        // Puts the weapon in the first empty slot, or replaces the active one.
+        // Returns the replaced weapon id (0 if none) and what was left in its magazine.
+        public int AddWeapon(int weaponId, int ammoInMag, out int replacedMag)
         {
+            replacedMag = 0;
             int slot = -1;
             for (int i = 0; i < SlotCount; i++)
                 if (_slotWeapon[i] == 0) { slot = i; break; }
@@ -35,6 +41,7 @@ namespace Game.Core
             {
                 slot = ActiveSlot;
                 replaced = _slotWeapon[slot];
+                replacedMag = _slotMag[slot];
                 _reloadEndTime = -1;
             }
             _slotWeapon[slot] = weaponId;
@@ -42,6 +49,8 @@ namespace Game.Core
             if (ActiveWeapon == null) ActiveSlot = slot;
             return replaced;
         }
+
+        public int AddWeapon(int weaponId, int ammoInMag) => AddWeapon(weaponId, ammoInMag, out _);
 
         public void AddAmmo(AmmoType type, int amount) => _reserve[(int)type] += amount;
         public void AddMedkits(int amount) => Medkits += amount;
@@ -90,7 +99,7 @@ namespace Game.Core
         {
             if (Medkits <= 0 || health.IsDead || health.Current >= health.Max) return false;
             Medkits--;
-            health.Heal(MedkitHeal);
+            health.Heal(_medkitHeal);
             return true;
         }
     }

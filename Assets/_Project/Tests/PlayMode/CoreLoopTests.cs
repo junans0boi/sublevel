@@ -95,6 +95,64 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator Player_Jumps_AndLandsAgain()
+        {
+            var player = PlayerController.Local.transform;
+            yield return WaitSeconds(0.3f); // settle on the floor
+            float ground = player.position.y;
+            _input.Frame.Jump = true;
+            float peak = ground;
+            float end = Time.time + 1.5f;
+            while (Time.time < end)
+            {
+                peak = Mathf.Max(peak, player.position.y);
+                yield return null;
+            }
+            Assert.Greater(peak - ground, 0.4f, "jump height");
+            Assert.Less(Mathf.Abs(player.position.y - ground), 0.1f, "back on the floor");
+        }
+
+        [UnityTest]
+        public IEnumerator Reload_SwitchWeapon_AndHeal_AreAppliedByTheServer()
+        {
+            var me = Combatant.LocalPlayer;
+            // Host shortcut: hand the items over on the server instead of walking to them.
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 2 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 4, Amount = 6 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Light, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });
+            yield return null;
+
+            _input.Frame.Reload = true;
+            yield return WaitUntil(() => me.Reloading.Value, 2f, "reload started");
+            yield return WaitUntil(() => !me.Reloading.Value && me.Mag0.Value == 12, 5f, "magazine refilled");
+            Assert.AreEqual(20, me.ReserveLight.Value);
+
+            _input.Frame.SelectSlot = 1;
+            yield return WaitUntil(() => me.ActiveSlot.Value == 1, 2f, "second slot active");
+            Assert.AreEqual(4, me.ActiveWeaponId);
+
+            me.ServerTakeDamage(70);
+            yield return null;
+            Assert.AreEqual(30f, me.Hp.Value);
+            _input.Frame.Heal = true;
+            yield return WaitUntil(() => me.Medkits.Value == 0, 2f, "medkit used");
+            Assert.AreEqual(80f, me.Hp.Value);
+        }
+
+        [UnityTest]
+        public IEnumerator DataFiles_LoadAndAreConsistent()
+        {
+            Assert.AreEqual(4, GameData.Weapons.Weapons.Length);
+            foreach (var entry in GameData.Loot.Entries)
+                if (entry.Kind == LootKind.Weapon)
+                    Assert.IsNotNull(GameData.Weapons.Find(entry.WeaponId), "loot refers to weapon " + entry.WeaponId);
+            Assert.Greater(GameData.Rules.MedkitHeal, 0f);
+            Assert.AreEqual(MatchDirector.Instance.LootSpawns.Length, LootItem.All.Count, "one item per loot point");
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Camera_SwitchesToFirstPerson_AndStaysInsideWalls()
         {
             var pc = PlayerController.Local;
@@ -111,6 +169,17 @@ namespace Game.Tests
 
             _input.Frame.ToggleView = true;
             yield return null;
+            yield return null;
+            Assert.AreEqual(ViewMode.ThirdPerson, pc.Rig.Mode);
+
+            // Shoulder swap moves the camera to the other side of the player.
+            float sideBefore = pc.transform.InverseTransformPoint(pc.Camera.transform.position).x;
+            _input.Frame.SwapShoulder = true;
+            yield return null;
+            yield return null;
+            float sideAfter = pc.transform.InverseTransformPoint(pc.Camera.transform.position).x;
+            Assert.Less(sideBefore * sideAfter, 0f, "camera switched shoulders");
+
             // Back against the south wall (inner face at z = -29.5), looking north.
             pc.Teleport(new Vector3(0, 0.1f, -28.8f));
             pc.LookAt(new Vector3(0, 1.6f, 0));
@@ -220,11 +289,11 @@ namespace Game.Tests
                 $"{{\"AvgMs\":{stats.AvgMs:F3},\"P99Ms\":{stats.P99Ms:F3},\"DrawCalls\":{drawCalls},\"Triangles\":{triangles},\"SetPass\":{setPasses}}}");
             UnityEngine.Debug.Log($"[Perf] testbox: avg {stats.AvgMs:F2}ms p99 {stats.P99Ms:F2}ms draw {drawCalls} tris {triangles} setpass {setPasses}");
 
-            // PERF_BUDGET maximums (ADR-028).
-            Assert.LessOrEqual(stats.P99Ms, 14f, "render time p99");
-            Assert.LessOrEqual(drawCalls, 4000);
-            Assert.LessOrEqual(triangles, 2500000);
-            Assert.LessOrEqual(setPasses, 120);
+            // PERF_BUDGET targets (ADR-028). Lower bounds prove the counters were live.
+            Assert.That(stats.P99Ms, Is.GreaterThan(0f).And.LessThanOrEqualTo(10f), "render time p99");
+            Assert.That(drawCalls, Is.GreaterThan(0).And.LessThanOrEqualTo(2500));
+            Assert.That(triangles, Is.GreaterThan(0).And.LessThanOrEqualTo(1500000));
+            Assert.That(setPasses, Is.GreaterThan(0).And.LessThanOrEqualTo(60));
         }
     }
 }

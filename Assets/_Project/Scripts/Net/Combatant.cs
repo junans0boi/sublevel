@@ -12,7 +12,6 @@ namespace Game.Net
     public class Combatant : NetworkBehaviour
     {
         public const float PickupRange = 3f;
-        const float MaxOriginError = 2.5f;
 
         [SerializeField] bool _isPlayer;
         [SerializeField] float _maxHealth = 100f;
@@ -67,8 +66,10 @@ namespace Game.Net
         public override void OnStartServer()
         {
             _health = new Health(_maxHealth);
-            _loadout = new Loadout(GameData.Weapons);
-            _rng = new System.Random(ObjectId * 7919 + 17);
+            _loadout = new Loadout(GameData.Weapons, GameData.Rules.MedkitHeal);
+            // Derived from the match seed so a match can be replayed.
+            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
+            _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
             Push();
         }
 
@@ -101,9 +102,12 @@ namespace Game.Net
         // ---- Server API (players reach it through the Cmd* requests below; AI calls it directly) ----
 
         [Server]
-        public bool ServerFire(Vector3 origin, Vector3 direction)
+        public bool ServerFire(Vector3 direction)
         {
-            if (_health.IsDead || direction.sqrMagnitude < 1e-6f) return false;
+            float sqr = direction.sqrMagnitude;
+            if (_health.IsDead || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
+            // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
+            var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
             if (!_loadout.TryFire(Time.timeAsDouble)) return false;
 
@@ -137,7 +141,12 @@ namespace Game.Net
         {
             switch (loot.Kind)
             {
-                case LootKind.Weapon: _loadout.AddWeapon(loot.WeaponId, loot.Amount); break;
+                case LootKind.Weapon:
+                    int replaced = _loadout.AddWeapon(loot.WeaponId, loot.Amount, out int replacedMag);
+                    // A replaced weapon goes back on the ground instead of vanishing.
+                    if (replaced != 0 && MatchDirector.Instance != null)
+                        MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
+                    break;
                 case LootKind.Ammo: _loadout.AddAmmo(loot.Ammo, loot.Amount); break;
                 case LootKind.Medkit: _loadout.AddMedkits(loot.Amount); break;
             }
@@ -153,12 +162,7 @@ namespace Game.Net
         // ---- Owner requests ----
 
         [ServerRpc]
-        public void CmdFire(Vector3 origin, Vector3 direction)
-        {
-            // The shot must start near this combatant's own eyes.
-            if ((origin - EyePosition).sqrMagnitude > MaxOriginError * MaxOriginError) return;
-            ServerFire(origin, direction);
-        }
+        public void CmdFire(Vector3 direction) => ServerFire(direction);
 
         [ServerRpc]
         public void CmdReload() => ServerReload();
@@ -184,6 +188,13 @@ namespace Game.Net
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
             ServerGive(item.ToEntry());
             item.Despawn();
+        }
+
+        // Solo has no revival: a dead player may ask the server for a fresh match.
+        [ServerRpc]
+        public void CmdRequestRestart()
+        {
+            if (_health.IsDead && MatchDirector.Instance != null) MatchDirector.Instance.Restart();
         }
 
         [ObserversRpc]

@@ -34,6 +34,12 @@ namespace Game.Tests
         public void OversizedTexture_IsCappedCompressedAndNotReadable()
         {
             var importer = ImportTexture("big_albedo.png", 4096);
+            // Someone loosens the settings by hand; the next import must put them back.
+            importer.maxTextureSize = 8192;
+            importer.isReadable = true;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.SaveAndReimport();
+            importer = (TextureImporter)AssetImporter.GetAtPath(importer.assetPath);
             Assert.LessOrEqual(importer.maxTextureSize, 2048);
             Assert.IsFalse(importer.isReadable);
             Assert.AreEqual(TextureImporterCompression.Compressed, importer.textureCompression);

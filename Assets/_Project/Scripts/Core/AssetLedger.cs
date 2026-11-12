@@ -15,9 +15,14 @@ namespace Game.Core
             var paths = new List<string>();
             foreach (var line in ledgerMarkdown.Split('\n'))
             {
-                if (!line.TrimStart().StartsWith("|") || line.Contains("(예시)")) continue;
+                var row = line.TrimStart();
+                if (!row.StartsWith("|") || row.TrimStart('|', ' ').StartsWith("(예시)")) continue;
                 foreach (Match m in PathPattern.Matches(line))
-                    paths.Add(m.Value.TrimEnd('.', '/'));
+                {
+                    var path = m.Value.TrimEnd('.', '/');
+                    // A row must name at least a category folder (Assets/_Project/Art/<category>); broader rows cover nothing.
+                    if (path.Split('/').Length >= 4) paths.Add(path);
+                }
             }
             return paths;
         }

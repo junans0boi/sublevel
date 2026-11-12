@@ -24,7 +24,7 @@ namespace Game.Gameplay
         public float Pitch { get; private set; }
         public LootItem NearbyLoot { get; private set; }
 
-        readonly LocomotionParams _locomotion = new LocomotionParams();
+        LocomotionParams _locomotion;
         CharacterController _controller;
         Combatant _combatant;
         IPlayerInput _input;
@@ -37,6 +37,7 @@ namespace Game.Gameplay
             _controller = GetComponent<CharacterController>();
             _combatant = GetComponent<Combatant>();
             _controller.enabled = false;
+            _locomotion = GameData.Rules.Locomotion;
         }
 
         public override void OnStartClient()
@@ -55,10 +56,18 @@ namespace Game.Gameplay
             }
         }
 
-        public override void OnStopClient()
+        public override void OnStopClient() => ReleaseOwnership();
+
+        // Scene unloads destroy objects without the network callbacks.
+        void OnDestroy() => ReleaseOwnership();
+
+        void ReleaseOwnership()
         {
-            if (Local == this) Local = null;
+            if (!_owner) return;
             _owner = false;
+            if (Local == this) Local = null;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         void Update()
@@ -68,7 +77,7 @@ namespace Game.Gameplay
 
             if (_combatant.Dead.Value)
             {
-                if (f.Restart && MatchDirector.Instance != null) MatchDirector.Instance.Restart();
+                if (f.Restart) _combatant.CmdRequestRestart();
                 PlaceCamera();
                 return;
             }
@@ -101,7 +110,7 @@ namespace Game.Gameplay
             _nextLocalFire = Time.time + weapon.FireInterval;
             var eye = _combatant.EyePosition;
             var aim = Camera != null ? Rig.AimPoint(Camera.transform, transform, AimDistance) : eye + transform.forward * AimDistance;
-            _combatant.CmdFire(eye, (aim - eye).normalized);
+            _combatant.CmdFire((aim - eye).normalized);
         }
 
         void PlaceCamera()

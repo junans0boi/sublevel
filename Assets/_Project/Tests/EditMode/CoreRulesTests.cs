@@ -110,7 +110,8 @@ namespace Game.Tests
             Assert.AreEqual(0, l.AddWeapon(1, 3));
             Assert.AreEqual(0, l.AddWeapon(2, 2));
             Assert.AreEqual(0, l.ActiveSlot);
-            Assert.AreEqual(1, l.AddWeapon(2, 1));
+            Assert.AreEqual(1, l.AddWeapon(2, 1, out int leftInMag));
+            Assert.AreEqual(3, leftInMag);
             Assert.AreEqual(2, l.WeaponInSlot(0));
             Assert.AreEqual(1, l.MagInSlot(0));
         }
@@ -163,6 +164,22 @@ namespace Game.Tests
                 Assert.AreEqual(LootKind.Weapon, a[0].Kind, "seed " + seed);
                 CollectionAssert.AreEqual(a, b);
             }
+            bool anyDifferent = false;
+            var first = table.Plan(6, 0);
+            for (int seed = 1; seed < 20 && !anyDifferent; seed++)
+            {
+                var other = table.Plan(6, seed);
+                for (int i = 0; i < 6; i++) anyDifferent |= other[i] != first[i];
+            }
+            Assert.IsTrue(anyDifferent, "the seed must change the plan");
+        }
+
+        [Test]
+        public void EmptyLootTable_PlansNothingAndDoesNotThrow()
+        {
+            var table = new LootTable();
+            Assert.IsNull(table.Roll(new Random(1)));
+            Assert.AreEqual(2, table.Plan(2, 5).Length);
         }
 
         [Test]

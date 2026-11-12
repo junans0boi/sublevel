@@ -24,6 +24,7 @@ namespace Game.Net
         public static MatchDirector Instance { get; private set; }
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
+        public int Seed => _seed;
 
         int _nextPlayerSpawn;
 
@@ -55,9 +56,7 @@ namespace Game.Net
             var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);
             for (int i = 0; i < plan.Length; i++)
             {
-                var item = Instantiate(_lootPrefab, _lootSpawns[i].position, Quaternion.identity);
-                item.GetComponent<LootItem>().Init(plan[i]);
-                _networkManager.ServerManager.Spawn(item);
+                ServerSpawnLoot(plan[i], _lootSpawns[i].position);
             }
 
             foreach (var point in _dummySpawns)
@@ -65,6 +64,13 @@ namespace Game.Net
                 var dummy = Instantiate(_dummyPrefab, point.position, point.rotation);
                 _networkManager.ServerManager.Spawn(dummy);
             }
+        }
+
+        public void ServerSpawnLoot(LootEntry entry, Vector3 position)
+        {
+            var item = Instantiate(_lootPrefab, position, Quaternion.identity);
+            item.GetComponent<LootItem>().Init(entry);
+            _networkManager.ServerManager.Spawn(item);
         }
 
         void OnClientLoaded(NetworkConnection connection, bool asServer)
@@ -75,7 +81,7 @@ namespace Game.Net
             _networkManager.ServerManager.Spawn(player, connection);
         }
 
-        // Solo has no revival: restarting reloads the match scene.
+        // Server-side. Solo has no revival: restarting reloads the match scene.
         public void Restart() => SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }

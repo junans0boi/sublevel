@@ -37,18 +37,5 @@ namespace Game.Net
             Ammo = (AmmoType)Ammo.Value,
             Amount = Amount.Value,
         };
-
-        public string Label()
-        {
-            switch ((LootKind)Kind.Value)
-            {
-                case LootKind.Weapon: return GameData.Weapons.Find(WeaponId.Value)?.Name ?? "Weapon";
-                case LootKind.Ammo: return AmmoName((AmmoType)Ammo.Value) + " x" + Amount.Value;
-                default: return "Medkit";
-            }
-        }
-
-        public static string AmmoName(AmmoType type) =>
-            type == AmmoType.Light ? "Light ammo" : type == AmmoType.Medium ? "Medium ammo" : "Shells";
     }
 }

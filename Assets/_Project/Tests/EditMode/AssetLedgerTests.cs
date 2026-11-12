@@ -41,6 +41,14 @@ namespace Game.Tests
         }
 
         [Test]
+        public void RowBroaderThanACategory_CoversNothing()
+        {
+            var ledger = "| A-0009 | x | y | Assets/_Project/Art |\n| (예시) | x | y | Assets/_Project/Art/Materials |\n";
+            var missing = AssetLedger.FindUnlisted(ledger, new[] { "Assets/_Project/Art/Materials/Metal01" });
+            Assert.AreEqual(1, missing.Count);
+        }
+
+        [Test]
         public void SimilarPrefix_IsNotCovered()
         {
             var missing = AssetLedger.FindUnlisted(Ledger, new[] { "Assets/_Project/Art/Materials/Metal012" });

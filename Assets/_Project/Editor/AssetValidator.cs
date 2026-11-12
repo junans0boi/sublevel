@@ -46,10 +46,12 @@ public class AssetValidator : IPreprocessBuildWithReport
         foreach (var root in Roots)
         {
             if (!Directory.Exists(root)) continue;
+            var loose = new List<string>(Directory.GetFiles(root));
             foreach (var category in Directory.GetDirectories(root))
-                foreach (var file in Directory.GetFiles(category))
-                    if (!file.EndsWith(".meta"))
-                        errors.Add("file outside an asset folder: " + file.Replace('\\', '/'));
+                loose.AddRange(Directory.GetFiles(category));
+            foreach (var file in loose)
+                if (!file.EndsWith(".meta"))
+                    errors.Add("file outside an asset folder: " + file.Replace('\\', '/'));
         }
         return errors;
     }

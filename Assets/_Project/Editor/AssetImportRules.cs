@@ -12,6 +12,9 @@ public class AssetImportRules : AssetPostprocessor
     static readonly Regex NormalSuffix = new Regex(@"_(normal|nor|nrm|n)(_gl|_dx)?$", RegexOptions.IgnoreCase);
     static readonly Regex LinearSuffix = new Regex(@"_(roughness|rough|metallic|metal|ao|mask|orm|arm|height|disp)$", RegexOptions.IgnoreCase);
 
+    // Bump when a rule changes so existing assets are reimported.
+    public override uint GetVersion() => 1;
+
     void OnPreprocessTexture()
     {
         if (!assetPath.StartsWith(ArtRoot)) return;

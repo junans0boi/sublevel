@@ -8,8 +8,10 @@ namespace Game.Net
     {
         static WeaponTable _weapons;
         static LootTable _loot;
+        static GameRules _rules;
 
         public static WeaponTable Weapons => _weapons ??= Load<WeaponTable>("GameData/weapons");
+        public static GameRules Rules => _rules ??= Load<GameRules>("GameData/rules");
         public static LootTable Loot => _loot ??= Load<LootTable>("GameData/loot");
 
         static T Load<T>(string path)

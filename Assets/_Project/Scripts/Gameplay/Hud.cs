@@ -12,6 +12,9 @@ namespace Game.Gameplay
         LootItem _promptFor;
         GUIStyle _style, _centered;
 
+        // Fixed rects only: skipping the layout pass avoids its per-frame allocations.
+        void Awake() => useGUILayout = false;
+
         void OnGUI()
         {
             if (Event.current.type != EventType.Repaint) return;
@@ -29,7 +32,7 @@ namespace Game.Gameplay
                 _hash = hash;
                 _status = BuildStatus(me);
             }
-            GUI.Label(new Rect(20, Screen.height - 110, 700, 100), _status, _style);
+            GUI.Label(new Rect(20, Screen.height - 140, 700, 130), _status, _style);
             GUI.Label(new Rect(Screen.width / 2 - 10, Screen.height / 2 - 14, 20, 28), "+", _centered);
 
             if (me.Dead.Value)
@@ -42,7 +45,7 @@ namespace Game.Gameplay
             if (loot != _promptFor)
             {
                 _promptFor = loot;
-                _prompt = loot != null ? "[F] " + loot.Label() : "";
+                _prompt = loot != null ? "[F] " + LootLabel(loot) : "";
             }
             if (_prompt.Length > 0)
                 GUI.Label(new Rect(0, Screen.height / 2 + 40, Screen.width, 30), _prompt, _centered);
@@ -52,7 +55,7 @@ namespace Game.Gameplay
         {
             unchecked
             {
-                int h = (int)c.Hp.Value;
+                int h = Mathf.CeilToInt(c.Hp.Value);
                 h = h * 31 + c.ActiveSlot.Value;
                 h = h * 31 + c.Slot0.Value; h = h * 31 + c.Slot1.Value;
                 h = h * 31 + c.Mag0.Value; h = h * 31 + c.Mag1.Value;
@@ -67,9 +70,23 @@ namespace Game.Gameplay
         {
             return "HP " + Mathf.CeilToInt(c.Hp.Value) + "   Medkits " + c.Medkits.Value + " [H]\n"
                 + SlotLine(c, 0, c.Slot0.Value, c.Mag0.Value) + "\n"
-                + SlotLine(c, 1, c.Slot1.Value, c.Mag1.Value)
+                + SlotLine(c, 1, c.Slot1.Value, c.Mag1.Value) + "\n"
+                + "Ammo  light " + c.ReserveLight.Value + "  medium " + c.ReserveMedium.Value + "  shells " + c.ReserveShell.Value
                 + (c.Reloading.Value ? "\nReloading..." : "");
         }
+
+        static string LootLabel(LootItem item)
+        {
+            switch ((LootKind)item.Kind.Value)
+            {
+                case LootKind.Weapon: return GameData.Weapons.Find(item.WeaponId.Value)?.Name ?? "Weapon";
+                case LootKind.Ammo: return AmmoName((AmmoType)item.Ammo.Value) + " x" + item.Amount.Value;
+                default: return "Medkit";
+            }
+        }
+
+        static string AmmoName(AmmoType type) =>
+            type == AmmoType.Light ? "Light ammo" : type == AmmoType.Medium ? "Medium ammo" : "Shells";
 
         static string SlotLine(Combatant c, int slot, int weaponId, int mag)
         {

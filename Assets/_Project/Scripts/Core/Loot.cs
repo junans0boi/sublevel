@@ -19,8 +19,10 @@ namespace Game.Core
     {
         public LootEntry[] Entries = new LootEntry[0];
 
+        // Null when the table is empty.
         public LootEntry Roll(Random rng)
         {
+            if (Entries.Length == 0) return null;
             float total = 0f;
             foreach (var e in Entries) total += e.Weight;
             double pick = rng.NextDouble() * total;
@@ -38,7 +40,7 @@ namespace Game.Core
             var rng = new Random(seed);
             var plan = new LootEntry[spawnPoints];
             for (int i = 0; i < spawnPoints; i++) plan[i] = Roll(rng);
-            if (spawnPoints > 0 && plan[0].Kind != LootKind.Weapon)
+            if (spawnPoints > 0 && plan[0] != null && plan[0].Kind != LootKind.Weapon)
             {
                 foreach (var e in Entries)
                     if (e.Kind == LootKind.Weapon) { plan[0] = e; break; }
