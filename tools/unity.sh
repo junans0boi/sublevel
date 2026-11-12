@@ -5,10 +5,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 mkdir -p Logs Build
 
-# 설치된 6000.3.x 중 가장 높은 버전을 자동 선택 (UNITY_PATH로 덮어쓰기 가능)
+# 실행 파일이 실제로 있는 설치 버전 중 가장 높은 6000.x를 자동 선택 (UNITY_PATH로 덮어쓰기 가능). ADR-018
 if [[ -z "${UNITY_PATH:-}" ]]; then
-  VER="$(ls /Applications/Unity/Hub/Editor 2>/dev/null | grep '^6000\.3' | sort -V | tail -1 || true)"
-  [[ -z "$VER" ]] && { echo "Unity 6000.3.x not found. See docs/SETUP.md step 3"; exit 2; }
+  VER=""
+  for v in $(ls /Applications/Unity/Hub/Editor 2>/dev/null | grep '^6000\.' | sort -V); do
+    [[ -x "/Applications/Unity/Hub/Editor/$v/Unity.app/Contents/MacOS/Unity" ]] && VER="$v"
+  done
+  [[ -z "$VER" ]] && { echo "Unity 6000.x not found. See docs/SETUP.md step 3"; exit 2; }
   UNITY_PATH="/Applications/Unity/Hub/Editor/$VER/Unity.app/Contents/MacOS/Unity"
 fi
 
