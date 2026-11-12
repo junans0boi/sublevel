@@ -44,7 +44,8 @@ namespace Game.Gameplay
         WeaponVisual _weaponVisual;
         IPlayerInput _input;
         float _verticalVelocity;
-        float _nextLocalFire;
+        readonly FireCadence _fireCadence = new FireCadence();
+        double _clickUntil = -1;
         bool _owner;
 
         void Awake()
@@ -181,13 +182,23 @@ namespace Game.Gameplay
 
         void TryFire(in PlayerInputFrame f)
         {
+            double now = Time.timeAsDouble;
+            var fire = _rules.Fire;
+            // A click that comes a moment too soon is remembered, so quick semi-automatic fire does not swallow clicks.
+            if (f.FirePressed) _clickUntil = now + fire.ClickBufferSeconds;
             var weapon = _combatant.ActiveWeapon;
             if (weapon == null || _combatant.Reloading.Value || _combatant.ActiveMag <= 0) return;
-            if (!(weapon.Auto ? f.FireHeld : f.FirePressed) || Time.time < _nextLocalFire) return;
-            _nextLocalFire = Time.time + weapon.FireInterval;
+            if (!(weapon.Auto ? f.FireHeld : now <= _clickUntil) || !_fireCadence.Ready(now)) return;
+            _clickUntil = -1;
+            // Scheduled from when the shot was due, not from this frame: a frame always lands a little late, and
+            // adding the interval to that would make the rhythm follow the frame times and run slow.
+            _fireCadence.Fired(now, weapon.FireInterval, fire.ClientCatchUp(weapon.FireInterval, Time.deltaTime));
             var eye = _combatant.EyePosition;
             var aim = Camera != null ? Rig.AimPoint(Camera.transform, transform, AimDistance) : eye + transform.forward * AimDistance;
-            _combatant.CmdFire((aim - eye).normalized);
+            var direction = (aim - eye).normalized;
+            // The host is the server: fire now instead of waiting for the next network tick to carry the request.
+            if (IsServerInitialized) _combatant.ServerFire(direction);
+            else _combatant.CmdFire(direction);
         }
 
         void PlaceCamera()

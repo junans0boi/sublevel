@@ -72,6 +72,32 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.6f);
             yield return Shot("02_hip_tpp");
 
+            // Automatic fire, several frames in a row to catch the flash and the tracers.
+            _frame.FireHeld = true;
+            yield return new WaitForSeconds(0.25f);
+            yield return Burst("02_fire_tpp", 5, 0.02f);
+            _frame.FireHeld = false;
+            yield return new WaitForSeconds(0.4f);
+
+            // The screens.
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = 60 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 });
+            me.ServerTakeDamage(35f);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("02_hud_damaged");
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("02_inventory");
+            UiFocus.Set(UiScreen.Menu);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("02_menu");
+            if (PauseMenu.Instance != null) PauseMenu.Instance.ShowSettings();
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot("02_menu_settings");
+            if (PauseMenu.Instance != null) PauseMenu.Instance.Back();
+            UiFocus.Close();
+            yield return new WaitForSeconds(0.3f);
+
             _frame.AimHeld = true;
             yield return new WaitForSeconds(0.8f);
             yield return Shot("03_shoulder_tpp");
@@ -120,6 +146,12 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.6f);
 
             // A standing jump seen from the side, then a running jump seen from the game camera.
+            _watch = Watch.Behind;
+            yield return JumpShots("11_jump_behind");
+            yield return new WaitForSeconds(0.5f);
+            _watch = Watch.Game;
+            yield return JumpShots("11_jump_game");
+            yield return new WaitForSeconds(0.5f);
             _watch = Watch.Side;
             yield return JumpShots("11_jump_side");
             _watch = Watch.Game;

@@ -12,6 +12,8 @@ namespace Game.Gameplay
     // Upper layer: arms and torso while armed — weapon lowered when just moving, raised when aiming or firing.
     // Empty hands leave the upper layer off, so the base clips show their plain arm swing.
     // Also reports the moment a foot touches down (for footsteps) and tilts the torso when leaning.
+    // The jump has no clip: the air state holds a standing pose and the push, tuck and landing are bone turns
+    // made here on top of it (ADR-048).
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public class CombatantAnimation : MonoBehaviour
     {
@@ -19,7 +21,7 @@ namespace Game.Gameplay
         public const string Lowered = "Lowered", Aim = "Aim", Shoot = "Shoot";
         public const string Move = "Move"; // speed along the legs' heading, negative when back-pedalling
         public const string Pace = "Pace"; // playback speed of the locomotion blend only
-        public const string AirPhase = "AirPhase"; // which moment of the run cycle the air state holds (0..1)
+        public const string AirPhase = "AirPhase"; // which moment of its clip the air state holds (0..1)
 
         const int BaseLayer = 0, UpperLayer = 1;
         const float Fade = 0.12f;
@@ -31,12 +33,19 @@ namespace Game.Gameplay
         const float StepMinSpeed = 0.6f;
         const float AirPhasePerSecond = 1.5f;  // how fast the jump pose moves between rise, fall and landing
         const float StepPauseAfterLanding = 0.15f;
+        const float TakeoffAttackShare = 0.3f; // of the take-off push spent getting into it
+        const float LandArmShare = 0.5f;       // of the arm lift shown again while absorbing a landing
+        // Bones turned in code after the animator has posed them, parents before children.
+        const int Torso = 0, ThighLeft = 1, ThighRight = 2, ShinLeft = 3, ShinRight = 4, FootLeft = 5, FootRight = 6,
+            ArmLeft = 7, ArmRight = 8, TurnedBones = 9;
 
         [SerializeField] Animator _animator;
         [SerializeField] Transform _spine;
         [SerializeField] Transform _hips;
         [SerializeField] Transform _footLeft;
         [SerializeField] Transform _footRight;
+        // Upper legs, lower legs, upper arms; left then right of each.
+        [SerializeField] Transform[] _jumpBones;
         // Ground speed the clips were authored for (m/s), measured when the character was built.
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
@@ -49,11 +58,24 @@ namespace Game.Gameplay
         FootContact _leftContact, _rightContact;
         readonly LegHeading _legs = new LegHeading();
         Quaternion _modelRest;
+        Vector3 _modelRestPosition;
         Quaternion _hipsRest; // hips relative to the model in the pose the prefab was saved in (weapon aimed forward)
+        readonly Vector3[] _footOwnPosition = new Vector3[2], _footLeftAtPosition = new Vector3[2];
+        readonly bool[] _footMoved = new bool[2];
         int _move, _pace, _airPhaseId;
         float _airPhase;
         bool _inAir;
         float _landUntil = -1f; // touched down: the landing pose is held until this time
+        float _takeoffAt = float.NegativeInfinity; // left the ground going up
+        float _landedAt = float.NegativeInfinity;
+        float _push, _tuck, _dip; // 0..1: take-off push, knees tucked up, landing absorbed
+        float _drop;              // how far the model is lowered right now (m)
+        // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
+        // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
+        readonly Transform[] _bones = new Transform[TurnedBones];
+        readonly Quaternion[] _boneOwn = new Quaternion[TurnedBones];
+        readonly Quaternion[] _boneLeftAt = new Quaternion[TurnedBones];
+        readonly bool[] _boneTurned = new bool[TurnedBones];
         string _base = Locomotion;
         string _upper;
         float _baseHoldUntil, _upperHoldUntil, _aimPoseUntil;
@@ -72,6 +94,9 @@ namespace Game.Gameplay
         // Speed fed to the legs (negative = back-pedalling) and how far they are turned from the facing, right positive.
         public float MoveDrive => _animator != null ? _animator.GetFloat(_move) : 0f;
         public float LegTurnDeg => _legs.TurnDeg;
+        // How far the knees are tucked up in the air and how deep a landing is being absorbed, both 0..1.
+        public float JumpTuck => _tuck;
+        public float LandDip => _dip;
 
         void Awake()
         {
@@ -84,10 +109,20 @@ namespace Game.Gameplay
             if (_animator != null)
             {
                 _modelRest = _animator.transform.localRotation;
+                _modelRestPosition = _animator.transform.localPosition;
                 if (_hips != null) _hipsRest = Quaternion.Inverse(_animator.transform.rotation) * _hips.rotation;
             }
             _pace = Animator.StringToHash(Pace);
             _airPhaseId = Animator.StringToHash(AirPhase);
+            _bones[Torso] = _spine;
+            _bones[FootLeft] = _footLeft;
+            _bones[FootRight] = _footRight;
+            for (int i = 0; _jumpBones != null && i < _jumpBones.Length; i++)
+            {
+                // Feet sit between the shins and the arms in the turn order.
+                int slot = i < 4 ? ThighLeft + i : i < 6 ? ArmLeft + i - 4 : -1;
+                if (slot >= 0) _bones[slot] = _jumpBones[i];
+            }
         }
 
         void OnDestroy() => _combatant.ShotFired -= OnShot;
@@ -132,6 +167,7 @@ namespace Game.Gameplay
                 else if (Time.time >= _baseHoldUntil) SetBase(showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
+            TrackJumpPose(dead);
 
             bool armed = !dead && _combatant.ActiveWeaponId != 0;
             // The flinch is a whole-body clip: let it through the weapon pose while it plays.
@@ -151,7 +187,12 @@ namespace Game.Gameplay
             if (_motion.Airborne)
             {
                 // Taking off: start on the rise pose instead of sweeping to it from wherever the last jump ended.
-                if (!_inAir) _airPhase = jump.RisePhase;
+                if (!_inAir)
+                {
+                    _airPhase = jump.RisePhase;
+                    // Only a jump pushes off; walking off an edge does not.
+                    _takeoffAt = _motion.VerticalSpeed > 0f ? Time.time : float.NegativeInfinity;
+                }
                 _inAir = true;
                 _landUntil = -1f;
                 _airPhase = Mathf.MoveTowards(_airPhase, Game.Core.Locomotion.AirPhase(_motion.VerticalSpeed, jump), AirPhasePerSecond * Time.deltaTime);
@@ -161,11 +202,33 @@ namespace Game.Gameplay
             {
                 _inAir = false;
                 _landUntil = Time.time + jump.LandSeconds;
+                _landedAt = Time.time;
                 Landed?.Invoke();
             }
             if (Time.time >= _landUntil) return false;
             _airPhase = Mathf.MoveTowards(_airPhase, jump.LandPhase, AirPhasePerSecond * Time.deltaTime);
             return true;
+        }
+
+        // How much of each part of the jump to show this frame: the push right after take-off, then the tuck (most
+        // at the top), then the dip that absorbs the landing. LateUpdate turns the bones; the dip also lowers the model.
+        void TrackJumpPose(bool dead)
+        {
+            var jump = GameData.Rules.Jump;
+            float push = 0f, tuck = 0f;
+            if (!dead && _inAir)
+            {
+                float sinceTakeoff = Time.time - _takeoffAt;
+                if (sinceTakeoff < jump.TakeoffSeconds)
+                    push = Game.Core.Locomotion.Pulse(sinceTakeoff, jump.TakeoffSeconds * TakeoffAttackShare, jump.TakeoffSeconds);
+                else tuck = Game.Core.Locomotion.JumpTuck(_motion.VerticalSpeed, jump);
+            }
+            _push = push;
+            _tuck = Mathf.MoveTowards(_tuck, tuck, jump.TuckPerSecond * Time.deltaTime);
+            // The ground probe reports the landing a little above the floor, so the dip is deepest about as the feet arrive.
+            _dip = dead ? 0f : Game.Core.Locomotion.Pulse(Time.time - _landedAt, jump.LandAttackSeconds, jump.LandAbsorbSeconds);
+            _drop = _dip * jump.LandDropMeters;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -191,14 +254,28 @@ namespace Game.Gameplay
             _upper = state;
         }
 
-        // After the animator has posed the skeleton: read the feet, then lean the torso on top of the pose.
+        // Adds a turn about a world axis to a bone on top of its pose.
+        void Turn(int index, float degrees, Vector3 axis)
+        {
+            var bone = _bones[index];
+            if (bone == null || Mathf.Abs(degrees) <= 1e-3f) return;
+            if (!_boneTurned[index])
+            {
+                _boneOwn[index] = bone.localRotation;
+                _boneTurned[index] = true;
+            }
+            bone.rotation = Quaternion.AngleAxis(degrees, axis) * bone.rotation;
+        }
+
+        // After the animator has posed the skeleton: read the feet, then turn the torso and pose the jump on top.
         void LateUpdate()
         {
             if (_animator == null) return;
             if (_footLeft != null && _footRight != null)
             {
-                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y);
-                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y);
+                // Heights as the clip has them: without the landing dip.
+                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop);
+                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
                 bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding
@@ -206,19 +283,91 @@ namespace Game.Gameplay
                 if ((left || right) && walking) FootDown?.Invoke();
             }
 
-            // Only on frames the animator has just re-posed the skeleton; otherwise the turns would pile up.
+            // Only on frames the animator poses the skeleton.
             if (_spine == null || Time.deltaTime <= 0f || !_animator.isActiveAndEnabled) return;
+            for (int side = 0; side < 2; side++)
+            {
+                if (!_footMoved[side]) continue;
+                _footMoved[side] = false;
+                var footBone = _bones[side == 0 ? FootLeft : FootRight];
+                // Same rule as for rotations below: only undo our own move if no clip has re-posed the foot.
+                if (footBone != null && footBone.localPosition == _footLeftAtPosition[side]) footBone.localPosition = _footOwnPosition[side];
+            }
+            for (int i = 0; i < TurnedBones; i++)
+            {
+                if (!_boneTurned[i]) continue;
+                _boneTurned[i] = false;
+                // Still exactly as it was left: no clip re-posed this bone, so take last frame's turn out.
+                if (_bones[i] != null && SameRotation(_bones[i].localRotation, _boneLeftAt[i])) _bones[i].localRotation = _boneOwn[i];
+            }
+
             // The model is turned with the legs; bring the torso (and with it head, arms and weapon) back to the facing.
             // The weapon poses were made for hips that face forward, but a running clip swings and turns the hips;
             // while a weapon pose is on, take that out too or the weapon points off to the side when moving.
             // (Not for the dead: the death clip turns the hips on purpose.)
             float turnBack = -_legs.TurnDeg - (_combatant.Dead.Value ? 0f : HipsYaw() * _upperWeight);
-            if (Mathf.Abs(turnBack) > 1e-3f)
-                _spine.rotation = Quaternion.AngleAxis(turnBack, transform.up) * _spine.rotation;
-            float lean = _combatant.LeanAmount;
-            if (Mathf.Abs(lean) > 1e-3f)
-                // Leaning right tips the torso clockwise seen from behind: a negative turn about the forward axis.
-                _spine.rotation = Quaternion.AngleAxis(-lean * GameData.Rules.Lean.BodyRollDeg, transform.forward) * _spine.rotation;
+            Turn(Torso, turnBack, transform.up);
+            // Leaning right tips the torso clockwise seen from behind: a negative turn about the forward axis.
+            Turn(Torso, -_combatant.LeanAmount * GameData.Rules.Lean.BodyRollDeg, transform.forward);
+
+            // The jump. A positive turn about the right axis tips the top of the body forward, swings a hanging
+            // limb backward and points the toes down.
+            var jump = GameData.Rules.Jump;
+            Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push, transform.right);
+            // The legs face where the model is turned, not where the combatant looks.
+            var legRight = Quaternion.AngleAxis(_legs.TurnDeg, transform.up) * transform.right;
+            // Knees up in front, shins folded back under them. Landing: the shin folds twice the thigh's angle
+            // so the feet stay under the hips, and the feet are levelled again.
+            float thigh = -(jump.TuckThighDeg * _tuck + jump.LandBendDeg * _dip);
+            float shin = jump.TuckShinDeg * _tuck + 2f * jump.LandBendDeg * _dip;
+            float foot = jump.TakeoffToeDeg * _push - jump.LandBendDeg * _dip;
+            PoseLeg(0, ThighLeft, ShinLeft, FootLeft, thigh, shin, legRight);
+            PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, legRight);
+            Turn(FootLeft, foot, legRight);
+            Turn(FootRight, foot, legRight);
+            // Empty hands: arms out sideways (a weapon pose keeps both arms on the weapon). About the forward
+            // axis a positive turn swings a hanging arm out to the right.
+            float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - _upperWeight);
+            Turn(ArmLeft, -armLift, transform.forward);
+            Turn(ArmRight, armLift, transform.forward);
+
+            for (int i = 0; i < TurnedBones; i++)
+                if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;
         }
+
+        // Turns a thigh and shin and brings the foot along. In this skeleton the feet are not children of the
+        // shins (they are separate control bones), so a foot left behind would stretch the leg down to the floor.
+        void PoseLeg(int side, int thighIndex, int shinIndex, int footIndex, float thighDeg, float shinDeg, Vector3 axis)
+        {
+            Transform shin = _bones[shinIndex], foot = _bones[footIndex];
+            if (shin == null || foot == null || shin.childCount == 0 || (Mathf.Abs(thighDeg) <= 1e-3f && Mathf.Abs(shinDeg) <= 1e-3f))
+            {
+                Turn(thighIndex, thighDeg, axis);
+                Turn(shinIndex, shinDeg, axis);
+                return;
+            }
+            var ankle = shin.GetChild(0); // the shin's end marker
+            var shinBefore = shin.rotation;
+            var footFromAnkle = foot.position - ankle.position;
+            Turn(thighIndex, thighDeg, axis);
+            Turn(shinIndex, shinDeg, axis);
+            var swing = shin.rotation * Quaternion.Inverse(shinBefore);
+            if (!_boneTurned[footIndex])
+            {
+                _boneOwn[footIndex] = foot.localRotation;
+                _boneTurned[footIndex] = true;
+            }
+            if (!_footMoved[side])
+            {
+                _footOwnPosition[side] = foot.localPosition;
+                _footMoved[side] = true;
+            }
+            foot.rotation = swing * foot.rotation;
+            foot.position = ankle.position + swing * footFromAnkle;
+            _footLeftAtPosition[side] = foot.localPosition;
+        }
+
+        // Exact, unlike ==, which also accepts rotations that are merely close.
+        static bool SameRotation(Quaternion a, Quaternion b) => a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
     }
 }

@@ -35,6 +35,8 @@ public static class CharacterKit
     const string MaskPath = SceneLook.GeneratedDir + "/CharacterUpperBody.mask";
     static readonly string[] UpperBodyRootCandidates = { "Torso", "Chest", "Abdomen" };
     const string FootLeftBone = "Foot.L", FootRightBone = "Foot.R", HipsBone = "Hips";
+    // Turned in code for the jump, in the order CombatantAnimation expects.
+    static readonly string[] JumpBoneNames = { "UpperLeg.L", "UpperLeg.R", "LowerLeg.L", "LowerLeg.R", "UpperArm.L", "UpperArm.R" };
 
     // Clips used from the character file (ADR-045, ADR-049). Base layer: a blend over speed along the legs'
     // heading plus whole-body states. The file's Run_Left/Run_Right turn the whole body sideways, so they are not used. Upper layer (arms and torso, armed only): weapon lowered, raised, firing.
@@ -63,6 +65,7 @@ public static class CharacterKit
         public GameObject[] WeaponModels;  // indexed by weapon id
         public WeaponVisual.Fit[] WeaponFits; // indexed by weapon id
         public Transform Spine, Hips, FootLeft, FootRight;
+        public Transform[] JumpBones;      // upper legs, lower legs, upper arms; left then right of each
         public GaitProfile Gait;
     }
 
@@ -326,9 +329,10 @@ public static class CharacterKit
         locomotion.speedParameterActive = true;
         var baseMachine = controller.layers[0].stateMachine;
         baseMachine.defaultState = locomotion;
-        // No jump clip in the file: the air state holds whichever moment of the run cycle the parameter picks (ADR-048).
+        // No jump clip in the file: the air state holds a still moment of the standing clip, picked by the parameter,
+        // and CombatantAnimation poses the jump on top of it (ADR-048). A running stride here would fight that pose.
         var air = baseMachine.AddState(CombatantAnimation.Air);
-        air.motion = Clip(RunClip);
+        air.motion = Clip(IdleClip);
         air.timeParameter = CombatantAnimation.AirPhase;
         air.timeParameterActive = true;
         baseMachine.AddState(CombatantAnimation.Hit).motion = Clip(HitClip);
@@ -400,6 +404,7 @@ public static class CharacterKit
         {
             Root = go.transform, Animator = animator, BodyRenderers = bodyRenderers, WeaponModels = models, WeaponFits = fits,
             Spine = UpperBodyRoot(go), Hips = Bone(go, HipsBone), FootLeft = Bone(go, FootLeftBone), FootRight = Bone(go, FootRightBone), Gait = _gait,
+            JumpBones = JumpBoneNames.Select(name => Bone(go, name)).ToArray(),
         };
     }
 

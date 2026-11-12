@@ -39,6 +39,18 @@ namespace Game.Net
         // Raised on every client for each projectile: (origin, end point).
         public event Action<Vector3, Vector3> ShotFired;
 
+        // The same projectile with what it ended on, for effects and hit confirmation. Raised right after ShotFired.
+        public struct ShotResult
+        {
+            public Vector3 Origin, End;
+            public Vector3 Normal;   // of the surface that was hit; back along the shot when nothing was
+            public ShotHit Hit;
+            public Combatant Victim; // null unless a combatant was hit
+        }
+
+        public delegate void ShotResolvedHandler(in ShotResult shot);
+        public event ShotResolvedHandler ShotResolved;
+
         static readonly float[] YawBuf = new float[32];
         static readonly float[] PitchBuf = new float[32];
         static readonly RaycastHit[] LeanHits = new RaycastHit[8];
@@ -150,7 +162,9 @@ namespace Game.Net
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
-            if (!_loadout.TryFire(Time.timeAsDouble)) return false;
+            // A request may arrive a little ahead of the weapon's schedule (frames and network ticks never line up
+            // with the fire interval); it is accepted without moving the schedule instead of leaving a gap in a burst.
+            if (weapon == null || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval))) return false;
 
             var aim = Quaternion.LookRotation(direction.normalized);
             int pellets = DamageRules.ShotOffsets(weapon, _rng, YawBuf, PitchBuf, GameData.Rules.Aim.For(AimMode).SpreadFactor);
@@ -158,14 +172,24 @@ namespace Game.Net
             {
                 var dir = aim * Quaternion.Euler(PitchBuf[i], YawBuf[i], 0f) * Vector3.forward;
                 var end = origin + dir * weapon.Range;
+                var normal = -dir;
+                var result = ShotHit.None;
+                NetworkObject victim = null;
                 if (Physics.Raycast(origin, dir, out var hit, weapon.Range, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 {
                     end = hit.point;
+                    normal = hit.normal;
+                    result = ShotHit.World;
                     var target = hit.collider.GetComponentInParent<Combatant>();
-                    if (target != null && target != this)
+                    // A body that is already dead stops the shot like any other obstacle.
+                    if (target != null && target != this && !target._health.IsDead)
+                    {
                         target.ServerTakeDamage(DamageRules.AtDistance(weapon, hit.distance));
+                        result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
+                        victim = target.NetworkObject;
+                    }
                 }
-                RpcShotFx(origin, end);
+                RpcShotFx(origin, end, normal, (byte)result, victim);
             }
             Push();
             return true;
@@ -243,6 +267,41 @@ namespace Game.Net
             item.Despawn();
         }
 
+        // Dropping from the inventory screen: the item leaves the loadout and lands on the ground in front.
+        [ServerRpc]
+        public void CmdDropWeapon(int slot)
+        {
+            if (_health.IsDead || MatchDirector.Instance == null) return;
+            int weaponId = _loadout.RemoveWeapon(slot, out int mag);
+            if (weaponId == 0) return;
+            ServerDropLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
+        }
+
+        [ServerRpc]
+        public void CmdDropAmmo(int ammoType)
+        {
+            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (ammoType < (int)AmmoType.Light || ammoType > (int)AmmoType.Shell) return;
+            int amount = _loadout.RemoveAmmo((AmmoType)ammoType);
+            if (amount <= 0) return;
+            ServerDropLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)ammoType, Amount = amount });
+        }
+
+        [ServerRpc]
+        public void CmdDropMedkit()
+        {
+            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (!_loadout.RemoveMedkit()) return;
+            ServerDropLoot(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });
+        }
+
+        [Server]
+        void ServerDropLoot(LootEntry entry)
+        {
+            MatchDirector.Instance.ServerSpawnLoot(entry, transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
+            Push();
+        }
+
         // Solo has no revival: a dead player may ask the server for a fresh match.
         [ServerRpc]
         public void CmdRequestRestart()
@@ -250,7 +309,24 @@ namespace Game.Net
             if (_health.IsDead && MatchDirector.Instance != null) MatchDirector.Instance.Restart();
         }
 
-        [ObserversRpc]
-        void RpcShotFx(Vector3 origin, Vector3 end) => ShotFired?.Invoke(origin, end);
+        // Runs locally too, so a host sees and hears the shot in the frame it was fired instead of a network tick
+        // later (ticks are 33 ms apart, which made the rhythm of automatic fire uneven).
+        [ObserversRpc(RunLocally = true)]
+        void RpcShotFx(Vector3 origin, Vector3 end, Vector3 normal, byte hit, NetworkObject victim)
+        {
+            // A server without a client has nothing to show.
+            if (!IsClientStarted) return;
+            ShotFired?.Invoke(origin, end);
+            if (ShotResolved == null) return;
+            var shot = new ShotResult
+            {
+                Origin = origin,
+                End = end,
+                Normal = normal,
+                Hit = (ShotHit)hit,
+                Victim = victim != null ? victim.GetComponent<Combatant>() : null,
+            };
+            ShotResolved.Invoke(in shot);
+        }
     }
 }

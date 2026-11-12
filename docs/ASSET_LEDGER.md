@@ -17,6 +17,7 @@
 | S-0002 | 효과음(재장전) | Gun reload sounds (SpringySpringo) — gunreload1, assaultriflereload1_0, shotguncock_0 | https://opengameart.org/content/gun-reload-sounds | CC0 1.0 | 아니오 | 파일명 변경 | Assets/_Project/Audio/Weapons/OgaGunReload | 재장전 | 2026-11-12 | agent |
 | S-0003 | 효과음(발소리·피격) | Kenney Impact Sounds 1.0 — footstep_concrete_000~004, impactPunch_medium_000~002 | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 아니오 | 아니오 | Assets/_Project/Audio/Foley/KenneyImpactSounds | 발소리(콘크리트), 피격 | 2026-11-12 | agent |
 
+| F-0001 | 폰트 | Noto Sans KR Regular (Noto Sans CJK KR subset OTF) | https://github.com/notofonts/noto-cjk/tree/main/Sans/SubsetOTF/KR | SIL Open Font License 1.1 | 아니오(라이선스 사본 동봉) | 파일명 변경(NotoSansKR-Regular.otf → NotoSansKR.otf), 폰트 자체는 수정 없음 | Assets/_Project/Art/Fonts/NotoSansKR | 게임 UI 전체(한글) | 2026-11-13 | agent |
 자체 제작(외부 출처 없음, Art/Audio 밖에 둠 — ADR-027): `Assets/_Project/Prefabs/M1_5/Textures/FabricNoise.png`은 `CharacterKit`이 코드(고정 시드 값 노이즈)로 만든 텍스처다. AI 생성물 아님.
 
 ## 분류 코드

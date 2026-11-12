@@ -244,6 +244,30 @@ namespace Game.Tests
         }
 
         [Test]
+        public void JumpTuck_IsFullAtTheTopOfTheJump_AndLeastWhileMovingFastUpOrDown()
+        {
+            var jump = new JumpRules { TuckSpeed = 4f, FallTuck = 0.2f };
+            Assert.AreEqual(1f, Locomotion.JumpTuck(0f, jump), 1e-4f, "top of the jump");
+            Assert.AreEqual(0.6f, Locomotion.JumpTuck(2f, jump), 1e-4f, "half way, rising");
+            Assert.AreEqual(0.6f, Locomotion.JumpTuck(-2f, jump), 1e-4f, "half way, falling");
+            Assert.AreEqual(0.2f, Locomotion.JumpTuck(4.8f, jump), 1e-4f, "just pushed off");
+            Assert.AreEqual(0.2f, Locomotion.JumpTuck(-10f, jump), 1e-4f, "a long fall: legs reaching down");
+        }
+
+        [Test]
+        public void Pulse_RisesQuickly_ThenEasesBackToNothing()
+        {
+            Assert.AreEqual(0f, Locomotion.Pulse(-1f, 0.06f, 0.25f), 1e-4f, "not started");
+            Assert.AreEqual(0f, Locomotion.Pulse(0f, 0.06f, 0.25f), 1e-4f);
+            Assert.AreEqual(0.5f, Locomotion.Pulse(0.03f, 0.06f, 0.25f), 1e-4f, "half way in");
+            Assert.AreEqual(1f, Locomotion.Pulse(0.06f, 0.06f, 0.25f), 1e-4f, "deepest");
+            Assert.AreEqual(0.5f, Locomotion.Pulse(0.155f, 0.06f, 0.25f), 1e-4f, "half way back");
+            Assert.AreEqual(0.15625f, Locomotion.Pulse(0.2025f, 0.06f, 0.25f), 1e-4f, "easing out: a quarter of the time left, less than a quarter of the depth");
+            Assert.AreEqual(0f, Locomotion.Pulse(0.25f, 0.06f, 0.25f), 1e-4f, "over");
+            Assert.AreEqual(0f, Locomotion.Pulse(5f, 0.06f, 0.25f), 1e-4f);
+        }
+
+        [Test]
         public void CrosshairGap_IsTheSpreadConeOnScreen()
         {
             // A 3 degree cone is 1.5 degrees either side: tan(1.5) / tan(30) * 540 px.

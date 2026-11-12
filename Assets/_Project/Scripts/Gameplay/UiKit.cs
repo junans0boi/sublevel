@@ -20,8 +20,16 @@ namespace Game.Gameplay
         static Font _font;
         static Sprite _white;
 
-        // One place to swap the typeface later (an OFL font with Korean glyphs, recorded in the asset ledger).
-        public static Font Font => _font != null ? _font : _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        // Noto Sans KR (OFL, asset ledger F-0001) so Korean renders the same on every machine.
+        public static Font Font
+        {
+            get
+            {
+                if (_font == null) _font = Resources.Load<Font>("Fonts/NotoSansKR");
+                if (_font == null) _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                return _font;
+            }
+        }
 
         public static Sprite White
         {

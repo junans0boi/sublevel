@@ -11,6 +11,8 @@ namespace Game.Core
         public AimRules Aim = new AimRules();
         public LeanRules Lean = new LeanRules();
         public RecoilRules Recoil = new RecoilRules();
+        public FireRules Fire = new FireRules();
+        public CombatFxRules CombatFx = new CombatFxRules();
         public GaitRules Gait = new GaitRules();
         public JumpRules Jump = new JumpRules();
     }

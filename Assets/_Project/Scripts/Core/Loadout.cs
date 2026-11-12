@@ -10,7 +10,7 @@ namespace Game.Core
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
         readonly int[] _reserve = new int[3];
-        double _nextFireTime;
+        readonly FireCadence _cadence = new FireCadence();
         double _reloadEndTime = -1;
 
         public int ActiveSlot { get; private set; }
@@ -64,12 +64,14 @@ namespace Game.Core
             return true;
         }
 
-        public bool TryFire(double now)
+        // `earlySeconds`: how far ahead of the weapon's schedule a shot is still accepted. The schedule itself does
+        // not move for an early shot, so the average rate never exceeds the weapon's.
+        public bool TryFire(double now, double earlySeconds = 0)
         {
             var w = ActiveWeapon;
-            if (w == null || IsReloading || now < _nextFireTime || _slotMag[ActiveSlot] <= 0) return false;
+            if (w == null || IsReloading || _slotMag[ActiveSlot] <= 0) return false;
+            if (!_cadence.TryFire(now, w.FireInterval, earlySeconds)) return false;
             _slotMag[ActiveSlot]--;
-            _nextFireTime = now + w.FireInterval;
             return true;
         }
 
@@ -100,6 +102,44 @@ namespace Game.Core
             if (Medkits <= 0 || health.IsDead || health.Current >= health.Max) return false;
             Medkits--;
             health.Heal(_medkitHeal);
+            return true;
+        }
+
+        // ---- Dropping (inventory screen) ----
+
+        // Empties the slot and returns the weapon that was in it (0 if none or no such slot) with its magazine.
+        // Dropping the weapon in hand cancels its reload and switches to the other slot when that holds a weapon.
+        public int RemoveWeapon(int slot, out int mag)
+        {
+            mag = 0;
+            if (slot < 0 || slot >= SlotCount || _slotWeapon[slot] == 0) return 0;
+            int removed = _slotWeapon[slot];
+            mag = _slotMag[slot];
+            _slotWeapon[slot] = 0;
+            _slotMag[slot] = 0;
+            if (slot == ActiveSlot)
+            {
+                _reloadEndTime = -1;
+                for (int i = 0; i < SlotCount; i++)
+                    if (_slotWeapon[i] != 0) { ActiveSlot = i; break; }
+            }
+            return removed;
+        }
+
+        // Takes the whole reserve of one ammo type. Returns how many rounds that was.
+        public int RemoveAmmo(AmmoType type)
+        {
+            int index = (int)type;
+            if (index < 0 || index >= _reserve.Length) return 0;
+            int amount = _reserve[index];
+            _reserve[index] = 0;
+            return amount;
+        }
+
+        public bool RemoveMedkit()
+        {
+            if (Medkits <= 0) return false;
+            Medkits--;
             return true;
         }
     }

@@ -9,6 +9,19 @@
   },
   "Lean": { "OffsetMeters": 0.25, "EyeDropMeters": 0.04, "EyeViewRollDeg": 6.0, "ThirdPersonRollDeg": 0.0, "BodyRollDeg": 10.0, "ChangePerSecond": 8.0, "MoveFactor": 0.85 },
   "Recoil": { "RecoverDegPerSecond": 14.0, "MaxPitchDeg": 12.0 },
+  "Fire": { "ServerEarlySeconds": 0.05, "MaxEarlyFraction": 0.4, "ClientCatchUpSeconds": 0.035, "ClickBufferSeconds": 0.12 },
+  "CombatFx": {
+    "MuzzleForward": 0.6, "MuzzleDrop": 0.22, "MuzzleFlashSize": [0.0, 0.28, 0.32, 0.4, 0.6], "MuzzleFlashSeconds": 0.05, "EyeViewFlashFactor": 0.45,
+    "MuzzleLightIntensity": 6.0, "MuzzleLightRange": 7.0,
+    "TracerSpeed": 250.0, "TracerLength": 4.0, "TracerMinSeconds": 0.06, "TracerWidth": 0.035, "TracerWidthPerMeter": 0.0015,
+    "ImpactFlashSize": 0.3, "ImpactFlashSeconds": 0.07, "DustSize": 0.35, "DustGrowth": 2.2, "DustSeconds": 0.45, "DustDriftSpeed": 0.5,
+    "HitConfirmVolume": 0.5, "HitConfirmPitch": 1.7, "KillConfirmVolume": 0.8, "KillConfirmPitch": 1.1
+  },
   "Gait": { "LegPaceFollow": 0.5, "MaxLegPace": 1.75, "MaxLegTurnDeg": 60.0, "LegTurnDegPerSecond": 360.0, "LegTurnMinSpeed": 0.5 },
-  "Jump": { "RisePhase": 0.25, "FallPhase": 0.375, "LandPhase": 0.4, "PoseSpeed": 3.0, "LandSeconds": 0.12, "GroundProbeMeters": 0.35 }
+  "Jump": {
+    "RisePhase": 0.25, "FallPhase": 0.375, "LandPhase": 0.4, "PoseSpeed": 3.0, "LandSeconds": 0.12, "GroundProbeMeters": 0.35,
+    "TakeoffSeconds": 0.1, "TakeoffToeDeg": 30.0, "TakeoffArchDeg": 6.0,
+    "TuckThighDeg": 68.0, "TuckShinDeg": 95.0, "TuckSpeed": 4.0, "FallTuck": 0.2, "TuckPerSecond": 10.0, "TorsoPitchDeg": 8.0, "ArmLiftDeg": 35.0,
+    "LandAttackSeconds": 0.06, "LandAbsorbSeconds": 0.25, "LandBendDeg": 28.0, "LandDropMeters": 0.09, "LandPitchDeg": 8.0
+  }
 }

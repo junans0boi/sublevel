@@ -385,6 +385,18 @@ namespace Game.Tests
             Assert.AreEqual(CombatantAnimation.Locomotion, animation.BaseState);
             float ground = pc.transform.position.y;
             int steps = audio.FootstepsPlayed;
+            // The knee is where the lower leg starts.
+            Transform knee = null, hips = null;
+            foreach (var t in me.GetComponentsInChildren<Transform>())
+            {
+                if (t.name == "LowerLeg.L") knee = t;
+                if (t.name == "Hips") hips = t;
+            }
+            Assert.IsNotNull(knee, "knee bone");
+            Assert.IsNotNull(hips, "hips bone");
+            Assert.Less(animation.JumpTuck, 0.05f, "legs straight while standing");
+            Assert.Less(animation.LandDip, 0.05f);
+            float standingKnee = knee.position.y - hips.position.y;
 
             _input.Frame.Jump = true;
             yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Air, 1f, "air pose after take-off");
@@ -394,10 +406,21 @@ namespace Game.Tests
             Assert.IsTrue(motion.Airborne, "still airborne at the top");
             Assert.AreEqual(CombatantAnimation.Air, animation.BaseState);
             Assert.AreEqual(0, audio.LandingsPlayed);
+            Assert.Greater(animation.JumpTuck, 0.5f, "knees tucked at the top");
+            Assert.Greater(knee.position.y - hips.position.y - standingKnee, 0.15f, "knees visibly raised toward the hips");
+            Assert.Less(animation.LandDip, 0.05f, "nothing to absorb in the air");
 
-            yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Locomotion, 2f, "back to normal after landing");
+            float dip = 0f;
+            yield return WaitUntil(() =>
+            {
+                dip = Mathf.Max(dip, animation.LandDip);
+                return animation.BaseState == CombatantAnimation.Locomotion;
+            }, 2f, "back to normal after landing");
             Assert.Less(pc.transform.position.y - ground, 0.1f);
             Assert.AreEqual(1, audio.LandingsPlayed, "one landing sound");
+            Assert.Greater(dip, 0.5f, "the landing is absorbed");
+            yield return WaitUntil(() => animation.JumpTuck < 0.05f && animation.LandDip < 0.05f, 1f, "legs straight again after landing");
+            Assert.AreEqual(knee.position.y - hips.position.y, standingKnee, 0.05f, "and the knees are back where they were");
             yield return new WaitForSeconds(0.4f);
             Assert.AreEqual(steps, audio.FootstepsPlayed, "a standing jump makes no footsteps besides the landing");
             Assert.AreEqual(1, audio.LandingsPlayed);

@@ -31,10 +31,12 @@ public static class TestBoxBuilder
         var postProfile = RenderSetup.Apply();
         CharacterKit.Prepare();
         var lootMats = new[] { Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f)), Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f)), Lit("LootMedkit", new Color(0.92f, 0.92f, 0.92f)) };
-        var tracerMat = Unlit("Tracer", new Color(1f, 0.9f, 0.5f));
+        // Brighter than white so the bloom picks the flashes and tracers up.
+        var glowMat = FxMaterial("ShotGlow", new Color(2f, 1.6f, 0.9f), true);
+        var dustMat = FxMaterial("ShotDust", Color.white, false);
 
-        var player = BuildPlayerPrefab(tracerMat);
-        var dummy = BuildDummyPrefab(tracerMat);
+        var player = BuildPlayerPrefab(glowMat, dustMat);
+        var dummy = BuildDummyPrefab(glowMat, dustMat);
         var loot = BuildLootPrefab(lootMats);
         AssetDatabase.SaveAssets();
         RebuildSpawnablePrefabs();
@@ -81,6 +83,42 @@ public static class TestBoxBuilder
     static Material Lit(string name, Color color) => SaveMaterial(name, "Universal Render Pipeline/Lit", color);
     static Material Unlit(string name, Color color) => SaveMaterial(name, "Universal Render Pipeline/Unlit", color);
 
+    // Unlit and see-through, for shot effects: additive for light, alpha blended for dust. The particle shader
+    // multiplies vertex colours in, which is what gives the effect meshes and tracers their soft edges.
+    // Set up by hand because the blend mode is normally applied by the material inspector.
+    static Material FxMaterial(string name, Color color, bool additive)
+    {
+        var mat = SaveMaterial(name, "Universal Render Pipeline/Particles/Unlit", color);
+        mat.SetFloat("_Surface", 1f);
+        mat.SetFloat("_Blend", additive ? 2f : 0f);
+        mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        mat.SetFloat("_DstBlend", (float)(additive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+        mat.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+        mat.SetFloat("_DstBlendAlpha", (float)(additive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+        mat.SetFloat("_ZWrite", 0f);
+        mat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        mat.SetOverrideTag("RenderType", "Transparent");
+        mat.SetShaderPassEnabled("DepthOnly", false);
+        mat.SetShaderPassEnabled("ShadowCaster", false);
+        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    // Shot effect materials and the hit-confirmation sound of a combatant.
+    static void WireShotFx(CombatantView view, GameObject go, Material glow, Material dust)
+    {
+        Set(view, "_glowMaterial", p => p.objectReferenceValue = glow);
+        Set(view, "_dustMaterial", p => p.objectReferenceValue = dust);
+        // Heard by the shooter only, so not placed in the world.
+        var confirm = Source(go.transform, "ConfirmAudio", 1.6f, 1f, 10f);
+        confirm.spatialBlend = 0f;
+        Set(view, "_confirmSource", p => p.objectReferenceValue = confirm);
+        Set(view, "_hitConfirmClip", p => p.objectReferenceValue = SceneLook.Load<AudioClip>(FoleyDir + "impactPunch_medium_001.ogg"));
+        Set(view, "_killConfirmClip", p => p.objectReferenceValue = SceneLook.Load<AudioClip>(FoleyDir + "impactPunch_medium_002.ogg"));
+    }
+
     static GameObject Shape(PrimitiveType type, string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat, bool keepCollider)
     {
         var go = GameObject.CreatePrimitive(type);
@@ -104,6 +142,7 @@ public static class TestBoxBuilder
         Set(animation, "_hips", p => p.objectReferenceValue = visual.Hips);
         Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
         Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
+        SetArray(animation, "_jumpBones", visual.JumpBones);
         Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
         Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
         Set(animation, "_footPlantHeight", p => p.floatValue = visual.Gait.FootPlantHeight);
@@ -161,7 +200,7 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    static NetworkObject BuildPlayerPrefab(Material tracer)
+    static NetworkObject BuildPlayerPrefab(Material glow, Material dust)
     {
         var go = new GameObject("Player");
         var cc = go.AddComponent<CharacterController>();
@@ -174,11 +213,11 @@ public static class TestBoxBuilder
         var renderers = AddCharacter(go);
         Set(combatant, "_isPlayer", p => p.boolValue = true);
         SetArray(controller, "_bodyRenderers", renderers);
-        Set(view, "_tracerMaterial", p => p.objectReferenceValue = tracer);
+        WireShotFx(view, go, glow, dust);
         return SavePrefab(go, "Player");
     }
 
-    static NetworkObject BuildDummyPrefab(Material tracer)
+    static NetworkObject BuildDummyPrefab(Material glow, Material dust)
     {
         var go = new GameObject("TrainingDummy");
         var capsule = go.AddComponent<CapsuleCollider>();
@@ -188,7 +227,7 @@ public static class TestBoxBuilder
         go.AddComponent<TrainingDummy>();
         var view = go.AddComponent<CombatantView>();
         AddCharacter(go);
-        Set(view, "_tracerMaterial", p => p.objectReferenceValue = tracer);
+        WireShotFx(view, go, glow, dust);
         return SavePrefab(go, "TrainingDummy");
     }
 
