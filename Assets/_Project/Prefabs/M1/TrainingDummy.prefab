@@ -196,7 +196,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.CombatantAnimation
   _animator: {fileID: 3235168772841893978}
-  _fullSpeed: 7
+  _spine: {fileID: 6795994052538996575}
+  _footLeft: {fileID: 8075686845345490815}
+  _footRight: {fileID: 8216936132043473451}
+  _forwardClipSpeed: 2.8567827
+  _backClipSpeed: 2.9665442
+  _sideClipSpeed: 2.832533
+  _footPlantHeight: 0.068523854
+  _footLiftHeight: 0.12497527
 --- !u!114 &7126440772801514521
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1623,9 +1630,24 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 320179479428049405, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
   m_PrefabInstance: {fileID: 6367949909353789027}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &6795994052538996575 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8786601893355691716, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6367949909353789027}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6905489140574196104 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6367949909353789027}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8075686845345490815 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -6319365212875026148, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6367949909353789027}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8216936132043473451 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3051166020086887496, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
   m_PrefabInstance: {fileID: 6367949909353789027}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8225607404996151171

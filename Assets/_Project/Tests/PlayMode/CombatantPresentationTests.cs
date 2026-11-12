@@ -92,7 +92,8 @@ namespace Game.Tests
             var animation = me.GetComponent<CombatantAnimation>();
             Assert.IsNotNull(audio, "player prefab should have CombatantAudio");
             Assert.IsNotNull(animation, "player prefab should have CombatantAnimation");
-            yield return WaitUntil(() => animation.CurrentState == CombatantAnimation.Idle, 2f, "idle animation");
+            Assert.AreEqual(CombatantAnimation.Locomotion, animation.BaseState);
+            Assert.IsNull(animation.UpperState, "empty hands: no weapon pose over the body");
 
             // One shotgun shot is nine pellets but must sound once.
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 4, Amount = 2 });
@@ -108,10 +109,11 @@ namespace Game.Tests
             yield return WaitUntil(() => audio.ReloadsPlayed == 1, 2f, "reload sound");
 
             _input.Frame.Move = new Vector2(0, 1);
-            yield return WaitUntil(() => animation.CurrentState == CombatantAnimation.Forward, 2f, "forward run animation");
-            yield return WaitUntil(() => audio.FootstepsPlayed >= 2, 3f, "footsteps while walking");
+            yield return WaitUntil(() => animation.MoveBlend.y > 3f, 2f, "forward movement reaches the blend");
+            yield return WaitUntil(() => audio.FootstepsPlayed >= 2, 3f, "footsteps while walking (feet touching down)");
             _input.Frame.Move = Vector2.zero;
-            yield return WaitUntil(() => animation.CurrentState == CombatantAnimation.Idle, 2f, "back to idle");
+            yield return WaitUntil(() => animation.MoveBlend.magnitude < 0.2f, 2f, "blend back to standing");
+            yield return new WaitForSeconds(0.3f); // let a foot that was mid-step come down
             int steps = audio.FootstepsPlayed;
             yield return new WaitForSeconds(0.5f);
             Assert.AreEqual(steps, audio.FootstepsPlayed, "no footsteps while standing");
@@ -119,7 +121,8 @@ namespace Game.Tests
             me.ServerTakeDamage(10);
             yield return WaitUntil(() => audio.HitsPlayed == 1, 2f, "hit sound");
             me.ServerTakeDamage(1000);
-            yield return WaitUntil(() => animation.CurrentState == CombatantAnimation.Death, 2f, "death animation");
+            yield return WaitUntil(() => animation.BaseState == CombatantAnimation.Death, 2f, "death animation");
+            yield return WaitUntil(() => animation.UpperState == null, 2f, "weapon pose released on death");
         }
     }
 }

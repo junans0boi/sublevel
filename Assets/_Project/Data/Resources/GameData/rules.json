@@ -1,4 +1,12 @@
 {
   "MedkitHeal": 50,
-  "Locomotion": { "WalkSpeed": 4.5, "SprintSpeed": 7.0, "JumpSpeed": 4.8, "Gravity": -14.0, "GroundedStick": -2.0 }
+  "Locomotion": { "WalkSpeed": 4.5, "SprintSpeed": 7.0, "JumpSpeed": 4.8, "Gravity": -14.0, "GroundedStick": -2.0 },
+  "Aim": {
+    "TapSeconds": 0.2, "FovChangePerSecond": 10.0, "ShoulderCameraDistance": 1.9,
+    "Hip":      { "MoveFactor": 1.0,  "SpreadFactor": 1.0,  "RecoilFactor": 1.0,  "Fov": 60.0 },
+    "Shoulder": { "MoveFactor": 0.8,  "SpreadFactor": 0.55, "RecoilFactor": 0.8,  "Fov": 50.0 },
+    "Sights":   { "MoveFactor": 0.55, "SpreadFactor": 0.25, "RecoilFactor": 0.6,  "Fov": 38.0 }
+  },
+  "Lean": { "OffsetMeters": 0.45, "EyeDropMeters": 0.08, "CameraRollDeg": 12.0, "BodyRollDeg": 18.0, "ChangePerSecond": 7.0, "MoveFactor": 0.85 },
+  "Recoil": { "RecoverDegPerSecond": 14.0, "MaxPitchDeg": 12.0 }
 }

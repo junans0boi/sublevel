@@ -252,7 +252,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.CombatantAnimation
   _animator: {fileID: 613229165914306775}
-  _fullSpeed: 7
+  _spine: {fileID: 5891450657597409666}
+  _footLeft: {fileID: 9187345280121977250}
+  _footRight: {fileID: 9050810684720471286}
+  _forwardClipSpeed: 2.8567827
+  _backClipSpeed: 2.9665442
+  _sideClipSpeed: 2.832533
+  _footPlantHeight: 0.068523854
+  _footLiftHeight: 0.12497527
 --- !u!114 &8876791603509334058
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1765,6 +1772,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
   m_PrefabInstance: {fileID: 6326742777163393214}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &5891450657597409666 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8786601893355691716, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6326742777163393214}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6033867489505050947 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 320179479428049405, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
@@ -1800,6 +1812,16 @@ Animator:
 --- !u!137 &7627345224410793369 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: 4473443429100072231, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6326742777163393214}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &9050810684720471286 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3051166020086887496, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
+  m_PrefabInstance: {fileID: 6326742777163393214}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &9187345280121977250 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -6319365212875026148, guid: ffca3f670a9bb4412a2e6f773de03deb, type: 3}
   m_PrefabInstance: {fileID: 6326742777163393214}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &7746055414464281769

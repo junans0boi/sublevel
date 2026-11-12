@@ -32,18 +32,25 @@ public static class CharacterKit
         new WeaponModel { Id = 4, File = "Shotgun_1.fbx", Length = 0.95f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },       // Breacher
     };
 
-    // Animator state -> clip in the character file. Looping ones are marked.
-    static readonly (string state, string clip, bool loop)[] States =
+    const string MaskPath = SceneLook.GeneratedDir + "/CharacterUpperBody.mask";
+    static readonly string[] UpperBodyRootCandidates = { "Torso", "Chest", "Abdomen" };
+    const string FootLeftBone = "Foot.L", FootRightBone = "Foot.R";
+
+    // Clips used from the character file (ADR-045). Base layer: a 2D blend over local velocity plus two
+    // whole-body states. Upper layer (arms and torso, armed only): weapon lowered, raised, firing.
+    const string IdleClip = "Idle", WalkClip = "Walk", RunClip = "Run", BackClip = "Run_Back", LeftClip = "Run_Left", RightClip = "Run_Right";
+    const string HitClip = "HitRecieve", DeathClip = "Death";
+    const string LoweredClip = "Idle_Gun", AimClip = ReferencePose, ShootClip = "Idle_Gun_Shoot";
+    static readonly string[] LoopingClips = { IdleClip, WalkClip, RunClip, BackClip, LeftClip, RightClip, LoweredClip, AimClip };
+
+    // What the clips themselves say about pace and foot height, measured once per build from the model.
+    public struct GaitProfile
     {
-        (CombatantAnimation.Idle, "Idle_Gun_Pointing", true),
-        (CombatantAnimation.Forward, "Run_Shoot", true),
-        (CombatantAnimation.Back, "Run_Back", true),
-        (CombatantAnimation.Left, "Run_Left", true),
-        (CombatantAnimation.Right, "Run_Right", true),
-        (CombatantAnimation.Shoot, "Idle_Gun_Shoot", false),
-        (CombatantAnimation.Hit, "HitRecieve", false),
-        (CombatantAnimation.Death, "Death", false),
-    };
+        public float WalkSpeed, RunSpeed, BackSpeed, LeftSpeed, RightSpeed; // ground speed each clip was authored for (m/s)
+        public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
+    }
+
+    static GaitProfile _gait;
 
     // Length of arrays indexed by weapon id.
     public static int WeaponSlots => Weapons.Max(w => w.Id) + 1;
@@ -54,13 +61,16 @@ public static class CharacterKit
         public Animator Animator;
         public Renderer[] Renderers;       // body and weapons
         public GameObject[] WeaponModels;  // indexed by weapon id
+        public Transform Spine, FootLeft, FootRight;
+        public GaitProfile Gait;
     }
 
     // Import settings and shared assets. Call once before AddTo.
     public static void Prepare()
     {
         RemapMaterialsAndLoopClips();
-        BuildController();
+        _gait = MeasureGait();
+        BuildController(_gait, BuildUpperBodyMask());
     }
 
     // Tileable soft noise: RGB darkens the base color a little, A varies smoothness. Self-made, so it lives outside Art/ (ADR-027).
@@ -137,7 +147,7 @@ public static class CharacterKit
 
         var clips = importer.defaultClipAnimations;
         foreach (var clip in clips)
-            clip.loopTime = States.Any(s => s.loop && clip.name.EndsWith("|" + s.clip));
+            clip.loopTime = LoopingClips.Any(name => clip.name.EndsWith("|" + name));
         importer.clipAnimations = clips;
 
         AssetDatabase.SaveAssets();
@@ -152,19 +162,189 @@ public static class CharacterKit
         return clip;
     }
 
-    static AnimatorController BuildController()
+    static GameObject Instance()
     {
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(SceneLook.Load<GameObject>(CharacterPath));
+        go.transform.localScale *= CharacterHeight / RawHeight(go);
+        return go;
+    }
+
+    // Model height in the reference pose, before scaling.
+    static float RawHeight(GameObject go)
+    {
+        Clip(ReferencePose).SampleAnimation(go, 0f);
+        return SceneLook.WorldBounds(go).size.y / go.transform.localScale.y;
+    }
+
+    static Transform Bone(GameObject go, string name)
+    {
+        var bone = go.GetComponentsInChildren<Transform>().FirstOrDefault(t => t.name == name);
+        if (bone == null) throw new System.Exception("bone missing in character: " + name);
+        return bone;
+    }
+
+    static Transform UpperBodyRoot(GameObject go)
+    {
+        var all = go.GetComponentsInChildren<Transform>();
+        foreach (var name in UpperBodyRootCandidates)
+        {
+            var bone = all.FirstOrDefault(t => t.name == name);
+            if (bone != null) return bone;
+        }
+        throw new System.Exception("no upper-body root bone found in character");
+    }
+
+    // The clips run in place, so the planted foot slides back at the speed the clip was animated for.
+    static GaitProfile MeasureGait()
+    {
+        var go = Instance();
+        try
+        {
+            Transform left = Bone(go, FootLeftBone), right = Bone(go, FootRightBone);
+            // Ground speed = how fast a foot slides back while it is on the ground. Only samples where the foot is
+            // near its lowest point count, so the flight phase of a run does not dilute the result.
+            float Speed(string clipName, Vector3 axis)
+            {
+                var clip = Clip(clipName);
+                const int samples = 96;
+                float dt = clip.length / samples;
+                var feet = new[] { left, right };
+                var positions = new Vector3[feet.Length, samples + 1];
+                float low = float.MaxValue, high = float.MinValue;
+                for (int i = 0; i <= samples; i++)
+                {
+                    clip.SampleAnimation(go, i * dt);
+                    for (int f = 0; f < feet.Length; f++)
+                    {
+                        positions[f, i] = feet[f].position;
+                        low = Mathf.Min(low, positions[f, i].y);
+                        high = Mathf.Max(high, positions[f, i].y);
+                    }
+                }
+                float grounded = low + (high - low) * 0.15f, travelled = 0f, time = 0f;
+                for (int f = 0; f < feet.Length; f++)
+                    for (int i = 1; i <= samples; i++)
+                    {
+                        if (positions[f, i].y > grounded || positions[f, i - 1].y > grounded) continue;
+                        travelled += Mathf.Abs(Vector3.Dot(positions[f, i] - positions[f, i - 1], axis));
+                        time += dt;
+                    }
+                return time > 0f ? travelled / time : 0f;
+            }
+
+            var gait = new GaitProfile
+            {
+                WalkSpeed = Speed(WalkClip, Vector3.forward), RunSpeed = Speed(RunClip, Vector3.forward),
+                BackSpeed = Speed(BackClip, Vector3.forward), LeftSpeed = Speed(LeftClip, Vector3.right), RightSpeed = Speed(RightClip, Vector3.right),
+            };
+
+            // Foot height range over a walk cycle (the lowest lift of any gait, so every gait crosses the thresholds).
+            var walk = Clip(WalkClip);
+            float low = float.MaxValue, high = float.MinValue;
+            for (int i = 0; i <= 48; i++)
+            {
+                walk.SampleAnimation(go, walk.length * i / 48f);
+                foreach (var foot in new[] { left, right })
+                {
+                    low = Mathf.Min(low, foot.position.y);
+                    high = Mathf.Max(high, foot.position.y);
+                }
+            }
+            gait.FootPlantHeight = low + (high - low) * 0.25f;
+            gait.FootLiftHeight = low + (high - low) * 0.55f;
+            Debug.Log($"[CharacterKit] gait: walk {gait.WalkSpeed:F2} run {gait.RunSpeed:F2} back {gait.BackSpeed:F2} left {gait.LeftSpeed:F2} right {gait.RightSpeed:F2} m/s, foot height {low:F3}..{high:F3} m");
+            if (gait.RunSpeed < 1f || gait.WalkSpeed < 0.3f || gait.RunSpeed <= gait.WalkSpeed || high - low < 0.03f)
+                throw new System.Exception("gait measurement looks wrong; the locomotion clips may not be in-place cycles");
+            return gait;
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+        }
+    }
+
+    // Transform mask covering the torso, arms and head, so the upper layer leaves the legs to the base layer.
+    static AvatarMask BuildUpperBodyMask()
+    {
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(SceneLook.Load<GameObject>(CharacterPath));
+        try
+        {
+            var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(MaskPath);
+            if (mask == null)
+            {
+                mask = new AvatarMask();
+                AssetDatabase.CreateAsset(mask, MaskPath);
+            }
+            mask.transformCount = 0;
+            mask.AddTransformPath(go.transform, true);
+            var upperPath = AnimationUtility.CalculateTransformPath(UpperBodyRoot(go), go.transform);
+            int active = 0;
+            for (int i = 0; i < mask.transformCount; i++)
+            {
+                var path = mask.GetTransformPath(i);
+                bool upper = path == upperPath || path.StartsWith(upperPath + "/");
+                mask.SetTransformActive(i, upper);
+                if (upper) active++;
+            }
+            Debug.Log($"[CharacterKit] upper-body mask from '{upperPath}': {active} of {mask.transformCount} transforms");
+            EditorUtility.SetDirty(mask);
+            return mask;
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+        }
+    }
+
+    static AnimatorController BuildController(GaitProfile gait, AvatarMask upperBody)
+    {
+        // Rebuilt from scratch every time; the asset itself is kept so references to it stay valid.
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
         if (controller == null) controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
-        var machine = controller.layers[0].stateMachine;
-        foreach (var existing in machine.states.ToArray()) machine.RemoveState(existing.state);
-        foreach (var (state, clip, _) in States)
-        {
-            var added = machine.AddState(state);
-            added.motion = Clip(clip);
-            if (state == CombatantAnimation.Idle) machine.defaultState = added;
-        }
+        controller.layers = new AnimatorControllerLayer[0];
+        controller.parameters = new AnimatorControllerParameter[0];
+        foreach (var leftover in AssetDatabase.LoadAllAssetsAtPath(ControllerPath))
+            if (leftover != null && leftover != controller) Object.DestroyImmediate(leftover, true);
+
+        controller.AddParameter(CombatantAnimation.MoveX, AnimatorControllerParameterType.Float);
+        controller.AddParameter(CombatantAnimation.MoveZ, AnimatorControllerParameterType.Float);
+        controller.AddParameter(new AnimatorControllerParameter { name = CombatantAnimation.Pace, type = AnimatorControllerParameterType.Float, defaultFloat = 1f });
+
+        // Base layer: idle in the middle, each moving clip at the velocity it was animated for.
+        controller.AddLayer("Base");
+        var locomotion = controller.CreateBlendTreeInController(CombatantAnimation.Locomotion, out var tree, 0);
+        tree.blendType = BlendTreeType.FreeformCartesian2D;
+        tree.blendParameter = CombatantAnimation.MoveX;
+        tree.blendParameterY = CombatantAnimation.MoveZ;
+        tree.AddChild(Clip(IdleClip), Vector2.zero);
+        tree.AddChild(Clip(WalkClip), new Vector2(0, gait.WalkSpeed));
+        tree.AddChild(Clip(RunClip), new Vector2(0, gait.RunSpeed));
+        tree.AddChild(Clip(BackClip), new Vector2(0, -gait.BackSpeed));
+        tree.AddChild(Clip(LeftClip), new Vector2(-gait.LeftSpeed, 0));
+        tree.AddChild(Clip(RightClip), new Vector2(gait.RightSpeed, 0));
+        // The legs alone play faster when the character outruns its clips.
+        locomotion.speedParameter = CombatantAnimation.Pace;
+        locomotion.speedParameterActive = true;
+        var baseMachine = controller.layers[0].stateMachine;
+        baseMachine.defaultState = locomotion;
+        baseMachine.AddState(CombatantAnimation.Hit).motion = Clip(HitClip);
+        baseMachine.AddState(CombatantAnimation.Death).motion = Clip(DeathClip);
+
+        // Upper layer: off by default; CombatantAnimation raises its weight while a weapon is held.
+        controller.AddLayer("Upper");
+        var layers = controller.layers;
+        layers[1].avatarMask = upperBody;
+        layers[1].defaultWeight = 0f;
+        controller.layers = layers;
+        var upperMachine = controller.layers[1].stateMachine;
+        var lowered = upperMachine.AddState(CombatantAnimation.Lowered);
+        lowered.motion = Clip(LoweredClip);
+        upperMachine.defaultState = lowered;
+        upperMachine.AddState(CombatantAnimation.Aim).motion = Clip(AimClip);
+        upperMachine.AddState(CombatantAnimation.Shoot).motion = Clip(ShootClip);
+
         EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
         return controller;
     }
 
@@ -208,7 +388,11 @@ public static class CharacterKit
         var local = go.transform.position;
         go.transform.SetParent(parent, false);
         go.transform.localPosition = local;
-        return new Visual { Root = go.transform, Animator = animator, Renderers = renderers, WeaponModels = models };
+        return new Visual
+        {
+            Root = go.transform, Animator = animator, Renderers = renderers, WeaponModels = models,
+            Spine = UpperBodyRoot(go), FootLeft = Bone(go, FootLeftBone), FootRight = Bone(go, FootRightBone), Gait = _gait,
+        };
     }
 
     // The weapon model at true size, muzzle along world +Z.
@@ -239,7 +423,7 @@ public static class CharacterKit
         SceneLook.EnablePost(cam);
         Directory.CreateDirectory("Logs/lookdev");
 
-        // Row 1: each weapon in the aiming pose, seen from the side. Row 2: one frame of every animation state.
+        // Row 1: each weapon in the aiming pose, seen from the side. Row 2: one frame of every clip in use.
         for (int i = 0; i < Weapons.Length; i++)
         {
             var slot = new GameObject("Hold" + Weapons[i].Id).transform;
@@ -249,17 +433,18 @@ public static class CharacterKit
         }
         SceneLook.Shot(cam, "Logs/lookdev/m15_weapons.png", new Vector3(11f, 1.3f, 2.4f), new Vector3(0, 1.05f, 2.4f));
 
-        for (int i = 0; i < States.Length; i++)
+        var poses = new[] { IdleClip, WalkClip, RunClip, BackClip, LeftClip, RightClip, LoweredClip, AimClip, ShootClip, HitClip, DeathClip };
+        for (int i = 0; i < poses.Length; i++)
         {
-            var slot = new GameObject("Pose" + States[i].state).transform;
+            var slot = new GameObject("Pose" + poses[i]).transform;
             slot.position = new Vector3(40, 0, i * 1.5f);
             var visual = AddTo(slot);
             visual.WeaponModels[3].SetActive(true);
-            var clip = Clip(States[i].clip);
+            var clip = Clip(poses[i]);
             clip.SampleAnimation(visual.Root.gameObject, clip.length * 0.5f);
         }
         SceneLook.WorldBox("Floor2", null, new Vector3(40, -0.05f, 5), new Vector3(30, 0.1f, 30), SceneLook.Floor, 2.5f);
-        SceneLook.Shot(cam, "Logs/lookdev/m15_poses.png", new Vector3(62f, 1.3f, 5.25f), new Vector3(40, 1.0f, 5.25f));
+        SceneLook.Shot(cam, "Logs/lookdev/m15_poses.png", new Vector3(70f, 1.3f, 7.5f), new Vector3(40, 1.0f, 7.5f));
         EditorApplication.Exit(0);
     }
 }

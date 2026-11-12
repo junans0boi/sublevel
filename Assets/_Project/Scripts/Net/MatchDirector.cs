@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Object;
@@ -25,6 +27,7 @@ namespace Game.Net
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
         public int Seed => _seed;
+        public ushort Port { get; private set; }
 
         int _nextPlayerSpawn;
 
@@ -36,8 +39,49 @@ namespace Game.Net
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost)
             {
+                // Every run hosts its own match: never share (or fall through to) a port another process is serving (ADR-044).
+                var transport = _networkManager.TransportManager.Transport;
+                Port = FreePort(transport.GetPort());
+                transport.SetPort(Port);
                 _networkManager.ServerManager.StartConnection();
                 _networkManager.ClientManager.StartConnection();
+            }
+        }
+
+        // Close the sockets on the way out so nothing of this match outlives the window.
+        void OnApplicationQuit()
+        {
+            if (_networkManager == null) return;
+            _networkManager.ClientManager.StopConnection();
+            _networkManager.ServerManager.StopConnection(true);
+        }
+
+        // The preferred port if nobody holds it, otherwise one the system hands out.
+        public static ushort FreePort(ushort preferred)
+        {
+            if (CanBind(preferred, out _)) return preferred;
+            if (CanBind(0, out ushort assigned)) return assigned;
+            Debug.LogError($"[MatchDirector] no free port found; falling back to {preferred}, the match may fail to start");
+            return preferred;
+        }
+
+        static bool CanBind(ushort port, out ushort bound)
+        {
+            bound = 0;
+            try
+            {
+                using (var probe = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+                {
+                    // Windows otherwise lets two sockets share a port; other platforms do not have the option.
+                    try { probe.ExclusiveAddressUse = true; } catch (SocketException) { } catch (System.PlatformNotSupportedException) { }
+                    probe.Bind(new IPEndPoint(IPAddress.Any, port));
+                    bound = (ushort)((IPEndPoint)probe.LocalEndPoint).Port;
+                    return true;
+                }
+            }
+            catch (SocketException)
+            {
+                return false;
             }
         }
 

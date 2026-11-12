@@ -23,7 +23,7 @@ namespace Game.Tests
                 var f = Frame;
                 // One-shot presses last a single frame.
                 Frame.Jump = Frame.FirePressed = Frame.Reload = Frame.Interact = false;
-                Frame.ToggleView = Frame.SwapShoulder = Frame.Heal = Frame.Restart = false;
+                Frame.ToggleView = Frame.Heal = Frame.Restart = false;
                 Frame.SelectSlot = -1;
                 return f;
             }
@@ -146,6 +146,15 @@ namespace Game.Tests
                 if (entry.Kind == LootKind.Weapon)
                     Assert.IsNotNull(GameData.Weapons.Find(entry.WeaponId), "loot refers to weapon " + entry.WeaponId);
             Assert.Greater(GameData.Rules.MedkitHeal, 0f);
+            var aim = GameData.Rules.Aim;
+            Assert.That(aim.TapSeconds, Is.InRange(0.05f, 0.5f));
+            Assert.Greater(aim.Hip.Fov, aim.Shoulder.Fov, "shouldering narrows the view");
+            Assert.Greater(aim.Shoulder.Fov, aim.Sights.Fov, "sights narrow it further");
+            Assert.Greater(aim.Hip.SpreadFactor, aim.Shoulder.SpreadFactor);
+            Assert.Greater(aim.Shoulder.SpreadFactor, aim.Sights.SpreadFactor);
+            Assert.Greater(aim.Hip.MoveFactor, aim.Sights.MoveFactor);
+            Assert.Greater(GameData.Rules.Lean.OffsetMeters, 0.1f);
+            foreach (var weapon in GameData.Weapons.Weapons) Assert.Greater(weapon.RecoilPitchDeg, 0f, weapon.Name + " recoil");
             Assert.AreEqual(MatchDirector.Instance.LootSpawns.Length, LootItem.All.Count, "one item per loot point");
             yield return null;
         }
@@ -169,14 +178,6 @@ namespace Game.Tests
             yield return null;
             yield return null;
             Assert.AreEqual(ViewMode.ThirdPerson, pc.Rig.Mode);
-
-            // Shoulder swap moves the camera to the other side of the player.
-            float sideBefore = pc.transform.InverseTransformPoint(pc.Camera.transform.position).x;
-            _input.Frame.SwapShoulder = true;
-            yield return null;
-            yield return null;
-            float sideAfter = pc.transform.InverseTransformPoint(pc.Camera.transform.position).x;
-            Assert.Less(sideBefore * sideAfter, 0f, "camera switched shoulders");
 
             // Back against the south wall (inner face at z = -29.5), looking north.
             pc.Teleport(new Vector3(0, 0.1f, -28.8f));

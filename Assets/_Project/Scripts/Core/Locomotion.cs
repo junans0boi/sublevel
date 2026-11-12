@@ -15,7 +15,7 @@ namespace Game.Core
     public static class Locomotion
     {
         // World-space planar velocity from stick input (x = right, y = forward) relative to a yaw heading.
-        public static void PlanarVelocity(float moveX, float moveY, float yawDeg, bool sprint, LocomotionParams p, out float vx, out float vz)
+        public static void PlanarVelocity(float moveX, float moveY, float yawDeg, bool sprint, LocomotionParams p, out float vx, out float vz, float speedFactor = 1f)
         {
             double len = Math.Sqrt(moveX * moveX + moveY * moveY);
             if (len < 1e-4) { vx = 0; vz = 0; return; }
@@ -23,7 +23,7 @@ namespace Game.Core
             double yaw = yawDeg * Math.PI / 180.0;
             double sin = Math.Sin(yaw), cos = Math.Cos(yaw);
             // Sprint only applies when moving forward.
-            float speed = sprint && moveY > 0.1f ? p.SprintSpeed : p.WalkSpeed;
+            float speed = (sprint && moveY > 0.1f ? p.SprintSpeed : p.WalkSpeed) * speedFactor;
             vx = (float)(moveX * cos + moveY * sin) * speed;
             vz = (float)(moveY * cos - moveX * sin) * speed;
         }

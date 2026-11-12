@@ -29,6 +29,9 @@ namespace Game.Net
         public readonly SyncVar<int> ReserveMedium = new SyncVar<int>();
         public readonly SyncVar<int> ReserveShell = new SyncVar<int>();
         public readonly SyncVar<int> Medkits = new SyncVar<int>();
+        // Stance, requested by the owner (ADR-045): how the weapon is aimed and which way the body leans.
+        public readonly SyncVar<int> Aim = new SyncVar<int>();   // AimMode
+        public readonly SyncVar<int> Lean = new SyncVar<int>();  // -1 left, 0 upright, 1 right
 
         public static readonly List<Combatant> All = new List<Combatant>();
         public static Combatant LocalPlayer { get; private set; }
@@ -38,13 +41,26 @@ namespace Game.Net
 
         static readonly float[] YawBuf = new float[32];
         static readonly float[] PitchBuf = new float[32];
+        static readonly RaycastHit[] LeanHits = new RaycastHit[8];
+
+        const float LeanProbeRadius = 0.15f;
+        // Kept between the leaned eye and a wall; larger than the camera's own collision radius so the
+        // third-person camera cast never starts inside the wall.
+        const float LeanWallClearance = 0.1f;
 
         Health _health;
         Loadout _loadout;
         System.Random _rng;
+        readonly LeanState _lean = new LeanState();
+        float _leanOffset;
 
         public bool IsPlayer => _isPlayer;
-        public Vector3 EyePosition => transform.position + Vector3.up * _eyeHeight;
+        // Where this combatant sees and shoots from. Leaning moves it sideways (never through a wall).
+        public Vector3 EyePosition => UprightEye + transform.right * _leanOffset + Vector3.down * (GameData.Rules.Lean.EyeDropMeters * Mathf.Abs(_lean.Value));
+        public AimMode AimMode => (AimMode)Aim.Value;
+        // -1..1, eased: how far the lean has actually got.
+        public float LeanAmount => _lean.Value;
+        Vector3 UprightEye => transform.position + Vector3.up * _eyeHeight;
         public int ActiveWeaponId => ActiveSlot.Value == 0 ? Slot0.Value : Slot1.Value;
         public int ActiveMag => ActiveSlot.Value == 0 ? Mag0.Value : Mag1.Value;
         public WeaponDef ActiveWeapon => GameData.Weapons.Find(ActiveWeaponId);
@@ -80,7 +96,32 @@ namespace Game.Net
 
         void Update()
         {
-            if (IsServerInitialized && _loadout != null && _loadout.Tick(Time.timeAsDouble)) Push();
+            if (IsServerInitialized && _loadout != null)
+            {
+                if (_loadout.Tick(Time.timeAsDouble)) Push();
+                // Nothing to aim with empty hands, and the dead neither aim nor lean.
+                if (Aim.Value != 0 && (_health.IsDead || ActiveWeaponId == 0)) Aim.Value = 0;
+                if (Lean.Value != 0 && _health.IsDead) Lean.Value = 0;
+            }
+            TickLean();
+        }
+
+        // Runs on every side from the replicated lean, so the eye position agrees between server and clients.
+        void TickLean()
+        {
+            var rules = GameData.Rules.Lean;
+            _lean.Tick(Lean.Value, Time.deltaTime, rules.ChangePerSecond);
+            float wanted = rules.OffsetMeters * Mathf.Abs(_lean.Value);
+            if (wanted < 1e-4f) { _leanOffset = 0f; return; }
+            var side = transform.right * Mathf.Sign(_lean.Value);
+            int hits = Physics.SphereCastNonAlloc(UprightEye, LeanProbeRadius, side, LeanHits, wanted, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits; i++)
+            {
+                var hit = LeanHits[i];
+                if (hit.collider.transform.IsChildOf(transform)) continue;
+                wanted = Mathf.Min(wanted, Mathf.Max(0f, hit.distance - LeanWallClearance));
+            }
+            _leanOffset = wanted * Mathf.Sign(_lean.Value);
         }
 
         void Push()
@@ -112,7 +153,7 @@ namespace Game.Net
             if (!_loadout.TryFire(Time.timeAsDouble)) return false;
 
             var aim = Quaternion.LookRotation(direction.normalized);
-            int pellets = DamageRules.ShotOffsets(weapon, _rng, YawBuf, PitchBuf);
+            int pellets = DamageRules.ShotOffsets(weapon, _rng, YawBuf, PitchBuf, GameData.Rules.Aim.For(AimMode).SpreadFactor);
             for (int i = 0; i < pellets; i++)
             {
                 var dir = aim * Quaternion.Euler(PitchBuf[i], YawBuf[i], 0f) * Vector3.forward;
@@ -154,6 +195,15 @@ namespace Game.Net
         }
 
         [Server]
+        public void ServerSetStance(AimMode aim, int lean)
+        {
+            if (_health.IsDead) return;
+            bool validAim = aim == AimMode.Hip || ((aim == AimMode.Shoulder || aim == AimMode.Sights) && ActiveWeaponId != 0);
+            Aim.Value = validAim ? (int)aim : 0;
+            Lean.Value = lean < 0 ? -1 : lean > 0 ? 1 : 0;
+        }
+
+        [Server]
         public void ServerReload()
         {
             if (!_health.IsDead && _loadout.TryStartReload(Time.timeAsDouble)) Push();
@@ -166,6 +216,9 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdReload() => ServerReload();
+
+        [ServerRpc]
+        public void CmdSetStance(int aim, int lean) => ServerSetStance((AimMode)aim, lean);
 
         [ServerRpc]
         public void CmdSelectSlot(int slot)

@@ -22,6 +22,8 @@ namespace Game.Core
         public float FalloffStart;
         public float FalloffEnd;
         public float MinDamageFactor = 1f;
+        public float RecoilPitchDeg;  // view kick per shot, before the aim stance's factor
+        public float RecoilYawDeg;    // random left/right kick, up to this much
     }
 
     [Serializable]

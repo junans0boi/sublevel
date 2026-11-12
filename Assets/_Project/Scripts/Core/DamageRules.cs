@@ -14,13 +14,14 @@ namespace Game.Core
         }
 
         // Fills yaw/pitch offsets (degrees) for each projectile of one shot, uniformly inside the spread cone.
-        public static int ShotOffsets(WeaponDef weapon, Random rng, float[] yawDeg, float[] pitchDeg)
+        // `spreadFactor` narrows the cone (aiming).
+        public static int ShotOffsets(WeaponDef weapon, Random rng, float[] yawDeg, float[] pitchDeg, float spreadFactor = 1f)
         {
             int n = Math.Min(Math.Max(1, weapon.Pellets), Math.Min(yawDeg.Length, pitchDeg.Length));
             for (int i = 0; i < n; i++)
             {
                 double angle = rng.NextDouble() * Math.PI * 2;
-                double radius = Math.Sqrt(rng.NextDouble()) * weapon.SpreadDeg * 0.5;
+                double radius = Math.Sqrt(rng.NextDouble()) * weapon.SpreadDeg * spreadFactor * 0.5;
                 yawDeg[i] = (float)(Math.Cos(angle) * radius);
                 pitchDeg[i] = (float)(Math.Sin(angle) * radius);
             }

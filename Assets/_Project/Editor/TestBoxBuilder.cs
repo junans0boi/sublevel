@@ -98,7 +98,16 @@ public static class TestBoxBuilder
     {
         var visual = CharacterKit.AddTo(go.transform);
         go.AddComponent<CombatantMotion>();
-        Set(go.AddComponent<CombatantAnimation>(), "_animator", p => p.objectReferenceValue = visual.Animator);
+        var animation = go.AddComponent<CombatantAnimation>();
+        Set(animation, "_animator", p => p.objectReferenceValue = visual.Animator);
+        Set(animation, "_spine", p => p.objectReferenceValue = visual.Spine);
+        Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
+        Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
+        Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
+        Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
+        Set(animation, "_sideClipSpeed", p => p.floatValue = (visual.Gait.LeftSpeed + visual.Gait.RightSpeed) * 0.5f);
+        Set(animation, "_footPlantHeight", p => p.floatValue = visual.Gait.FootPlantHeight);
+        Set(animation, "_footLiftHeight", p => p.floatValue = visual.Gait.FootLiftHeight);
         SetArray(go.AddComponent<WeaponVisual>(), "_modelsByWeaponId", visual.WeaponModels);
 
         var audio = go.AddComponent<CombatantAudio>();

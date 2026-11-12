@@ -8,5 +8,8 @@ namespace Game.Core
     {
         public float MedkitHeal = 50f;
         public LocomotionParams Locomotion = new LocomotionParams();
+        public AimRules Aim = new AimRules();
+        public LeanRules Lean = new LeanRules();
+        public RecoilRules Recoil = new RecoilRules();
     }
 }

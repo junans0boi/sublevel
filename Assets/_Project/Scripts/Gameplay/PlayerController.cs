@@ -24,7 +24,21 @@ namespace Game.Gameplay
         public float Pitch { get; private set; }
         public LootItem NearbyLoot { get; private set; }
 
+        public AimMode Aim => _aim.Mode;
+        public int Lean { get; private set; }
+
         LocomotionParams _locomotion;
+        GameRules _rules;
+        AimInput _aim;
+        readonly ViewRecoil _recoil = new ViewRecoil();
+        readonly ShotGrouper _ownShots = new ShotGrouper(0.03);
+        const float StanceResendSeconds = 0.3f;
+        const float MaxViewPitch = 89f;
+
+        int _sentAim, _sentLean;
+        float _stanceSentAt;
+        System.Random _recoilRng;
+        bool _bodyHidden;
         CharacterController _controller;
         Combatant _combatant;
         IPlayerInput _input;
@@ -37,7 +51,9 @@ namespace Game.Gameplay
             _controller = GetComponent<CharacterController>();
             _combatant = GetComponent<Combatant>();
             _controller.enabled = false;
-            _locomotion = GameData.Rules.Locomotion;
+            _rules = GameData.Rules;
+            _locomotion = _rules.Locomotion;
+            _aim = new AimInput(_rules.Aim.TapSeconds);
         }
 
         public override void OnStartClient()
@@ -48,6 +64,10 @@ namespace Game.Gameplay
             _input = InputOverride ?? new DeviceInput();
             _controller.enabled = true;
             Camera = Camera.main;
+            if (Camera != null) Camera.fieldOfView = _rules.Aim.Hip.Fov;
+            _combatant.ShotFired += OnOwnShot;
+            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
+            _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
             Yaw = transform.eulerAngles.y;
             if (!Application.isBatchMode && InputOverride == null)
             {
@@ -65,6 +85,7 @@ namespace Game.Gameplay
         {
             if (!_owner) return;
             _owner = false;
+            _combatant.ShotFired -= OnOwnShot;
             if (Local == this) Local = null;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -74,9 +95,14 @@ namespace Game.Gameplay
         {
             if (!_owner) return;
             var f = _input.Read();
+            if (f.Quit) Application.Quit(); // until there is a menu (M1.6c)
+            _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
 
             if (_combatant.Dead.Value)
             {
+                _aim.Update(false, Time.timeAsDouble, false);
+                Lean = 0;
+                SendStance();
                 if (f.Restart) _combatant.CmdRequestRestart();
                 PlaceCamera();
                 return;
@@ -86,12 +112,18 @@ namespace Game.Gameplay
             Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
             transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
 
-            Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, f.Sprint, _locomotion, out var vx, out var vz);
+            // Aiming needs a weapon and wins over sprinting; leaning is for standing and walking only.
+            var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, _combatant.ActiveWeapon != null);
+            bool sprint = f.Sprint && aim == AimMode.Hip;
+            Lean = sprint && f.Move.y > 0.1f ? 0 : (f.LeanRight ? 1 : 0) - (f.LeanLeft ? 1 : 0);
+            SendStance();
+
+            float speedFactor = _rules.Aim.For(aim).MoveFactor * (Lean != 0 ? _rules.Lean.MoveFactor : 1f);
+            Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
             _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, f.Jump, Time.deltaTime, _locomotion);
             _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
 
-            if (f.ToggleView) SetViewMode(Rig.Mode == ViewMode.ThirdPerson ? ViewMode.FirstPerson : ViewMode.ThirdPerson);
-            if (f.SwapShoulder) Rig.SwapShoulder();
+            if (f.ToggleView) Rig.ToggleMode();
             PlaceCamera();
 
             NearbyLoot = FindNearbyLoot();
@@ -100,6 +132,31 @@ namespace Game.Gameplay
             if (f.Reload) _combatant.CmdReload();
             if (f.Heal) _combatant.CmdUseMedkit();
             TryFire(f);
+        }
+
+        // Tells the server when the stance changes, and again if the server's copy still disagrees a moment later
+        // (it may have refused or reset it), so the two cannot drift apart for good.
+        void SendStance()
+        {
+            int aim = (int)_aim.Mode;
+            bool changed = aim != _sentAim || Lean != _sentLean;
+            bool stale = (aim != _combatant.Aim.Value || Lean != _combatant.Lean.Value) && Time.time - _stanceSentAt > StanceResendSeconds;
+            if (!changed && !stale) return;
+            _sentAim = aim;
+            _sentLean = Lean;
+            _stanceSentAt = Time.time;
+            _combatant.CmdSetStance(aim, Lean);
+        }
+
+        // Our own shots kick the view; the kicked view is what the next shot aims with.
+        void OnOwnShot(Vector3 origin, Vector3 end)
+        {
+            var weapon = _combatant.ActiveWeapon;
+            if (weapon == null || !_ownShots.IsNewShot(Time.timeAsDouble)) return;
+            float factor = _rules.Aim.For(_aim.Mode).RecoilFactor;
+            // Seeded per match and player so a replayed match kicks the same way.
+            float side = (float)(_recoilRng.NextDouble() * 2.0 - 1.0) * weapon.RecoilYawDeg;
+            _recoil.Kick(weapon.RecoilPitchDeg * factor, side * factor, _rules.Recoil.MaxPitchDeg);
         }
 
         void TryFire(in PlayerInputFrame f)
@@ -115,14 +172,26 @@ namespace Game.Gameplay
 
         void PlaceCamera()
         {
-            if (Camera != null) Rig.Place(Camera.transform, transform, _combatant.EyePosition, Yaw, Pitch);
-        }
+            if (Camera == null) return;
+            var aimRules = _rules.Aim;
+            var view = new ViewState
+            {
+                Aim = _aim.Mode,
+                Lean = _combatant.LeanAmount,
+                LeanRollDeg = _rules.Lean.CameraRollDeg,
+                RecoilPitch = Mathf.Min(_recoil.Pitch, MaxViewPitch - Pitch), // never past straight up
+                RecoilYaw = _recoil.Yaw,
+                ShoulderAimDistance = aimRules.ShoulderCameraDistance,
+            };
+            Rig.Place(Camera.transform, transform, _combatant.EyePosition, Yaw, Pitch, view, Time.deltaTime);
+            float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
+            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, aimRules.For(_aim.Mode).Fov, ease);
 
-        public void SetViewMode(ViewMode mode)
-        {
-            if (Rig.Mode != mode) Rig.ToggleMode();
-            // Hide our own body in first person so it does not block the view.
-            foreach (var r in _bodyRenderers) r.enabled = mode == ViewMode.ThirdPerson;
+            // Hide our own body whenever the camera sits at the eyes so it does not block the view.
+            bool hide = Rig.IsEyeView(_aim.Mode);
+            if (hide == _bodyHidden) return;
+            _bodyHidden = hide;
+            foreach (var r in _bodyRenderers) r.enabled = !hide;
         }
 
         LootItem FindNearbyLoot()

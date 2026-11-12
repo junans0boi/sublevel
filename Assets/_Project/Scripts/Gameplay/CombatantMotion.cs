@@ -12,7 +12,6 @@ namespace Game.Gameplay
         Vector3 _lastPosition;
 
         public Vector3 LocalVelocity { get; private set; }
-        public float PlanarDistanceThisFrame { get; private set; }
         public bool Airborne { get; private set; }
 
         void OnEnable() => _lastPosition = transform.position;
@@ -26,13 +25,11 @@ namespace Game.Gameplay
             {
                 // Paused: nothing moved this frame.
                 LocalVelocity = Vector3.zero;
-                PlanarDistanceThisFrame = 0f;
                 return;
             }
             // A teleport (spawn, test hook) is not movement.
             if (delta.sqrMagnitude > TeleportDistance * TeleportDistance) delta = Vector3.zero;
             LocalVelocity = transform.InverseTransformDirection(delta / dt);
-            PlanarDistanceThisFrame = new Vector2(delta.x, delta.z).magnitude;
             Airborne = Mathf.Abs(delta.y / dt) > AirborneVerticalSpeed;
         }
     }

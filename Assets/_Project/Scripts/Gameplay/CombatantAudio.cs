@@ -5,11 +5,11 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     // Sounds a combatant makes: gunshots, reloads, footsteps and being hit. Clip arrays for weapons are indexed by weapon id.
-    [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
+    // Footsteps sound when the animation puts a foot down, so they always match what the legs are doing.
+    [RequireComponent(typeof(Combatant), typeof(CombatantAnimation))]
     public class CombatantAudio : MonoBehaviour
     {
         const float PitchJitter = 0.05f;
-        const float StrideMeters = 1.9f;
         const double PelletWindow = 0.03;
 
         [SerializeField] AudioSource _weaponSource;
@@ -23,10 +23,9 @@ namespace Game.Gameplay
         [SerializeField] float _footstepVolume = 0.35f;
         [SerializeField] float _hitVolume = 0.7f;
 
-        readonly FootstepCadence _cadence = new FootstepCadence(StrideMeters);
         readonly ShotGrouper _shots = new ShotGrouper(PelletWindow);
         Combatant _combatant;
-        CombatantMotion _motion;
+        CombatantAnimation _animation;
         bool _wasReloading;
         float _lastHp;
         int _nextFootstep;
@@ -40,11 +39,24 @@ namespace Game.Gameplay
         void Awake()
         {
             _combatant = GetComponent<Combatant>();
-            _motion = GetComponent<CombatantMotion>();
+            _animation = GetComponent<CombatantAnimation>();
             _combatant.ShotFired += OnShot;
+            _animation.FootDown += OnFootDown;
         }
 
-        void OnDestroy() => _combatant.ShotFired -= OnShot;
+        void OnDestroy()
+        {
+            _combatant.ShotFired -= OnShot;
+            _animation.FootDown -= OnFootDown;
+        }
+
+        void OnFootDown()
+        {
+            if (_footsteps.Length == 0) return;
+            // Cycle instead of picking at random so the same clip never plays twice in a row.
+            if (Play(_bodySource, _footsteps[_nextFootstep], _footstepVolume)) FootstepsPlayed++;
+            _nextFootstep = (_nextFootstep + 1) % _footsteps.Length;
+        }
 
         void OnShot(Vector3 origin, Vector3 end)
         {
@@ -62,14 +74,6 @@ namespace Game.Gameplay
             float hp = _combatant.Hp.Value;
             if (hp < _lastHp && _hits.Length > 0 && Play(_bodySource, _hits[Random.Range(0, _hits.Length)], _hitVolume)) HitsPlayed++;
             _lastHp = hp;
-
-            bool walking = !_combatant.Dead.Value && !_motion.Airborne && _motion.PlanarDistanceThisFrame > 0.0005f;
-            if (_cadence.Advance(_motion.PlanarDistanceThisFrame, walking) && _footsteps.Length > 0)
-            {
-                // Cycle instead of picking at random so the same clip never plays twice in a row.
-                if (Play(_bodySource, _footsteps[_nextFootstep], _footstepVolume)) FootstepsPlayed++;
-                _nextFootstep = (_nextFootstep + 1) % _footsteps.Length;
-            }
         }
 
         static AudioClip ClipFor(AudioClip[] byWeapon, int weaponId) =>
