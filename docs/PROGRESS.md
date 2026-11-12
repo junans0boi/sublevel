@@ -1,10 +1,10 @@
 # PROGRESS — 진행 상황 (타이틀 종료 때마다 갱신)
 
 ## 현재 위치
-- 마일스톤: M0 (M0-1~6 완료. 남음: M0-7 에셋 파이프라인, M0-8 PERF 확정) → 이후 M1(사용자 지시: M1까지 진행)
-- 진행 중 타이틀: M0-7
-- 열린 지도 이슈: 없음 (blocked/검토: #2 Fish-Net 라이선스 검토)
-- 스킬 호출 규칙: ADR-022(user-only 스킬은 SKILL.md 직접 읽기).
+- 마일스톤: **M0 완료(게이트 ①~⑥ 통과, Godot 폴백 불필요)** → M1 코어 루프 진행 중 (사용자 지시: M1까지만)
+- 진행 중 타이틀: M1 코어 루프
+- blocked/검토: #2 Fish-Net 라이선스 검토
+- 스킬 호출 규칙: ADR-022. 안개 없는 작은 타이틀은 지도 생략(ADR-025).
 
 ## 환경 (SETUP 완료 후 채움)
 | 항목 | 값 |
@@ -23,6 +23,8 @@
 | 2026-11-12 | M0 | 환경 세팅(SETUP 0~5) | 완료(일부 후속 있음) | 스킬·GitHub 트래커·Unity 6000.3.28f1 프로젝트(URP/Fish-Net 4.7.3/Input/Cinemachine/테스트) 구성, EditMode 1/1·mac(IL2CPP)·win(Mono) 빌드 성공.<br>Fish-Net 라이선스 검토 필요(#2). win IL2CPP는 사람이 모듈 추가 후 전환.<br>다음: 새 세션에서 M0-4 씬 PoC → 프레임타임 캡처 → Fish-Net 스모크 루프 시작. |
 | 2026-11-12 | M0 | M0-4/5 헤드리스 씬 + 프레임타임/스크린샷 캡처 (#3~#5) | 완료 | FrameStats(순수 C#, EditMode 4/4) + PlayMode 캡처 테스트 1/1 통과. Logs/perf/{frametime.json,screenshot.png} 생성·육안 확인.<br>batchmode에서 WaitForEndOfFrame 불가 → 카메라→RenderTexture 캡처 사용.<br>측정값(빈 Plane 씬, 1280x720, 헤드리스): avg 0.20ms/p99 0.23ms — 실제 PERF 기준선 아님(씬이 비어 있음). 다음: M0-6. |
 | 2026-11-12 | M0 | M0-6 Fish-Net 서버 권위 스모크 (#6~#12) | 완료 | 단일 프로세스에서 서버 전용+클라 전용 NetworkManager 2개(Tugboat 127.0.0.1)로 연결·스폰 관측·SyncVar 복제·클라 쓰기 불변을 검증. PlayMode 6/6, EditMode 4/4, mac 빌드(IL2CPP) 성공.<br>근거 문서: docs/research/fishnet-headless-host-client.md, ADR-023/024. 테스트 픽스처는 Fish-Net 프리팹 생성기에서 제외(Assets/FishNet.Config.XML).<br>알려진 점: SmokeNetObject는 릴리스 전 제거/스트립 대상. 빌드 후 ProjectSettings의 스크립팅 백엔드 값이 바뀌므로 커밋하지 않고 되돌림. |
+| 2026-11-12 | M0 | M0-7 에셋 임포트 파이프라인 + 대장 검증 (#13, #14) | 완료 | Art/Audio 임포트 규칙(최대 2048·압축·읽기 비활성·노멀/마스크 이름 규칙), ASSET_LEDGER 미기록·LICENSE.txt 누락 시 빌드/CLI 실패. EditMode 12/12.<br>KTX2는 Unity 네이티브 압축으로 해석(ADR-026), 에셋 단위 규칙(ADR-027).<br>별도 code-review는 M1 리뷰 때 함께 수행 예정. |
+| 2026-11-12 | M0 | M0-8 PERF_BUDGET 측정·확정 (#15) | 완료 | 부하 씬 7단계 실측으로 드로우콜 ≤2,500·삼각형 ≤1.5M·렌더 ≤10ms 확정(ADR-028). PlayMode 7/7, mac·win 빌드 성공.<br>한계: 에디터 오프스크린 측정 → M1 게이트에서 플레이어 빌드로 재확인.<br>메모리·로딩·빌드 크기는 잠정치. |
 
 ## blocked 목록 (사람 필요)
 | 날짜 | 티켓 | 사유 | 사람이 할 일 |
