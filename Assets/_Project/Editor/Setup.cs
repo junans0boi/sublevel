@@ -30,7 +30,7 @@ public static class Setup
 
         PlayerSettings.companyName = "STEADY TO VIVID STUDIO";
         PlayerSettings.productName = "Sublevel";
-        PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+        PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone, ScriptingImplementation.IL2CPP);
         PlayerSettings.defaultScreenWidth = 1920;
         PlayerSettings.defaultScreenHeight = 1080;
         PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;

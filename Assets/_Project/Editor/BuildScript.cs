@@ -5,13 +5,16 @@ using UnityEngine;
 
 public static class BuildScript
 {
-    public static void BuildMac() => Build(BuildTarget.StandaloneOSX, "Build/mac/Sublevel.app");
-    public static void BuildWin() => Build(BuildTarget.StandaloneWindows64, "Build/win/Sublevel.exe");
+    // The Standalone scripting backend is shared by mac and win, so each build sets it explicitly.
+    // win uses Mono until the windows-il2cpp module is installed.
+    public static void BuildMac() => Build(BuildTarget.StandaloneOSX, "Build/mac/Sublevel.app", ScriptingImplementation.IL2CPP);
+    public static void BuildWin() => Build(BuildTarget.StandaloneWindows64, "Build/win/Sublevel.exe", ScriptingImplementation.Mono2x);
 
-    static void Build(BuildTarget target, string output)
+    static void Build(BuildTarget target, string output, ScriptingImplementation backend)
     {
         try
         {
+            PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone, backend);
             var options = new BuildPlayerOptions
             {
                 scenes = Array.ConvertAll(EditorBuildSettings.scenes, s => s.path),
