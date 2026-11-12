@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unity Editor 커맨드라인 래퍼. 사용법: tools/unity.sh {create|run|test|build|log|license-return} ...
+# Unity Editor 커맨드라인 래퍼. 사용법: tools/unity.sh {create|run|run-gfx|test|build|log|license-return} ...
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -21,6 +21,9 @@ case "$cmd" in
     "$UNITY_PATH" -batchmode -nographics -quit -createProject "$ROOT" -logFile Logs/create.log -accept-apiupdate ;;
   run)
     "$UNITY_PATH" -batchmode -nographics -quit -projectPath "$ROOT" -executeMethod "${1:?Class.Method}" -logFile "Logs/run-${1//./_}.log" -accept-apiupdate ;;
+  run-gfx)
+    # Like run, but with a graphics device (needed to render screenshots).
+    "$UNITY_PATH" -batchmode -quit -projectPath "$ROOT" -executeMethod "${1:?Class.Method}" -logFile "Logs/run-${1//./_}.log" -accept-apiupdate ;;
   test)
     mode="${1:?editmode|playmode}"; filter="${2:-}"
     args=(-batchmode -projectPath "$ROOT" -runTests -testPlatform "$mode" -testResults "Logs/test-$mode.xml" -logFile "Logs/test-$mode.log")
@@ -37,5 +40,5 @@ case "$cmd" in
     f="$(ls -t Logs/*.log 2>/dev/null | head -1)"; echo "== $f"; grep -nE "error CS|Exception|Build Finished|Tests? (passed|failed)" "$f" | tail -40 ;;
   license-return)
     "$UNITY_PATH" -batchmode -quit -returnlicense ;;
-  *) echo "usage: $0 {create|run <Class.Method>|test editmode|playmode [filter]|build mac|win|log|license-return}"; exit 1 ;;
+  *) echo "usage: $0 {create|run <Class.Method>|run-gfx <Class.Method>|test editmode|playmode [filter]|build mac|win|log|license-return}"; exit 1 ;;
 esac

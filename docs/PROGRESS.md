@@ -1,8 +1,10 @@
 # PROGRESS — 진행 상황 (타이틀 종료 때마다 갱신)
 
 ## 현재 위치
-- 마일스톤: **M0 완료, M1 완료(게이트 통과)**. 사용자 지시에 따라 M1에서 멈춤. 다음은 M2(구역 D, 봇 AI, 엘리베이터 투입) — 시작하려면 지시 필요.
-- 진행 중 타이틀: 없음. 열린 지도 이슈: 없음.
+- 마일스톤: M0·M1 완료. **M1.5 에셋 도입 진행 중(ADR-035/036/037) — 조건부 승인 보정 5건을 반영해 룩 확인 스크린샷을 다시 만들었고, 사용자 재승인 대기 중.** M2는 지시 전까지 시작하지 않음.
+- 진행 중 타이틀: M1.5 에셋 도입(스펙 #26). 승인 대기: #27 룩 확인 장면(`tools/unity.sh run-gfx LookDevBuilder.Build` → `Logs/lookdev/lookdev_{wide,character,weapon}.png`). 승인 후 할 일: 무기 3종 추가, 캐릭터·애니메이션을 플레이어/더미 프리팹에 연결(무기 파지 포함), 테스트 박스 머티리얼·하늘·포스트 적용, 효과음, mac 빌드 성능 재측정.
+- M1.5 작업물은 톤 승인 전이라 **아직 커밋하지 않음**. 현재 상태: 대장 검증 0건, EditMode 30/30, PlayMode 15/15. 포스트프로세싱 켠 뒤 실측은 PERF_BUDGET.md "M1.5 포스트프로세싱 실측". 원본 다운로드는 `AssetStaging/`(gitignore).
+- 주의: Unity 실행 후 `ProjectSettings/{GraphicsSettings,QualitySettings}.asset`이 저절로 바뀜 → 커밋하지 않고 되돌린다.
 - blocked/검토(사람): #2 Fish-Net 라이선스 검토, 무기 이름 상표 검토(RISKS), windows-il2cpp 모듈 추가.
 - 스킬 호출 규칙: ADR-022. 안개 없는 작은 타이틀은 지도 생략(ADR-025).
 - 직접 해보기: `Build/mac/Sublevel.app` 실행(또는 `tools/unity.sh build mac` 후). 조작: WASD 이동, Shift 달리기, Space 점프, 마우스 조준·좌클릭 사격, F 줍기, R 재장전, 1/2 무기 전환, H 회복, V 시점 전환, Q 어깨 전환, 사망 후 Enter 재시작.
@@ -32,6 +34,8 @@
 ## blocked 목록 (사람 필요)
 | 날짜 | 티켓 | 사유 | 사람이 할 일 |
 |---|---|---|---|
+| 2026-11-12 | #26 | Quaternius Universal Base Characters / Universal Animation Library는 itch.io 결제 위젯(0원 구매 절차)으로만 배포 | 필요하면 직접 받아 `AssetStaging/`에 넣기. 현재는 Ultimate Modular Men(애니메이션 내장)으로 대체 |
+| 2026-11-12 | #26 | Mixamo(계정·약관), Sonniss GameAudioGDC(약관 동의·대용량 번들) | 쓰려면 사람이 약관 확인 후 파일 제공. 효과음은 직접 받을 수 있는 CC0 소스로 진행 예정 |
 
 ## 환경 이슈 / 시도한 접근
 - 2026-11-12: node/npx 미설치 → 스킬 설치는 방법 A(플러그인)로 성공해 영향 없음. npx가 필요해지면 재검토.

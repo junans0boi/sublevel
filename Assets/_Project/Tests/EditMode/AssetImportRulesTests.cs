@@ -9,6 +9,8 @@ namespace Game.Tests
     public class AssetImportRulesTests
     {
         const string Dir = "Assets/_Project/Art/_PipelineTest/Tex";
+        const string HdriDir = "Assets/_Project/Art/HDRI/_PipelineTest";
+        const string CharacterDir = "Assets/_Project/Art/Characters/_PipelineTest";
 
         [SetUp]
         public void SetUp() => Directory.CreateDirectory(Dir);
@@ -17,13 +19,16 @@ namespace Game.Tests
         public void TearDown()
         {
             AssetDatabase.DeleteAsset("Assets/_Project/Art/_PipelineTest");
+            AssetDatabase.DeleteAsset(HdriDir);
+            AssetDatabase.DeleteAsset(CharacterDir);
             AssetDatabase.Refresh();
         }
 
-        static TextureImporter ImportTexture(string name, int size)
+        static TextureImporter ImportTexture(string name, int size, string dir = Dir)
         {
+            Directory.CreateDirectory(dir);
             var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
-            var path = Dir + "/" + name;
+            var path = dir + "/" + name;
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
@@ -59,6 +64,29 @@ namespace Game.Tests
         {
             var importer = ImportTexture("wall_roughness.png", 64);
             Assert.IsFalse(importer.sRGBTexture);
+        }
+
+        [Test]
+        public void TextureUnderHdri_ImportsAsCubemap()
+        {
+            var importer = ImportTexture("sky.png", 64, HdriDir);
+            Assert.AreEqual(TextureImporterShape.TextureCube, importer.textureShape);
+            Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<Cubemap>(importer.assetPath));
+        }
+
+        [Test]
+        public void ModelUnderCharacters_RecalculatesSmoothNormalsAndGetsUvs()
+        {
+            Directory.CreateDirectory(CharacterDir);
+            var path = CharacterDir + "/tri.obj";
+            File.WriteAllText(path, "v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n");
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+            Assert.AreEqual(ModelImporterNormals.Calculate, importer.importNormals);
+            Assert.AreEqual(75f, importer.normalSmoothingAngle);
+            var uvs = AssetDatabase.LoadAssetAtPath<Mesh>(path).uv;
+            Assert.AreEqual(3, uvs.Length);
+            Assert.AreNotEqual(uvs[0], uvs[1], "a model without texture coordinates should get projected ones");
         }
     }
 }
