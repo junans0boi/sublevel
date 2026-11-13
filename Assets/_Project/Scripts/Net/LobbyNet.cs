@@ -46,6 +46,10 @@ namespace Game.Net
         public PhaseKind Phase { get; private set; }
         public string FailureText { get; private set; } = "";
         public bool IsHost { get; private set; }
+        // Server only, without a local client of its own (#168).
+        public bool Dedicated { get; private set; }
+        // People in the room as the server counts them (a dedicated server has no roster of its own).
+        public int PlayerCount => IsHost ? _truth.Count : Roster.Count;
         // This room's own client id (known only once the connection finished).
         public int SelfId => _nm != null && _nm.ClientManager.Connection != null ? _nm.ClientManager.Connection.ClientId : -1;
         public string Address { get; private set; } = "127.0.0.1";
@@ -89,6 +93,21 @@ namespace Game.Net
             return StartClientSide();
         }
 
+        // A dedicated server's room (#168, ADR-126): the server side only, no local person. Nobody is the host, so
+        // everyone who joins has to be ready (or the server's start timer runs out).
+        public bool StartDedicated(ushort port)
+        {
+            if (!Begin(true, "127.0.0.1", port)) return false;
+            Dedicated = true;
+            MaxPlayers = Mathf.Max(1, (MatchRules.Current ?? new MatchRules()).MaxPlayers);
+            _truthBots = Bots = LobbyRules.DefaultBots(1, (MatchRules.Current ?? new MatchRules()).ClampedBotCount + 1);
+            RegisterServer();
+            if (!_nm.ServerManager.StartConnection(port)) return Fail("포트 " + port + "을(를) 열지 못했다. 다른 프로그램이 쓰고 있을 수 있다.");
+            Phase = PhaseKind.InLobby;
+            Changed?.Invoke();
+            return true;
+        }
+
         public bool Join(string address, ushort port)
         {
             if (!Begin(false, address, port)) return false;
@@ -100,6 +119,7 @@ namespace Game.Net
             Shutdown();
             Create();
             IsHost = host;
+            Dedicated = false;
             Address = address;
             Port = port;
             FailureText = "";
@@ -259,13 +279,23 @@ namespace Game.Net
         }
 
         // Host: tells everyone the match begins. False while someone is not ready.
-        public bool StartMatch()
+        // `force`: a dedicated server's start timer, which does not wait for the people who are not ready.
+        public bool StartMatch(bool force = false)
         {
-            if (!CanStart) return false;
+            if (!(force ? IsHost && Phase == PhaseKind.InLobby && !HasStarted && _truth.Count > 0 : CanStart)) return false;
             _matchStarted = true;
             // The match listens on its own port so the lobby's sockets need not be closed first.
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
-            _nm.ServerManager.Broadcast(new LobbyStart { MatchPort = matchPort, Players = _truth.Count, Bots = LobbyRules.ClampBots(_truthBots, _truth.Count) });
+            var start = new LobbyStart { MatchPort = matchPort, Players = _truth.Count, Bots = LobbyRules.ClampBots(_truthBots, _truth.Count) };
+            _nm.ServerManager.Broadcast(start);
+            if (Dedicated)
+            {
+                // No client of its own to hear the message: the server leaves the lobby itself, after the guests got it.
+                StartInfo = start;
+                HasStarted = true;
+                _hostLeaveAt = Time.unscaledTime + HostLeaveDelay;
+                Changed?.Invoke();
+            }
             return true;
         }
 
@@ -285,6 +315,7 @@ namespace Game.Net
             _truth.Add(conn.ClientId, hello.Name);
             RefreshBots();
             BroadcastState();
+            if (Dedicated) Changed?.Invoke();
         }
 
         void OnReady(NetworkConnection conn, LobbyReady ready, Channel channel)
@@ -300,6 +331,7 @@ namespace Game.Net
             _truth.Remove(args.ConnectionId);
             RefreshBots();
             BroadcastState();
+            if (Dedicated) Changed?.Invoke();
         }
 
         // Until the host picks a number, the bots fill the match up to the single-player size as people come and go.

@@ -19,6 +19,9 @@ namespace Game.Net
         // Names this player across reconnects to a match (#166): the server hands the same combatant back to the same token.
         public static readonly string Token = System.Guid.NewGuid().ToString("N");
 
+        // Host role without a local player: a dedicated server (#168).
+        public static bool Dedicated;
+
         public static bool IsMultiplayer => Role != RoleKind.Single;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -29,6 +32,7 @@ namespace Game.Net
             Port = 0;
             Players = 1;
             Bots = -1;
+            Dedicated = false;
         }
 
         // Called with what the lobby decided, right before the match scene loads.

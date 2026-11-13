@@ -71,10 +71,14 @@ namespace Game.Net
         public static event Action<Vector3, float> ClientBlastImpact;                // position, radius
         public static event Action<int, float> ClientPassOpened;                     // pass, seconds it stays open
 
+        // A dedicated server's `--region` (#168): the region id (or index) the plan must end in. null = random.
+        public static string FinalRegionOverride;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
             Instance = null;
+            FinalRegionOverride = null;
             ServerRegionStateChanged = null;
             ServerFinalRevealed = null;
             ClientRegionStateChanged = null;
@@ -485,12 +489,27 @@ namespace Game.Net
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.LockdownSeed : 1;
             _planSeed = _seed != 0 ? _seed : unchecked(matchSeed ^ 0x5EED5);
             _plan = Lockdown.Plan(_geo.RegionCount, _geo.PassA, _geo.PassB, _planSeed, _geo.SubZoneCounts(), Rules);
+            if (!string.IsNullOrEmpty(FinalRegionOverride)) ForceFinalRegion();
             _rng = new System.Random(unchecked(_planSeed * 31 + 7));
             _startTime = Time.timeAsDouble;
             _nextEvent = 0;
             _radiationTimer = 0f;
             ResetViewState();
             _serverReady = true;
+        }
+
+        // The first seed from the match's own on whose plan ends in the wanted region (the plan itself stays as designed).
+        void ForceFinalRegion()
+        {
+            int want = _geo.RegionIndexOf(FinalRegionOverride);
+            if (want < 0 && !int.TryParse(FinalRegionOverride, out want)) want = -1;
+            if (want < 0 || want >= _geo.RegionCount) { Debug.LogWarning("[ZoneDirector] --region '" + FinalRegionOverride + "' is not a region of this map, ignored"); return; }
+            for (int k = 0; k < 4096 && _plan.FinalRegion != want; k++)
+            {
+                _planSeed = unchecked(_planSeed + 1);
+                _plan = Lockdown.Plan(_geo.RegionCount, _geo.PassA, _geo.PassB, _planSeed, _geo.SubZoneCounts(), Rules);
+            }
+            Debug.Log("[ZoneDirector] final region " + want + (_plan.FinalRegion == want ? " (forced)" : " could not be forced"));
         }
 
         // ---- Server ----

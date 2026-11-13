@@ -12,6 +12,13 @@ public static class BuildScript
     public static void BuildMacReview() => Build(BuildTarget.StandaloneOSX, "Build/review/Sublevel.app", ScriptingImplementation.Mono2x);
     public static void BuildWin() =>Build(BuildTarget.StandaloneWindows64, "Build/win/Sublevel.exe", ScriptingImplementation.Mono2x);
 
+    // Dedicated server (#168, ADR-127): the normal standalone player, started with `--dedicated -batchmode -nographics`
+    // (docs/DEDICATED_SERVER.md). Mono so it builds quickly; the same build serves every platform's clients.
+    [MenuItem("Build/Dedicated Server (mac)")]
+    public static void BuildServerMenu() => BuildServerMac();
+    public static void BuildServerMac() => Build(BuildTarget.StandaloneOSX, "Build/server/SublevelServer.app", ScriptingImplementation.Mono2x);
+    public static void BuildServerWin() => Build(BuildTarget.StandaloneWindows64, "Build/server-win/SublevelServer.exe", ScriptingImplementation.Mono2x);
+
     static void Build(BuildTarget target, string output, ScriptingImplementation backend)
     {
         try

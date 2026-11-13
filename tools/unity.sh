@@ -36,11 +36,13 @@ case "$cmd" in
     case "${1:?mac|win}" in
       mac) "$UNITY_PATH" -batchmode -nographics -quit -projectPath "$ROOT" -buildTarget StandaloneOSX -executeMethod BuildScript.BuildMac -logFile Logs/build-mac.log ;;
       win) "$UNITY_PATH" -batchmode -nographics -quit -projectPath "$ROOT" -buildTarget StandaloneWindows64 -executeMethod BuildScript.BuildWin -logFile Logs/build-win.log ;;
-      *) echo "mac|win"; exit 1 ;;
+      server) "$UNITY_PATH" -batchmode -nographics -quit -projectPath "$ROOT" -buildTarget StandaloneOSX -executeMethod BuildScript.BuildServerMac -logFile Logs/build-server.log ;;
+      server-win) "$UNITY_PATH" -batchmode -nographics -quit -projectPath "$ROOT" -buildTarget StandaloneWindows64 -executeMethod BuildScript.BuildServerWin -logFile Logs/build-server-win.log ;;
+      *) echo "mac|win|server|server-win"; exit 1 ;;
     esac ;;
   log)
     f="$(ls -t Logs/*.log 2>/dev/null | head -1)"; echo "== $f"; grep -nE "error CS|Exception|Build Finished|Tests? (passed|failed)" "$f" | tail -40 ;;
   license-return)
     "$UNITY_PATH" -batchmode -quit -returnlicense ;;
-  *) echo "usage: $0 {create|run <Class.Method>|run-gfx <Class.Method>|test editmode|playmode [filter]|build mac|win|log|license-return}"; exit 1 ;;
+  *) echo "usage: $0 {create|run <Class.Method>|run-gfx <Class.Method>|test editmode|playmode [filter]|build mac|win|server|server-win|log|license-return}"; exit 1 ;;
 esac

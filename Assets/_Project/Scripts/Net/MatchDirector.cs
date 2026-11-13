@@ -130,7 +130,7 @@ namespace Game.Net
                 Port = FreePort(NetSession.Role == NetSession.RoleKind.Host && NetSession.Port != 0 ? NetSession.Port : transport.GetPort());
                 transport.SetPort(Port);
                 _networkManager.ServerManager.StartConnection();
-                _networkManager.ClientManager.StartConnection();
+                if (!NetSession.Dedicated) _networkManager.ClientManager.StartConnection();
             }
         }
 

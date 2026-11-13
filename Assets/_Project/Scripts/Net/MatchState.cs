@@ -95,6 +95,8 @@ namespace Game.Net
         public int AliveCount { get; private set; }
         public int TotalCount { get; private set; }
         public bool IsOver { get; private set; }
+        // Server: the match has been decided (a dedicated server has no client to read IsOver from, #168).
+        public bool ServerOver => _serverOver;
         public int WinnerId { get; private set; } = -1;
         public string WinnerName { get; private set; } = "";
         // Kills received since the match began (the feed itself keeps only the latest FeedCapacity).
