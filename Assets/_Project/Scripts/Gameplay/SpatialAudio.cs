@@ -31,9 +31,10 @@ namespace Game.Gameplay
         };
 
         // Volume factor at `meters` from the listener: 1 inside Min, min/d beyond it, faded to 0 at Max.
-        public static float Gain(Category category, float meters)
+        public static float Gain(Category category, float meters) => Gain(For(category), meters);
+
+        public static float Gain(Range r, float meters)
         {
-            var r = For(category);
             if (meters <= r.Min) return 1f;
             if (meters >= r.Max) return 0f;
             float t = (meters - r.Min) / (r.Max - r.Min);
@@ -49,15 +50,16 @@ namespace Game.Gameplay
         }
 
         // The rolloff curve Unity reads over distance / max distance; sampled from Gain, denser close up.
-        public static AnimationCurve Curve(Category category)
+        public static AnimationCurve Curve(Category category) => Curve(For(category));
+
+        public static AnimationCurve Curve(Range r)
         {
-            var r = For(category);
             var keys = new Keyframe[CurveKeys + 1];
             keys[0] = new Keyframe(0f, 1f);
             for (int i = 0; i < CurveKeys; i++)
             {
                 float d = r.Min * Mathf.Pow(r.Max / r.Min, i / (float)(CurveKeys - 1));
-                keys[i + 1] = new Keyframe(d / r.Max, Gain(category, d));
+                keys[i + 1] = new Keyframe(d / r.Max, Gain(r, d));
             }
             // Straight lines between keys, so the curve never overshoots between samples.
             for (int i = 0; i < keys.Length; i++)
@@ -70,27 +72,38 @@ namespace Game.Gameplay
             return new AnimationCurve(keys);
         }
 
-        public static AudioSource Apply(AudioSource source, Category category)
+        public static AudioSource Apply(AudioSource source, Category category) => Apply(source, For(category));
+
+        // A range of its own, e.g. a footstep whose reach depends on gait and ground (SoundRules.StepRange).
+        public static AudioSource Apply(AudioSource source, Range r)
         {
             if (source == null) return null;
-            var r = For(category);
             source.spatialBlend = 1f;
             source.spread = 0f;
             source.dopplerLevel = 0f;
             source.minDistance = r.Min;
             source.maxDistance = r.Max;
             source.rolloffMode = AudioRolloffMode.Custom;
-            source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, Curve(category));
+            source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, Curve(r));
             return source;
         }
 
         static AudioListener _listener;
 
         // Metres from the active listener (the local player's camera), or 0 when there is none.
-        public static float DistanceToListener(Vector3 position)
+        public static float DistanceToListener(Vector3 position) =>
+            ListenerPosition(out var listener) ? Vector3.Distance(listener, position) : 0f;
+
+        public static bool ListenerPosition(out Vector3 position)
         {
-            if (_listener == null || !_listener.isActiveAndEnabled) _listener = Object.FindAnyObjectByType<AudioListener>();
-            return _listener != null ? Vector3.Distance(_listener.transform.position, position) : 0f;
+            if (_listener == null || !_listener.isActiveAndEnabled)
+            {
+                // FindAnyObjectByType also returns disabled components, so pick an enabled one.
+                _listener = null;
+                foreach (var l in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None)) if (l.isActiveAndEnabled) { _listener = l; break; }
+            }
+            position = _listener != null ? _listener.transform.position : default;
+            return _listener != null;
         }
     }
 }
