@@ -151,6 +151,9 @@ namespace Game.Gameplay
             Cursor.visible = !playing;
         }
 
+        // Tests: a second local player in the same process (remote client harness) takes its own input, not the shared override.
+        public void UseInput(IPlayerInput input) => _input = input;
+
         public override void OnStopClient() => ReleaseOwnership();
 
         // Scene unloads destroy objects without the network callbacks.

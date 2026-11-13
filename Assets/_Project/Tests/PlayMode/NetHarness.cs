@@ -32,6 +32,14 @@ namespace Game.Tests
 
         NetworkManager Create(string name, out SinglePrefabObjects prefabs)
         {
+            prefabs = ScriptableObject.CreateInstance<SinglePrefabObjects>();
+            prefabs.AddObject(_prefab, false, false);
+            return Build(name, prefabs, Port);
+        }
+
+        // A NetworkManager that coexists with others in the process (AllowMultiple), on its own Tugboat.
+        public static NetworkManager Build(string name, PrefabObjects prefabs, ushort port)
+        {
             var go = new GameObject(name);
             go.SetActive(false); // defer NetworkManager.Awake until configured
             // Editor-only: NetworkManager.Reset logs "SpawnablePrefabs is null" on AddComponent; we assign it right after.
@@ -41,10 +49,8 @@ namespace Game.Tests
             try { nm = go.AddComponent<NetworkManager>(); }
             finally { LogAssert.ignoreFailingMessages = prevIgnore; }
             typeof(NetworkManager).GetField("_persistence", Priv).SetValue(nm, NetworkManager.PersistenceType.AllowMultiple);
-            prefabs = ScriptableObject.CreateInstance<SinglePrefabObjects>();
-            prefabs.AddObject(_prefab, false, false);
             nm.SpawnablePrefabs = prefabs;
-            go.AddComponent<Tugboat>().SetPort(Port);
+            go.AddComponent<Tugboat>().SetPort(port);
             go.SetActive(true);
             return nm;
         }
