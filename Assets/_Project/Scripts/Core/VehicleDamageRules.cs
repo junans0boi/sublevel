@@ -8,7 +8,8 @@ namespace Game.Core
     // The vehicle's condition as everyone sees it: smoke, fire, then the wreck (#90, ADR-067, ADR-074).
     public enum VehicleDamageStage { Healthy = 0, WhiteSmoke = 1, BlackSmoke = 2, Burning = 3, Wrecked = 4 }
 
-    // Detachable body parts (#90): only models built with them as separate meshes have them.
+    // Detachable body parts (#90): only models built with them as separate meshes have them (prefab children
+    // Model/Part_<name>, VehicleModels). Doors are part of every model's body shell: none detach.
     public enum VehiclePart { Hood = 0, Trunk = 1, BumperFront = 2, BumperRear = 3 }
 
     // Per part: still fixed, hanging loose, gone.
@@ -87,15 +88,19 @@ namespace Game.Core
         public int MaxDecals = 30;
         public float DecalSize = 0.11f;         // a hole with its bare-metal rim, readable at 5-8 m
         public float DeformScale = 1f;
-        public float DentBulletRadius = 0.14f;
-        public float DentBulletDepth = 0.008f;
-        public float DentImpactRadiusPerMps = 0.04f; // radius = speed x this, capped
+        // Sized to read at 6 m with the normals bent along (VehicleDamageVisual): a bullet a 20 cm dimple, a blast a 1.4 m cave-in.
+        public float DentBulletRadius = 0.2f;
+        public float DentBulletDepth = 0.022f;   // at DentBulletRefDamage, x0.5..x2 with the weapon's damage
+        public float DentBulletRefDamage = 30f;
+        public float DentImpactRadiusPerMps = 0.05f; // radius = speed x this, capped
         public float DentImpactMaxRadius = 0.9f;
-        public float DentImpactDepthPerMps = 0.006f;
-        public float DentBlastRadius = 1.1f;
-        public float DentBlastDepth = 0.07f;
-        public float DentMaxDepth = 0.2f;        // no vertex goes further in than this in total
+        public float DentImpactDepthPerMps = 0.01f;
+        public float DentBlastRadius = 1.4f;
+        public float DentBlastDepth = 0.16f;
+        public float DentMaxDepth = 0.22f;       // no vertex goes further in than this in total
         public int DentHistory = 48;             // kept by the server for late joiners
+        public float PartDangleDeg = 14f;        // a loose part hangs open / down this far
+        public float PartDespawnSeconds = 20f;   // a fallen part lies on the ground this long
     }
 
     // Pure vehicle damage rules (#90).
@@ -269,6 +274,34 @@ namespace Game.Core
 
         // Slot of the oldest decal to reuse once the cap is reached (a ring).
         public static int DecalSlot(int placedSoFar, int cap) => cap <= 0 ? 0 : placedSoFar % cap;
+
+        // A ring of `cap` records after `placedSoFar` writes: how many are kept, and the slot of the k-th oldest.
+        public static int HistoryCount(int placedSoFar, int cap) => Math.Max(0, Math.Min(placedSoFar, cap));
+        public static int HistorySlot(int placedSoFar, int cap, int k) =>
+            cap <= 0 ? 0 : placedSoFar <= cap ? k : (placedSoFar + k) % cap;
+
+        // A bullet's dimple: deeper for heavier rounds (x0.5..x2 of the reference damage's depth).
+        public static void BulletDent(float weaponDamage, VehicleDamageRules r, out float radius, out float depth)
+        {
+            float scale = r.DentBulletRefDamage > 0f ? Math.Max(0.5f, Math.Min(2f, weaponDamage / r.DentBulletRefDamage)) : 1f;
+            radius = r.DentBulletRadius;
+            depth = r.DentBulletDepth * r.DeformScale * scale;
+        }
+
+        // Damage on a detachable part: its state after (fallen stays fallen).
+        public static PartState HitPart(ref float health, float damage, VehicleDamageRules r)
+        {
+            health = Math.Max(0f, health - Math.Max(0f, damage));
+            return PartStateFor(health, r);
+        }
+
+        // Every part in one state, packed.
+        public static int AllParts(PartState state)
+        {
+            int packed = 0;
+            for (int p = 0; p < PartCount; p++) packed = SetPart(packed, p, state);
+            return packed;
+        }
 
         // The ray (unit direction) against a sphere: distance along the ray to where it enters, or -1.
         public static float RaySphere(float ox, float oy, float oz, float dx, float dy, float dz, float cx, float cy, float cz, float radius)

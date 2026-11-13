@@ -167,5 +167,56 @@ namespace Game.Tests
             Assert.AreEqual(29, VehicleDamageMath.DecalSlot(29, 30));
             Assert.AreEqual(0, VehicleDamageMath.DecalSlot(30, 30));
         }
+
+        // ---- Late joiners: the history replays oldest first ----
+
+        [Test]
+        public void History_ReplaysOldestFirst_FromTheRing()
+        {
+            Assert.AreEqual(0, VehicleDamageMath.HistorySlot(3, 30, 0));   // not full: from slot 0
+            Assert.AreEqual(2, VehicleDamageMath.HistorySlot(3, 30, 2));
+            Assert.AreEqual(5, VehicleDamageMath.HistorySlot(35, 30, 0));  // wrapped: the oldest kept is slot 5
+            Assert.AreEqual(4, VehicleDamageMath.HistorySlot(35, 30, 29)); // the newest
+            Assert.AreEqual(3, VehicleDamageMath.HistoryCount(3, 30));
+            Assert.AreEqual(30, VehicleDamageMath.HistoryCount(35, 30));
+        }
+
+        // ---- Bullet dents scale with the weapon ----
+
+        [Test]
+        public void BulletDent_DeeperForHeavierRounds_Capped()
+        {
+            VehicleDamageMath.BulletDent(R.DentBulletRefDamage, R, out float r1, out float d1);
+            VehicleDamageMath.BulletDent(R.DentBulletRefDamage * 2f, R, out _, out float d2);
+            VehicleDamageMath.BulletDent(R.DentBulletRefDamage * 100f, R, out _, out float dMax);
+            VehicleDamageMath.BulletDent(0f, R, out _, out float d0);
+            Assert.AreEqual(R.DentBulletRadius, r1, 1e-5f);
+            Assert.AreEqual(R.DentBulletDepth * R.DeformScale, d1, 1e-5f);
+            Assert.Greater(d2, d1);
+            Assert.AreEqual(R.DentBulletDepth * R.DeformScale * 2f, dMax, 1e-5f);
+            Assert.AreEqual(R.DentBulletDepth * R.DeformScale * 0.5f, d0, 1e-5f);
+        }
+
+        // ---- Detachable parts ----
+
+        [Test]
+        public void Part_HangsLooseAtHalf_FallsAtZero_AndStaysFallen()
+        {
+            float health = R.PartHealth;
+            Assert.AreEqual(PartState.Fixed, VehicleDamageMath.HitPart(ref health, R.PartHealth * 0.4f, R));
+            Assert.AreEqual(PartState.Dangling, VehicleDamageMath.HitPart(ref health, R.PartHealth * 0.2f, R));
+            Assert.AreEqual(PartState.Fallen, VehicleDamageMath.HitPart(ref health, R.PartHealth, R));
+            Assert.AreEqual(0f, health);
+            Assert.AreEqual(PartState.Fallen, VehicleDamageMath.HitPart(ref health, 0f, R));
+        }
+
+        [Test]
+        public void Explosion_DropsEveryPart()
+        {
+            int packed = VehicleDamageMath.AllParts(PartState.Fallen);
+            for (int p = 0; p < VehicleDamageMath.PartCount; p++)
+                Assert.AreEqual(PartState.Fallen, VehicleDamageMath.GetPart(packed, p));
+            Assert.AreEqual(0, VehicleDamageMath.AllParts(PartState.Fixed));
+        }
     }
 }
