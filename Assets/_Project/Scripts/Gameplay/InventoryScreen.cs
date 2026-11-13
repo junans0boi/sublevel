@@ -13,12 +13,12 @@ namespace Game.Gameplay
         public const int MaxVicinityRows = 12;
 
         const int SortingOrder = 100;
-        const float PanelWidth = 1680f, PanelHeight = 900f;
-        const float ColumnHeight = 810f, ColumnTop = 70f, Gap = 20f;
+        const float PanelWidth = 1680f, PanelHeight = 980f;
+        const float ColumnHeight = 890f, ColumnTop = 70f, Gap = 20f;
         const float GroundWidth = 340f, BagWidth = 360f, GearWidth = 360f, WeaponWidth = 560f;
         const float Pad = 14f, HeaderHeight = 54f;
         const float GroundRowHeight = 54f, GroundRowGap = 6f;
-        const float BagRowHeight = 52f, BagRowGap = 4f; // ten rows with the jerrycan (ADR-075), then loose optics (ADR-082)
+        const float BagRowHeight = 38f, BagRowGap = 3f; // fifteen rows (boost items, flash, molotov: ADR-116), then loose optics (ADR-082)
         const float BagOpticHeight = 40f, BagOpticGap = 3f, BagOpticLabel = 22f; // ADR-100: 16 ids = 6 columns x 3 rows
         const int BagOpticColumns = 6, BagOpticRows = 3;
         const float AttachChip = 46f, AttachGap = 4f;
@@ -279,6 +279,16 @@ namespace Game.Gameplay
             _packDrags[InventoryBackend.SmokeRow].Configure(this, SmokeSource());
             ShowPackRow(InventoryBackend.JerrycanRow, InventoryBackend.Jerrycans(me));
             _packDrags[InventoryBackend.JerrycanRow].Configure(this, JerrycanSource());
+            ShowPackRow(InventoryBackend.DrinkRow, InventoryBackend.BoostCount(me, HealKind.Drink));
+            _packDrags[InventoryBackend.DrinkRow].Configure(this, ExtraSource(InventorySourceKind.Drink));
+            ShowPackRow(InventoryBackend.PillRow, InventoryBackend.BoostCount(me, HealKind.Pill));
+            _packDrags[InventoryBackend.PillRow].Configure(this, ExtraSource(InventorySourceKind.Pill));
+            ShowPackRow(InventoryBackend.SyringeRow, InventoryBackend.BoostCount(me, HealKind.Syringe));
+            _packDrags[InventoryBackend.SyringeRow].Configure(this, ExtraSource(InventorySourceKind.Syringe));
+            ShowPackRow(InventoryBackend.FlashRow, InventoryBackend.Flashes(me));
+            _packDrags[InventoryBackend.FlashRow].Configure(this, ExtraSource(InventorySourceKind.Flash));
+            ShowPackRow(InventoryBackend.MolotovRow, InventoryBackend.Molotovs(me));
+            _packDrags[InventoryBackend.MolotovRow].Configure(this, ExtraSource(InventorySourceKind.Molotov));
 
             // Loose optics (ADR-082): one cell per optic id held, packed in id order.
             int cell = 0;
@@ -313,6 +323,11 @@ namespace Game.Gameplay
                 hash = hash * 31 + InventoryBackend.FirstAids(me);
                 hash = hash * 31 + InventoryBackend.Smokes(me);
                 hash = hash * 31 + InventoryBackend.Jerrycans(me);
+                hash = hash * 31 + InventoryBackend.BoostCount(me, HealKind.Drink);
+                hash = hash * 31 + InventoryBackend.BoostCount(me, HealKind.Pill);
+                hash = hash * 31 + InventoryBackend.BoostCount(me, HealKind.Syringe);
+                hash = hash * 31 + InventoryBackend.Flashes(me);
+                hash = hash * 31 + InventoryBackend.Molotovs(me);
                 hash = hash * 31 + InventoryBackend.Keys(me);
                 hash = hash * 31 + InventoryBackend.CarryHash(me);
                 hash = hash * 31 + InventoryBackend.BagOptics(me).GetHashCode();
@@ -425,6 +440,7 @@ namespace Game.Gameplay
         public InventoryDragSource BandageSource() => new InventoryDragSource(InventorySourceKind.Bandage, null, 0);
         public InventoryDragSource FirstAidSource() => new InventoryDragSource(InventorySourceKind.FirstAid, null, 0);
         public InventoryDragSource SmokeSource() => new InventoryDragSource(InventorySourceKind.Smoke, null, 0);
+        public InventoryDragSource ExtraSource(InventorySourceKind kind) => new InventoryDragSource(kind, null, 0);
         public InventoryDragSource JerrycanSource() => new InventoryDragSource(InventorySourceKind.Jerrycan, null, 0);
         public InventoryDragSource BagOpticSource(int opticId) => opticId >= 1 && opticId <= OpticBag.MaxId
             ? new InventoryDragSource(InventorySourceKind.BagOptic, null, opticId) : default;
@@ -477,6 +493,11 @@ namespace Game.Gameplay
                 case InventorySourceKind.FirstAid: InventoryBackend.DropHealing(me, HealKind.FirstAid); return true;
                 case InventorySourceKind.Smoke: InventoryBackend.DropSmoke(me); return true;
                 case InventorySourceKind.Jerrycan: InventoryBackend.DropJerrycan(me); return true;
+                case InventorySourceKind.Drink:
+                case InventorySourceKind.Pill:
+                case InventorySourceKind.Syringe: InventoryBackend.DropHealing(me, InventoryBackend.BoostKindOf(source.Kind)); return true;
+                case InventorySourceKind.Flash: InventoryBackend.DropFlash(me); return true;
+                case InventorySourceKind.Molotov: InventoryBackend.DropMolotov(me); return true;
                 default: return false;
             }
         }
@@ -490,6 +511,11 @@ namespace Game.Gameplay
                 case InventorySourceKind.FirstAid: count = InventoryBackend.FirstAids(me); return true;
                 case InventorySourceKind.Smoke: count = InventoryBackend.Smokes(me); return true;
                 case InventorySourceKind.Jerrycan: count = InventoryBackend.Jerrycans(me); return true;
+                case InventorySourceKind.Drink:
+                case InventorySourceKind.Pill:
+                case InventorySourceKind.Syringe: count = InventoryBackend.BoostCount(me, InventoryBackend.BoostKindOf(source.Kind)); return true;
+                case InventorySourceKind.Flash: count = InventoryBackend.Flashes(me); return true;
+                case InventorySourceKind.Molotov: count = InventoryBackend.Molotovs(me); return true;
                 default: count = 0; return false;
             }
         }
@@ -559,8 +585,7 @@ namespace Game.Gameplay
             if (me == null) return;
             if (source.Kind == InventorySourceKind.Vicinity && clickCount >= 2) InventoryBackend.Pickup(me, source.Loot);
             else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
-            else if (source.Kind == InventorySourceKind.Bandage && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.Bandage);
-            else if (source.Kind == InventorySourceKind.FirstAid && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.FirstAid);
+            else if (clickCount >= 2 && InventoryBackend.RightClickHeal(source.Kind, out var heal)) InventoryBackend.UseHealing(me, heal);
             else if (source.Kind == InventorySourceKind.Jerrycan && clickCount >= 2) InventoryBackend.UseJerrycan(me);
             else if (source.Kind == InventorySourceKind.Weapon && InventoryBackend.WeaponId(me, source.Index) != 0)
                 InventoryBackend.SelectSlot(me, source.Index);
@@ -724,6 +749,11 @@ namespace Game.Gameplay
                 case InventorySourceKind.FirstAid: key = "firstaid"; name = HealRules.FirstAidName; break;
                 case InventorySourceKind.Smoke: key = "smoke"; name = ThrowableRules.SmokeName; break;
                 case InventorySourceKind.Jerrycan: key = "jerrycan"; name = FuelRules.JerrycanName; break;
+                case InventorySourceKind.Drink: key = "drink"; name = HealRules.DrinkName; break;
+                case InventorySourceKind.Pill: key = "pill"; name = HealRules.PillName; break;
+                case InventorySourceKind.Syringe: key = "syringe"; name = HealRules.SyringeName; break;
+                case InventorySourceKind.Flash: key = "flash"; name = ThrowableRules.FlashName; break;
+                case InventorySourceKind.Molotov: key = "molotov"; name = ThrowableRules.MolotovName; break;
             }
         }
 
@@ -854,11 +884,16 @@ namespace Game.Gameplay
                 else if (i == InventoryBackend.FirstAidRow) { name = HealRules.FirstAidName; key = "firstaid"; }
                 else if (i == InventoryBackend.SmokeRow) { name = ThrowableRules.SmokeName; key = "smoke"; }
                 else if (i == InventoryBackend.JerrycanRow) { name = FuelRules.JerrycanName; key = "jerrycan"; }
+                else if (i == InventoryBackend.DrinkRow) { name = HealRules.DrinkName; key = "drink"; }
+                else if (i == InventoryBackend.PillRow) { name = HealRules.PillName; key = "pill"; }
+                else if (i == InventoryBackend.SyringeRow) { name = HealRules.SyringeName; key = "syringe"; }
+                else if (i == InventoryBackend.FlashRow) { name = ThrowableRules.FlashName; key = "flash"; }
+                else if (i == InventoryBackend.MolotovRow) { name = ThrowableRules.MolotovName; key = "molotov"; }
                 else { name = "수류탄"; key = "grenade"; }
-                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 44f, 44f));
+                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, BagRowHeight - 4f, BagRowHeight - 4f));
                 _packIcons[i].Set(key, name);
-                _packNames[i] = UiKit.Label(InRow("Name", row, 70f, content - 156f, BagRowHeight), name, 20, UiKit.TextDim);
-                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 22, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+                _packNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, BagRowHeight), name, 19, UiKit.TextDim);
+                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 20, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
                 _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
                 _packRows[i] = row.gameObject;
             }

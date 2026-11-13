@@ -275,6 +275,28 @@ namespace Game.Net
             return true;
         }
 
+        // Death crate (ADR-116): every bandage, kit and boost item carried goes into `into` and the counts clear.
+        public void ServerStrip(System.Collections.Generic.List<LootEntry> into)
+        {
+            if (!IsServerInitialized) return;
+            ServerCancel();
+            for (var kind = HealKind.Bandage; kind <= HealKind.Syringe; kind++)
+            {
+                if (kind == HealKind.Medkit) continue; // the loadout's own count, stripped with it
+                int n = CountOf(kind);
+                if (n <= 0) continue;
+                switch (kind)
+                {
+                    case HealKind.Bandage: Bandages.Value = 0; break;
+                    case HealKind.FirstAid: FirstAids.Value = 0; break;
+                    case HealKind.Drink: Drinks.Value = 0; break;
+                    case HealKind.Pill: Pills.Value = 0; break;
+                    default: Syringes.Value = 0; break;
+                }
+                into?.Add(new LootEntry { Kind = Healing.LootOf(kind), Amount = n });
+            }
+        }
+
         // ---- Owner requests ----
 
         // The owner's call: the host is the server, so it does not wait for the next network tick.

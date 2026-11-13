@@ -263,10 +263,13 @@ namespace Game.AI
                 _nextDoor = now + 0.25f;
                 DoorSystem.ServerBotOpen(transform.position, OnNavMesh && _agent.velocity.sqrMagnitude > 0.04f ? _agent.velocity : transform.forward);
             }
+            ApplyBlindness(now);
             FillSelf();
             _intent = _brain.Think(_percept);
             // Teams (ADR-072): revive a knocked teammate, keep near the leader.
             ApplyTeam(ref _intent, now);
+            // Items (ADR-116): heal, boost, throw; blind and burning bodies react.
+            ApplyItems(ref _intent, now);
             // One-shot senses are the brain's to remember from here on.
             _percept.Heard = false;
             _percept.Stuck = false;
@@ -283,6 +286,7 @@ namespace Game.AI
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
+            InitItems();
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
@@ -408,6 +412,8 @@ namespace Game.AI
             bool emptySlot = _self.HasFreeWeaponSlot;
             bool unarmed = !_self.HasAnyWeapon;
             int medkits = _self.Medkits.Value;
+            var h = _healing;
+            var t = _throwables;
             float now = Time.time;
             float bestSqr = rules.LootRadius * rules.LootRadius;
             bool bestIsWeapon = false;
@@ -436,7 +442,10 @@ namespace Game.AI
                 // A key (ADR-058 (7)) gets it through a locked pass; one is enough.
                 bool wanted = kind == LootKind.Key
                     ? _keys != null && _keys.Keys.Value < KeysWanted
-                    : BotBrain.WantsLoot(kind, slotFree, usesAmmo, reserve, medkits, rules);
+                    : BotBrain.WantsLoot(kind, slotFree, usesAmmo, reserve, medkits, rules)
+                      || BotItems.WantsLoot(kind, h != null ? h.Bandages.Value : 99, h != null ? h.FirstAids.Value : 99,
+                          h != null ? h.Drinks.Value : 99, h != null ? h.Pills.Value : 99, h != null ? h.Syringes.Value : 99,
+                          t != null ? t.Grenades.Value : 99, t != null ? t.Smokes.Value : 99, t != null ? t.Flashes.Value : 99, t != null ? t.Molotovs.Value : 99, rules);
                 if (!wanted) continue;
                 var at = item.transform.position;
                 float sqr = (at - feet).sqrMagnitude;
@@ -478,7 +487,7 @@ namespace Game.AI
             _percept.Reserve = weapon != null ? _self.ReserveFor(weapon.Ammo) : 0;
             _percept.WeaponRange = weapon != null ? weapon.Range : 0f;
             _percept.Reloading = _self.Reloading.Value;
-            _percept.Medkits = _self.Medkits.Value;
+            _percept.Medkits = HealCount;
 
             int otherSlot = _self.OtherWeaponSlot();
             var other = GameData.Weapons.Find(otherSlot >= 0 ? _self.WeaponInSlot(otherSlot) : 0);
@@ -529,7 +538,7 @@ namespace Game.AI
                 else if (intent.Heal)
                 {
                     _nextAction = now + ActionRetrySeconds;
-                    BotServerActions.UseMedkit(_self);
+                    BotServerActions.Heal(_self);
                 }
                 else if (intent.PickUp && _loot != null && _loot.ObjectId == intent.LootId)
                 {

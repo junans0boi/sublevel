@@ -30,6 +30,17 @@ namespace Game.AI
         // Same effect as Combatant.CmdUseMedkit.
         public static bool UseMedkit(Combatant bot) => bot != null && bot.ServerUseMedkit();
 
+        // Heals the way a player's H does: the best-fitting timed item (bandage, kit, medkit) when the bot has the
+        // component for it, else the instant medkit (ADR-116).
+        public static bool Heal(Combatant bot)
+        {
+            if (bot == null) return false;
+            var healing = bot.GetComponent<CombatantHealing>();
+            // With the component every use is timed (the medkit too); a retry while one runs must not fall through to the instant kit.
+            if (healing != null) return healing.Using || healing.ServerUse();
+            return bot.ServerUseMedkit();
+        }
+
         // The name the match shows for this combatant, where Combatant offers a place for it.
         public static bool SetDisplayName(Combatant bot, string name)
         {

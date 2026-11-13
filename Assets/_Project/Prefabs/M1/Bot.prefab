@@ -1115,6 +1115,7 @@ GameObject:
   - component: {fileID: 8594492728898728236}
   - component: {fileID: 6087439256904701151}
   - component: {fileID: 143243291639752285}
+  - component: {fileID: 1932686244966445232}
   m_Layer: 0
   m_Name: Bot
   m_TagString: Untagged
@@ -1843,6 +1844,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e0140e50768043feac596a0597030c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Net::Game.Net.CombatantCarry
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 5619070907207653756}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &1932686244966445232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7904354460414550351}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9efb924a912e24a65be1079489381703, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Net::Game.Net.CombatantHealing
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 5619070907207653756}
   _networkObjectCache: {fileID: 0}

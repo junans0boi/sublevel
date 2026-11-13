@@ -21,6 +21,11 @@ namespace Game.Gameplay
         Vest,
         Optic, // the optic on the weapon card of slot Index
         BagOptic, // ADR-082: a loose optic in the bag; Index = optic id
+        Drink,    // ADR-116: boost items and the two throwables that had no row yet
+        Pill,
+        Syringe,
+        Flash,
+        Molotov,
     }
 
     public readonly struct InventoryDragSource
@@ -68,7 +73,12 @@ namespace Game.Gameplay
         public const int FirstAidRow = 7;
         public const int SmokeRow = 8;
         public const int JerrycanRow = 9;
-        public const int BackpackRows = 10;
+        public const int DrinkRow = 10;
+        public const int PillRow = 11;
+        public const int SyringeRow = 12;
+        public const int FlashRow = 13;
+        public const int MolotovRow = 14;
+        public const int BackpackRows = 15;
         public const int HelmetSlot = 0;
         public const int VestSlot = 1;
 
@@ -93,6 +103,25 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             return user != null ? user.Smokes.Value : 0;
+        }
+
+        public static int Flashes(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.Flashes.Value : 0;
+        }
+
+        public static int Molotovs(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.Molotovs.Value : 0;
+        }
+
+        // Boost items (drink, pill, syringe) by HealKind.
+        public static int BoostCount(Combatant combatant, HealKind kind)
+        {
+            var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
+            return healing != null ? healing.CountOf(kind) : 0;
         }
 
         public static int Jerrycans(Combatant combatant)
@@ -281,6 +310,15 @@ namespace Game.Gameplay
                     return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.Smoke:
                     return ThrowableRules.SmokeName + "\n보유 " + Smokes(combatant) + "개";
+                case InventorySourceKind.Drink:
+                case InventorySourceKind.Pill:
+                case InventorySourceKind.Syringe:
+                    var boost = BoostKindOf(source.Kind);
+                    return Healing.NameOf(boost) + "\n보유 " + BoostCount(combatant, boost) + "개 · 우클릭 사용 (J: 가장 작은 것)";
+                case InventorySourceKind.Flash:
+                    return ThrowableRules.FlashName + "\n보유 " + Flashes(combatant) + "개 · 우클릭 버리기";
+                case InventorySourceKind.Molotov:
+                    return ThrowableRules.MolotovName + "\n보유 " + Molotovs(combatant) + "개 · 우클릭 버리기";
                 case InventorySourceKind.Jerrycan:
                     return FuelRules.JerrycanName + "\n보유 " + Jerrycans(combatant) + "개 · 차량 옆에서 J 또는 더블클릭 주유";
                 case InventorySourceKind.Weapon:
@@ -480,6 +518,21 @@ namespace Game.Gameplay
             if (user != null) user.CmdDropSmoke();
         }
 
+        public static void DropFlash(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            if (user != null) user.CmdDropFlash();
+        }
+
+        public static void DropMolotov(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            if (user != null) user.CmdDropMolotov();
+        }
+
+        public static HealKind BoostKindOf(InventorySourceKind kind) =>
+            kind == InventorySourceKind.Drink ? HealKind.Drink : kind == InventorySourceKind.Pill ? HealKind.Pill : kind == InventorySourceKind.Syringe ? HealKind.Syringe : HealKind.None;
+
         public static void DropJerrycan(Combatant combatant)
         {
             var cans = combatant != null ? combatant.GetComponent<CombatantJerrycan>() : null;
@@ -503,7 +556,7 @@ namespace Game.Gameplay
         // ADR-081 (#110): a single right click on a bandage or first-aid row uses it (other rows: quick drop).
         public static bool RightClickHeal(InventorySourceKind kind, out HealKind heal)
         {
-            heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid : HealKind.None;
+            heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid : BoostKindOf(kind);
             return heal != HealKind.None;
         }
 

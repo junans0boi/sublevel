@@ -69,6 +69,22 @@ namespace Game.Core
         public float PickupMeters = 2.2f;         // must stay below the server's pickup range
         public int AmmoWanted = 120;              // per ammo type a carried weapon uses
         public int MedkitsWanted = 3;
+        public int HealItemsWanted = 4;           // bandages + first-aid kits it keeps picking up (ADR-116)
+        public int BoostWanted = 2;               // per boost item type
+        public int ThrowablesWanted = 2;          // per throwable type
+
+        // ---- Items (ADR-116) ----
+        public float ThrowIntervalSeconds = 6f;   // between two throws of one bot
+        public float FragMinMeters = 10f;         // a fragmentation grenade is thrown at a target between these
+        public float FragMaxMeters = 28f;
+        public float FlashMinMeters = 7f;         // a flash close enough to blind, far enough not to catch the thrower
+        public float FlashMaxMeters = 20f;
+        public float MolotovMinMeters = 8f;       // a fire bottle at someone standing still
+        public float MolotovMaxMeters = 25f;
+        public float StillSpeed = 1f;             // slower than this counts as standing still
+        public float BoostBelowFraction = 0.85f;  // out of sight: a boost item below this health...
+        public float BoostThreatSeconds = 15f;    // ...or this soon after seeing an enemy
+        public float FireFleeMeters = 9f;         // out of a fire: this far from its centre
     }
 
     public enum NoiseKind : byte { Gunshot = 0, Footstep = 1, Other = 2 }

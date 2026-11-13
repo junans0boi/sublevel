@@ -316,6 +316,29 @@ namespace Game.Net
         }
 
         [ServerRpc]
+        public void CmdDropMolotov()
+        {
+            if (_combatant.Dead.Value || Molotovs.Value <= 0 || MatchDirector.Instance == null) return;
+            Molotovs.Value--;
+            MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Molotov, Amount = 1 },
+                transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
+        }
+
+        // Death crate (ADR-116): every throwable carried goes into `into` (one entry per kind) and the counts clear.
+        [Server]
+        public void ServerStrip(System.Collections.Generic.List<LootEntry> into)
+        {
+            Cooking.Value = false;
+            for (var kind = ThrowableKind.Frag; kind <= ThrowableKind.Molotov; kind++)
+            {
+                int n = CountOf(kind);
+                if (n <= 0) continue;
+                Adjust(kind, -n);
+                into?.Add(new LootEntry { Kind = Throwables.LootKindOf(kind), Amount = n });
+            }
+        }
+
+        [ServerRpc]
         public void CmdDropSmoke()
         {
             if (_combatant.Dead.Value || Smokes.Value <= 0 || MatchDirector.Instance == null) return;

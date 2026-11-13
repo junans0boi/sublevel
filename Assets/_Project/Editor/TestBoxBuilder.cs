@@ -383,9 +383,10 @@ public static class TestBoxBuilder
         AddCharacter(go);
         WireShotFx(view, go, gear.Glow, gear.Dust);
         AddGear(go, gear);
-        // Keys to open a barrier on the way out of a closing region, and the same bag limit as a player. Bots heal
-        // with the instant medkit (BotServerActions.UseMedkit), so no CombatantHealing.
+        // Keys to open a barrier on the way out of a closing region, and the same bag limit as a player. Bots use
+        // bandages, kits and boost items like a player (ADR-116).
         go.AddComponent<KeyHolder>();
+        go.AddComponent<CombatantHealing>();
         go.AddComponent<CombatantCarry>();
         return SavePrefab(go, "Bot");
     }

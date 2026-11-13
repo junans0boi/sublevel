@@ -78,6 +78,8 @@ namespace Game.Net
             Contents.Clear();
             ServerTakeLoadout(Contents);
             GetComponent<CombatantOptics>()?.ServerStripOptics(Contents);
+            GetComponent<CombatantHealing>()?.ServerStrip(Contents); // ADR-116: bandages, kits, boost items
+            GetComponent<ThrowableUser>()?.ServerStrip(Contents);    // ... and every throwable
             if (_gear != null)
             {
                 var helmet = _gear.ServerRemove(ArmorSlot.Helmet);

@@ -313,9 +313,10 @@ namespace Game.Tests
             me.ServerDamageFilter = filterBefore;
 
             yield return new WaitForSeconds(1.2f); // past the throw interval
-            Assert.AreEqual(1, user.Grenades.Value);
+            // The one left in the hand went into the death crate (ADR-116), so there is nothing to throw.
+            Assert.AreEqual(0, user.Grenades.Value);
             Assert.IsFalse(user.ServerThrow(me.transform.position + Vector3.up * 0.5f, Vector3.zero), "the dead throw nothing");
-            Assert.AreEqual(1, user.Grenades.Value);
+            Assert.AreEqual(0, user.Grenades.Value);
         }
 
         [UnityTest]

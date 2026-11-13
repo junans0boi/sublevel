@@ -60,6 +60,34 @@ namespace Game.Tests
             UiFocus.Close();
         }
 
+        // #148: every bag row filled, boost items, flash and fire bottle included.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator CaptureFullBag()
+        {
+            string folder = Environment.GetEnvironmentVariable("INV_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = "Logs/invshots";
+            Directory.CreateDirectory(folder);
+            SceneManager.LoadScene("TestBox");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var me = Combatant.LocalPlayer;
+            foreach (var k in new[] { LootKind.Bandage, LootKind.FirstAidKit, LootKind.Drink, LootKind.Pill, LootKind.Syringe, LootKind.Flash, LootKind.Molotov, LootKind.Smoke, LootKind.Grenade, LootKind.Medkit })
+                me.ServerGive(new LootEntry { Kind = k, Amount = 2 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 90 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
+            me.ServerGive(Optics.ToLoot(5));
+            yield return new WaitForSeconds(0.3f);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(1.0f);
+            yield return Shot(folder, "inv_04_full_bag");
+            UiFocus.Close();
+        }
+
         static IEnumerator Shot(string folder, string name)
         {
             yield return null; // not WaitForEndOfFrame: it stalls in a batch mode editor
