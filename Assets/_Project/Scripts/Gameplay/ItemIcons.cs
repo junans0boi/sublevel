@@ -9,7 +9,7 @@ namespace Game.Gameplay
     {
         public static readonly string[] KnownKeys =
         {
-            "weapon_1", "weapon_2", "weapon_3", "weapon_4",
+            "weapon_1", "weapon_2", "weapon_3", "weapon_4", "weapon_5",
             "ammo_9mm", "ammo_556", "ammo_762", "ammo_12ga",
             "medkit",
             "helmet_1", "helmet_2", "helmet_3",

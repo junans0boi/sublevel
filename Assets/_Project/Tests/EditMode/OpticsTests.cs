@@ -8,7 +8,7 @@ namespace Game.Tests
     // Numbers are the defaults in OpticRules.
     public class OpticsTests
     {
-        const int VK9 = 1, Ordo = 2, Warden = 3, Breacher = 4;
+        const int VK9 = 1, Ordo = 2, Warden = 3, Breacher = 4, Sentinel = 5;
         const int RedDot = 1, Holo = 2, X2 = 3, X3 = 4, X4 = 5, X6 = 6, X8 = 7, X16 = 8;
 
         static readonly OpticRules Rules = new OpticRules();
@@ -43,7 +43,7 @@ namespace Game.Tests
         [Test]
         public void PerWeaponLists_ReferenceOnlyRealOptics_WithoutDuplicates()
         {
-            Assert.AreEqual(4, Rules.Weapons.Length);
+            Assert.AreEqual(5, Rules.Weapons.Length);
             foreach (var w in Rules.Weapons)
             {
                 Assert.IsNotEmpty(w.Optics, "weapon " + w.WeaponId);
@@ -80,12 +80,13 @@ namespace Game.Tests
         }
 
         [Test]
-        public void CanAttach_EightAndSixteenTimes_FitNoWeaponYet()
+        public void CanAttach_EightAndSixteenTimes_FitOnlyTheSniperRifle()
         {
             foreach (var w in Rules.Weapons)
             {
-                Assert.IsFalse(Optics.CanAttach(w.WeaponId, X8, Rules), "8x on " + w.WeaponId);
-                Assert.IsFalse(Optics.CanAttach(w.WeaponId, X16, Rules), "16x on " + w.WeaponId);
+                bool sniper = w.WeaponId == Sentinel;
+                Assert.AreEqual(sniper, Optics.CanAttach(w.WeaponId, X8, Rules), "8x on " + w.WeaponId);
+                Assert.AreEqual(sniper, Optics.CanAttach(w.WeaponId, X16, Rules), "16x on " + w.WeaponId);
             }
         }
 

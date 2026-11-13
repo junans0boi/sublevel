@@ -29,7 +29,7 @@ namespace Game.Core
     }
 
     // The optic table and the per-weapon lists. Defaults until the data loader replaces `Current`, so everything
-    // runs without a data file. 8x and 16x exist in the table but no weapon takes them yet (sniper rifle, M5).
+    // runs without a data file. 8x and 16x are taken only by the sniper rifle (Sentinel, id 5).
     [Serializable]
     public class OpticRules
     {
@@ -47,13 +47,14 @@ namespace Game.Core
             new OpticDef { Id = 8, Name = "16배율", Kind = OpticKind.Scope, Zoom = 16f, SensitivityFactor = 0.109f, Reticle = ReticleStyle.Crosshair },
         };
 
-        // Weapon ids as in weapons.json: 1 VK-9, 2 Ordo, 3 Warden, 4 Breacher.
+        // Weapon ids as in weapons.json: 1 VK-9, 2 Ordo, 3 Warden, 4 Breacher, 5 Sentinel.
         public WeaponOptics[] Weapons =
         {
             new WeaponOptics { WeaponId = 1, Optics = new[] { 1, 2 } },
             new WeaponOptics { WeaponId = 2, Optics = new[] { 1, 2, 3, 4, 5 } },
             new WeaponOptics { WeaponId = 3, Optics = new[] { 1, 2, 3, 4, 5, 6 } },
             new WeaponOptics { WeaponId = 4, Optics = new[] { 1, 2, 3 } },
+            new WeaponOptics { WeaponId = 5, Optics = new[] { 1, 2, 3, 4, 5, 6, 7, 8 } },
         };
 
         static readonly int[] Empty = new int[0];
