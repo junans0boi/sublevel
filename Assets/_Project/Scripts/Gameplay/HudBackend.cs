@@ -29,16 +29,16 @@ namespace Game.Gameplay
         // "단발" / "연사" for the weapon in `slot`.
         public static string FireModeOf(Combatant me, int slot) => me != null && slot >= 0 ? me.FireModeOf(slot) : "";
 
-        // Short name of the optic fitted to the weapon in `slot` ("" = none), e.g. "2x", "레드도트".
+        // Short name of the optic fitted to the weapon in `slot` ("" = none), e.g. "2x", "반사" / "투영" for the 1x sights.
         public static string OpticOf(Combatant me, int slot)
         {
             if (me == null || slot < 0) return "";
             var optics = me.GetComponent<CombatantOptics>();
             var def = optics != null ? OpticRules.Current.Find(optics.OpticInSlot(slot)) : null;
             if (def == null) return "";
-            // Short enough for the corner of a weapon-strip cell (the full names ran over the weapon icon).
+            // Short enough for the corner of a weapon-strip cell; the full names are in the optic table.
             if (def.Zoom > 1f) return def.Zoom.ToString("0.#") + "x";
-            return def.Kind == OpticKind.Holo ? "홀로" : "도트";
+            return def.Kind == OpticKind.Holo ? "투영" : "반사";
         }
 
         // True while a magnified scope overlay is up: the HUD then hides its crosshair.

@@ -261,7 +261,8 @@ public static class TestBoxBuilder
                 fit.FindPropertyRelative("Size").vector3Value = visual.WeaponFits[i].Size;
             }
         });
-        // Sights and scopes on the held weapon: same models and fits as the weapon, parts in dark grey.
+        // Sights and scopes on the held weapon: same models and fits as the weapon; code-built optic models in dark
+        // metal with lens glass and a see-through sight window (the scope eyepiece view borrows these too).
         var opticVisual = go.AddComponent<OpticVisual>();
         SetArray(opticVisual, "_modelsByWeaponId", visual.WeaponModels);
         Set(opticVisual, "_fitByWeaponId", p =>
@@ -275,7 +276,9 @@ public static class TestBoxBuilder
                 fit.FindPropertyRelative("Size").vector3Value = visual.WeaponFits[i].Size;
             }
         });
-        Set(opticVisual, "_material", p => p.objectReferenceValue = Lit("OpticPart", new Color(0.22f, 0.24f, 0.27f)));
+        Set(opticVisual, "_metal", p => p.objectReferenceValue = SceneLook.OpticMetal);
+        Set(opticVisual, "_glass", p => p.objectReferenceValue = SceneLook.OpticGlass);
+        Set(opticVisual, "_window", p => p.objectReferenceValue = SceneLook.OpticWindow);
 
         var audio = go.AddComponent<CombatantAudio>();
         Set(audio, "_weaponSource", p => p.objectReferenceValue = Source(go.transform, "WeaponAudio", 1.3f, 3f, 70f));
@@ -402,6 +405,10 @@ public static class TestBoxBuilder
             models[weapon.Id] = model;
         }
         SetArray(view, "_weaponModelsById", models);
+        // Optic pickups show the code-built optic model in the same materials as on the weapon.
+        Set(view, "_opticMetal", p => p.objectReferenceValue = SceneLook.OpticMetal);
+        Set(view, "_opticGlass", p => p.objectReferenceValue = SceneLook.OpticGlass);
+        Set(view, "_opticWindow", p => p.objectReferenceValue = SceneLook.OpticWindow);
         return SavePrefab(go, "LootItem");
     }
 
