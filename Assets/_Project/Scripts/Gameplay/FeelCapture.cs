@@ -1370,7 +1370,7 @@ namespace Game.Gameplay
             {
                 if (item == null || item.Kind.Value != (int)LootKind.Optic) continue;
                 var view = item.GetComponent<LootView>();
-                var box = item.transform.Find("Cube")?.GetComponent<Renderer>();
+                var box = item.transform.Find("Visual/Cube")?.GetComponent<Renderer>();
                 Debug.Log($"[FeelCapture] loot optic {item.Optic.Value}: model {(view != null && view.OpticModel != null)}, box drawn {(box != null && box.enabled && !box.forceRenderingOff)}");
             }
             pc.LookAt(me.transform.position + me.transform.forward * 2.9f);

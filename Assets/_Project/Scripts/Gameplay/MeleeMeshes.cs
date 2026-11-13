@@ -100,7 +100,7 @@ namespace Game.Gameplay
             d.Disc(centre + new Vector3(0f, 0f, -0.0365f), 0.106f, Vector3.back, Grip, 24);
         }
 
-        sealed class Draft
+        internal sealed class Draft
         {
             const float UvPerMetre = 8f;
             readonly List<Vector3> _v = new List<Vector3>();
