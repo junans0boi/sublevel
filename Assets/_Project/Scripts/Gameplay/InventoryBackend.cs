@@ -20,6 +20,7 @@ namespace Game.Gameplay
         Helmet,
         Vest,
         Optic, // the optic on the weapon card of slot Index
+        BagOptic, // ADR-082: a loose optic in the bag; Index = optic id
     }
 
     public readonly struct InventoryDragSource
@@ -262,9 +263,9 @@ namespace Game.Gameplay
                 case InventorySourceKind.Grenade:
                     return "수류탄\n보유 " + Grenades(combatant) + "개";
                 case InventorySourceKind.Bandage:
-                    return HealRules.BandageName + "\n보유 " + Bandages(combatant) + "개 · 더블클릭 사용";
+                    return HealRules.BandageName + "\n보유 " + Bandages(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.FirstAid:
-                    return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 더블클릭 사용";
+                    return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.Smoke:
                     return ThrowableRules.SmokeName + "\n보유 " + Smokes(combatant) + "개";
                 case InventorySourceKind.Jerrycan:
@@ -277,6 +278,9 @@ namespace Game.Gameplay
                     int opticId = OpticOf(combatant, source.Index);
                     var def = OpticRules.Current.Find(opticId);
                     return def == null ? "" : def.Name + "\n조준경 · " + (def.Zoom > 1f ? def.Zoom.ToString("0.#") + "배율" : "1배율");
+                case InventorySourceKind.BagOptic:
+                    var loose = OpticRules.Current.Find(source.Index);
+                    return loose == null ? "" : loose.Name + "\n조준경 · 보유 " + BagOpticCount(combatant, source.Index) + "개 · 총기 칸으로 끌어 장착";
                 case InventorySourceKind.Helmet: return GearDescription(combatant, HelmetSlot, "헬멧");
                 case InventorySourceKind.Vest: return GearDescription(combatant, VestSlot, "조끼");
                 default: return "";
@@ -365,6 +369,33 @@ namespace Game.Gameplay
         {
             var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
             if (optics != null) optics.CmdDropOptic(slot);
+        }
+
+        // ADR-082: optics loose in the bag.
+        public static ulong BagOptics(Combatant combatant)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            return optics != null ? optics.Bag.Value : 0UL;
+        }
+
+        public static int BagOpticCount(Combatant combatant, int opticId) => OpticBag.Count(BagOptics(combatant), opticId);
+
+        public static void AttachOpticFromBag(Combatant combatant, int opticId, int slot)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            if (optics != null) optics.CmdAttachFromBag(opticId, slot);
+        }
+
+        public static void DetachOpticToBag(Combatant combatant, int slot)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            if (optics != null) optics.CmdDetachToBag(slot);
+        }
+
+        public static void DropBagOptic(Combatant combatant, int opticId)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            if (optics != null) optics.CmdDropFromBag(opticId);
         }
 
         // "단발" / "연사" for the weapon in the slot; empty for an empty slot.
@@ -456,6 +487,13 @@ namespace Game.Gameplay
         {
             var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
             if (healing != null) healing.CmdDrop((int)kind);
+        }
+
+        // ADR-081 (#110): a single right click on a bandage or first-aid row uses it (other rows: quick drop).
+        public static bool RightClickHeal(InventorySourceKind kind, out HealKind heal)
+        {
+            heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid : HealKind.None;
+            return heal != HealKind.None;
         }
 
         // Starts that bandage or kit (timed; the server refuses at full health or while busy).

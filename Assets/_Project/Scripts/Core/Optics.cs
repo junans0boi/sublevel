@@ -158,5 +158,50 @@ namespace Game.Core
         public static string ZoomText(float zoom) => "×" + (int)Math.Round(zoom);
 
         public static LootEntry ToLoot(int opticId) => new LootEntry { Kind = LootKind.Optic, Optic = opticId, Amount = 1 };
+
+        // ADR-082: where an optic picked up from the ground goes. The weapon in hand when it takes it and has none
+        // yet, else the first other weapon that does; -1 = into the bag (no matching weapon is needed).
+        public static int PickupSlot(int[] slotWeapons, int[] slotOptics, int activeSlot, int opticId)
+        {
+            int count = Math.Min(slotWeapons.Length, slotOptics.Length);
+            if (activeSlot >= 0 && activeSlot < count && slotOptics[activeSlot] == None && CanAttach(slotWeapons[activeSlot], opticId)) return activeSlot;
+            for (int i = 0; i < count; i++)
+                if (i != activeSlot && slotOptics[i] == None && CanAttach(slotWeapons[i], opticId)) return i;
+            return -1;
+        }
+    }
+
+    // ADR-082: optics carried loose in the bag, counted per optic id (1..MaxId) and packed 8 bits each into one
+    // ulong so a single SyncVar replicates the whole bag.
+    public static class OpticBag
+    {
+        public const int MaxId = 8;
+        public const int MaxCount = 255;
+
+        static int Shift(int id) => (id - 1) * 8;
+        static bool Valid(int id) => id >= 1 && id <= MaxId;
+
+        public static int Count(ulong bag, int id) => Valid(id) ? (int)((bag >> Shift(id)) & 0xFF) : 0;
+
+        public static int Total(ulong bag)
+        {
+            int total = 0;
+            for (int id = 1; id <= MaxId; id++) total += Count(bag, id);
+            return total;
+        }
+
+        public static bool TryAdd(ref ulong bag, int id)
+        {
+            if (!Valid(id) || Count(bag, id) >= MaxCount) return false;
+            bag += 1UL << Shift(id);
+            return true;
+        }
+
+        public static bool TryRemove(ref ulong bag, int id)
+        {
+            if (Count(bag, id) <= 0) return false;
+            bag -= 1UL << Shift(id);
+            return true;
+        }
     }
 }

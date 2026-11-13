@@ -268,6 +268,17 @@ namespace Game.Core
             return removed;
         }
 
+        // ADR-081: a weapon goes on the ground unloaded: the weapon with an empty magazine, then (when it held any)
+        // its rounds as a separate ammo item of its calibre. Melee weapons and unknown ids carry no rounds.
+        public static LootEntry[] DropEntries(WeaponTable table, int weaponId, int mag)
+        {
+            if (weaponId == 0) return new LootEntry[0];
+            var weapon = new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = 0 };
+            var def = table?.Find(weaponId);
+            if (def == null || def.IsMelee || mag <= 0) return new[] { weapon };
+            return new[] { weapon, new LootEntry { Kind = LootKind.Ammo, Ammo = def.Ammo, Amount = mag } };
+        }
+
         // Takes the whole reserve of one ammo type. Returns how many rounds that was.
         public int RemoveAmmo(AmmoType type)
         {

@@ -1,4 +1,5 @@
 using Game.Core;
+using Game.Gameplay;
 using NUnit.Framework;
 
 namespace Game.Tests
@@ -149,6 +150,20 @@ namespace Game.Tests
             int used = Carry.UsedTenths(Bag, 300, 0, 0, 0, 0, 0, 0, 0, 0);
             Assert.AreEqual(Carry.CapacityTenths(Bag, 0), used);
             Assert.AreEqual(0, Carry.Fit(Carry.CapacityTenths(Bag, 0) - used, Carry.AmmoUnitTenths(AmmoType.Pistol9, Bag), 30));
+        }
+
+        // ---- #110: a single right click in the inventory uses a bandage or first-aid kit ----
+
+        [Test]
+        public void RightClick_UsesBandagesAndKits_AndDropsEverythingElse()
+        {
+            Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.Bandage, out var heal));
+            Assert.AreEqual(HealKind.Bandage, heal);
+            Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.FirstAid, out heal));
+            Assert.AreEqual(HealKind.FirstAid, heal);
+            Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.Ammo, out _));
+            Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.Medkit, out _));
+            Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.BagOptic, out _));
         }
     }
 }

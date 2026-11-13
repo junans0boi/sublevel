@@ -207,5 +207,52 @@ namespace Game.Tests
             Assert.AreEqual(X4, entry.Optic);
             Assert.AreEqual(1, entry.Amount);
         }
+
+        // ---- ADR-082 (#113): optics loose in the bag ----
+
+        [Test]
+        public void PickupSlot_PrefersTheWeaponInHand_ThenAnotherFreeOne_ElseTheBag()
+        {
+            var weapons = new[] { Warden, Sentinel, VK9, 0, 0 };
+            Assert.AreEqual(1, Optics.PickupSlot(weapons, new int[5], 1, X4), "the weapon in hand takes it");
+            Assert.AreEqual(0, Optics.PickupSlot(weapons, new int[5], 2, X4), "the pistol does not: the first rifle does");
+            Assert.AreEqual(1, Optics.PickupSlot(weapons, new[] { X2, 0, 0, 0, 0 }, 0, X4), "a fitted slot is skipped");
+            Assert.AreEqual(-1, Optics.PickupSlot(weapons, new[] { X2, X3, 0, 0, 0 }, 0, X4), "every taker is fitted: into the bag");
+            Assert.AreEqual(-1, Optics.PickupSlot(new int[5], new int[5], 0, X8), "no weapon at all: into the bag");
+        }
+
+        [Test]
+        public void OpticBag_CountsEachIdOnItsOwn()
+        {
+            ulong bag = 0;
+            Assert.IsTrue(OpticBag.TryAdd(ref bag, X4));
+            Assert.IsTrue(OpticBag.TryAdd(ref bag, X4));
+            Assert.IsTrue(OpticBag.TryAdd(ref bag, X16), "the highest id uses the top byte");
+            Assert.AreEqual(2, OpticBag.Count(bag, X4));
+            Assert.AreEqual(1, OpticBag.Count(bag, X16));
+            Assert.AreEqual(0, OpticBag.Count(bag, RedDot));
+            Assert.AreEqual(3, OpticBag.Total(bag));
+            Assert.IsTrue(OpticBag.TryRemove(ref bag, X4));
+            Assert.IsFalse(OpticBag.TryRemove(ref bag, RedDot), "none to take");
+            Assert.AreEqual(1, OpticBag.Count(bag, X4));
+            Assert.AreEqual(1, OpticBag.Count(bag, X16));
+            Assert.IsFalse(OpticBag.TryAdd(ref bag, 0));
+            Assert.IsFalse(OpticBag.TryAdd(ref bag, 9));
+        }
+
+        [Test]
+        public void OpticBag_StopsAtTheMostOneIdHolds()
+        {
+            ulong bag = 0;
+            for (int i = 0; i < OpticBag.MaxCount; i++) Assert.IsTrue(OpticBag.TryAdd(ref bag, X2));
+            Assert.IsFalse(OpticBag.TryAdd(ref bag, X2));
+            Assert.AreEqual(0, OpticBag.Count(bag, X3), "never spills into the next id");
+        }
+
+        [Test]
+        public void LooseOptic_TakesTwoPointsOfBagRoom()
+        {
+            Assert.AreEqual(20, Carry.Tenths(new CarryRules().Optic));
+        }
     }
 }

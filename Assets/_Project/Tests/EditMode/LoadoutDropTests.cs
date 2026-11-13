@@ -111,5 +111,32 @@ namespace Game.Tests
             Assert.IsFalse(l.RemoveMedkit());
             Assert.AreEqual(0, l.Medkits);
         }
+
+        // ---- ADR-081 (#107): a dropped weapon lands unloaded, its rounds beside it as ammo ----
+
+        [Test]
+        public void DropEntries_SplitTheMagazineIntoAnAmmoItemOfTheWeaponsCalibre()
+        {
+            var e = Loadout.DropEntries(Table(), 2, 2);
+            Assert.AreEqual(2, e.Length);
+            Assert.AreEqual(LootKind.Weapon, e[0].Kind);
+            Assert.AreEqual(2, e[0].WeaponId);
+            Assert.AreEqual(0, e[0].Amount, "the weapon on the ground holds no rounds");
+            Assert.AreEqual(LootKind.Ammo, e[1].Kind);
+            Assert.AreEqual(AmmoType.Shotgun12, e[1].Ammo);
+            Assert.AreEqual(2, e[1].Amount);
+        }
+
+        [Test]
+        public void DropEntries_EmptyMagazine_OrMeleeWeapon_GiveTheWeaponAlone()
+        {
+            var table = Table();
+            Assert.AreEqual(1, Loadout.DropEntries(table, 1, 0).Length);
+            var melee = new WeaponTable { Weapons = new[] { new WeaponDef { Id = 9, Name = "M", Category = WeaponCategory.Melee } } };
+            var e = Loadout.DropEntries(melee, 9, 5);
+            Assert.AreEqual(1, e.Length);
+            Assert.AreEqual(LootKind.Weapon, e[0].Kind);
+            Assert.AreEqual(0, Loadout.DropEntries(table, 0, 3).Length, "no weapon, nothing");
+        }
     }
 }

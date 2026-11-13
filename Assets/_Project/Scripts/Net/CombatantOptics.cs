@@ -22,10 +22,14 @@ namespace Game.Net
         public readonly SyncVar<int> Optic2 = new SyncVar<int>();
         public readonly SyncVar<int> Optic3 = new SyncVar<int>();
         public readonly SyncVar<int> Optic4 = new SyncVar<int>();
+        // ADR-082: optics loose in the bag, packed by OpticBag (count per optic id).
+        public readonly SyncVar<ulong> Bag = new SyncVar<ulong>();
 
         Combatant _combatant;
         // Server truth; the SyncVars mirror it.
         readonly int[] _server = new int[MaxSlots];
+        ulong _bag;
+        CombatantCarry _carry;
 
         static int SlotCount => Mathf.Min(Loadout.SlotCount, MaxSlots);
 
@@ -48,15 +52,21 @@ namespace Game.Net
         // 1 for no optic and for the dot and holographic sights.
         public float ActiveZoom => Optics.ZoomOf(ActiveOptic);
         public OpticDef ActiveOpticDef => OpticRules.Current.Find(ActiveOptic);
+        public int InBag(int opticId) => OpticBag.Count(Bag.Value, opticId);
 
         // Weapon in a slot, as replicated. Wiring: when Combatant gets an accessor for any slot, call it here.
         int WeaponInSlot(int slot) => _combatant.WeaponInSlot(slot);
 
-        void Awake() => _combatant = GetComponent<Combatant>();
+        void Awake()
+        {
+            _combatant = GetComponent<Combatant>();
+            _carry = GetComponent<CombatantCarry>();
+        }
 
         public override void OnStartServer()
         {
             for (int i = 0; i < MaxSlots; i++) _server[i] = 0;
+            _bag = 0;
             Push();
         }
 
@@ -64,12 +74,12 @@ namespace Game.Net
         {
             if (!IsServerInitialized) return;
             // A weapon that left its slot without a word (or was swapped for one that does not take the optic)
-            // leaves its optic on the ground instead of keeping it invisibly.
+            // puts its optic in the bag (or on the ground when full) instead of keeping it invisibly.
             int count = SlotCount;
             for (int i = 0; i < count; i++)
             {
                 if (_server[i] == 0) continue;
-                if (!Optics.CanAttach(WeaponInSlot(i), _server[i])) ServerDetach(i);
+                if (!Optics.CanAttach(WeaponInSlot(i), _server[i])) ServerStash(ServerRemove(i));
             }
         }
 
@@ -80,12 +90,13 @@ namespace Game.Net
             Optic2.Value = _server[2];
             Optic3.Value = _server[3];
             Optic4.Value = _server[4];
+            Bag.Value = _bag;
         }
 
         // ---- Server API ----
 
-        // Fits an optic to the weapon in `slot`. An optic already there is replaced and lands on the ground.
-        // False when the slot has no weapon or the weapon does not take that optic.
+        // Fits an optic to the weapon in `slot`. An optic already there is replaced and goes to the bag (the ground
+        // when the bag is full). False when the slot has no weapon or the weapon does not take that optic.
         public bool ServerAttach(int slot, int opticId)
         {
             if (!IsServerInitialized || slot < 0 || slot >= SlotCount) return false;
@@ -93,7 +104,38 @@ namespace Game.Net
             int before = _server[slot];
             _server[slot] = opticId;
             Push();
-            if (before != 0) Drop(before, false);
+            if (before != 0) ServerStash(before);
+            return true;
+        }
+
+        // ADR-082: an optic into the bag when it has room, else on the ground at the feet.
+        public void ServerStash(int opticId)
+        {
+            if (!IsServerInitialized || opticId == 0) return;
+            if (BagHasRoom() && OpticBag.TryAdd(ref _bag, opticId)) Push();
+            else Drop(opticId, false);
+        }
+
+        bool BagHasRoom() => _carry == null || _carry.FreeTenths >= Carry.Tenths(CarryRules.Current.Optic);
+
+        // From the bag onto the weapon in `slot`; the optic that was there goes to the bag (its room was just freed).
+        public bool ServerAttachFromBag(int opticId, int slot)
+        {
+            if (!IsServerInitialized || OpticBag.Count(_bag, opticId) <= 0 || slot < 0 || slot >= SlotCount) return false;
+            if (!Optics.CanAttach(WeaponInSlot(slot), opticId)) return false;
+            OpticBag.TryRemove(ref _bag, opticId);
+            return ServerAttach(slot, opticId);
+        }
+
+        // Off the weapon in `slot` into the bag (the ground when full).
+        public void ServerDetachToBag(int slot) => ServerStash(ServerRemove(slot));
+
+        // One optic of that id out of the bag onto the ground in front.
+        public bool ServerDropFromBag(int opticId)
+        {
+            if (!IsServerInitialized || !OpticBag.TryRemove(ref _bag, opticId)) return false;
+            Push();
+            Drop(opticId, true);
             return true;
         }
 
@@ -118,8 +160,9 @@ namespace Game.Net
             return id;
         }
 
-        // Combatant calls this wherever a weapon leaves a slot (dropped, replaced, stripped): its optic goes too.
-        public void ServerOnWeaponRemoved(int slot) => ServerDetach(slot, false);
+        // Combatant calls this wherever a weapon leaves a slot (dropped, replaced): the weapon goes alone, its optic
+        // to the bag (the ground when full) (ADR-082).
+        public void ServerOnWeaponRemoved(int slot) => ServerDetachToBag(slot);
 
         // Combatant calls this when two weapon slots trade places: their optics trade with them.
         public void ServerOnSlotsSwapped(int a, int b)
@@ -139,6 +182,9 @@ namespace Game.Net
                 into?.Add(Optics.ToLoot(_server[i]));
                 _server[i] = 0;
             }
+            for (int id = 1; id <= OpticBag.MaxId; id++)
+                for (int n = OpticBag.Count(_bag, id); n > 0; n--) into?.Add(Optics.ToLoot(id));
+            _bag = 0;
             Push();
         }
 
@@ -149,21 +195,22 @@ namespace Game.Net
             MatchDirector.Instance.ServerSpawnLoot(Optics.ToLoot(opticId), at);
         }
 
-        // ILootReceiver: an optic from the ground. It goes on the weapon in hand when that weapon takes it and has
-        // no optic yet, else on the first other weapon that does; otherwise it is refused and stays where it lies
-        // (the inventory can swap one in on purpose).
+        // ILootReceiver: an optic from the ground (ADR-082). It goes on a weapon that takes it and has none yet
+        // (Optics.PickupSlot), else into the bag when there is room — no matching weapon needed. Refused (and left
+        // where it lies) only when the bag is full or the id is unknown.
         public bool ServerTryTake(LootEntry loot)
         {
             if (!IsServerInitialized || loot == null || loot.Kind != LootKind.Optic || _combatant.Dead.Value) return false;
             int count = SlotCount;
-            int active = _combatant.ActiveSlot.Value;
-            if (active >= 0 && active < count && CanTake(active, loot.Optic)) return ServerAttach(active, loot.Optic);
-            for (int i = 0; i < count; i++)
-                if (i != active && CanTake(i, loot.Optic)) return ServerAttach(i, loot.Optic);
-            return false;
+            var weapons = new int[count];
+            var optics = new int[count];
+            for (int i = 0; i < count; i++) { weapons[i] = WeaponInSlot(i); optics[i] = _server[i]; }
+            int slot = Optics.PickupSlot(weapons, optics, _combatant.ActiveSlot.Value, loot.Optic);
+            if (slot >= 0) return ServerAttach(slot, loot.Optic);
+            if (OpticRules.Current.Find(loot.Optic) == null || !BagHasRoom() || !OpticBag.TryAdd(ref _bag, loot.Optic)) return false;
+            Push();
+            return true;
         }
-
-        bool CanTake(int slot, int opticId) => _server[slot] == 0 && Optics.CanAttach(WeaponInSlot(slot), opticId);
 
         // ---- Owner requests ----
 
@@ -175,7 +222,25 @@ namespace Game.Net
             ServerDetach(slot, true);
         }
 
-        // An optic from the ground onto a chosen weapon slot; the one that was there lands on the ground.
+        [ServerRpc]
+        public void CmdDetachToBag(int slot)
+        {
+            if (!_combatant.Dead.Value) ServerDetachToBag(slot);
+        }
+
+        [ServerRpc]
+        public void CmdAttachFromBag(int opticId, int slot)
+        {
+            if (!_combatant.Dead.Value) ServerAttachFromBag(opticId, slot);
+        }
+
+        [ServerRpc]
+        public void CmdDropFromBag(int opticId)
+        {
+            if (!_combatant.Dead.Value) ServerDropFromBag(opticId);
+        }
+
+        // An optic from the ground onto a chosen weapon slot; the one that was there goes to the bag (or the ground).
         [ServerRpc]
         public void CmdAttachFromGround(NetworkObject lootObject, int slot)
         {

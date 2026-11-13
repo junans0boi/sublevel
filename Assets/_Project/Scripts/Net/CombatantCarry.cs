@@ -19,6 +19,7 @@ namespace Game.Net
         CombatantHealing _healing;
         ThrowableUser _throwables;
         CombatantJerrycan _jerrycans;
+        CombatantOptics _optics;
         float _nextScan;
         int _slotAmmoA, _slotAmmoB, _slotAmmoC;
         // Ammo that just left the bag (dropped, or loaded into a weapon) is not picked up again while standing
@@ -43,6 +44,7 @@ namespace Game.Net
             _healing = GetComponent<CombatantHealing>();
             _throwables = GetComponent<ThrowableUser>();
             _jerrycans = GetComponent<CombatantJerrycan>();
+            _optics = GetComponent<CombatantOptics>();
         }
 
         public override void OnStartClient()
@@ -67,7 +69,8 @@ namespace Game.Net
             _combatant.ReservePistol9.Value, _combatant.ReserveRifle556.Value, _combatant.ReserveShotgun12.Value, _combatant.ReserveRifle762.Value,
             _healing != null ? _healing.Bandages.Value : 0, _healing != null ? _healing.FirstAids.Value : 0, _combatant.Medkits.Value,
             _throwables != null ? _throwables.Grenades.Value : 0, _throwables != null ? _throwables.Smokes.Value : 0)
-            + (_jerrycans != null ? _jerrycans.Count.Value * Carry.Tenths(CarryRules.Current.Jerrycan) : 0); // ADR-075
+            + (_jerrycans != null ? _jerrycans.Count.Value * Carry.Tenths(CarryRules.Current.Jerrycan) : 0) // ADR-075
+            + (_optics != null ? OpticBag.Total(_optics.Bag.Value) * Carry.Tenths(CarryRules.Current.Optic) : 0); // ADR-082
 
         // The bag's size: the base plus what the worn vest adds (a broken vest adds nothing).
         public int CapacityTenths => Carry.CapacityTenths(CarryRules.Current, _gear != null ? _gear.VestTier.Value : 0);
@@ -101,6 +104,14 @@ namespace Game.Net
             leftover = wanted - fit;
             loot.Amount = fit;
             return true;
+        }
+
+        // Server: automatic pickup stays off until the combatant walks away from here (e.g. after dropping a
+        // weapon, whose rounds land beside it as ammo, ADR-081).
+        public void ServerSuppressAutoPickup()
+        {
+            _suppressed = true;
+            _suppressFrom = transform.position;
         }
 
         void Update()

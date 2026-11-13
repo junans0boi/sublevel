@@ -28,6 +28,7 @@ namespace Game.Core
         public float Grenade = 3f;
         public float Smoke = 3f;
         public float Jerrycan = 20f; // ADR-075
+        public float Optic = 2f;     // ADR-082: an optic loose in the bag (one fitted to a weapon takes no room)
 
         // Ammo on the ground this close is picked up by walking over it (when it fits and a weapon uses it).
         public float AutoPickupMeters = 1.5f;

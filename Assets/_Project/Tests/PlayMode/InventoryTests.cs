@@ -162,12 +162,19 @@ namespace Game.Tests
             int lootBefore = LootItem.All.Count;
             screen.ClickDropWeapon(0);
             yield return WaitUntil(() => me.Slot0.Value == 0, 2f, "slot emptied");
-            yield return WaitUntil(() => LootItem.All.Count == lootBefore + 1, 2f, "dropped weapon on the ground");
+            // ADR-081 (#107): the weapon lands unloaded, its 30 rounds beside it as a 5.56 ammo item.
+            yield return WaitUntil(() => LootItem.All.Count == lootBefore + 2, 2f, "dropped weapon and its rounds on the ground");
 
-            var dropped = LootItem.All[LootItem.All.Count - 1];
+            var dropped = LootItem.All[lootBefore];
+            var rounds = LootItem.All[lootBefore + 1];
             Assert.AreEqual((int)LootKind.Weapon, dropped.Kind.Value);
             Assert.AreEqual(3, dropped.WeaponId.Value);
-            Assert.AreEqual(30, dropped.Amount.Value, "keeps what was in the magazine");
+            Assert.AreEqual(0, dropped.Amount.Value, "the weapon on the ground holds no rounds");
+            Assert.AreEqual((int)LootKind.Ammo, rounds.Kind.Value);
+            Assert.AreEqual((int)GameData.Weapons.Find(3).Ammo, rounds.Ammo.Value, "the weapon's calibre");
+            Assert.AreEqual(30, rounds.Amount.Value, "what was in the magazine");
+            yield return new WaitForSeconds(0.6f);
+            Assert.IsTrue(rounds != null && rounds.IsSpawned, "not picked straight back up by walking over it");
             Assert.Less(Vector3.Distance(dropped.transform.position, me.transform.position), 3f, "within reach of the player");
             Assert.AreEqual(0, me.ActiveWeaponId, "hands are empty");
 

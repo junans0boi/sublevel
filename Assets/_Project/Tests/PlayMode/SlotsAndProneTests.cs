@@ -169,9 +169,12 @@ namespace Game.Tests
             int onGround = LootItem.All.Count;
             me.CmdDropWeapon(2);
             yield return WaitUntil(() => me.Slot2.Value == 0, 2f, "sidearm slot emptied");
-            yield return WaitUntil(() => LootItem.All.Count == onGround + 1, 2f, "the pistol lies on the ground");
-            Assert.AreEqual(Pistol, LootItem.All[LootItem.All.Count - 1].WeaponId.Value);
-            Assert.AreEqual(7, LootItem.All[LootItem.All.Count - 1].Amount.Value);
+            // ADR-081: unloaded, its 7 rounds beside it as ammo.
+            yield return WaitUntil(() => LootItem.All.Count == onGround + 2, 2f, "the pistol and its rounds lie on the ground");
+            Assert.AreEqual(Pistol, LootItem.All[onGround].WeaponId.Value);
+            Assert.AreEqual(0, LootItem.All[onGround].Amount.Value);
+            Assert.AreEqual((int)LootKind.Ammo, LootItem.All[onGround + 1].Kind.Value);
+            Assert.AreEqual(7, LootItem.All[onGround + 1].Amount.Value);
         }
 
         // ---- Fire mode ----

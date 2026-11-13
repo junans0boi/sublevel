@@ -584,9 +584,8 @@ namespace Game.Net
                     int pickupSlot = _loadout.PickupSlotFor(loot.WeaponId);
                     int replaced = _loadout.AddWeapon(loot.WeaponId, loot.Amount, out int replacedMag);
                     if (replaced != 0) OpticsPart?.ServerOnWeaponRemoved(pickupSlot);
-                    // A replaced weapon goes back on the ground instead of vanishing.
-                    if (replaced != 0 && MatchDirector.Instance != null)
-                        MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
+                    // A replaced weapon goes back on the ground (unloaded, ADR-081) instead of vanishing.
+                    if (replaced != 0) ServerSpawnWeaponDrop(replaced, replacedMag, transform.position + Vector3.up * 0.3f);
                     break;
                 case LootKind.Ammo: _loadout.AddAmmo(loot.Ammo, loot.Amount); break;
                 case LootKind.Medkit: _loadout.AddMedkits(loot.Amount); break;
@@ -707,7 +706,9 @@ namespace Game.Net
             for (int slot = 0; slot < Loadout.SlotCount; slot++)
             {
                 int weaponId = _loadout.RemoveWeapon(slot, out int mag);
-                if (weaponId != 0) into?.Add(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
+                // ADR-081: the weapon unloaded; its rounds join that calibre's reserve, stripped below.
+                foreach (var e in Loadout.DropEntries(GameData.Weapons, weaponId, mag))
+                    if (e.Kind == LootKind.Weapon) into?.Add(e); else _loadout.AddAmmo(e.Ammo, e.Amount);
             }
             for (int type = 0; type < AmmoNames.Count; type++)
             {
@@ -764,8 +765,7 @@ namespace Game.Net
             int replaced = _loadout.AddWeaponToSlot(slot, item.WeaponId.Value, item.Amount.Value, out int replacedMag);
             item.Despawn();
             if (replaced != 0) OpticsPart?.ServerOnWeaponRemoved(slot);
-            if (replaced != 0 && MatchDirector.Instance != null)
-                MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
+            if (replaced != 0) ServerSpawnWeaponDrop(replaced, replacedMag, transform.position + Vector3.up * 0.3f);
             Push();
         }
 
@@ -792,7 +792,20 @@ namespace Game.Net
             int weaponId = _loadout.RemoveWeapon(slot, out int mag);
             if (weaponId == 0) return;
             OpticsPart?.ServerOnWeaponRemoved(slot);
-            ServerDropLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
+            ServerSpawnWeaponDrop(weaponId, mag, transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
+            Push();
+        }
+
+        // ADR-081: a weapon lands unloaded: the weapon with an empty magazine and, beside it, its rounds as an ammo
+        // item of its calibre. Automatic ammo pickup waits until the combatant walks away from here.
+        [Server]
+        void ServerSpawnWeaponDrop(int weaponId, int mag, Vector3 at)
+        {
+            if (MatchDirector.Instance == null) return;
+            var entries = Loadout.DropEntries(GameData.Weapons, weaponId, mag);
+            for (int i = 0; i < entries.Length; i++)
+                MatchDirector.Instance.ServerSpawnLoot(entries[i], at + transform.right * (0.4f * i));
+            if (entries.Length > 1) _carry?.ServerSuppressAutoPickup();
         }
 
         [ServerRpc]

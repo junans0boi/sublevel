@@ -18,7 +18,9 @@ namespace Game.Gameplay
         const float GroundWidth = 340f, BagWidth = 360f, GearWidth = 360f, WeaponWidth = 560f;
         const float Pad = 14f, HeaderHeight = 54f;
         const float GroundRowHeight = 54f, GroundRowGap = 6f;
-        const float BagRowHeight = 62f, BagRowGap = 6f; // ten rows with the jerrycan (ADR-075)
+        const float BagRowHeight = 52f, BagRowGap = 4f; // ten rows with the jerrycan (ADR-075), then loose optics (ADR-082)
+        const float BagOpticHeight = 50f, BagOpticGap = 4f, BagOpticLabel = 22f;
+        const int BagOpticColumns = 4;
         const float GearCardHeight = 220f, WeaponCardHeight = 142f, WeaponCardGap = 8f;
 
         static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.62f);
@@ -54,6 +56,14 @@ namespace Game.Gameplay
         readonly GameObject[] _packRows = new GameObject[InventoryBackend.BackpackRows];
         readonly InventoryItemIcon[] _packIcons = new InventoryItemIcon[InventoryBackend.BackpackRows];
         readonly InventoryDragItem[] _packDrags = new InventoryDragItem[InventoryBackend.BackpackRows];
+        readonly GameObject[] _bagOpticCells = new GameObject[OpticBag.MaxId];
+        readonly InventoryItemIcon[] _bagOpticIcons = new InventoryItemIcon[OpticBag.MaxId];
+        readonly Text[] _bagOpticCounts = new Text[OpticBag.MaxId];
+        readonly InventoryDragItem[] _bagOpticDrags = new InventoryDragItem[OpticBag.MaxId];
+        Text _bagOpticTitle;
+        GameObject _healBox;
+        Text _healLabel;
+        RectTransform _healFill;
         Text _carryLabel;
         RectTransform _carryFill;
         Image _carryFillImage;
@@ -146,6 +156,19 @@ namespace Game.Gameplay
                 return;
             }
             Refresh(me);
+            ShowHealing();
+        }
+
+        // #110: the timed use (started by a right click here or by H) shows its progress in the header, since the
+        // HUD's bar is under this screen.
+        void ShowHealing()
+        {
+            var heal = CombatantHealing.Local;
+            bool on = heal != null && heal.Using;
+            if (_healBox.activeSelf != on) _healBox.SetActive(on);
+            if (!on) return;
+            _healLabel.text = heal.ItemName + " 사용 중  " + heal.RemainingSeconds.ToString("0.0") + "초";
+            _healFill.anchorMax = new Vector2(Mathf.Clamp01(heal.Progress01), 1f);
         }
 
         void Refresh(Combatant me)
@@ -251,6 +274,22 @@ namespace Game.Gameplay
             ShowPackRow(InventoryBackend.JerrycanRow, InventoryBackend.Jerrycans(me));
             _packDrags[InventoryBackend.JerrycanRow].Configure(this, JerrycanSource());
 
+            // Loose optics (ADR-082): one cell per optic id held, packed in id order.
+            int cell = 0;
+            for (int id = 1; id <= OpticBag.MaxId; id++)
+            {
+                int count = InventoryBackend.BagOpticCount(me, id);
+                if (count <= 0) continue;
+                string name = InventoryBackend.OpticName(id);
+                _bagOpticIcons[cell].Set(ItemIcons.OpticKey(id), name);
+                _bagOpticCounts[cell].text = "x" + count;
+                _bagOpticDrags[cell].Configure(this, BagOpticSource(id));
+                _bagOpticCells[cell].SetActive(true);
+                cell++;
+            }
+            for (int i = cell; i < OpticBag.MaxId; i++) _bagOpticCells[i].SetActive(false);
+            _bagOpticTitle.text = cell == 0 ? "조준경  ·  없음" : "조준경";
+
             // The bag's load against its size; red when over (the server then refuses what does not fit).
             string carry = InventoryBackend.CarryLabel(me);
             float fraction = InventoryBackend.CarryFraction(me);
@@ -270,6 +309,7 @@ namespace Game.Gameplay
                 hash = hash * 31 + InventoryBackend.Jerrycans(me);
                 hash = hash * 31 + InventoryBackend.Keys(me);
                 hash = hash * 31 + InventoryBackend.CarryHash(me);
+                hash = hash * 31 + InventoryBackend.BagOptics(me).GetHashCode();
                 return hash;
             }
         }
@@ -371,6 +411,8 @@ namespace Game.Gameplay
         public InventoryDragSource FirstAidSource() => new InventoryDragSource(InventorySourceKind.FirstAid, null, 0);
         public InventoryDragSource SmokeSource() => new InventoryDragSource(InventorySourceKind.Smoke, null, 0);
         public InventoryDragSource JerrycanSource() => new InventoryDragSource(InventorySourceKind.Jerrycan, null, 0);
+        public InventoryDragSource BagOpticSource(int opticId) => opticId >= 1 && opticId <= OpticBag.MaxId
+            ? new InventoryDragSource(InventorySourceKind.BagOptic, null, opticId) : default;
         public InventoryDragSource WeaponSource(int slot) => slot >= 0 && slot < Loadout.SlotCount
             ? new InventoryDragSource(InventorySourceKind.Weapon, null, slot) : default;
         public InventoryDragSource GearSource(int slot) => slot == InventoryBackend.HelmetSlot
@@ -380,7 +422,8 @@ namespace Game.Gameplay
         public bool DropOnBag(InventoryDragSource source)
         {
             if (!CanDropOnBag(source)) return false;
-            InventoryBackend.Pickup(Combatant.LocalPlayer, source.Loot);
+            if (source.Kind == InventorySourceKind.Optic) InventoryBackend.DetachOpticToBag(Combatant.LocalPlayer, source.Index);
+            else InventoryBackend.Pickup(Combatant.LocalPlayer, source.Loot);
             _dirty = true;
             return true;
         }
@@ -400,6 +443,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Medkit: InventoryBackend.DropMedkit(me); break;
                 case InventorySourceKind.Grenade: InventoryBackend.DropGrenade(me); break;
                 case InventorySourceKind.Optic: InventoryBackend.DropOptic(me, source.Index); break;
+                case InventorySourceKind.BagOptic: InventoryBackend.DropBagOptic(me, source.Index); break;
                 case InventorySourceKind.Weapon: InventoryBackend.DropWeapon(me, source.Index); break;
                 case InventorySourceKind.Helmet: InventoryBackend.DropArmor(me, InventoryBackend.HelmetSlot); break;
                 case InventorySourceKind.Vest: InventoryBackend.DropArmor(me, InventoryBackend.VestSlot); break;
@@ -442,6 +486,7 @@ namespace Game.Gameplay
             if (!CanDropOnWeaponSlot(source, slot)) return false;
             var me = Combatant.LocalPlayer;
             if (source.Kind == InventorySourceKind.Vicinity && InventoryBackend.IsOptic(source.Loot)) InventoryBackend.AttachOpticFromGround(me, source.Loot, slot);
+            else if (source.Kind == InventorySourceKind.BagOptic) InventoryBackend.AttachOpticFromBag(me, source.Index, slot);
             else if (source.Kind == InventorySourceKind.Vicinity) InventoryBackend.PickupToSlot(me, source.Loot, slot);
             else if (source.Kind == InventorySourceKind.Weapon) InventoryBackend.SwapWeaponSlots(me, source.Index, slot);
             else return false;
@@ -514,6 +559,10 @@ namespace Game.Gameplay
                 return;
             }
             if (Dragging) CancelDrag();
+            else if (InventoryBackend.RightClickHeal(source.Kind, out var heal))
+            {
+                if (TryExtraCount(source, Combatant.LocalPlayer, out int held) && held > 0) InventoryBackend.UseHealing(Combatant.LocalPlayer, heal);
+            }
             else DropOnGround(source);
         }
 
@@ -550,13 +599,16 @@ namespace Game.Gameplay
                 case InventorySourceKind.Grenade: return InventoryBackend.Grenades(me) > 0;
                 case InventorySourceKind.Weapon: return InventoryBackend.WeaponId(me, source.Index) != 0;
                 case InventorySourceKind.Optic: return InventoryBackend.OpticOf(me, source.Index) != 0;
+                case InventorySourceKind.BagOptic: return InventoryBackend.BagOpticCount(me, source.Index) > 0;
                 case InventorySourceKind.Helmet: return InventoryBackend.Gear(me, InventoryBackend.HelmetSlot).Has;
                 case InventorySourceKind.Vest: return InventoryBackend.Gear(me, InventoryBackend.VestSlot).Has;
                 default: return false;
             }
         }
 
-        bool CanDropOnBag(InventoryDragSource source) => source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned;
+        bool CanDropOnBag(InventoryDragSource source) =>
+            source.Kind == InventorySourceKind.Vicinity ? source.Loot != null && source.Loot.IsSpawned
+            : source.Kind == InventorySourceKind.Optic && CanDrag(source); // ADR-082: off the weapon into the bag
 
         bool CanDropOnGround(InventoryDragSource source)
         {
@@ -576,6 +628,7 @@ namespace Game.Gameplay
                 int mine = InventoryBackend.WeaponId(me, source.Index), theirs = InventoryBackend.WeaponId(me, slot);
                 return InventoryBackend.SlotAccepts(slot, mine) && (theirs == 0 || InventoryBackend.SlotAccepts(source.Index, theirs));
             }
+            if (source.Kind == InventorySourceKind.BagOptic) return CanDrag(source) && InventoryBackend.CanAttachOptic(me, slot, source.Index);
             if (source.Kind != InventorySourceKind.Vicinity || source.Loot == null || !source.Loot.IsSpawned) return false;
             var kind = (LootKind)source.Loot.Kind.Value;
             if (kind == LootKind.Weapon) return InventoryBackend.SlotAccepts(slot, source.Loot.WeaponId.Value);
@@ -629,6 +682,10 @@ namespace Game.Gameplay
                     int opticId = InventoryBackend.OpticOf(me, source.Index);
                     key = ItemIcons.OpticKey(opticId);
                     name = InventoryBackend.OpticName(opticId);
+                    break;
+                case InventorySourceKind.BagOptic:
+                    key = ItemIcons.OpticKey(source.Index);
+                    name = InventoryBackend.OpticName(source.Index);
                     break;
                 case InventorySourceKind.Medkit: key = "medkit"; name = "구급상자"; break;
                 case InventorySourceKind.Grenade: key = "grenade"; name = "수류탄"; break;
@@ -705,7 +762,17 @@ namespace Game.Gameplay
             _panel = UiKit.Rect("InventoryPanel", root, Centre, Centre, Vector2.zero, new Vector2(PanelWidth, PanelHeight));
             var header = UiKit.Rect("Header", _panel, TopCentre, TopCentre, Vector2.zero, new Vector2(PanelWidth, 54f));
             UiKit.Label(UiKit.Fill("Title", header), "인벤토리", 34, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Label(UiKit.Fill("Hint", header), "끌어서 이동  ·  더블클릭 사용  ·  우클릭 빠른 버리기  ·  Tab / Esc 닫기", 18, UiKit.TextDim, TextAnchor.MiddleRight);
+            UiKit.Label(UiKit.Fill("Hint", header), "끌어서 이동  ·  더블클릭 사용  ·  우클릭 버리기 (회복템은 사용)  ·  Tab / Esc 닫기", 18, UiKit.TextDim, TextAnchor.MiddleRight);
+            // #110: progress of a timed heal, centred in the header.
+            var heal = UiKit.Rect("Healing", header, Centre, Centre, new Vector2(-60f, 0f), new Vector2(300f, 50f));
+            _healLabel = UiKit.Label(UiKit.Rect("Label", heal, TopLeft, TopLeft, Vector2.zero, new Vector2(300f, 30f)), "", 19, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var healTrack = UiKit.Rect("Track", heal, TopLeft, TopLeft, new Vector2(0f, -36f), new Vector2(300f, 8f));
+            UiKit.Box(healTrack, UiKit.PanelLight);
+            _healFill = UiKit.Fill("Fill", healTrack);
+            _healFill.anchorMax = new Vector2(0f, 1f);
+            UiKit.Box(_healFill, UiKit.Accent);
+            _healBox = heal.gameObject;
+            _healBox.SetActive(false);
 
             float x = 0f;
             var ground = Column(_panel, "바닥", "주변 아이템", x, GroundWidth); x += GroundWidth + Gap;
@@ -773,15 +840,32 @@ namespace Game.Gameplay
                 else if (i == InventoryBackend.SmokeRow) { name = ThrowableRules.SmokeName; key = "smoke"; }
                 else if (i == InventoryBackend.JerrycanRow) { name = FuelRules.JerrycanName; key = "jerrycan"; }
                 else { name = "수류탄"; key = "grenade"; }
-                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 50f, 50f));
+                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 44f, 44f));
                 _packIcons[i].Set(key, name);
                 _packNames[i] = UiKit.Label(InRow("Name", row, 70f, content - 156f, BagRowHeight), name, 20, UiKit.TextDim);
                 _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 22, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
                 _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
                 _packRows[i] = row.gameObject;
             }
-            // Under the rows: the bag's load as text and a bar ("가방 용량 23/60").
-            var carry = Row("Carry", column, width, HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap) + 2f, 52f);
+            // Loose optics (ADR-082): a grid of cells, one per optic id held; drag one onto a weapon card to fit it.
+            float opticTop = HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap);
+            _bagOpticTitle = UiKit.Label(Row("OpticsTitle", column, width, opticTop, BagOpticLabel), "조준경  ·  없음", 17, UiKit.TextDim);
+            float cellWidth = (content - (BagOpticColumns - 1) * BagOpticGap) / BagOpticColumns;
+            for (int i = 0; i < OpticBag.MaxId; i++)
+            {
+                float cx = Pad + (i % BagOpticColumns) * (cellWidth + BagOpticGap);
+                float cy = opticTop + BagOpticLabel + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap);
+                var cellRect = UiKit.Rect("Optic" + i, column, TopLeft, TopLeft, new Vector2(cx, -cy), new Vector2(cellWidth, BagOpticHeight));
+                UiKit.Box(cellRect, UiKit.PanelLight, true);
+                _bagOpticIcons[i] = InventoryItemIcon.Build(InRow("Icon", cellRect, 2f, 46f, 40f));
+                _bagOpticCounts[i] = UiKit.Label(InRow("Count", cellRect, cellWidth - 34f, 30f, BagOpticHeight), "x1", 18, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+                _bagOpticDrags[i] = cellRect.gameObject.AddComponent<InventoryDragItem>();
+                _bagOpticCells[i] = cellRect.gameObject;
+                cellRect.gameObject.SetActive(false);
+            }
+            // Under them: the bag's load as text and a bar ("가방 용량 23/60").
+            float carryTop = opticTop + BagOpticLabel + 2f * (BagOpticHeight + BagOpticGap) + 2f;
+            var carry = Row("Carry", column, width, carryTop, 52f);
             _carryLabel = UiKit.Label(UiKit.Rect("Label", carry, TopLeft, TopLeft, Vector2.zero, new Vector2(content, 28f)), "가방 용량 —", 19, UiKit.Text);
             var track = UiKit.Rect("Track", carry, TopLeft, TopLeft, new Vector2(0f, -34f), new Vector2(content, 10f));
             UiKit.Box(track, UiKit.PanelLight);

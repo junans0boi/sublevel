@@ -112,38 +112,63 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator EightTimesOptic_IsRefusedByTheRifle_AndStaysOnTheGround()
+        public IEnumerator EightTimesOptic_DoesNotFitTheRifle_AndGoesIntoTheBag()
         {
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
             var optics = OpticsOf(me);
             yield return GiveRifle();
 
-            Assert.IsFalse(me.ServerGive(Optic(X8)), "the rifle takes up to 6x");
-            yield return null;
+            // ADR-082: no matching weapon is needed to carry an optic.
+            Assert.IsTrue(me.ServerGive(Optic(X8)), "the rifle takes up to 6x: the 8x goes into the bag");
+            yield return WaitUntil(() => optics.InBag(X8) == 1, 2f, "the 8x in the bag");
             Assert.AreEqual(0, optics.ActiveOptic);
 
-            // A pickup that is refused is not despawned.
             int before = LootItem.All.Count;
             MatchDirector.Instance.ServerSpawnLoot(Optic(X8), me.transform.position + me.transform.forward * 1f + Vector3.up * 0.3f);
             yield return WaitUntil(() => FindOpticLoot(before, X8) != null, 2f, "the 8x pickup");
             var item = FindOpticLoot(before, X8);
             me.CmdPickup(item.NetworkObject);
-            yield return null;
-            Assert.IsTrue(item != null && item.IsSpawned, "the refused optic stays on the ground");
+            yield return WaitUntil(() => item == null || !item.IsSpawned, 2f, "the pickup removed");
+            yield return WaitUntil(() => optics.InBag(X8) == 2, 2f, "two 8x in the bag");
             Assert.AreEqual(0, optics.ActiveOptic);
         }
 
         [UnityTest]
-        public IEnumerator SecondOptic_IsRefusedWhileTheSlotIsTaken()
+        public IEnumerator BagOptic_AttachesToTheRifle_SwapsWithTheFittedOne_AndDetachesBack()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var optics = OpticsOf(me);
+            yield return GiveRifle();
+            int slot = me.ActiveSlot.Value;
+            Assert.IsTrue(me.ServerGive(Optic(X4)));
+            Assert.IsTrue(me.ServerGive(Optic(RedDot)), "the rifle is fitted: the red dot goes into the bag");
+            yield return WaitUntil(() => optics.InBag(RedDot) == 1 && optics.ActiveOptic == X4, 2f, "4x fitted, red dot in the bag");
+
+            Assert.IsFalse(optics.ServerAttachFromBag(X8, slot), "not in the bag");
+            Assert.IsTrue(optics.ServerAttachFromBag(RedDot, slot));
+            yield return WaitUntil(() => optics.ActiveOptic == RedDot && optics.InBag(X4) == 1 && optics.InBag(RedDot) == 0, 2f, "swapped");
+
+            optics.ServerDetachToBag(slot);
+            yield return WaitUntil(() => optics.ActiveOptic == 0 && optics.InBag(RedDot) == 1, 2f, "detached into the bag");
+
+            int before = LootItem.All.Count;
+            Assert.IsTrue(optics.ServerDropFromBag(X4));
+            yield return WaitUntil(() => FindOpticLoot(before, X4) != null, 2f, "the 4x dropped from the bag");
+            Assert.AreEqual(0, optics.InBag(X4));
+        }
+
+        [UnityTest]
+        public IEnumerator SecondOptic_GoesIntoTheBagWhileTheSlotIsTaken()
         {
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
             var optics = OpticsOf(me);
             yield return GiveRifle();
             Assert.IsTrue(me.ServerGive(Optic(X4)));
-            Assert.IsFalse(me.ServerGive(Optic(RedDot)), "the only weapon already has an optic");
-            yield return null;
+            Assert.IsTrue(me.ServerGive(Optic(RedDot)), "the only weapon already has an optic: into the bag");
+            yield return WaitUntil(() => optics.InBag(RedDot) == 1, 2f, "red dot in the bag");
             Assert.AreEqual(X4, optics.ActiveOptic);
         }
 
@@ -167,7 +192,7 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator DroppingTheWeapon_TakesItsOpticToTheGround()
+        public IEnumerator DroppingTheWeapon_PutsItsOpticInTheBag()
         {
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
@@ -180,8 +205,9 @@ namespace Game.Tests
             int slot = me.ActiveSlot.Value;
             me.CmdDropWeapon(slot);
             yield return WaitUntil(() => me.ActiveWeaponId == 0, 2f, "the weapon dropped");
-            // The optic does not stay behind on an empty slot: it lies on the ground as an optic pickup.
-            yield return WaitUntil(() => FindOpticLoot(before, X4) != null, 2f, "the optic lying on the ground");
+            // ADR-081/082: the weapon goes alone; its optic does not stay on an empty slot but goes into the bag.
+            yield return WaitUntil(() => optics.InBag(X4) == 1, 2f, "the optic in the bag");
+            Assert.IsNull(FindOpticLoot(before, X4), "not on the ground");
             Assert.AreEqual(0, optics.OpticInSlot(slot));
             Assert.AreEqual(0, optics.ActiveOptic);
         }
