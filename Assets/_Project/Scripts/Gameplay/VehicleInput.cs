@@ -18,6 +18,8 @@ namespace Game.Gameplay
         public bool Interact;     // F pressed: get in (nearest free seat, the driver's if free) or out
         public int Seat;          // Ctrl+1..4 pressed: 0..3; -1 = none
         public bool ToggleView;   // V pressed: the seat's eye view or the vehicle camera
+        public bool Horn;         // left mouse held (driver with no pistol out, ADR-075)
+        public bool Jerrycan;     // J pressed: pour a jerrycan into the vehicle here, or stop (ADR-075)
     }
 
     public interface IVehicleInput
@@ -43,6 +45,8 @@ namespace Game.Gameplay
             f.Roll = (k.eKey.isPressed ? 1f : 0f) - (k.qKey.isPressed ? 1f : 0f);
             f.Interact = k.fKey.wasPressedThisFrame;
             f.ToggleView = k.vKey.wasPressedThisFrame;
+            f.Jerrycan = k.jKey.wasPressedThisFrame;
+            f.Horn = Mouse.current != null && Mouse.current.leftButton.isPressed;
             if (ctrl)
             {
                 if (k.digit1Key.wasPressedThisFrame) f.Seat = 0;
@@ -75,6 +79,8 @@ namespace Game.Gameplay
         bool _attached;
         ViewMode _modeSeen;
         float _engineRequestedAt = float.NegativeInfinity;
+        VehicleHorn _horn; // the horn this player last pressed, released when it stops driving
+        CombatantJerrycan _jerrycans;
 
         // The view in the vehicle: the seat's eyes (true) or the vehicle camera. V switches; shared with the on-foot view mode.
         public bool EyeView => _player != null && _player.Rig.Mode == ViewMode.FirstPerson;
@@ -85,6 +91,7 @@ namespace Game.Gameplay
         {
             _player = GetComponent<PlayerController>();
             _combatant = GetComponent<Combatant>();
+            _jerrycans = GetComponent<CombatantJerrycan>();
         }
 
         void OnEnable() => VehicleSeat.Released += OnReleased;
@@ -98,6 +105,7 @@ namespace Game.Gameplay
             // Screens that take the mouse, the elevator wait and death leave the vehicle alone (it rolls on its own).
             bool blocked = UiFocus.Current != UiScreen.None || SpawnProtection.InputBlocked || _combatant.Dead.Value;
             if (blocked) f = new VehicleInputFrame { Seat = -1 };
+            if (f.Jerrycan && _jerrycans != null) _jerrycans.RequestToggle();
 
             bool attached = VehicleSeat.IsAttached(_combatant);
             SetAttached(attached);
@@ -112,8 +120,10 @@ namespace Game.Gameplay
                 if (f.Interact) vehicle.RequestExit(_combatant);
                 else if (f.Seat >= 0 && f.Seat != seat) vehicle.RequestSwitch(_combatant, f.Seat);
                 if (seat == Vehicles.DriverSeat) Drive(vehicle, f);
+                else ReleaseHorn();
                 return;
             }
+            ReleaseHorn();
             if (attached || !f.Interact) return;
             // F near a vehicle gets in, unless there is loot right here to pick up (that keeps the F key).
             if (_player.NearbyLoot != null) return;
@@ -142,6 +152,17 @@ namespace Game.Gameplay
                 Pitch = f.Pitch,
                 Roll = f.Roll,
             });
+            var horn = vehicle.GetComponent<VehicleHorn>();
+            if (horn != _horn) ReleaseHorn();
+            _horn = horn;
+            // With a pistol out the button fires it instead.
+            if (_horn != null) _horn.Request(_combatant, f.Horn && _combatant.ActiveWeaponId == 0);
+        }
+
+        void ReleaseHorn()
+        {
+            if (_horn != null) _horn.Request(_combatant, false);
+            _horn = null;
         }
 
         // The character's own movement is off from getting in until the way out has finished.

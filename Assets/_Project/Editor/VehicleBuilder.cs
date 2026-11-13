@@ -84,6 +84,9 @@ public static class VehicleBuilder
         nt.SetSynchronizeScale(false);
         root.AddComponent<VehicleState>();
         vehicle = root.AddComponent<Vehicle>();
+        root.AddComponent<VehicleFuel>();  // ADR-075: tank, horn, engine sound
+        root.AddComponent<VehicleHorn>();
+        root.AddComponent<Game.Gameplay.VehicleAudio>();
         model = new GameObject("Model").transform;
         model.SetParent(root.transform, false);
         return root;
