@@ -144,8 +144,23 @@ namespace Game.Gameplay
         public static float AmbientVolume => Values[(int)SettingId.AmbientVolume];
         public static float UiVolume => Values[(int)SettingId.UiVolume];
 
-        // Extra factor while looking through a magnified scope, on top of ScopeView.SensitivityFactor.
-        public static float ScopeSensitivityFactor => Values[(int)SettingId.ScopeSensitivity];
+        // Extra factor through a magnified scope at `zoom`, on top of ScopeView.SensitivityFactor: the setting of the
+        // nearest magnifications (2/3/4/6/8/15x), blended in between for variable scopes.
+        public static float ScopeFactorAt(float zoom)
+        {
+            var stops = SettingsCatalog.ScopeZoomStops;
+            int last = stops.Length - 1;
+            if (zoom <= stops[0]) return Values[(int)SettingId.ScopeSens2x];
+            if (zoom >= stops[last]) return Values[(int)SettingId.ScopeSens2x + last];
+            int i = 0;
+            while (zoom > stops[i + 1]) i++;
+            float t = (zoom - stops[i]) / (stops[i + 1] - stops[i]);
+            return Mathf.Lerp(Values[(int)SettingId.ScopeSens2x + i], Values[(int)SettingId.ScopeSens2x + i + 1], t);
+        }
+
+        // 정조준 꾹 / 견착 탭 (the aim button's style, #139).
+        public static bool SightsHold => GetIndex(SettingId.SightsStyle) == 1;
+        public static bool ShoulderToggle => GetIndex(SettingId.ShoulderStyle) == 1;
         public static bool InvertMouseY => GetToggle(SettingId.InvertMouseY);
 
         // Vertical field of view of the first-person hip view, degrees.
@@ -162,15 +177,16 @@ namespace Game.Gameplay
         public static bool ShowDamageDirection => GetToggle(SettingId.DamageDirection);
         public static bool ShowKillFeed => GetToggle(SettingId.KillFeed);
 
-        // The mouse look of one frame after the settings: aim factor while aiming, the scope factor blended in as a
-        // magnified scope's own slow-down sets in (`scopeFactor` = ScopeView.SensitivityFactor), and the vertical invert.
-        public static Vector2 AdjustLook(Vector2 look, bool aiming, float scopeFactor)
+        // The mouse look of one frame after the settings: the 1x aim factor while aiming without a magnified scope, the
+        // setting of the scope's magnification (`zoom`) blended in as its own slow-down sets in (`scopeFactor` =
+        // ScopeView.SensitivityFactor), and the vertical invert.
+        public static Vector2 AdjustLook(Vector2 look, bool aiming, float scopeFactor, float zoom = 1f)
         {
             float factor = scopeFactor;
-            if (aiming) factor *= AimSensitivityFactor;
-            // 1 = no scope; a 2x scope is about 0.57, so the extra factor is fully in from 0.75 down.
+            // 1 = no scope; a 2x scope is about 0.57, so the scope factor is fully in from 0.75 down.
             float scoped = Mathf.Clamp01((1f - scopeFactor) * 4f);
-            factor *= Mathf.Lerp(1f, ScopeSensitivityFactor, scoped);
+            float aim = aiming ? AimSensitivityFactor : 1f;
+            factor *= Mathf.Lerp(aim, ScopeFactorAt(zoom), scoped);
             look *= factor;
             if (InvertMouseY) look.y = -look.y;
             return look;

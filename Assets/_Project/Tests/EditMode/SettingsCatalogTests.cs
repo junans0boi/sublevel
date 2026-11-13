@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Game.Core;
 using Game.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
@@ -103,7 +104,7 @@ namespace Game.Tests
             Assert.AreEqual(8, Count(SettingsTab.Graphics, SettingsPage.Basic));
             Assert.AreEqual(6, Count(SettingsTab.Graphics, SettingsPage.Advanced));
             Assert.AreEqual(4, Count(SettingsTab.Audio, SettingsPage.Basic));
-            Assert.AreEqual(4, Count(SettingsTab.Controls, SettingsPage.Basic));
+            Assert.AreEqual(11, Count(SettingsTab.Controls, SettingsPage.Basic));
             Assert.AreEqual(4, Count(SettingsTab.Gameplay, SettingsPage.Basic));
             Assert.AreEqual(0, Count(SettingsTab.Audio, SettingsPage.Advanced), "only graphics has an advanced page");
             Assert.Greater(SettingsCatalog.KeyBindings.Length, 15);
@@ -257,11 +258,44 @@ namespace Game.Tests
             GameSettings.AimSensitivityFactor = 0.5f;
             Assert.AreEqual(new Vector2(1f, 1f), GameSettings.AdjustLook(new Vector2(1f, 1f), false, 1f), "hip, no scope: unchanged");
             Assert.AreEqual(0.5f, GameSettings.AdjustLook(new Vector2(1f, 0f), true, 1f).x, 0.0001f, "aim factor while aiming");
-            GameSettings.Preview(SettingId.ScopeSensitivity, 0.5f);
-            Assert.AreEqual(0.5f * 0.5f * 0.5f, GameSettings.AdjustLook(new Vector2(1f, 0f), true, 0.5f).x, 0.0001f, "magnified: scope × aim × scope setting");
+            GameSettings.Preview(SettingId.ScopeSens4x, 0.5f);
+            Assert.AreEqual(0.5f * 0.5f, GameSettings.AdjustLook(new Vector2(1f, 0f), true, 0.5f, 4f).x, 0.0001f, "magnified: scope factor × that zoom's setting");
             GameSettings.Preview(SettingId.InvertMouseY, 1f);
             Assert.AreEqual(-1f, GameSettings.AdjustLook(new Vector2(0f, 1f), false, 1f).y, 0.0001f, "inverted");
             GameSettings.Revert();
+        }
+
+        [Test]
+        public void ScopeSensitivity_IsPerMagnification()
+        {
+            var look = new Vector2(1f, 0f);
+            float f2 = Optics.SensitivityFor(2f), f4 = Optics.SensitivityFor(4f);
+            float before2 = GameSettings.AdjustLook(look, true, f2, 2f).x;
+            float before4 = GameSettings.AdjustLook(look, true, f4, 4f).x;
+            float hip = GameSettings.AdjustLook(look, false, 1f).x;
+            GameSettings.Preview(SettingId.ScopeSens4x, 1.5f);
+            Assert.AreEqual(before2, GameSettings.AdjustLook(look, true, f2, 2f).x, 0.0001f, "2x unchanged");
+            Assert.AreEqual(hip, GameSettings.AdjustLook(look, false, 1f).x, 0.0001f, "hip unchanged");
+            Assert.AreEqual(before4 * 1.5f, GameSettings.AdjustLook(look, true, f4, 4f).x, 0.0001f, "4x scaled");
+            Assert.AreEqual(Mathf.Lerp(1f, 1.5f, 0.5f), GameSettings.ScopeFactorAt(5f), 0.0001f, "5x lies between 4x (1.5) and 6x (1)");
+            GameSettings.Revert();
+        }
+
+        [Test]
+        public void AimStyles_AreSavedAndSurviveReload()
+        {
+            var snap = GameSettings.CapturePrefs();
+            try
+            {
+                GameSettings.SetAndSave(SettingId.SightsStyle, 1f);
+                GameSettings.SetAndSave(SettingId.ShoulderStyle, 1f);
+                GameSettings.SetAndSave(SettingId.ScopeSens8x, 0.8f);
+                GameSettings.Load();
+                Assert.IsTrue(GameSettings.SightsHold);
+                Assert.IsTrue(GameSettings.ShoulderToggle);
+                Assert.AreEqual(0.8f, GameSettings.Get(SettingId.ScopeSens8x), 0.0001f);
+            }
+            finally { GameSettings.RestorePrefs(snap); }
         }
     }
 }

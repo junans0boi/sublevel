@@ -152,5 +152,26 @@ namespace Game.Tests
             Assert.LessOrEqual(widest, 1.0001f, "8 degree cone at a quarter is 2 degrees wide: 1 degree off-axis at most");
             Assert.Greater(widest, 0.5f, "but it is still a cone, not a point");
         }
+
+        [Test]
+        public void SightsHold_AimsOnlyWhileHeld()
+        {
+            var aim = new AimInput(Tap) { SightsHold = true };
+            Assert.AreEqual(AimMode.Sights, aim.Update(true, 0.0, true));
+            Assert.AreEqual(AimMode.Sights, aim.Update(true, 1.0, true), "no shoulder after a long hold");
+            Assert.AreEqual(AimMode.Hip, aim.Update(false, 1.1, true));
+        }
+
+        [Test]
+        public void ShoulderToggle_StaysAfterRelease_NextPressPutsItAway()
+        {
+            var aim = new AimInput(Tap) { ShoulderToggle = true };
+            aim.Update(true, 0.0, true);
+            Assert.AreEqual(AimMode.Shoulder, aim.Update(true, Tap + 0.1, true));
+            Assert.AreEqual(AimMode.Shoulder, aim.Update(false, Tap + 0.2, true), "kept");
+            Assert.AreEqual(AimMode.Hip, aim.Update(true, 2.0, true), "next press puts it away");
+            Assert.AreEqual(AimMode.Hip, aim.Update(true, 3.0, true), "and holding it does not raise it again");
+            Assert.AreEqual(AimMode.Hip, aim.Update(false, 3.1, true));
+        }
     }
 }

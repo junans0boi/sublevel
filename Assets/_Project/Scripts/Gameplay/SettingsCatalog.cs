@@ -23,7 +23,8 @@ namespace Game.Gameplay
         ScreenMode, Resolution, FpsLimit, VSync, Brightness, RenderScale, FirstPersonFov, QualityPreset,
         AntiAliasing, Shadows, Textures, Effects, ViewDistance, AmbientOcclusion,
         MasterVolume, EffectsVolume, AmbientVolume, UiVolume,
-        MouseSensitivity, AimSensitivity, ScopeSensitivity, InvertMouseY,
+        MouseSensitivity, AimSensitivity, ScopeSens2x, ScopeSens3x, ScopeSens4x, ScopeSens6x, ScopeSens8x, ScopeSens15x, InvertMouseY,
+        SightsStyle, ShoulderStyle,
         DefaultView, CrosshairColor, DamageDirection, KillFeed,
     }
 
@@ -66,6 +67,9 @@ namespace Game.Gameplay
         public const int PresetLow = 0, PresetMedium = 1, PresetHigh = 2, PresetCustom = 3;
         public const string ResolutionKey = "settings.resolution";
         public const string KeysNote = "키 변경은 추후 지원 예정입니다. 지금은 아래 배치만 확인할 수 있습니다.";
+
+        // Magnifications with their own mouse factor (#139).
+        public static readonly float[] ScopeZoomStops = { 2f, 3f, 4f, 6f, 8f, 15f };
 
         public static readonly string[] TabLabels = { "그래픽", "오디오", "컨트롤", "키 설정", "게임 플레이" };
         public static readonly string[] PageLabels = { "기본", "고급" };
@@ -163,17 +167,27 @@ namespace Game.Gameplay
                 "마우스를 움직일 때 시점이 도는 빠르기입니다.",
                 GameSettings.MouseSensitivityKey, GameSettings.MinMouseSensitivity, GameSettings.MaxMouseSensitivity, 0.01f,
                 DeviceInput.DefaultMouseSensitivity, SliderFormat.Decimal2));
-            Add(Slider(SettingId.AimSensitivity, SettingsTab.Controls, SettingsPage.Basic, "마우스", "조준 감도 배율",
-                "견착하거나 정조준할 때 마우스 감도에 곱해지는 값입니다.",
+            Add(Slider(SettingId.AimSensitivity, SettingsTab.Controls, SettingsPage.Basic, "마우스", "1배 조준 감도 (견착·반사 사이트)",
+                "견착하거나 배율 없는 조준 사이트로 정조준할 때 마우스 감도에 곱해지는 값입니다.",
                 GameSettings.AimSensitivityKey, GameSettings.MinAimSensitivityFactor, GameSettings.MaxAimSensitivityFactor, 0.01f,
                 GameSettings.DefaultAimSensitivityFactor, SliderFormat.Factor2));
-            Add(Slider(SettingId.ScopeSensitivity, SettingsTab.Controls, SettingsPage.Basic, "마우스", "배율 조준경 감도 배율",
-                "2배율 이상 조준경을 볼 때 추가로 곱해지는 값입니다. 조준경 배율에 따른 기본 감속 위에 적용됩니다.",
-                "settings.scopeSensitivityFactor", GameSettings.MinAimSensitivityFactor, GameSettings.MaxAimSensitivityFactor, 0.01f,
-                1f, SliderFormat.Factor2));
+            for (int i = 0; i < ScopeZoomStops.Length; i++)
+            {
+                int zoom = (int)ScopeZoomStops[i];
+                Add(Slider(SettingId.ScopeSens2x + i, SettingsTab.Controls, SettingsPage.Basic, "배율 조준경", zoom + "배 조준경 감도",
+                    zoom + "배율 조준경을 볼 때 마우스 감도에 곱해지는 값입니다. 조준경 배율에 따른 기본 감속 위에 적용되고 다른 배율에는 영향이 없습니다.",
+                    "settings.scopeSens." + zoom, GameSettings.MinAimSensitivityFactor, GameSettings.MaxAimSensitivityFactor, 0.01f,
+                    1f, SliderFormat.Factor2));
+            }
             Add(Choice(SettingId.InvertMouseY, SettingsTab.Controls, SettingsPage.Basic, "마우스", "마우스 상하 반전",
                 "마우스를 위로 밀면 시점이 아래로 내려가게 합니다.",
                 "settings.invertMouseY", OffOn, 0, SettingKind.Toggle));
+            Add(Choice(SettingId.SightsStyle, SettingsTab.Controls, SettingsPage.Basic, "조준 방식", "정조준 방식",
+                "탭 전환: 우클릭을 짧게 누를 때마다 정조준이 켜지고 꺼집니다. 꾹 누르기: 누르고 있는 동안만 정조준하고 견착은 쓰지 않습니다.",
+                "settings.sightsStyle", new[] { "탭 전환", "꾹 누르기" }, 0));
+            Add(Choice(SettingId.ShoulderStyle, SettingsTab.Controls, SettingsPage.Basic, "조준 방식", "견착 방식",
+                "꾹 누르기: 우클릭을 길게 누르는 동안만 견착합니다. 탭 전환: 길게 눌러 견착하면 손을 떼도 유지되고, 다시 누르면 풀립니다. 정조준 방식이 탭 전환일 때만 적용됩니다.",
+                "settings.shoulderStyle", new[] { "꾹 누르기", "탭 전환" }, 0));
 
             // ---- gameplay ----
             Add(Choice(SettingId.DefaultView, SettingsTab.Gameplay, SettingsPage.Basic, "시점", "기본 시점",

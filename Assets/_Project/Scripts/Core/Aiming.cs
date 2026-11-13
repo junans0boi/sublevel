@@ -119,6 +119,10 @@ namespace Game.Core
         double _pressedAt;
 
         public AimMode Mode { get; private set; }
+        // 정조준 꾹: sights only while the button is held (no tap toggle, no shoulder). 견착 탭: a long press leaves the
+        // shoulder aim on after release; the next press puts it away (#139).
+        public bool SightsHold;
+        public bool ShoulderToggle;
 
         public AimInput(float tapSeconds) => _tapSeconds = tapSeconds;
 
@@ -139,6 +143,19 @@ namespace Game.Core
                 return Mode;
             }
 
+            if (SightsHold)
+            {
+                Mode = held ? AimMode.Sights : AimMode.Hip;
+                _wasHeld = held;
+                return Mode;
+            }
+            if (held && !_wasHeld && ShoulderToggle && Mode == AimMode.Shoulder)
+            {
+                Mode = AimMode.Hip;
+                _ignorePress = true;
+                _wasHeld = held;
+                return Mode;
+            }
             if (held && !_wasHeld)
             {
                 _pressedAt = time;
@@ -151,7 +168,7 @@ namespace Game.Core
             else if (_wasHeld)
             {
                 if (time - _pressedAt < _tapSeconds) Mode = _startedInSights ? AimMode.Hip : AimMode.Sights;
-                else if (Mode == AimMode.Shoulder) Mode = AimMode.Hip;
+                else if (Mode == AimMode.Shoulder && !ShoulderToggle) Mode = AimMode.Hip;
             }
             _wasHeld = held;
             return Mode;

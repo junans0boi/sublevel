@@ -180,7 +180,7 @@ namespace Game.Gameplay
             if (SpawnProtection.InputBlocked || ElevatorPanel.Riding)
                 f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook, Ping = f.Ping };
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
-            f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
+            f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor, ScopeView.CurrentZoom);
             LastInput = f;
             UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverRate(_combatant.ActiveWeapon) * FittedMods.Recover, _rules.Recoil.RecoverDelaySeconds);
@@ -221,6 +221,8 @@ namespace Game.Gameplay
 
             // Aiming needs a gun (not a melee weapon, ADR-073) and wins over sprinting; leaning is for standing and walking only.
             bool armed = !Melee.CanStrike(_combatant.ActiveWeapon);
+            _aim.SightsHold = GameSettings.SightsHold;
+            _aim.ShoulderToggle = GameSettings.ShoulderToggle;
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
             // The aim key raises the weapon on the press, before the tap/hold decision (#121): no sprint under it either.
             AimKeyDown = armed && f.AimHeld;
