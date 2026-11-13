@@ -23,7 +23,7 @@ namespace Game.Gameplay
     public static class ParkourProbe
     {
         const float FirstRung = 0.1f, RungStep = 0.1f;
-        const int Rungs = 24;                 // up to 2.4 m
+        const int Rungs = 27;                 // up to 2.7 m: a 1.4 m hall window over a sill 1.15 m above the ground outside
         const float ScanTop = 2.7f;           // highest point the top is looked for from
         const float FaceSlack = 0.25f;        // a rung this much farther than the face is not the same wall
         const float IntoFace = 0.08f;         // how far past the face the top is measured
@@ -32,6 +32,7 @@ namespace Game.Gameplay
         const float LandingMargin = 0.2f;     // past the far side, clear of it
         const float MaxLandingDrop = 2.0f;    // ground farther below than this: the move ends in the air and the body falls
         const float GroundProbe = 0.25f;      // the ground under the feet is looked for this far above and below them
+        const float WalkableNormalY = 0.7f;   // cos 45 deg: a surface this flat is ground, not a face
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
         static readonly Collider[] Overlaps = new Collider[16];
@@ -50,7 +51,7 @@ namespace Game.Gameplay
 
             for (int i = 0; i < Rungs; i++)
             {
-                Blocked[i] = Cast(feet + Vector3.up * Rung(i), forward, reach, body, out float d);
+                Blocked[i] = Cast(feet + Vector3.up * Rung(i), forward, reach, body, out float d, walls: true);
                 Distance[i] = d;
             }
             // Nothing standing on the ground right in front: an ordinary jump.
@@ -137,8 +138,9 @@ namespace Game.Gameplay
 
         static float Rung(int i) => FirstRung + i * RungStep;
 
-        // The nearest thing along the ray that is not the body itself (and not glass or a trigger).
-        static bool Cast(Vector3 origin, Vector3 direction, float length, Transform body, out float distance)
+        // The nearest thing along the ray that is not the body itself (and not glass or a trigger). `walls`: ground
+        // the body could walk up (a slope rising toward a wall outside a building pad, #108) is not an obstacle.
+        static bool Cast(Vector3 origin, Vector3 direction, float length, Transform body, out float distance, bool walls = false)
         {
             distance = length;
             bool any = false;
@@ -146,7 +148,7 @@ namespace Game.Gameplay
             for (int i = 0; i < n; i++)
             {
                 var hit = Hits[i];
-                if (hit.collider.transform.IsChildOf(body) || hit.distance >= distance) continue;
+                if (hit.collider.transform.IsChildOf(body) || hit.distance >= distance || (walls && hit.normal.y > WalkableNormalY)) continue;
                 distance = hit.distance;
                 any = true;
             }

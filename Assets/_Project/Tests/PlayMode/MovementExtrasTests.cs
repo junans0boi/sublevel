@@ -343,6 +343,79 @@ namespace Game.Tests
             Assert.IsFalse(second.GetComponent<Collider>().enabled, "and it no longer blocks");
         }
 
+        // #108: a house window and a yard wall are got over from outside in as well as from inside out.
+        // The house floor is 0.15 m over the ground outside, so its 1.0 m sill is 1.15 m high from outside, and a
+        // 1.4 m hall window's lintel is 2.55 m up.
+        [UnityTest]
+        public IEnumerator AHouseWindow_IsGoneThrough_FromOutsideIn_AndBackOut()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            var stance = Combatant.LocalPlayer.GetComponent<CombatantStance>();
+            Box("Floor", new Vector3(0f, 0.075f, -20.5f), new Vector3(3f, 0.15f, 2.75f));
+            Box("Sill", new Vector3(0f, 0.575f, -22f), new Vector3(3f, 1.15f, 0.25f));
+            Box("Lintel", new Vector3(0f, 2.95f, -22f), new Vector3(3f, 0.8f, 0.25f));
+            yield return StandAt(pc, new Vector3(0f, 0.1f, -22.9f));
+
+            yield return Over(pc, ParkourMove.Window, "in");
+            Assert.AreEqual(1.15f, pc.LastParkourPlan.Profile.TopHeight, 0.05f, "the sill from outside");
+            Assert.AreEqual(1.4f, pc.LastParkourPlan.Profile.OpeningHeight, 0.05f, "the opening");
+            Assert.Greater(pc.transform.position.z, -21.6f, "inside");
+            Assert.AreEqual(0.15f, pc.transform.position.y, 0.1f, "on the floor");
+
+            yield return Face(pc, -1f);
+            yield return Over(pc, ParkourMove.Window, "out");
+            Assert.Less(pc.transform.position.z, -22.4f, "outside again");
+            Assert.AreEqual(2, stance.ParkoursAccepted);
+        }
+
+        // A yard wall 0.65 m over a raised yard, the ground outside sloping up to its foot: the slope is not the
+        // obstacle, the wall is.
+        [UnityTest]
+        public IEnumerator AYardWall_IsVaulted_FromTheSlopeOutside_AndBack()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            var stance = Combatant.LocalPlayer.GetComponent<CombatantStance>();
+            Box("Yard", new Vector3(0f, 0.2f, -20.5f), new Vector3(3f, 0.4f, 2.75f));
+            Box("Wall", new Vector3(0f, 0.525f, -22f), new Vector3(3f, 1.05f, 0.24f));
+            // The slope: from the floor at z = -25 up to 0.4 m at the wall.
+            float run = 2.88f, rise = 0.4f, angle = Mathf.Atan2(rise, run) * Mathf.Rad2Deg;
+            var slope = Box("Slope", Vector3.zero, new Vector3(3f, 0.2f, Mathf.Sqrt(run * run + rise * rise)));
+            slope.transform.rotation = Quaternion.Euler(-angle, 0f, 0f);
+            slope.transform.position = new Vector3(0f, rise / 2f, -22.12f - run / 2f) - slope.transform.up * 0.1f;
+            Physics.SyncTransforms();
+            yield return StandAt(pc, new Vector3(0f, 0.4f, -23.0f));
+
+            yield return Over(pc, ParkourMove.Vault, "in");
+            Assert.Greater(pc.transform.position.z, -21.6f, "in the yard");
+            Assert.AreEqual(0.4f, pc.transform.position.y, 0.1f, "on the yard");
+
+            yield return Face(pc, -1f);
+            yield return Over(pc, ParkourMove.Vault, "out");
+            Assert.Less(pc.transform.position.z, -22.3f, "outside again");
+            Assert.AreEqual(2, stance.ParkoursAccepted);
+        }
+
+        IEnumerator Over(PlayerController pc, ParkourMove move, string way)
+        {
+            _input.Frame.Jump = true;
+            yield return null;
+            yield return null;
+            var plan = pc.LastParkourPlan;
+            Assert.AreEqual(move, plan.Move, $"{way}: top {plan.Profile.TopHeight:F2}, depth {plan.Profile.Depth:F2}, opening {plan.Profile.Opening} {plan.Profile.OpeningHeight:F2}");
+            yield return WaitUntil(() => !pc.InParkour, 2f, way + " ends");
+            yield return new WaitForSeconds(0.3f);
+        }
+
+        // Turned to face north (+1) or south (-1) where it stands.
+        IEnumerator Face(PlayerController pc, float z)
+        {
+            var p = pc.transform.position;
+            pc.LookAt(new Vector3(p.x, p.y + 1.5f, p.z + 20f * z));
+            yield return new WaitForSeconds(0.2f);
+        }
+
         // A pane like the world builder's: thin box on the Ignore Raycast layer.
         static GlassPane NewPane(int id, Vector3 center, Vector3 size)
         {

@@ -24,7 +24,7 @@ namespace Game.Core
         // A window: an opening in a wall with its sill in this band and at least this tall. Openings lower than
         // SmallWindowHeight are only gone through crouched.
         public float WindowSillMin = 0.9f;
-        public float WindowSillMax = 1.1f;
+        public float WindowSillMax = 1.25f;        // a 1.0 m sill is 1.15 m over the ground outside (Buildings.FloorTop, #108)
         public float WindowMinOpening = 0.6f;
         public float SmallWindowHeight = 1.0f;
         // Durations (s): vault, window, climb at VaultMaxHeight rising to ClimbHighSeconds at ClimbMaxHeight.

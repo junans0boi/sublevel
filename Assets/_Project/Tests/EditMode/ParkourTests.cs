@@ -60,6 +60,8 @@ namespace Game.Tests
             Assert.AreEqual(ParkourMove.Window, Standing(Window(1.0f, 1.2f)), "a house window: sill 1.0, 1.2 tall");
             Assert.AreEqual(ParkourMove.Window, Standing(Window(0.9f, 1.4f)), "low sill");
             Assert.AreEqual(ParkourMove.Window, Standing(Window(1.1f, 1.0f)), "high sill, exactly not small");
+            Assert.AreEqual(ParkourMove.Window, Standing(Window(1.15f, 1.2f)), "a house window from outside: the floor is 0.15 over the ground (#108)");
+            Assert.AreEqual(ParkourMove.Window, Standing(Window(1.15f, 1.4f)), "a hall window from outside");
             Assert.AreEqual(ParkourMove.Window, Crouched(Window(1.0f, 1.2f)), "crouched too");
 
             Assert.AreEqual(ParkourMove.Refuse, Standing(Window(1.0f, 0.8f)), "a small window standing");
