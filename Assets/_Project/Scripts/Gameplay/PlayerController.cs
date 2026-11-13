@@ -367,7 +367,10 @@ namespace Game.Gameplay
             // Next to a knocked teammate F revives instead (ADR-072).
             // In a station F is the elevator's (ADR-076): tap = next destination, held = ride.
             bool elevatorKey = ElevatorPanel.HandleInteract(_combatant, f.Interact, f.InteractHeld, Time.deltaTime);
-            if (!elevatorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
+            // A door in reach and in view opens or shuts (G11, ADR-104); otherwise F picks up.
+            bool doorKey = !elevatorKey && f.Interact && TeamHud.ReviveCandidate(_combatant) == null
+                && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, Camera != null ? Camera.transform.forward : transform.forward);
+            if (!elevatorKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);

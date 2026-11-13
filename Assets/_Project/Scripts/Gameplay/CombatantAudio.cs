@@ -158,9 +158,12 @@ namespace Game.Gameplay
             int weapon = _combatant.ActiveWeaponId;
             float meters = SpatialAudio.DistanceToListener(_weaponSource.transform.position);
             float heard = SoundRules.HeardDistance(meters, Suppressed);
+            // Closed doors between the shot and the listener muffle it (G11, ADR-104).
+            if (SpatialAudio.ListenerPosition(out var ear))
+                heard = Doors.HeardMeters(heard, DoorSystem.ClosedBetween(_weaponSource.transform.position, ear), DoorRules.Current);
             SoundRules.ShotLayers(heard, out float near, out float far);
             // Suppressed: as quiet as a shot from `heard` metres (the source's rolloff already applies `meters`).
-            float scale = Suppressed ? Mathf.Clamp01(SpatialAudio.Gain(SpatialAudio.Category.Gunshot, heard)
+            float scale = Suppressed || heard > meters ? Mathf.Clamp01(SpatialAudio.Gain(SpatialAudio.Category.Gunshot, heard)
                 / Mathf.Max(1e-4f, SpatialAudio.Gain(SpatialAudio.Category.Gunshot, meters))) : 1f;
             float cutoff = SpatialAudio.DistantCutoff(heard);
             if (_distantShot != null) _distantShot.cutoffFrequency = cutoff;

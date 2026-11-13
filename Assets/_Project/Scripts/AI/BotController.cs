@@ -195,6 +195,8 @@ namespace Game.AI
             if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
         }
 
+        float _nextDoor;
+
         void Update()
         {
             if (!_self.IsServerInitialized) return;
@@ -217,6 +219,12 @@ namespace Game.AI
             {
                 _nextSense = now + _rules.SenseInterval;
                 Sense();
+            }
+            // Bots open a closed door in their way (G11, ADR-104).
+            if (now >= _nextDoor)
+            {
+                _nextDoor = now + 0.25f;
+                DoorSystem.ServerBotOpen(transform.position, OnNavMesh && _agent.velocity.sqrMagnitude > 0.04f ? _agent.velocity : transform.forward);
             }
             FillSelf();
             _intent = _brain.Think(_percept);
@@ -325,6 +333,9 @@ namespace Game.AI
                 var at = new Vector3(noise.X, noise.Y, noise.Z);
                 float sqr = (at - eye).sqrMagnitude;
                 if (sqr > noise.Radius * noise.Radius || sqr >= heardSqr) continue;
+                // A closed door on the way muffles it: the radius shrinks for each one (G11, ADR-104).
+                int shut = DoorSystem.ClosedBetween(at, eye);
+                if (shut > 0 && Mathf.Sqrt(sqr) > noise.Radius * Mathf.Pow(DoorRules.Current.ClosedSoundFactor, shut)) continue;
                 heard = true;
                 heardAt = at;
                 heardSqr = sqr;

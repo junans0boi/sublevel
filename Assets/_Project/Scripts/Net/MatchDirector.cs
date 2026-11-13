@@ -98,6 +98,10 @@ namespace Game.Net
             var glass = GetComponent<GlassPanes>();
             if (glass == null) glass = gameObject.AddComponent<GlassPanes>();
             glass.Bind(_networkManager);
+            // Doors of the map's buildings (ADR-104): the server keeps their state.
+            var doors = GetComponent<DoorSystem>();
+            if (doors == null) doors = gameObject.AddComponent<DoorSystem>();
+            doors.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost)
