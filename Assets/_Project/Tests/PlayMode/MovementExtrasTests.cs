@@ -111,13 +111,18 @@ namespace Game.Tests
             yield return new WaitForSeconds(0.4f);
             Assert.Less(PlanarSpeedOver(p1, pc.transform.position, 0.4f), 0.2f, "standing still");
 
-            // Opening a screen ends it too.
+            // #105: the inventory / map keep the movement, so auto-run goes on; only the pause menu ends it.
             _input.Frame.AutoRun = true;
             yield return WaitUntil(() => pc.AutoRunning, 1f, "auto-run on again");
             UiFocus.Toggle(UiScreen.Inventory);
             yield return null;
             yield return null;
-            Assert.IsFalse(pc.AutoRunning, "a screen cancels auto-run");
+            Assert.IsTrue(pc.AutoRunning, "the inventory keeps auto-run");
+            UiFocus.Close();
+            UiFocus.Toggle(UiScreen.Menu);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(pc.AutoRunning, "the pause menu cancels auto-run");
             UiFocus.Close();
         }
 
