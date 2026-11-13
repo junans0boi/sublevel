@@ -18,6 +18,7 @@ namespace Game.Gameplay
         const float MotorcycleMinPivot = 1.5f; // over the rider's head, not just the bike
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
+        const float MotorcycleEyeBack = 0.2f;
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -60,7 +61,10 @@ namespace Game.Gameplay
             CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
             if (eyes)
             {
-                cam.transform.SetPositionAndRotation(_combatant.EyePosition, look);
+                // On a motorcycle the eye is right over the bars: the view sits a little back (view only, the shot
+                // origin stays at the eye) so the bars and gauges are in the lower frame.
+                var eye = _combatant.EyePosition - (vehicle.IsMotorcycle ? vehicle.transform.forward * MotorcycleEyeBack : Vector3.zero);
+                cam.transform.SetPositionAndRotation(eye, look);
                 _distance = 0f;
                 return;
             }

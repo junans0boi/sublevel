@@ -226,7 +226,8 @@ namespace Game.Gameplay
                 Yaw += f.Look.x;
                 Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
             }
-            transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
+            // Seated, the vehicle sets the body's rotation (tilted with it): the eyes and shots go by that.
+            if (!VehicleSeat.IsAttached(_combatant)) transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
 
             // Auto-run: = toggles it; a fresh W or S, aiming, a screen or anything else taking the body ends it.
             if (f.AutoRun) _autoRun = !_autoRun;
@@ -596,6 +597,7 @@ namespace Game.Gameplay
         // faces the view the vehicle's way: the third-person camera starts behind it and stays there through turns.
         bool _inVehicle;
         float _vehicleHeading;
+        const float EnterPitchCarDeg = 5f, EnterPitchBikeDeg = 15f;
 
         void FollowVehicleHeading()
         {
@@ -604,7 +606,11 @@ namespace Game.Gameplay
             var forward = vehicle.transform.forward;
             if (new Vector2(forward.x, forward.z).sqrMagnitude < 1e-4f) return; // nose straight up or down: keep the view
             float heading = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
-            if (!_inVehicle) Yaw = heading;
+            if (!_inVehicle)
+            {
+                Yaw = heading;
+                Pitch = vehicle.IsMotorcycle ? -EnterPitchBikeDeg : -EnterPitchCarDeg; // a little down: the bars / dash in view
+            }
             else Yaw += Mathf.DeltaAngle(_vehicleHeading, heading);
             _inVehicle = true;
             _vehicleHeading = heading;

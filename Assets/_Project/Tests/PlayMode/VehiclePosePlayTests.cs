@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Game.Core;
 using Game.Gameplay;
 using Game.Net;
 using NUnit.Framework;
@@ -78,13 +79,17 @@ namespace Game.Tests
             PlayerController.Local.Teleport(v.DoorPosition(0) + Vector3.up * 0.05f);
             yield return null;
             yield return null;
+            // Loot beside the door would take the F key first.
+            foreach (var loot in LootItem.All.ToList())
+                if (loot != null && (loot.transform.position - me.transform.position).sqrMagnitude < 9f) { LootItem.All.Remove(loot); loot.gameObject.SetActive(false); }
             for (int tries = 0; tries < 4 && !VehicleSeat.IsAttached(me); tries++)
             {
                 _keys.Frame.Interact = true;
                 float wait = Time.realtimeSinceStartup + 1.2f;
                 while (!VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < wait) yield return null;
             }
-            Assert.IsTrue(VehicleSeat.TryGet(me, out var on, out int seat) && on == v && seat == 0, Name(v) + ": in the driver's seat");
+            VehicleSeat.TryGet(me, out var on, out int seat);
+            Assert.IsTrue(on == v && seat == 0, $"{Name(v)}: in the driver's seat (got {(on != null ? Name(on) : "none")} seat {seat}, door {v.DoorPosition(0)}, me {me.transform.position})");
             yield return new WaitForSeconds(v.Rules.EnterSeconds + 0.4f);
         }
 
@@ -134,7 +139,7 @@ namespace Game.Tests
                     {
                         var grip = (side == 0 ? seat.GripLeft : seat.GripRight).position;
                         float palm = Vector3.Distance(anim.PalmPoint(side), grip), tip = Vector3.Distance(anim.FingerTip(side), grip);
-                        Debug.Log($"[PoseTest] {tag} hand {side}: palm {palm:F3} m, tip {tip:F3} m from the grip");
+                        Debug.Log($"[PoseTest] {tag} hand {side}: palm {palm:F3} m, tip {tip:F3} m from the grip; torso lean {Vector3.Angle(anim.TorsoUpShown, v.transform.up):F1}");
                         if (palm > PalmOnGrip) failures.Add($"{tag} hand {side} palm {palm:F3} m off the grip");
                         if (tip > TipOnGrip) failures.Add($"{tag} hand {side} fingertip {tip:F3} m off the grip (open hand)");
                     }
@@ -143,7 +148,8 @@ namespace Game.Tests
                     yield return new WaitForSeconds(1.2f);
                     float l = v.transform.InverseTransformPoint(anim.PalmPoint(0)).x, r = v.transform.InverseTransformPoint(anim.PalmPoint(1)).x;
                     Debug.Log($"[PoseTest] {tag} full lock: left palm x {l:F3}, right palm x {r:F3}");
-                    if (l >= r - 0.1f) failures.Add($"{tag} hands crossed at full lock ({l:F3} / {r:F3})");
+                    // At the 90 degree limit the hands are one over the other (same x); crossed is left right of right.
+                    if (l > r + 0.03f) failures.Add($"{tag} hands crossed at full lock ({l:F3} / {r:F3})");
                     _keys.Frame.Steer = 0f;
                     yield return new WaitForSeconds(0.6f);
                 }
@@ -151,8 +157,10 @@ namespace Game.Tests
                 float eyeOff = Vector3.Distance(me.EyePosition, seat.transform.position);
                 if (eyeOff > 0.03f) failures.Add($"{tag} eye {eyeOff:F3} m off the seat's eye marker");
 
-                // Passengers: every other seat, hands inside the body's sides and under its top.
-                var box = LocalBounds(v);
+                // Passengers: every other seat, hands inside the cabin box (ADR-077 `Cabin`, root space) or, on a
+                // motorcycle, inside the body's sides and under its top.
+                var cabin = v.transform.Find("Cabin");
+                var box = cabin != null ? new Bounds(cabin.localPosition, cabin.localScale + Vector3.one * 0.16f) : LocalBounds(v);
                 for (int s = 1; s < v.SeatCount; s++)
                 {
                     _keys.Frame.Seat = s;
@@ -162,7 +170,7 @@ namespace Game.Tests
                     {
                         var hand = v.transform.InverseTransformPoint(anim.PalmPoint(side));
                         Debug.Log($"[PoseTest] {tag} seat {s} hand {side} at {hand:F3}, body x {box.min.x:F2}..{box.max.x:F2}");
-                        if (Mathf.Abs(hand.x) > box.extents.x - 0.08f || hand.y > box.max.y)
+                        if (Mathf.Abs(hand.x - box.center.x) > box.extents.x - 0.08f || hand.y > box.max.y)
                             failures.Add($"{tag} seat {s} hand {side} outside the body ({hand:F3})");
                     }
                 }

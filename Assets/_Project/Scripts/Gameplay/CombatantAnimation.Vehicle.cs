@@ -10,8 +10,9 @@ namespace Game.Gameplay
     //   A steering wheel turns up to 150 degrees, the hands follow it only to ±HandFollowDeg, then the rim slides
     //   through them (the arms never cross).
     // - Passengers, empty hands: palms down on the thighs, so the arms stay inside the cabin.
-    // - Astride: the feet onto the pegs when the model marks them (children "FootLeft" / "FootRight" of the seat or
-    //   the vehicle), the knees in against the tank; otherwise the fixed seated leg angles, feet along the machine.
+    // - Hips onto the seat's measured cushion point (SeatN/Cushion, ADR-077) when the model has one.
+    // - Astride: the feet onto the pegs (Seat0/PegLeft, PegRight), the knees towards the knee points on the tank
+    //   (KneeLeft, KneeRight); without them the fixed seated leg angles, feet along the machine.
     // - In a car the upper body sways out of a turn; everyone's head looks where the player looks (the local player)
     //   or straight ahead (others: the look is not replicated while seated), so a leaning rider keeps the head up.
     public partial class CombatantAnimation
@@ -43,21 +44,23 @@ namespace Game.Gameplay
         Transform _head;
         Quaternion _headBind;   // the head's rotation relative to the body's facing, as the prefab was saved
         bool _gripBonesLooked;
-        VehicleSeat _pegsOf;
-        readonly Transform[] _pegs = new Transform[2];
+        VehicleSeat _anchorsOf;
+        readonly Transform[] _pegs = new Transform[2], _knees = new Transform[2];
+        Transform _cushion;
         Vehicle _swayOf;
         float _swayHeading, _sway;
         Vector3 _swayPosition;
 
-        // Test hooks: where each hand's palm centre is and where its middle fingertip is, this frame.
-        public Vector3 PalmPoint(int side) =>
+        // Test hooks: each hand's palm centre and middle fingertip as the seated pose left them (a test coroutine
+        // resumes before LateUpdate, when the bones still show the clip), and the torso's up then.
+        readonly Vector3[] _palmShown = new Vector3[2], _tipShown = new Vector3[2];
+        public Vector3 PalmPoint(int side) => _palmShown[side];
+        public Vector3 FingerTip(int side) => _tipShown[side];
+        public Vector3 TorsoUpShown { get; private set; }
+
+        Vector3 PalmNow(int side) =>
             _wrist[side] != null && _fingers[side] != null && _fingers[side][3] != null
                 ? Vector3.Lerp(_wrist[side].position, _fingers[side][3].position, PalmShare) : transform.position;
-        public Vector3 FingerTip(int side) => _fingerTip[side] != null ? _fingerTip[side].position : PalmPoint(side);
-        public Transform Wrist(int side) => _wrist[side];
-        public Transform Bone(int index) => _bones[index];
-        public const int TorsoBone = Torso, ArmLeftBone = ArmLeft, ArmRightBone = ArmRight;
-        public Transform Head => _head;
 
         // Called at the end of PoseSeated. `free` is how much of the empty-hands pose shows.
         void PoseVehicleHands(float free, bool astride, float seated)
@@ -73,6 +76,12 @@ namespace Game.Gameplay
                 else if (!_driverPose) RestHandsOnThighs(free);
             }
             LookAhead(seated);
+            for (int side = 0; side < 2; side++)
+            {
+                _palmShown[side] = PalmNow(side);
+                _tipShown[side] = _fingerTip[side] != null ? _fingerTip[side].position : _palmShown[side];
+            }
+            if (_bones[Torso] != null) TorsoUpShown = _bones[Torso].up;
         }
 
         // ---- Driver ----
@@ -238,11 +247,14 @@ namespace Game.Gameplay
                 _forearm[side] = Deep(upper, "LowerArm" + suffix);
                 _wrist[side] = Deep(upper, "Wrist" + suffix);
                 _fingers[side] = new Transform[FingerNames.Length * 3];
+                // In this rig the "1" bones of all fingers (and the thumb) start together at the root of the hand (they
+                // are the palm bones): the knuckles are the "2" bones, and 2..4 are the joints that curl.
                 for (int f = 0; f < FingerNames.Length; f++)
                     for (int j = 0; j < 3; j++)
-                        _fingers[side][f * 3 + j] = Deep(_wrist[side], FingerNames[f] + (j + 1) + suffix);
-                _thumb[side] = Deep(_wrist[side], "Thumb1" + suffix);
-                _fingerTip[side] = Deep(_wrist[side], "Middle4" + suffix);
+                        _fingers[side][f * 3 + j] = Deep(_wrist[side], FingerNames[f] + (j + 2) + suffix);
+                _thumb[side] = Deep(_wrist[side], "Thumb2" + suffix);
+                var last = Deep(_wrist[side], "Middle4" + suffix);
+                _fingerTip[side] = last != null && last.childCount > 0 ? last.GetChild(0) : last;
                 var foot = _bones[side == 0 ? FootLeft : FootRight];
                 _toe[side] = foot != null && foot.childCount > 0 ? foot.GetChild(0) : null;
             }
@@ -311,20 +323,31 @@ namespace Game.Gameplay
 
         // ---- Legs ----
 
-        // U4: the feet on the pegs the model marks, knees forward and in against the tank. False when unmarked.
+        void FindSeatAnchors(VehicleSeat seat)
+        {
+            if (seat == _anchorsOf) return;
+            _anchorsOf = seat;
+            _cushion = seat != null ? seat.transform.Find("Cushion") : null;
+            for (int side = 0; side < 2; side++)
+            {
+                _pegs[side] = seat != null ? seat.transform.Find(side == 0 ? "PegLeft" : "PegRight") : null;
+                _knees[side] = seat != null ? seat.transform.Find(side == 0 ? "KneeLeft" : "KneeRight") : null;
+            }
+        }
+
+        // Before the limbs are posed: the whole model moves so the hips rest on the cushion point.
+        void SitOnCushion(float seated)
+        {
+            if (!_gripBonesLooked) FindGripBones();
+            FindSeatAnchors(VehicleSeat.SeatOf(_combatant));
+            if (_cushion == null || _hips == null || _animator == null) return;
+            _animator.transform.position += (_cushion.position - _hips.position) * seated;
+        }
+
+        // U4: the feet on the pegs the model marks, knees forward and in towards the knee points. False when unmarked.
         bool PlaceFeetOnPegs(VehicleSeat seat, float seated)
         {
-            if (seat == null) return false;
-            if (seat != _pegsOf)
-            {
-                _pegsOf = seat;
-                var vehicle = seat.GetComponentInParent<Vehicle>();
-                for (int side = 0; side < 2; side++)
-                {
-                    string name = side == 0 ? "FootLeft" : "FootRight";
-                    _pegs[side] = Deep(seat.transform, name) ?? (vehicle != null ? Deep(vehicle.transform, name) : null);
-                }
-            }
+            FindSeatAnchors(seat);
             if (_pegs[0] == null || _pegs[1] == null || seated < 0.001f) return false;
             for (int side = 0; side < 2; side++)
             {
@@ -336,7 +359,8 @@ namespace Game.Gameplay
                 var shinBefore = shin.rotation;
                 var footFromAnkle = foot.position - ankle.position;
                 var inward = side == 0 ? transform.right : -transform.right;
-                TwoBone(thigh, thighIndex, shin, shinIndex, ankle, Vector3.Lerp(ankle.position, target, seated), transform.forward + transform.up * 0.3f + inward * 0.4f);
+                var pole = _knees[side] != null ? _knees[side].position - thigh.position : transform.forward + transform.up * 0.3f + inward * 0.4f;
+                TwoBone(thigh, thighIndex, shin, shinIndex, ankle, Vector3.Lerp(ankle.position, target, seated), pole);
                 var swing = shin.rotation * Quaternion.Inverse(shinBefore);
                 if (!_footMoved[side])
                 {

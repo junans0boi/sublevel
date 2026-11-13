@@ -495,6 +495,7 @@ namespace Game.Gameplay
             var r = VehicleSeat.RulesOf(_combatant);
             float s = _seated;
             bool astride = VehicleSeat.Astride(_combatant);
+            SitOnCushion(s);
             float thighDeg = astride ? r.AstrideThighDeg : r.SeatedThighDeg;
             float shinDeg = astride ? r.AstrideShinDeg : r.SeatedShinDeg;
             if (astride)
