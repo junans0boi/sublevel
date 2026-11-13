@@ -106,6 +106,7 @@ namespace Game.Tests
             Assert.AreEqual("weapon_3", hud.ActiveWeaponIconKey);
             Assert.AreEqual(0, hud.ActiveSlotShown);
             Assert.AreEqual("Warden", hud.ActiveWeaponName);
+            Assert.AreEqual("연사", hud.FireModeText);
 
             me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = InventoryBackend.AmmoValue(1), Amount = 60 });
             yield return WaitUntil(() => hud.AmmoText != "30 / 0", 2f, "reserve readout");

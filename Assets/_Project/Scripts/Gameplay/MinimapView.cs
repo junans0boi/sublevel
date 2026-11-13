@@ -1,0 +1,255 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Game.Gameplay
+{
+    // Small runtime-made sprites for the HUD (no texture assets).
+    internal static class HudSprites
+    {
+        static Texture2D _arrowTexture;
+        static Sprite _arrow;
+
+        // A chevron pointing up, white (tint it with the Image colour).
+        public static Sprite Arrow
+        {
+            get
+            {
+                if (_arrow != null) return _arrow;
+                const int n = 32;
+                _arrowTexture = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                _arrowTexture.hideFlags = HideFlags.HideAndDontSave;
+                _arrowTexture.wrapMode = TextureWrapMode.Clamp;
+                float half = n * 0.5f - 1f;
+                for (int y = 0; y < n; y++)
+                {
+                    for (int x = 0; x < n; x++)
+                    {
+                        float dx = Mathf.Abs(x + 0.5f - n * 0.5f);
+                        // Wide at the bottom, a point at the top, with a notch cut into the base.
+                        float reach = half * (1f - y / (n - 1f));
+                        float notch = 0.34f * n * (1f - dx / half);
+                        bool on = dx <= reach && y >= notch;
+                        _arrowTexture.SetPixel(x, y, on ? Color.white : new Color(1f, 1f, 1f, 0f));
+                    }
+                }
+                _arrowTexture.Apply();
+                _arrow = Sprite.Create(_arrowTexture, new Rect(0f, 0f, n, n), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                _arrow.hideFlags = HideFlags.HideAndDontSave;
+                return _arrow;
+            }
+        }
+    }
+
+    // The minimap (bottom right): a square window onto the island, north up, centred on the player, with a
+    // rotating player arrow, region borders and names, passes and elevator stations from WorldInfo.Current.
+    // The map picture comes from HudBackend.MapImage(); without one a faint grid is drawn instead.
+    // Positions are rewritten only after the player has moved a little, and the marker pools are built once per map.
+    public sealed class MinimapView
+    {
+        const float GridMeters = 100f;
+        const int GridLines = 5;                 // ViewMeters / GridMeters + 2 spare
+        const float MoveEpsilon = 0.25f;         // metres before the content is placed again
+        const float ArrowSize = 22f;
+
+        public RectTransform Root { get; private set; }
+        // The heading the arrow shows (degrees, 0 = north) and its actual z rotation; for tests.
+        public float ArrowHeading { get; private set; } = float.NaN;
+        public float ArrowRotationZ => _arrow != null ? _arrow.localEulerAngles.z : 0f;
+        public bool HasMapImage => _mapRect != null && _mapRect.gameObject.activeSelf;
+        public bool GridShown => _gridRoot != null && _gridRoot.activeSelf;
+        public int ElevatorMarkers => _elevators.Count;
+        public int BorderLines => _borders.Count;
+        public string RegionName { get; private set; } = "";
+
+        RectTransform _content, _arrow, _mapRect;
+        RawImage _mapImage;
+        GameObject _gridRoot;
+        Text _regionLabel;
+        readonly RectTransform[] _gridV = new RectTransform[GridLines];
+        readonly RectTransform[] _gridH = new RectTransform[GridLines];
+
+        WorldInfo _world;
+        GameObject _worldRoot;
+        readonly List<RectTransform> _elevators = new List<RectTransform>();
+        readonly List<Vector3> _elevatorPos = new List<Vector3>();
+        readonly List<RectTransform> _borders = new List<RectTransform>();
+        readonly List<Vector3> _borderPos = new List<Vector3>();
+        readonly List<RectTransform> _passMarks = new List<RectTransform>();
+        readonly List<Vector3> _passPos = new List<Vector3>();
+        readonly List<RectTransform> _names = new List<RectTransform>();
+        readonly List<Vector3> _namePos = new List<Vector3>();
+        Vector3 _placedAt = new Vector3(float.NaN, 0f, 0f);
+        int _shownRegion = -2;
+        Texture _shownTexture;
+
+        public static MinimapView Build(Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position)
+        {
+            var v = new MinimapView();
+            var root = UiKit.Rect("Minimap", parent, anchor, pivot, position, new Vector2(Minimap.ViewSize, Minimap.ViewSize));
+            UiKit.Box(root, new Color(0.05f, 0.06f, 0.07f, 0.86f));
+            v.Root = root;
+
+            var clip = UiKit.Fill("Clip", root);
+            clip.gameObject.AddComponent<RectMask2D>();
+            var centre = new Vector2(0.5f, 0.5f);
+            v._content = UiKit.Rect("Content", clip, centre, centre, Vector2.zero, Vector2.zero);
+
+            v._mapRect = UiKit.Rect("MapImage", v._content, centre, centre, Vector2.zero, Vector2.zero);
+            v._mapImage = v._mapRect.gameObject.AddComponent<RawImage>();
+            v._mapImage.raycastTarget = false;
+            v._mapImage.color = new Color(1f, 1f, 1f, 0.9f);
+            v._mapRect.gameObject.SetActive(false);
+
+            var gridColor = new Color(UiKit.Steel.r, UiKit.Steel.g, UiKit.Steel.b, 0.16f);
+            v._gridRoot = UiKit.Rect("Grid", v._content, centre, centre, Vector2.zero, Vector2.zero).gameObject;
+            for (int i = 0; i < GridLines; i++)
+            {
+                v._gridV[i] = UiKit.Rect("V" + i, v._gridRoot.transform, centre, centre, Vector2.zero, new Vector2(1f, Minimap.ViewSize + 4f));
+                UiKit.Box(v._gridV[i], gridColor);
+                v._gridH[i] = UiKit.Rect("H" + i, v._gridRoot.transform, centre, centre, Vector2.zero, new Vector2(Minimap.ViewSize + 4f, 1f));
+                UiKit.Box(v._gridH[i], gridColor);
+            }
+
+            // Above the world markers, below the frame: the player.
+            v._arrow = UiKit.Rect("Player", root, centre, centre, Vector2.zero, new Vector2(ArrowSize, ArrowSize));
+            var arrowImage = UiKit.Box(v._arrow, UiKit.Accent);
+            arrowImage.sprite = HudSprites.Arrow;
+
+            UiKit.Label(UiKit.Rect("North", root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -4f), new Vector2(30f, 22f)), "북", 18, UiKit.TextDim,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            v._regionLabel = UiKit.Label(UiKit.Rect("Region", root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(10f, 6f), new Vector2(180f, 24f)), "", 18, UiKit.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+
+            UiKit.Frame(root, 1f, UiKit.SteelDim);
+            UiKit.Brackets(root, 16f, 2f, UiKit.Steel);
+            return v;
+        }
+
+        public void Tick(Vector3 playerPosition, float yaw, bool hasYaw)
+        {
+            EnsureWorld(WorldInfo.Current);
+
+            if (hasYaw && yaw != ArrowHeading)
+            {
+                ArrowHeading = Mathf.Repeat(yaw, 360f);
+                _arrow.localRotation = Quaternion.Euler(0f, 0f, Minimap.ArrowRotationZ(ArrowHeading));
+            }
+
+            ShowRegionName(playerPosition);
+
+            var flat = new Vector3(playerPosition.x, 0f, playerPosition.z);
+            var texture = HudBackend.MapImage();
+            if (!ReferenceEquals(texture, _shownTexture))
+            {
+                _shownTexture = texture;
+                _placedAt = new Vector3(float.NaN, 0f, 0f);
+                _mapImage.texture = texture;
+                _mapRect.gameObject.SetActive(texture != null);
+                _gridRoot.SetActive(texture == null);
+            }
+            if (!float.IsNaN(_placedAt.x) && (flat - _placedAt).sqrMagnitude < MoveEpsilon * MoveEpsilon) return;
+            _placedAt = flat;
+            PlaceContent(flat);
+        }
+
+        void PlaceContent(Vector3 centre)
+        {
+            if (_gridRoot.activeSelf)
+            {
+                float firstX = Mathf.Floor((centre.x - Minimap.ViewMeters * 0.5f) / GridMeters) * GridMeters;
+                float firstZ = Mathf.Floor((centre.z - Minimap.ViewMeters * 0.5f) / GridMeters) * GridMeters;
+                for (int i = 0; i < GridLines; i++)
+                {
+                    _gridV[i].anchoredPosition = new Vector2((firstX + i * GridMeters - centre.x) * Minimap.PixelsPerMeter, 0f);
+                    _gridH[i].anchoredPosition = new Vector2(0f, (firstZ + i * GridMeters - centre.z) * Minimap.PixelsPerMeter);
+                }
+            }
+            if (_mapRect.gameObject.activeSelf && _world != null && _world.Size > 0f)
+            {
+                float size = _world.Size;
+                _mapRect.sizeDelta = new Vector2(size * Minimap.PixelsPerMeter, size * Minimap.PixelsPerMeter);
+                _mapRect.anchoredPosition = Minimap.ToView(new Vector3(size * 0.5f, 0f, size * 0.5f), centre);
+            }
+            for (int i = 0; i < _elevators.Count; i++) _elevators[i].anchoredPosition = Minimap.ToView(_elevatorPos[i], centre);
+            for (int i = 0; i < _borders.Count; i++) _borders[i].anchoredPosition = Minimap.ToView(_borderPos[i], centre);
+            for (int i = 0; i < _passMarks.Count; i++) _passMarks[i].anchoredPosition = Minimap.ToView(_passPos[i], centre);
+            for (int i = 0; i < _names.Count; i++) _names[i].anchoredPosition = Minimap.ToView(_namePos[i], centre);
+        }
+
+        void ShowRegionName(Vector3 position)
+        {
+            int index = _world != null ? Minimap.NearestRegion(_world.Regions, position) : -1;
+            if (index == _shownRegion) return;
+            _shownRegion = index;
+            RegionName = index >= 0 ? _world.Regions[index].Name ?? "" : "";
+            _regionLabel.text = RegionName;
+        }
+
+        // Builds the marker pools when a different map shows up (once per scene load; not per frame).
+        void EnsureWorld(WorldInfo world)
+        {
+            if (ReferenceEquals(world, _world) && (world == null || _worldRoot != null)) return;
+            if (_worldRoot != null) Object.Destroy(_worldRoot);
+            _worldRoot = null;
+            _elevators.Clear(); _elevatorPos.Clear();
+            _borders.Clear(); _borderPos.Clear();
+            _passMarks.Clear(); _passPos.Clear();
+            _names.Clear(); _namePos.Clear();
+            _world = world;
+            _shownRegion = -2;
+            _placedAt = new Vector3(float.NaN, 0f, 0f);
+            if (world == null) return;
+
+            var centre = new Vector2(0.5f, 0.5f);
+            _worldRoot = UiKit.Rect("World", _content, centre, centre, Vector2.zero, Vector2.zero).gameObject;
+            var root = _worldRoot.transform;
+            var borderColor = new Color(UiKit.Steel.r, UiKit.Steel.g, UiKit.Steel.b, 0.65f);
+            var regions = world.Regions;
+            var passes = world.Passes;
+
+            // One border line per neighbouring pair (two regions that share a pass).
+            var seen = new List<long>();
+            for (int i = 0; i < passes.Count; i++)
+            {
+                int a = Mathf.Min(passes[i].RegionA, passes[i].RegionB), b = Mathf.Max(passes[i].RegionA, passes[i].RegionB);
+                if (a < 0 || b >= regions.Count || a == b) continue;
+                long key = a * 1000L + b;
+                if (seen.Contains(key)) continue;
+                seen.Add(key);
+                var line = UiKit.Rect("Border" + a + b, root, centre, centre, Vector2.zero, new Vector2(Minimap.ViewMeters * 4f, 1.5f));
+                UiKit.Box(line, borderColor);
+                line.localRotation = Quaternion.Euler(0f, 0f, Minimap.BorderAngleDeg(regions[a].Centre, regions[b].Centre));
+                _borders.Add(line);
+                _borderPos.Add(Minimap.BorderPoint(regions[a].Centre, regions[b].Centre));
+            }
+            for (int i = 0; i < passes.Count; i++)
+            {
+                // A short bar across the road where it leaves a region.
+                var mark = UiKit.Rect("Pass" + i, root, centre, centre, Vector2.zero, new Vector2(14f, 3f));
+                UiKit.Box(mark, UiKit.Text);
+                mark.localRotation = Quaternion.Euler(0f, 0f, -passes[i].YawDeg);
+                _passMarks.Add(mark);
+                _passPos.Add(passes[i].Position);
+            }
+            for (int i = 0; i < regions.Count; i++)
+            {
+                var label = UiKit.Rect("Name" + i, root, centre, centre, Vector2.zero, new Vector2(120f, 24f));
+                var text = UiKit.Label(label, regions[i].Name ?? "", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
+                text.color = new Color(UiKit.TextDim.r, UiKit.TextDim.g, UiKit.TextDim.b, 0.8f);
+                _names.Add(label);
+                _namePos.Add(regions[i].Centre);
+            }
+            var elevators = world.Elevators;
+            for (int i = 0; i < elevators.Count; i++)
+            {
+                // A diamond: a square turned 45 degrees.
+                var marker = UiKit.Rect("Elevator" + i, root, centre, centre, Vector2.zero, new Vector2(8f, 8f));
+                UiKit.Box(marker, UiKit.Text);
+                marker.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                _elevators.Add(marker);
+                _elevatorPos.Add(elevators[i].Position);
+            }
+        }
+    }
+}

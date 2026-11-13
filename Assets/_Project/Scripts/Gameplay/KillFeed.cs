@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // Kill feed, top left: the latest kills, newest on top, each fading out after a few seconds.
+    // Kill feed, top right under the alive/kill cards (ADR-057): the latest kills, newest on top, each fading out after a few seconds.
     // It only shows what MatchState received from the server. Texts are written when a kill arrives, never per frame.
     public class KillFeed : MonoBehaviour
     {
@@ -14,8 +14,9 @@ namespace Game.Gameplay
 
         const int SortOrder = 1; // just above the HUD
         const float FadeSeconds = 1f;
-        const float Margin = 36f, Top = 24f;
-        const float RowWidth = 520f, RowHeight = 34f, RowGap = 4f;
+        const float Margin = 36f, Top = 78f;     // below the two stat cards
+        const float RowWidth = 460f, RowHeight = 34f, RowGap = 4f;
+        public const float AreaWidth = RowWidth, AreaHeight = Rows * RowHeight + (Rows - 1) * RowGap;
 
         public static KillFeed Instance { get; private set; }
 
@@ -26,8 +27,15 @@ namespace Game.Gameplay
         readonly Color[] _color = new Color[Rows];
         readonly float[] _until = new float[Rows];
         int _shown;
+        Canvas _canvas;
 
         // ---- Read-only state for tests ----
+
+        // The reserved block the rows stack in (top right).
+        public RectTransform Area { get; private set; }
+        public bool Visible => _canvas != null && _canvas.enabled;
+        // Screen-space rect of row i's slot, whether or not it shows anything yet.
+        public RectTransform RowRect(int row) => (RectTransform)_row[row].transform;
 
         public int VisibleCount => _shown;
         // Row 0 is the newest. "" for a row that shows nothing.
@@ -120,6 +128,9 @@ namespace Game.Gameplay
 
         void Update()
         {
+            // The inventory and the map are full screens of their own; the feed would sit on top of them.
+            bool wanted = UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map;
+            if (_canvas.enabled != wanted) _canvas.enabled = wanted;
             if (_shown > 0) Tick();
         }
 
@@ -142,19 +153,21 @@ namespace Game.Gameplay
         {
             var canvas = UiKit.Canvas("KillFeedCanvas", SortOrder, false);
             canvas.transform.SetParent(transform, false);
-            var topLeft = new Vector2(0f, 1f);
+            _canvas = canvas;
+            var topRight = Vector2.one;
+            Area = UiKit.Rect("Area", canvas.transform, topRight, topRight, new Vector2(-Margin, -Top), new Vector2(AreaWidth, AreaHeight));
             for (int i = 0; i < Rows; i++)
             {
-                var row = UiKit.Rect("Row" + i, canvas.transform, topLeft, topLeft,
-                    new Vector2(Margin, -Top - i * (RowHeight + RowGap)), new Vector2(RowWidth, RowHeight));
+                var row = UiKit.Rect("Row" + i, Area, topRight, topRight, new Vector2(0f, -i * (RowHeight + RowGap)), new Vector2(RowWidth, RowHeight));
                 UiKit.Box(row, UiKit.Panel);
+                UiKit.Box(UiKit.Rect("Edge", row, new Vector2(1f, 0f), new Vector2(1f, 0f), Vector2.zero, new Vector2(2f, RowHeight)), UiKit.Steel);
                 _group[i] = row.gameObject.AddComponent<CanvasGroup>();
                 _group[i].interactable = false;
                 _group[i].blocksRaycasts = false;
                 var text = UiKit.Fill("Text", row);
                 text.offsetMin = new Vector2(14f, 0f);
                 text.offsetMax = new Vector2(-14f, 0f);
-                _label[i] = UiKit.Label(text, "", 20, UiKit.Text);
+                _label[i] = UiKit.Label(text, "", 20, UiKit.Text, TextAnchor.MiddleRight);
                 _text[i] = "";
                 _color[i] = UiKit.Text;
                 _row[i] = row.gameObject;
