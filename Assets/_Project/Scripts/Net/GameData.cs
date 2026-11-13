@@ -30,6 +30,8 @@ namespace Game.Net
             MeleeRules.Current = rules.Melee;
             MatchRules.Current = rules.Match ?? new MatchRules();
             ParkourRules.Current = rules.Parkour;
+            VehicleRules.Current = rules.Vehicles;
+            VehicleRules.Motorcycle = rules.Motorcycles;
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

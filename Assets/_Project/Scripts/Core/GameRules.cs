@@ -29,5 +29,7 @@ namespace Game.Core
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();
         public ParkourRules Parkour = new ParkourRules();
+        public VehicleRules Vehicles = new VehicleRules();
+        public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
     }
 }

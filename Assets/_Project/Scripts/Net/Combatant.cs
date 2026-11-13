@@ -167,6 +167,8 @@ namespace Game.Net
         float SpreadFactorWith(WeaponDef weapon)
         {
             float factor = GameData.Rules.Aim.For(AimMode).SpreadFactor * StanceSpreadFactor;
+            // [VEHICLE HOOK] ADR-065 (5): seated, one fixed factor instead of the moving / airborne ones.
+            if (VehicleSeat.IsSeated(this)) return weapon == null ? factor : factor * VehicleSeat.SpreadFactor;
             return weapon == null ? factor : factor * DamageRules.MovementSpread(weapon, PlanarSpeed, Airborne, GameData.Rules.Fire);
         }
         // What is in the hands: 0 when the slot in hand is empty or the weapon is put away (Holstered). Everything
@@ -374,7 +376,8 @@ namespace Game.Net
             var weapon = _loadout.ActiveWeapon;
             // A request may arrive a little ahead of the weapon's schedule (frames and network ticks never line up
             // with the fire interval); it is accepted without moving the schedule instead of leaving a gap in a burst.
-            if (weapon == null || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval), GameData.Rules.Slots.SingleModeMinInterval)) return false;
+            // [VEHICLE HOOK] ADR-065 (5): the driver fires only a sidearm; nobody fires while getting in, out or across.
+            if (weapon == null || !VehicleSeat.CanUseWeapon(this, weapon) || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval), GameData.Rules.Slots.SingleModeMinInterval)) return false;
 
             var aim = Quaternion.LookRotation(direction.normalized);
             // Aim mode and stance narrow the cone; moving or being off the ground widens it.
@@ -389,7 +392,8 @@ namespace Game.Net
                 var result = ShotHit.None;
                 var zone = HitZone.Body;
                 NetworkObject victim = null;
-                if (Physics.Raycast(origin, dir, out var hit, weapon.Range, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                // [VEHICLE HOOK] same as Physics.Raycast on foot; from a seat it passes the shooter's own car and its occupants.
+                if (VehicleSeat.Raycast(this, origin, dir, weapon.Range, out var hit))
                 {
                     end = hit.point;
                     normal = hit.normal;
@@ -431,6 +435,8 @@ namespace Game.Net
         {
             float sqr = direction.sqrMagnitude;
             if (_health == null || _health.IsDead || ActiveWeaponId != 0 || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
+            // [VEHICLE HOOK] ADR-065 (5): no punching from a seat.
+            if (!VehicleSeat.CanPunch(this)) return false;
             var rules = MeleeRules.Current;
             if (!_punchCadence.TryFire(Time.timeAsDouble, rules.PunchInterval, GameData.Rules.Fire.ServerEarly(rules.PunchInterval))) return false;
 

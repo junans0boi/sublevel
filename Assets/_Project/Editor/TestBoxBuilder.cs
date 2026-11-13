@@ -43,12 +43,13 @@ public static class TestBoxBuilder
         var dummy = BuildDummyPrefab(gear);
         var bot = BuildBotPrefab(gear);
         var loot = BuildLootPrefab(lootMats);
+        VehicleBuilder.BuildPrefabs(); // [VEHICLE HOOK] ADR-065 (5): Car + Motorcycle prefabs, before the spawnable list
         AssetDatabase.SaveAssets();
         RebuildSpawnablePrefabs();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         BuildLevel(postProfile);
-        MatchKit.AddMatch(
+        var director = MatchKit.AddMatch(
             new[] { MatchKit.At(0, 0.1f, -24) },
             new[]
             {
@@ -56,6 +57,7 @@ public static class TestBoxBuilder
                 MatchKit.At(-22, 0.3f, 8), MatchKit.At(22, 0.3f, 8), MatchKit.At(-8, 0.3f, 22), MatchKit.At(8, 0.3f, 22), MatchKit.At(0, 0.3f, 26),
             },
             new[] { MatchKit.At(-15, 0, 0, 180f), MatchKit.At(15, 0, 0, 180f), MatchKit.At(0, 0, 20, 180f) });
+        VehicleBuilder.AddToTestBox(director); // [VEHICLE HOOK] one car + one motorcycle
         EditorSceneManager.SaveScene(scene, ScenePath);
         SceneBuilder.RegisterBuildScenes();
         AssetDatabase.SaveAssets();
@@ -340,6 +342,9 @@ public static class TestBoxBuilder
         go.AddComponent<KeyHolder>();
         go.AddComponent<CombatantHealing>();
         go.AddComponent<CombatantCarry>();
+        // [VEHICLE HOOK] ADR-065 (5): vehicle keys and camera for the local player.
+        go.AddComponent<VehicleInput>();
+        go.AddComponent<VehicleCamera>();
         return SavePrefab(go, "Player");
     }
 

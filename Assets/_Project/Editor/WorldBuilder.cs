@@ -513,7 +513,8 @@ public static partial class WorldBuilder
             var at = OnGround(ground, point.X, point.Z);
             return MatchKit.At(at.x, at.y + 0.05f, at.z);
         }).Concat(extra.Select(l => MatchKit.At(l.x, l.y + 0.05f, l.z))).ToArray();
-        MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), new MatchKit.Spawn[0], bots);
+        var director = MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), new MatchKit.Spawn[0], bots);
+        VehicleBuilder.AddToWorld(director, plan, ground.Height); // [VEHICLE HOOK] ADR-065 (5): 6 cars + 4 motorcycles
     }
 
     // The outdoor map draws with its own URP renderer: the project's, without the SSAO pass. On this map SSAO and the

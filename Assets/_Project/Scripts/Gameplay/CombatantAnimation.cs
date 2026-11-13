@@ -90,6 +90,8 @@ namespace Game.Gameplay
         float _prone;             // 0..1: how much of the lying pose is shown
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
+        float _seated;            // 0..1: how much of the seated pose is shown (in a car, ADR-065 (5))
+        bool _driverPose;         // seated at the wheel: empty hands go to the steering wheel
         const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
         // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
@@ -129,6 +131,9 @@ namespace Game.Gameplay
         public float PronePose => _prone;
         // How much of the parkour pose (knees tucked, hands forward onto the top) is shown, 0..1.
         public float ParkourPose => _parkour;
+        // How much of the seated pose is shown, 0..1. Follows the replicated seats (VehicleSeat), eased over the
+        // 0.6 s it takes to get in or out, so it is the same on every side.
+        public float SeatedPose => _seated;
         public float ModelDrop => _drop;
 
         void Awake()
@@ -204,7 +209,11 @@ namespace Game.Gameplay
             bool hit = hp < _lastHp && !dead;
             _lastHp = hp;
 
-            var v = dead ? Vector3.zero : _motion.LocalVelocity;
+            // Seated, the body rides with the car: none of that motion is walking.
+            float seatAmount = dead ? 0f : VehicleSeat.SeatedAmount(_combatant);
+            _seated = seatAmount * seatAmount * (3f - 2f * seatAmount);
+            _driverPose = VehicleSeat.InDriverSeat(_combatant);
+            var v = dead || _seated > 0.001f ? Vector3.zero : _motion.LocalVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
             _legs.Tick(v.x, v.z, Time.deltaTime, GameData.Rules.Gait);
             float proneAmount = dead || _stance == null ? 0f : _stance.ProneAmount;
@@ -227,7 +236,7 @@ namespace Game.Gameplay
             // Crawling is the walk clip at a slow pace; at the crawl's low speed the blend also shows only a part of the stride.
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
-            bool showAir = !dead && TrackAir();
+            bool showAir = !dead && TrackAir() && _seated < 0.5f;
             if (dead) SetBase(Death);
             else
             {
@@ -251,7 +260,8 @@ namespace Game.Gameplay
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
             if (armed && Time.time >= _upperHoldUntil)
                 // Crouched or lying, the weapon stays up: hanging down from hips this low it would go through the floor.
-                SetUpper(_combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil || _crouch > 0.5f || _prone > 0.5f ? Aim : Lowered);
+                // Seated too: lowered it would go through the car.
+                SetUpper(_combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil || _crouch > 0.5f || _prone > 0.5f || _seated > 0.5f ? Aim : Lowered);
         }
 
         // Follows take-off and touch-down, picks the jump pose, and says whether the base layer should show it: all
@@ -319,7 +329,10 @@ namespace Game.Gameplay
             // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
             // so the head (which the pitch swung forward to the end of the body) ends up under the eyes.
             var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * _prone;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop + lying;
+            // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
+            var seatRules = VehicleSeat.RulesOf(_combatant);
+            var sitting = (Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -376,7 +389,7 @@ namespace Game.Gameplay
                 bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
-                bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f
+                bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f && _seated < 0.5f
                     && new Vector2(v.x, v.z).sqrMagnitude > StepMinSpeed * StepMinSpeed;
                 if ((left || right) && walking) FootDown?.Invoke();
             }
@@ -450,9 +463,49 @@ namespace Game.Gameplay
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);
             Turn(ArmRight, reach, transform.right);
+            if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;
+        }
+
+        // Sitting in a car (ADR-065 (5)), no clip: thighs forward to about level, shins down with the feet a little
+        // forward, feet flat, the torso leaning back a little. Empty hands go to the steering wheel at the driver's
+        // seat and rest on the lap elsewhere; a weapon keeps the upper layer's weapon pose.
+        // Same turn directions as the jump: a negative turn about the right axis lifts a thigh forward; the shin turns
+        // back by the thigh's angle plus its own; the foot turns back by the shin's.
+        // Astride a motorcycle: thighs less far forward and apart (about the forward axis a positive turn swings a
+        // hanging limb to the right), shins back to the pegs, the rider's hands forward on the bars.
+        void PoseSeated()
+        {
+            var r = VehicleSeat.RulesOf(_combatant);
+            float s = _seated;
+            bool astride = VehicleSeat.Astride(_combatant);
+            float thighDeg = astride ? r.AstrideThighDeg : r.SeatedThighDeg;
+            float shinDeg = astride ? r.AstrideShinDeg : r.SeatedShinDeg;
+            if (astride)
+            {
+                // Through PoseLeg so the feet (separate bones) follow the spread legs.
+                PoseLeg(0, ThighLeft, ShinLeft, FootLeft, -r.AstrideApartDeg * s, 0f, transform.forward);
+                PoseLeg(1, ThighRight, ShinRight, FootRight, r.AstrideApartDeg * s, 0f, transform.forward);
+            }
+            float thigh = -thighDeg * s;
+            float shin = (thighDeg + shinDeg) * s;
+            PoseLeg(0, ThighLeft, ShinLeft, FootLeft, thigh, shin, transform.right);
+            PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, transform.right);
+            Turn(FootLeft, -shinDeg * s, transform.right);
+            Turn(FootRight, -shinDeg * s, transform.right);
+            if (!astride) Turn(Torso, -r.SeatedTorsoBackDeg * s, transform.right);
+            float free = s * (1f - _upperWeight);
+            float forward = _driverPose ? (astride ? r.AstrideArmDeg : r.DriverArmDeg) : r.PassengerArmDeg;
+            Turn(ArmLeft, -forward * free, transform.right);
+            Turn(ArmRight, -forward * free, transform.right);
+            if (_driverPose)
+            {
+                // About the forward axis a positive turn swings a hanging arm to the right: both hands in toward the wheel.
+                Turn(ArmLeft, r.DriverArmInDeg * free, transform.forward);
+                Turn(ArmRight, -r.DriverArmInDeg * free, transform.forward);
+            }
         }
 
         // Turns a thigh and shin and brings the foot along. In this skeleton the feet are not children of the

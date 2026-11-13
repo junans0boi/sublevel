@@ -163,6 +163,8 @@ namespace Game.Net
         public void ServerSetStance(Stance stance)
         {
             if (_combatant.Dead.Value || stance == Current) return;
+            // [VEHICLE HOOK] ADR-065 (5): seated stays upright (C / Z mean other things in a vehicle).
+            if (VehicleSeat.IsAttached(_combatant)) return;
             var rules = StanceRules.Current;
             if (stance != Stance.Stand && stance != Stance.Crouch && !(stance == Stance.Prone && rules.ProneEnabled)) return;
             // Getting up needs head room for the taller capsule, whatever the owner believes.
