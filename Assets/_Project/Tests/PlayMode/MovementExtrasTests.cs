@@ -92,7 +92,7 @@ namespace Game.Tests
             float t0 = Time.time;
             yield return new WaitForSeconds(0.5f);
             float speed = PlanarSpeedOver(p0, pc.transform.position, Time.time - t0);
-            Assert.AreEqual(4.5f * 1.12f, speed, 0.5f, "walking speed with empty hands, no key held");
+            Assert.AreEqual(4.7f, speed, 0.5f, "walking speed with empty hands, no key held");
             Assert.Greater(pc.transform.position.z - p0.z, 2f, "straight ahead (north)");
 
             _input.Frame.Sprint = true;
@@ -203,7 +203,7 @@ namespace Game.Tests
             float t0 = Time.time;
             steps = audio.FootstepsPlayed;
             yield return new WaitForSeconds(1.0f);
-            Assert.AreEqual(2.0f, PlanarSpeedOver(p0, pc.transform.position, Time.time - t0), 0.25f, "2 m/s");
+            Assert.AreEqual(1.7f, PlanarSpeedOver(p0, pc.transform.position, Time.time - t0), 0.25f, "1.7 m/s (ADR-095)");
             yield return WaitUntil(() => audio.FootstepsPlayed > steps, 3f, "footsteps while slow walking");
             Assert.AreEqual(walkVolume * 0.25f, audio.LastFootstepVolume, 1e-3f, "a quarter of the volume");
             Assert.AreEqual(0.25f, stance.FootstepVolumeFactor, 1e-4f);

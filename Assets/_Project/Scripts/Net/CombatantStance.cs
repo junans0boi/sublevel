@@ -20,6 +20,8 @@ namespace Game.Net
         public readonly SyncVar<bool> SlowWalk = new SyncVar<bool>();
         // The parkour move under way (ParkourMove; 0 = none), so every side shows the pose (ADR-065 (4)).
         public readonly SyncVar<int> Parkour = new SyncVar<int>();
+        // Where the owner looks up (+) or down (-), degrees, so every side holds the weapon at it (#121, ADR-096).
+        public readonly SyncVar<float> LookPitch = new SyncVar<float>();
 
         static readonly RaycastHit[] HeadHits = new RaycastHit[8];
         static readonly Collider[] Overlaps = new Collider[16];
@@ -319,6 +321,12 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdSetSlowWalk(bool on) => ServerSetSlowWalk(on);
+
+        [ServerRpc]
+        public void CmdSetLookPitch(float degrees) => ServerSetLookPitch(degrees);
+
+        [Server]
+        public void ServerSetLookPitch(float degrees) => LookPitch.Value = Mathf.Clamp(degrees, -90f, 90f);
 
         [ServerRpc]
         public void CmdStartParkour(int move, Vector3 start, Vector3 end, int glassId) => ServerStartParkour(move, start, end, glassId);

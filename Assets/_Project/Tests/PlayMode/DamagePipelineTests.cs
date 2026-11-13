@@ -366,10 +366,10 @@ namespace Game.Tests
             Assert.AreEqual(0.5f, me.SpreadFactor, 1e-3f, "the stance factor scales it");
             me.StanceSpreadFactor = 1f;
 
-            // Running is 4.5 m/s: the full movement factor of the rifle (x5, ADR-089).
+            // Running is 4.7 m/s times the rifle's 0.954 (ADR-095): the full movement factor of the rifle (x5, ADR-089).
             _input.Frame.Move = new Vector2(0, 1);
             yield return new WaitForSeconds(0.5f);
-            Assert.AreEqual(4.5f, me.PlanarSpeed, 0.5f);
+            Assert.AreEqual(4.7f * GameData.Rules.Locomotion.RifleMoveFactor, me.PlanarSpeed, 0.5f);
             Assert.AreEqual(5f, me.SpreadFactor, 0.5f, "running widens the cone");
             _input.Frame.Move = Vector2.zero;
             yield return new WaitForSeconds(0.4f);

@@ -78,5 +78,24 @@ namespace Game.Tests
             Assert.That(t, Is.InRange(0.05f, 0.15f), "a stop is quicker than a start");
             Assert.That(vx, Is.EqualTo(0f));
         }
+
+        [Test]
+        public void TheWeaponFollowsTheLookPitch_AllShouldered_HalfAtLowReady_Clamped()
+        {
+            var r = new RifleHoldRules();
+            Assert.AreEqual(30f, RifleHold.FollowedPitch(30f, 1f, r), 1e-4f, "shouldered: all of it (#121)");
+            Assert.AreEqual(-15f, RifleHold.FollowedPitch(-30f, 0f, r), 1e-4f, "low ready: half");
+            Assert.AreEqual(r.MaxLookPitchDeg, RifleHold.FollowedPitch(89f, 1f, r), 1e-4f, "no further than the limit");
+            Assert.AreEqual(0f, RifleHold.FollowedPitch(0f, 0.5f, r), 1e-6f);
+        }
+
+        [Test]
+        public void Shouldered_TheGripSitsAboveTheShoulder_SoTheSightsReachTheEyes()
+        {
+            var r = new RifleHoldRules();
+            var aim = RifleHold.Pose(0f, 0f, 1f, r);
+            Assert.Greater(aim.Y, 0f, "raised above the shoulder joint, not held at the chest (#121)");
+            Assert.AreEqual(0f, aim.Pitch, 1e-4f, "level before the look pitch");
+        }
     }
 }

@@ -24,10 +24,11 @@ namespace Game.Core
 
         public StancePose Stand = new StancePose();
         // The capsule is low enough to pass a 1.2 m gap with the character controller's skin on both ends.
-        public StancePose Crouch = new StancePose { EyeDropMeters = 0.65f, CapsuleHeight = 1.0f, MoveFactor = 0.55f, SpreadFactor = 0.5f, FootstepVolumeFactor = 0.4f };
-        // Lying down: eyes 0.4 m over the ground (upright eyes 1.6), crawling at 0.18 * 4.5 = 0.81 m/s. The capsule
+        // Speeds (ADR-095): one factor puts running, sprinting and slow walking within 3% of PUBG's 3.4, 4.8 and 1.3 m/s.
+        public StancePose Crouch = new StancePose { EyeDropMeters = 0.65f, CapsuleHeight = 1.0f, MoveFactor = 0.745f, SpreadFactor = 0.5f, FootstepVolumeFactor = 0.4f };
+        // Lying down: eyes 0.4 m over the ground (upright eyes 1.6), crawling at 0.255 * 4.7 = 1.2 m/s. The capsule
         // stays at least as tall as it is wide (the character controller's limit: height >= 2 * radius, here 0.7).
-        public StancePose Prone = new StancePose { EyeDropMeters = 1.2f, CapsuleHeight = 0.7f, MoveFactor = 0.18f, SpreadFactor = 0.2f, FootstepVolumeFactor = 0.1f };
+        public StancePose Prone = new StancePose { EyeDropMeters = 1.2f, CapsuleHeight = 0.7f, MoveFactor = 0.255f, SpreadFactor = 0.2f, FootstepVolumeFactor = 0.1f };
         public bool ProneEnabled = true;
         public float ChangePerSecond = 5f;   // getting down or up takes 1 / this seconds
         public float HeadClearanceMeters = 0.05f; // free space needed above the raised head before standing up
@@ -67,14 +68,14 @@ namespace Game.Core
         public static float MoveSpeed(float uprightSpeed, Stance stance, StanceRules rules) =>
             uprightSpeed * rules.For(stance).MoveFactor;
 
-        // The stance after this frame's input. The crouch and prone keys toggle; jumping or starting to sprint
-        // gets up instead. `canRise`: there is head room for the taller capsule; without it the stance stays.
+        // The stance after this frame's input. The crouch and prone keys toggle; jumping gets up instead, and so
+        // does sprinting from lying down (crouched, it sprints crouched, ADR-095). `canRise`: there is head room for the taller capsule; without it the stance stays.
         public static Stance Next(Stance current, bool crouchPressed, bool pronePressed, bool jump, bool sprint, bool canRise, StanceRules rules)
         {
             var wanted = current;
             if (crouchPressed) wanted = current == Stance.Crouch ? Stance.Stand : Stance.Crouch;
             else if (pronePressed && rules.ProneEnabled) wanted = current == Stance.Prone ? Stance.Stand : Stance.Prone;
-            if (current != Stance.Stand && (jump || sprint)) wanted = Stance.Stand;
+            if (current != Stance.Stand && (jump || (sprint && current == Stance.Prone))) wanted = Stance.Stand;
             if (wanted == Stance.Prone && !rules.ProneEnabled) wanted = current;
             bool rises = rules.For(wanted).CapsuleHeight > rules.For(current).CapsuleHeight;
             return rises && !canRise ? current : wanted;

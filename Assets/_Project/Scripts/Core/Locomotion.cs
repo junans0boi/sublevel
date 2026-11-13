@@ -5,15 +5,16 @@ namespace Game.Core
     [Serializable]
     public class LocomotionParams
     {
-        public float WalkSpeed = 4.5f;
-        public float SprintSpeed = 7f;
+        // Empty hands, a pistol or a melee weapon (ADR-095, PUBG's table): running 4.7, sprinting 6.3 m/s.
+        public float WalkSpeed = 4.7f;
+        public float SprintSpeed = 6.3f;
         public float JumpSpeed = 4.8f;
         public float Gravity = -14f;
         public float GroundedStick = -2f;
-        // Empty hands (nothing held, or the weapon put away with X) move this much faster, walking and sprinting (ADR-058).
-        public float UnarmedMoveFactor = 1.12f;
+        // A long gun in hand slows walking and sprinting by its kind (ADR-095).
+        public float SmgMoveFactor = 0.977f, RifleMoveFactor = 0.954f, MarksmanMoveFactor = 0.952f, ShotgunMoveFactor = 0.939f;
         // Slow walk (Ctrl held, ADR-065 (3)): this speed standing at the hip, whatever is in the hands; no sprinting.
-        public float SlowWalkSpeed = 2.0f;
+        public float SlowWalkSpeed = 1.7f;
         public float SlowWalkFootstepVolume = 0.25f; // footsteps this much quieter
         // Starting and stopping take a moment (#111, ADR-083): ground speed changes at most this fast (m/s per second).
         // 0 to a run in about 0.15 s, to a sprint in about 0.25 s; a stop from a run in about 0.1 s.
@@ -79,7 +80,11 @@ namespace Game.Core
         public float SprintPitchDeg = 40f, SprintYawDeg = -24f, SprintRollDeg = -14f;
         public float IdleGripX = -0.07f, IdleGripY = -0.15f, IdleGripZ = 0.21f;
         public float SprintGripX = -0.11f, SprintGripY = -0.17f, SprintGripZ = 0.17f;
-        public float AimGripX = -0.05f, AimGripY = -0.06f, AimGripZ = 0.26f;
+        // Shouldered (#121, ADR-096): the grip high enough that the sights are at the eyes, the stock in the shoulder pocket.
+        public float AimGripX = -0.05f, AimGripY = 0.06f, AimGripZ = 0.24f;
+        // The weapon follows the look pitch (degrees, up positive): all of it shouldered, this share at low ready;
+        // the chest takes TorsoPitchShare of what is followed. Beyond MaxLookPitchDeg the weapon stays put.
+        public float LowPitchFollow = 0.5f, TorsoPitchShare = 0.4f, MaxLookPitchDeg = 70f;
         public float LowTwistDeg = 15f, AimTwistDeg = 25f; // torso turned right (left shoulder forward)
         public float MoveFullSpeed = 4f;   // m/s at which the moving low ready is fully shown
         // Body: torso pitched forward with speed (more sprinting), rolled into a sidestep, leaning into a start.
@@ -124,6 +129,13 @@ namespace Game.Core
             float moving = r.MoveFullSpeed <= 0f ? 1f : Clamp01(speed / r.MoveFullSpeed);
             var low = RifleHoldPose.Lerp(RifleHoldPose.Lerp(idle, move, moving), sprinting, Clamp01(sprint));
             return RifleHoldPose.Lerp(low, aim, Clamp01(ready));
+        }
+
+        // How much of the look pitch (degrees, up positive) the weapon follows at `ready` (0 low ready .. 1 shouldered).
+        public static float FollowedPitch(float lookPitch, float ready, RifleHoldRules r)
+        {
+            float look = Math.Max(-r.MaxLookPitchDeg, Math.Min(r.MaxLookPitchDeg, lookPitch));
+            return look * (r.LowPitchFollow + (1f - r.LowPitchFollow) * Clamp01(ready));
         }
 
         // Forward pitch of the torso (degrees): with speed, more sprinting, plus a lean into speeding up (back when stopping).
@@ -292,12 +304,21 @@ namespace Game.Core
         }
 
         // The share of the full walking or sprinting speed allowed by the aim state, leaning, stance and what is in
-        // the hands. The owner moves with it; anything checking the owner's speed must use the same product.
-        // Slow walking replaces the empty-hands bonus with the slow walk's share of the walking speed.
-        public static float MoveSpeedFactor(float aimFactor, float leanFactor, float stanceFactor, bool armed, LocomotionParams p, bool slowWalk = false)
+        // the hands (`carryFactor`, CarryFactor). The owner moves with it; anything checking the owner's speed must use
+        // the same product. Slow walking replaces the weapon's factor with the slow walk's share of the walking speed.
+        public static float MoveSpeedFactor(float aimFactor, float leanFactor, float stanceFactor, float carryFactor, LocomotionParams p, bool slowWalk = false)
         {
-            float hands = slowWalk ? (p.WalkSpeed > 0f ? p.SlowWalkSpeed / p.WalkSpeed : 1f) : armed ? 1f : p.UnarmedMoveFactor;
+            float hands = slowWalk ? (p.WalkSpeed > 0f ? p.SlowWalkSpeed / p.WalkSpeed : 1f) : carryFactor;
             return aimFactor * leanFactor * stanceFactor * hands;
+        }
+
+        // How much the weapon in hand slows walking and sprinting (ADR-095). There is no kind field: a primary is told
+        // apart by its pellets and calibre. Nothing, a pistol or a melee weapon: 1.
+        public static float CarryFactor(WeaponDef weapon, LocomotionParams p)
+        {
+            if (weapon == null || weapon.Category != WeaponCategory.Primary) return 1f;
+            if (weapon.Pellets > 1) return p.ShotgunMoveFactor;
+            return weapon.Ammo == AmmoType.Pistol9 ? p.SmgMoveFactor : weapon.Ammo == AmmoType.Rifle762 ? p.MarksmanMoveFactor : p.RifleMoveFactor;
         }
 
         // Free look: the view's turn away from the facing after adding `deltaDeg`, kept in -180..180 so the swing

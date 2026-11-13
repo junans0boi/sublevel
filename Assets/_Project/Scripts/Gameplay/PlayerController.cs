@@ -36,6 +36,8 @@ namespace Game.Gameplay
         public bool AutoRunning => _autoRun;
         // Slow walk (Ctrl held, ADR-065 (3)).
         public bool SlowWalking { get; private set; }
+        // The aim key is down with a gun in hand, whether it turns out a tap (sights) or a hold (shoulder).
+        public bool AimKeyDown { get; private set; }
         // A vehicle (or anything else) moves the body: no walking, jumping or parkour of our own; the view still
         // turns. Firing is left to whoever set it.
         public bool ExternalControl;
@@ -68,6 +70,7 @@ namespace Game.Gameplay
         float _lastMoveY;
         bool _sentSlowWalk;
         float _slowWalkSentAt;
+        float _sentPitch, _pitchSentAt = float.NegativeInfinity;
         ParkourPlan _parkour;
         float _parkourT;
         bool _parkourBack;
@@ -216,6 +219,9 @@ namespace Game.Gameplay
             // Aiming needs a gun (not a melee weapon, ADR-073) and wins over sprinting; leaning is for standing and walking only.
             bool armed = !Melee.CanStrike(_combatant.ActiveWeapon);
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
+            // The aim key raises the weapon on the press, before the tap/hold decision (#121): no sprint under it either.
+            AimKeyDown = armed && f.AimHeld;
+            SendLookPitch();
 
             FollowVehicleHeading();
 
@@ -270,7 +276,7 @@ namespace Game.Gameplay
             // raising the weapon drops back to a walk, so no shot ever leaves a sprint. Slow walking never sprints.
             bool firing = armed && (f.FireHeld || f.FirePressed);
             SlowWalking = f.SlowWalk && !ExternalControl;
-            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !firing && !SlowWalking && !ExternalControl;
+            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl;
 
             // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
             if (f.Jump && !ExternalControl && _stance != null && _controller.isGrounded && BodyStance != Stance.Prone && TryStartParkour())
@@ -297,7 +303,8 @@ namespace Game.Gameplay
             }
             if (knocked && _stance != null) BodyStance = Stance.Prone;
             bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up
-            sprint &= BodyStance == Stance.Stand;
+            // Crouched, Shift sprints crouched (ADR-095), except the sprint held when C took the body down (#105).
+            sprint &= BodyStance == Stance.Stand || (BodyStance == Stance.Crouch && !_sprintOverruled);
             Sprinting = sprint;
             Lean = sprint ? 0 : (f.LeanRight ? 1 : 0) - (f.LeanLeft ? 1 : 0);
             SendStance();
@@ -321,10 +328,10 @@ namespace Game.Gameplay
                 Teleport(new Vector3(transform.position.x, rideFeet, transform.position.z));
             else
             {
-                // Empty hands (nothing held, or put away with X) are faster; the other factors slow the weapon down.
-                // Slow walking replaces the empty-hands bonus with its own share of the walking speed.
+                // A long gun slows walking and sprinting by its kind (ADR-095); the other factors slow it further.
+                // Slow walking replaces the weapon's factor with its own share of the walking speed.
                 float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
-                    stanceRules.For(BodyStance).MoveFactor, armed, _locomotion, SlowWalking);
+                    stanceRules.For(BodyStance).MoveFactor, armed ? Locomotion.CarryFactor(_combatant.ActiveWeapon, _locomotion) : 1f, _locomotion, SlowWalking);
                 // Slower while a bandage or kit is being used.
                 speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
                 if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
@@ -508,6 +515,16 @@ namespace Game.Gameplay
         }
 
         // Tells the server about slow walking when it changes, and again if its copy still disagrees a moment later.
+        // The look pitch for the third-person weapon hold (#121): only when it moved a little, at most ten times a second.
+        void SendLookPitch()
+        {
+            if (_stance == null || Mathf.Abs(Pitch - _sentPitch) < 1.5f || Time.time - _pitchSentAt < 0.1f) return;
+            _sentPitch = Pitch;
+            _pitchSentAt = Time.time;
+            if (IsServerInitialized) _stance.ServerSetLookPitch(Pitch);
+            else _stance.CmdSetLookPitch(Pitch);
+        }
+
         void SendSlowWalk()
         {
             if (_stance == null) return;

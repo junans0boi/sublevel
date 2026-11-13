@@ -320,36 +320,36 @@ namespace Game.Tests
             GoToTheQuietLane(pc);
             Give(me, Rifle, 30);
             yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 2f, "rifle in hand");
-            Assert.AreEqual(1.12f, GameData.Rules.Locomotion.UnarmedMoveFactor, 1e-5f);
+            float rifle = GameData.Rules.Locomotion.RifleMoveFactor; // ADR-095: empty hands 6.3 / 4.7, a rifle 4.6% slower
 
             _input.Frame.Move = new Vector2(0, 1);
             _input.Frame.Sprint = true;
             float armedSprint = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => armedSprint = s);
             Assert.IsTrue(pc.Sprinting);
-            Assert.AreEqual(7f, armedSprint, 0.4f, "armed sprint");
+            Assert.AreEqual(6.3f * rifle, armedSprint, 0.3f, "armed sprint");
 
             _input.Frame.Holster = true;
             yield return WaitUntil(() => me.Holstered.Value, 2f, "put away");
             float unarmedSprint = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => unarmedSprint = s);
             Assert.IsTrue(pc.Sprinting);
-            Assert.GreaterOrEqual(unarmedSprint, armedSprint * 1.1f, "unarmed sprint is at least 10% faster");
-            Assert.AreEqual(7f * 1.12f, unarmedSprint, 0.45f);
+            Assert.GreaterOrEqual(unarmedSprint, armedSprint * 1.03f, "unarmed sprint is faster");
+            Assert.AreEqual(6.3f, unarmedSprint, 0.3f);
 
             _input.Frame.Sprint = false;
             pc.Teleport(new Vector3(-25f, 0.1f, -29f));
             float unarmedWalk = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => unarmedWalk = s);
-            Assert.AreEqual(4.5f * 1.12f, unarmedWalk, 0.3f, "unarmed walk");
+            Assert.AreEqual(4.7f, unarmedWalk, 0.25f, "unarmed walk");
 
             _input.Frame.SelectSlot = 0;
             yield return WaitUntil(() => !me.Holstered.Value, 2f, "rifle out again");
             pc.Teleport(new Vector3(-25f, 0.1f, -29f));
             float armedWalk = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => armedWalk = s);
-            Assert.AreEqual(4.5f, armedWalk, 0.3f, "armed walk");
-            Assert.GreaterOrEqual(unarmedWalk, armedWalk * 1.1f);
+            Assert.AreEqual(4.7f * rifle, armedWalk, 0.25f, "armed walk");
+            Assert.GreaterOrEqual(unarmedWalk, armedWalk * 1.03f);
         }
 
         // ---- Prone ----
@@ -391,7 +391,7 @@ namespace Game.Tests
             float crawl = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => crawl = s);
             _input.Frame.Move = Vector2.zero;
-            Assert.AreEqual(4.5f * 0.18f, crawl, 0.2f, "about 0.8 m/s");
+            Assert.AreEqual(1.2f * GameData.Rules.Locomotion.RifleMoveFactor, crawl, 0.2f, "1.2 m/s times the rifle's factor (ADR-095)");
 
             // Space and sprinting stand up; Z toggles back down and up.
             _input.Frame.Jump = true;

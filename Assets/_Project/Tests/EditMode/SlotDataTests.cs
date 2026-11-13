@@ -40,15 +40,16 @@ namespace Game.Tests
         }
 
         [Test]
-        public void RulesData_UnarmedFactorSlotsAndProne()
+        public void RulesData_SpeedsSlotsAndProne()
         {
             var rules = JsonUtility.FromJson<GameRules>(File.ReadAllText(DataFolder + "rules.json"));
-            Assert.AreEqual(1.12f, rules.Locomotion.UnarmedMoveFactor, 1e-5f);
+            Assert.AreEqual(6.3f, rules.Locomotion.SprintSpeed, 1e-5f);
+            Assert.AreEqual(0.954f, rules.Locomotion.RifleMoveFactor, 1e-5f);
             Assert.AreEqual(0.12f, rules.Slots.SingleModeMinInterval, 1e-5f);
             Assert.IsTrue(rules.Stance.ProneEnabled);
             Assert.AreEqual(1.2f, rules.Stance.Prone.EyeDropMeters, 1e-5f);
             Assert.AreEqual(0.7f, rules.Stance.Prone.CapsuleHeight, 1e-5f);
-            Assert.AreEqual(0.18f, rules.Stance.Prone.MoveFactor, 1e-5f);
+            Assert.AreEqual(0.255f, rules.Stance.Prone.MoveFactor, 1e-5f);
             Assert.AreEqual(85f, rules.Stance.ProneModelPitchDeg, 1e-5f);
             Assert.AreEqual(40f, rules.Stance.ProneHeadLiftDeg, 1e-5f);
             Assert.GreaterOrEqual(rules.Stance.Prone.CapsuleHeight, 0.7f);

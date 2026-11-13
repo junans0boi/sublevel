@@ -364,32 +364,73 @@ namespace Game.Tests
             Assert.AreEqual(0, l.MagInSlot(0));
         }
 
-        // ---- Unarmed speed ----
+        // ---- Speeds by stance and weapon (ADR-095, PUBG's table) ----
 
-        [Test]
-        public void UnarmedMoveFactor_IsOneTwelve_AndSpeedsUpWalkAndSprint()
+        static float Speed(LocomotionParams p, StanceRules stances, Stance stance, bool sprint, bool slow, WeaponDef weapon)
         {
-            var p = new LocomotionParams();
-            Assert.AreEqual(1.12f, p.UnarmedMoveFactor, 1e-6f);
-            Assert.AreEqual(1f, Locomotion.MoveSpeedFactor(1f, 1f, 1f, true, p), 1e-6f);
-            Assert.AreEqual(1.12f, Locomotion.MoveSpeedFactor(1f, 1f, 1f, false, p), 1e-6f);
-            // The factor reaches the velocity: 4.5 * 1.12 walking, 7 * 1.12 sprinting.
-            Locomotion.PlanarVelocity(0f, 1f, 0f, false, p, out float wx, out float wz, Locomotion.MoveSpeedFactor(1f, 1f, 1f, false, p));
-            Assert.AreEqual(5.04f, (float)System.Math.Sqrt(wx * wx + wz * wz), 1e-4f);
-            Locomotion.PlanarVelocity(0f, 1f, 0f, true, p, out float sx, out float sz, Locomotion.MoveSpeedFactor(1f, 1f, 1f, false, p));
-            Assert.AreEqual(7.84f, (float)System.Math.Sqrt(sx * sx + sz * sz), 1e-4f);
-            Locomotion.PlanarVelocity(0f, 1f, 0f, true, p, out float ax, out float az, Locomotion.MoveSpeedFactor(1f, 1f, 1f, true, p));
-            Assert.Greater(System.Math.Sqrt(sx * sx + sz * sz), System.Math.Sqrt(ax * ax + az * az) * 1.1, "unarmed sprint is at least 10% faster");
+            float f = Locomotion.MoveSpeedFactor(1f, 1f, stances.For(stance).MoveFactor, Locomotion.CarryFactor(weapon, p), p, slow);
+            Locomotion.PlanarVelocity(0f, 1f, 0f, sprint, p, out float x, out float z, f);
+            return (float)System.Math.Sqrt(x * x + z * z);
         }
 
         [Test]
-        public void UnarmedFactor_CombinesWithTheOtherFactors_ByMultiplying()
+        public void Speeds_MatchPubgsTable_WithinThreePercent()
         {
             var p = new LocomotionParams();
-            // Lying (0.18) with empty hands: 0.18 * 1.12.
-            Assert.AreEqual(0.2016f, Locomotion.MoveSpeedFactor(1f, 1f, 0.18f, false, p), 1e-5f);
-            // Leaning (0.85) and crouching (0.55) armed: no unarmed bonus.
-            Assert.AreEqual(0.4675f, Locomotion.MoveSpeedFactor(1f, 0.85f, 0.55f, true, p), 1e-5f);
+            var s = new StanceRules();
+            // Empty hands (= a pistol): sprint 6.3, run 4.7, slow walk 1.7; crouched 4.8 / 3.4 / 1.3; lying 1.2.
+            Assert.AreEqual(6.3f, Speed(p, s, Stance.Stand, true, false, null), 1e-4f);
+            Assert.AreEqual(4.7f, Speed(p, s, Stance.Stand, false, false, null), 1e-4f);
+            Assert.AreEqual(1.7f, Speed(p, s, Stance.Stand, false, true, null), 1e-4f);
+            Assert.AreEqual(4.8f, Speed(p, s, Stance.Crouch, true, false, null), 4.8f * 0.03f);
+            Assert.AreEqual(3.4f, Speed(p, s, Stance.Crouch, false, false, null), 3.4f * 0.03f);
+            Assert.AreEqual(1.3f, Speed(p, s, Stance.Crouch, false, true, null), 1.3f * 0.03f);
+            Assert.AreEqual(1.2f, Speed(p, s, Stance.Prone, false, false, null), 0.01f);
+        }
+
+        [Test]
+        public void WeaponKinds_SlowTheSprint_ShotgunMost()
+        {
+            var p = new LocomotionParams();
+            var s = new StanceRules();
+            var pistol = new WeaponDef { Category = WeaponCategory.Sidearm, Ammo = AmmoType.Pistol9 };
+            var smg = new WeaponDef { Category = WeaponCategory.Primary, Ammo = AmmoType.Pistol9 };
+            var rifle = new WeaponDef { Category = WeaponCategory.Primary, Ammo = AmmoType.Rifle556 };
+            var marksman = new WeaponDef { Category = WeaponCategory.Primary, Ammo = AmmoType.Rifle762 };
+            var shotgun = new WeaponDef { Category = WeaponCategory.Primary, Ammo = AmmoType.Shotgun12, Pellets = 9 };
+            var melee = new WeaponDef { Category = WeaponCategory.Melee };
+            float Sprint(WeaponDef w) => Speed(p, s, Stance.Stand, true, false, w);
+            Assert.AreEqual(Sprint(null), Sprint(pistol), 1e-5f, "a pistol is as fast as empty hands");
+            Assert.AreEqual(Sprint(null), Sprint(melee), 1e-5f);
+            Assert.AreEqual(6.3f * 0.977f, Sprint(smg), 1e-3f);
+            Assert.AreEqual(6.3f * 0.954f, Sprint(rifle), 1e-3f);
+            Assert.AreEqual(6.3f * 0.952f, Sprint(marksman), 1e-3f);
+            Assert.AreEqual(6.3f * 0.939f, Sprint(shotgun), 1e-3f);
+            Assert.That(Sprint(shotgun), Is.LessThan(Sprint(marksman)));
+            Assert.That(Sprint(marksman), Is.LessThan(Sprint(rifle)));
+            Assert.That(Sprint(rifle), Is.LessThan(Sprint(smg)));
+            Assert.That(Sprint(smg), Is.LessThan(Sprint(null)));
+            Assert.AreEqual(1.7f, Speed(p, s, Stance.Stand, false, true, shotgun), 1e-4f, "slow walking is the same whatever is in the hands");
+        }
+
+        [Test]
+        public void WeaponsData_EachGetsItsKindsFactor()
+        {
+            var p = new LocomotionParams();
+            var table = UnityEngine.JsonUtility.FromJson<WeaponTable>(System.IO.File.ReadAllText("Assets/_Project/Data/Resources/GameData/weapons.json"));
+            Assert.AreEqual(1f, Locomotion.CarryFactor(table.Find(1), p), 1e-6f, "VK-9 pistol");
+            Assert.AreEqual(p.SmgMoveFactor, Locomotion.CarryFactor(table.Find(2), p), 1e-6f, "Ordo");
+            Assert.AreEqual(p.RifleMoveFactor, Locomotion.CarryFactor(table.Find(3), p), 1e-6f, "Warden");
+            Assert.AreEqual(p.ShotgunMoveFactor, Locomotion.CarryFactor(table.Find(4), p), 1e-6f, "Breacher");
+            Assert.AreEqual(p.MarksmanMoveFactor, Locomotion.CarryFactor(table.Find(5), p), 1e-6f, "Sentinel");
+            Assert.AreEqual(1f, Locomotion.CarryFactor(table.Find(21), p), 1e-6f, "machete");
+        }
+
+        [Test]
+        public void StanceAndWeaponFactors_CombineWithTheOthers_ByMultiplying()
+        {
+            var p = new LocomotionParams();
+            Assert.AreEqual(0.85f * 0.74f * 0.954f, Locomotion.MoveSpeedFactor(1f, 0.85f, 0.74f, 0.954f, p), 1e-5f);
         }
     }
 }

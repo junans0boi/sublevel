@@ -95,10 +95,13 @@ namespace Game.Gameplay
             float dt = Time.deltaTime;
             _rifleWanted = armed && LongGunInHand(_combatant.ActiveWeaponId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f;
             _rifle = Mathf.MoveTowards(_rifle, _rifleWanted ? 1f : 0f, RifleWeightPerSecond * dt);
+            // The local player's aim key raises it on the press, before the tap/hold decision makes it an aim (#121).
+            var local = PlayerController.Local;
+            aiming |= _combatant == Combatant.LocalPlayer && local != null && local.AimKeyDown;
             _ready = RifleHold.ReadyStep(_ready, aiming, dt, r);
             float speed = new Vector2(localVelocity.x, localVelocity.z).magnitude;
             var loco = GameData.Rules.Locomotion;
-            float sprint = loco.SprintSpeed > loco.WalkSpeed ? Mathf.InverseLerp(loco.WalkSpeed * 1.05f, loco.SprintSpeed * 0.95f, speed) : 0f;
+            float sprint = loco.SprintSpeed > loco.WalkSpeed ? Mathf.InverseLerp(loco.WalkSpeed * 1.05f, loco.SprintSpeed * 0.9f, speed) : 0f;
             _sprintShown = Mathf.MoveTowards(_sprintShown, sprint, 5f * dt);
             if (r.KickSeconds > 0f) _kick = Mathf.MoveTowards(_kick, 0f, dt / r.KickSeconds);
             // Acceleration in the character's axes, smoothed: what the torso leans into.
@@ -120,6 +123,14 @@ namespace Game.Gameplay
             return t - Mathf.Floor(t);
         }
 
+        // Where this combatant looks, degrees up: the local player's own view, the replicated one for everyone else.
+        float LookPitch()
+        {
+            var local = PlayerController.Local;
+            if (_combatant == Combatant.LocalPlayer && local != null) return local.Pitch;
+            return _stance != null ? _stance.LookPitch.Value : 0f;
+        }
+
         // LateUpdate, after the torso and leg turns: lean the torso, then place the weapon and both hands.
         void PoseRifle()
         {
@@ -137,13 +148,19 @@ namespace Game.Gameplay
             float square = Mathf.Lerp(LowReadySquare, 1f, _ready) * _rifle;
             Turn(Torso, Mathf.DeltaAngle(ShoulderYaw(), _shoulderRestYaw + pose.Twist) * square, transform.up);
 
+            // The look pitch (#121, ADR-096): all of it shouldered, part of it at low ready. The chest takes a share
+            // (looking up tips it back: a negative turn about the right axis), the arms and weapon the rest.
+            float look = RifleHold.FollowedPitch(LookPitch(), _ready, r) * _rifle;
+            Turn(Torso, -look * r.TorsoPitchShare, transform.right);
+            var frame = transform.rotation * Quaternion.AngleAxis(-look, Vector3.right);
+
             float amount = Mathf.Clamp01(speed / Mathf.Max(0.1f, r.MoveFullSpeed)) * (1f - 0.6f * _ready);
             RifleHold.Bob(StridePhase(), amount, r, out float down, out float side, out float bobRoll);
-            var turn = transform.rotation * Quaternion.Euler(pose.Pitch - r.KickPitchDeg * _kick, pose.Yaw, pose.Roll + bobRoll);
+            var turn = frame * Quaternion.Euler(pose.Pitch - r.KickPitchDeg * _kick, pose.Yaw, pose.Roll + bobRoll);
             var axis = turn * Vector3.forward;
             int id = _combatant.ActiveWeaponId;
             if (!LongGunInHand(id)) return;
-            var grip = _upperArmR.position + transform.rotation * new Vector3(pose.X + side, pose.Y - down, pose.Z)
+            var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down, pose.Z)
                 - axis * (r.KickBackMeters * _kick);
             var gripTurn = turn * _wristRBind;
 
@@ -153,6 +170,18 @@ namespace Game.Gameplay
             // Left hand: round the handguard from below, palm up and toward the weapon, fingers closed.
             var up = turn * Vector3.up;
             Grip(0, ArmLeft, grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + turn * Vector3.right, GripCurlDeg, _rifle);
+        }
+
+        // For the pose review (FeelCapture): heights over the feet of the head joint, the right shoulder and the top of
+        // the weapon in hand, meters.
+        public string AimGeometry()
+        {
+            var model = _weapons != null ? _weapons.ModelFor(_combatant.ActiveWeaponId) : null;
+            if (model == null || _head == null || _upperArmR == null) return "";
+            float top = float.MinValue;
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>()) top = Mathf.Max(top, renderer.bounds.max.y);
+            float feet = transform.position.y;
+            return $"head {_head.position.y - feet:F3} shoulder {_upperArmR.position.y - feet:F3} weapon top {top - feet:F3}";
         }
 
         void KickRifle()

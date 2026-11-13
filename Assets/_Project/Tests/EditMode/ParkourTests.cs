@@ -197,16 +197,16 @@ namespace Game.Tests
         }
 
         [Test]
-        public void SlowWalk_Is2MetresASecond_WhateverIsInTheHands()
+        public void SlowWalk_Is1_7MetresASecond_WhateverIsInTheHands()
         {
             var p = new LocomotionParams();
-            Assert.AreEqual(2.0f, p.SlowWalkSpeed, 1e-4f);
-            float armed = Locomotion.MoveSpeedFactor(1f, 1f, 1f, true, p, slowWalk: true);
-            float empty = Locomotion.MoveSpeedFactor(1f, 1f, 1f, false, p, slowWalk: true);
-            Assert.AreEqual(2.0f, p.WalkSpeed * armed, 1e-4f);
-            Assert.AreEqual(2.0f, p.WalkSpeed * empty, 1e-4f, "no empty-hands bonus while slow walking");
-            Assert.AreEqual(2.0f * 0.55f, p.WalkSpeed * Locomotion.MoveSpeedFactor(1f, 1f, 0.55f, true, p, true), 1e-4f, "crouched slower still");
-            Assert.AreEqual(4.5f * 1.12f, p.WalkSpeed * Locomotion.MoveSpeedFactor(1f, 1f, 1f, false, p), 1e-4f, "unchanged without it");
+            Assert.AreEqual(1.7f, p.SlowWalkSpeed, 1e-4f);
+            float armed = Locomotion.MoveSpeedFactor(1f, 1f, 1f, p.RifleMoveFactor, p, slowWalk: true);
+            float empty = Locomotion.MoveSpeedFactor(1f, 1f, 1f, 1f, p, slowWalk: true);
+            Assert.AreEqual(1.7f, p.WalkSpeed * armed, 1e-4f);
+            Assert.AreEqual(1.7f, p.WalkSpeed * empty, 1e-4f, "no weapon factor while slow walking");
+            Assert.AreEqual(1.7f * 0.74f, p.WalkSpeed * Locomotion.MoveSpeedFactor(1f, 1f, 0.74f, 1f, p, true), 1e-4f, "crouched slower still");
+            Assert.AreEqual(4.7f * p.RifleMoveFactor, p.WalkSpeed * Locomotion.MoveSpeedFactor(1f, 1f, 1f, p.RifleMoveFactor, p), 1e-4f, "unchanged without it");
         }
 
         [Test]

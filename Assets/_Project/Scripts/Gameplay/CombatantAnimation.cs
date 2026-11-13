@@ -48,6 +48,7 @@ namespace Game.Gameplay
         const float TakeoffAttackShare = 0.3f; // of the take-off push spent getting into it
         const float LandArmShare = 0.5f;       // of the arm lift shown again while absorbing a landing
         const float FallbackLegLength = 0.9f;  // hip to ankle, when the leg bones are not wired
+        const float MaxFootFix = 0.3f;         // most the crouched model is moved to put the lowest foot on the ground
         // Bones turned in code after the animator has posed them, parents before children.
         const int Torso = 0, ThighLeft = 1, ThighRight = 2, ShinLeft = 3, ShinRight = 4, FootLeft = 5, FootRight = 6,
             ArmLeft = 7, ArmRight = 8, TurnedBones = 9;
@@ -86,6 +87,8 @@ namespace Game.Gameplay
         float _drop;              // how far the model is lowered right now (m)
         CombatantStance _stance;  // missing on a prefab built before stances existed: never crouches
         float _legLength = FallbackLegLength;
+        float _footFixTotal;      // how far GroundCrouchedFeet has the crouched model moved down (carried into next frame's placement)
+        float _footRestHeight;    // the lower foot's height over the character's origin in the saved (standing) pose
         float _crouch;            // 0..1: how much of the crouch is shown
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
@@ -137,6 +140,11 @@ namespace Game.Gameplay
         // 0.6 s it takes to get in or out, so it is the same on every side.
         public float SeatedPose => _seated;
         public float ModelDrop => _drop;
+        // How far GroundCrouchedFeet moved the crouched model down this frame (m, negative = up).
+        public float FootFix { get; private set; }
+        // Height of the lower ankle over the character's origin right now, and standing at rest (pose review).
+        public float FootLow => _footLeft == null || _footRight == null ? 0f : Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
+        public float FootRest => _footRestHeight;
 
         void Awake()
         {
@@ -167,6 +175,8 @@ namespace Game.Gameplay
             _stance = GetComponent<CombatantStance>();
             FindHead();
             FindArms();
+            if (_footLeft != null && _footRight != null)
+                _footRestHeight = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
             // Hip to ankle in the pose the prefab was saved in: what a knee bend shortens.
             Transform thigh = _bones[ThighLeft], shin = _bones[ShinLeft];
             if (thigh != null && shin != null && shin.childCount > 0)
@@ -352,7 +362,7 @@ namespace Game.Gameplay
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop + lying + sitting;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal) + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -405,8 +415,8 @@ namespace Game.Gameplay
             if (_footLeft != null && _footRight != null)
             {
                 // Heights as the clip has them: without the landing dip.
-                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop);
-                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop);
+                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal);
+                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
                 bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f && _seated < 0.5f
@@ -470,6 +480,7 @@ namespace Game.Gameplay
             PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, legRight);
             Turn(FootLeft, foot, legRight);
             Turn(FootRight, foot, legRight);
+            GroundCrouchedFeet();
             // Empty hands: arms out sideways (a weapon pose keeps both arms on the weapon). About the forward
             // axis a positive turn swings a hanging arm out to the right.
             float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - Mathf.Max(_upperWeight, _rifle));
@@ -491,6 +502,19 @@ namespace Game.Gameplay
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;
+        }
+
+        // Crouched, the knee bend on top of the walk clip's stride takes off more or less than the drop assumed
+        // (a stride's legs are not upright), which left the feet 0.2 m in the air (#121): the model goes down (or up)
+        // until the lower foot is where a standing foot rests.
+        // The correction is carried into the next frame's placement (Update) so anything drawn between frames agrees.
+        void GroundCrouchedFeet()
+        {
+            if (_crouch <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
+            float low = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
+            float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);
+            _animator.transform.position -= transform.up * (total - _footFixTotal);
+            FootFix = _footFixTotal = total;
         }
 
         // Sitting in a car (ADR-065 (5)), no clip: thighs forward to about level, shins down with the feet a little

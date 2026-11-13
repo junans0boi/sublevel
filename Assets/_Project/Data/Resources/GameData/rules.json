@@ -1,6 +1,6 @@
 {
   "MedkitHeal": 50,
-  "Locomotion": { "WalkSpeed": 4.5, "SprintSpeed": 7.0, "JumpSpeed": 4.8, "Gravity": -14.0, "GroundedStick": -2.0, "UnarmedMoveFactor": 1.12, "SlowWalkSpeed": 2.0, "SlowWalkFootstepVolume": 0.25 },
+  "Locomotion": { "WalkSpeed": 4.7, "SprintSpeed": 6.3, "JumpSpeed": 4.8, "Gravity": -14.0, "GroundedStick": -2.0, "SmgMoveFactor": 0.977, "RifleMoveFactor": 0.954, "MarksmanMoveFactor": 0.952, "ShotgunMoveFactor": 0.939, "SlowWalkSpeed": 1.7, "SlowWalkFootstepVolume": 0.25 },
   "Slots": { "SingleModeMinInterval": 0.12 },
   "Aim": {
     "TapSeconds": 0.2, "FovChangePerSecond": 10.0, "ShoulderCameraDistance": 1.9,
@@ -31,8 +31,8 @@
   },
   "Stance": {
     "Stand":  { "EyeDropMeters": 0.0,  "CapsuleHeight": 1.8, "MoveFactor": 1.0,  "SpreadFactor": 1.0,  "FootstepVolumeFactor": 1.0 },
-    "Crouch": { "EyeDropMeters": 0.65, "CapsuleHeight": 1.0, "MoveFactor": 0.55, "SpreadFactor": 0.5,  "FootstepVolumeFactor": 0.4 },
-    "Prone":  { "EyeDropMeters": 1.2,  "CapsuleHeight": 0.7, "MoveFactor": 0.18, "SpreadFactor": 0.2,  "FootstepVolumeFactor": 0.1 },
+    "Crouch": { "EyeDropMeters": 0.65, "CapsuleHeight": 1.0, "MoveFactor": 0.745, "SpreadFactor": 0.5,  "FootstepVolumeFactor": 0.4 },
+    "Prone":  { "EyeDropMeters": 1.2,  "CapsuleHeight": 0.7, "MoveFactor": 0.255, "SpreadFactor": 0.2, "FootstepVolumeFactor": 0.1 },
     "ProneEnabled": true, "ChangePerSecond": 5.0, "HeadClearanceMeters": 0.05,
     "ProneModelPitchDeg": 85.0, "ProneHeadLiftDeg": 40.0, "ProneBodyHeight": 0.15, "ProneModelBackShift": 1.35, "ProneMinLegPace": 0.3,
     "CrouchThighDeg": 58.0, "CrouchShinDeg": 50.0, "CrouchTorsoPitchDeg": 10.0,

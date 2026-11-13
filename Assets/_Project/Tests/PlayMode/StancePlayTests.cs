@@ -136,7 +136,7 @@ namespace Game.Tests
             _input.Frame.Move = Vector2.zero;
             Assert.Less(walkDrop, crouchDrop - 0.05f, "walking crouched bends the knees less so the legs can still swing");
             Assert.Greater(walkDrop, 0.1f, "but the body stays low");
-            Assert.AreEqual(2.772f, speed, 0.3f, "walking 4.5 m/s times the crouch factor 0.55, times 1.12 for the empty hands");
+            Assert.AreEqual(4.7f * 0.745f, speed, 0.3f, "walking 4.7 m/s with empty hands times the crouch factor 0.745 (ADR-095)");
 
             _input.Frame.Crouch = true;
             yield return WaitUntil(() => stance.Current == Stance.Stand && stance.CrouchAmount <= 0.001f, 2f, "standing again");
@@ -148,7 +148,7 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator JumpingOrSprinting_GetsUpFromACrouch()
+        public IEnumerator Jumping_GetsUpFromACrouch_SprintingCrouchSprints()
         {
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
@@ -170,9 +170,10 @@ namespace Game.Tests
             yield return Crouch(stance);
             _input.Frame.Sprint = true;
             _input.Frame.Move = new Vector2(0, 1);
-            yield return WaitUntil(() => stance.Current == Stance.Stand, 2f, "sprinting stands up");
-            yield return null;
+            yield return new WaitForSeconds(0.4f);
+            Assert.AreEqual(Stance.Crouch, stance.Current, "Shift crouched sprints crouched (ADR-095)");
             Assert.IsTrue(pc.Sprinting);
+            Assert.AreEqual(4.8f, me.PlanarSpeed, 0.4f, "crouch-sprint speed, empty hands");
         }
 
         // #105 (PUBG): C mid-sprint crouch-walks on with Shift still held, C again stands and runs; the inventory
@@ -275,15 +276,15 @@ namespace Game.Tests
             Assert.Less(pc.transform.position.y - floor, 0.1f, "and no jump into the slab either");
             Assert.AreEqual(1.0f, me.GetComponent<CharacterController>().height, 1e-3f);
 
-            // Sprinting out: still crouched until the head is clear, then up.
+            // Sprinting crouched (ADR-095): the sprint key does not stand up; out from under the slab only the crouch key does.
             _input.Frame.Sprint = true;
             _input.Frame.Move = new Vector2(0, 1);
-            yield return null;
-            yield return null;
-            Assert.AreEqual(Stance.Crouch, stance.Current, "sprint key under the slab");
-            Assert.IsFalse(pc.Sprinting);
+            yield return WaitUntil(() => pc.transform.position.z > -17.5f, 4f, "sprints crouched out from under the slab");
+            Assert.AreEqual(Stance.Crouch, stance.Current, "sprint key does not stand up");
+            _input.Frame.Sprint = false;
+            _input.Frame.Move = Vector2.zero;
+            _input.Frame.Crouch = true;
             yield return WaitUntil(() => stance.Current == Stance.Stand, 3f, "stands up once out from under the slab");
-            Assert.Greater(pc.transform.position.z, -18f);
         }
 
         [UnityTest]
@@ -379,7 +380,7 @@ namespace Game.Tests
             Assert.IsTrue(pc.Sprinting);
             float x0 = pc.transform.position.x, t0 = Time.time;
             yield return new WaitForSeconds(0.4f);
-            Assert.AreEqual(7f, (pc.transform.position.x - x0) / (Time.time - t0), 0.6f, "sprint speed");
+            Assert.AreEqual(6.3f * GameData.Rules.Locomotion.RifleMoveFactor, (pc.transform.position.x - x0) / (Time.time - t0), 0.6f, "sprint speed with a rifle");
             Assert.AreEqual(0, shots);
 
             _input.Frame.FireHeld = true;
@@ -388,7 +389,7 @@ namespace Game.Tests
             x0 = pc.transform.position.x;
             t0 = Time.time;
             yield return new WaitForSeconds(0.4f);
-            Assert.AreEqual(4.5f, (pc.transform.position.x - x0) / (Time.time - t0), 0.6f, "firing at walking speed");
+            Assert.AreEqual(4.7f * GameData.Rules.Locomotion.RifleMoveFactor, (pc.transform.position.x - x0) / (Time.time - t0), 0.6f, "firing at walking speed");
             Assert.Greater(shots, 0, "and the weapon fires");
 
             _input.Frame.FireHeld = false;

@@ -12,9 +12,10 @@ namespace Game.Tests
         [Test]
         public void EachStance_HasItsOwnMoveSpeed()
         {
-            Assert.AreEqual(4.5f, Stances.MoveSpeed(4.5f, Stance.Stand, Rules), 1e-4f);
-            Assert.AreEqual(2.475f, Stances.MoveSpeed(4.5f, Stance.Crouch, Rules), 1e-4f);
-            Assert.AreEqual(0.81f, Stances.MoveSpeed(4.5f, Stance.Prone, Rules), 1e-4f, "crawling: about 0.8 m/s");
+            // PUBG's table (ADR-095): running 4.7, crouched 3.4, crawling 1.2 m/s.
+            Assert.AreEqual(4.7f, Stances.MoveSpeed(4.7f, Stance.Stand, Rules), 1e-4f);
+            Assert.AreEqual(3.4f, Stances.MoveSpeed(4.7f, Stance.Crouch, Rules), 0.12f);
+            Assert.AreEqual(1.2f, Stances.MoveSpeed(4.7f, Stance.Prone, Rules), 0.01f, "crawling: 1.2 m/s");
         }
 
         [Test]
@@ -48,10 +49,10 @@ namespace Game.Tests
         }
 
         [Test]
-        public void JumpingOrSprinting_StandsUp()
+        public void Jumping_StandsUp_SprintingCrouchedStaysDown()
         {
             Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Crouch, false, false, true, false, true, Rules), "jump");
-            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Crouch, false, false, false, true, true, Rules), "sprint");
+            Assert.AreEqual(Stance.Crouch, Stances.Next(Stance.Crouch, false, false, false, true, true, Rules), "crouch-sprint (ADR-095)");
         }
 
         [Test]
@@ -92,8 +93,8 @@ namespace Game.Tests
             var prone = Rules.Prone;
             Assert.AreEqual(1.2f, prone.EyeDropMeters, 1e-5f);
             Assert.AreEqual(0.4f, Stances.EyeHeight(1.6f, Stance.Prone, Rules), 1e-5f, "eyes 0.4 m over the ground");
-            Assert.AreEqual(0.18f, prone.MoveFactor, 1e-5f);
-            Assert.AreEqual(0.81f, 4.5f * prone.MoveFactor, 1e-4f, "about 0.8 m/s");
+            Assert.AreEqual(0.255f, prone.MoveFactor, 1e-5f);
+            Assert.AreEqual(1.2f, 4.7f * prone.MoveFactor, 0.01f, "1.2 m/s (ADR-095)");
             Assert.AreEqual(0.2f, prone.SpreadFactor, 1e-5f);
             Assert.Less(prone.SpreadFactor, Rules.Crouch.SpreadFactor, "the steadiest stance");
             Assert.AreEqual(0.1f, prone.FootstepVolumeFactor, 1e-5f);

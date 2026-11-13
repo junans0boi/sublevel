@@ -52,10 +52,14 @@ namespace Game.Gameplay
             yield return PoseCase(pc, home, run, room, "d_sprint", new Vector2(0f, 1f), sprint: true);
             _frame.Crouch = true;
             yield return new WaitForSeconds(0.6f);
+            yield return PoseCase(pc, home, run, room, "e0_crouch_idle", Vector2.zero);
             yield return PoseCase(pc, home, run, room, "e_crouchwalk", new Vector2(0f, 1f));
+            yield return PoseCase(pc, home, run, room, "e2_crouchsprint", new Vector2(0f, 1f), sprint: true);
             _frame.Crouch = true;
             yield return new WaitForSeconds(0.6f);
             yield return PoseCase(pc, home, run, room, "f_aim_idle", Vector2.zero, aim: true);
+            yield return PoseCase(pc, home, run, room, "f2_aim_up", Vector2.zero, aim: true, pitch: 30f);
+            yield return PoseCase(pc, home, run, room, "f3_aim_down", Vector2.zero, aim: true, pitch: -30f);
             yield return PoseCase(pc, home, run, room, "g_aim_walk", new Vector2(0f, 1f), aim: true);
             yield return PoseCase(pc, home, run, room, "h_strafe_right", new Vector2(1f, 0f));
 
@@ -80,7 +84,7 @@ namespace Game.Gameplay
             Debug.Log("[FeelCapture] pose shots done: " + _folder);
         }
 
-        IEnumerator StartRun(PlayerController pc, Vector3 home, Vector3 run, float room, Vector2 move, bool sprint)
+        IEnumerator StartRun(PlayerController pc, Vector3 home, Vector3 run, float room, Vector2 move, bool sprint, float pitch = 0f)
         {
             _frame.Move = Vector2.zero;
             _frame.Sprint = false;
@@ -89,23 +93,23 @@ namespace Game.Gameplay
             pc.Teleport(from);
             yield return null;
             var facing = move.x != 0f ? Quaternion.Euler(0f, -90f, 0f) * run : run;
-            pc.LookAt(from + facing * 10f + Vector3.up * 1.6f);
+            pc.LookAt(from + facing * 10f + Vector3.up * (1.6f + 10f * Mathf.Tan(pitch * Mathf.Deg2Rad)));
             yield return new WaitForSeconds(0.4f);
             _frame.Move = move;
             _frame.Sprint = sprint;
         }
 
         IEnumerator PoseCase(PlayerController pc, Vector3 home, Vector3 run, float room, string name, Vector2 move,
-            bool sprint = false, bool slowWalk = false, bool aim = false)
+            bool sprint = false, bool slowWalk = false, bool aim = false, float pitch = 0f)
         {
             _frame.SlowWalk = slowWalk;
             _frame.AimHeld = aim;
-            yield return StartRun(pc, home, run, room, move, sprint);
+            yield return StartRun(pc, home, run, room, move, sprint, pitch);
             yield return new WaitForSeconds(0.7f);
             var anim = Combatant.LocalPlayer.GetComponent<CombatantAnimation>();
             for (int i = 0; i < 3; i++)
             {
-                Debug.Log($"[FeelCapture] {name} {i}: speed {Combatant.LocalPlayer.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F1} hold {anim.RifleHoldShown:F2} ready {anim.RifleReady:F2} pitch {anim.RiflePose.Pitch:F0} upper {anim.UpperState}");
+                Debug.Log($"[FeelCapture] {name} {i}: speed {Combatant.LocalPlayer.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F1} hold {anim.RifleHoldShown:F2} ready {anim.RifleReady:F2} pitch {anim.RiflePose.Pitch:F0} look {pc.Pitch:F0} upper {anim.UpperState} footfix {anim.FootFix:F3} footlow {anim.FootLow:F3} rest {anim.FootRest:F3} y {Combatant.LocalPlayer.transform.position.y:F3} sprinting {pc.Sprinting} {anim.AimGeometry()}");
                 foreach (var (view, tag) in new[] { (Watch.Side, "side"), (Watch.Quarter, "quarter"), (Watch.LeftSide, "left"), (Watch.Game, "tpp") })
                 {
                     _watch = view;
