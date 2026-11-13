@@ -28,6 +28,8 @@ namespace Game.Net
             SmokeRules.Current = rules.Smoke;
             BotRules.Current = rules.Bot;
             MeleeRules.Current = rules.Melee;
+            VehicleRules.Current = rules.Vehicles;
+            VehicleRules.Motorcycle = rules.Motorcycles;
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

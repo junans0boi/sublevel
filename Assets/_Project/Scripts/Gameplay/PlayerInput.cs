@@ -77,11 +77,13 @@ namespace Game.Gameplay
                 f.Map = k.mKey.wasPressedThisFrame;
                 f.Holster = k.xKey.wasPressedThisFrame;
                 f.CycleThrowable = k.tKey.wasPressedThisFrame;
-                if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
-                else if (k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
-                else if (k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;
-                else if (k.digit4Key.wasPressedThisFrame) f.SelectSlot = 3;
-                else if (k.digit5Key.wasPressedThisFrame) f.SelectSlot = 4;
+                // [VEHICLE HOOK] ADR-065 (5): Ctrl+1..4 change car seats (VehicleInput), not weapon slots.
+                bool ctrl = k.leftCtrlKey.isPressed || k.rightCtrlKey.isPressed;
+                if (!ctrl && k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
+                else if (!ctrl && k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
+                else if (!ctrl && k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;
+                else if (!ctrl && k.digit4Key.wasPressedThisFrame) f.SelectSlot = 3;
+                else if (!ctrl && k.digit5Key.wasPressedThisFrame) f.SelectSlot = 4;
             }
             if (m != null)
             {

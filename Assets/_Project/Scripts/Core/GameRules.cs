@@ -27,5 +27,7 @@ namespace Game.Core
         public SmokeRules Smoke = new SmokeRules();
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
+        public VehicleRules Vehicles = new VehicleRules();
+        public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
     }
 }

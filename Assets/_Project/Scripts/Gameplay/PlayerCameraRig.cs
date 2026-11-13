@@ -29,6 +29,13 @@ namespace Game.Gameplay
         public ViewMode Mode { get; private set; } = ViewMode.ThirdPerson;
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
+
+        // [VEHICLE HOOK] ADR-065 (5): colliders the view rays look past (set by VehicleCamera while in a car: the car
+        // and its occupants, so the crosshair aims at what lies beyond them). Null on foot.
+        public static System.Func<Collider, bool> AimIgnore;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => AimIgnore = null;
         float _distance = -1f;
 
         public void ToggleMode() => Mode = Mode == ViewMode.ThirdPerson ? ViewMode.FirstPerson : ViewMode.ThirdPerson;
@@ -76,6 +83,7 @@ namespace Game.Gameplay
                 var h = Hits[i];
                 // distance 0 means the cast started inside the collider.
                 if (h.distance <= 0f || h.collider.transform.IsChildOf(ignoreRoot) || h.distance >= best) continue;
+                if (AimIgnore != null && AimIgnore(h.collider)) continue;
                 best = h.distance;
                 nearest = h;
             }

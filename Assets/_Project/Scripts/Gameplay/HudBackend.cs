@@ -67,6 +67,26 @@ namespace Game.Gameplay
         public static bool DoorsClosed => SpawnProtection.InputBlocked;
         public static float DoorSecondsLeft => SpawnProtection.DoorSecondsLeft;
 
+        // ---- Vehicle (ADR-065 (5)) ----
+
+        // The seat the local player sits in, 1..4 (1 = driver); 0 when not in a car.
+        public static int VehicleSeatNumber(Combatant me) => VehicleSeat.TryGet(me, out _, out int seat) ? seat + 1 : 0;
+
+        // The speed of the car the player sits in (km/h, never negative); 0 when not in a car.
+        public static float VehicleSpeedKmh(Combatant me) => VehicleSeat.TryGet(me, out var vehicle, out _) ? vehicle.SpeedKmh : 0f;
+
+        // "운전석", "조수석", "뒷좌석"; "" when not in a car.
+        public static string VehicleSeatName(Combatant me)
+        {
+            int number = VehicleSeatNumber(me);
+            return number == 0 ? "" : number == 1 ? "운전석" : number == 2 ? "조수석" : "뒷좌석";
+        }
+
+        // On foot next to a car with a free seat: F gets in.
+        public static bool VehicleEnterable(Combatant me) =>
+            me != null && !me.Dead.Value && !VehicleSeat.IsAttached(me)
+            && Vehicle.NearestEnterable(me.transform.position, VehicleRules.Current.EnterRange, out _) != null;
+
         // ---- Match ----
 
         public static int Alive()
