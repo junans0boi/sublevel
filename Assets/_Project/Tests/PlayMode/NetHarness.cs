@@ -82,15 +82,15 @@ namespace Game.Tests
             yield return null;
         }
 
-        public static IEnumerator WaitUntil(Func<bool> cond, string what, Action<string> log = null)
+        public static IEnumerator WaitUntil(Func<bool> cond, string what, Action<string> log = null, float timeout = TimeoutSeconds)
         {
-            var end = Time.realtimeSinceStartup + TimeoutSeconds;
+            var end = Time.realtimeSinceStartup + timeout;
             while (!cond())
             {
                 if (Time.realtimeSinceStartup > end)
                 {
                     log?.Invoke($"TIMEOUT waiting for: {what}");
-                    throw new TimeoutException($"Timed out ({TimeoutSeconds}s) waiting for: {what}");
+                    throw new TimeoutException($"Timed out ({timeout}s) waiting for: {what}");
                 }
                 yield return null;
             }

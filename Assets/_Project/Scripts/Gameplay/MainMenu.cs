@@ -35,6 +35,8 @@ namespace Game.Gameplay
         public string LoadingText => _loading != null ? _loading.text : "";
         // The team mode 시작 will host (ADR-072); the last choice of this session, solo at first.
         public TeamMode Mode { get; private set; } = TeamMatch.Mode;
+        public LobbyScreen Lobby => _lobbyScreen;
+        public bool LobbyShown => _lobbyScreen != null && _lobbyScreen.Shown;
         public string ModeText => _modeLabel != null ? _modeLabel.text : "";
 
         GameObject _root, _main, _settings, _hint, _credits;
@@ -42,6 +44,7 @@ namespace Game.Gameplay
         Text _loading;
         Button[] _buttons;
         Text _modeLabel, _startLabel;
+        LobbyScreen _lobbyScreen;
 
         // Leaves the running match (this process hosts it) and opens the main menu. Both network sides are stopped
         // first so the sockets are closed before the scene, and its NetworkManager, goes away; the next 시작 then
@@ -68,6 +71,8 @@ namespace Game.Gameplay
             // The cursor may still be locked by the match we came from.
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            // The next match is solo again unless a lobby decides otherwise (#160).
+            NetSession.Reset();
             GameSettings.Load();
             Build();
         }
@@ -84,6 +89,7 @@ namespace Game.Gameplay
             // Esc in the settings = 뒤로 가기 (drops unapplied changes).
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && LobbyShown) _lobbyScreen.Leave();
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
@@ -106,6 +112,33 @@ namespace Game.Gameplay
             _loading.gameObject.SetActive(true);
             for (int i = 0; i < _buttons.Length; i++) _buttons[i].interactable = false;
             SceneManager.LoadSceneAsync(scene);
+        }
+
+        // 방 만들기 / 참가 (#160): the lobby panels; 시작 above stays the single-player path.
+        public void OpenHost()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            _lobbyScreen.OpenHost();
+        }
+
+        public void OpenJoin()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            _lobbyScreen.OpenJoin();
+        }
+
+        // The host started the lobby's match: everyone loads the match scene now (NetSession tells it who it is).
+        public void StartLobbyMatch(LobbyNet lobby)
+        {
+            if (IsLoading) return;
+            NetSession.Begin(lobby);
+            lobby.Shutdown();
+            _lobbyScreen.gameObject.SetActive(false);
+            Load(MatchScene, TeamMode.Solo);
         }
 
         // 모드 button: 솔로 -> 듀오 -> 스쿼드 -> 솔로.
@@ -173,6 +206,7 @@ namespace Game.Gameplay
             _settings.SetActive(false);
             _credits = new CreditsScreen().Build(_root.transform, Back).gameObject;
             _credits.SetActive(false);
+            _lobbyScreen = LobbyScreen.Build(this, _root.transform);
 
             var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(1400f, 30f));
             _hint = hint.gameObject;
@@ -185,14 +219,16 @@ namespace Game.Gameplay
         {
             var panel = UiKit.CenteredPanel("Main", parent, MainWidth);
             _main = panel.gameObject;
-            _buttons = new Button[6];
+            _buttons = new Button[8];
             float y = UiKit.MenuPadding;
             _buttons[0] = AddButton(panel, "모드", ref y, CycleMode);
             _buttons[1] = AddButton(panel, "시작", ref y, StartGame);
             _buttons[2] = AddButton(panel, "훈련장", ref y, StartTraining);
-            _buttons[3] = AddButton(panel, "설정", ref y, ShowSettings);
-            _buttons[4] = AddButton(panel, "크레딧", ref y, ShowCredits);
-            _buttons[5] = AddButton(panel, "종료", ref y, Quit);
+            _buttons[3] = AddButton(panel, "방 만들기", ref y, OpenHost);
+            _buttons[4] = AddButton(panel, "참가", ref y, OpenJoin);
+            _buttons[5] = AddButton(panel, "설정", ref y, ShowSettings);
+            _buttons[6] = AddButton(panel, "크레딧", ref y, ShowCredits);
+            _buttons[7] = AddButton(panel, "종료", ref y, Quit);
             _modeLabel = _buttons[0].GetComponentInChildren<Text>();
             _startLabel = _buttons[1].GetComponentInChildren<Text>();
             SetMode(Mode);
@@ -200,9 +236,9 @@ namespace Game.Gameplay
             panel.anchoredPosition = new Vector2(0f, -60f);
 
             // Title block above the button column (children of the column, so it goes away with it when settings show).
-            var title = UiKit.Rect("Title", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 346f), new Vector2(1000f, 120f));
+            var title = UiKit.Rect("Title", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 414f), new Vector2(1000f, 120f));
             UiKit.Label(title, Title, 96, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-            var studio = UiKit.Rect("Studio", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 266f), new Vector2(1000f, 36f));
+            var studio = UiKit.Rect("Studio", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 334f), new Vector2(1000f, 36f));
             UiKit.Label(studio, Studio, 24, UiKit.Accent, TextAnchor.MiddleCenter);
 
             var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -250f), new Vector2(600f, 40f));

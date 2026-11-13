@@ -120,6 +120,8 @@ namespace Game.Core
 
         public int BotCount = 15;             // + the player = 16
         public int MaxBots = MaxBotsLimit;
+        // People in one room (#160, ADR-124); bots fill the rest of the match.
+        public int MaxPlayers = 16;
 
         // BotCount within 0..MaxBots (and never above MaxBotsLimit).
         public int ClampedBotCount => Math.Max(0, Math.Min(BotCount, Math.Min(Math.Max(0, MaxBots), MaxBotsLimit)));

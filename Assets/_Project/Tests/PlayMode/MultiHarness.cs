@@ -56,10 +56,23 @@ namespace Game.Tests
         // Loads `scene` (it hosts its own match) and waits for the host's own player.
         public IEnumerator StartHost(string scene)
         {
+            PrepareHostInput();
+            SceneManager.LoadScene(scene);
+            yield return AdoptHost();
+        }
+
+        // Must come before the host's player spawns.
+        public void PrepareHostInput()
+        {
             HostInput = new HarnessInput();
             PlayerController.InputOverride = HostInput;
-            SceneManager.LoadScene(scene);
-            yield return NetHarness.WaitUntil(() => MatchDirector.Instance != null && Combatant.LocalPlayer != null && PlayerController.Local != null, "host player spawned", Log);
+        }
+
+        // The host is a match that is already loading or running (e.g. started from the lobby; call PrepareHostInput
+        // first): waits for its player.
+        public IEnumerator AdoptHost()
+        {
+            yield return NetHarness.WaitUntil(() => MatchDirector.Instance != null && Combatant.LocalPlayer != null && PlayerController.Local != null, "host player spawned", Log, 60f);
             Host = InstanceFinder.NetworkManager;
             HostPlayer = Combatant.LocalPlayer;
             ((Action<NetworkManager>)(nm => nm.TransportManager.LatencySimulator.GetType().GetField("_simulateHost", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nm.TransportManager.LatencySimulator, false)))(Host);

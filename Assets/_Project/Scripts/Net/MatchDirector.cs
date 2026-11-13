@@ -62,13 +62,18 @@ namespace Game.Net
         // Server: the elevator index each participant was given (players first, then bots); empty without elevators.
         public IReadOnlyList<int> ElevatorAssignment => _deployment;
         // Players counted ahead of the bots (participants 0..ExpectedPlayers-1, ADR-055); teams count the same way (ADR-072).
-        public int ExpectedPlayers => _playerPrefab != null ? Mathf.Max(0, _expectedPlayers) : 0;
+        // In a lobby's match (#160) it is the people the lobby counted.
+        public int ExpectedPlayers => _playerPrefab != null ? Mathf.Max(0, NetSession.Role == NetSession.RoleKind.Host ? NetSession.Players : _expectedPlayers) : 0;
 
         const float BotSnapMeters = 2f;
         // Feet a little above the station floor, as the builders place spawn points.
         const float ElevatorSpawnLift = 0.1f;
         // The doors open on their own this long after the server started if no player ever arrives.
         const float PlayerWaitSeconds = 15f;
+        // A lobby's match waits longer for its people (scene loads differ per machine); stragglers then arrive in an open station.
+        const float LobbyWaitSeconds = 60f;
+        // A guest keeps trying to reach the host's match this long (the host's scene may load later than its own).
+        const float GuestConnectSeconds = 60f;
 
         int _nextPlayerSpawn;
         int _playersPlaced;
@@ -76,6 +81,8 @@ namespace Game.Net
         int[] _deployment = new int[0];
         int[] _elevatorLoad = new int[0];
         float _serverStartedAt = -1f;
+        float _guestGiveUpAt = -1f;
+        float _guestRetryAt = -1f;
 
         void Awake()
         {
@@ -104,11 +111,19 @@ namespace Game.Net
             doors.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
-            if (_startAsHost)
+            if (_startAsHost && NetSession.Role == NetSession.RoleKind.Client)
+            {
+                // A guest of a lobby's match (#160): no server here, only the connection to the host.
+                _guestGiveUpAt = Time.time + GuestConnectSeconds;
+                _networkManager.ClientManager.OnClientConnectionState += OnGuestState;
+                _networkManager.ClientManager.StartConnection(NetSession.Address, NetSession.Port);
+            }
+            else if (_startAsHost)
             {
                 // Every run hosts its own match: never share (or fall through to) a port another process is serving (ADR-044).
                 var transport = _networkManager.TransportManager.Transport;
-                Port = FreePort(transport.GetPort());
+                // A lobby's host keeps the port it told the guests.
+                Port = FreePort(NetSession.Role == NetSession.RoleKind.Host && NetSession.Port != 0 ? NetSession.Port : transport.GetPort());
                 transport.SetPort(Port);
                 _networkManager.ServerManager.StartConnection();
                 _networkManager.ClientManager.StartConnection();
@@ -158,6 +173,14 @@ namespace Game.Net
             if (_networkManager == null) return;
             _networkManager.ServerManager.OnServerConnectionState -= OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
+            _networkManager.ClientManager.OnClientConnectionState -= OnGuestState;
+        }
+
+        // The guest's first attempt may come before the host listens: try again until it is up or the time is over.
+        void OnGuestState(ClientConnectionStateArgs args)
+        {
+            if (args.ConnectionState == LocalConnectionState.Stopped && Time.time < _guestGiveUpAt) _guestRetryAt = Time.time + 1f;
+            else if (args.ConnectionState == LocalConnectionState.Started) _guestGiveUpAt = -1f;
         }
 
         void OnServerState(ServerConnectionStateArgs args)
@@ -223,7 +246,10 @@ namespace Game.Net
             get
             {
                 if (_botPrefab == null) return 0;
-                if (HasElevators) return (MatchRules.Current ?? new MatchRules()).ClampedBotCount;
+                if (HasElevators)
+                    return NetSession.Role == NetSession.RoleKind.Host && NetSession.Bots >= 0
+                        ? LobbyRules.ClampBots(NetSession.Bots, NetSession.Players)
+                        : (MatchRules.Current ?? new MatchRules()).ClampedBotCount;
                 if (_botSpawns == null) return 0;
                 int count = 0;
                 foreach (var point in _botSpawns) if (point != null) count++;
@@ -238,7 +264,7 @@ namespace Game.Net
         {
             if (Elevators == null || Elevators.Sites.Count == 0) return;
             DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(_seed * 397 ^ System.Environment.TickCount) : _seed);
-            _expectedPlayersCounted = _playerPrefab != null ? Mathf.Max(0, _expectedPlayers) : 0;
+            _expectedPlayersCounted = ExpectedPlayers;
             var slots = new ElevatorSlot[Elevators.Sites.Count];
             for (int i = 0; i < slots.Length; i++) slots[i] = new ElevatorSlot(Elevators.Sites[i].Region);
             // A team starts together in one elevator (ADR-072); solo is the plain assignment.
@@ -299,8 +325,14 @@ namespace Game.Net
         void Update()
         {
             // Nobody came to play (a server without its own client): the bots are not kept in the dark for ever.
-            if (Elevators != null && _serverStartedAt >= 0f && !Elevators.ServerScheduled && Time.time - _serverStartedAt > PlayerWaitSeconds)
+            float wait = NetSession.Role == NetSession.RoleKind.Host ? LobbyWaitSeconds : PlayerWaitSeconds;
+            if (Elevators != null && _serverStartedAt >= 0f && !Elevators.ServerScheduled && Time.time - _serverStartedAt > wait)
                 Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
+            if (_guestRetryAt >= 0f && Time.time >= _guestRetryAt)
+            {
+                _guestRetryAt = -1f;
+                _networkManager.ClientManager.StartConnection(NetSession.Address, NetSession.Port);
+            }
         }
 
         // The places bots wander between: loot, dummies and where bots start. Game.AI sits above this assembly, so
@@ -338,7 +370,9 @@ namespace Game.Net
                 _networkManager.ServerManager.Spawn(deployed, connection);
                 ServerProtect(deployed.GetComponent<Combatant>());
                 // The match starts with its first player: the doors open DoorDelaySeconds later, for everyone.
-                Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
+                // A lobby's match waits until all its people stand in their elevators (#160); Update covers the ones who never come.
+                if (NetSession.Role != NetSession.RoleKind.Host || _playersPlaced >= _expectedPlayersCounted)
+                    Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
                 return;
             }
             var point = _playerSpawns[_nextPlayerSpawn++ % _playerSpawns.Length];

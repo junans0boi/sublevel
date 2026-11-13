@@ -1,0 +1,185 @@
+using System.Collections;
+using System.IO;
+using Game.Core;
+using Game.Gameplay;
+using Game.Net;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+
+namespace Game.Tests
+{
+    // #160: the lobby over localhost (host + guests as separate LobbyNet rooms in one process), the refusals, and the
+    // way from the main menu's lobby into the elevator start of the real World match.
+    public class LobbyPlayTests
+    {
+        const string LogDir = "Logs/net-lobby";
+        static ushort _port = 17900;
+        readonly System.Collections.Generic.List<LobbyNet> _rooms = new System.Collections.Generic.List<LobbyNet>();
+        readonly System.Text.StringBuilder _log = new System.Text.StringBuilder();
+        MatchRules _rules;
+        int _maxPlayers;
+
+        void Log(string line) { Debug.Log(line); _log.AppendLine(line); }
+
+        LobbyNet NewRoom()
+        {
+            var room = new GameObject("TestLobby" + _rooms.Count).AddComponent<LobbyNet>();
+            _rooms.Add(room);
+            return room;
+        }
+
+        [SetUp]
+        public void SetUp()
+        {
+            _log.Clear();
+            _rules = MatchRules.Current;
+            _maxPlayers = _rules.MaxPlayers;
+            NetSession.Reset();
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            Directory.CreateDirectory(LogDir);
+            File.WriteAllText(Path.Combine(LogDir, TestContext.CurrentContext.Test.Name + ".log"), _log.ToString());
+            _rules.MaxPlayers = _maxPlayers;
+            foreach (var r in _rooms) if (r != null) { r.Shutdown(); Object.Destroy(r.gameObject); }
+            _rooms.Clear();
+            PlayerController.InputOverride = null;
+            NetSession.Reset();
+            SceneManager.LoadScene("Bootstrap");
+            yield return null;
+            yield return null;
+        }
+
+        IEnumerator HostWithGuest(System.Action<LobbyNet, LobbyNet> done, ushort port)
+        {
+            var host = NewRoom();
+            Assert.IsTrue(host.StartHost(port));
+            var guest = NewRoom();
+            Assert.IsTrue(guest.Join("127.0.0.1", port));
+            yield return NetHarness.WaitUntil(() => host.Roster.Count == 2 && guest.Phase == LobbyNet.PhaseKind.InLobby, "host and guest in the room", Log);
+            done(host, guest);
+        }
+
+        [UnityTest]
+        public IEnumerator Guest_JoinsReadiesUp_AndTheHostStartsForBoth()
+        {
+            LobbyNet host = null, guest = null;
+            yield return HostWithGuest((h, g) => { host = h; guest = g; }, _port++);
+
+            Assert.IsTrue(host.IsHost);
+            Assert.AreEqual(2, guest.Roster.Count, "the guest sees both people");
+            Assert.IsFalse(host.CanStart, "the guest is not ready yet");
+            Assert.IsFalse(host.StartMatch());
+
+            guest.SetReady(true);
+            yield return NetHarness.WaitUntil(() => host.CanStart, "guest ready seen by the host", Log);
+            host.SetBots(3);
+            yield return NetHarness.WaitUntil(() => guest.Bots == 3, "bot count reaches the guest", Log);
+
+            int starts = 0;
+            host.MatchStarting += () => starts++;
+            guest.MatchStarting += () => starts++;
+            Assert.IsTrue(host.StartMatch());
+            yield return NetHarness.WaitUntil(() => starts == 2, "both rooms told to start", Log);
+            Assert.AreEqual(host.StartInfo.MatchPort, guest.StartInfo.MatchPort);
+            Assert.AreEqual(2, guest.StartInfo.Players);
+            Assert.AreEqual(3, guest.StartInfo.Bots);
+        }
+
+        [UnityTest]
+        public IEnumerator DifferentVersion_IsRefusedWithTheReason()
+        {
+            ushort port = _port++;
+            var host = NewRoom();
+            Assert.IsTrue(host.StartHost(port));
+            var guest = NewRoom();
+            guest.Version = "0.0.0-other/1";
+            guest.Join("127.0.0.1", port);
+            yield return NetHarness.WaitUntil(() => guest.Phase == LobbyNet.PhaseKind.Failed, "guest refused", Log);
+            Assert.AreEqual(LobbyRules.Reason(JoinResult.VersionMismatch), guest.FailureText);
+            Assert.AreEqual(1, host.Roster.Count, "the refused guest never entered the room");
+        }
+
+        [UnityTest]
+        public IEnumerator FullRoom_RefusesTheNextGuest()
+        {
+            MatchRules.Current.MaxPlayers = 2;
+            LobbyNet host = null, guest = null;
+            ushort port = _port++;
+            yield return HostWithGuest((h, g) => { host = h; guest = g; }, port);
+            var third = NewRoom();
+            third.Join("127.0.0.1", port);
+            yield return NetHarness.WaitUntil(() => third.Phase == LobbyNet.PhaseKind.Failed, "third guest refused", Log);
+            Assert.AreEqual(LobbyRules.Reason(JoinResult.Full), third.FailureText);
+            Assert.AreEqual(2, host.Roster.Count);
+        }
+
+        [UnityTest]
+        public IEnumerator NobodyThere_FailsWithTheAddressHint()
+        {
+            var guest = NewRoom();
+            guest.Join("127.0.0.1", _port++);
+            yield return NetHarness.WaitUntil(() => guest.Phase == LobbyNet.PhaseKind.Failed, "join gives up", Log, 15f);
+            Assert.AreEqual(LobbyRules.Unreachable, guest.FailureText);
+        }
+
+        [UnityTest]
+        public IEnumerator GuestLeaving_FreesItsPlaceInTheRoom()
+        {
+            LobbyNet host = null, guest = null;
+            yield return HostWithGuest((h, g) => { host = h; guest = g; }, _port++);
+            guest.Shutdown();
+            yield return NetHarness.WaitUntil(() => host.Roster.Count == 1, "guest removed from the room", Log);
+        }
+
+        // The whole way: main menu 방 만들기 -> a guest joins and readies -> 시작 -> the World match waits for both in
+        // the elevators (the doors do not open for the first one alone) -> the guest's client connects -> the doors are scheduled.
+        [UnityTest, Timeout(180000)]
+        public IEnumerator MainMenuHost_StartsTheWorldMatch_WaitingForTheGuestInTheElevators()
+        {
+            var net = new MultiHarness { Log = Log };
+            net.PrepareHostInput();
+            SceneManager.LoadScene(MainMenu.SceneName);
+            yield return NetHarness.WaitUntil(() => MainMenu.Instance != null, "main menu", Log);
+            yield return null;
+            MainMenu.Instance.OpenHost();
+            var hostRoom = MainMenu.Instance.Lobby.Lobby;
+            yield return NetHarness.WaitUntil(() => hostRoom.Phase == LobbyNet.PhaseKind.InLobby, "menu host in its room", Log);
+            Assert.AreEqual(LobbyScreen.ViewKind.Room, MainMenu.Instance.Lobby.View);
+
+            var guest = NewRoom();
+            Assert.IsTrue(guest.Join("127.0.0.1", hostRoom.Port));
+            yield return NetHarness.WaitUntil(() => hostRoom.Roster.Count == 2 && guest.Phase == LobbyNet.PhaseKind.InLobby, "guest in the host's room", Log);
+            guest.SetReady(true);
+            hostRoom.SetBots(2);
+            yield return NetHarness.WaitUntil(() => hostRoom.CanStart && guest.Bots == 2, "ready and bots synced", Log);
+
+            Assert.IsTrue(hostRoom.StartMatch());
+            yield return NetHarness.WaitUntil(() => guest.HasStarted, "guest got the start", Log);
+            yield return NetHarness.WaitUntil(() => SceneManager.GetActiveScene().name == MainMenu.MatchScene && MatchDirector.Instance != null, "World loaded", Log, 90f);
+            Assert.AreEqual(NetSession.RoleKind.Host, NetSession.Role);
+            Assert.AreEqual(guest.StartInfo.MatchPort, MatchDirector.Instance.Port, "the match listens where the guest was told");
+            yield return net.AdoptHost();
+
+            var director = MatchDirector.Instance;
+            Assert.AreEqual(2, director.ExpectedPlayers);
+            Assert.AreEqual(2, director.BotCount);
+            Assert.AreEqual(4, director.ElevatorAssignment.Count, "2 people + 2 bots share the deployment");
+            float until = Time.realtimeSinceStartup + 2f;
+            while (Time.realtimeSinceStartup < until) yield return null;
+            Assert.IsFalse(director.Elevators.ServerScheduled, "the doors wait for the second person");
+
+            // The guest's process would do exactly this: connect to the host's match port.
+            RemoteClient remote = null;
+            yield return net.AddClient(c => remote = c);
+            yield return NetHarness.WaitUntil(() => director.Elevators.ServerScheduled, "doors scheduled once both stand in their elevators", Log);
+            Assert.AreEqual(2, MultiHarness.PlayersSeenBy(net.Host).Count);
+            Assert.AreNotEqual(net.HostPlayer.transform.position, remote.Player.transform.position);
+            yield return net.Teardown();
+        }
+    }
+}
