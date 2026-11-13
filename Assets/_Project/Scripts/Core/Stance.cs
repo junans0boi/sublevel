@@ -35,11 +35,12 @@ namespace Game.Core
 
         // There is no crouch clip: the knees are bent in code and the model is lowered by what that takes off
         // the legs, so the feet stay on the ground. Angles are measured from vertical: the thigh points down and
-        // forward, the shin down and back, so the knee flexes by their sum. 58 + 50 = 108 degrees of flexion is
-        // an interior knee angle of 72 and never beyond the 110 a real knee folds to; both thighs and shins have
-        // about the same length, so the feet land 4 cm ahead of the hips and the hips come down about 0.37 m.
-        public float CrouchThighDeg = 58f;
-        public float CrouchShinDeg = 50f;
+        // forward, the shin down and back, so the knee flexes by their sum. 46 + 40 = 86 degrees of flexion (was
+        // 58 + 50 = 108, judged deeper than PUBG's crouch, #143) never goes beyond the 110 a real knee folds to; both
+        // thighs and shins have about the same length, so the feet land 3 cm ahead of the hips and the hips come
+        // down about 0.24 m on a 0.9 m leg.
+        public float CrouchThighDeg = 46f;
+        public float CrouchShinDeg = 40f;
         public float CrouchTorsoPitchDeg = 10f; // forward, empty hands only (a weapon pose keeps the weapon level)
         // Crouch-walking keeps the walk clip's leg swing and bends the knees by this share of the standing crouch
         // (a full bend plus a stride would fold the legs), reached at CrouchWalkFullSpeed m/s.

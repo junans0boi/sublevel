@@ -8,7 +8,7 @@ namespace Game.Gameplay
     {
         const int DiscSegments = 12;
 
-        static Mesh _disc, _muzzleFlash;
+        static Mesh _disc, _muzzleFlash, _burst;
 
         // A disc of diameter 1 in the XY plane.
         public static Mesh Disc
@@ -28,6 +28,48 @@ namespace Game.Gameplay
                 if (_muzzleFlash == null) _muzzleFlash = Build("FxMuzzleFlash", true);
                 return _muzzleFlash;
             }
+        }
+
+        // A jagged explosion flash of diameter 1 in the XY plane (#143): a bright core with nine uneven spikes whose
+        // tips fade out. The disc it replaces read as a round ball of light.
+        public static Mesh Burst
+        {
+            get
+            {
+                if (_burst == null) _burst = BuildBurst();
+                return _burst;
+            }
+        }
+
+        static Mesh BuildBurst()
+        {
+            const int spikes = 9;
+            // Tip lengths (share of the radius) and the angle jitter of each spike: fixed, so every flash has the same irregular look.
+            float[] tip = { 0.50f, 0.34f, 0.46f, 0.30f, 0.50f, 0.38f, 0.44f, 0.32f, 0.48f };
+            float[] jitter = { 0f, 0.15f, -0.1f, 0.2f, -0.05f, 0.1f, -0.2f, 0.05f, -0.12f };
+            var vertices = new Vector3[1 + spikes * 2];
+            var colors = new Color32[vertices.Length];
+            var triangles = new int[spikes * 6];
+            vertices[0] = Vector3.zero;
+            colors[0] = new Color32(255, 255, 255, 255);
+            for (int i = 0; i < spikes; i++)
+            {
+                float a = (i + jitter[i]) * Mathf.PI * 2f / spikes;
+                float valley = (i + 0.5f) * Mathf.PI * 2f / spikes;
+                vertices[1 + i * 2] = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * tip[i];
+                colors[1 + i * 2] = new Color32(255, 255, 255, 0);
+                vertices[2 + i * 2] = new Vector3(Mathf.Cos(valley), Mathf.Sin(valley), 0f) * 0.14f;
+                colors[2 + i * 2] = new Color32(255, 255, 255, 150);
+                int next = (i + 1) % spikes;
+                triangles[i * 6 + 0] = 0; triangles[i * 6 + 1] = 1 + i * 2; triangles[i * 6 + 2] = 2 + i * 2;
+                triangles[i * 6 + 3] = 0; triangles[i * 6 + 4] = 2 + i * 2; triangles[i * 6 + 5] = 1 + next * 2;
+            }
+            var mesh = new Mesh { name = "FxBurst", hideFlags = HideFlags.HideAndDontSave };
+            mesh.vertices = vertices;
+            mesh.colors32 = colors;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         static Mesh Build(string name, bool spikes)

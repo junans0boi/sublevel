@@ -316,7 +316,7 @@ namespace Game.Gameplay
             var band = UiKit.Rect("Band", _camRoot.transform, at, at, Vector2.zero, new Vector2(640f, 150f));
             UiKit.Box(band, UiKit.Panel);
             var top = new Vector2(0.5f, 1f);
-            UiKit.Label(UiKit.Rect("Caption", band, top, top, new Vector2(0f, -12f), new Vector2(600f, 24f)), "처치한 상대", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
+            UiKit.Label(UiKit.Rect("Caption", band, top, top, new Vector2(0f, -12f), new Vector2(600f, 24f)), "나를 처치한 상대", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
             _camName = UiKit.Label(UiKit.Rect("Name", band, top, top, new Vector2(0f, -38f), new Vector2(600f, 52f)), "", 40, UiKit.Danger, TextAnchor.MiddleCenter, FontStyle.Bold);
             _camDetail = UiKit.Label(UiKit.Rect("Detail", band, top, top, new Vector2(0f, -92f), new Vector2(600f, 28f)), "", 22, UiKit.Text, TextAnchor.MiddleCenter);
             UiKit.Label(UiKit.Rect("Hint", band, top, top, new Vector2(0f, -122f), new Vector2(600f, 22f)), "클릭 / Space — 건너뛰기", 16, UiKit.TextDim, TextAnchor.MiddleCenter);

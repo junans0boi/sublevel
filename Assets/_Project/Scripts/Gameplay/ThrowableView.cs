@@ -192,7 +192,7 @@ namespace Game.Gameplay
                 root.SetParent(_fxRoot, false);
                 _blasts[i] = root;
                 for (int p = 0; p < PuffsPerBlast; p++) _puffs[i * PuffsPerBlast + p] = NewRenderer("Puff", root, _dustMaterial);
-                _flash[i] = NewRenderer("Flash", root, _glowMaterial);
+                _flash[i] = NewRenderer("Flash", root, _glowMaterial, CombatFxMeshes.Burst);
                 var light = root.gameObject.AddComponent<Light>();
                 light.type = LightType.Point;
                 light.color = _lightColor;
@@ -252,11 +252,11 @@ namespace Game.Gameplay
             _built = true;
         }
 
-        static MeshRenderer NewRenderer(string name, Transform parent, Material material)
+        static MeshRenderer NewRenderer(string name, Transform parent, Material material, Mesh mesh = null)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = CombatFxMeshes.Disc;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh != null ? mesh : CombatFxMeshes.Disc;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -587,7 +587,8 @@ namespace Game.Gameplay
 
             if (age < FlashSeconds)
             {
-                _flash[i].transform.rotation = rotation;
+                // A different turn of the burst each time, so two blasts never look the same.
+                _flash[i].transform.rotation = rotation * Quaternion.Euler(0f, 0f, Mathf.Repeat(_blastStart[i] * 997f, 360f));
                 _flash[i].transform.localScale = Vector3.one * (FlashSize * Mathf.Lerp(0.5f, 1f, age / FlashSeconds));
             }
             else if (_flash[i].enabled) _flash[i].enabled = false;

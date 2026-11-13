@@ -120,7 +120,7 @@ namespace Game.Tests
             yield return null; // a frame for LateUpdate to pose the legs and for the camera to follow
             yield return null;
             Assert.AreEqual(1f, animation.CrouchPose, 0.01f);
-            Assert.Greater(animation.ModelDrop, 0.3f, "the model is lowered");
+            Assert.Greater(animation.ModelDrop, 0.2f, "the model is lowered");
             Assert.Less(animation.ModelDrop, 0.5f, "not a kneel");
             float crouchDrop = animation.ModelDrop;
             Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.28f, "the hips came down");

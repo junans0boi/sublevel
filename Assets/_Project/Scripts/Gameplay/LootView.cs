@@ -39,6 +39,9 @@ namespace Game.Gameplay
         MeshFilter _boxFilter;
         Mesh _boxMesh;
         Vector3 _boxScale = Vector3.one;
+        Quaternion _boxRotation = Quaternion.identity;
+        // The ground pack is the worn model scaled down and laid on its back (#143, ADR-112): about a rifle's length.
+        const float GroundPackScale = 1f;
         readonly Color[] _colors = new Color[3];
         int _shownKind = -1;
         int _shownWeapon = -1;
@@ -88,6 +91,7 @@ namespace Game.Gameplay
             if (_renderer != null)
             {
                 _boxScale = _renderer.transform.localScale;
+                _boxRotation = _renderer.transform.localRotation;
                 _boxFilter = _renderer.GetComponent<MeshFilter>();
                 if (_boxFilter != null) _boxMesh = _boxFilter.sharedMesh;
                 _renderer.transform.SetParent(_visual, false);
@@ -133,13 +137,16 @@ namespace Game.Gameplay
             if (mesh != null && _boxFilter != null && material != null)
             {
                 _boxFilter.sharedMesh = mesh;
-                box.localScale = Vector3.one;
+                bool pack = lootKind == LootKind.Backpack;
+                box.localScale = pack ? Vector3.one * GroundPackScale : Vector3.one;
+                box.localRotation = pack ? Quaternion.Euler(-90f, 0f, 0f) * _boxRotation : _boxRotation; // back panel down
                 if (attachment) LootMeshes.AttachmentColors(_colors); else LootMeshes.Colors(lootKind, ammo, tier, _colors);
                 _renderer.sharedMaterials = new[] { Tint(material, _colors[0]), Tint(material, _colors[1]), Tint(material, _colors[2]) };
             }
             else
             {
                 if (_boxFilter != null) _boxFilter.sharedMesh = _boxMesh;
+                box.localRotation = _boxRotation;
                 // Without the optic materials an optic is a bar tinted by its zoom.
                 box.localScale = opticKind ? Vector3.Scale(_boxScale, OpticShape) : _boxScale;
                 _renderer.sharedMaterial = opticKind && material != null ? Tint(material, OpticColor(optic)) : material;

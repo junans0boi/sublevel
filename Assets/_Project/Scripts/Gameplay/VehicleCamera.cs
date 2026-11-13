@@ -93,19 +93,21 @@ namespace Game.Gameplay
         }
 
         // At a car's wheel the eye view goes down (view only) until the grips are GripsCarDeg below level (the wheel
-        // top about the lower third of the frame), within MaxCarDrop. Not on a motorcycle: moving that view back puts
-        // the rider's own back in front of it (tried: the bars stay under the frame, the back covers the road).
-        const float GripsCarDeg = 24f, MaxCarDrop = 0.12f;
+        // top about the lower third of the frame), within MaxCarDrop. A motorcycle's bars sit lower and nearer: the
+        // same lowering (GripsBikeDeg, MaxBikeDrop) brings them to the bottom edge looking straight ahead (#143). Never
+        // moved back: that puts the rider's own back in front of the view (tried: the back covers the road).
+        const float GripsCarDeg = 24f, MaxCarDrop = 0.12f, GripsBikeDeg = 36f, MaxBikeDrop = 0.22f;
 
         Vector3 GripsInView(Vehicle vehicle, Vector3 eye)
         {
             var seat = VehicleSeat.SeatOf(_combatant);
-            if (vehicle.IsMotorcycle || seat == null || !seat.HasGrips || !VehicleSeat.InDriverSeat(_combatant)) return Vector3.zero;
+            if (seat == null || !seat.HasGrips || !VehicleSeat.InDriverSeat(_combatant)) return Vector3.zero;
+            bool bike = vehicle.IsMotorcycle;
             var t = vehicle.transform;
             var to = (seat.GripLeft.position + seat.GripRight.position) * 0.5f - eye;
             float ahead = Vector3.Dot(to, t.forward), down = -Vector3.Dot(to, t.up);
             if (ahead <= 0.01f || down <= 0f) return Vector3.zero;
-            return -t.up * Mathf.Clamp(down - ahead * Mathf.Tan(GripsCarDeg * Mathf.Deg2Rad), 0f, MaxCarDrop);
+            return -t.up * Mathf.Clamp(down - ahead * Mathf.Tan((bike ? GripsBikeDeg : GripsCarDeg) * Mathf.Deg2Rad), 0f, bike ? MaxBikeDrop : MaxCarDrop);
         }
 
         // The model's bounds in the vehicle's own space (renderers only: the occupants are not children).

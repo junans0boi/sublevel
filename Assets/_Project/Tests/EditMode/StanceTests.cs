@@ -148,16 +148,16 @@ namespace Game.Tests
             Assert.AreEqual(0f, Stances.KneeBendDrop(0.9f, 0f), 1e-5f);
             Assert.AreEqual(0.45f, Stances.KneeBendDrop(0.9f, 60f), 1e-4f);
             Assert.AreEqual(0.9f, Stances.KneeBendDrop(0.9f, 90f), 1e-4f);
-            // The default crouch: thigh 58 and shin 50 degrees from vertical on a 0.9 m leg.
-            Assert.AreEqual(0.3723f, Stances.CrouchHipDrop(0.9f, Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-3f);
+            // The default crouch: thigh 46 and shin 40 degrees from vertical on a 0.9 m leg.
+            Assert.AreEqual(0.2427f, Stances.CrouchHipDrop(0.9f, Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-3f);
         }
 
         [Test]
         public void CrouchKnee_FoldsToAboutAQuarterTurnNeverPast110()
         {
-            Assert.AreEqual(108f, Stances.KneeFlexion(Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-4f);
+            Assert.AreEqual(86f, Stances.KneeFlexion(Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-4f);
             Assert.That(Stances.KneeFlexion(Rules.CrouchThighDeg, Rules.CrouchShinDeg), Is.InRange(80f, 110f));
-            Assert.That(Rules.CrouchThighDeg, Is.InRange(55f, 65f));
+            Assert.That(Rules.CrouchThighDeg, Is.InRange(40f, 50f));
             Assert.That(Rules.CrouchTorsoPitchDeg, Is.InRange(8f, 12f));
             // Landing bend (thigh 28, shin 28 from vertical) stays far from the limit too.
             Assert.AreEqual(56f, Stances.KneeFlexion(28f, 28f), 1e-4f);
@@ -166,16 +166,16 @@ namespace Game.Tests
         [Test]
         public void CrouchBend_ShrinksWithWalkingSpeed()
         {
-            // Blend 0 = standing crouch: full 58 / 50. Blend 1 = walking: 0.65 of that. Half way in between.
-            foreach (var c in new[] { (0f, 1f, 58f, 50f), (0.5f, 0.825f, 47.85f, 41.25f), (1f, 0.65f, 37.7f, 32.5f), (2f, 0.65f, 37.7f, 32.5f), (-1f, 1f, 58f, 50f) })
+            // Blend 0 = standing crouch: full 46 / 40. Blend 1 = walking: 0.65 of that. Half way in between.
+            foreach (var c in new[] { (0f, 1f, 46f, 40f), (0.5f, 0.825f, 37.95f, 33f), (1f, 0.65f, 29.9f, 26f), (2f, 0.65f, 29.9f, 26f), (-1f, 1f, 46f, 40f) })
             {
                 float scale = Stances.CrouchBendScale(c.Item1, Rules.CrouchWalkBend);
                 Assert.AreEqual(c.Item2, scale, 1e-4f, "scale at blend " + c.Item1);
                 Assert.AreEqual(c.Item3, Rules.CrouchThighDeg * scale, 1e-2f, "thigh");
                 Assert.AreEqual(c.Item4, Rules.CrouchShinDeg * scale, 1e-2f, "shin");
             }
-            // Walking bend: hips 0.9 * 0.5 * (2 - cos 37.7 - cos 32.5) = 0.1644 m down; still well above the full bend.
-            Assert.AreEqual(0.1644f, Stances.CrouchHipDrop(0.9f, 37.7f, 32.5f), 1e-3f);
+            // Walking bend: hips 0.9 * 0.5 * (2 - cos 29.9 - cos 26) = 0.1054 m down; still well above the full bend.
+            Assert.AreEqual(0.1054f, Stances.CrouchHipDrop(0.9f, 29.9f, 26f), 1e-3f);
         }
 
         [Test]
