@@ -38,7 +38,7 @@ namespace Game.Tests
         {
             var table = Weapons();
             CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 21, 22, 23, 24 }, table.Weapons.Select(w => w.Id).ToArray());
-            Assert.AreEqual(27f, table.Find(3).Damage, 1e-4f);
+            Assert.AreEqual(40f, table.Find(3).Damage, 1e-4f, "ADR-089: three body shots");
             Assert.AreEqual(AmmoType.Rifle556, table.Find(3).Ammo);
         }
 
@@ -66,11 +66,11 @@ namespace Game.Tests
         }
 
         [Test]
-        public void ScopedSpread_IsAQuarterOfASixTenthsDegree()
+        public void ScopedSpread_IsAlmostNothing()
         {
             var w = Weapons().Find(Sentinel);
-            // Sights spread factor 0.25 in rules.json: 0.6 x 0.25 = 0.15 degrees.
-            Assert.AreEqual(0.15f, w.SpreadDeg * 0.25f, 1e-4f);
+            // Sights spread factor 0.015 in rules.json (ADR-089): 0.6 x 0.015 = 0.009 degrees.
+            Assert.AreEqual(0.009f, w.SpreadDeg * 0.015f, 1e-4f);
             Assert.Greater(w.MoveSpreadFactor, 3f, "a moving sniper is inaccurate");
         }
 

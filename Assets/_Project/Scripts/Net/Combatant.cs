@@ -211,18 +211,20 @@ namespace Game.Net
         public bool IsAutoFire(int slot)
         {
             var weapon = GameData.Weapons.Find(WeaponInSlot(slot));
-            return weapon != null && weapon.Auto && (SingleFireSlots.Value & (1 << slot)) == 0;
+            return Loadout.ModeFromBits(weapon, SingleFireSlots.Value, slot) == FireMode.Auto;
         }
+        // Single, burst or automatic for the weapon in hand (ADR-089); bits 8+ of SingleFireSlots mark burst.
+        public FireMode ActiveFireMode => Holstered.Value ? FireMode.Single : Loadout.ModeFromBits(ActiveWeapon, SingleFireSlots.Value, ActiveSlot.Value);
         public bool ActiveAutoFire => !Holstered.Value && IsAutoFire(ActiveSlot.Value);
         // The fire mode shown for a slot: "연사" or "단발"; empty for an empty slot.
         public string FireModeOf(int slot)
         {
             var weapon = GameData.Weapons.Find(WeaponInSlot(slot));
-            return weapon == null ? "" : Loadout.FireModeName(IsAutoFire(slot));
+            return weapon == null ? "" : Loadout.FireModeName(Loadout.ModeFromBits(weapon, SingleFireSlots.Value, slot));
         }
         // Seconds between shots of the weapon in hand in its current mode (single shots on an automatic weapon are slower).
         public double FireInterval(WeaponDef weapon) =>
-            weapon.Auto && !ActiveAutoFire ? Math.Max(weapon.FireInterval, GameData.Rules.Slots.SingleModeMinInterval) : weapon.FireInterval;
+            Loadout.IntervalAfter(weapon, ActiveFireMode, 1, GameData.Rules.Slots.SingleModeMinInterval);
         // Loadout questions for the bots.
         public bool HasFreeWeaponSlot => WeaponInSlot(0) == 0 || WeaponInSlot(1) == 0 || WeaponInSlot(2) == 0;
         public bool HasAnyWeapon => WeaponInSlot(0) != 0 || WeaponInSlot(1) != 0 || WeaponInSlot(2) != 0;
@@ -359,10 +361,7 @@ namespace Game.Net
             Mag2.Value = _loadout.MagInSlot(2);
             Mag3.Value = _loadout.MagInSlot(3);
             Mag4.Value = _loadout.MagInSlot(4);
-            int single = 0;
-            for (int i = 0; i < Loadout.SlotCount; i++)
-                if (_loadout.CanSwitchFireMode(i) && !_loadout.IsAutoFire(i)) single |= 1 << i;
-            SingleFireSlots.Value = single;
+            SingleFireSlots.Value = _loadout.ModeBits();
             ReservePistol9.Value = _loadout.Reserve(AmmoType.Pistol9);
             ReserveRifle556.Value = _loadout.Reserve(AmmoType.Rifle556);
             ReserveShotgun12.Value = _loadout.Reserve(AmmoType.Shotgun12);
@@ -632,6 +631,7 @@ namespace Game.Net
             // Knocked down (ADR-072) the weapon stays put away.
             if (_health.IsDead || (Knocked.Value && !holstered) || Holstered.Value == holstered) return;
             if (holstered) _loadout.CancelReload();
+            else _loadout.StartDraw(); // ADR-089
             Holstered.Value = holstered;
             Push();
         }
@@ -671,7 +671,7 @@ namespace Game.Net
             if (!IsServerInitialized || _loadout == null || _health.IsDead || Knocked.Value) return false;
             // Choosing a slot, even the one already in hand, takes a put-away weapon out again.
             bool drawn = Holstered.Value;
-            if (drawn) Holstered.Value = false;
+            if (drawn) { Holstered.Value = false; _loadout.StartDraw(); }
             if (!_loadout.SelectSlot(slot) && !drawn) return false;
             Push();
             return true;

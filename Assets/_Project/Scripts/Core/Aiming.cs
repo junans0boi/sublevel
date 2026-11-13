@@ -46,6 +46,50 @@ namespace Game.Core
     {
         public float RecoverDegPerSecond = 14f;
         public float MaxPitchDeg = 12f;
+        // ADR-089: the view starts settling back only this long after the last kick, so a spray climbs.
+        public float RecoverDelaySeconds = 0.15f;
+        // Recoil share by body stance (PUBG: crouch x0.8, prone x0.6).
+        public float CrouchFactor = 0.8f;
+        public float ProneFactor = 0.6f;
+        // ADR-090 aim punch: a hit throws the view up to this much (up / sideways), times the vest factor below.
+        public float AimPunchPitchDeg = 1.6f;
+        public float AimPunchYawDeg = 0.9f;
+        // Indexed by vest tier 0-3: a vest takes the same share off the punch as off the damage (30/40/55%).
+        public float[] AimPunchVestFactor = { 1f, 0.7f, 0.6f, 0.45f };
+
+        public float StanceFactor(Stance stance) => stance == Stance.Prone ? ProneFactor : stance == Stance.Crouch ? CrouchFactor : 1f;
+        public float VestFactor(int tier) =>
+            AimPunchVestFactor == null || AimPunchVestFactor.Length == 0 ? 1f : AimPunchVestFactor[Math.Max(0, Math.Min(AimPunchVestFactor.Length - 1, tier))];
+        public float RecoverRate(WeaponDef weapon) =>
+            weapon != null && weapon.RecoilRecoverDegPerSecond > 0f ? weapon.RecoilRecoverDegPerSecond : RecoverDegPerSecond;
+    }
+
+    // ADR-089: each weapon's recoil pattern. Every shot kicks the view up by the weapon's RecoilPitchDeg (+-10%)
+    // and sideways by its bias plus a random share, both times `factor` (aim mode x body stance). ViewRecoil adds
+    // them up within the vertical cap and the weapon's side cap, so a spray climbs and drifts the weapon's way.
+    public static class RecoilPattern
+    {
+        public static void Next(WeaponDef weapon, Random rng, float factor, out float pitchDeg, out float yawDeg)
+        {
+            pitchDeg = weapon.RecoilPitchDeg * (0.9f + 0.2f * (float)rng.NextDouble()) * factor;
+            yawDeg = (weapon.RecoilYawBias + (float)(rng.NextDouble() * 2.0 - 1.0)) * weapon.RecoilYawDeg * factor;
+        }
+
+        // Kicks `recoil` with the next shot of the weapon.
+        public static void Kick(ViewRecoil recoil, WeaponDef weapon, Random rng, float factor, RecoilRules rules)
+        {
+            Next(weapon, rng, factor, out float pitch, out float yaw);
+            recoil.Kick(pitch, yaw, rules.MaxPitchDeg, weapon.RecoilYawMaxDeg > 0f ? weapon.RecoilYawMaxDeg * factor : float.PositiveInfinity);
+        }
+
+        // ADR-090: being hit throws the view up and to a random side; a vest makes it smaller.
+        public static void Punch(ViewRecoil recoil, Random rng, int vestTier, RecoilRules rules)
+        {
+            float f = rules.VestFactor(vestTier);
+            float pitch = rules.AimPunchPitchDeg * (0.6f + 0.4f * (float)rng.NextDouble()) * f;
+            float yaw = rules.AimPunchYawDeg * (float)(rng.NextDouble() * 2.0 - 1.0) * f;
+            recoil.Kick(pitch, yaw, rules.MaxPitchDeg);
+        }
     }
 
     public static class Crosshair
@@ -113,15 +157,21 @@ namespace Game.Core
     {
         public float Pitch { get; private set; } // degrees, up positive
         public float Yaw { get; private set; }
+        float _sinceKick;
 
-        public void Kick(float pitchDeg, float yawDeg, float maxPitchDeg)
+        // `maxYawDeg`: the side offset never goes past this either way.
+        public void Kick(float pitchDeg, float yawDeg, float maxPitchDeg, float maxYawDeg = float.PositiveInfinity)
         {
             Pitch = Math.Min(maxPitchDeg, Pitch + pitchDeg);
-            Yaw += yawDeg;
+            Yaw = Math.Max(-maxYawDeg, Math.Min(maxYawDeg, Yaw + yawDeg));
+            _sinceKick = 0f;
         }
 
-        public void Tick(float dt, float recoverDegPerSecond)
+        // Settles back at `recoverDegPerSecond`, but only once `delaySeconds` have passed since the last kick.
+        public void Tick(float dt, float recoverDegPerSecond, float delaySeconds = 0f)
         {
+            _sinceKick += dt;
+            if (_sinceKick < delaySeconds) return;
             float length = (float)Math.Sqrt(Pitch * Pitch + Yaw * Yaw);
             if (length < 1e-5f) { Pitch = 0f; Yaw = 0f; return; }
             float left = Math.Max(0f, length - recoverDegPerSecond * dt) / length;

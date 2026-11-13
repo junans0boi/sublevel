@@ -31,7 +31,7 @@ namespace Game.Tests
             Assert.AreEqual(1.8f, Rules.For(Stance.Stand).CapsuleHeight, 1e-4f);
             Assert.AreEqual(1.0f, Rules.For(Stance.Crouch).CapsuleHeight, 1e-4f);
             Assert.AreEqual(1f, Rules.For(Stance.Stand).SpreadFactor, 1e-4f);
-            Assert.AreEqual(0.7f, Rules.For(Stance.Crouch).SpreadFactor, 1e-4f);
+            Assert.AreEqual(0.5f, Rules.For(Stance.Crouch).SpreadFactor, 1e-4f);
             Assert.AreEqual(1f, Rules.For(Stance.Stand).FootstepVolumeFactor, 1e-4f);
             Assert.AreEqual(0.4f, Rules.For(Stance.Crouch).FootstepVolumeFactor, 1e-4f);
             // The eyes stay inside the lowered capsule.
@@ -94,7 +94,7 @@ namespace Game.Tests
             Assert.AreEqual(0.4f, Stances.EyeHeight(1.6f, Stance.Prone, Rules), 1e-5f, "eyes 0.4 m over the ground");
             Assert.AreEqual(0.18f, prone.MoveFactor, 1e-5f);
             Assert.AreEqual(0.81f, 4.5f * prone.MoveFactor, 1e-4f, "about 0.8 m/s");
-            Assert.AreEqual(0.35f, prone.SpreadFactor, 1e-5f);
+            Assert.AreEqual(0.2f, prone.SpreadFactor, 1e-5f);
             Assert.Less(prone.SpreadFactor, Rules.Crouch.SpreadFactor, "the steadiest stance");
             Assert.AreEqual(0.1f, prone.FootstepVolumeFactor, 1e-5f);
             Assert.Less(prone.FootstepVolumeFactor, Rules.Crouch.FootstepVolumeFactor, "near silent");

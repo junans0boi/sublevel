@@ -232,6 +232,17 @@ namespace Game.Tests
             Assert.Greater(asked, shots);
             Assert.LessOrEqual(shots, 11, "at most one shot per 0.12 s (plus the first, plus the early allowance)");
 
+            // ADR-089: B goes on to burst; one click fires the whole burst (3 for the rifle) and no more.
+            yield return new WaitForSeconds(0.5f);
+            _input.Frame.FireMode = true;
+            yield return WaitUntil(() => me.FireModeOf(0) == "점사", 2f, "burst");
+            Assert.IsFalse(me.ActiveAutoFire);
+            mag = me.Mag0.Value;
+            _input.Frame.FirePressed = true;
+            yield return WaitUntil(() => me.Mag0.Value == mag - rifle.Burst, 2f, "one click, one burst");
+            yield return new WaitForSeconds(0.5f);
+            Assert.AreEqual(mag - rifle.Burst, me.Mag0.Value, "and only one burst");
+
             // Toggling back, and a weapon with no choice.
             _input.Frame.FireMode = true;
             yield return WaitUntil(() => me.FireModeOf(0) == "연사", 2f, "automatic again");
@@ -290,6 +301,7 @@ namespace Game.Tests
             Assert.AreEqual(Rifle, me.ActiveWeaponId);
             Assert.AreEqual(0, me.ActiveSlot.Value);
             yield return WaitUntil(() => visual.ShownWeaponId == Rifle, 2f, "rifle model shown again");
+            yield return new WaitForSeconds(GameData.Weapons.Find(Rifle).DrawSeconds); // ADR-089: drawing first
             Assert.IsTrue(me.ServerFire(pc.transform.forward), "fires again");
 
             // A number key takes it out as well, and chooses the slot.
@@ -363,7 +375,7 @@ namespace Game.Tests
             Assert.AreEqual(0.4f, EyeHeight(me), 0.03f);
             Assert.AreEqual(0.7f, body.height, 1e-3f);
             Assert.GreaterOrEqual(body.height, 2f * body.radius, "the controller capsule is never lower than its width");
-            Assert.AreEqual(0.35f, me.StanceSpreadFactor, 1e-3f);
+            Assert.AreEqual(0.2f, me.StanceSpreadFactor, 1e-3f);
             Assert.AreEqual(0.1f, stance.FootstepVolumeFactor, 1e-3f);
             Assert.AreEqual(0f, stance.CrouchAmount, 1e-3f);
 

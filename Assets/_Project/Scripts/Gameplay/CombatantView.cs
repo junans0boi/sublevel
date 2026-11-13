@@ -314,6 +314,7 @@ namespace Game.Gameplay
                 _damageShown = true;
                 DamageDirectionsShown++;
                 Hud.DamageFrom(transform.position);
+                if (PlayerController.Local != null) PlayerController.Local.TakeAimPunch(); // ADR-090
             }
             if (_combatant != local) return;
             // One marker per shot; a later pellet of the same shot that kills or lands on the head upgrades it.

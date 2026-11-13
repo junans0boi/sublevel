@@ -115,7 +115,7 @@ namespace Game.Tests
             Assert.AreEqual(0.95f, EyeHeight(me), 0.01f, "the server's eye position is 0.65 m lower");
             Assert.AreEqual(1.0f, body.height, 1e-3f);
             Assert.AreEqual(0.5f, body.center.y, 1e-3f, "the feet stay where they were");
-            Assert.AreEqual(0.7f, me.StanceSpreadFactor, 1e-4f);
+            Assert.AreEqual(0.5f, me.StanceSpreadFactor, 1e-4f);
             Assert.AreEqual(0.4f, stance.FootstepVolumeFactor, 1e-4f);
             yield return null; // a frame for LateUpdate to pose the legs and for the camera to follow
             yield return null;

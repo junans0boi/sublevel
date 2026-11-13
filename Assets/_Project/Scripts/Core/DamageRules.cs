@@ -33,6 +33,7 @@ namespace Game.Core
         public static int ShotOffsets(WeaponDef weapon, Random rng, float[] yawDeg, float[] pitchDeg, float spreadFactor = 1f)
         {
             int n = Math.Min(Math.Max(1, weapon.Pellets), Math.Min(yawDeg.Length, pitchDeg.Length));
+            spreadFactor = Math.Max(spreadFactor, weapon.MinSpreadFactor); // pellets keep their pattern when aimed
             for (int i = 0; i < n; i++)
             {
                 double angle = rng.NextDouble() * Math.PI * 2;

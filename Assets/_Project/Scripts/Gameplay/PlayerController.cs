@@ -91,6 +91,7 @@ namespace Game.Gameplay
         readonly FireCadence _fireCadence = new FireCadence();
         readonly FireCadence _punchCadence = new FireCadence();
         double _clickUntil = -1;
+        int _burstLeft; // shots still to fire of a burst (ADR-089)
         bool _owner;
 
         void Awake()
@@ -176,7 +177,7 @@ namespace Game.Gameplay
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
             LastInput = f;
             UpdateCursor();
-            _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
+            _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverRate(_combatant.ActiveWeapon), _rules.Recoil.RecoverDelaySeconds);
 
             if (_combatant.Dead.Value)
             {
@@ -569,10 +570,17 @@ namespace Game.Gameplay
         {
             var weapon = _combatant.ActiveWeapon;
             if (weapon == null || !_ownShots.IsNewShot(Time.timeAsDouble)) return;
-            float factor = _rules.Aim.For(_aim.Mode).RecoilFactor;
-            // Seeded per match and player so a replayed match kicks the same way.
-            float side = (float)(_recoilRng.NextDouble() * 2.0 - 1.0) * weapon.RecoilYawDeg;
-            _recoil.Kick(weapon.RecoilPitchDeg * factor, side * factor, _rules.Recoil.MaxPitchDeg);
+            // The weapon's pattern (ADR-089), seeded per match and player so a replayed match kicks the same way.
+            float factor = _rules.Aim.For(_aim.Mode).RecoilFactor * _rules.Recoil.StanceFactor(BodyStance);
+            RecoilPattern.Kick(_recoil, weapon, _recoilRng, factor, _rules.Recoil);
+        }
+
+        // ADR-090: a hit on this player throws the view; a vest makes it smaller. Called once per shot that lands.
+        public void TakeAimPunch()
+        {
+            if (_recoilRng == null) return;
+            var gear = GetComponent<CombatantGear>();
+            RecoilPattern.Punch(_recoil, _recoilRng, gear != null ? gear.VestTier.Value : 0, _rules.Recoil);
         }
 
         void TryFire(in PlayerInputFrame f)
@@ -589,11 +597,16 @@ namespace Game.Gameplay
                 return;
             }
             var weapon = _combatant.ActiveWeapon;
-            if (weapon == null || _combatant.Reloading.Value || _combatant.ActiveMag <= 0) return;
-            // Automatic weapons set to single shots (B) fire once per click, and no faster than the server allows.
-            if (!(_combatant.ActiveAutoFire ? f.FireHeld : now <= _clickUntil) || !_fireCadence.Ready(now)) return;
-            _clickUntil = -1;
-            double interval = _combatant.FireInterval(weapon);
+            // A shell-by-shell reload gives way to a shot (ADR-089).
+            if (weapon == null || (_combatant.Reloading.Value && !weapon.ReloadsByShell) || _combatant.ActiveMag <= 0) { _burstLeft = 0; return; }
+            // Automatic weapons set to single shots (B) fire once per click, and no faster than the server allows;
+            // in burst mode a click fires the whole burst.
+            var mode = _combatant.ActiveFireMode;
+            if (!(mode == FireMode.Auto ? f.FireHeld : _burstLeft > 0 || now <= _clickUntil) || !_fireCadence.Ready(now)) return;
+            if (_burstLeft <= 0) { _clickUntil = -1; _burstLeft = mode == FireMode.Burst ? weapon.Burst : 1; }
+            int burstShot = mode == FireMode.Burst ? weapon.Burst - _burstLeft + 1 : 1;
+            _burstLeft--;
+            double interval = Loadout.IntervalAfter(weapon, mode, burstShot, _rules.Slots.SingleModeMinInterval);
             // Scheduled from when the shot was due, not from this frame: a frame always lands a little late, and
             // adding the interval to that would make the rhythm follow the frame times and run slow.
             _fireCadence.Fired(now, interval, fire.ClientCatchUp(interval, Time.deltaTime));

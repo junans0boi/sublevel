@@ -11,6 +11,9 @@ namespace Game.Core
         public float SingleModeMinInterval = 0.12f;
     }
 
+    // B cycles a weapon's modes in the order Auto -> Single -> Burst (those it has), starting from the first (ADR-089).
+    public enum FireMode { Auto = 0, Single = 1, Burst = 2 }
+
     // What one combatant carries: five weapon slots (ADR-058), reserve ammo per type, medkits. Owns fire-rate and
     // reload timing. Slots 0 and 1 take primary weapons, slot 2 a sidearm (pistols), slot 3 a melee weapon (no
     // magazine: it never fires or reloads, ADR-073) and slot 4 is the throwable slot (grenades are
@@ -26,11 +29,17 @@ namespace Game.Core
         readonly float _medkitHeal;
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
-        // An automatic weapon the shooter set to single shots. Cleared whenever the slot gets another weapon.
-        readonly bool[] _slotSingle = new bool[SlotCount];
+        // How many times B was pressed for the weapon in each slot (an index into its modes). Cleared whenever
+        // the slot gets another weapon.
+        readonly int[] _slotModeStep = new int[SlotCount];
         readonly int[] _reserve = new int[AmmoNames.Count];
         readonly FireCadence _cadence = new FireCadence();
         double _reloadEndTime = -1;
+        // ADR-089: the weapon in hand fires from this time on; NaN = it was just taken in hand and the draw starts
+        // at the next Tick or fire attempt (callers that change the slot do not pass the time).
+        double _readyAt = double.NegativeInfinity;
+        int _burstShot;            // shots fired of the current burst
+        double _lastShotAt = double.NegativeInfinity;
 
         public int ActiveSlot { get; private set; }
         public int Medkits { get; private set; }
@@ -56,6 +65,53 @@ namespace Game.Core
         }
 
         public static string FireModeName(bool auto) => auto ? "연사" : "단발";
+        public static string FireModeName(FireMode mode) => mode == FireMode.Auto ? "연사" : mode == FireMode.Burst ? "점사" : "단발";
+
+        // The modes a weapon has, in B order. Never empty for a weapon (single shots at least).
+        static int ModeCount(WeaponDef w) => w == null ? 1 : 1 + (w.Auto ? 1 : 0) + (w.Burst > 1 ? 1 : 0);
+        static FireMode ModeAt(WeaponDef w, int step)
+        {
+            if (w == null) return FireMode.Single;
+            int i = step % ModeCount(w);
+            if (w.Auto) { if (i == 0) return FireMode.Auto; i--; }
+            return i == 0 ? FireMode.Single : FireMode.Burst;
+        }
+
+        public FireMode ModeOf(int slot) => slot >= 0 && slot < SlotCount ? ModeAt(_table.Find(_slotWeapon[slot]), _slotModeStep[slot]) : FireMode.Single;
+
+        // The chosen fire modes for the network: bit i = single shots in slot i, bit 8 + i = burst.
+        public int ModeBits()
+        {
+            int bits = 0;
+            for (int i = 0; i < SlotCount; i++)
+            {
+                if (!CanSwitchFireMode(i)) continue; // a weapon with one mode records nothing
+                var mode = ModeOf(i);
+                if (mode == FireMode.Single) bits |= 1 << i;
+                else if (mode == FireMode.Burst) bits |= 1 << (8 + i);
+            }
+            return bits;
+        }
+
+        public static FireMode ModeFromBits(WeaponDef weapon, int bits, int slot)
+        {
+            if (weapon == null || slot < 0 || slot >= SlotCount) return FireMode.Single;
+            if ((bits & (1 << (8 + slot))) != 0 && weapon.Burst > 1) return FireMode.Burst;
+            return weapon.Auto && (bits & (1 << slot)) == 0 ? FireMode.Auto : FireMode.Single;
+        }
+
+        // Seconds from a shot to the next one the weapon may fire. `burstShot`: the shot's place in its burst
+        // (1 = first). Single shots on a weapon that can fire faster wait at least `singleModeInterval`; the last
+        // shot of a burst waits the weapon's burst gap.
+        public static double IntervalAfter(WeaponDef weapon, FireMode mode, int burstShot, double singleModeInterval)
+        {
+            switch (mode)
+            {
+                case FireMode.Auto: return weapon.FireInterval;
+                case FireMode.Burst: return burstShot < weapon.Burst ? weapon.FireInterval : Math.Max(weapon.FireInterval, Math.Max(weapon.BurstGapSeconds, singleModeInterval));
+                default: return ModeCount(weapon) > 1 ? Math.Max(weapon.FireInterval, singleModeInterval) : weapon.FireInterval;
+            }
+        }
 
         public int WeaponInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotWeapon[slot] : 0;
         public int MagInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotMag[slot] : 0;
@@ -133,7 +189,7 @@ namespace Game.Core
             replacedMag = _slotMag[slot];
             _slotWeapon[slot] = weaponId;
             _slotMag[slot] = ammoInMag;
-            _slotSingle[slot] = false;
+            _slotModeStep[slot] = 0;
             if (slot == ActiveSlot) _reloadEndTime = -1;
             if (ActiveWeapon == null) ActiveSlot = slot;
             return replaced;
@@ -152,7 +208,7 @@ namespace Game.Core
             if (_slotWeapon[a] != 0 && !CanHold(b, _slotWeapon[a])) return false;
             int weapon = _slotWeapon[a]; _slotWeapon[a] = _slotWeapon[b]; _slotWeapon[b] = weapon;
             int mag = _slotMag[a]; _slotMag[a] = _slotMag[b]; _slotMag[b] = mag;
-            bool single = _slotSingle[a]; _slotSingle[a] = _slotSingle[b]; _slotSingle[b] = single;
+            int step = _slotModeStep[a]; _slotModeStep[a] = _slotModeStep[b]; _slotModeStep[b] = step;
             if (ActiveSlot == a) ActiveSlot = b;
             else if (ActiveSlot == b) ActiveSlot = a;
             return true;
@@ -171,32 +227,39 @@ namespace Game.Core
             if (slot < 0 || slot >= SlotCount || slot == ActiveSlot) return false;
             ActiveSlot = slot;
             _reloadEndTime = -1;
+            StartDraw();
             return true;
         }
 
         public void CancelReload() => _reloadEndTime = -1;
 
+        // ADR-089: the weapon in hand was just taken out (slot change, put-away weapon drawn): it may fire once
+        // its DrawSeconds have passed, counted from the next Tick or fire attempt.
+        public void StartDraw() => _readyAt = double.NaN;
+
+        // Still taking the weapon in hand at `now`.
+        public bool IsDrawing(double now) => double.IsNaN(_readyAt) || now < _readyAt;
+
+        void ResolveDraw(double now)
+        {
+            if (!double.IsNaN(_readyAt)) return;
+            var w = ActiveWeapon;
+            _readyAt = now + (w != null ? w.DrawSeconds : 0f);
+        }
+
         // ---- Fire mode ----
 
-        // Only automatic weapons have a choice.
-        public bool CanSwitchFireMode(int slot)
-        {
-            var def = _table.Find(WeaponInSlot(slot));
-            return def != null && def.Auto;
-        }
+        // Only weapons with more than one mode (automatic and/or burst) have a choice.
+        public bool CanSwitchFireMode(int slot) => ModeCount(_table.Find(WeaponInSlot(slot))) > 1;
 
         // Does the weapon in this slot fire while the button is held?
-        public bool IsAutoFire(int slot)
-        {
-            var def = _table.Find(WeaponInSlot(slot));
-            return def != null && def.Auto && !_slotSingle[slot];
-        }
+        public bool IsAutoFire(int slot) => ModeOf(slot) == FireMode.Auto;
 
-        // Switches an automatic weapon between single shots and automatic. False for any other slot.
+        // B: the next of the weapon's modes (Auto -> Single -> Burst). False for a weapon with one mode.
         public bool ToggleFireMode(int slot)
         {
             if (!CanSwitchFireMode(slot)) return false;
-            _slotSingle[slot] = !_slotSingle[slot];
+            _slotModeStep[slot] = (_slotModeStep[slot] + 1) % ModeCount(_table.Find(WeaponInSlot(slot)));
             return true;
         }
 
@@ -206,29 +269,53 @@ namespace Game.Core
         public bool TryFire(double now, double earlySeconds = 0, double singleModeInterval = 0)
         {
             var w = ActiveWeapon;
-            if (w == null || IsReloading || _slotMag[ActiveSlot] <= 0) return false;
-            if (!_cadence.TryFire(now, EffectiveInterval(w, ActiveSlot, singleModeInterval), earlySeconds)) return false;
+            if (w == null || _slotMag[ActiveSlot] <= 0) return false;
+            ResolveDraw(now);
+            if (IsDrawing(now + earlySeconds)) return false;
+            // A shell-by-shell reload stops for a shot when there is a round to fire (ADR-089).
+            if (IsReloading && !(w.ReloadsByShell && _cadence.Ready(now, earlySeconds))) return false;
+            var mode = ModeOf(ActiveSlot);
+            // A burst the shooter stopped (or one that ended) starts over after a pause longer than the rate allows.
+            int burstShot = mode == FireMode.Burst && _burstShot < w.Burst && now - _lastShotAt <= w.FireInterval * 2.0 + earlySeconds ? _burstShot + 1 : 1;
+            if (!_cadence.TryFire(now, IntervalAfter(w, mode, burstShot, singleModeInterval), earlySeconds)) return false;
+            _burstShot = burstShot;
+            _lastShotAt = now;
+            _reloadEndTime = -1;
             _slotMag[ActiveSlot]--;
             return true;
         }
 
-        // The time between shots in this slot's current mode.
+        // The time between shots in this slot's current mode (the first shot of a burst).
         public double EffectiveInterval(WeaponDef weapon, int slot, double singleModeInterval) =>
-            weapon.Auto && slot >= 0 && slot < SlotCount && _slotSingle[slot] ? Math.Max(weapon.FireInterval, singleModeInterval) : weapon.FireInterval;
+            IntervalAfter(weapon, ModeOf(slot), 1, singleModeInterval);
 
         public bool TryStartReload(double now)
         {
             var w = ActiveWeapon;
             if (w == null || IsReloading || _slotMag[ActiveSlot] >= w.MagSize || _reserve[(int)w.Ammo] <= 0) return false;
-            _reloadEndTime = now + w.ReloadTime;
+            // Empty takes longer than a tactical reload; a shell-by-shell weapon loads its first round after this.
+            _reloadEndTime = now + w.ReloadSeconds(_slotMag[ActiveSlot]);
             return true;
         }
 
         // Completes a reload whose time has come. Returns true when state changed.
         public bool Tick(double now)
         {
+            ResolveDraw(now);
             if (!IsReloading || now < _reloadEndTime) return false;
             var w = ActiveWeapon;
+            if (w != null && w.ReloadsByShell)
+            {
+                // One round per ShellReloadSeconds until full or out of rounds (several when a tick came late).
+                while (IsReloading && now >= _reloadEndTime)
+                {
+                    int ammo = (int)w.Ammo;
+                    if (_slotMag[ActiveSlot] < w.MagSize && _reserve[ammo] > 0) { _slotMag[ActiveSlot]++; _reserve[ammo]--; }
+                    bool more = _slotMag[ActiveSlot] < w.MagSize && _reserve[ammo] > 0;
+                    _reloadEndTime = more ? _reloadEndTime + w.ShellReloadSeconds : -1;
+                }
+                return true;
+            }
             _reloadEndTime = -1;
             if (w == null) return true;
             int need = w.MagSize - _slotMag[ActiveSlot];
@@ -258,12 +345,12 @@ namespace Game.Core
             mag = _slotMag[slot];
             _slotWeapon[slot] = 0;
             _slotMag[slot] = 0;
-            _slotSingle[slot] = false;
+            _slotModeStep[slot] = 0;
             if (slot == ActiveSlot)
             {
                 _reloadEndTime = -1;
                 for (int i = 0; i < SlotCount; i++)
-                    if (_slotWeapon[i] != 0) { ActiveSlot = i; break; }
+                    if (_slotWeapon[i] != 0) { ActiveSlot = i; StartDraw(); break; }
             }
             return removed;
         }

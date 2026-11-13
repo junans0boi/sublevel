@@ -24,10 +24,10 @@ namespace Game.Core
 
         public StancePose Stand = new StancePose();
         // The capsule is low enough to pass a 1.2 m gap with the character controller's skin on both ends.
-        public StancePose Crouch = new StancePose { EyeDropMeters = 0.65f, CapsuleHeight = 1.0f, MoveFactor = 0.55f, SpreadFactor = 0.7f, FootstepVolumeFactor = 0.4f };
+        public StancePose Crouch = new StancePose { EyeDropMeters = 0.65f, CapsuleHeight = 1.0f, MoveFactor = 0.55f, SpreadFactor = 0.5f, FootstepVolumeFactor = 0.4f };
         // Lying down: eyes 0.4 m over the ground (upright eyes 1.6), crawling at 0.18 * 4.5 = 0.81 m/s. The capsule
         // stays at least as tall as it is wide (the character controller's limit: height >= 2 * radius, here 0.7).
-        public StancePose Prone = new StancePose { EyeDropMeters = 1.2f, CapsuleHeight = 0.7f, MoveFactor = 0.18f, SpreadFactor = 0.35f, FootstepVolumeFactor = 0.1f };
+        public StancePose Prone = new StancePose { EyeDropMeters = 1.2f, CapsuleHeight = 0.7f, MoveFactor = 0.18f, SpreadFactor = 0.2f, FootstepVolumeFactor = 0.1f };
         public bool ProneEnabled = true;
         public float ChangePerSecond = 5f;   // getting down or up takes 1 / this seconds
         public float HeadClearanceMeters = 0.05f; // free space needed above the raised head before standing up

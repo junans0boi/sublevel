@@ -43,6 +43,23 @@ namespace Game.Core
         public float MinDamageFactor = 1f;
         public float RecoilPitchDeg;  // view kick per shot, before the aim stance's factor
         public float RecoilYawDeg;    // random left/right kick, up to this much
+        // Recoil pattern (ADR-089): the side kick leans this way (-1 left .. 1 right, share of RecoilYawDeg), the
+        // side drift of one spray stops at RecoilYawMaxDeg (0 = no limit), and the view settles back at
+        // RecoilRecoverDegPerSecond (0 = RecoilRules.RecoverDegPerSecond).
+        public float RecoilYawBias;
+        public float RecoilYawMaxDeg;
+        public float RecoilRecoverDegPerSecond;
+        // Burst mode (ADR-089): rounds per burst (0 or 1 = no burst mode) and the pause after a burst.
+        public int Burst;
+        public float BurstGapSeconds;
+        // Seconds from taking the weapon in hand to the first shot it may fire (ADR-089). 0 = at once.
+        public float DrawSeconds;
+        // Reload with rounds still in the magazine is ReloadTime; from empty it is EmptyReloadTime (0 = ReloadTime).
+        // ShellReloadSeconds > 0: loads one round per that many seconds instead, and a shot stops it (ADR-089).
+        public float EmptyReloadTime;
+        public float ShellReloadSeconds;
+        // The aim and stance factors never narrow the cone below this share of SpreadDeg (shotgun pellets).
+        public float MinSpreadFactor;
         // Damage multipliers by where the hit lands (ADR-053).
         public float HeadFactor = 2f;
         public float BodyFactor = 1f;
@@ -56,6 +73,9 @@ namespace Game.Core
         public MeleeSwingStyle Swing;
 
         public bool IsMelee => Category == WeaponCategory.Melee;
+        public bool ReloadsByShell => ShellReloadSeconds > 0f;
+        // Reload seconds from a magazine holding `mag` rounds (the whole reload, or one round for shell loading).
+        public float ReloadSeconds(int mag) => ReloadsByShell ? ShellReloadSeconds : mag <= 0 && EmptyReloadTime > 0f ? EmptyReloadTime : ReloadTime;
     }
 
     [Serializable]
