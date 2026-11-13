@@ -37,6 +37,8 @@ namespace Game.Gameplay
         Text _healthLabel;
         GameObject _reload, _prompt;
         Text _promptLabel;
+        GameObject _promptIconRoot;
+        InventoryItemIcon _promptIcon;
         LootItem _promptFor;
         float _shownHp = float.NaN;
         int _shownHpInt = int.MinValue;
@@ -48,11 +50,19 @@ namespace Game.Gameplay
         readonly Text[] _slotName = new Text[2];
         readonly int[] _slotWeapon = { int.MinValue, int.MinValue };
         Text _magLabel, _reserveLabel, _ammoTypeLabel;
+        GameObject _activeWeaponIconRoot;
+        InventoryItemIcon _activeWeaponIcon;
         int _shownActive = -1, _shownAmmoWeapon = int.MinValue, _shownMag = int.MinValue, _shownReserve = int.MinValue;
 
         // Bottom left, top right.
         Text _medkitLabel, _aliveLabel;
+        readonly Text[] _gearLabel = new Text[2];
+        readonly RectTransform[] _gearFill = new RectTransform[2];
+        GameObject _grenadeRow;
+        Text _grenadeLabel;
         int _shownMedkits = int.MinValue, _shownAlive = int.MinValue;
+        readonly int[] _shownGearHash = { int.MinValue, int.MinValue };
+        int _shownGrenades = int.MinValue;
 
         // Top centre.
         readonly RectTransform[] _compassMarks = new RectTransform[CompassSteps];
@@ -84,6 +94,8 @@ namespace Game.Gameplay
         public bool Visible => _canvas != null && _canvas.enabled;
         public float HealthFill { get; private set; } = 1f;      // 0..1
         public string AmmoText { get; private set; } = Dash;     // "mag / reserve" of the weapon in hand
+        public string AmmoTypeText { get; private set; } = "맨손";
+        public string ActiveWeaponIconKey => _activeWeaponIcon != null ? _activeWeaponIcon.Key : "";
         public int ActiveSlotShown => _shownActive;
         public string ActiveWeaponName => _shownActive >= 0 && _shownActive < 2 ? _slotName[_shownActive].text : "";
         public bool CrosshairVisible => Visible && _crosshair.activeSelf;
@@ -91,6 +103,8 @@ namespace Game.Gameplay
         public bool HeadMarkerShown { get; private set; }         // the last hit marker was for a head hit
         public bool ReloadingShown => _reload.activeSelf;
         public string PromptText => _prompt.activeSelf ? _promptLabel.text : "";
+        public string PromptIconKey => _promptIcon != null && _prompt.activeSelf ? _promptIcon.Key : "";
+        public bool GrenadeShown => _grenadeRow != null && _grenadeRow.activeSelf;
         public bool LowHealthShown => _vignette.alpha > 0f;
         public bool DeathShown => _death.activeSelf;
         public int AliveShown => _shownAlive;
@@ -220,7 +234,7 @@ namespace Game.Gameplay
             WeaponDef weapon = me.ActiveWeapon;
             int id = weapon != null ? weapon.Id : 0;
             int mag = weapon != null ? me.ActiveMag : 0;
-            int reserve = weapon != null ? me.ReserveFor(weapon.Ammo) : 0;
+            int reserve = weapon != null ? InventoryBackend.Reserve(me, InventoryBackend.AmmoIndex(weapon)) : 0;
             if (id == _shownAmmoWeapon && mag == _shownMag && reserve == _shownReserve) return;
             _shownAmmoWeapon = id;
             _shownMag = mag;
@@ -228,17 +242,24 @@ namespace Game.Gameplay
             if (weapon == null)
             {
                 AmmoText = Dash;
+                AmmoTypeText = "맨손";
                 _magLabel.text = Dash;
                 _magLabel.color = UiKit.TextDim;
                 _reserveLabel.text = "";
                 _ammoTypeLabel.text = "맨손";
+                _activeWeaponIcon.Set("", "맨손");
+                _activeWeaponIconRoot.SetActive(false);
                 return;
             }
+            int ammoIndex = InventoryBackend.AmmoIndex(weapon);
             AmmoText = IntText(mag) + " / " + IntText(reserve);
+            AmmoTypeText = InventoryBackend.AmmoName(ammoIndex);
             _magLabel.text = IntText(mag);
             _magLabel.color = mag == 0 ? UiKit.Danger : UiKit.Text;
             _reserveLabel.text = "/ " + IntText(reserve);
-            _ammoTypeLabel.text = AmmoName(weapon.Ammo);
+            _ammoTypeLabel.text = AmmoTypeText;
+            _activeWeaponIcon.Set(InventoryBackend.WeaponKey(id), weapon.Name);
+            _activeWeaponIconRoot.SetActive(true);
         }
 
         void ShowSlotWeapon(int slot, int weaponId)
@@ -257,6 +278,26 @@ namespace Game.Gameplay
                 _shownMedkits = medkits;
                 _medkitLabel.text = "x" + IntText(medkits);
                 _medkitLabel.color = medkits > 0 ? UiKit.Text : UiKit.TextDim;
+            }
+
+            for (int slot = 0; slot < 2; slot++)
+            {
+                var gear = InventoryBackend.Gear(me, slot);
+                int hash = (gear.Has ? 1 : 0) ^ gear.Tier * 397 ^ gear.Durability * 31 ^ gear.MaxDurability;
+                if (hash == _shownGearHash[slot]) continue;
+                _shownGearHash[slot] = hash;
+                string name = slot == InventoryBackend.HelmetSlot ? "헬멧" : "조끼";
+                _gearLabel[slot].text = gear.Has ? name + " " + gear.Tier + "단계  " + gear.Durability + "/" + gear.MaxDurability : name + "  —";
+                _gearLabel[slot].color = gear.Has ? UiKit.Text : UiKit.TextDim;
+                _gearFill[slot].anchorMax = new Vector2(Mathf.Clamp01(gear.Fraction), 1f);
+            }
+
+            int grenades = InventoryBackend.Grenades(me);
+            if (grenades != _shownGrenades)
+            {
+                _shownGrenades = grenades;
+                _grenadeLabel.text = "x" + IntText(grenades);
+                Show(_grenadeRow, grenades > 0);
             }
 
             // The match's own count when it has one (it is what the kill feed and placements use).
@@ -286,7 +327,10 @@ namespace Game.Gameplay
             {
                 _promptFor = loot;
                 _promptLabel.text = "[F]  " + LootLabel(loot);
+                string name = InventoryBackend.LootName(loot);
+                _promptIcon.Set(InventoryBackend.LootIconKey(loot), name);
             }
+            Show(_promptIconRoot, hasLoot);
             Show(_prompt, hasLoot);
         }
 
@@ -425,8 +469,11 @@ namespace Game.Gameplay
             _reload = reload.gameObject;
             _reload.SetActive(false);
 
-            var prompt = Panel("Pickup", root, bottom, new Vector2(0f, Margin + 100f), new Vector2(420f, 40f));
-            _promptLabel = UiKit.Label(UiKit.Fill("Label", prompt), "", 22, UiKit.Text, TextAnchor.MiddleCenter);
+            var prompt = Panel("Pickup", root, bottom, new Vector2(0f, Margin + 100f), new Vector2(460f, 52f));
+            var promptIconRect = UiKit.Rect("Icon", prompt, MidLeft, MidLeft, new Vector2(8f, 0f), new Vector2(40f, 40f));
+            _promptIcon = InventoryItemIcon.Build(promptIconRect);
+            _promptIconRoot = promptIconRect.gameObject;
+            _promptLabel = UiKit.Label(UiKit.Rect("Label", prompt, MidLeft, MidLeft, new Vector2(60f, 0f), new Vector2(384f, 46f)), "", 22, UiKit.Text, TextAnchor.MiddleCenter);
             _prompt = prompt.gameObject;
             _prompt.SetActive(false);
         }
@@ -434,29 +481,49 @@ namespace Game.Gameplay
         void BuildWeapons(Transform root)
         {
             var corner = new Vector2(1f, 0f);
-            var panel = Panel("Weapons", root, corner, new Vector2(-Margin, Margin), new Vector2(340f, 200f));
-            _ammoTypeLabel = Label("AmmoType", panel, TopLeft, new Vector2(20f, -12f), new Vector2(200f, 24f), "맨손", 18, UiKit.TextDim);
-            _magLabel = Label("Mag", panel, TopLeft, new Vector2(20f, -38f), new Vector2(150f, 60f), Dash, 52, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
-            _reserveLabel = Label("Reserve", panel, TopLeft, new Vector2(184f, -44f), new Vector2(140f, 60f), "", 28, UiKit.TextDim);
+            var panel = Panel("Weapons", root, corner, new Vector2(-Margin, Margin), new Vector2(380f, 220f));
+            var iconRect = UiKit.Rect("WeaponIcon", panel, TopLeft, TopLeft, new Vector2(18f, -14f), new Vector2(82f, 72f));
+            _activeWeaponIcon = InventoryItemIcon.Build(iconRect);
+            _activeWeaponIconRoot = iconRect.gameObject;
+            _activeWeaponIconRoot.SetActive(false);
+            _ammoTypeLabel = Label("AmmoType", panel, TopLeft, new Vector2(114f, -12f), new Vector2(236f, 24f), "맨손", 18, UiKit.TextDim);
+            _magLabel = Label("Mag", panel, TopLeft, new Vector2(104f, -36f), new Vector2(126f, 60f), Dash, 50, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+            _reserveLabel = Label("Reserve", panel, TopLeft, new Vector2(240f, -42f), new Vector2(120f, 60f), "", 27, UiKit.TextDim);
 
             for (int i = 0; i < 2; i++)
             {
-                var row = UiKit.Rect("Slot" + (i + 1), panel, TopLeft, TopLeft, new Vector2(12f, -108f - 42f * i), new Vector2(316f, 38f));
+                var row = UiKit.Rect("Slot" + (i + 1), panel, TopLeft, TopLeft, new Vector2(12f, -128f - 42f * i), new Vector2(356f, 38f));
                 _slotBack[i] = UiKit.Box(row, UiKit.PanelLight);
                 _slotBack[i].enabled = false;
                 _slotBar[i] = UiKit.Box(UiKit.Rect("Active", row, MidLeft, MidLeft, Vector2.zero, new Vector2(4f, 38f)), UiKit.Accent);
                 _slotBar[i].enabled = false;
                 _slotKey[i] = Label("Key", row, MidLeft, new Vector2(16f, 0f), new Vector2(24f, 38f), i == 0 ? "1" : "2", 20, UiKit.TextDim);
-                _slotName[i] = Label("Name", row, MidLeft, new Vector2(48f, 0f), new Vector2(256f, 38f), Dash, 22, UiKit.TextDim);
+                _slotName[i] = Label("Name", row, MidLeft, new Vector2(48f, 0f), new Vector2(296f, 38f), Dash, 22, UiKit.TextDim);
             }
         }
 
         void BuildConsumables(Transform root)
         {
-            var panel = Panel("Consumables", root, Vector2.zero, new Vector2(Margin, Margin), new Vector2(270f, 48f));
-            Label("Name", panel, MidLeft, new Vector2(16f, 0f), new Vector2(100f, 40f), "구급상자", 20, UiKit.TextDim);
-            _medkitLabel = Label("Count", panel, MidLeft, new Vector2(122f, 0f), new Vector2(70f, 40f), "x0", 26, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Label("Key", panel, MidRight, new Vector2(-16f, 0f), new Vector2(50f, 40f), "[H]", 20, UiKit.TextDim, TextAnchor.MiddleRight);
+            var panel = Panel("Consumables", root, Vector2.zero, new Vector2(Margin, Margin), new Vector2(320f, 190f));
+            Label("MedkitName", panel, TopLeft, new Vector2(16f, -10f), new Vector2(116f, 36f), "구급상자", 20, UiKit.TextDim);
+            _medkitLabel = Label("MedkitCount", panel, TopLeft, new Vector2(138f, -10f), new Vector2(70f, 36f), "x0", 24, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            Label("MedkitKey", panel, TopLeft, new Vector2(250f, -10f), new Vector2(50f, 36f), "[H]", 20, UiKit.TextDim, TextAnchor.MiddleRight);
+
+            for (int slot = 0; slot < 2; slot++)
+            {
+                float y = -58f - slot * 48f;
+                _gearLabel[slot] = Label(slot == 0 ? "Helmet" : "Vest", panel, TopLeft, new Vector2(16f, y), new Vector2(288f, 28f), slot == 0 ? "헬멧  —" : "조끼  —", 18, UiKit.TextDim);
+                var track = UiKit.Rect(slot == 0 ? "HelmetTrack" : "VestTrack", panel, TopLeft, TopLeft, new Vector2(16f, y - 29f), new Vector2(288f, 6f));
+                UiKit.Box(track, UiKit.PanelLight);
+                _gearFill[slot] = UiKit.Fill("Fill", track);
+                UiKit.Box(_gearFill[slot], new Color(0.32f, 0.72f, 0.58f, 1f));
+                _gearFill[slot].anchorMax = new Vector2(0f, 1f);
+            }
+
+            _grenadeRow = UiKit.Rect("Grenade", panel, TopLeft, TopLeft, new Vector2(16f, -154f), new Vector2(288f, 28f)).gameObject;
+            Label("Name", _grenadeRow.transform, MidLeft, Vector2.zero, new Vector2(160f, 28f), "수류탄", 18, UiKit.TextDim);
+            _grenadeLabel = Label("Count", _grenadeRow.transform, new Vector2(1f, 0.5f), Vector2.zero, new Vector2(80f, 28f), "x0", 20, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+            _grenadeRow.SetActive(false);
         }
 
         void BuildAlive(Transform root)
@@ -644,15 +711,7 @@ namespace Game.Gameplay
 
         static string LootLabel(LootItem item)
         {
-            switch ((LootKind)item.Kind.Value)
-            {
-                case LootKind.Weapon: return GameData.Weapons.Find(item.WeaponId.Value)?.Name ?? "무기";
-                case LootKind.Ammo: return AmmoName((AmmoType)item.Ammo.Value) + " x" + item.Amount.Value;
-                default: return "구급상자";
-            }
+            return InventoryBackend.LootName(item) + ((LootKind)item.Kind.Value == LootKind.Weapon ? "" : " x" + item.Amount.Value);
         }
-
-        static string AmmoName(AmmoType type) =>
-            type == AmmoType.Light ? "소형 탄약" : type == AmmoType.Medium ? "중형 탄약" : "산탄";
     }
 }

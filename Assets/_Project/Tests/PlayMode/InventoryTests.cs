@@ -122,18 +122,18 @@ namespace Game.Tests
             yield return LoadTestBox();
             var me = Combatant.LocalPlayer;
             var screen = InventoryScreen.Instance;
-            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = 40 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = InventoryBackend.AmmoValue(1), Amount = 40 });
             me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 });
             UiFocus.Set(UiScreen.Inventory);
-            yield return WaitUntil(() => screen.BackpackText(1).Contains("40") && screen.BackpackText(3).Contains("2"), 2f, "ammo and medkits listed");
+            yield return WaitUntil(() => screen.BackpackText(1).Contains("40") && screen.BackpackText(4).Contains("2"), 2f, "ammo and medkits listed");
 
             int lootBefore = LootItem.All.Count;
             screen.ClickDropAmmo(1);
-            yield return WaitUntil(() => me.ReserveMedium.Value == 0, 2f, "ammo left the backpack");
+            yield return WaitUntil(() => InventoryBackend.Reserve(me, 1) == 0, 2f, "ammo left the backpack");
             yield return WaitUntil(() => LootItem.All.Count == lootBefore + 1, 2f, "ammo on the ground");
             var ammo = LootItem.All[LootItem.All.Count - 1];
             Assert.AreEqual((int)LootKind.Ammo, ammo.Kind.Value);
-            Assert.AreEqual((int)AmmoType.Medium, ammo.Ammo.Value);
+            Assert.AreEqual(1, ammo.Ammo.Value);
             Assert.AreEqual(40, ammo.Amount.Value, "the whole stack is dropped");
 
             screen.ClickDropMedkit();

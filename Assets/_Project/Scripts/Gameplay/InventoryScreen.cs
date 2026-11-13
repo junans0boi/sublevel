@@ -2,29 +2,27 @@ using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // Tab inventory. Created for the local player by PlayerController; shows itself while UiFocus says so.
-    // Three columns: loot on the ground nearby, what the backpack holds, the two weapon slots. It only shows the
-    // server's replicated state and sends requests; the server decides what actually changes hands.
+    // Four-zone Tab inventory. Presentation reads replicated state; every mutation goes through InventoryBackend.
     public class InventoryScreen : MonoBehaviour
     {
         public const int MaxVicinityRows = 12;
 
-        const int AmmoTypeCount = 3;
-        const int MedkitRow = AmmoTypeCount;
-        const int BackpackRows = AmmoTypeCount + 1;
         const int SortingOrder = 100;
+        const float PanelWidth = 1680f, PanelHeight = 900f;
+        const float ColumnHeight = 810f, ColumnTop = 70f, Gap = 20f;
+        const float GroundWidth = 340f, BagWidth = 360f, GearWidth = 360f, WeaponWidth = 560f;
+        const float Pad = 14f, HeaderHeight = 54f;
+        const float GroundRowHeight = 54f, GroundRowGap = 6f;
+        const float BagRowHeight = 68f, BagRowGap = 8f;
+        const float GearCardHeight = 220f, WeaponCardHeight = 272f;
 
-        const float ColumnWidth = 520f, ColumnHeight = 860f, ColumnSpacing = 550f, ColumnY = -40f;
-        const float Pad = 16f, HeaderHeight = 60f;
-        const float RowWidth = ColumnWidth - 2f * Pad, RowHeight = 56f, RowGap = 6f;
-        const float CardHeight = 190f, CardGap = 12f;
-        const float ButtonWidth = 90f, ButtonHeight = 40f;
-
-        static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.55f);
+        static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.62f);
+        static readonly Color Durability = new Color(0.32f, 0.72f, 0.58f, 1f);
         static readonly Vector2 TopLeft = new Vector2(0f, 1f);
         static readonly Vector2 MidLeft = new Vector2(0f, 0.5f);
         static readonly Vector2 Centre = new Vector2(0.5f, 0.5f);
@@ -33,29 +31,53 @@ namespace Game.Gameplay
         public static InventoryScreen Instance { get; private set; }
 
         public bool IsOpen => _canvas != null && _canvas.gameObject.activeSelf;
-        // Loot rows currently listed (at most MaxVicinityRows). Zero while closed.
         public int VicinityCount => _vicinity.Count;
+        public bool Dragging => _dragSource.IsValid;
+        public InventoryDragSource ActiveDragSource => _dragSource;
 
         Canvas _canvas;
+        RectTransform _panel;
         readonly List<LootItem> _vicinity = new List<LootItem>(MaxVicinityRows);
+        readonly List<InventoryDropZone> _dropZones = new List<InventoryDropZone>(6);
         int _hash;
         bool _dirty = true;
 
-        readonly GameObject[] _vicinityRow = new GameObject[MaxVicinityRows];
-        readonly Text[] _vicinityName = new Text[MaxVicinityRows];
-        readonly Text[] _vicinityAmount = new Text[MaxVicinityRows];
+        readonly GameObject[] _vicinityRows = new GameObject[MaxVicinityRows];
+        readonly Text[] _vicinityNames = new Text[MaxVicinityRows];
+        readonly Text[] _vicinityAmounts = new Text[MaxVicinityRows];
+        readonly InventoryItemIcon[] _vicinityIcons = new InventoryItemIcon[MaxVicinityRows];
+        readonly InventoryDragItem[] _vicinityDrags = new InventoryDragItem[MaxVicinityRows];
         GameObject _vicinityEmpty;
 
-        readonly Text[] _packName = new Text[BackpackRows];
-        readonly Text[] _packCount = new Text[BackpackRows];
-        readonly GameObject[] _packDrop = new GameObject[BackpackRows];
-        GameObject _medkitUse;
+        readonly Text[] _packNames = new Text[InventoryBackend.BackpackRows];
+        readonly Text[] _packCounts = new Text[InventoryBackend.BackpackRows];
+        readonly GameObject[] _packRows = new GameObject[InventoryBackend.BackpackRows];
+        readonly InventoryItemIcon[] _packIcons = new InventoryItemIcon[InventoryBackend.BackpackRows];
+        readonly InventoryDragItem[] _packDrags = new InventoryDragItem[InventoryBackend.BackpackRows];
+
+        readonly Text[] _gearNames = new Text[2];
+        readonly Text[] _gearDetails = new Text[2];
+        readonly RectTransform[] _gearFill = new RectTransform[2];
+        readonly InventoryItemIcon[] _gearIcons = new InventoryItemIcon[2];
+        readonly InventoryDragItem[] _gearDrags = new InventoryDragItem[2];
 
         readonly GameObject[] _weaponActive = new GameObject[Loadout.SlotCount];
-        readonly Text[] _weaponName = new Text[Loadout.SlotCount];
+        readonly Text[] _weaponNames = new Text[Loadout.SlotCount];
         readonly Text[] _weaponAmmo = new Text[Loadout.SlotCount];
-        readonly GameObject[] _weaponEquip = new GameObject[Loadout.SlotCount];
-        readonly GameObject[] _weaponDrop = new GameObject[Loadout.SlotCount];
+        readonly Text[] _weaponBadge = new Text[Loadout.SlotCount];
+        readonly InventoryItemIcon[] _weaponIcons = new InventoryItemIcon[Loadout.SlotCount];
+        readonly InventoryDragItem[] _weaponDrags = new InventoryDragItem[Loadout.SlotCount];
+
+        InventoryDragSource _dragSource;
+        GameObject _dragGhost;
+        RectTransform _dragGhostRect;
+        InventoryItemIcon _dragGhostIcon;
+        bool _dropHandled;
+        bool _suppressQuickDropUntilRightRelease;
+
+        GameObject _tooltip;
+        RectTransform _tooltipRect;
+        Text _tooltipText;
 
         void Awake()
         {
@@ -70,7 +92,11 @@ namespace Game.Gameplay
             OnFocusChanged();
         }
 
-        void OnDisable() => UiFocus.Changed -= OnFocusChanged;
+        void OnDisable()
+        {
+            UiFocus.Changed -= OnFocusChanged;
+            CancelDrag();
+        }
 
         void OnDestroy()
         {
@@ -84,6 +110,8 @@ namespace Game.Gameplay
             if (_canvas.gameObject.activeSelf != open) _canvas.gameObject.SetActive(open);
             if (!open)
             {
+                CancelDrag();
+                HideTooltip();
                 _vicinity.Clear();
                 return;
             }
@@ -95,8 +123,16 @@ namespace Game.Gameplay
         void Update()
         {
             if (!IsOpen) return;
+            if (_suppressQuickDropUntilRightRelease && Mouse.current != null && !Mouse.current.rightButton.isPressed &&
+                !Mouse.current.rightButton.wasReleasedThisFrame)
+                _suppressQuickDropUntilRightRelease = false;
+            if (Dragging && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+            {
+                _suppressQuickDropUntilRightRelease = true;
+                CancelDrag();
+                return;
+            }
             var me = Combatant.LocalPlayer;
-            // The dead carry nothing to manage, and the death prompt must not be covered.
             if (me == null || me.Dead.Value)
             {
                 UiFocus.Close();
@@ -105,7 +141,6 @@ namespace Game.Gameplay
             Refresh(me);
         }
 
-        // Rows are rewritten only when what they show has changed.
         void Refresh(Combatant me)
         {
             CollectVicinity(me.transform.position);
@@ -115,41 +150,53 @@ namespace Game.Gameplay
             _hash = hash;
             ShowVicinity();
             ShowBackpack(me);
+            ShowGear(me);
             ShowWeapons(me);
         }
 
-        // Same reach as the [F] prompt and the server's pickup check.
         void CollectVicinity(Vector3 position)
         {
             _vicinity.Clear();
             float rangeSqr = Combatant.PickupRange * Combatant.PickupRange;
             foreach (var item in LootItem.All)
             {
-                if (item == null) continue;
-                if ((item.transform.position - position).sqrMagnitude >= rangeSqr) continue;
+                if (item == null || (item.transform.position - position).sqrMagnitude >= rangeSqr) continue;
                 _vicinity.Add(item);
                 if (_vicinity.Count == MaxVicinityRows) break;
             }
         }
 
-        int Hash(Combatant c)
+        int Hash(Combatant combatant)
         {
             unchecked
             {
-                int h = c.ActiveSlot.Value;
-                h = h * 31 + c.Slot0.Value; h = h * 31 + c.Slot1.Value;
-                h = h * 31 + c.Mag0.Value; h = h * 31 + c.Mag1.Value;
-                h = h * 31 + c.ReserveLight.Value; h = h * 31 + c.ReserveMedium.Value; h = h * 31 + c.ReserveShell.Value;
-                h = h * 31 + c.Medkits.Value;
-                h = h * 31 + _vicinity.Count;
+                int hash = combatant.ActiveSlot.Value;
+                hash = hash * 31 + combatant.Slot0.Value;
+                hash = hash * 31 + combatant.Slot1.Value;
+                hash = hash * 31 + combatant.Mag0.Value;
+                hash = hash * 31 + combatant.Mag1.Value;
+                for (int i = 0; i < InventoryBackend.AmmoTypeCount; i++) hash = hash * 31 + InventoryBackend.Reserve(combatant, i);
+                hash = hash * 31 + combatant.Medkits.Value;
+                hash = hash * 31 + InventoryBackend.Grenades(combatant);
+                for (int i = 0; i < 2; i++)
+                {
+                    var gear = InventoryBackend.Gear(combatant, i);
+                    hash = hash * 31 + (gear.Has ? 1 : 0);
+                    hash = hash * 31 + gear.Tier;
+                    hash = hash * 31 + gear.Durability;
+                    hash = hash * 31 + gear.MaxDurability;
+                }
+                hash = hash * 31 + _vicinity.Count;
                 for (int i = 0; i < _vicinity.Count; i++)
                 {
                     var item = _vicinity[i];
-                    h = h * 31 + item.ObjectId;
-                    h = h * 31 + item.Kind.Value; h = h * 31 + item.WeaponId.Value;
-                    h = h * 31 + item.Ammo.Value; h = h * 31 + item.Amount.Value;
+                    hash = hash * 31 + item.ObjectId;
+                    hash = hash * 31 + item.Kind.Value;
+                    hash = hash * 31 + item.WeaponId.Value;
+                    hash = hash * 31 + item.Ammo.Value;
+                    hash = hash * 31 + item.Amount.Value;
                 }
-                return h;
+                return hash;
             }
         }
 
@@ -158,124 +205,357 @@ namespace Game.Gameplay
             for (int i = 0; i < MaxVicinityRows; i++)
             {
                 bool used = i < _vicinity.Count;
-                _vicinityRow[i].SetActive(used);
+                _vicinityRows[i].SetActive(used);
                 if (!used) continue;
                 var item = _vicinity[i];
-                _vicinityName[i].text = LootName(item);
-                _vicinityAmount[i].text = LootAmount(item);
+                string name = InventoryBackend.LootName(item);
+                _vicinityNames[i].text = name;
+                _vicinityAmounts[i].text = InventoryBackend.LootAmount(item);
+                _vicinityIcons[i].Set(InventoryBackend.LootIconKey(item), name);
+                _vicinityDrags[i].Configure(this, new InventoryDragSource(InventorySourceKind.Vicinity, item, i));
             }
             _vicinityEmpty.SetActive(_vicinity.Count == 0);
         }
 
         void ShowBackpack(Combatant me)
         {
-            for (int i = 0; i < AmmoTypeCount; i++) ShowPackRow(i, me.ReserveFor((AmmoType)i));
-            ShowPackRow(MedkitRow, me.Medkits.Value);
-            _medkitUse.SetActive(me.Medkits.Value > 0);
+            for (int i = 0; i < InventoryBackend.AmmoTypeCount; i++)
+            {
+                int count = InventoryBackend.Reserve(me, i);
+                ShowPackRow(i, count);
+                _packDrags[i].Configure(this, AmmoSource(i));
+            }
+            ShowPackRow(InventoryBackend.MedkitRow, me.Medkits.Value);
+            _packDrags[InventoryBackend.MedkitRow].Configure(this, MedkitSource());
+            int grenades = InventoryBackend.Grenades(me);
+            ShowPackRow(InventoryBackend.GrenadeRow, grenades);
+            _packDrags[InventoryBackend.GrenadeRow].Configure(this, GrenadeSource());
         }
 
-        // Things the player has none of stay listed but dimmed, with nothing to press.
         void ShowPackRow(int row, int count)
         {
             bool any = count > 0;
-            _packCount[row].text = count.ToString();
-            _packName[row].color = any ? UiKit.Text : UiKit.TextDim;
-            _packCount[row].color = any ? UiKit.Text : UiKit.TextDim;
-            _packDrop[row].SetActive(any);
+            _packCounts[row].text = "x" + count;
+            _packNames[row].color = any ? UiKit.Text : UiKit.TextDim;
+            _packCounts[row].color = any ? UiKit.Text : UiKit.TextDim;
+            _packRows[row].GetComponent<Image>().color = any ? UiKit.PanelLight : new Color(UiKit.PanelLight.r, UiKit.PanelLight.g, UiKit.PanelLight.b, 0.45f);
+        }
+
+        void ShowGear(Combatant me)
+        {
+            for (int slot = 0; slot < 2; slot++)
+            {
+                var gear = InventoryBackend.Gear(me, slot);
+                string baseName = slot == InventoryBackend.HelmetSlot ? "헬멧" : "조끼";
+                _gearNames[slot].text = gear.Has ? baseName + " " + gear.Tier + "단계" : baseName + "  ·  비어 있음";
+                _gearNames[slot].color = gear.Has ? UiKit.Text : UiKit.TextDim;
+                _gearDetails[slot].text = gear.Has ? "내구도  " + gear.Durability + " / " + gear.MaxDurability : "장구류를 이곳에 놓으세요";
+                _gearFill[slot].anchorMax = new Vector2(Mathf.Clamp01(gear.Fraction), 1f);
+                _gearIcons[slot].Set(gear.Has ? (slot == 0 ? "helmet_" : "vest_") + gear.Tier : "", baseName);
+                var kind = slot == 0 ? InventorySourceKind.Helmet : InventorySourceKind.Vest;
+                _gearDrags[slot].Configure(this, new InventoryDragSource(kind, null, slot));
+            }
         }
 
         void ShowWeapons(Combatant me)
         {
             for (int slot = 0; slot < Loadout.SlotCount; slot++)
             {
-                int id = slot == 0 ? me.Slot0.Value : me.Slot1.Value;
-                int mag = slot == 0 ? me.Mag0.Value : me.Mag1.Value;
+                int id = InventoryBackend.WeaponId(me, slot);
+                int mag = InventoryBackend.WeaponMag(me, slot);
                 bool active = me.ActiveSlot.Value == slot;
-                WeaponDef weapon = GameData.Weapons.Find(id);
+                var weapon = GameData.Weapons.Find(id);
                 _weaponActive[slot].SetActive(active);
                 if (weapon == null)
                 {
-                    _weaponName[slot].text = "비어 있음";
-                    _weaponName[slot].color = UiKit.TextDim;
-                    _weaponAmmo[slot].text = "";
-                    _weaponEquip[slot].SetActive(false);
-                    _weaponDrop[slot].SetActive(false);
-                    continue;
+                    _weaponNames[slot].text = "비어 있음";
+                    _weaponNames[slot].color = UiKit.TextDim;
+                    _weaponAmmo[slot].text = "총기를 이곳에 놓으세요";
+                    _weaponBadge[slot].text = "구경 —";
+                    _weaponIcons[slot].Set("", "총");
                 }
-                _weaponName[slot].text = weapon.Name;
-                _weaponName[slot].color = active ? UiKit.Accent : UiKit.Text;
-                _weaponAmmo[slot].text = mag + " / " + me.ReserveFor(weapon.Ammo) + "   " + AmmoName(weapon.Ammo);
-                _weaponEquip[slot].SetActive(!active);
-                _weaponDrop[slot].SetActive(true);
+                else
+                {
+                    int ammoIndex = InventoryBackend.AmmoIndex(weapon);
+                    _weaponNames[slot].text = weapon.Name;
+                    _weaponNames[slot].color = active ? UiKit.Accent : UiKit.Text;
+                    _weaponAmmo[slot].text = mag + " / " + InventoryBackend.Reserve(me, ammoIndex) + "발";
+                    _weaponBadge[slot].text = InventoryBackend.AmmoName(ammoIndex);
+                    _weaponIcons[slot].Set(InventoryBackend.WeaponKey(id), weapon.Name);
+                }
+                _weaponDrags[slot].Configure(this, WeaponSource(slot));
             }
         }
 
-        static string LootName(LootItem item)
+        // ---- Interaction paths (EventSystem handlers and PlayMode tests both call these) ----
+
+        public InventoryDragSource VicinitySource(int index) => index >= 0 && index < _vicinity.Count
+            ? new InventoryDragSource(InventorySourceKind.Vicinity, _vicinity[index], index) : default;
+        public InventoryDragSource AmmoSource(int ammoIndex) => ammoIndex >= 0 && ammoIndex < InventoryBackend.AmmoTypeCount
+            ? new InventoryDragSource(InventorySourceKind.Ammo, null, ammoIndex) : default;
+        public InventoryDragSource MedkitSource() => new InventoryDragSource(InventorySourceKind.Medkit, null, 0);
+        public InventoryDragSource GrenadeSource() => new InventoryDragSource(InventorySourceKind.Grenade, null, 0);
+        public InventoryDragSource WeaponSource(int slot) => slot >= 0 && slot < Loadout.SlotCount
+            ? new InventoryDragSource(InventorySourceKind.Weapon, null, slot) : default;
+        public InventoryDragSource GearSource(int slot) => slot == InventoryBackend.HelmetSlot
+            ? new InventoryDragSource(InventorySourceKind.Helmet, null, slot)
+            : slot == InventoryBackend.VestSlot ? new InventoryDragSource(InventorySourceKind.Vest, null, slot) : default;
+
+        public bool DropOnBag(InventoryDragSource source)
         {
-            switch ((LootKind)item.Kind.Value)
+            if (!CanDropOnBag(source)) return false;
+            InventoryBackend.Pickup(Combatant.LocalPlayer, source.Loot);
+            _dirty = true;
+            return true;
+        }
+
+        public bool DropOnGround(InventoryDragSource source)
+        {
+            if (!CanDropOnGround(source)) return false;
+            var me = Combatant.LocalPlayer;
+            switch (source.Kind)
             {
-                case LootKind.Weapon:
-                    WeaponDef weapon = GameData.Weapons.Find(item.WeaponId.Value);
-                    return weapon != null ? weapon.Name : "무기";
-                case LootKind.Ammo: return AmmoName((AmmoType)item.Ammo.Value);
-                default: return "구급상자";
+                case InventorySourceKind.Ammo: InventoryBackend.DropAmmo(me, source.Index); break;
+                case InventorySourceKind.Medkit: InventoryBackend.DropMedkit(me); break;
+                case InventorySourceKind.Grenade: InventoryBackend.DropGrenade(me); break;
+                case InventorySourceKind.Weapon: InventoryBackend.DropWeapon(me, source.Index); break;
+                case InventorySourceKind.Helmet: InventoryBackend.DropArmor(me, InventoryBackend.HelmetSlot); break;
+                case InventorySourceKind.Vest: InventoryBackend.DropArmor(me, InventoryBackend.VestSlot); break;
+                default: return false;
+            }
+            _dirty = true;
+            return true;
+        }
+
+        public bool DropOutside(InventoryDragSource source) => DropOnGround(source);
+
+        public bool DropOnWeaponSlot(InventoryDragSource source, int slot)
+        {
+            if (!CanDropOnWeaponSlot(source, slot)) return false;
+            var me = Combatant.LocalPlayer;
+            if (source.Kind == InventorySourceKind.Vicinity) InventoryBackend.PickupToSlot(me, source.Loot, slot);
+            else InventoryBackend.SwapWeaponSlots(me);
+            _dirty = true;
+            return true;
+        }
+
+        public bool DropOnGear(InventoryDragSource source, int slot)
+        {
+            if (!CanDropOnGear(source, slot)) return false;
+            InventoryBackend.EquipArmor(Combatant.LocalPlayer, source.Loot, slot);
+            _dirty = true;
+            return true;
+        }
+
+        public bool BeginDrag(InventoryDragSource source)
+        {
+            if (!CanDrag(source)) return false;
+            CancelDrag();
+            _dragSource = source;
+            _dropHandled = false;
+            SourcePresentation(source, out string key, out string name);
+            _dragGhostIcon.Set(key, name);
+            _dragGhost.SetActive(true);
+            _dragGhost.transform.SetAsLastSibling();
+            SetDropHighlights(true);
+            return true;
+        }
+
+        public void MoveDrag(Vector2 screenPosition, Camera eventCamera)
+        {
+            if (!Dragging) return;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)_canvas.transform, screenPosition, eventCamera, out var local);
+            _dragGhostRect.anchoredPosition = local + new Vector2(18f, -18f);
+        }
+
+        public void EndDrag(Vector2 screenPosition, Camera eventCamera)
+        {
+            if (!Dragging) return;
+            if (!_dropHandled && !RectTransformUtility.RectangleContainsScreenPoint(_panel, screenPosition, eventCamera)) DropOutside(_dragSource);
+            CancelDrag();
+        }
+
+        public void CancelDrag()
+        {
+            _dragSource = default;
+            _dropHandled = false;
+            if (_dragGhost != null) _dragGhost.SetActive(false);
+            SetDropHighlights(false);
+        }
+
+        public void Activate(InventoryDragSource source, int clickCount)
+        {
+            var me = Combatant.LocalPlayer;
+            if (me == null) return;
+            if (source.Kind == InventorySourceKind.Vicinity && clickCount >= 2) InventoryBackend.Pickup(me, source.Loot);
+            else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
+            else if (source.Kind == InventorySourceKind.Weapon && InventoryBackend.WeaponId(me, source.Index) != 0)
+                InventoryBackend.SelectSlot(me, source.Index);
+        }
+
+        public void QuickDrop(InventoryDragSource source)
+        {
+            if (_suppressQuickDropUntilRightRelease)
+            {
+                if (Mouse.current == null || !Mouse.current.rightButton.isPressed) _suppressQuickDropUntilRightRelease = false;
+                return;
+            }
+            if (Dragging) CancelDrag();
+            else DropOnGround(source);
+        }
+
+        public void CancelDragFromPointer()
+        {
+            _suppressQuickDropUntilRightRelease = true;
+            CancelDrag();
+        }
+
+        internal bool DropOn(InventoryDropKind kind, int index, InventoryDragSource source)
+        {
+            switch (kind)
+            {
+                case InventoryDropKind.Bag: return DropOnBag(source);
+                case InventoryDropKind.Ground: return DropOnGround(source);
+                case InventoryDropKind.Weapon: return DropOnWeaponSlot(source, index);
+                case InventoryDropKind.Gear: return DropOnGear(source, index);
+                default: return false;
             }
         }
 
-        static string LootAmount(LootItem item) =>
-            (LootKind)item.Kind.Value == LootKind.Weapon ? "탄창 " + item.Amount.Value + "발" : "x" + item.Amount.Value;
+        internal void MarkDropHandled() => _dropHandled = true;
 
-        static string AmmoName(AmmoType type) =>
-            type == AmmoType.Light ? "소형 탄약" : type == AmmoType.Medium ? "중형 탄약" : "산탄";
-
-        // ---- What the buttons do (also called by tests) ----
-
-        public void ClickVicinity(int index)
+        bool CanDrag(InventoryDragSource source)
         {
             var me = Combatant.LocalPlayer;
-            if (me == null || index < 0 || index >= _vicinity.Count) return;
-            var item = _vicinity[index];
-            if (item == null || !item.IsSpawned) return;
-            me.CmdPickup(item.NetworkObject);
+            if (me == null || !source.IsValid) return false;
+            switch (source.Kind)
+            {
+                case InventorySourceKind.Vicinity: return source.Loot != null && source.Loot.IsSpawned;
+                case InventorySourceKind.Ammo: return InventoryBackend.Reserve(me, source.Index) > 0;
+                case InventorySourceKind.Medkit: return me.Medkits.Value > 0;
+                case InventorySourceKind.Grenade: return InventoryBackend.Grenades(me) > 0;
+                case InventorySourceKind.Weapon: return InventoryBackend.WeaponId(me, source.Index) != 0;
+                case InventorySourceKind.Helmet: return InventoryBackend.Gear(me, InventoryBackend.HelmetSlot).Has;
+                case InventorySourceKind.Vest: return InventoryBackend.Gear(me, InventoryBackend.VestSlot).Has;
+                default: return false;
+            }
         }
 
-        public void ClickEquip(int slot)
+        bool CanDropOnBag(InventoryDragSource source) => source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned;
+
+        bool CanDropOnGround(InventoryDragSource source)
+        {
+            if (source.Kind == InventorySourceKind.Vicinity) return false;
+            return CanDrag(source);
+        }
+
+        bool CanDropOnWeaponSlot(InventoryDragSource source, int slot)
+        {
+            if (slot < 0 || slot >= Loadout.SlotCount) return false;
+            if (source.Kind == InventorySourceKind.Weapon) return source.Index != slot && CanDrag(source);
+            return source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned &&
+                   (LootKind)source.Loot.Kind.Value == LootKind.Weapon;
+        }
+
+        bool CanDropOnGear(InventoryDragSource source, int slot)
+        {
+            return slot >= 0 && slot < 2 && source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned &&
+                   InventoryBackend.CanEquipArmor(Combatant.LocalPlayer, source.Loot, slot);
+        }
+
+        bool CanDropOn(InventoryDropKind kind, int index, InventoryDragSource source)
+        {
+            switch (kind)
+            {
+                case InventoryDropKind.Bag: return CanDropOnBag(source);
+                case InventoryDropKind.Ground: return CanDropOnGround(source);
+                case InventoryDropKind.Weapon: return CanDropOnWeaponSlot(source, index);
+                case InventoryDropKind.Gear: return CanDropOnGear(source, index);
+                default: return false;
+            }
+        }
+
+        void SetDropHighlights(bool active)
+        {
+            for (int i = 0; i < _dropZones.Count; i++)
+            {
+                var zone = _dropZones[i];
+                zone.SetDragState(active, active && CanDropOn(zone.Kind, zone.Index, _dragSource));
+            }
+        }
+
+        void SourcePresentation(InventoryDragSource source, out string key, out string name)
         {
             var me = Combatant.LocalPlayer;
-            if (me != null) me.CmdSelectSlot(slot);
+            key = "";
+            name = "아이템";
+            switch (source.Kind)
+            {
+                case InventorySourceKind.Vicinity:
+                    key = InventoryBackend.LootIconKey(source.Loot);
+                    name = InventoryBackend.LootName(source.Loot);
+                    break;
+                case InventorySourceKind.Ammo:
+                    key = InventoryBackend.AmmoKey(source.Index);
+                    name = InventoryBackend.AmmoName(source.Index);
+                    break;
+                case InventorySourceKind.Medkit: key = "medkit"; name = "구급상자"; break;
+                case InventorySourceKind.Grenade: key = "grenade"; name = "수류탄"; break;
+                case InventorySourceKind.Weapon:
+                    int id = InventoryBackend.WeaponId(me, source.Index);
+                    var weapon = GameData.Weapons.Find(id);
+                    key = InventoryBackend.WeaponKey(id);
+                    name = weapon != null ? weapon.Name : "총";
+                    break;
+                case InventorySourceKind.Helmet:
+                    var helmet = InventoryBackend.Gear(me, InventoryBackend.HelmetSlot);
+                    key = helmet.Has ? "helmet_" + helmet.Tier : "";
+                    name = "헬멧";
+                    break;
+                case InventorySourceKind.Vest:
+                    var vest = InventoryBackend.Gear(me, InventoryBackend.VestSlot);
+                    key = vest.Has ? "vest_" + vest.Tier : "";
+                    name = "조끼";
+                    break;
+            }
         }
 
-        public void ClickDropWeapon(int slot)
+        public void ShowTooltip(InventoryDragSource source, Vector2 screenPosition, Camera eventCamera)
         {
-            var me = Combatant.LocalPlayer;
-            if (me != null) me.CmdDropWeapon(slot);
+            string description = InventoryBackend.Describe(source, Combatant.LocalPlayer);
+            if (description.Length == 0) return;
+            _tooltipText.text = description;
+            var canvasRect = (RectTransform)_canvas.transform;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, eventCamera, out var local);
+            local += new Vector2(18f, -18f);
+            local.x = Mathf.Clamp(local.x, canvasRect.rect.xMin, canvasRect.rect.xMax - _tooltipRect.rect.width);
+            local.y = Mathf.Clamp(local.y, canvasRect.rect.yMin + _tooltipRect.rect.height, canvasRect.rect.yMax);
+            _tooltipRect.anchoredPosition = local;
+            _tooltip.SetActive(true);
+            _tooltip.transform.SetAsLastSibling();
         }
 
-        public void ClickDropAmmo(int ammoType)
+        public void HideTooltip()
         {
-            var me = Combatant.LocalPlayer;
-            if (me != null) me.CmdDropAmmo(ammoType);
+            if (_tooltip != null) _tooltip.SetActive(false);
         }
 
-        public void ClickUseMedkit()
-        {
-            var me = Combatant.LocalPlayer;
-            if (me != null) me.CmdUseMedkit();
-        }
+        // ---- Legacy public click hooks kept for existing tests and callers ----
 
-        public void ClickDropMedkit()
-        {
-            var me = Combatant.LocalPlayer;
-            if (me != null) me.CmdDropMedkit();
-        }
+        public void ClickVicinity(int index) => InventoryBackend.Pickup(Combatant.LocalPlayer, VicinityItem(index));
+        public void ClickEquip(int slot) => InventoryBackend.SelectSlot(Combatant.LocalPlayer, slot);
+        public void ClickDropWeapon(int slot) => InventoryBackend.DropWeapon(Combatant.LocalPlayer, slot);
+        public void ClickDropAmmo(int ammoType) => InventoryBackend.DropAmmo(Combatant.LocalPlayer, ammoType);
+        public void ClickUseMedkit() => InventoryBackend.UseMedkit(Combatant.LocalPlayer);
+        public void ClickDropMedkit() => InventoryBackend.DropMedkit(Combatant.LocalPlayer);
 
-        // ---- Hooks for tests ----
+        // ---- Read-only hooks ----
 
         public LootItem VicinityItem(int index) => index >= 0 && index < _vicinity.Count ? _vicinity[index] : null;
-        public string VicinityText(int index) => _vicinityName[index].text + " " + _vicinityAmount[index].text;
-        public string BackpackText(int row) => _packName[row].text + " " + _packCount[row].text;
-        // Name line and ammo line of a weapon card.
-        public string WeaponCardText(int slot) => _weaponName[slot].text + "\n" + _weaponAmmo[slot].text;
+        public string VicinityText(int index) => _vicinityNames[index].text + " " + _vicinityAmounts[index].text;
+        public string BackpackText(int row) => _packNames[row].text + " " + _packCounts[row].text;
+        public string GearCardText(int slot) => _gearNames[slot].text + "\n" + _gearDetails[slot].text;
+        public string WeaponCardText(int slot) => _weaponNames[slot].text + "\n" + _weaponAmmo[slot].text + " " + _weaponBadge[slot].text;
 
         // ---- Construction (once) ----
 
@@ -284,114 +564,156 @@ namespace Game.Gameplay
             _canvas = UiKit.Canvas("InventoryCanvas", SortingOrder, true);
             _canvas.transform.SetParent(transform, false);
             var root = _canvas.transform;
-            // Swallows clicks so nothing behind the screen reacts.
             UiKit.Box(UiKit.Fill("Backdrop", root), Backdrop, true);
 
-            // Laid out around the centre so the columns stay on screen on 16:10 displays too.
-            float totalWidth = ColumnSpacing * 2f + ColumnWidth;
-            var header = UiKit.Rect("Header", root, TopCentre, TopCentre, new Vector2(0f, -36f), new Vector2(totalWidth, 50f));
-            UiKit.Label(UiKit.Fill("Title", header), "인벤토리", 36, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Label(UiKit.Fill("Hint", header), "Tab / Esc — 닫기", 20, UiKit.TextDim, TextAnchor.MiddleRight);
+            _panel = UiKit.Rect("InventoryPanel", root, Centre, Centre, Vector2.zero, new Vector2(PanelWidth, PanelHeight));
+            var header = UiKit.Rect("Header", _panel, TopCentre, TopCentre, Vector2.zero, new Vector2(PanelWidth, 54f));
+            UiKit.Label(UiKit.Fill("Title", header), "인벤토리", 34, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiKit.Label(UiKit.Fill("Hint", header), "끌어서 이동  ·  더블클릭 사용  ·  우클릭 빠른 버리기  ·  Tab / Esc 닫기", 18, UiKit.TextDim, TextAnchor.MiddleRight);
 
-            BuildVicinity(Column(root, "주변", -ColumnSpacing));
-            BuildBackpack(Column(root, "가방", 0f));
-            BuildWeapons(Column(root, "무기", ColumnSpacing));
+            float x = 0f;
+            var ground = Column(_panel, "바닥", "주변 아이템", x, GroundWidth); x += GroundWidth + Gap;
+            var bag = Column(_panel, "가방", "보유 아이템", x, BagWidth); x += BagWidth + Gap;
+            var gear = Column(_panel, "장구류", "헬멧 · 조끼", x, GearWidth); x += GearWidth + Gap;
+            var weapons = Column(_panel, "총기", "슬롯 1 · 2", x, WeaponWidth);
+
+            BuildVicinity(ground, GroundWidth);
+            BuildBackpack(bag, BagWidth);
+            BuildGear(gear, GearWidth);
+            BuildWeapons(weapons, WeaponWidth);
+            AddDropZone(ground, InventoryDropKind.Ground, 0);
+            AddDropZone(bag, InventoryDropKind.Bag, 0);
+            BuildDragGhost(root);
+            BuildTooltip(root);
         }
 
-        static RectTransform Column(Transform parent, string title, float x)
+        static RectTransform Column(Transform parent, string title, string subtitle, float x, float width)
         {
-            var column = UiKit.Rect(title, parent, Centre, Centre, new Vector2(x, ColumnY), new Vector2(ColumnWidth, ColumnHeight));
-            UiKit.Box(column, UiKit.Panel);
-            var titleRect = UiKit.Rect("Title", column, TopLeft, TopLeft, new Vector2(Pad, -12f), new Vector2(RowWidth, 36f));
-            UiKit.Label(titleRect, title, 22, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var column = UiKit.Rect(title, parent, TopLeft, TopLeft, new Vector2(x, -ColumnTop), new Vector2(width, ColumnHeight));
+            UiKit.Box(column, UiKit.Panel, true);
+            UiKit.Label(UiKit.Rect("Title", column, TopLeft, TopLeft, new Vector2(Pad, -8f), new Vector2(width - 2f * Pad, 28f)), title, 23, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiKit.Label(UiKit.Rect("Subtitle", column, TopLeft, TopLeft, new Vector2(Pad, -34f), new Vector2(width - 2f * Pad, 20f)), subtitle, 18, UiKit.TextDim);
             return column;
         }
 
-        static RectTransform Row(string name, Transform column, float top, float height) =>
-            UiKit.Rect(name, column, TopLeft, TopLeft, new Vector2(Pad, -top), new Vector2(RowWidth, height));
+        static RectTransform Row(string name, Transform column, float width, float top, float height) =>
+            UiKit.Rect(name, column, TopLeft, TopLeft, new Vector2(Pad, -top), new Vector2(width - 2f * Pad, height));
 
-        // A child of a row: `x` from the row's left edge, vertically centred.
         static RectTransform InRow(string name, Transform row, float x, float width, float height) =>
             UiKit.Rect(name, row, MidLeft, MidLeft, new Vector2(x, 0f), new Vector2(width, height));
 
-        void BuildVicinity(RectTransform column)
+        void BuildVicinity(RectTransform column, float width)
         {
+            float content = width - 2f * Pad;
             for (int i = 0; i < MaxVicinityRows; i++)
             {
-                int index = i;
-                var row = Row("Loot" + i, column, HeaderHeight + i * (RowHeight + RowGap), RowHeight);
-                // The whole row is the button: click to pick up.
-                var button = UiKit.Button(row, "", 22, () => ClickVicinity(index));
-                _vicinityName[i] = button.GetComponentInChildren<Text>(true);
-                _vicinityName[i].alignment = TextAnchor.MiddleLeft;
-                _vicinityAmount[i] = UiKit.Label(UiKit.Fill("Amount", row, 14f), "", 20, UiKit.TextDim, TextAnchor.MiddleRight);
-                _vicinityRow[i] = row.gameObject;
+                var row = Row("Loot" + i, column, width, HeaderHeight + i * (GroundRowHeight + GroundRowGap), GroundRowHeight);
+                UiKit.Box(row, UiKit.PanelLight, true);
+                _vicinityIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 6f, 42f, 42f));
+                _vicinityNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, GroundRowHeight), "", 19, UiKit.Text);
+                _vicinityAmounts[i] = UiKit.Label(InRow("Amount", row, content - 80f, 68f, GroundRowHeight), "", 18, UiKit.TextDim, TextAnchor.MiddleRight);
+                _vicinityDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
+                _vicinityRows[i] = row.gameObject;
                 row.gameObject.SetActive(false);
             }
-            var empty = Row("Empty", column, HeaderHeight, RowHeight);
-            UiKit.Label(empty, "주변에 아이템 없음", 20, UiKit.TextDim);
+            var empty = Row("Empty", column, width, HeaderHeight, 64f);
+            UiKit.Label(empty, "주변에 아이템 없음", 19, UiKit.TextDim, TextAnchor.MiddleCenter);
             _vicinityEmpty = empty.gameObject;
         }
 
-        void BuildBackpack(RectTransform column)
+        void BuildBackpack(RectTransform column, float width)
         {
-            float dropX = RowWidth - 8f - ButtonWidth;
-            float useX = dropX - 8f - ButtonWidth;
-            for (int i = 0; i < BackpackRows; i++)
+            float content = width - 2f * Pad;
+            for (int i = 0; i < InventoryBackend.BackpackRows; i++)
             {
-                int index = i;
-                bool medkit = i == MedkitRow;
-                var row = Row(medkit ? "Medkits" : "Ammo" + i, column, HeaderHeight + i * (RowHeight + RowGap), RowHeight);
-                UiKit.Box(row, UiKit.Panel);
-                string label = medkit ? "구급상자" : AmmoName((AmmoType)i);
-                _packName[i] = UiKit.Label(InRow("Name", row, 14f, 170f, RowHeight), label, 22, UiKit.TextDim);
-                _packCount[i] = UiKit.Label(InRow("Count", row, 190f, 80f, RowHeight), "0", 22, UiKit.TextDim, TextAnchor.MiddleRight);
-                var drop = InRow("Drop", row, dropX, ButtonWidth, ButtonHeight);
-                if (medkit) UiKit.Button(drop, "버리기", 18, ClickDropMedkit);
-                else UiKit.Button(drop, "버리기", 18, () => ClickDropAmmo(index));
-                _packDrop[i] = drop.gameObject;
-                drop.gameObject.SetActive(false);
-                if (!medkit) continue;
-                var use = InRow("Use", row, useX, ButtonWidth, ButtonHeight);
-                UiKit.Button(use, "사용", 18, ClickUseMedkit);
-                _medkitUse = use.gameObject;
-                use.gameObject.SetActive(false);
+                var row = Row("Bag" + i, column, width, HeaderHeight + i * (BagRowHeight + BagRowGap), BagRowHeight);
+                UiKit.Box(row, UiKit.PanelLight, true);
+                string name;
+                string key;
+                if (i < InventoryBackend.AmmoTypeCount) { name = InventoryBackend.AmmoName(i) + " 탄약"; key = InventoryBackend.AmmoKey(i); }
+                else if (i == InventoryBackend.MedkitRow) { name = "구급상자"; key = "medkit"; }
+                else { name = "수류탄"; key = "grenade"; }
+                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 50f, 50f));
+                _packIcons[i].Set(key, name);
+                _packNames[i] = UiKit.Label(InRow("Name", row, 70f, content - 156f, BagRowHeight), name, 20, UiKit.TextDim);
+                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 22, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+                _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
+                _packRows[i] = row.gameObject;
             }
-            // Places kept for what the spec lists but the game does not have yet.
-            float top = HeaderHeight + BackpackRows * (RowHeight + RowGap) + 18f;
-            UiKit.Label(Row("Throwables", column, top, 30f), "투척 무기  —", 18, UiKit.TextDim);
-            UiKit.Label(Row("Keys", column, top + 34f, 30f), "열쇠 / 칩  —", 18, UiKit.TextDim);
+            UiKit.Label(Row("BagHint", column, width, HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap) + 8f, 44f),
+                "소모품 확장 자리", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
         }
 
-        void BuildWeapons(RectTransform column)
+        void BuildGear(RectTransform column, float width)
         {
-            for (int i = 0; i < Loadout.SlotCount; i++)
+            for (int slot = 0; slot < 2; slot++)
             {
-                int slot = i;
-                var card = Row("Slot" + (i + 1), column, HeaderHeight + i * (CardHeight + CardGap), CardHeight);
-                UiKit.Box(card, UiKit.Panel);
-                // Accent bar down the left edge of the weapon in hand.
-                var bar = UiKit.Rect("Active", card, TopLeft, TopLeft, Vector2.zero, new Vector2(6f, CardHeight));
-                UiKit.Box(bar, UiKit.Accent);
-                _weaponActive[i] = bar.gameObject;
-                bar.gameObject.SetActive(false);
-
-                UiKit.Label(UiKit.Rect("Slot", card, TopLeft, TopLeft, new Vector2(22f, -12f), new Vector2(200f, 22f)), "슬롯 " + (i + 1), 16, UiKit.TextDim);
-                _weaponName[i] = UiKit.Label(UiKit.Rect("Name", card, TopLeft, TopLeft, new Vector2(22f, -40f), new Vector2(440f, 40f)), "비어 있음", 30, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-                _weaponAmmo[i] = UiKit.Label(UiKit.Rect("Ammo", card, TopLeft, TopLeft, new Vector2(22f, -86f), new Vector2(440f, 28f)), "", 20, UiKit.TextDim);
-
-                var equip = UiKit.Rect("Equip", card, TopLeft, TopLeft, new Vector2(22f, -134f), new Vector2(130f, ButtonHeight));
-                UiKit.Button(equip, "장착", 18, () => ClickEquip(slot));
-                _weaponEquip[i] = equip.gameObject;
-                equip.gameObject.SetActive(false);
-                var drop = UiKit.Rect("Drop", card, TopLeft, TopLeft, new Vector2(162f, -134f), new Vector2(ButtonWidth, ButtonHeight));
-                UiKit.Button(drop, "버리기", 18, () => ClickDropWeapon(slot));
-                _weaponDrop[i] = drop.gameObject;
-                drop.gameObject.SetActive(false);
+                var card = Row(slot == 0 ? "Helmet" : "Vest", column, width, HeaderHeight + slot * (GearCardHeight + 16f), GearCardHeight);
+                UiKit.Box(card, UiKit.PanelLight, true);
+                _gearIcons[slot] = InventoryItemIcon.Build(UiKit.Rect("Icon", card, TopLeft, TopLeft, new Vector2(16f, -18f), new Vector2(92f, 92f)));
+                _gearNames[slot] = UiKit.Label(UiKit.Rect("Name", card, TopLeft, TopLeft, new Vector2(124f, -20f), new Vector2(width - 166f, 36f)), "", 23, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+                _gearDetails[slot] = UiKit.Label(UiKit.Rect("Detail", card, TopLeft, TopLeft, new Vector2(124f, -62f), new Vector2(width - 166f, 48f)), "", 18, UiKit.TextDim);
+                var track = UiKit.Rect("Durability", card, TopLeft, TopLeft, new Vector2(16f, -136f), new Vector2(width - 60f, 10f));
+                UiKit.Box(track, UiKit.Panel);
+                _gearFill[slot] = UiKit.Fill("Fill", track);
+                UiKit.Box(_gearFill[slot], Durability);
+                UiKit.Label(UiKit.Rect("DropHint", card, TopLeft, TopLeft, new Vector2(16f, -162f), new Vector2(width - 60f, 34f)), "바닥으로 끌어 버리기", 18, UiKit.TextDim);
+                _gearDrags[slot] = card.gameObject.AddComponent<InventoryDragItem>();
+                AddDropZone(card, InventoryDropKind.Gear, slot);
             }
-            float top = HeaderHeight + Loadout.SlotCount * (CardHeight + CardGap) + 18f;
-            UiKit.Label(Row("Helmet", column, top, 30f), "헬멧  —", 18, UiKit.TextDim);
-            UiKit.Label(Row("Vest", column, top + 34f, 30f), "조끼  —", 18, UiKit.TextDim);
+        }
+
+        void BuildWeapons(RectTransform column, float width)
+        {
+            for (int slot = 0; slot < Loadout.SlotCount; slot++)
+            {
+                var card = Row("Slot" + (slot + 1), column, width, HeaderHeight + slot * (WeaponCardHeight + 14f), WeaponCardHeight);
+                UiKit.Box(card, UiKit.PanelLight, true);
+                var active = UiKit.Rect("Active", card, TopLeft, TopLeft, Vector2.zero, new Vector2(6f, WeaponCardHeight));
+                UiKit.Box(active, UiKit.Accent);
+                _weaponActive[slot] = active.gameObject;
+                UiKit.Label(UiKit.Rect("SlotLabel", card, TopLeft, TopLeft, new Vector2(20f, -12f), new Vector2(110f, 24f)), "슬롯 " + (slot + 1), 18, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+                _weaponIcons[slot] = InventoryItemIcon.Build(UiKit.Rect("Icon", card, TopLeft, TopLeft, new Vector2(20f, -46f), new Vector2(160f, 112f)));
+                _weaponNames[slot] = UiKit.Label(UiKit.Rect("Name", card, TopLeft, TopLeft, new Vector2(198f, -48f), new Vector2(width - 238f, 42f)), "비어 있음", 27, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+                _weaponAmmo[slot] = UiKit.Label(UiKit.Rect("Ammo", card, TopLeft, TopLeft, new Vector2(198f, -96f), new Vector2(width - 238f, 34f)), "", 21, UiKit.TextDim);
+                var badge = UiKit.Rect("CalibreBadge", card, TopLeft, TopLeft, new Vector2(198f, -142f), new Vector2(132f, 34f));
+                UiKit.Box(badge, new Color(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, 0.18f));
+                _weaponBadge[slot] = UiKit.Label(UiKit.Fill("Label", badge, 6f), "구경 —", 18, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+                UiKit.Label(UiKit.Rect("Hint", card, TopLeft, TopLeft, new Vector2(20f, -216f), new Vector2(width - 60f, 30f)), "클릭 선택  ·  다른 슬롯으로 끌어 교체", 18, UiKit.TextDim);
+                _weaponDrags[slot] = card.gameObject.AddComponent<InventoryDragItem>();
+                AddDropZone(card, InventoryDropKind.Weapon, slot);
+            }
+        }
+
+        void AddDropZone(RectTransform target, InventoryDropKind kind, int index)
+        {
+            var overlayRect = UiKit.Fill("DropState", target, 2f);
+            var overlay = UiKit.Box(overlayRect, Color.clear);
+            overlay.enabled = false;
+            var zone = target.gameObject.AddComponent<InventoryDropZone>();
+            zone.Configure(this, kind, index, overlay);
+            _dropZones.Add(zone);
+        }
+
+        void BuildDragGhost(Transform root)
+        {
+            _dragGhostRect = UiKit.Rect("DragIcon", root, Centre, Centre, Vector2.zero, new Vector2(72f, 72f));
+            var group = _dragGhostRect.gameObject.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+            group.alpha = 0.92f;
+            _dragGhostIcon = InventoryItemIcon.Build(_dragGhostRect);
+            _dragGhost = _dragGhostRect.gameObject;
+            _dragGhost.SetActive(false);
+        }
+
+        void BuildTooltip(Transform root)
+        {
+            _tooltipRect = UiKit.Rect("Tooltip", root, Centre, TopLeft, Vector2.zero, new Vector2(260f, 92f));
+            UiKit.Box(_tooltipRect, new Color(0.04f, 0.05f, 0.06f, 0.97f));
+            _tooltipText = UiKit.Label(UiKit.Fill("Text", _tooltipRect, 12f), "", 18, UiKit.Text, TextAnchor.UpperLeft);
+            _tooltip = _tooltipRect.gameObject;
+            _tooltip.SetActive(false);
         }
     }
 }
