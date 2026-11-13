@@ -50,13 +50,14 @@ namespace Game.Gameplay
         public int StepCount => Kind == SettingKind.Slider ? Mathf.RoundToInt((Max - Min) / Step) + 1 : OptionCount;
     }
 
-    // One read-only line of the key list.
+    // One line of the key list: an action and the key it is on now (changeable, #140).
     public sealed class KeyBinding
     {
         public string Section;
         public string Label;   // the action, in Korean
-        public string Keys;    // the key names
+        public BindAction Action;
         public string Description;
+        public string Keys => KeyBinds.Name(Action);   // the key's name now
     }
 
     // What the settings screen offers, in screen order, and the pure rules between rows (quality presets, clamping,
@@ -66,7 +67,7 @@ namespace Game.Gameplay
     {
         public const int PresetLow = 0, PresetMedium = 1, PresetHigh = 2, PresetCustom = 3;
         public const string ResolutionKey = "settings.resolution";
-        public const string KeysNote = "키 변경은 추후 지원 예정입니다. 지금은 아래 배치만 확인할 수 있습니다.";
+        public const string KeysNote = "바꿀 줄을 누른 뒤 새 키를 누르면 바로 저장됩니다. Esc는 취소, 기본은 모든 키를 처음대로 되돌립니다.";
 
         // Magnifications with their own mouse factor (#139).
         public static readonly float[] ScopeZoomStops = { 2f, 3f, 4f, 6f, 8f, 15f };
@@ -224,35 +225,43 @@ namespace Game.Gameplay
         static KeyBinding[] BuildKeys()
         {
             const string move = "이동", fight = "전투", other = "화면·기타";
-            KeyBinding K(string section, string label, string keys, string description) =>
-                new KeyBinding { Section = section, Label = label, Keys = keys, Description = description };
+            KeyBinding K(string section, string label, BindAction action, string description) =>
+                new KeyBinding { Section = section, Label = label, Action = action, Description = description };
             return new[]
             {
-                K(move, "이동", "W A S D", "앞뒤와 좌우로 걷습니다."),
-                K(move, "달리기", "Shift", "누르고 있는 동안 달립니다. 달리는 중에는 사격·재장전·조준을 할 수 없습니다."),
-                K(move, "점프·넘기", "Space", "뛰어오릅니다. 앞에 장애물이 있으면 넘거나 위로 올라가고, 창문은 넘어 들어갑니다(작은 창문은 앉아서). 동작 초반에 S를 누르면 취소하고 제자리로 돌아옵니다."),
-                K(move, "자동 달리기", "=", "앞으로 계속 걷습니다. Shift를 누르면 달립니다. W·S를 누르거나 조준하거나 화면을 열면 멈춥니다."),
-                K(move, "천천히 걷기", "Ctrl", "누르고 있는 동안 천천히 걸어 발소리가 작아집니다. 달릴 수 없습니다."),
-                K(move, "앉기", "C", "앉거나 일어섭니다. 앉으면 탄퍼짐이 줄고 몸이 작아집니다."),
-                K(move, "엎드리기", "Z", "엎드리거나 일어섭니다. 이동은 매우 느리지만 탄퍼짐이 가장 적습니다."),
-                K(move, "기울이기", "Q / E", "왼쪽·오른쪽으로 몸을 기울여 엄폐물 밖을 살핍니다."),
-                K(move, "자유 시점 360°", "Alt", "누르고 있는 동안 몸과 이동 방향은 그대로 두고 시점만 한 바퀴 돌릴 수 있습니다. 떼면 몸 방향으로 돌아옵니다. 자유 시점 중에는 사격할 수 없고, 조준하면 풀립니다."),
-                K(fight, "사격", "좌클릭", "들고 있는 무기를 쏩니다. 맨손이면 주먹을 휘두릅니다."),
-                K(fight, "견착", "우클릭 (꾹)", "누르고 있는 동안 3인칭 그대로 어깨 너머로 조준합니다."),
-                K(fight, "정조준", "우클릭 (짧게)", "짧게 누르면 조준기를 들여다보고, 다시 누르면 풀립니다."),
-                K(fight, "재장전", "R", "탄창을 갈아 끼웁니다."),
-                K(fight, "발사 모드 전환", "B", "단발과 연발처럼 무기가 지원하는 발사 방식을 바꿉니다."),
-                K(fight, "무기 슬롯", "1 ~ 5", "1·2 주무기, 3 권총, 4 근접, 5 투척 슬롯을 듭니다."),
-                K(fight, "무장 해제", "X", "무기를 손에서 내려놓습니다. 맨손이면 조금 더 빨리 움직입니다."),
-                K(fight, "투척", "G", "투척물을 던집니다. 누르고 있으면 궤적이 보입니다."),
-                K(fight, "투척물 전환", "T", "가진 투척물 종류를 바꿉니다."),
-                K(fight, "회복", "H", "붕대·구급 키트·구급상자 중 알맞은 것으로 체력을 회복합니다."),
-                K(other, "줍기·상호작용", "F", "물건을 줍거나 열쇠로 통로 차단기를 엽니다."),
-                K(other, "시점 전환", "V", "1인칭과 3인칭을 바꿉니다."),
-                K(other, "인벤토리", "Tab", "가방과 주변 물건을 엽니다."),
-                K(other, "지도", "M", "전체 지도를 엽니다. 지도를 클릭하면 마커를 찍고, 우클릭하면 지웁니다."),
-                K(other, "핑", "마우스 휠 클릭", "조준점이 가리키는 지점(최대 600m)에 마커를 찍습니다. 방위 띠·미니맵·화면에 방향과 거리가 나오고, 10m 안으로 다가가면 사라집니다."),
-                K(other, "메뉴", "Esc", "일시정지 메뉴를 열고 닫습니다."),
+                K(move, "앞으로", BindAction.MoveForward, "앞으로 걷습니다."),
+                K(move, "뒤로", BindAction.MoveBack, "뒤로 걷습니다."),
+                K(move, "왼쪽", BindAction.MoveLeft, "왼쪽으로 걷습니다."),
+                K(move, "오른쪽", BindAction.MoveRight, "오른쪽으로 걷습니다."),
+                K(move, "달리기", BindAction.Sprint, "누르고 있는 동안 달립니다. 달리는 중에는 사격·재장전·조준을 할 수 없습니다."),
+                K(move, "점프·넘기", BindAction.Jump, "뛰어오릅니다. 앞에 장애물이 있으면 넘거나 위로 올라가고, 창문은 넘어 들어갑니다(작은 창문은 앉아서). 동작 초반에 뒤로 가기 키를 누르면 취소하고 제자리로 돌아옵니다."),
+                K(move, "자동 달리기", BindAction.AutoRun, "앞으로 계속 걷습니다. 달리기 키를 누르면 달립니다. 앞뒤 키를 누르거나 조준하거나 화면을 열면 멈춥니다."),
+                K(move, "천천히 걷기", BindAction.SlowWalk, "누르고 있는 동안 천천히 걸어 발소리가 작아집니다. 달릴 수 없습니다."),
+                K(move, "앉기", BindAction.Crouch, "앉거나 일어섭니다. 앉으면 탄퍼짐이 줄고 몸이 작아집니다."),
+                K(move, "엎드리기", BindAction.Prone, "엎드리거나 일어섭니다. 이동은 매우 느리지만 탄퍼짐이 가장 적습니다. 차에서는 시동을 겁니다."),
+                K(move, "왼쪽으로 기울이기", BindAction.LeanLeft, "누르고 있는 동안 왼쪽으로 몸을 기울여 엄폐물 밖을 살핍니다."),
+                K(move, "오른쪽으로 기울이기", BindAction.LeanRight, "누르고 있는 동안 오른쪽으로 몸을 기울여 엄폐물 밖을 살핍니다."),
+                K(move, "자유 시점 360°", BindAction.FreeLook, "누르고 있는 동안 몸과 이동 방향은 그대로 두고 시점만 한 바퀴 돌릴 수 있습니다. 떼면 몸 방향으로 돌아옵니다. 자유 시점 중에는 사격할 수 없고, 조준하면 풀립니다."),
+                K(fight, "사격", BindAction.Fire, "들고 있는 무기를 쏩니다. 맨손이면 주먹을 휘두릅니다. 차에서는 경적입니다."),
+                K(fight, "견착·정조준", BindAction.Aim, "기본은 길게 누르면 어깨 너머 견착, 짧게 누르면 정조준 전환입니다. 방식은 컨트롤 탭에서 고릅니다."),
+                K(fight, "재장전", BindAction.Reload, "탄창을 갈아 끼웁니다."),
+                K(fight, "발사 모드 전환", BindAction.FireMode, "단발과 연발처럼 무기가 지원하는 발사 방식을 바꿉니다."),
+                K(fight, "주무기 1", BindAction.Slot1, "첫 번째 주무기 슬롯을 듭니다."),
+                K(fight, "주무기 2", BindAction.Slot2, "두 번째 주무기 슬롯을 듭니다."),
+                K(fight, "권총", BindAction.Slot3, "권총 슬롯을 듭니다."),
+                K(fight, "근접", BindAction.Slot4, "근접 무기 슬롯을 듭니다."),
+                K(fight, "투척 슬롯", BindAction.Slot5, "투척 슬롯을 듭니다."),
+                K(fight, "무장 해제", BindAction.Holster, "무기를 손에서 내려놓습니다. 맨손이면 조금 더 빨리 움직입니다."),
+                K(fight, "투척", BindAction.Throw, "투척물을 던집니다. 누르고 있으면 궤적이 보입니다."),
+                K(fight, "투척물 전환", BindAction.CycleThrowable, "가진 투척물 종류를 바꿉니다."),
+                K(fight, "회복", BindAction.Heal, "붕대·구급 키트·구급상자 중 알맞은 것으로 체력을 회복합니다."),
+                K(fight, "부스트", BindAction.Boost, "가진 부스트 아이템 가운데 가장 작은 것을 마십니다. 차에서는 연료통을 씁니다."),
+                K(other, "줍기·상호작용", BindAction.Interact, "물건을 줍거나 열쇠로 통로 차단기를 엽니다."),
+                K(other, "시점 전환", BindAction.ToggleView, "1인칭과 3인칭을 바꿉니다."),
+                K(other, "인벤토리", BindAction.Inventory, "가방과 주변 물건을 엽니다."),
+                K(other, "지도", BindAction.Map, "전체 지도를 엽니다. 지도를 클릭하면 마커를 찍고, 우클릭하면 지웁니다."),
+                K(other, "핑", BindAction.Ping, "조준점이 가리키는 지점(최대 600m)에 마커를 찍습니다. 방위 띠·미니맵·화면에 방향과 거리가 나오고, 10m 안으로 다가가면 사라집니다."),
+                K(other, "메뉴", BindAction.Menu, "일시정지 메뉴를 열고 닫습니다. 설정에서 키를 고르는 중에는 Esc가 취소입니다."),
             };
         }
 

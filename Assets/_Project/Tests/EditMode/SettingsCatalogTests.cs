@@ -68,16 +68,18 @@ namespace Game.Tests
         }
 
         [Test]
-        public void KeyList_HasEveryBinding()
+        public void KeyList_HasARowForEveryAction_WithItsDefaultKey()
         {
-            var keys = new HashSet<string>();
-            foreach (var k in SettingsCatalog.KeyBindings) keys.Add(k.Keys);
-            string[] expected =
-            {
-                "W A S D", "Shift", "Space", "C", "Z", "X", "B", "R", "F", "H", "G", "T", "Q / E", "V", "M", "Tab", "Esc", "1 ~ 5", "Alt",
-                "좌클릭", "우클릭 (꾹)", "우클릭 (짧게)", "마우스 휠 클릭",
-            };
-            foreach (var key in expected) Assert.IsTrue(keys.Contains(key), "missing key " + key);
+            var seen = new HashSet<BindAction>();
+            foreach (var k in SettingsCatalog.KeyBindings) Assert.IsTrue(seen.Add(k.Action), "duplicate row " + k.Action);
+            foreach (BindAction a in System.Enum.GetValues(typeof(BindAction))) Assert.IsTrue(seen.Contains(a), "missing row " + a);
+            var saved = KeyBinds.SnapshotPrefs();
+            KeyBinds.ResetAll();
+            var names = new HashSet<string>();
+            foreach (var k in SettingsCatalog.KeyBindings) names.Add(k.Keys);
+            KeyBinds.RestorePrefs(saved);
+            string[] expected = { "W", "A", "S", "D", "Shift", "Space", "C", "Z", "X", "B", "R", "F", "H", "G", "T", "Q", "E", "V", "M", "Tab", "Esc", "1", "5", "Alt", "좌클릭", "우클릭", "휠 클릭" };
+            foreach (var key in expected) Assert.IsTrue(names.Contains(key), "missing key " + key);
         }
 
         [Test]

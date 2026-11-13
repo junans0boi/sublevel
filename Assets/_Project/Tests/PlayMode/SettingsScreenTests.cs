@@ -19,6 +19,7 @@ namespace Game.Tests
         }
 
         GameSettings.PrefsSnapshot _prefs;
+        int[] _keys;
 
         static IEnumerator WaitUntil(Func<bool> condition, float seconds, string what)
         {
@@ -35,6 +36,8 @@ namespace Game.Tests
         public void RememberPrefs()
         {
             _prefs = GameSettings.CapturePrefs();
+            _keys = KeyBinds.SnapshotPrefs();
+            KeyBinds.ResetAll();
             foreach (var def in SettingsCatalog.All) PlayerPrefs.DeleteKey(def.Key);
             GameSettings.Load();
         }
@@ -43,6 +46,7 @@ namespace Game.Tests
         public IEnumerator TearDown()
         {
             GameSettings.RestorePrefs(_prefs);
+            KeyBinds.RestorePrefs(_keys);
             UiFocus.Close();
             PlayerController.InputOverride = null;
             SceneManager.LoadScene("Bootstrap");
@@ -105,12 +109,44 @@ namespace Game.Tests
             screen.SelectTab(SettingsTab.Keys);
             Assert.AreEqual(SettingsCatalog.KeyBindings.Length, screen.VisibleRows.Count);
             foreach (var row in screen.VisibleRows) Assert.IsNotNull(row.Binding);
-            StringAssert.Contains("추후", screen.DescriptionBody, "key rows say rebinding comes later");
+            StringAssert.Contains("새 키를 누르면", screen.DescriptionBody, "key rows explain how to rebind");
 
             screen.SelectTab(SettingsTab.Controls);
             Assert.AreEqual(SettingsPage.Basic, screen.CurrentPage);
             screen.SelectPage(SettingsPage.Advanced);
             Assert.AreEqual(SettingsPage.Basic, screen.CurrentPage, "only graphics has an advanced page");
+        }
+
+        [UnityTest]
+        public IEnumerator KeyRows_Rebind_WarnOnConflict_AndResetWithKihon()
+        {
+            yield return OpenFromPauseMenu();
+            var screen = Shown;
+            screen.SelectTab(SettingsTab.Keys);
+            SettingsRow Find(BindAction a) { foreach (var r in screen.VisibleRows) if (r.Binding.Action == a) return r; return null; }
+
+            var reload = Find(BindAction.Reload);
+            screen.BeginRebind(reload);
+            Assert.AreSame(reload, SettingsScreen.Listening);
+            Assert.IsTrue(SettingsScreen.KeyCaptureActive);
+            screen.Rebind(reload, KeyBinds.Letter('Y'));
+            Assert.IsNull(SettingsScreen.Listening);
+            Assert.AreEqual("Y", reload.Value.text);
+            Assert.AreEqual("", screen.ConflictWarning);
+            Assert.AreEqual(KeyBinds.Letter('Y'), PlayerPrefs.GetInt("keys.Reload"), "saved at once");
+
+            screen.Rebind(Find(BindAction.Heal), KeyBinds.Letter('Y'));
+            StringAssert.Contains("재장전", screen.ConflictWarning, "names the other action");
+            Assert.AreEqual(UiKit.Danger, reload.Value.color, "both rows are marked");
+
+            screen.BeginRebind(Find(BindAction.Map));
+            screen.SelectTab(SettingsTab.Controls);
+            Assert.IsNull(SettingsScreen.Listening, "leaving the tab cancels the wait");
+            screen.SelectTab(SettingsTab.Keys);
+            screen.ResetCurrentTab();
+            Assert.AreEqual("R", reload.Value.text);
+            Assert.AreEqual("", screen.ConflictWarning);
+            Assert.AreEqual(KeyBinds.Letter('R'), KeyBinds.Get(BindAction.Reload));
         }
 
         [UnityTest]

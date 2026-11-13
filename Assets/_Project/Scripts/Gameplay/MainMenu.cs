@@ -79,6 +79,7 @@ namespace Game.Gameplay
         void Update()
         {
             var keyboard = Keyboard.current;
+            if (SettingsScreen.KeyCaptureActive) return; // Esc while choosing a key only cancels that
             // Esc in the settings = 뒤로 가기 (drops unapplied changes).
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();

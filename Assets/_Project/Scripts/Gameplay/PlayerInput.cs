@@ -17,7 +17,7 @@ namespace Game.Gameplay
         public bool Boost;         // J: drink the smallest boost item carried
         public bool InteractHeld;  // F held: reviving a knocked teammate (ADR-072)
         public bool ToggleView;
-        public bool AimHeld;       // right button: hold = shoulder, tap = toggle sights
+        public bool AimHeld;       // aim key (right button): hold = shoulder, tap = toggle sights
         public bool LeanLeft;
         public bool LeanRight;
         public bool Menu;          // Esc: open or close the pause menu
@@ -57,53 +57,52 @@ namespace Game.Gameplay
         public PlayerInputFrame Read()
         {
             var f = new PlayerInputFrame { SelectSlot = -1 };
-            var k = Keyboard.current;
             var m = Mouse.current;
-            if (k != null)
+            // Keys and buttons come from KeyBinds (#140): every action can sit on another key or mouse button.
+            if (Keyboard.current != null)
             {
-                f.Move = new Vector2((k.dKey.isPressed ? 1 : 0) - (k.aKey.isPressed ? 1 : 0), (k.wKey.isPressed ? 1 : 0) - (k.sKey.isPressed ? 1 : 0));
-                f.Sprint = k.leftShiftKey.isPressed;
-                f.Jump = k.spaceKey.wasPressedThisFrame;
-                f.Reload = k.rKey.wasPressedThisFrame;
-                f.Interact = k.fKey.wasPressedThisFrame;
-                f.InteractHeld = k.fKey.isPressed;
-                f.ToggleView = k.vKey.wasPressedThisFrame;
-                f.LeanLeft = k.qKey.isPressed;
-                f.LeanRight = k.eKey.isPressed;
-                f.Menu = k.escapeKey.wasPressedThisFrame;
-                f.Inventory = k.tabKey.wasPressedThisFrame;
-                f.Heal = k.hKey.wasPressedThisFrame;
-                f.Boost = k.jKey.wasPressedThisFrame;
-                f.Restart = k.enterKey.wasPressedThisFrame;
-                f.Crouch = k.cKey.wasPressedThisFrame;
-                f.Prone = k.zKey.wasPressedThisFrame;
-                f.FreeLook = k.leftAltKey.isPressed;
-                f.SlowWalk = k.ctrlKey.isPressed;
-                f.AutoRun = k.equalsKey.wasPressedThisFrame;
-                f.FireMode = k.bKey.wasPressedThisFrame;
-                f.ThrowHeld = k.gKey.isPressed;
-                f.ThrowPressed = k.gKey.wasPressedThisFrame;
-                f.ThrowReleased = k.gKey.wasReleasedThisFrame;
-                f.Map = k.mKey.wasPressedThisFrame;
-                f.Holster = k.xKey.wasPressedThisFrame;
-                f.CycleThrowable = k.tKey.wasPressedThisFrame;
-                f.ZeroSteps = (k.pageUpKey.wasPressedThisFrame ? 1 : 0) - (k.pageDownKey.wasPressedThisFrame ? 1 : 0);
-                // Ctrl + a number is kept for vehicle seats; on foot it selects nothing.
-                if (f.SlowWalk) { }
-                else if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
-                else if (k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
-                else if (k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;
-                else if (k.digit4Key.wasPressedThisFrame) f.SelectSlot = 3;
-                else if (k.digit5Key.wasPressedThisFrame) f.SelectSlot = 4;
+                f.Move = new Vector2((KeyBinds.Held(BindAction.MoveRight) ? 1 : 0) - (KeyBinds.Held(BindAction.MoveLeft) ? 1 : 0),
+                    (KeyBinds.Held(BindAction.MoveForward) ? 1 : 0) - (KeyBinds.Held(BindAction.MoveBack) ? 1 : 0));
+                f.Restart = Keyboard.current.enterKey.wasPressedThisFrame;
+                f.ZeroSteps = (Keyboard.current.pageUpKey.wasPressedThisFrame ? 1 : 0) - (Keyboard.current.pageDownKey.wasPressedThisFrame ? 1 : 0); // fixed keys (ADR-103)
             }
+            f.Sprint = KeyBinds.Held(BindAction.Sprint);
+            f.Jump = KeyBinds.Pressed(BindAction.Jump);
+            f.Reload = KeyBinds.Pressed(BindAction.Reload);
+            f.Interact = KeyBinds.Pressed(BindAction.Interact);
+            f.InteractHeld = KeyBinds.Held(BindAction.Interact);
+            f.ToggleView = KeyBinds.Pressed(BindAction.ToggleView);
+            f.LeanLeft = KeyBinds.Held(BindAction.LeanLeft);
+            f.LeanRight = KeyBinds.Held(BindAction.LeanRight);
+            f.Menu = KeyBinds.Pressed(BindAction.Menu);
+            f.Inventory = KeyBinds.Pressed(BindAction.Inventory);
+            f.Heal = KeyBinds.Pressed(BindAction.Heal);
+            f.Boost = KeyBinds.Pressed(BindAction.Boost);
+            f.Crouch = KeyBinds.Pressed(BindAction.Crouch);
+            f.Prone = KeyBinds.Pressed(BindAction.Prone);
+            f.FreeLook = KeyBinds.Held(BindAction.FreeLook);
+            f.SlowWalk = KeyBinds.Held(BindAction.SlowWalk);
+            f.AutoRun = KeyBinds.Pressed(BindAction.AutoRun);
+            f.FireMode = KeyBinds.Pressed(BindAction.FireMode);
+            f.ThrowHeld = KeyBinds.Held(BindAction.Throw);
+            f.ThrowPressed = KeyBinds.Pressed(BindAction.Throw);
+            f.ThrowReleased = KeyBinds.Released(BindAction.Throw);
+            f.Map = KeyBinds.Pressed(BindAction.Map);
+            f.Holster = KeyBinds.Pressed(BindAction.Holster);
+            f.CycleThrowable = KeyBinds.Pressed(BindAction.CycleThrowable);
+            f.FireHeld = KeyBinds.Held(BindAction.Fire);
+            f.FirePressed = KeyBinds.Pressed(BindAction.Fire);
+            f.AimHeld = KeyBinds.Held(BindAction.Aim);
+            f.Ping = KeyBinds.Pressed(BindAction.Ping);
+            // Ctrl + a number is kept for vehicle seats; on foot it selects nothing.
+            if (f.SlowWalk) { }
+            else
+                for (int slot = 0; slot < 5; slot++)
+                    if (KeyBinds.Pressed(BindAction.Slot1 + slot)) { f.SelectSlot = slot; break; }
             if (m != null)
             {
                 var delta = m.delta.ReadValue();
                 f.Look = new Vector2(delta.x, delta.y) * MouseSensitivity;
-                f.FireHeld = m.leftButton.isPressed;
-                f.FirePressed = m.leftButton.wasPressedThisFrame;
-                f.AimHeld = m.rightButton.isPressed;
-                f.Ping = m.middleButton.wasPressedThisFrame;
                 // One notch per frame at most, whatever the device reports per notch (120 on Windows, less on macOS).
                 float wheel = m.scroll.ReadValue().y;
                 f.ZoomSteps = wheel > 0.01f ? 1 : wheel < -0.01f ? -1 : 0;

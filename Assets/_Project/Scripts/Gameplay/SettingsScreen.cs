@@ -57,6 +57,7 @@ namespace Game.Gameplay
         readonly Image[] _pageLines = new Image[2];
         readonly Image[] _swatchCells = new Image[SwatchCells];
         GameObject _pageBar, _swatch;
+        Text _keysNote;
         ScrollRect _scroll;
         Text _descTitle, _descBody, _dirtyLabel;
         Button _applyButton;
@@ -88,6 +89,59 @@ namespace Game.Gameplay
 
             ShowPage();
             return Root;
+        }
+
+        // ---- key rebinding (#140) ----
+
+        // The key row waiting for a key (null = none). True for the frame the wait ended too, so the key that ended it
+        // (Esc, or the new key itself) does nothing else in the game.
+        public static SettingsRow Listening { get; private set; }
+        static int _listenEndedFrame = -1;
+        static int _listenStartedFrame = -1;
+        public static bool KeyCaptureActive => Listening != null || _listenEndedFrame == Time.frameCount;
+        // The warning after the last change when the key is shared with another action; empty otherwise.
+        public string ConflictWarning { get; private set; } = "";
+
+        // Press on a key row: the next key (or mouse button) becomes that action's key.
+        public void BeginRebind(SettingsRow row)
+        {
+            if (row == null || row.Binding == null) return;
+            Listening = row;
+            _listenStartedFrame = Time.frameCount;
+            row.Value.text = "키를 누르세요...";
+        }
+
+        public void CancelRebind()
+        {
+            if (Listening == null) return;
+            _listenEndedFrame = Time.frameCount;
+            Listening = null;
+            Sync();
+        }
+
+        // Puts the row's action on `code` (saved at once); warns when another action is on it too.
+        public void Rebind(SettingsRow row, int code)
+        {
+            var action = row.Binding.Action;
+            var other = KeyBinds.Set(action, code);
+            ConflictWarning = other.HasValue ? "경고: " + KeyBinds.Name(code) + " 키는 '" + LabelOf(other.Value) + "'에도 쓰이고 있습니다." : "";
+            _listenEndedFrame = Time.frameCount;
+            Listening = null;
+            Sync();
+        }
+
+        static string LabelOf(BindAction action)
+        {
+            foreach (var k in SettingsCatalog.KeyBindings) if (k.Action == action) return k.Label;
+            return action.ToString();
+        }
+
+        internal void PollRebind(SettingsRow row)
+        {
+            if (Listening != row || Time.frameCount <= _listenStartedFrame) return;
+            if (!KeyBinds.TryCapture(out int code)) return;
+            if (code == (int)UnityEngine.InputSystem.Key.Escape) CancelRebind();
+            else Rebind(row, code);
         }
 
         // ---- actions ----
@@ -130,6 +184,7 @@ namespace Game.Gameplay
         // Drops unapplied changes without leaving (the menu was closed some other way).
         public void Cancel()
         {
+            CancelRebind();
             GameSettings.Revert();
             Sync();
         }
@@ -137,6 +192,7 @@ namespace Game.Gameplay
         // 기본: the current tab's defaults, previewed until 적용.
         public void ResetCurrentTab()
         {
+            if (CurrentTab == SettingsTab.Keys) { KeyBinds.ResetAll(); ConflictWarning = ""; }
             GameSettings.ResetTab(CurrentTab);
             Sync();
         }
@@ -181,6 +237,11 @@ namespace Game.Gameplay
         {
             var rows = VisibleRows;
             for (int i = 0; i < rows.Count; i++) SyncRow(rows[i]);
+            if (_keysNote != null)
+            {
+                _keysNote.text = ConflictWarning.Length > 0 ? ConflictWarning : SettingsCatalog.KeysNote;
+                _keysNote.color = ConflictWarning.Length > 0 ? UiKit.Danger : UiKit.Accent;
+            }
             bool dirty = GameSettings.HasUnappliedChanges;
             _dirtyLabel.enabled = dirty;
             UiKit.SetSelected(_applyButton, dirty);
@@ -198,6 +259,7 @@ namespace Game.Gameplay
             int page = PageIndex(CurrentTab, CurrentPage);
             for (int i = 0; i < PageCount; i++)
                 if (_contents[i] != null) _contents[i].gameObject.SetActive(i == page);
+            CancelRebind();
             _scroll.StopMovement();
             _scroll.content = _contents[page];
             _contents[page].anchoredPosition = Vector2.zero;
@@ -215,7 +277,15 @@ namespace Game.Gameplay
         void SyncRow(SettingsRow row)
         {
             var def = row.Def;
-            if (def == null) return;
+            if (def == null)
+            {
+                if (row.Binding != null && Listening != row)
+                {
+                    row.Value.text = row.Binding.Keys;
+                    row.Value.color = KeyBinds.ConflictOf(row.Binding.Action).HasValue ? UiKit.Danger : UiKit.Text;
+                }
+                return;
+            }
             switch (def.Kind)
             {
                 case SettingKind.Slider:
@@ -405,7 +475,7 @@ namespace Game.Gameplay
             if (tab == SettingsTab.Keys)
             {
                 var note = Band("Note", content, y, 40f, 22f);
-                UiKit.Label(note, SettingsCatalog.KeysNote, 18, UiKit.Accent);
+                _keysNote = UiKit.Label(note, SettingsCatalog.KeysNote, 18, UiKit.Accent);
                 y += 44f;
                 var keys = SettingsCatalog.KeyBindings;
                 for (int i = 0; i < keys.Length; i++)
@@ -413,8 +483,10 @@ namespace Game.Gameplay
                     if (keys[i].Section != section) { section = keys[i].Section; y = Section(content, section, y); }
                     var row = NewRow(content, keys[i].Label, rows.Count, ref y);
                     row.Binding = keys[i];
-                    var box = ValueBox(row.transform, 260f);
-                    row.Value = UiKit.Label(UiKit.Fill("Text", box), keys[i].Keys, 19, UiKit.Text, TextAnchor.MiddleCenter);
+                    var box = UiKit.Rect("Key", row.transform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(260f, RowHeight - 16f));
+                    var rowRef = row;
+                    row.KeyButton = UiKit.Button(box, keys[i].Keys, 19, () => BeginRebind(rowRef));
+                    row.Value = box.GetComponentInChildren<Text>();
                     rows.Add(row);
                 }
             }

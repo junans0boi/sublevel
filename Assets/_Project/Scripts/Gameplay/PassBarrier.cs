@@ -158,8 +158,7 @@ namespace Game.Gameplay
             if (_director.PassDistance(_pass, me.transform.position) > _director.Rules.PassInteractRange) return;
             PromptPass = _pass;
             PromptFrame = Time.frameCount;
-            var keyboard = Keyboard.current;
-            if (UiFocus.Current == UiScreen.None && keyboard != null && keyboard.fKey.wasPressedThisFrame) keys.CmdUseKey(_pass);
+            if (UiFocus.Current == UiScreen.None && KeyBinds.Pressed(BindAction.Interact)) keys.CmdUseKey(_pass);
         }
 
         // A unit cube (24 vertices, flat normals), built once.

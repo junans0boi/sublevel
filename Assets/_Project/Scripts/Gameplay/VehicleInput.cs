@@ -36,17 +36,18 @@ namespace Game.Gameplay
             var k = Keyboard.current;
             if (k == null) return f;
             bool ctrl = k.leftCtrlKey.isPressed || k.rightCtrlKey.isPressed;
-            f.Throttle = (k.wKey.isPressed ? 1f : 0f) - (k.sKey.isPressed ? 1f : 0f);
-            f.Steer = (k.dKey.isPressed ? 1f : 0f) - (k.aKey.isPressed ? 1f : 0f);
-            f.Handbrake = k.spaceKey.isPressed;
-            f.Boost = k.leftShiftKey.isPressed;
-            f.EngineToggle = k.zKey.wasPressedThisFrame;
-            f.Pitch = (k.spaceKey.isPressed ? 1f : 0f) - (ctrl ? 1f : 0f);
-            f.Roll = (k.eKey.isPressed ? 1f : 0f) - (k.qKey.isPressed ? 1f : 0f);
-            f.Interact = k.fKey.wasPressedThisFrame;
-            f.ToggleView = k.vKey.wasPressedThisFrame;
-            f.Jerrycan = k.jKey.wasPressedThisFrame;
-            f.Horn = Mouse.current != null && Mouse.current.leftButton.isPressed;
+            // The same bindings as on foot (#140): move, jump, sprint, prone (engine), lean (roll), interact, view, boost (jerrycan).
+            f.Throttle = (KeyBinds.Held(BindAction.MoveForward) ? 1f : 0f) - (KeyBinds.Held(BindAction.MoveBack) ? 1f : 0f);
+            f.Steer = (KeyBinds.Held(BindAction.MoveRight) ? 1f : 0f) - (KeyBinds.Held(BindAction.MoveLeft) ? 1f : 0f);
+            f.Handbrake = KeyBinds.Held(BindAction.Jump);
+            f.Boost = KeyBinds.Held(BindAction.Sprint);
+            f.EngineToggle = KeyBinds.Pressed(BindAction.Prone);
+            f.Pitch = (KeyBinds.Held(BindAction.Jump) ? 1f : 0f) - (ctrl ? 1f : 0f);
+            f.Roll = (KeyBinds.Held(BindAction.LeanRight) ? 1f : 0f) - (KeyBinds.Held(BindAction.LeanLeft) ? 1f : 0f);
+            f.Interact = KeyBinds.Pressed(BindAction.Interact);
+            f.ToggleView = KeyBinds.Pressed(BindAction.ToggleView);
+            f.Jerrycan = KeyBinds.Pressed(BindAction.Boost);
+            f.Horn = KeyBinds.Held(BindAction.Fire);
             if (ctrl)
             {
                 if (k.digit1Key.wasPressedThisFrame) f.Seat = 0;

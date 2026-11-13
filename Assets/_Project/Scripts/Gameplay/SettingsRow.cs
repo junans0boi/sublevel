@@ -16,6 +16,7 @@ namespace Game.Gameplay
 
         public Slider Slider { get; internal set; }      // sliders
         public Text Value { get; internal set; }         // value text of sliders, choices and key rows
+        public Button KeyButton { get; internal set; }   // key rows: press, then the new key
         public Button Previous { get; internal set; }    // choices: ◀
         public Button Next { get; internal set; }        // choices: ▶
         public Button Off { get; internal set; }         // toggles
@@ -27,6 +28,11 @@ namespace Game.Gameplay
         internal Image[] Pips;
         internal string[] SliderTexts;
         internal Color BaseColor;
+
+        void Update()
+        {
+            if (Owner != null && Binding != null) Owner.PollRebind(this);
+        }
 
         public void OnPointerEnter(PointerEventData eventData)
         {

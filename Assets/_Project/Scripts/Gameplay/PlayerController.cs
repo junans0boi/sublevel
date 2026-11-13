@@ -169,6 +169,7 @@ namespace Game.Gameplay
         {
             if (!_owner) return;
             var f = _input.Read();
+            if (SettingsScreen.KeyCaptureActive) f = new PlayerInputFrame { SelectSlot = -1 }; // the key being rebound is not a command
             // Screens that take over the mouse: the keys that open and close them still work; over the inventory and
             // the map the movement keys keep working too, everything else is ignored (no look, aim or fire).
             if (f.Menu) UiFocus.Toggle(UiScreen.Menu);
