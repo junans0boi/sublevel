@@ -2,7 +2,7 @@ using System;
 
 namespace Game.Core
 {
-    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2, Helmet = 3, Vest = 4, Grenade = 10 }
+    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2, Helmet = 3, Vest = 4, Grenade = 10, Optic = 11 }
 
     [Serializable]
     public class LootEntry
@@ -13,6 +13,7 @@ namespace Game.Core
         public int Amount = 1; // rounds (Ammo), kits (Medkit), grenades (Grenade), rounds in magazine (Weapon)
         public int Tier;       // Kind == Helmet / Vest: 1..3
         public float Durability; // Kind == Helmet / Vest: what is left of the piece; 0 = fresh (full for its tier)
+        public int Optic;      // Kind == Optic: id in OpticRules (1..8)
         public float Weight = 1f;
     }
 

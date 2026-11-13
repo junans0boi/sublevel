@@ -6,7 +6,8 @@ namespace Game.Gameplay
 {
     // Colours a pickup by what it holds; weapon pickups show the weapon's model instead of the box.
     // Armour has no model yet: a box tinted by piece and tier (helmets blue, vests orange, darker = higher tier),
-    // small and cubic for a helmet, tall and flat for a vest.
+    // small and cubic for a helmet, tall and flat for a vest. An optic is a small dark-tinted bar: red-ish for the
+    // dot and holographic sights, bluer the higher the zoom.
     [RequireComponent(typeof(LootItem))]
     public class LootView : MonoBehaviour
     {
@@ -18,6 +19,7 @@ namespace Game.Gameplay
         static readonly Color[] VestColors = { new Color(0.95f, 0.7f, 0.5f), new Color(0.9f, 0.4f, 0.15f), new Color(0.55f, 0.15f, 0.05f) };
         static readonly Vector3 HelmetShape = new Vector3(0.8f, 0.8f, 0.8f);
         static readonly Vector3 VestShape = new Vector3(1f, 1.3f, 0.55f);
+        static readonly Vector3 OpticShape = new Vector3(0.45f, 0.45f, 1.1f);
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int ColorId = Shader.PropertyToID("_Color");
 
@@ -27,12 +29,23 @@ namespace Game.Gameplay
         int _shownKind = -1;
         int _shownWeapon = -1;
         int _shownTier = -1;
+        int _shownOptic = -1;
 
         // The box colour of an armour pickup. Tiers outside the table get the nearest one.
         public static Color ArmorColor(LootKind kind, int tier)
         {
             var colors = kind == LootKind.Helmet ? HelmetColors : VestColors;
             return colors[Mathf.Clamp(tier - 1, 0, colors.Length - 1)];
+        }
+
+        // The box colour of an optic pickup: warm for the 1x sights, cooler with more zoom.
+        public static Color OpticColor(int opticId)
+        {
+            var def = OpticRules.Current.Find(opticId);
+            if (def == null) return new Color(0.5f, 0.5f, 0.5f);
+            if (def.Kind == OpticKind.Dot) return new Color(0.85f, 0.3f, 0.22f);
+            if (def.Kind == OpticKind.Holo) return new Color(0.9f, 0.65f, 0.25f);
+            return Color.Lerp(new Color(0.55f, 0.75f, 0.85f), new Color(0.2f, 0.3f, 0.6f), Mathf.Clamp01((def.Zoom - 2f) / 6f));
         }
 
         // The Korean name of what lies here (shared with the HUD prompt and the inventory rows).
@@ -49,24 +62,27 @@ namespace Game.Gameplay
             int kind = _item.Kind.Value;
             int weapon = kind == (int)LootKind.Weapon ? _item.WeaponId.Value : 0;
             int tier = _item.Tier.Value;
-            if (kind == _shownKind && weapon == _shownWeapon && tier == _shownTier) return;
+            int optic = kind == (int)LootKind.Optic ? _item.Optic.Value : 0;
+            if (kind == _shownKind && weapon == _shownWeapon && tier == _shownTier && optic == _shownOptic) return;
             bool armor = Armor.IsArmor((LootKind)kind);
-            // Kinds this prefab has no material for keep whatever was shown, except armour, which is tinted.
-            if (_renderer == null || kind < 0 || (!armor && kind >= _materialsByKind.Length)) return;
+            bool opticKind = kind == (int)LootKind.Optic;
+            // Kinds this prefab has no material for keep whatever was shown, except armour and optics, which are tinted.
+            if (_renderer == null || kind < 0 || (!armor && !opticKind && kind >= _materialsByKind.Length)) return;
             _shownKind = kind;
             _shownWeapon = weapon;
             _shownTier = tier;
+            _shownOptic = optic;
 
             if (kind < _materialsByKind.Length) _renderer.sharedMaterial = _materialsByKind[kind];
             else if (_materialsByKind.Length > 0) _renderer.sharedMaterial = _materialsByKind[0];
-            if (armor)
+            if (armor || opticKind)
             {
                 _tint ??= new MaterialPropertyBlock();
-                var color = ArmorColor((LootKind)kind, tier);
+                var color = armor ? ArmorColor((LootKind)kind, tier) : OpticColor(optic);
                 _tint.SetColor(BaseColorId, color);
                 _tint.SetColor(ColorId, color);
                 _renderer.SetPropertyBlock(_tint);
-                _renderer.transform.localScale = Vector3.Scale(_boxScale, kind == (int)LootKind.Helmet ? HelmetShape : VestShape);
+                _renderer.transform.localScale = Vector3.Scale(_boxScale, opticKind ? OpticShape : kind == (int)LootKind.Helmet ? HelmetShape : VestShape);
             }
             else
             {

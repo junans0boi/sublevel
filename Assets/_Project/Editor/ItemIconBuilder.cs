@@ -6,7 +6,7 @@ using UnityEngine;
 
 // Generates the inventory item icons into Assets/_Project/Resources/Icons/<key>.png (ADR-054):
 //  - weapons: the project's CC0 weapon models rendered from the side onto a transparent background
-//  - ammo, medkit, armour, grenade: flat glyphs drawn from signed-distance shapes, supersampled
+//  - ammo, medkit, armour, grenade, optics: flat glyphs drawn from signed-distance shapes, supersampled
 // Run: tools/unity.sh run-gfx ItemIconBuilder.Build   (exits the editor with 0 on success, 1 on failure)
 public static class ItemIconBuilder
 {
@@ -379,6 +379,48 @@ public static class ItemIconBuilder
         p.Fill(ring, Steel, 1f, false);
     }
 
+    static readonly Color OpticBody = new Color(0.30f, 0.32f, 0.37f);
+    static readonly Color Glass = new Color(0.32f, 0.52f, 0.68f);
+    static readonly Color Ember = new Color(0.95f, 0.30f, 0.22f);
+
+    // Red dot (ring = false) and holographic (ring = true) sights seen from the side-front: a housing with a window.
+    static void DrawSight(Painter p, bool ring)
+    {
+        p.Fill(RRect(p.X, p.Y, 128f, 64f, 78f, 12f, 5f), OpticBody * 0.8f);          // rail foot
+        p.Fill(RRect(p.X, p.Y, 128f, 118f, 66f, 54f, 14f), OpticBody, Shade(p.X - 128f, 66f) * 0.5f + 0.5f);
+        p.Fill(RRect(p.X, p.Y, 128f, 120f, 48f, 38f, 8f), Glass * 0.55f, 1f, false);  // window
+        if (!ring)
+        {
+            p.Fill(Circle(p.X, p.Y, 128f, 120f, 9f), Ember, 1f, false);
+            return;
+        }
+        float ringD = Mathf.Abs(Circle(p.X, p.Y, 128f, 120f, 26f)) - 3.5f;
+        p.Fill(Mathf.Min(ringD, Circle(p.X, p.Y, 128f, 120f, 4.5f)), Pip, 1f, false);
+        p.Fill(Mathf.Min(Box(p.X, p.Y, 128f, 156f, 2.5f, 6f), Box(p.X, p.Y, 128f, 84f, 2.5f, 6f)), Pip, 1f, false);
+    }
+
+    // A magnifying scope lying along the icon: the tube grows with the zoom, with one to three amber bands.
+    static void DrawScope(Painter p, int zoom)
+    {
+        float hl = Mathf.Min(100f, 58f + 5f * zoom);
+        float ht = 21f + 1.3f * zoom;
+        int bands = zoom <= 3 ? 1 : zoom <= 6 ? 2 : 3;
+        float cx = 128f, cy = 118f;
+        // mounts under the tube
+        p.Fill(Mathf.Min(Box(p.X, p.Y, cx - hl * 0.5f, cy - ht - 8f, 9f, 10f), Box(p.X, p.Y, cx + hl * 0.5f, cy - ht - 8f, 9f, 10f)), OpticBody * 0.8f);
+        // tube, bells
+        p.Fill(RRect(p.X, p.Y, cx, cy, hl, ht, 8f), OpticBody, Shade(p.Y - cy, ht) * 0.5f + 0.5f);
+        p.Fill(RRect(p.X, p.Y, cx + hl - 6f, cy, 20f, ht * 1.32f, 7f), OpticBody * 0.85f, Shade(p.Y - cy, ht * 1.3f) * 0.5f + 0.5f);
+        p.Fill(RRect(p.X, p.Y, cx - hl + 4f, cy, 14f, ht * 1.14f, 6f), OpticBody * 0.85f, Shade(p.Y - cy, ht * 1.1f) * 0.5f + 0.5f);
+        // lens on the front bell
+        p.Fill(Ellipse(p.X, p.Y, cx + hl + 6f, cy, 7f, ht * 1.05f), Glass, 1f, false);
+        // amber bands
+        for (int i = 0; i < bands; i++)
+            p.Fill(Box(p.X, p.Y, cx - hl * 0.42f + i * 18f, cy, 4f, ht - 4f), Pip, 1f, false);
+        // turret knob on top
+        p.Fill(RRect(p.X, p.Y, cx + hl * 0.05f, cy + ht + 8f, 11f, 9f, 3f), OpticBody * 0.9f);
+    }
+
     static void BuildGlyphs()
     {
         DrawIcon("ammo_9mm", DrawAmmo9mm);
@@ -387,6 +429,13 @@ public static class ItemIconBuilder
         DrawIcon("ammo_12ga", DrawAmmo12ga);
         DrawIcon("medkit", DrawMedkit);
         DrawIcon("grenade", DrawGrenade);
+        DrawIcon("optic_reddot", p => DrawSight(p, false));
+        DrawIcon("optic_holo", p => DrawSight(p, true));
+        foreach (int zoom in new[] { 2, 3, 4, 6, 8, 16 })
+        {
+            int z = zoom;
+            DrawIcon("optic_" + z + "x", p => DrawScope(p, z));
+        }
         for (int tier = 1; tier <= 3; tier++)
         {
             int t = tier;

@@ -16,6 +16,8 @@ namespace Game.Net
         // Armour only: tier 1..3 and what is left of the piece.
         public readonly SyncVar<int> Tier = new SyncVar<int>();
         public readonly SyncVar<float> Durability = new SyncVar<float>();
+        // Optics only: the id in OpticRules.
+        public readonly SyncVar<int> Optic = new SyncVar<int>();
 
         public static readonly List<LootItem> All = new List<LootItem>();
 
@@ -33,6 +35,7 @@ namespace Game.Net
             Ammo.Value = (int)entry.Ammo;
             Amount.Value = entry.Amount;
             Tier.Value = entry.Tier;
+            Optic.Value = entry.Optic;
             // Armour from a loot table carries no durability: it is fresh. What lies on the ground always says
             // how much is left, so every side can show it.
             Durability.Value = Armor.IsArmor(entry.Kind) ? Armor.FromLoot(entry, ArmorRules.Current).Durability : 0f;
@@ -46,6 +49,7 @@ namespace Game.Net
             Amount = Amount.Value,
             Tier = Tier.Value,
             Durability = Durability.Value,
+            Optic = Optic.Value,
         };
     }
 
@@ -74,7 +78,12 @@ namespace Game.Net
         }
 
         // What the thing is, without how much of it.
-        public static string Of(LootKind kind, int weaponId, AmmoType ammo, int tier)
+        public static string Of(LootKind kind, int weaponId, AmmoType ammo, int tier) => Of(kind, weaponId, ammo, tier, 0);
+
+        // "4배율" for an optic; "조준경" when the id is unknown.
+        public static string OfOptic(int opticId) => OpticRules.Current.Find(opticId)?.Name ?? "조준경";
+
+        public static string Of(LootKind kind, int weaponId, AmmoType ammo, int tier, int optic)
         {
             switch (kind)
             {
@@ -84,15 +93,16 @@ namespace Game.Net
                 case LootKind.Grenade: return "수류탄";
                 case LootKind.Helmet: return OfArmor(ArmorSlot.Helmet, tier);
                 case LootKind.Vest: return OfArmor(ArmorSlot.Vest, tier);
+                case LootKind.Optic: return OfOptic(optic);
                 default: return "물건";
             }
         }
 
         public static string Of(LootItem item) =>
-            item == null ? "" : Of((LootKind)item.Kind.Value, item.WeaponId.Value, (AmmoType)item.Ammo.Value, item.Tier.Value);
+            item == null ? "" : Of((LootKind)item.Kind.Value, item.WeaponId.Value, (AmmoType)item.Ammo.Value, item.Tier.Value, item.Optic.Value);
 
         public static string Of(LootEntry entry) =>
-            entry == null ? "" : Of(entry.Kind, entry.WeaponId, entry.Ammo, entry.Tier);
+            entry == null ? "" : Of(entry.Kind, entry.WeaponId, entry.Ammo, entry.Tier, entry.Optic);
 
         // How much of it: rounds in the magazine, a count, or the durability left. Builds a string: call it when
         // the item changes, not every frame.
@@ -102,6 +112,7 @@ namespace Game.Net
             var kind = (LootKind)item.Kind.Value;
             if (kind == LootKind.Weapon) return "탄창 " + item.Amount.Value + "발";
             if (Armor.IsArmor(kind)) return "내구도 " + Points(item.Durability.Value);
+            if (kind == LootKind.Optic) return Optics.ZoomText(Optics.ZoomOf(item.Optic.Value));
             return "x" + item.Amount.Value;
         }
 
