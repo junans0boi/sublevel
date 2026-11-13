@@ -113,6 +113,7 @@ namespace Game.Gameplay
             SpatialAudio.Apply(_blastSource, SpatialAudio.Category.Explosion);
             ThrownItem.ClientExploded += OnExploded;
             ThrownItem.ClientSmoked += OnSmoked;
+            ThrownItem.ClientFlashed += OnFlashedBurst;
             Build();
         }
 
@@ -201,6 +202,7 @@ namespace Game.Gameplay
         {
             ThrownItem.ClientExploded -= OnExploded;
             ThrownItem.ClientSmoked -= OnSmoked;
+            ThrownItem.ClientFlashed -= OnFlashedBurst;
             if (_fxRoot != null) Destroy(_fxRoot.gameObject);
         }
 
@@ -210,6 +212,13 @@ namespace Game.Gameplay
         {
             bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
             if (mine) ShowBlast(centre);
+        }
+
+        // The burst of a flash grenade: a white flash and a light, no smoke, a high short bang.
+        void OnFlashedBurst(Vector3 centre, NetworkObject thrower)
+        {
+            bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
+            if (mine) ShowBlast(centre, true);
         }
 
         // Same rule as for blasts: each view shows its own combatant's clouds.
@@ -308,15 +317,15 @@ namespace Game.Gameplay
 
         // ---- Everyone: the blast ----
 
-        void ShowBlast(Vector3 centre)
+        void ShowBlast(Vector3 centre, bool flash = false)
         {
             LastBlastCentre = centre;
             BlastsShown++;
             if (_blastSource != null && _blastClip != null)
             {
                 _blastSource.transform.position = centre;
-                _blastSource.pitch = _blastPitch;
-                _blastSource.PlayOneShot(_blastClip, _blastVolume * GameSettings.EffectsVolume);
+                _blastSource.pitch = flash ? _blastPitch * 1.8f : _blastPitch;
+                _blastSource.PlayOneShot(_blastClip, _blastVolume * GameSettings.EffectsVolume * (flash ? 0.6f : 1f));
                 BlastSoundsPlayed++;
             }
             if (!_built) return;
@@ -327,6 +336,8 @@ namespace Game.Gameplay
             _blastOn[i] = true;
             _flash[i].enabled = true;
             _light[i].enabled = true;
+            _light[i].color = flash ? Color.white : _lightColor;
+            _light[i].intensity = flash ? _lightIntensity * 3f : _lightIntensity;
             for (int p = 0; p < PuffsPerBlast; p++)
             {
                 int index = i * PuffsPerBlast + p;
@@ -334,7 +345,7 @@ namespace Game.Gameplay
                 var offset = Random.insideUnitSphere * PuffSpread;
                 offset.y = Mathf.Abs(offset.y);
                 _puffOffset[index] = offset;
-                _puffs[index].enabled = GameSettings.HighEffects || p < LowEffectsPuffs;
+                _puffs[index].enabled = !flash && (GameSettings.HighEffects || p < LowEffectsPuffs);
             }
             PlaceBlast(i, ViewCamera());
         }

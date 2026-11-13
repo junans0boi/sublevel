@@ -20,6 +20,7 @@ namespace Game.Gameplay
             "bandage", "firstaid", "smoke", "key",
             "jerrycan", // ADR-075
             "drink", "pill", "syringe", // ADR-099
+            "flash", // ADR-105
             "backpack_1", "backpack_2", "backpack_3", // ADR-091
             "att_grip_v", "att_grip_a", "att_grip_c", "att_stock", // ADR-100
             "att_comp", "att_flash", "att_supp", "att_mag", // ADR-102

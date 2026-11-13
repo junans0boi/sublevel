@@ -103,7 +103,7 @@ namespace Game.Tests
         public void SelectionCycles_BetweenTheKinds()
         {
             Assert.AreEqual(ThrowableKind.Smoke, Throwables.Next(ThrowableKind.Frag));
-            Assert.AreEqual(ThrowableKind.Frag, Throwables.Next(ThrowableKind.Smoke));
+            Assert.AreEqual(ThrowableKind.Flash, Throwables.Next(ThrowableKind.Smoke));
             Assert.AreEqual(1f, Throwables.FuseOf(ThrowableKind.Smoke, new ThrowableRules(), new SmokeRules()), 1e-4f);
             Assert.AreEqual(5f, Throwables.FuseOf(ThrowableKind.Frag, new ThrowableRules(), new SmokeRules()), 1e-4f);
             Assert.AreEqual("연막탄", Throwables.NameOf(ThrowableKind.Smoke));

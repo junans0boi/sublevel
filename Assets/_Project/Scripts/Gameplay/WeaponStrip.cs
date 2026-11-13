@@ -127,7 +127,7 @@ namespace Game.Gameplay
             var user = ThrowableUser.Local;
             var kind = user != null ? user.SelectedKind : ThrowableKind.Frag;
             int count = user != null ? user.SelectedCount : grenades;
-            int total = user != null ? user.Grenades.Value + user.Smokes.Value : grenades;
+            int total = user != null ? user.TotalCount : grenades;
             bool has = total > 0;
             // The pin is out: the fuse left shows instead of the count (tenths of a second).
             bool cooking = user != null && user.Cooking.Value;
@@ -143,7 +143,7 @@ namespace Game.Gameplay
             _count[cell].text = !has ? "" : cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count);
             _count[cell].color = cooking ? UiKit.Danger : count > 0 ? UiKit.Text : UiKit.TextDim;
             _shownThrowName = has ? Throwables.NameOf(kind) : "";
-            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : "grenade", _shownThrowName);
+            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : "grenade", _shownThrowName);
         }
     }
 }

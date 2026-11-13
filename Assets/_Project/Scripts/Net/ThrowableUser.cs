@@ -20,6 +20,8 @@ namespace Game.Net
 
         public readonly SyncVar<int> Grenades = new SyncVar<int>();
         public readonly SyncVar<int> Smokes = new SyncVar<int>();
+        public readonly SyncVar<int> Flashes = new SyncVar<int>();  // ADR-105
+        public readonly SyncVar<int> Molotovs = new SyncVar<int>(); // ADR-106
         // The ThrowableKind the next throw uses.
         public readonly SyncVar<int> Selected = new SyncVar<int>();
         // A fragmentation grenade with its pin out, burning its fuse in the hand (ADR-101).
@@ -60,11 +62,34 @@ namespace Game.Net
 
         // ---- Read-only, every side (HUD) ----
 
-        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-102/103).
-        public int ExtraTenths => 0;
+        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-105/106).
+        public int ExtraTenths => Flashes.Value * Carry.Tenths(CarryRules.Current.Flash) + Molotovs.Value * Carry.Tenths(CarryRules.Current.Molotov);
 
         public ThrowableKind SelectedKind => (ThrowableKind)Selected.Value;
-        public int CountOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? Smokes.Value : Grenades.Value;
+        public int CountOf(ThrowableKind kind)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Smoke: return Smokes.Value;
+                case ThrowableKind.Flash: return Flashes.Value;
+                case ThrowableKind.Molotov: return Molotovs.Value;
+                default: return Grenades.Value;
+            }
+        }
+
+        // Server: changes a kind's count.
+        void Adjust(ThrowableKind kind, int delta)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Smoke: Smokes.Value += delta; break;
+                case ThrowableKind.Flash: Flashes.Value += delta; break;
+                case ThrowableKind.Molotov: Molotovs.Value += delta; break;
+                default: Grenades.Value += delta; break;
+            }
+        }
+
+        public int TotalCount => Grenades.Value + Smokes.Value + Flashes.Value + Molotovs.Value;
         public int SelectedCount => CountOf(SelectedKind);
         public string SelectedName => Throwables.NameOf(SelectedKind);
 
@@ -122,11 +147,10 @@ namespace Game.Net
         [Server]
         public int ServerAdd(ThrowableKind kind, int amount)
         {
-            int max = kind == ThrowableKind.Smoke ? SmokeRules.Current.MaxCarried : ThrowableRules.Current.MaxCarried;
-            int taken = Mathf.Max(0, Mathf.Min(amount, max - CountOf(kind)));
+            int taken = Mathf.Max(0, Mathf.Min(amount, Throwables.MaxCarriedOf(kind) - CountOf(kind)));
             if (taken > 0 && _carry != null) taken = _carry.FitCount(Throwables.LootKindOf(kind), AmmoType.Pistol9, taken);
             if (taken <= 0) return 0;
-            if (kind == ThrowableKind.Smoke) Smokes.Value += taken; else Grenades.Value += taken;
+            Adjust(kind, taken);
             return taken;
         }
 
@@ -135,10 +159,7 @@ namespace Game.Net
         public bool ServerTryTake(LootEntry loot)
         {
             if (!IsServerInitialized || loot == null) return false;
-            ThrowableKind kind;
-            if (loot.Kind == ThrowableRules.GrenadeLootKind) kind = ThrowableKind.Frag;
-            else if (loot.Kind == ThrowableRules.SmokeLootKind) kind = ThrowableKind.Smoke;
-            else return false;
+            if (!Throwables.TryKindOfLoot(loot.Kind, out var kind)) return false;
             int wanted = Mathf.Max(1, loot.Amount);
             int taken = ServerAdd(kind, wanted);
             if (taken <= 0) return false;
@@ -237,7 +258,7 @@ namespace Game.Net
             // Never faster than a throw can be, whoever asks.
             velocity = Vector3.ClampMagnitude(velocity, rules.ThrowSpeed);
             _nextThrowAt = now + rules.MinThrowInterval;
-            if (kind == ThrowableKind.Smoke) Smokes.Value--; else Grenades.Value--;
+            Adjust(kind, -1);
             // A cooked grenade keeps burning from where the pin left it.
             float fuse = -1f;
             if (kind == ThrowableKind.Frag && Cooking.Value) { fuse = CookRemaining; Cooking.Value = false; }
@@ -282,6 +303,15 @@ namespace Game.Net
             if (_combatant.Dead.Value || Grenades.Value <= 0 || MatchDirector.Instance == null) return;
             Grenades.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = ThrowableRules.GrenadeLootKind, Amount = 1 },
+                transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
+        }
+
+        [ServerRpc]
+        public void CmdDropFlash()
+        {
+            if (_combatant.Dead.Value || Flashes.Value <= 0 || MatchDirector.Instance == null) return;
+            Flashes.Value--;
+            MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Flash, Amount = 1 },
                 transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
         }
 

@@ -49,5 +49,41 @@ namespace Game.Tests
             yield return Shot("boost_hud_pill_in_use");
             Debug.Log($"[HealThrowCapture] gauge {healing.Gauge.Value:F1} step {healing.BoostStep} hp {me.Hp.Value:F0} speed x{CombatantHealing.BoostSpeedOf(me):F3}");
         }
+
+        static void QuietDummies()
+        {
+            foreach (var c in Combatant.All)
+                if (!c.IsPlayer)
+                    foreach (var part in c.GetComponents<MonoBehaviour>())
+                        if (part.GetType().Name == "TrainingDummy") part.enabled = false;
+        }
+
+        [UnityTest, Timeout(180000)]
+        public IEnumerator FlashOverlayShots()
+        {
+            yield return Load();
+            QuietDummies();
+            var me = Combatant.LocalPlayer;
+            var user = me.GetComponent<ThrowableUser>();
+            var fwd = PlayerController.Local.Camera.transform.forward;
+            fwd.y = 0f;
+            fwd.Normalize();
+            yield return Shot("flash_0_before");
+            user.ServerAdd(ThrowableKind.Flash, 1);
+            Assert.IsTrue(user.ServerThrow(me.EyePosition + fwd * 5f - Vector3.up * 1.2f, Vector3.zero, ThrowableKind.Flash));
+            bool bang = false;
+            ThrownItem.ServerFlashed += (c, t) => bang = true;
+            float end = Time.realtimeSinceStartup + 6f;
+            while (!bang && Time.realtimeSinceStartup < end) yield return null;
+            yield return new WaitForSeconds(0.12f);
+            yield return Shot("flash_1_burst");
+            var overlay = FlashOverlay.Instance;
+            Debug.Log($"[HealThrowCapture] flash blind {overlay.LastBlindSeconds:F2}s ring {overlay.LastRingSeconds:F2}s whiteness {overlay.Whiteness:F2} volume x{AudioListener.volume:F2}");
+            yield return new WaitForSeconds(2.0f);
+            yield return Shot("flash_2_white");
+            yield return new WaitForSeconds(1.6f);
+            Debug.Log($"[HealThrowCapture] flash fading whiteness {overlay.Whiteness:F2} volume x{AudioListener.volume:F2}");
+            yield return Shot("flash_3_fade");
+        }
     }
 }

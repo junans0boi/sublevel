@@ -3,7 +3,7 @@ using System;
 namespace Game.Core
 {
     // The kinds of thrown item. The flight is shared; what happens when the fuse runs out differs.
-    public enum ThrowableKind { Frag = 0, Smoke = 1 }
+    public enum ThrowableKind { Frag = 0, Smoke = 1, Flash = 2, Molotov = 3 }
 
     // Tuning of thrown items (PUBG_GAP 4-3 batch I). The fragmentation grenade's numbers; the smoke grenade
     // reuses the same flight (its own numbers are SmokeRules).
@@ -131,15 +131,57 @@ namespace Game.Core
             vz = dz / len * rules.RollSpeed;
         }
 
-        public static string NameOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? ThrowableRules.SmokeName : ThrowableRules.GrenadeName;
+        public static string NameOf(ThrowableKind kind)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Smoke: return ThrowableRules.SmokeName;
+                case ThrowableKind.Flash: return ThrowableRules.FlashName;
+                case ThrowableKind.Molotov: return ThrowableRules.MolotovName;
+                default: return ThrowableRules.GrenadeName;
+            }
+        }
 
-        public static LootKind LootKindOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? ThrowableRules.SmokeLootKind : ThrowableRules.GrenadeLootKind;
+        public static LootKind LootKindOf(ThrowableKind kind)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Smoke: return ThrowableRules.SmokeLootKind;
+                case ThrowableKind.Flash: return LootKind.Flash;
+                case ThrowableKind.Molotov: return LootKind.Molotov;
+                default: return ThrowableRules.GrenadeLootKind;
+            }
+        }
+
+        // The kind a pickup stands for; false for loot that is not a throwable.
+        public static bool TryKindOfLoot(LootKind loot, out ThrowableKind kind)
+        {
+            kind = ThrowableKind.Frag;
+            if (loot == ThrowableRules.GrenadeLootKind) return true;
+            if (loot == ThrowableRules.SmokeLootKind) { kind = ThrowableKind.Smoke; return true; }
+            if (loot == LootKind.Flash) { kind = ThrowableKind.Flash; return true; }
+            if (loot == LootKind.Molotov) { kind = ThrowableKind.Molotov; return true; }
+            return false;
+        }
 
         // Seconds from the throw to the effect.
-        public static float FuseOf(ThrowableKind kind, ThrowableRules rules, SmokeRules smoke) => kind == ThrowableKind.Smoke ? smoke.FuseSeconds : rules.FuseSeconds;
+        public static float FuseOf(ThrowableKind kind, ThrowableRules rules, SmokeRules smoke) =>
+            kind == ThrowableKind.Smoke ? smoke.FuseSeconds : kind == ThrowableKind.Flash ? FlashRules.Current.FuseSeconds : rules.FuseSeconds;
+
+        // How many of a kind may be carried.
+        public static int MaxCarriedOf(ThrowableKind kind) =>
+            kind == ThrowableKind.Smoke ? SmokeRules.Current.MaxCarried : kind == ThrowableKind.Flash ? FlashRules.Current.MaxCarried : ThrowableRules.Current.MaxCarried;
 
         // The next kind when cycling the selection (the T key).
-        public static ThrowableKind Next(ThrowableKind kind) => kind == ThrowableKind.Frag ? ThrowableKind.Smoke : ThrowableKind.Frag;
+        public static ThrowableKind Next(ThrowableKind kind)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Frag: return ThrowableKind.Smoke;
+                case ThrowableKind.Smoke: return ThrowableKind.Flash;
+                default: return ThrowableKind.Frag;
+            }
+        }
 
         // How many of `offered` grenades fit next to the `carried` ones.
         public static int Room(int carried, int offered, ThrowableRules rules) =>

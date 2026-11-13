@@ -41,6 +41,10 @@ namespace Game.Net
         // Server only: every smoke cloud, once it exists (centre, thrower or null).
         public static event Action<Vector3, Combatant> ServerSmoked;
 
+        // A flash grenade went off: raised on every client (centre, thrower or null), and on the server (centre, thrower).
+        public static event Action<Vector3, NetworkObject> ClientFlashed;
+        public static event Action<Vector3, Combatant> ServerFlashed;
+
         static readonly RaycastHit[] Hits = new RaycastHit[16];
         static readonly List<Combatant> Victims = new List<Combatant>(16);
 
@@ -51,6 +55,8 @@ namespace Game.Net
             ServerExploded = null;
             ClientSmoked = null;
             ServerSmoked = null;
+            ClientFlashed = null;
+            ServerFlashed = null;
             SmokeZones.Clear();
         }
 
@@ -83,8 +89,17 @@ namespace Game.Net
             _fuse = fuseOverride >= 0f ? fuseOverride : Throwables.FuseOf(kind, rules, SmokeRules.Current);
         }
 
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
         public override void OnStartNetwork()
         {
+            // A flash grenade is the same body in pale steel (the prefab has one grenade shape).
+            if (Kind.Value == (int)ThrowableKind.Flash && _visual != null)
+            {
+                var block = new MaterialPropertyBlock();
+                block.SetColor(BaseColorId, new Color(0.80f, 0.82f, 0.86f));
+                foreach (var r in _visual.GetComponentsInChildren<Renderer>()) r.SetPropertyBlock(block);
+            }
             // The canister of a smoke grenade looks different from a grenade (when the prefab has both).
             if (Kind.Value == (int)ThrowableKind.Smoke && _smokeVisual != null)
             {
@@ -122,7 +137,9 @@ namespace Game.Net
                 _age += StepSeconds;
                 if (_age >= _fuse)
                 {
-                    if (Kind.Value == (int)ThrowableKind.Smoke) OpenSmoke(); else Explode();
+                    if (Kind.Value == (int)ThrowableKind.Smoke) OpenSmoke();
+                    else if (Kind.Value == (int)ThrowableKind.Flash) FlashBang();
+                    else Explode();
                 }
             }
             transform.position = _position;
@@ -189,6 +206,28 @@ namespace Game.Net
             _zoneId = SmokeZones.Add(centre.x, centre.y + smoke.CentreLiftMeters, centre.z, smoke.Radius);
             ServerSmoked?.Invoke(centre, attacker);
             RpcSmoked(centre, smoke.Radius, smoke.Seconds, attacker != null ? attacker.NetworkObject : null);
+        }
+
+        // The flash: no damage; every client works out its own player's blindness (FlashOverlay).
+        void FlashBang()
+        {
+            _exploded = true;
+            _despawnAt = Time.time + LingerSeconds;
+            var centre = _position;
+            transform.position = centre;
+            var attacker = _thrower != null ? _thrower : null;
+            ServerFlashed?.Invoke(centre, attacker);
+            RpcFlashed(centre, attacker != null ? attacker.NetworkObject : null);
+        }
+
+        // Runs locally too, so a host is blinded in the frame it goes off.
+        [ObserversRpc(RunLocally = true)]
+        void RpcFlashed(Vector3 centre, NetworkObject thrower)
+        {
+            _exploded = true;
+            if (_visual != null) _visual.SetActive(false);
+            if (!IsClientStarted) return;
+            ClientFlashed?.Invoke(centre, thrower);
         }
 
         // Everyone within the blast radius whose chest the centre can see takes damage by distance: walls and
