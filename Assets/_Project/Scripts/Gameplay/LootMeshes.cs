@@ -17,11 +17,13 @@ namespace Game.Gameplay
         static readonly Color Brass = new Color(0.80f, 0.62f, 0.28f);
         static readonly Color Cloth = new Color(0.88f, 0.85f, 0.76f);
         static readonly Color White = new Color(0.92f, 0.93f, 0.92f);
+        // Backpacks by tier: khaki, olive, dark green (darker = higher, like the armour).
+        static readonly Color[] BackpackColors = { new Color(0.66f, 0.60f, 0.42f), new Color(0.42f, 0.46f, 0.28f), new Color(0.20f, 0.27f, 0.18f) };
 
         // Null for kinds drawn otherwise (weapons, optics) or unknown.
         public static Mesh Model(LootKind kind, AmmoType ammo, int tier)
         {
-            int key = (int)kind * 100 + (kind == LootKind.Ammo ? (int)ammo : Armor.IsArmor(kind) ? Mathf.Clamp(tier, 1, 3) : 0);
+            int key = (int)kind * 100 + (kind == LootKind.Ammo ? (int)ammo : Armor.IsArmor(kind) || kind == LootKind.Backpack ? Mathf.Clamp(tier, 1, 3) : 0);
             if (Cache.TryGetValue(key, out var mesh) && mesh != null) return mesh;
             var d = new MeleeMeshes.Draft();
             switch (kind)
@@ -36,6 +38,7 @@ namespace Game.Gameplay
                 case LootKind.FirstAidKit: BuildFirstAid(d); break;
                 case LootKind.Smoke: BuildSmoke(d); break;
                 case LootKind.Jerrycan: BuildJerrycan(d); break;
+                case LootKind.Backpack: BuildBackpack(d, Mathf.Clamp(tier, 1, 3)); break;
                 default: return null;
             }
             mesh = d.ToMesh("Loot" + kind + key % 100);
@@ -66,6 +69,7 @@ namespace Game.Gameplay
                 case LootKind.Smoke: into[Body] = new Color(0.50f, 0.53f, 0.56f); into[Accent] = new Color(0.88f, 0.62f, 0.18f); break;
                 case LootKind.Key: into[Body] = Brass; into[Accent] = new Color(0.78f, 0.22f, 0.20f); break;
                 case LootKind.Jerrycan: into[Body] = new Color(0.62f, 0.16f, 0.10f); into[Accent] = new Color(0.70f, 0.72f, 0.75f); break;
+                case LootKind.Backpack: into[Body] = BackpackColors[Mathf.Clamp(tier, 1, 3) - 1]; into[Accent] = new Color(0.96f, 0.82f, 0.38f); break;
                 default: into[Body] = new Color(0.5f, 0.5f, 0.5f); break;
             }
         }
@@ -211,6 +215,32 @@ namespace Game.Gameplay
                 Strip(d, new Vector3(x, 0.08f, -0.13f), new Vector3(x, 0.38f, 0.13f), s, Dark);
                 Strip(d, new Vector3(x, 0.08f, 0.13f), new Vector3(x, 0.38f, -0.13f), s, Dark);
             }
+        }
+
+        // A backpack standing up (ADR-091), its back panel toward -z: a rounded pack with a lid flap and a front
+        // pocket carrying one pale bar per tier, two shoulder straps and a carry loop. Higher tiers are bigger.
+        // The same model is worn on the character's back (BackpackVisual).
+        static void BuildBackpack(MeleeMeshes.Draft d, int tier)
+        {
+            float w = 0.30f + 0.03f * tier, h = 0.36f + 0.06f * tier, l = 0.16f + 0.03f * tier, r = l * 0.5f;
+            d.Box(new Vector3(0f, (h - r) * 0.5f, 0f), new Vector3(w, h - r, l), Body);
+            d.Tube(new Vector3(-w * 0.5f, h - r, 0f), new Vector3(w * 0.5f, h - r, 0f), r, Body, 14); // rounded top
+            d.Box(new Vector3(0f, h - r * 0.4f, l * 0.18f), new Vector3(w * 0.9f, r * 0.9f, l * 0.75f), Dark); // lid flap
+            d.Box(new Vector3(0f, h * 0.68f, l * 0.5f + 0.008f), new Vector3(0.06f, h * 0.22f, 0.016f), Dark); // lid strap
+            // Front pocket with the tier bars.
+            float pw = w * 0.72f, ph = h * 0.36f, pz = l * 0.5f + 0.03f;
+            d.Box(new Vector3(0f, h * 0.24f, pz - 0.015f), new Vector3(pw, ph, 0.06f), Body);
+            d.Box(new Vector3(0f, h * 0.24f + ph * 0.5f - 0.01f, pz + 0.016f), new Vector3(pw + 0.004f, 0.012f, 0.004f), Dark); // zip
+            for (int i = 0; i < tier; i++)
+                d.Box(new Vector3(0f, h * 0.22f + (i - (tier - 1) * 0.5f) * 0.035f, pz + 0.017f), new Vector3(pw * 0.55f, 0.016f, 0.004f), Accent);
+            // A padded back panel with two flat shoulder straps.
+            d.Box(new Vector3(0f, h * 0.45f, -l * 0.5f - 0.01f), new Vector3(w * 0.8f, h * 0.7f, 0.02f), Dark);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                d.Box(new Vector3(s * w * 0.24f, h * 0.5f, -l * 0.5f - 0.035f), new Vector3(0.06f, h * 0.78f, 0.03f), Body);
+                d.Box(new Vector3(s * (w * 0.5f + 0.012f), h * 0.42f, 0f), new Vector3(0.024f, h * 0.5f, l * 0.55f), Dark); // side compression strap
+            }
+            d.Box(new Vector3(0f, h + 0.02f, -l * 0.2f), new Vector3(0.09f, 0.03f, 0.02f), Dark); // carry loop
         }
 
         // A white plus lying on a lid at `at` (its top surface).

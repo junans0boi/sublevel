@@ -93,13 +93,35 @@ namespace Game.Tests
         // ---- Carry ----
 
         [Test]
-        public void Capacity_GrowsWithTheVest()
+        public void Capacity_GrowsWithTheVestAndTheBackpack_AtPubgRatios()
         {
+            // ADR-091: base 60, any vest +25 (PUBG +50), backpacks +75/100/125 (PUBG +150/200/250), at our item scale.
             Assert.AreEqual(600, Carry.CapacityTenths(Bag, 0));
-            Assert.AreEqual(700, Carry.CapacityTenths(Bag, 1));
-            Assert.AreEqual(800, Carry.CapacityTenths(Bag, 2));
-            Assert.AreEqual(900, Carry.CapacityTenths(Bag, 3));
+            Assert.AreEqual(850, Carry.CapacityTenths(Bag, 1));
+            Assert.AreEqual(850, Carry.CapacityTenths(Bag, 2));
+            Assert.AreEqual(850, Carry.CapacityTenths(Bag, 3));
             Assert.AreEqual(600, Carry.CapacityTenths(Bag, 7), "no such tier: no bonus");
+            Assert.AreEqual(1350, Carry.CapacityTenths(Bag, 0, 1));
+            Assert.AreEqual(1600, Carry.CapacityTenths(Bag, 0, 2));
+            Assert.AreEqual(1850, Carry.CapacityTenths(Bag, 0, 3));
+            Assert.AreEqual(2100, Carry.CapacityTenths(Bag, 2, 3), "fully kitted");
+            Assert.AreEqual(600, Carry.CapacityTenths(Bag, 0, 4), "no such backpack: no bonus");
+            // The bonuses keep PUBG's proportions: vest : L1 : L2 : L3 = 1 : 3 : 4 : 5.
+            Assert.AreEqual(3f, Bag.BackpackBonus1 / Bag.VestBonus1, 1e-6f);
+            Assert.AreEqual(4f, Bag.BackpackBonus2 / Bag.VestBonus1, 1e-6f);
+            Assert.AreEqual(5f, Bag.BackpackBonus3 / Bag.VestBonus1, 1e-6f);
+        }
+
+        [Test]
+        public void Backpack_SwapsOnlyForAHigherTier()
+        {
+            Assert.IsTrue(Carry.IsBetterBackpack(1, 0), "anything beats none");
+            Assert.IsTrue(Carry.IsBetterBackpack(3, 2));
+            Assert.IsFalse(Carry.IsBetterBackpack(2, 2), "the same tier is no better");
+            Assert.IsFalse(Carry.IsBetterBackpack(1, 3), "never downgrades");
+            Assert.IsFalse(Carry.IsBetterBackpack(0, 0));
+            Assert.IsFalse(Carry.IsBetterBackpack(4, 1), "no such tier");
+            Assert.AreEqual(0, Carry.UnitTenths(LootKind.Backpack, AmmoType.Pistol9, Bag), "a backpack takes no room itself");
         }
 
         [Test]

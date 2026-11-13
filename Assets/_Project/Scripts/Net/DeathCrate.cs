@@ -85,6 +85,9 @@ namespace Game.Net
                 var vest = _gear.ServerRemove(ArmorSlot.Vest);
                 if (vest.Worn) Contents.Add(Armor.ToLoot(ArmorSlot.Vest, vest));
             }
+            var carry = GetComponent<CombatantCarry>();
+            int backpack = carry != null ? carry.ServerEquipBackpack(0) : 0; // ADR-091
+            if (backpack > 0) Contents.Add(new LootEntry { Kind = LootKind.Backpack, Tier = backpack, Amount = 1 });
             ServerItemCount = Contents.Count;
             for (int i = 0; i < Contents.Count; i++)
                 MatchDirector.Instance.ServerSpawnLoot(Contents[i], ServerItemPosition(i, Contents.Count));

@@ -42,15 +42,16 @@
   "FreeLook": { "ReturnDegPerSecond": 540.0, "ReturnEasePerSecond": 10.0 },
   "Armor": {
     "Helmets": [
-      { "Reduction": 0.25, "Durability": 60.0 },
-      { "Reduction": 0.40, "Durability": 110.0 },
-      { "Reduction": 0.50, "Durability": 170.0 }
+      { "Reduction": 0.30, "Durability": 80.0 },
+      { "Reduction": 0.40, "Durability": 150.0 },
+      { "Reduction": 0.55, "Durability": 230.0 }
     ],
     "Vests": [
-      { "Reduction": 0.25, "Durability": 120.0 },
-      { "Reduction": 0.35, "Durability": 180.0 },
-      { "Reduction": 0.45, "Durability": 250.0 }
-    ]
+      { "Reduction": 0.30, "Durability": 200.0 },
+      { "Reduction": 0.40, "Durability": 220.0 },
+      { "Reduction": 0.55, "Durability": 250.0 }
+    ],
+    "BrokenVestReduction": 0.20
   },
   "Crate": { "RingRadius": 0.9, "LiftMeters": 0.3, "WallClearance": 0.25, "MarkerSeconds": 90.0 },
   "Throwables": {
@@ -65,7 +66,8 @@
     "MoveFactor": 0.6
   },
   "Carry": {
-    "Capacity": 60.0, "VestBonus1": 10.0, "VestBonus2": 20.0, "VestBonus3": 30.0,
+    "Capacity": 60.0, "VestBonus1": 25.0, "VestBonus2": 25.0, "VestBonus3": 25.0,
+    "BackpackBonus1": 75.0, "BackpackBonus2": 100.0, "BackpackBonus3": 125.0,
     "Ammo9mm": 0.2, "Ammo556": 0.3, "Ammo12ga": 0.8, "Ammo762": 0.5,
     "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Grenade": 3.0, "Smoke": 3.0, "Jerrycan": 20.0,
     "AutoPickupMeters": 1.5, "AutoPickupInterval": 0.25

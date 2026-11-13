@@ -19,19 +19,22 @@ namespace Game.Core
         // The rules in use. Defaults until the data loader replaces them, so everything runs without a data file.
         public static ArmorRules Current = new ArmorRules();
 
-        // Index 0 is tier 1.
+        // Index 0 is tier 1. PUBG's numbers (ADR-091): health is 100 in both games.
         public ArmorTier[] Helmets =
         {
-            new ArmorTier { Reduction = 0.25f, Durability = 60f },
-            new ArmorTier { Reduction = 0.40f, Durability = 110f },
-            new ArmorTier { Reduction = 0.50f, Durability = 170f },
+            new ArmorTier { Reduction = 0.30f, Durability = 80f },
+            new ArmorTier { Reduction = 0.40f, Durability = 150f },
+            new ArmorTier { Reduction = 0.55f, Durability = 230f },
         };
         public ArmorTier[] Vests =
         {
-            new ArmorTier { Reduction = 0.25f, Durability = 120f },
-            new ArmorTier { Reduction = 0.35f, Durability = 180f },
-            new ArmorTier { Reduction = 0.45f, Durability = 250f },
+            new ArmorTier { Reduction = 0.30f, Durability = 200f },
+            new ArmorTier { Reduction = 0.40f, Durability = 220f },
+            new ArmorTier { Reduction = 0.55f, Durability = 250f },
         };
+        // A vest at zero durability stays on and still takes this share of every hit, wearing no further (ADR-091).
+        // A helmet at zero is gone.
+        public float BrokenVestReduction = 0.20f;
 
         public int TierCount(ArmorSlot slot) => (slot == ArmorSlot.Helmet ? Helmets : Vests).Length;
 
@@ -49,13 +52,15 @@ namespace Game.Core
         }
     }
 
-    // A piece as worn or lying on the ground: its tier and what is left of it. Tier 0 = none.
+    // A piece as worn or lying on the ground: its tier and what is left of it. Tier 0 = none. A vest can be worn
+    // broken (durability 0, ADR-091); a helmet never is.
     public struct ArmorPiece
     {
         public int Tier;
         public float Durability;
 
-        public readonly bool Worn => Tier > 0 && Durability > 0f;
+        public readonly bool Worn => Tier > 0;
+        public readonly bool Broken => Tier > 0 && Durability < Armor.BrokenBelow;
 
         public static ArmorPiece None => default;
 
@@ -83,26 +88,41 @@ namespace Game.Core
         }
 
         // Takes one hit of `amount` on the zone the piece protects. Returns what gets through to the wearer.
-        // The piece takes its tier's share of the hit, but never more than it has left; it loses that much
-        // durability and is gone (tier 0) when nothing is left.
+        // The piece takes its tier's share of the hit, but never more than it has left, and loses that much
+        // durability. At zero a helmet is gone (tier 0); a vest stays on, broken, and from then on takes
+        // BrokenVestReduction of every hit without wearing further (ADR-091).
         public static float Absorb(ref ArmorPiece piece, ArmorSlot slot, float amount, ArmorRules rules)
         {
             // Written so that NaN passes through untouched.
             if (!(amount > 0f) || !piece.Worn) return amount;
             var def = rules.Find(slot, piece.Tier);
             if (def == null) return amount;
-            float share = def.Reduction < 0f ? 0f : def.Reduction > 1f ? 1f : def.Reduction;
-            float absorbed = Math.Min(amount * share, piece.Durability);
+            if (piece.Broken)
+            {
+                if (slot == ArmorSlot.Vest) return amount * (1f - Clamp01(rules.BrokenVestReduction));
+                piece = ArmorPiece.None;
+                return amount;
+            }
+            float absorbed = Math.Min(amount * Clamp01(def.Reduction), piece.Durability);
             piece.Durability -= absorbed;
-            if (piece.Durability < BrokenBelow) piece = ArmorPiece.None;
+            if (piece.Durability < BrokenBelow)
+            {
+                if (slot == ArmorSlot.Vest) piece.Durability = 0f;
+                else piece = ArmorPiece.None;
+            }
             return amount - absorbed;
         }
 
-        // Worth swapping for: a higher tier, or the same tier in better shape. Anything beats wearing nothing.
+        static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
+
+        // Worth swapping for: a higher tier, or the same tier in better shape. Anything beats wearing nothing, any
+        // whole piece beats a broken vest, and one broken vest is no better than another (both take the same 20%).
         public static bool IsBetter(ArmorPiece candidate, ArmorPiece current)
         {
             if (!candidate.Worn) return false;
             if (!current.Worn) return true;
+            if (candidate.Broken != current.Broken) return current.Broken;
+            if (candidate.Broken) return false;
             if (candidate.Tier != current.Tier) return candidate.Tier > current.Tier;
             return candidate.Durability > current.Durability;
         }
@@ -125,7 +145,8 @@ namespace Game.Core
             return new ArmorPiece { Tier = loot.Tier, Durability = durability };
         }
 
+        // A broken vest is written as a sliver of durability: 0 in an entry means "fresh".
         public static LootEntry ToLoot(ArmorSlot slot, ArmorPiece piece) =>
-            new LootEntry { Kind = KindOf(slot), Tier = piece.Tier, Durability = piece.Durability, Amount = 1 };
+            new LootEntry { Kind = KindOf(slot), Tier = piece.Tier, Durability = piece.Broken ? BrokenBelow * 0.5f : piece.Durability, Amount = 1 };
     }
 }

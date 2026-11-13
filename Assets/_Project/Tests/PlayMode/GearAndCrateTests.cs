@@ -28,7 +28,7 @@ namespace Game.Tests
         }
 
         const int Pistol = 1;
-        const int Rifle = 3; // 27 per projectile, head x2.0 (weapons.json)
+        const int Rifle = 3; // 40 per projectile, head x2.35 (weapons.json, ADR-089)
 
         ScriptedInput _input;
 
@@ -138,34 +138,34 @@ namespace Game.Tests
             yield return FaceAQuietDummy(d => dummy = d);
             var gear = GearOf(dummy);
             Assert.AreEqual(0.40f, ArmorRules.Current.Find(ArmorSlot.Helmet, 2).Reduction, 1e-4f, "tier 2 helmet takes 40%");
-            Assert.AreEqual(110f, ArmorRules.Current.Find(ArmorSlot.Helmet, 2).Durability, 1e-4f);
+            Assert.AreEqual(150f, ArmorRules.Current.Find(ArmorSlot.Helmet, 2).Durability, 1e-4f);
             Assert.IsFalse(gear.Has(ArmorSlot.Helmet));
             Assert.AreEqual(100f, dummy.Hp.Value);
 
-            // Bare head: 27 x 2.0.
-            Assert.IsTrue(ShootAt(me, dummy.transform.position + Vector3.up * 1.65f), "head shot fired");
-            Assert.AreEqual(46f, dummy.Hp.Value, 1e-3f, "no helmet: the full 54");
+            // A bare head would take the full 40 x 2.35 = 94 (DamagePipelineTests); one shot would leave 6, so the
+            // helmet goes on first (ADR-089 made the rifle hit harder).
+            Assert.AreEqual(94f, DamageRules.ForZone(GameData.Weapons.Find(Rifle), 5f, HitZone.Head), 1e-3f, "no helmet: the full 94");
             Assert.AreEqual(0f, gear.LastAbsorbed);
 
             gear.ServerEquip(ArmorSlot.Helmet, 2);
             Assert.AreEqual(2, gear.HelmetTier.Value);
-            Assert.AreEqual(110f, gear.HelmetDurability.Value, 1e-3f);
+            Assert.AreEqual(150f, gear.HelmetDurability.Value, 1e-3f);
             Assert.AreEqual(1f, gear.FractionOf(ArmorSlot.Helmet), 1e-4f);
             yield return new WaitForSeconds(0.3f);
 
-            // Same shot on the helmet: 40% of 54 = 21.6 stays in the helmet, 32.4 gets through.
-            Assert.IsTrue(ShootAt(me, dummy.transform.position + Vector3.up * 1.65f), "second head shot fired");
-            Assert.AreEqual(13.6f, dummy.Hp.Value, 1e-3f, "46 - 32.4");
-            Assert.AreEqual(21.6f, gear.LastAbsorbed, 1e-3f);
-            Assert.AreEqual(88.4f, gear.HelmetDurability.Value, 1e-3f, "110 - 21.6");
+            // The head shot on the helmet: 40% of 94 = 37.6 stays in the helmet, 56.4 gets through.
+            Assert.IsTrue(ShootAt(me, dummy.transform.position + Vector3.up * 1.65f), "head shot fired");
+            Assert.AreEqual(43.6f, dummy.Hp.Value, 1e-3f, "100 - 56.4");
+            Assert.AreEqual(37.6f, gear.LastAbsorbed, 1e-3f);
+            Assert.AreEqual(112.4f, gear.HelmetDurability.Value, 1e-3f, "150 - 37.6");
             Assert.AreEqual(2, gear.TierOf(ArmorSlot.Helmet));
 
             // A helmet does nothing for the body or the legs.
             dummy.ServerTakeDamage(new DamageInfo { Amount = 5f, Zone = HitZone.Body, Cause = DamageCause.Shot, Attacker = me });
-            Assert.AreEqual(8.6f, dummy.Hp.Value, 1e-3f);
+            Assert.AreEqual(38.6f, dummy.Hp.Value, 1e-3f);
             dummy.ServerTakeDamage(new DamageInfo { Amount = 5f, Zone = HitZone.Limb, Cause = DamageCause.Shot, Attacker = me });
-            Assert.AreEqual(3.6f, dummy.Hp.Value, 1e-3f);
-            Assert.AreEqual(88.4f, gear.HelmetDurability.Value, 1e-3f, "untouched");
+            Assert.AreEqual(33.6f, dummy.Hp.Value, 1e-3f);
+            Assert.AreEqual(112.4f, gear.HelmetDurability.Value, 1e-3f, "untouched");
         }
 
         [UnityTest]
@@ -175,7 +175,7 @@ namespace Game.Tests
             var me = Combatant.LocalPlayer;
             var gear = GearOf(me);
 
-            // A tier 1 helmet (25%) with 5 points left: of a 40-point hit it can only take 5.
+            // A tier 1 helmet (30%) with 5 points left: of a 40-point hit it can only take 5.
             gear.ServerEquip(ArmorSlot.Helmet, 1, 5f);
             Assert.AreEqual(1, gear.HelmetTier.Value);
             Assert.AreEqual(5f, gear.HelmetDurability.Value, 1e-4f);
@@ -190,7 +190,7 @@ namespace Game.Tests
             me.ServerTakeDamage(new DamageInfo { Amount = 20f, Zone = HitZone.Head, Cause = DamageCause.Shot });
             Assert.AreEqual(45f, me.Hp.Value, 1e-3f, "bare head again: the full 20");
 
-            // A tier 3 vest (45%, 250): not for falls, the zone or the legs; yes for a blast on the body.
+            // A tier 3 vest (55%, 250): not for falls, the zone or the legs; yes for a blast on the body.
             gear.ServerEquip(ArmorSlot.Vest, 3);
             Assert.AreEqual("3단계  250 / 250", LootNames.Worn(gear, ArmorSlot.Vest));
             me.ServerTakeDamage(new DamageInfo { Amount = 10f, Zone = HitZone.Body, Cause = DamageCause.Fall });
@@ -202,8 +202,8 @@ namespace Game.Tests
             Assert.AreEqual(250f, gear.VestDurability.Value, 1e-3f, "none of that touched the vest");
 
             me.ServerTakeDamage(new DamageInfo { Amount = 20f, Zone = HitZone.Body, Cause = DamageCause.Blast });
-            Assert.AreEqual(14f, me.Hp.Value, 1e-3f, "45% of 20 = 9 absorbed, 11 through");
-            Assert.AreEqual(241f, gear.VestDurability.Value, 1e-3f);
+            Assert.AreEqual(16f, me.Hp.Value, 1e-3f, "55% of 20 = 11 absorbed, 9 through");
+            Assert.AreEqual(239f, gear.VestDurability.Value, 1e-3f);
             Assert.AreEqual(3, gear.VestTier.Value);
             yield return null;
             Assert.IsFalse(me.Dead.Value);
@@ -263,11 +263,11 @@ namespace Game.Tests
             Assert.AreEqual(60, light.Amount.Value, "a dummy leaves at most the cap per calibre");
             Assert.AreEqual(2, medkits.Amount.Value, "both kits in one pickup");
             Assert.AreEqual(1, helmet.Tier.Value);
-            Assert.AreEqual(60f, helmet.Durability.Value, 1e-3f);
+            Assert.AreEqual(80f, helmet.Durability.Value, 1e-3f);
             Assert.AreEqual(2, vest.Tier.Value);
             Assert.AreEqual(100f, vest.Durability.Value, 1e-3f, "armour keeps the durability it had left");
             Assert.AreEqual("조끼 2단계", LootNames.Of(vest));
-            Assert.AreEqual("헬멧 1단계 (내구도 60)", LootNames.Label(helmet));
+            Assert.AreEqual("헬멧 1단계 (내구도 80)", LootNames.Label(helmet));
 
             float ring = CrateRules.Current.RingRadius;
             for (int i = lootBefore; i < LootItem.All.Count; i++)
@@ -338,10 +338,10 @@ namespace Game.Tests
             var worse = FindLoot(lootBefore, LootKind.Vest);
             Assert.IsNotNull(worse);
             Assert.AreEqual(1, worse.Tier.Value);
-            Assert.AreEqual(120f, worse.Durability.Value, 1e-3f, "a table row is a fresh piece");
+            Assert.AreEqual(200f, worse.Durability.Value, 1e-3f, "a table row is a fresh piece");
             Assert.AreEqual("조끼 1단계", LootNames.Of(worse));
-            Assert.AreEqual("내구도 120", LootNames.Amount(worse));
-            Assert.AreEqual("조끼 1단계 (내구도 120)", worse.GetComponent<LootView>().Label);
+            Assert.AreEqual("내구도 200", LootNames.Amount(worse));
+            Assert.AreEqual("조끼 1단계 (내구도 200)", worse.GetComponent<LootView>().Label);
 
             // Worse than what is worn: refused, and it stays on the ground.
             me.CmdPickup(worse.NetworkObject);
@@ -360,7 +360,7 @@ namespace Game.Tests
             me.CmdPickup(worse.NetworkObject);
             yield return WaitUntil(() => !LootItem.All.Contains(worse), 3f, "the fresh vest picked up");
             Assert.AreEqual(1, gear.VestTier.Value);
-            Assert.AreEqual(120f, gear.VestDurability.Value, 1e-3f);
+            Assert.AreEqual(200f, gear.VestDurability.Value, 1e-3f);
             yield return WaitUntil(() => LootItem.All.Count == lootBefore + 1, 2f, "the old vest dropped");
             var old = FindLoot(lootBefore, LootKind.Vest);
             Assert.IsNotNull(old);
@@ -372,8 +372,8 @@ namespace Game.Tests
             Assert.IsFalse(gear.Has(ArmorSlot.Helmet));
             Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Helmet, Tier = 2 }));
             Assert.AreEqual(2, gear.HelmetTier.Value);
-            Assert.AreEqual(110f, gear.HelmetDurability.Value, 1e-3f);
-            Assert.AreEqual("2단계  110 / 110", LootNames.Worn(gear, ArmorSlot.Helmet));
+            Assert.AreEqual(150f, gear.HelmetDurability.Value, 1e-3f);
+            Assert.AreEqual("2단계  150 / 150", LootNames.Worn(gear, ArmorSlot.Helmet));
             Assert.AreEqual(lootBefore + 1, LootItem.All.Count);
             Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Helmet, Tier = 3, Durability = 10f }), "tier before durability");
             Assert.AreEqual(3, gear.HelmetTier.Value);
@@ -381,7 +381,7 @@ namespace Game.Tests
             yield return WaitUntil(() => LootItem.All.Count == lootBefore + 2, 2f, "the tier 2 helmet dropped");
             var dropped = FindLoot(lootBefore, LootKind.Helmet);
             Assert.AreEqual(2, dropped.Tier.Value);
-            Assert.AreEqual(110f, dropped.Durability.Value, 1e-3f);
+            Assert.AreEqual(150f, dropped.Durability.Value, 1e-3f);
 
             // The loadout still takes its own kinds with the gear component present.
             Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 1 }));

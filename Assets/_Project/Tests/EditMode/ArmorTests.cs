@@ -14,10 +14,16 @@ namespace Game.Tests
         {
             Assert.AreEqual(3, Rules.TierCount(ArmorSlot.Helmet));
             Assert.AreEqual(3, Rules.TierCount(ArmorSlot.Vest));
-            Assert.AreEqual(0.40f, Rules.Find(ArmorSlot.Helmet, 2).Reduction, 1e-6f);
-            Assert.AreEqual(110f, Rules.Find(ArmorSlot.Helmet, 2).Durability, 1e-6f);
-            Assert.AreEqual(0.35f, Rules.Find(ArmorSlot.Vest, 2).Reduction, 1e-6f);
-            Assert.AreEqual(180f, Rules.Find(ArmorSlot.Vest, 2).Durability, 1e-6f);
+            // PUBG (ADR-091): 30/40/55% for both; helmets 80/150/230, vests 200/220/250.
+            float[] reduction = { 0.30f, 0.40f, 0.55f }, helmet = { 80f, 150f, 230f }, vest = { 200f, 220f, 250f };
+            for (int tier = 1; tier <= 3; tier++)
+            {
+                Assert.AreEqual(reduction[tier - 1], Rules.Find(ArmorSlot.Helmet, tier).Reduction, 1e-6f);
+                Assert.AreEqual(reduction[tier - 1], Rules.Find(ArmorSlot.Vest, tier).Reduction, 1e-6f);
+                Assert.AreEqual(helmet[tier - 1], Rules.Find(ArmorSlot.Helmet, tier).Durability, 1e-6f);
+                Assert.AreEqual(vest[tier - 1], Rules.Find(ArmorSlot.Vest, tier).Durability, 1e-6f);
+            }
+            Assert.AreEqual(0.20f, Rules.BrokenVestReduction, 1e-6f);
             foreach (var slot in new[] { ArmorSlot.Helmet, ArmorSlot.Vest })
             {
                 for (int tier = 2; tier <= 3; tier++)
@@ -38,17 +44,17 @@ namespace Game.Tests
         {
             var helmet = ArmorPiece.Fresh(ArmorSlot.Helmet, 2, Rules);
             Assert.AreEqual(2, helmet.Tier);
-            Assert.AreEqual(110f, helmet.Durability, 1e-4f);
+            Assert.AreEqual(150f, helmet.Durability, 1e-4f);
 
             // A 54-point head hit (rifle 27 x 2.0) on a tier 2 helmet: 40% = 21.6 absorbed.
             float through = Armor.Absorb(ref helmet, ArmorSlot.Helmet, 54f, Rules);
             Assert.AreEqual(32.4f, through, 1e-4f);
-            Assert.AreEqual(88.4f, helmet.Durability, 1e-4f);
+            Assert.AreEqual(128.4f, helmet.Durability, 1e-4f);
             Assert.AreEqual(2, helmet.Tier);
 
             through = Armor.Absorb(ref helmet, ArmorSlot.Helmet, 10f, Rules);
             Assert.AreEqual(6f, through, 1e-4f);
-            Assert.AreEqual(84.4f, helmet.Durability, 1e-4f);
+            Assert.AreEqual(124.4f, helmet.Durability, 1e-4f);
         }
 
         [Test]
@@ -56,20 +62,20 @@ namespace Game.Tests
         {
             var vest = ArmorPiece.Fresh(ArmorSlot.Vest, 1, Rules);
             float through = Armor.Absorb(ref vest, ArmorSlot.Vest, 40f, Rules);
-            Assert.AreEqual(30f, through, 1e-4f, "tier 1 takes 25%");
-            Assert.AreEqual(110f, vest.Durability, 1e-4f, "120 - 10");
+            Assert.AreEqual(28f, through, 1e-4f, "tier 1 takes 30%");
+            Assert.AreEqual(188f, vest.Durability, 1e-4f, "200 - 12");
 
             var best = ArmorPiece.Fresh(ArmorSlot.Vest, 3, Rules);
             through = Armor.Absorb(ref best, ArmorSlot.Vest, 40f, Rules);
-            Assert.AreEqual(22f, through, 1e-4f, "tier 3 takes 45%");
-            Assert.AreEqual(232f, best.Durability, 1e-4f, "250 - 18");
+            Assert.AreEqual(18f, through, 1e-4f, "tier 3 takes 55%");
+            Assert.AreEqual(228f, best.Durability, 1e-4f, "250 - 22");
         }
 
         [Test]
-        public void APieceBreaksAtZero_AndTakesNoMoreThanItHasLeft()
+        public void AHelmetIsGoneAtZero_AndTakesNoMoreThanItHasLeft()
         {
             var helmet = new ArmorPiece { Tier = 1, Durability = 5f };
-            // 25% of 40 would be 10, but only 5 is left: 35 gets through and the helmet is gone.
+            // 30% of 40 would be 12, but only 5 is left: 35 gets through and the helmet is gone.
             float through = Armor.Absorb(ref helmet, ArmorSlot.Helmet, 40f, Rules);
             Assert.AreEqual(35f, through, 1e-4f);
             Assert.AreEqual(0, helmet.Tier, "broken");
@@ -78,25 +84,51 @@ namespace Game.Tests
 
             // Nothing worn: the hit lands in full.
             Assert.AreEqual(40f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, 40f, Rules), 1e-6f);
+        }
 
-            // Exactly used up counts as broken too.
-            var vest = new ArmorPiece { Tier = 1, Durability = 10f };
-            Assert.AreEqual(30f, Armor.Absorb(ref vest, ArmorSlot.Vest, 40f, Rules), 1e-4f);
-            Assert.IsFalse(vest.Worn);
-            Assert.AreEqual(0, vest.Tier);
+        [Test]
+        public void ABrokenVestStaysOn_AndStillTakesTwentyPercent_WithoutWearing()
+        {
+            // Exactly used up: 30% of 40 = 12 absorbed, the vest is at zero but still worn (ADR-091).
+            var vest = new ArmorPiece { Tier = 1, Durability = 12f };
+            Assert.AreEqual(28f, Armor.Absorb(ref vest, ArmorSlot.Vest, 40f, Rules), 1e-4f);
+            Assert.IsTrue(vest.Worn, "a broken vest stays on");
+            Assert.IsTrue(vest.Broken);
+            Assert.AreEqual(1, vest.Tier);
+            Assert.AreEqual(0f, vest.Durability);
+
+            // From now on 20% of every hit, whatever the tier, and it wears no further.
+            for (int i = 0; i < 5; i++)
+                Assert.AreEqual(32f, Armor.Absorb(ref vest, ArmorSlot.Vest, 40f, Rules), 1e-4f, "hit " + i);
+            Assert.IsTrue(vest.Broken);
+            var t3 = new ArmorPiece { Tier = 3, Durability = 0f };
+            Assert.AreEqual(80f, Armor.Absorb(ref t3, ArmorSlot.Vest, 100f, Rules), 1e-4f, "tier 3 broken: also 20%");
+
+            // More left than the hit needs breaks it partway: what it had left is absorbed, the rest passes.
+            var nearly = new ArmorPiece { Tier = 3, Durability = 5f };
+            Assert.AreEqual(35f, Armor.Absorb(ref nearly, ArmorSlot.Vest, 40f, Rules), 1e-4f);
+            Assert.IsTrue(nearly.Broken);
+
+            // Dropped and picked up again it is still the broken vest, not a fresh one (0 in an entry means fresh).
+            var entry = Armor.ToLoot(ArmorSlot.Vest, vest);
+            Assert.Greater(entry.Durability, 0f);
+            var back = Armor.FromLoot(entry, Rules);
+            Assert.AreEqual(1, back.Tier);
+            Assert.IsTrue(back.Broken, "still broken after the ground");
         }
 
         [Test]
         public void WearingDown_OverManyHits_EndsWithNoPiece()
         {
-            var helmet = ArmorPiece.Fresh(ArmorSlot.Helmet, 1, Rules); // 60 durability, 15 per 60-point hit
+            var helmet = ArmorPiece.Fresh(ArmorSlot.Helmet, 1, Rules); // 80 durability, 20 per 66.67-point hit
+            const float hit = 200f / 3f;
             for (int i = 0; i < 3; i++)
             {
-                Assert.AreEqual(45f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, 60f, Rules), 1e-3f, "hit " + i);
+                Assert.AreEqual(hit - 20f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, hit, Rules), 1e-3f, "hit " + i);
                 Assert.IsTrue(helmet.Worn, "hit " + i);
             }
-            Assert.AreEqual(15f, helmet.Durability, 1e-3f);
-            Assert.AreEqual(45f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, 60f, Rules), 1e-3f);
+            Assert.AreEqual(20f, helmet.Durability, 1e-3f);
+            Assert.AreEqual(hit - 20f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, hit, Rules), 1e-3f);
             Assert.IsFalse(helmet.Worn, "the fourth hit uses it up");
             Assert.AreEqual(60f, Armor.Absorb(ref helmet, ArmorSlot.Helmet, 60f, Rules), 1e-6f);
         }
@@ -108,7 +140,7 @@ namespace Game.Tests
             Assert.AreEqual(0f, Armor.Absorb(ref vest, ArmorSlot.Vest, 0f, Rules));
             Assert.AreEqual(-5f, Armor.Absorb(ref vest, ArmorSlot.Vest, -5f, Rules));
             Assert.IsTrue(float.IsNaN(Armor.Absorb(ref vest, ArmorSlot.Vest, float.NaN, Rules)));
-            Assert.AreEqual(180f, vest.Durability, 1e-6f);
+            Assert.AreEqual(220f, vest.Durability, 1e-6f);
 
             // A tier the rules do not know protects nothing.
             var odd = new ArmorPiece { Tier = 9, Durability = 50f };
@@ -154,7 +186,13 @@ namespace Game.Tests
             Assert.IsFalse(Armor.IsBetter(t2Worn, t2));
             Assert.IsFalse(Armor.IsBetter(t2, t2), "the same piece is not better");
             Assert.IsTrue(Armor.IsBetter(t3, t2));
-            Assert.IsFalse(Armor.IsBetter(new ArmorPiece { Tier = 3, Durability = 0f }, t1), "a broken piece is no piece");
+            var broken3 = new ArmorPiece { Tier = 3, Durability = 0f };
+            var broken1 = new ArmorPiece { Tier = 1, Durability = 0f };
+            Assert.IsFalse(Armor.IsBetter(broken3, t1), "a whole piece beats a broken one, whatever the tiers");
+            Assert.IsTrue(Armor.IsBetter(t1, broken3));
+            Assert.IsTrue(Armor.IsBetter(broken3, none), "a broken vest still beats nothing");
+            Assert.IsFalse(Armor.IsBetter(broken3, broken1), "broken is broken: both take 20%");
+            Assert.IsFalse(Armor.IsBetter(broken1, broken3));
         }
 
         [Test]
@@ -186,7 +224,7 @@ namespace Game.Tests
             Assert.AreEqual(42.5f, back.Durability, 1e-6f);
 
             // More than the tier holds is cut down; no such tier, or not armour, is no piece.
-            Assert.AreEqual(60f, Armor.FromLoot(new LootEntry { Kind = LootKind.Helmet, Tier = 1, Durability = 999f }, Rules).Durability, 1e-6f);
+            Assert.AreEqual(80f, Armor.FromLoot(new LootEntry { Kind = LootKind.Helmet, Tier = 1, Durability = 999f }, Rules).Durability, 1e-6f);
             Assert.IsFalse(Armor.FromLoot(new LootEntry { Kind = LootKind.Helmet, Tier = 0 }, Rules).Worn);
             Assert.IsFalse(Armor.FromLoot(new LootEntry { Kind = LootKind.Vest, Tier = 4 }, Rules).Worn);
             Assert.IsFalse(Armor.FromLoot(new LootEntry { Kind = LootKind.Medkit, Tier = 2 }, Rules).Worn);

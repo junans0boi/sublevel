@@ -19,7 +19,11 @@ namespace Game.Gameplay
             "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_15x",
             "bandage", "firstaid", "smoke", "key",
             "jerrycan", // ADR-075
+            "backpack_1", "backpack_2", "backpack_3", // ADR-091
         };
+
+        // "backpack_2"; empty for no such tier.
+        public static string BackpackKey(int tier) => tier >= 1 && tier <= 3 ? "backpack_" + tier : "";
 
         // Icon key of an optic by its id in OpticRules (1..8); empty for none or unknown.
         static readonly string[] OpticKeys =

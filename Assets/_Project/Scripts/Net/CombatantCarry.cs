@@ -1,4 +1,5 @@
 using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using Game.Core;
 using UnityEngine;
 
@@ -11,9 +12,14 @@ namespace Game.Net
     //
     // Inventory bar "가방 용량 23/60": `Local.UsedPoints` / `Local.CapacityPoints` (or `Local.Label`, which builds
     // a string: refresh it when the numbers change, not every frame).
+    //
+    // It also holds the worn backpack (ADR-091): tiers 1..3, picked up like loot (ILootReceiver), a higher tier
+    // replaces the worn one, which goes on the ground; never a lower one.
     [RequireComponent(typeof(Combatant))]
-    public class CombatantCarry : NetworkBehaviour
+    public class CombatantCarry : NetworkBehaviour, ILootReceiver
     {
+        public readonly SyncVar<int> BackpackTier = new SyncVar<int>(); // 0 = none
+
         Combatant _combatant;
         CombatantGear _gear;
         CombatantHealing _healing;
@@ -72,8 +78,8 @@ namespace Game.Net
             + (_jerrycans != null ? _jerrycans.Count.Value * Carry.Tenths(CarryRules.Current.Jerrycan) : 0) // ADR-075
             + (_optics != null ? OpticBag.Total(_optics.Bag.Value) * Carry.Tenths(CarryRules.Current.Optic) : 0); // ADR-082
 
-        // The bag's size: the base plus what the worn vest adds (a broken vest adds nothing).
-        public int CapacityTenths => Carry.CapacityTenths(CarryRules.Current, _gear != null ? _gear.VestTier.Value : 0);
+        // The bag's size: the base plus what the worn vest (broken or not) and backpack add.
+        public int CapacityTenths => Carry.CapacityTenths(CarryRules.Current, _gear != null ? _gear.VestTier.Value : 0, BackpackTier.Value);
 
         public int FreeTenths => Mathf.Max(0, CapacityTenths - UsedTenths);
         public float Used => UsedTenths / (float)Carry.Scale;
@@ -82,13 +88,34 @@ namespace Game.Net
         public int CapacityPoints => Carry.Points(CapacityTenths);
         // 0..1 (more when over capacity), for a bar.
         public float Fraction => CapacityTenths > 0 ? UsedTenths / (float)CapacityTenths : 0f;
-        public string Label => "가방 용량 " + UsedPoints + "/" + CapacityPoints;
+        public string Label => "가방 용량 " + UsedPoints + "/" + CapacityPoints
+            + (BackpackTier.Value > 0 ? "  (가방 " + LootNames.Tier(BackpackTier.Value) + ")" : "");
 
         // How many of `wanted` units of a loot kind (rounds, items) fit into the free room.
         public int FitCount(LootKind kind, AmmoType ammo, int wanted) =>
             Carry.Fit(FreeTenths, Carry.UnitTenths(kind, ammo, CarryRules.Current), wanted);
 
         // ---- Server ----
+
+        // Puts a backpack on directly (bots, tests); tier 0 takes it off. Returns the tier worn before (not dropped).
+        public int ServerEquipBackpack(int tier)
+        {
+            if (!IsServerInitialized) return 0;
+            int before = BackpackTier.Value;
+            BackpackTier.Value = tier >= 1 && tier <= Carry.BackpackTiers ? tier : 0;
+            return before;
+        }
+
+        // ILootReceiver: a backpack of a higher tier than the worn one. The old one lands at the feet.
+        public bool ServerTryTake(LootEntry loot)
+        {
+            if (!IsServerInitialized || loot == null || loot.Kind != LootKind.Backpack || _combatant.Dead.Value) return false;
+            if (!Carry.IsBetterBackpack(loot.Tier, BackpackTier.Value)) return false;
+            int old = ServerEquipBackpack(loot.Tier);
+            if (old > 0 && MatchDirector.Instance != null)
+                MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Backpack, Tier = old, Amount = 1 }, transform.position + Vector3.up * 0.3f);
+            return true;
+        }
 
         // The check Combatant.ServerGive makes before it takes anything. Cuts `loot.Amount` down to what fits and
         // reports the rest in `leftover`; false when none of it fits (the pickup is refused and stays where it lies).

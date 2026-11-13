@@ -151,6 +151,7 @@ namespace Game.Gameplay
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
                 case LootKind.Jerrycan: return FuelRules.JerrycanName;
+                case LootKind.Backpack: return "가방";
                 default: return "";
             }
         }
@@ -173,6 +174,7 @@ namespace Game.Gameplay
             var kind = (LootKind)loot.Kind.Value;
             string name = ExtraName(kind);
             if (name.Length == 0) return "아이템";
+            if (kind == LootKind.Backpack) return LootNames.Of(kind, 0, AmmoType.Pistol9, loot.Tier.Value) + "\n장구류 · 용량 늘림";
             string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke ? "투척물" : kind == LootKind.Jerrycan ? "차량 주유" : "회복";
             return name + "\n" + type + " · 수량 " + loot.Amount.Value + "개";
         }
@@ -246,6 +248,7 @@ namespace Game.Gameplay
                 case LootKind.Optic: return ItemIcons.OpticKey(item.Optic.Value);
                 default:
                     if (TryArmorSlot(item, out int slot)) return (slot == HelmetSlot ? "helmet_" : "vest_") + item.Tier.Value;
+                    if ((LootKind)item.Kind.Value == LootKind.Backpack) return ItemIcons.BackpackKey(item.Tier.Value);
                     return IsGrenade(item) ? "grenade" : ExtraIconKey((LootKind)item.Kind.Value);
             }
         }

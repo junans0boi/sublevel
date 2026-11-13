@@ -79,12 +79,81 @@ namespace Game.Tests
             var gear = me.GetComponent<CombatantGear>();
             if (gear == null) Assert.Ignore("no CombatantGear on the player");
             gear.ServerEquip(ArmorSlot.Vest, 2);
-            Assert.AreEqual(80f, carry.Capacity, 1e-3f, "tier 2 vest: +20");
+            Assert.AreEqual(85f, carry.Capacity, 1e-3f, "any vest: +25 (ADR-091)");
             gear.ServerEquip(ArmorSlot.Vest, 3);
-            Assert.AreEqual(90f, carry.Capacity, 1e-3f);
+            Assert.AreEqual(85f, carry.Capacity, 1e-3f);
             gear.ServerEquip(ArmorSlot.Vest, 0);
             Assert.AreEqual(60f, carry.Capacity, 1e-3f, "vest off");
             Assert.AreEqual("가방 용량 " + carry.UsedPoints + "/60", carry.Label);
+        }
+
+        // ADR-091: a backpack raises the capacity; F on a better one swaps it (the old one lands at the feet), never a
+        // worse one; a broken vest keeps its bonus; the inventory's capacity line follows.
+        [UnityTest]
+        public IEnumerator Backpack_RaisesCapacity_SwapsOnlyForBetter_AndABrokenVestKeepsItsBonus()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var carry = Bag(me);
+            var gear = me.GetComponent<CombatantGear>();
+            var director = MatchDirector.Instance;
+            Assert.AreEqual(0, carry.BackpackTier.Value);
+            Assert.AreEqual(60f, carry.Capacity, 1e-3f);
+
+            // A tier 2 backpack on the ground, picked up with F (the owner's request).
+            int lootBefore = LootItem.All.Count;
+            director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Backpack, Tier = 2, Amount = 1 }, me.transform.position + Vector3.right + Vector3.up * 0.3f);
+            yield return WaitUntil(() => LootItem.All.Count == lootBefore + 1, 2f, "a backpack on the ground");
+            var pack2 = LootItem.All[lootBefore];
+            yield return null; // the view follows the synced values in Update
+            Assert.AreEqual((int)LootKind.Backpack, pack2.Kind.Value);
+            Assert.AreEqual("가방 2단계", LootNames.Label(pack2));
+            Assert.AreEqual("backpack_2", InventoryBackend.LootIconKey(pack2));
+            Assert.IsNotNull(ItemIcons.Get("backpack_2"), "the icon exists");
+            Assert.IsNotNull(pack2.GetComponent<LootView>().ShownMesh, "the ground shows the backpack model");
+            me.CmdPickup(pack2.NetworkObject);
+            yield return WaitUntil(() => carry.BackpackTier.Value == 2, 3f, "tier 2 backpack worn");
+            yield return WaitUntil(() => !LootItem.All.Contains(pack2), 2f, "it left the ground");
+            Assert.AreEqual(160f, carry.Capacity, 1e-3f, "60 + 100");
+            StringAssert.Contains("/160", carry.Label);
+            StringAssert.Contains("가방 2단계", carry.Label);
+            Assert.AreEqual(carry.Label, InventoryBackend.CarryLabel(me), "the inventory shows the same line");
+            var visual = me.GetComponent<BackpackVisual>();
+            Assert.IsNotNull(visual, "CombatantView adds the worn backpack");
+            yield return null;
+            Assert.AreEqual(2, visual.ShownTier);
+            Assert.IsTrue(visual.Renderer.enabled, "worn on the back");
+
+            // A worse or equal one is refused and stays.
+            Assert.IsFalse(me.ServerGive(new LootEntry { Kind = LootKind.Backpack, Tier = 1, Amount = 1 }), "never downgrades");
+            Assert.IsFalse(me.ServerGive(new LootEntry { Kind = LootKind.Backpack, Tier = 2, Amount = 1 }), "same tier: no swap");
+            Assert.AreEqual(2, carry.BackpackTier.Value);
+
+            // Tier 3 on top of tier 2: swapped, the tier 2 lands at the feet.
+            lootBefore = LootItem.All.Count;
+            director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Backpack, Tier = 3, Amount = 1 }, me.transform.position + Vector3.right + Vector3.up * 0.3f);
+            yield return WaitUntil(() => LootItem.All.Count == lootBefore + 1, 2f, "a tier 3 backpack on the ground");
+            var pack3 = LootItem.All[lootBefore];
+            me.CmdPickup(pack3.NetworkObject);
+            yield return WaitUntil(() => carry.BackpackTier.Value == 3, 3f, "tier 3 backpack worn");
+            Assert.AreEqual(185f, carry.Capacity, 1e-3f, "60 + 125");
+            yield return WaitUntil(() => LootItem.All.Exists(i => i != pack3 && i.Kind.Value == (int)LootKind.Backpack && i.Tier.Value == 2), 2f, "the old backpack dropped");
+
+            // A vest adds 25 and keeps it when shot to pieces.
+            if (gear == null) Assert.Ignore("no CombatantGear on the player");
+            gear.ServerEquip(ArmorSlot.Vest, 1, 5f);
+            Assert.AreEqual(210f, carry.Capacity, 1e-3f, "60 + 25 + 125");
+            me.ServerTakeDamage(new DamageInfo { Amount = 40f, Zone = HitZone.Body, Cause = DamageCause.Shot });
+            Assert.AreEqual(1, gear.VestTier.Value, "the broken vest stays on");
+            Assert.AreEqual(0f, gear.VestDurability.Value, 1e-4f);
+            Assert.AreEqual(210f, carry.Capacity, 1e-3f, "and keeps its bonus");
+            float hp = me.Hp.Value;
+            me.ServerTakeDamage(new DamageInfo { Amount = 20f, Zone = HitZone.Body, Cause = DamageCause.Shot });
+            Assert.AreEqual(hp - 16f, me.Hp.Value, 1e-3f, "a broken vest still takes 20%");
+
+            // A whole vest replaces the broken one on F, whatever its tier.
+            Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Vest, Tier = 1 }));
+            Assert.AreEqual(200f, gear.VestDurability.Value, 1e-3f);
         }
 
         [UnityTest]

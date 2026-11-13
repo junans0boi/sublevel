@@ -8,7 +8,8 @@ namespace Game.Net
 {
     // The armour a combatant wears: a helmet (head) and a vest (body), three tiers each (data: ArmorRules).
     // The server owns it: it sits in the combatant's damage path, takes its tier's share of shots and blasts on
-    // the zone it covers, wears down by what it took and is gone at zero. Clients read the SyncVars.
+    // the zone it covers and wears down by what it took. A helmet is gone at zero; a vest stays on broken, still
+    // taking 20% and keeping its carry bonus (ADR-091). Clients read the SyncVars.
     // Armour is picked up like any other loot (Combatant.ServerGive hands unknown kinds to an ILootReceiver).
     [RequireComponent(typeof(Combatant))]
     public class CombatantGear : NetworkBehaviour, ILootReceiver
@@ -72,20 +73,11 @@ namespace Game.Net
         {
             LastAbsorbed = 0f;
             if (!Armor.TrySlotFor(info.Zone, info.Cause, out var slot)) return info.Amount;
-            bool wasWorn;
-            float through;
-            if (slot == ArmorSlot.Helmet)
-            {
-                wasWorn = _helmet.Worn;
-                through = Armor.Absorb(ref _helmet, slot, info.Amount, ArmorRules.Current);
-                if (wasWorn && !_helmet.Worn) PiecesBroken++;
-            }
-            else
-            {
-                wasWorn = _vest.Worn;
-                through = Armor.Absorb(ref _vest, slot, info.Amount, ArmorRules.Current);
-                if (wasWorn && !_vest.Worn) PiecesBroken++;
-            }
+            ref ArmorPiece piece = ref (slot == ArmorSlot.Helmet ? ref _helmet : ref _vest);
+            bool wasWorn = piece.Worn, wasIntact = wasWorn && !piece.Broken;
+            float through = Armor.Absorb(ref piece, slot, info.Amount, ArmorRules.Current);
+            // A helmet is gone at zero; a vest stays on, broken (ADR-091).
+            if (wasIntact && (!piece.Worn || piece.Broken)) PiecesBroken++;
             if (!wasWorn) return info.Amount;
             LastAbsorbed = info.Amount - through;
             Push();

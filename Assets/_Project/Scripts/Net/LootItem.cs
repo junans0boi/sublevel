@@ -61,6 +61,7 @@ namespace Game.Net
         static readonly string[] TierNames = { "", "1단계", "2단계", "3단계" };
         static readonly string[] HelmetNames = { "헬멧", "헬멧 1단계", "헬멧 2단계", "헬멧 3단계" };
         static readonly string[] VestNames = { "조끼", "조끼 1단계", "조끼 2단계", "조끼 3단계" };
+        static readonly string[] BackpackNames = { "가방", "가방 1단계", "가방 2단계", "가방 3단계" };
 
         public static string Ammo(AmmoType type) => AmmoNames.Of(type) + " 탄약";
 
@@ -99,6 +100,7 @@ namespace Game.Net
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
                 case LootKind.Jerrycan: return FuelRules.JerrycanName;
+                case LootKind.Backpack: return tier >= 1 && tier < BackpackNames.Length ? BackpackNames[tier] : BackpackNames[0];
                 default: return "물건";
             }
         }
@@ -144,7 +146,7 @@ namespace Game.Net
             return Tier(gear.TierOf(slot)) + "  " + Points(gear.DurabilityOf(slot)) + " / " + Points(gear.MaxDurabilityOf(slot));
         }
 
-        // Durability as whole points; anything left shows as at least 1.
-        public static int Points(float durability) => durability <= 0f ? 0 : Mathf.Max(1, Mathf.RoundToInt(durability));
+        // Durability as whole points; anything left shows as at least 1 (a broken vest's sliver shows as 0).
+        public static int Points(float durability) => durability < Armor.BrokenBelow ? 0 : Mathf.Max(1, Mathf.RoundToInt(durability));
     }
 }

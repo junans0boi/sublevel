@@ -2,8 +2,9 @@ using System;
 
 namespace Game.Core
 {
-    // How much a combatant can carry (PUBG_GAP 4-3 batch H): every item has a size in points, the bag holds a
-    // capacity of them (more with a vest). All arithmetic is done in tenths of a point so sums are exact.
+    // How much a combatant can carry (PUBG_GAP 4-3 batch H): every item has a size in points, the combatant holds a
+    // capacity of them, more with a vest and a backpack (ADR-091). All arithmetic is done in tenths of a point so
+    // sums are exact.
     [Serializable]
     public class CarryRules
     {
@@ -11,10 +12,14 @@ namespace Game.Core
         public static CarryRules Current = new CarryRules();
 
         public float Capacity = 60f;
-        // Extra capacity by vest tier.
-        public float VestBonus1 = 10f;
-        public float VestBonus2 = 20f;
-        public float VestBonus3 = 30f;
+        // Extra capacity by vest tier; a broken vest still gives it. PUBG's +50 at our item scale (ADR-091).
+        public float VestBonus1 = 25f;
+        public float VestBonus2 = 25f;
+        public float VestBonus3 = 25f;
+        // Extra capacity by backpack tier: PUBG's +150/200/250 at our item scale (ADR-091).
+        public float BackpackBonus1 = 75f;
+        public float BackpackBonus2 = 100f;
+        public float BackpackBonus3 = 125f;
 
         // Size per round, by calibre.
         public float Ammo9mm = 0.2f;
@@ -44,11 +49,18 @@ namespace Game.Core
         // Whole points for display; a started point counts ("23/60").
         public static int Points(int tenths) => tenths <= 0 ? 0 : (tenths + Scale - 1) / Scale;
 
-        public static int CapacityTenths(CarryRules rules, int vestTier)
+        public const int BackpackTiers = 3;
+
+        public static int CapacityTenths(CarryRules rules, int vestTier, int backpackTier = 0)
         {
             float bonus = vestTier == 1 ? rules.VestBonus1 : vestTier == 2 ? rules.VestBonus2 : vestTier == 3 ? rules.VestBonus3 : 0f;
+            bonus += backpackTier == 1 ? rules.BackpackBonus1 : backpackTier == 2 ? rules.BackpackBonus2 : backpackTier == 3 ? rules.BackpackBonus3 : 0f;
             return Tenths(rules.Capacity + bonus);
         }
+
+        // A backpack is worth swapping for only when its tier is higher (backpacks do not wear). Never downgrades.
+        public static bool IsBetterBackpack(int candidateTier, int currentTier) =>
+            candidateTier >= 1 && candidateTier <= BackpackTiers && candidateTier > currentTier;
 
         public static int AmmoUnitTenths(AmmoType type, CarryRules rules)
         {

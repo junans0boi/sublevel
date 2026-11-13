@@ -81,6 +81,7 @@ namespace Game.Gameplay
             _combatant.ShotResolved += OnShot;
             _combatant.Punched += OnPunch;
             _fxRoot = new GameObject("ShotFx").transform;
+            if (GetComponent<BackpackVisual>() == null) gameObject.AddComponent<BackpackVisual>(); // ADR-091
 
             _flashRenderer = NewRenderer("MuzzleFlash", transform, CombatFxMeshes.MuzzleFlash, _glowMaterial);
             _flash = _flashRenderer.transform;

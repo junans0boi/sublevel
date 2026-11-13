@@ -116,7 +116,7 @@ namespace Game.Gameplay
             bool opticKind = lootKind == LootKind.Optic;
             if (lootKind != LootKind.Weapon) weapon = 0;
             if (lootKind != LootKind.Ammo) ammo = 0;
-            if (!armor) tier = 0;
+            if (!armor && lootKind != LootKind.Backpack) tier = 0;
             if (!opticKind) optic = 0;
             if (kind == _shownKind && weapon == _shownWeapon && (int)ammo == _shownAmmo && tier == _shownTier && optic == _shownOptic) return;
             if (_renderer == null || kind < 0) return;
