@@ -373,7 +373,8 @@ namespace Game.Tests
             Assert.Greater(Mathf.DeltaAngle(yaw, pc.Yaw), 3f);
         }
 
-        // No map screen exists yet (UiFocus.MapAvailable is never set), so the key does nothing until one is added.
+        // The map screen only exists in scenes with a WorldInfo (World), so in TestBox the key does nothing
+        // (MapScreenTests covers the World scene).
         [UnityTest]
         public IEnumerator TheMapKey_DoesNothing_UntilAMapScreenExists()
         {
