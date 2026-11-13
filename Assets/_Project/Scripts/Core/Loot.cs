@@ -2,7 +2,7 @@ using System;
 
 namespace Game.Core
 {
-    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2 }
+    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2, Helmet = 3, Vest = 4 }
 
     [Serializable]
     public class LootEntry
@@ -11,6 +11,8 @@ namespace Game.Core
         public int WeaponId;   // Kind == Weapon
         public AmmoType Ammo;  // Kind == Ammo
         public int Amount = 1; // rounds (Ammo), kits (Medkit), rounds in magazine (Weapon)
+        public int Tier;       // Kind == Helmet / Vest: 1..3
+        public float Durability; // Kind == Helmet / Vest: what is left of the piece; 0 = fresh (full for its tier)
         public float Weight = 1f;
     }
 
@@ -46,6 +48,32 @@ namespace Game.Core
                     if (e.Kind == LootKind.Weapon) { plan[0] = e; break; }
             }
             return plan;
+        }
+    }
+
+    // What a dead combatant leaves behind (death crate): everything it carried, laid out in a ring around the
+    // body as ordinary pickups, under a marker box that goes away after a while.
+    [Serializable]
+    public class CrateRules
+    {
+        // The rules in use. Defaults until the data loader replaces them, so everything runs without a data file.
+        public static CrateRules Current = new CrateRules();
+
+        public float RingRadius = 0.9f;      // metres from the body to each item
+        public float LiftMeters = 0.3f;      // items lie this far above the ground, like any other pickup
+        public float WallClearance = 0.25f;  // an item is pulled in this far from a wall the ring would cross
+        public float MarkerSeconds = 90f;    // how long the marker box stays over the body
+    }
+
+    public static class LootScatter
+    {
+        // Where item `index` of `count` lies around the centre: evenly spaced on a circle, the first one straight
+        // ahead (+z), going clockwise seen from above. A single item still lies on the ring, not on the body.
+        public static void RingOffset(int index, int count, float radius, out float x, out float z)
+        {
+            double angle = count > 0 ? index * (Math.PI * 2.0 / count) : 0.0;
+            x = (float)(Math.Sin(angle) * radius);
+            z = (float)(Math.Cos(angle) * radius);
         }
     }
 }
