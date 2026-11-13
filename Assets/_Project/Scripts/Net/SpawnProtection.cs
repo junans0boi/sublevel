@@ -114,9 +114,11 @@ namespace Game.Net
 
         // Combatant.ServerDamageFilter: nothing gets through while protected; afterwards the previous filter (armour)
         // decides as before.
+        // The zone (radiation) is not held back: protection is against other combatants, and radiation is never
+        // instant (ADR-061).
         float FilterDamage(DamageInfo info)
         {
-            if (IsProtected) return 0f;
+            if (IsProtected && info.Cause != DamageCause.Zone) return 0f;
             return _previous != null ? _previous(info) : info.Amount;
         }
 

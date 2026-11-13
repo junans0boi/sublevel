@@ -136,8 +136,10 @@ namespace Game.Tests
             yield return null;
             Assert.AreEqual(30f, me.Hp.Value);
             _input.Frame.Heal = true;
-            yield return WaitUntil(() => me.Medkits.Value == 0, 2f, "medkit used");
-            Assert.AreEqual(80f, me.Hp.Value);
+            // Timed healing (wave 4): a medkit takes its use time and then heals to its cap (full).
+            var medkit = HealRules.Current.Medkit;
+            yield return WaitUntil(() => me.Medkits.Value == 0, medkit.Seconds + 3f, "medkit used");
+            Assert.AreEqual(Mathf.Min(medkit.MaxHp, 30f + medkit.Amount), me.Hp.Value);
         }
 
         [UnityTest]

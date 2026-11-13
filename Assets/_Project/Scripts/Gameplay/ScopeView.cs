@@ -22,6 +22,8 @@ namespace Game.Gameplay
         public static float SensitivityFactor { get; private set; } = 1f;
         // Vertical field of view the camera should ease to; 0 or less means "none, use the aim stance's".
         public static float FovOverride { get; private set; }
+        // True while a magnified scope covers most of the view: the weapon at the eye is not drawn.
+        public static bool HidesWeapon { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -29,6 +31,7 @@ namespace Game.Gameplay
             Active = false;
             SensitivityFactor = 1f;
             FovOverride = 0f;
+            HidesWeapon = false;
         }
 
         // The lens window is this many reference pixels across (the screen is 1080 tall in reference space).
@@ -97,6 +100,7 @@ namespace Game.Gameplay
             FovOverride = scoped ? Optics.FovFor(GameData.Rules.Aim.Sights.Fov, def.Zoom) : 0f;
             SensitivityFactor = Mathf.Lerp(1f, _lastFactor, ScopeBlend);
             Active = def != null || ScopeBlend > 0f || ReticleBlend > 0f;
+            HidesWeapon = ScopeBlend >= 0.5f;
 
             bool draw = ScopeBlend > 0f || ReticleBlend > 0f;
             if (_canvas.enabled != draw) _canvas.enabled = draw;
@@ -192,7 +196,9 @@ namespace Game.Gameplay
             }
             Bar("Centre", group, Vector2.zero, new Vector2(3.5f, 3.5f), ReticleRed);
 
-            var label = UiKit.Rect("Zoom", group, centre, centre, new Vector2(0f, -half + 52f), new Vector2(160f, 40f));
+            // On the lens edge, upper right (45 degrees): clear of the HUD weapon panel and the compass.
+            float edge = half * 0.70710678f - 46f;
+            var label = UiKit.Rect("Zoom", group, centre, centre, new Vector2(edge, edge), new Vector2(120f, 40f));
             _zoomLabel = UiKit.Label(label, "", 28, UiKit.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
         }
 

@@ -84,22 +84,27 @@ namespace Game.Gameplay
 
             switch (def.Kind)
             {
-                case OpticKind.Dot: BuildSight(t, 0.030f, 0.030f, 0.050f, DotWindow); break;
-                case OpticKind.Holo: BuildSight(t, 0.036f, 0.038f, 0.072f, HoloWindow); break;
+                case OpticKind.Dot: BuildSight(t, 0.034f, 0.046f, 0.050f, DotWindow); break;
+                case OpticKind.Holo: BuildSight(t, 0.040f, 0.050f, 0.072f, HoloWindow); break;
                 default: BuildScope(t, def.Zoom); break;
             }
         }
 
-        // A box housing with a window at each end.
+        // An open hoop: a base on the rail, two thin side posts and a top bar, with a tinted rim on the front edge.
+        // Nothing fills the window, so looking down the sights the world shows through it and the screen reticle
+        // (ScopeView) sits inside the frame; a solid box with glass covered the aim point (wave-4 review).
         void BuildSight(Transform parent, float width, float height, float length, Color window)
         {
+            const float wall = 0.0035f;
+            float baseTop = -Sink + 0.010f;
             Part(parent, PrimitiveType.Cube, new Vector3(0f, -Sink + 0.005f, 0f), Vector3.zero, new Vector3(width * 0.8f, 0.010f, length), Body);
-            Part(parent, PrimitiveType.Cube, new Vector3(0f, -Sink + 0.010f + height * 0.5f, 0f), Vector3.zero, new Vector3(width, height, length * 0.8f), Body);
-            float z = length * 0.4f + 0.0015f;
-            float y = -Sink + 0.010f + height * 0.5f;
-            var glass = new Vector3(width * 0.78f, height * 0.72f, 0.003f);
-            Part(parent, PrimitiveType.Cube, new Vector3(0f, y, z), Vector3.zero, glass, window);
-            Part(parent, PrimitiveType.Cube, new Vector3(0f, y, -z), Vector3.zero, glass, window);
+            float postX = (width - wall) * 0.5f;
+            float midY = baseTop + height * 0.5f;
+            for (int side = -1; side <= 1; side += 2)
+                Part(parent, PrimitiveType.Cube, new Vector3(side * postX, midY, 0f), Vector3.zero, new Vector3(wall, height, length * 0.8f), Body);
+            Part(parent, PrimitiveType.Cube, new Vector3(0f, baseTop + height - wall * 0.5f, 0f), Vector3.zero, new Vector3(width, wall, length * 0.8f), Body);
+            // The tinted rim: a thin strip inside the front of the top bar, the only coloured part.
+            Part(parent, PrimitiveType.Cube, new Vector3(0f, baseTop + height - wall * 1.2f, length * 0.4f), Vector3.zero, new Vector3(width - wall * 2f, wall * 0.6f, 0.003f), window);
         }
 
         // A tube on two mounts with a bell at each end and a lens at the front; longer and wider the higher the zoom.

@@ -144,7 +144,6 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        [Ignore("needs master wiring: PlayerController must add ScopeView to the Screens object and PlaceCamera must ease the camera to ScopeView.FovOverride; also CombatantOptics on the Player prefab")]
         public IEnumerator TapAim_With16xOptic_NarrowsTheViewToTheSixteenTimesValue()
         {
             yield return LoadTestBox();

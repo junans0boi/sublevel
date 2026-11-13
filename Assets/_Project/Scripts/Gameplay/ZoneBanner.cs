@@ -12,7 +12,7 @@ namespace Game.Gameplay
     public class ZoneBanner : MonoBehaviour
     {
         const int SortOrder = 2;                    // above the HUD and the kill feed
-        const float Top = 72f;
+        const float Top = 116f; // below the compass and its heading readout
         const float BannerWidth = 780f, BannerHeight = 58f;
         const float PromptWidth = 560f, PromptHeight = 42f, PromptGap = 8f;
         const float MessageSeconds = 5f;

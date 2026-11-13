@@ -290,7 +290,18 @@ namespace Game.Net
 
         // ---- Setup ----
 
-        void Awake() => Instance = this;
+        void Awake()
+        {
+            Instance = this;
+            // Review builds only (hidden, removed before release with -feelcapture/-perfcapture): `-fastzones` runs a
+            // whole closing in about a minute so warning, lockdown, radiation and bombardment can be seen quickly.
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-fastzones") >= 0)
+                _rules = new LockdownRules
+                {
+                    FirstWarningSeconds = 40f, WarningSeconds = 10f, LockdownSeconds = 30f, BombardmentSeconds = 15f,
+                    MinSecondsBetweenClosings = 60f, RadiationGraceSeconds = 1f,
+                };
+        }
 
         void Start()
         {

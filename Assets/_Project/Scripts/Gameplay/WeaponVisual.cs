@@ -38,9 +38,13 @@ namespace Game.Gameplay
         float _sightsBlend;
         int _atEye; // id of the model currently moved to the camera, 0 = none
         int _shown = -1;
+        int _hiddenModel; // id of the model whose renderers are switched off for a magnified scope, 0 = none
+        readonly System.Collections.Generic.List<Renderer> _renderers = new System.Collections.Generic.List<Renderer>();
 
         public int ShownWeaponId => _shown;
         public bool AtEye => _atEye != 0;
+        // True while the weapon at the eye (and the optic on it) is not drawn because a magnified scope fills the view.
+        public bool HiddenForScope => _hiddenModel != 0;
 
         void Awake()
         {
@@ -75,6 +79,21 @@ namespace Game.Gameplay
                 if (_modelsByWeaponId[i] != null) _modelsByWeaponId[i].SetActive(i == id);
         }
 
+        void SetScopeHidden(int id)
+        {
+            if (id != _hiddenModel && _hiddenModel != 0 && _hiddenModel < _modelsByWeaponId.Length && _modelsByWeaponId[_hiddenModel] != null)
+                ForceOff(_modelsByWeaponId[_hiddenModel], false);
+            _hiddenModel = id;
+            // Every frame while hidden: the optic parts are rebuilt when the optic changes.
+            if (id != 0) ForceOff(_modelsByWeaponId[id], true);
+        }
+
+        void ForceOff(GameObject model, bool off)
+        {
+            model.GetComponentsInChildren(true, _renderers);
+            foreach (var r in _renderers) r.forceRenderingOff = off;
+        }
+
         // After the animator has moved the hand.
         void LateUpdate()
         {
@@ -87,6 +106,9 @@ namespace Game.Gameplay
                 back.localRotation = _handRotation[_atEye];
             }
             _atEye = wanted;
+            // Looking through a magnified scope the lens fills the view: the weapon and the optic body in front of the
+            // camera would only cover it, so they are not drawn (the scope overlay draws the tube's ring instead).
+            SetScopeHidden(wanted != 0 && ScopeView.HidesWeapon ? wanted : 0);
             if (wanted == 0) return;
 
             _sightsBlend = Mathf.MoveTowards(_sightsBlend, _sights ? 1f : 0f, _anchorChangePerSecond * Time.deltaTime);

@@ -19,6 +19,7 @@ namespace Game.Gameplay
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
+        bool _w4Shots; // `-w4shots <folder>` (with -fastzones): scopes, healing, smoke and a region lockdown in the World
         bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
         Watch _watch;
@@ -32,6 +33,8 @@ namespace Game.Gameplay
             int w = Array.IndexOf(args, "-worldshots");
             int e = Array.IndexOf(args, "-eleshots");
             if (e >= 0 && e + 1 < args.Length) { w = e; }
+            int w4 = Array.IndexOf(args, "-w4shots");
+            if (w4 >= 0 && w4 + 1 < args.Length) { w = w4; }
             if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
             bool world = i < 0;
             if (world) i = w;
@@ -41,6 +44,7 @@ namespace Game.Gameplay
             capture._folder = Path.GetFullPath(args[i + 1]);
             capture._worldShots = world;
             capture._eleShots = e >= 0 && e + 1 < args.Length;
+            capture._w4Shots = w4 >= 0 && w4 + 1 < args.Length;
             PlayerController.InputOverride = capture;
         }
 
@@ -77,6 +81,13 @@ namespace Game.Gameplay
                 yield break;
             }
             yield return new WaitForSeconds(1.5f);
+            if (_w4Shots)
+            {
+                yield return Wave4Shots(me);
+                Debug.Log("[FeelCapture] wave 4 shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
             if (_worldShots)
             {
                 yield return WorldShots(me);
@@ -773,6 +784,115 @@ namespace Game.Gameplay
             }
             yield return new WaitForSeconds(0.8f);
             yield return Shot("33_win");
+        }
+
+        // Wave 4 review in the World: fixed scope views, the sniper's 8x, healing, smoke, then a region lockdown
+        // (run with -fastzones so it comes within a minute).
+        IEnumerator Wave4Shots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            float began = Time.realtimeSinceStartup;
+            // Only zone damage (and the scripted fall below) reaches the player.
+            me.ServerDamageFilter = info => info.Cause == DamageCause.Zone || info.Cause == DamageCause.Fall ? info.Amount : 0f;
+            yield return new WaitForSeconds(4f); // the elevator door
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 5, Amount = 5 });
+            yield return new WaitForSeconds(0.5f);
+            // Out of the elevator, a few metres into the open, looking at the horizon.
+            pc.Teleport(me.transform.position + me.transform.forward * 4f + Vector3.up * 0.2f);
+            yield return new WaitForSeconds(0.3f);
+            var optics = me.GetComponent<CombatantOptics>();
+            Debug.Log($"[FeelCapture] w4: weapon {me.ActiveWeaponId} slot {me.ActiveSlot.Value}");
+            for (int s = 0; s < 2; s++)
+            {
+                _frame.SelectSlot = s; yield return null; _frame.SelectSlot = -1;
+                yield return new WaitForSeconds(0.6f);
+                int slot = me.ActiveSlot.Value;
+                int weapon = me.ActiveWeaponId;
+                var list = weapon == 5 ? new[] { ("sniper_8x", 7) } : new[] { ("warden_4x", 5), ("warden_reddot", 1), ("warden_holo", 2) };
+                foreach (var (name, id) in list)
+                {
+                    bool ok = optics != null && optics.ServerAttach(slot, id);
+                    yield return new WaitForSeconds(0.5f);
+                    yield return Tap();
+                    yield return new WaitForSeconds(1.0f);
+                    yield return Shot("s_" + name);
+                    Debug.Log($"[FeelCapture] w4 {name} (weapon {weapon}, attached {ok}): fov {pc.Camera.fieldOfView:F1}, scope hides weapon {ScopeView.HidesWeapon}");
+                    yield return Tap();
+                    yield return new WaitForSeconds(0.6f);
+                }
+            }
+
+            // Healing: hurt, then a bandage; the ring shows the progress.
+            me.ServerTakeDamage(new DamageInfo { Amount = 45f, Cause = DamageCause.Fall, Zone = HitZone.Body });
+            var healing = me.GetComponent<CombatantHealing>();
+            if (healing != null)
+            {
+                healing.ServerAdd(HealKind.Bandage, 3);
+                yield return new WaitForSeconds(0.3f);
+                bool ok = healing.ServerBegin(HealKind.Bandage);
+                yield return new WaitForSeconds(1.2f);
+                yield return Shot("s_heal_ring");
+                float hp0 = me.Hp.Value;
+                yield return new WaitForSeconds(Mathf.Max(0.5f, healing.RemainingSeconds + 0.5f));
+                Debug.Log($"[FeelCapture] w4 heal began {ok}: hp {hp0:F0} -> {me.Hp.Value:F0}, completed {healing.ServerCompleted}");
+            }
+
+            // Smoke: thrown ahead, seen as it spreads.
+            var thrower = me.GetComponent<ThrowableUser>();
+            if (thrower != null)
+            {
+                thrower.ServerAdd(ThrowableKind.Smoke, 1);
+                bool thrown = thrower.ServerThrowAimed((me.transform.forward - Vector3.up * 0.1f).normalized, ThrowableKind.Smoke);
+                yield return new WaitForSeconds(SmokeRules.Current.FuseSeconds + 5f);
+                yield return Shot("s_smoke");
+                Debug.Log($"[FeelCapture] w4 smoke thrown {thrown}");
+            }
+
+            // Lockdown: wait for the first announcement, then stand inside that region next to one of its passes.
+            var zones = ZoneDirector.Instance;
+            if (zones == null) { Debug.LogWarning("[FeelCapture] w4: no ZoneDirector"); yield break; }
+            int region = -1;
+            float giveUp = Time.realtimeSinceStartup + 90f;
+            while (region < 0 && Time.realtimeSinceStartup < giveUp)
+            {
+                for (int r = 0; r < zones.RegionCount; r++) if (zones.StateOf(r) != ZoneState.Safe) region = r;
+                yield return null;
+            }
+            if (region < 0) { Debug.LogWarning("[FeelCapture] w4: no region was announced"); yield break; }
+            var geo = zones.Geometry;
+            Debug.Log($"[FeelCapture] w4 region {zones.RegionIdOf(region)} {zones.StateOf(region)} at {Time.realtimeSinceStartup - began:F0} s");
+            for (int p = 0; p < geo.PassCount; p++)
+            {
+                if (geo.PassA[p] != region && geo.PassB[p] != region) continue;
+                var at = new Vector3(geo.PassX[p], geo.PassY[p], geo.PassZ[p]);
+                float yaw = geo.PassYawDeg[p] * Mathf.Deg2Rad;
+                var along = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
+                var inside = at + along * 7f;
+                if (zones.RegionIndexAt(inside) != region) inside = at - along * 7f;
+                if (UnityEngine.AI.NavMesh.SamplePosition(inside, out var hit, 4f, UnityEngine.AI.NavMesh.AllAreas)) inside = hit.position;
+                pc.Teleport(inside + Vector3.up * 0.2f);
+                yield return null;
+                pc.LookAt(at + Vector3.up * 1.4f);
+                break;
+            }
+            yield return new WaitForSeconds(1.0f);
+            yield return Shot("s_lock_warning");
+            giveUp = Time.realtimeSinceStartup + 40f;
+            while (zones.StateOf(region) == ZoneState.Warning && Time.realtimeSinceStartup < giveUp) yield return null;
+            yield return new WaitForSeconds(1.5f);
+            yield return Shot("s_lock_barrier");
+            float hpA = me.Hp.Value;
+            pc.LookAt(me.EyePosition - me.transform.forward * 10f + Vector3.up * 0.5f);
+            yield return new WaitForSeconds(4f);
+            yield return Shot("s_lock_fog");
+            Debug.Log($"[FeelCapture] w4 lockdown {zones.StateOf(region)}: hp {hpA:F0} -> {me.Hp.Value:F0} over 4 s, pass locked {zones.IsPassLocked(0)}");
+            giveUp = Time.realtimeSinceStartup + 40f;
+            while (zones.StateOf(region) == ZoneState.Lockdown && Time.realtimeSinceStartup < giveUp) yield return null;
+            me.ServerDamageFilter = _ => 0f;
+            yield return new WaitForSeconds(4f);
+            yield return Shot("s_lock_bombard");
+            Debug.Log($"[FeelCapture] w4 then {zones.StateOf(region)}, markers {zones.Markers.Count}, hp {me.Hp.Value:F0}");
         }
 
         IEnumerator Tap()

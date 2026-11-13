@@ -34,6 +34,7 @@ public static class TestBoxBuilder
         // Brighter than white so the bloom picks the flashes and tracers up.
         var glowMat = FxMaterial("ShotGlow", new Color(2f, 1.6f, 0.9f), true);
         var dustMat = FxMaterial("ShotDust", Color.white, false);
+        BuildBarrierMaterial();
 
         // The thrown grenade has to exist before the combatants that reference it, and be saved before the
         // spawnable prefab list is rebuilt below.
@@ -187,6 +188,23 @@ public static class TestBoxBuilder
         mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         EditorUtility.SetDirty(mat);
         return mat;
+    }
+
+    // The picture of a lockdown pass barrier (PassBarrier loads it from Resources): a see-through amber slab,
+    // since shots and sight lines go through it. Alpha blended, both sides.
+    static void BuildBarrierMaterial()
+    {
+        const string dir = "Assets/_Project/Resources/Lockdown";
+        Directory.CreateDirectory(dir);
+        var fx = FxMaterial("LockdownBarrier", new Color(1f, 0.62f, 0.12f, 0.32f), false);
+        var path = dir + "/BarrierMaterial.mat";
+        if (AssetDatabase.LoadAssetAtPath<Material>(path) == null) AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(fx), path);
+        else
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            mat.CopyPropertiesFromMaterial(fx);
+            EditorUtility.SetDirty(mat);
+        }
     }
 
     // Shot effect materials and the hit-confirmation sound of a combatant.

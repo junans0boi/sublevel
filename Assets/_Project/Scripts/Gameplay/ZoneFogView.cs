@@ -13,6 +13,12 @@ namespace Game.Gameplay
         FogMode _baseMode;
         Color _baseColour;
         float _baseDensity;
+        float _baseStart, _baseEnd;
+
+        // The fog is drawn as linear fog: the builds keep only the fog modes the scenes use (automatic stripping) and
+        // the World uses linear fog, so exponential fog would not show at all in a player build. These turn the
+        // exponential-squared density of ZoneFog into a linear start and end (about the same look at mid range).
+        const float StartPerDensity = 0.15f, EndPerDensity = 1.6f;
 
         // True while the radiation fog is what the render settings show.
         public bool Applied => _applied;
@@ -42,11 +48,18 @@ namespace Game.Gameplay
                 if (!_applied) Save();
                 _applied = true;
                 RenderSettings.fog = true;
-                RenderSettings.fogMode = FogMode.ExponentialSquared;
+                RenderSettings.fogMode = FogMode.Linear;
                 RenderSettings.fogColor = fog.Colour;
-                // A scene that already has exponential fog never gets thinner fog than its own.
-                float floor = _baseFog && _baseMode != FogMode.Linear ? _baseDensity : 0f;
-                RenderSettings.fogDensity = Mathf.Max(floor, fog.Density);
+                // A scene that already has linear fog never gets thinner fog than its own.
+                float density = Mathf.Max(fog.Density, 1e-5f);
+                float start = StartPerDensity / density, end = EndPerDensity / density;
+                if (_baseFog && _baseMode == FogMode.Linear)
+                {
+                    start = Mathf.Min(start, _baseStart);
+                    end = Mathf.Min(end, _baseEnd);
+                }
+                RenderSettings.fogStartDistance = start;
+                RenderSettings.fogEndDistance = Mathf.Max(start + 1f, end);
             }
             else if (_applied)
             {
@@ -66,6 +79,8 @@ namespace Game.Gameplay
             _baseMode = RenderSettings.fogMode;
             _baseColour = RenderSettings.fogColor;
             _baseDensity = RenderSettings.fogDensity;
+            _baseStart = RenderSettings.fogStartDistance;
+            _baseEnd = RenderSettings.fogEndDistance;
         }
 
         void Restore()
@@ -76,6 +91,8 @@ namespace Game.Gameplay
             RenderSettings.fogMode = _baseMode;
             RenderSettings.fogColor = _baseColour;
             RenderSettings.fogDensity = _baseDensity;
+            RenderSettings.fogStartDistance = _baseStart;
+            RenderSettings.fogEndDistance = _baseEnd;
         }
     }
 }
