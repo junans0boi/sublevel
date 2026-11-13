@@ -140,5 +140,81 @@ namespace Game.Tests
             Assert.AreEqual(1, ElevatorTravel.KeepSelection(-1, choices));
             Assert.AreEqual(-1, ElevatorTravel.KeepSelection(3, new List<int>()));
         }
-    }
+    
+        // ---- Bots (ADR-079) ----
+
+        [Test]
+        public void Bot_RidesOutOfAnAnnouncedRegion_WhenTheStationIsNearer()
+        {
+            var s = States(W, S, S, C);
+            Assert.IsTrue(ElevatorTravel.BotShouldRide(0, s, 30f, 200f, 0f));
+            Assert.IsTrue(ElevatorTravel.BotShouldRide(0, s, 30f, -1f, 0f), "no way out on foot");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, s, 250f, 200f, 0f), "the pass is nearer");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, s, 30f, 200f, 5f), "cooling down");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, s, -1f, 200f, 0f), "no free station");
+        }
+
+        [Test]
+        public void Bot_DoesNotRide_FromASafeOrLockedRegion_OrWithNowhereToGo()
+        {
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(1, States(W, S, S), 10f, 200f, 0f), "safe: no reason");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, States(L, S, S), 10f, 200f, 0f), "locked: elevators off");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, States(W, W, C), 10f, 200f, 0f), "no safe region");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(5, States(W, S), 10f, 200f, 0f));
+        }
+
+        [Test]
+        public void Bot_Destination_PrefersTheNamedFinalRegion()
+        {
+            var s = States(W, S, S, S);
+            Assert.AreEqual(3, ElevatorTravel.BotDestination(0, s, 3));
+            Assert.AreEqual(1, ElevatorTravel.BotDestination(0, s, -1), "not named yet: the first safe region");
+            Assert.AreEqual(1, ElevatorTravel.BotDestination(0, States(W, S, S, W), 3), "final not reachable");
+            Assert.AreEqual(-1, ElevatorTravel.BotDestination(0, States(W, C, C, C), -1));
+        }
+
+        // ---- Ride cycle (ADR-079) ----
+
+        [Test]
+        public void Cycle_LastsTheTravelTime_DoorsCloseMoveOpen()
+        {
+            var r = new DeploymentRules();
+            float d = ElevatorCycle.DoorSeconds(r), m = ElevatorCycle.MoveSeconds(r);
+            Assert.AreEqual(r.TravelSeconds, ElevatorCycle.RideSeconds(r), 1e-4f);
+            Assert.AreEqual(d + m, ElevatorCycle.SwitchAt(r), 1e-4f);
+            Assert.AreEqual(0f, ElevatorCycle.DoorClosed01(0.0, r));
+            Assert.AreEqual(0.5f, ElevatorCycle.DoorClosed01(d / 2, r), 1e-3f);
+            Assert.AreEqual(1f, ElevatorCycle.DoorClosed01(d + m / 2, r));
+            Assert.AreEqual(0.5f, ElevatorCycle.DoorClosed01(d + m + d / 2, r), 1e-3f);
+            Assert.AreEqual(0f, ElevatorCycle.DoorClosed01(ElevatorCycle.Length(r) + 0.1, r));
+            Assert.IsFalse(ElevatorCycle.Moving(d / 2, r));
+            Assert.IsTrue(ElevatorCycle.Moving(d + m / 2, r));
+        }
+
+        [Test]
+        public void Cycle_DepartGoesDown_ArriveComesUp_OnlyBehindShutDoors()
+        {
+            var r = new DeploymentRules();
+            float d = ElevatorCycle.DoorSeconds(r), m = ElevatorCycle.MoveSeconds(r), depth = r.CarStartDepth;
+            Assert.AreEqual(0f, ElevatorCycle.CarOffset(ElevatorCycleKind.Depart, d * 0.5, r), "still up while the doors close");
+            Assert.AreEqual(depth, ElevatorCycle.CarOffset(ElevatorCycleKind.Depart, d + m * 0.999, r), 0.05f);
+            Assert.AreEqual(depth, ElevatorCycle.CarOffset(ElevatorCycleKind.Arrive, d + 0.0001, r), 0.05f);
+            Assert.AreEqual(0f, ElevatorCycle.CarOffset(ElevatorCycleKind.Arrive, d + m * 0.999, r), 0.05f);
+            Assert.AreEqual(0f, ElevatorCycle.CarOffset(ElevatorCycleKind.Arrive, d + m + 0.1, r), "up while the doors open");
+            float half = ElevatorCycle.CarOffset(ElevatorCycleKind.Depart, d + m * 0.5, r);
+            Assert.Greater(half, 0.3f * depth);
+            Assert.Less(half, 0.7f * depth);
+            // Jumps (the empty departure car back to the top, the arrival car to the bottom) happen with the doors shut.
+            Assert.AreEqual(1f, ElevatorCycle.DoorClosed01(d, r), 1e-4f);
+            Assert.AreEqual(1f, ElevatorCycle.DoorClosed01(d + m - 1e-4, r), 1e-3f);
+        }
+
+        [Test]
+        public void Cycle_ShortTravel_StillMovesForAMoment()
+        {
+            var r = new DeploymentRules { TravelSeconds = 1f };
+            Assert.AreEqual(0.3f, ElevatorCycle.MoveSeconds(r), 1e-4f);
+            Assert.Greater(ElevatorCycle.RideSeconds(r), 1f);
+        }
+}
 }
