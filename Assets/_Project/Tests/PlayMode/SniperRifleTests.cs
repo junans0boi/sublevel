@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections;
 using Game.Core;
@@ -87,18 +88,22 @@ namespace Game.Tests
                     if (part.GetType().Name == "TrainingDummy") part.enabled = false;
             }
             var pc = PlayerController.Local;
-            Vector3 spot = default;
-            bool clear = false;
-            foreach (var dir in new[] { dummy.transform.forward, -dummy.transform.forward, dummy.transform.right, -dummy.transform.right })
+            // Any direction that keeps the shooter inside the box; props on the line are switched off (the scene is
+            // reloaded for every test), so the layout of the box never decides the result.
+            Vector3 spot = default, to = dummy.transform.position + Vector3.up * 1.1f;
+            RaycastHit[] blockers = null;
+            for (int i = 0; i < 16; i++)
             {
-                spot = dummy.transform.position + dir * 40f + Vector3.up * 0.1f;
-                var from = spot + Vector3.up * 1.5f;
-                var to = dummy.transform.position + Vector3.up * 1.1f;
-                if (Mathf.Abs(spot.x) < 29f && Mathf.Abs(spot.z) < 29f &&
-                    (!Physics.Linecast(from, to, out var hit) || hit.collider.GetComponentInParent<Combatant>() == dummy))
-                { clear = true; break; }
+                var dir = Quaternion.Euler(0f, i * 22.5f, 0f) * dummy.transform.forward;
+                var candidate = dummy.transform.position + dir * 40f + Vector3.up * 0.1f;
+                if (Mathf.Abs(candidate.x) >= 29f || Mathf.Abs(candidate.z) >= 29f) continue;
+                var hits = Physics.RaycastAll(candidate + Vector3.up * 1.5f, to - (candidate + Vector3.up * 1.5f), Vector3.Distance(candidate + Vector3.up * 1.5f, to))
+                    .Where(h => h.collider.GetComponentInParent<Combatant>() == null).ToArray();
+                if (blockers == null || hits.Length < blockers.Length) { spot = candidate; blockers = hits; }
+                if (hits.Length == 0) break;
             }
-            if (!clear) Assert.Inconclusive("no clear 40 m line to the dummy in this TestBox layout");
+            Assert.IsNotNull(blockers, "a spot 40 m from the dummy inside the test box");
+            foreach (var hit in blockers) hit.collider.enabled = false;
             pc.Teleport(spot);
             pc.LookAt(dummy.transform.position + Vector3.up * 1.1f);
             yield return new WaitForSeconds(0.5f);

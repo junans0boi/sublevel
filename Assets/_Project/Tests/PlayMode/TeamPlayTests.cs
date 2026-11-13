@@ -263,6 +263,7 @@ namespace Game.Tests
             Assert.AreEqual(MatchOutcome.Won, MatchState.Instance.LocalOutcome);
             yield return null;
             Assert.IsFalse(Hud.Instance.DeathShown, "the death band under the win panel");
+            Assert.IsFalse(Hud.Instance.DoorNoticeShown, "the elevator door notice under the win panel");
             yield return UiShot.Save("Logs/shots/result_dead_won.png", 1920, 1080);
         }
 

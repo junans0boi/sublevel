@@ -127,6 +127,7 @@ namespace Game.Gameplay
         public bool GrenadeShown => _strip != null && _strip.GrenadesShown > 0;
         public bool LowHealthShown => _vignette.alpha > 0f;
         public bool DeathShown => _death.activeSelf;
+        public bool DoorNoticeShown => _doorNoticeRoot.activeSelf;
         public int AliveShown => _shownAlive;
         public int KillsShown => _shownKills;
         public bool HealingShown => _healing.activeSelf;
@@ -512,7 +513,9 @@ namespace Game.Gameplay
 
         void TickDoorNotice()
         {
-            int left = HudBackend.DoorsClosed ? Mathf.Max(1, Mathf.CeilToInt(HudBackend.DoorSecondsLeft)) : 0;
+            // Not over the result panel (#101): the match is decided, the doors no longer matter.
+            bool over = ResultScreen.Instance != null && ResultScreen.Instance.IsShown;
+            int left = HudBackend.DoorsClosed && !over ? Mathf.Max(1, Mathf.CeilToInt(HudBackend.DoorSecondsLeft)) : 0;
             if (left == _doorShown) return;
             _doorShown = left;
             _doorNoticeRoot.SetActive(left > 0);
