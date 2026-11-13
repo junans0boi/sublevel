@@ -17,7 +17,7 @@ namespace Game.Gameplay
     {
         const float SpawnTimeoutSeconds = 30f;
 
-        enum Watch { Game, Front, Side, Behind, Above, Optic, Fixed, Vehicle }
+        enum Watch { Game, Front, Side, Behind, Above, Optic, Fixed, Vehicle, Quarter, LeftSide }
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
@@ -105,6 +105,12 @@ namespace Game.Gameplay
                 yield return null;
             }
             var me = Combatant.LocalPlayer;
+            if (_poseShots)
+            {
+                yield return PoseShots(me);
+                Application.Quit();
+                yield break;
+            }
             if (_vehShots)
             {
                 yield return VehShots(me);
@@ -1459,6 +1465,8 @@ namespace Game.Gameplay
             }
             var offset = _watch == Watch.Front ? player.forward * 3.2f
                 : _watch == Watch.Side ? player.right * 3.6f
+                : _watch == Watch.LeftSide ? -player.right * 3.0f
+                : _watch == Watch.Quarter ? (player.forward * 2.0f - player.right * 1.9f) + Vector3.up * 0.2f
                 : -player.forward * 3.2f + Vector3.up * 0.6f;
             var cam = pc.Camera.transform;
             if (_watch == Watch.Above)

@@ -228,7 +228,7 @@ namespace Game.Tests
             Assert.AreEqual(yaw, pc.Yaw, 1e-3f, "the mouse does not turn the view");
 
             UiFocus.Set(UiScreen.Menu);
-            yield return null;
+            yield return new WaitForSeconds(0.15f); // a run takes about 0.1 s to stop (#111, ADR-083)
             x0 = pc.transform.position.x;
             yield return new WaitForSeconds(0.3f);
             Assert.AreEqual(x0, pc.transform.position.x, 0.05f, "the pause menu holds the body still");

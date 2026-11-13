@@ -456,12 +456,14 @@ public static class CharacterKit
             slots[i] = AddTo(slot);
             slots[i].WeaponModels[3].SetActive(true);
         }
-        foreach (var name in new[] { RunClip, WalkClip, BackClip, "Roll", "Run_Left" })
+        foreach (var name in new[] { RunClip, WalkClip, BackClip, "Roll", "Run_Left", "Run_Shoot", LoweredClip, AimClip, "Gun_Shoot", ShootClip })
         {
             var clip = Clip(name);
             for (int i = 0; i < phases; i++)
                 clip.SampleAnimation(slots[i].Root.gameObject, clip.length * i / phases);
             SceneLook.Shot(cam, $"Logs/lookdev/clips_{name}.png", new Vector3(14f, 1.2f, 4.9f), new Vector3(0, 0.9f, 4.9f));
+            // From the front-left: the left hand and the weapon's front end are hidden in the side view.
+            SceneLook.Shot(cam, $"Logs/lookdev/clips_{name}_front.png", new Vector3(-9f, 1.6f, 14f), new Vector3(0, 0.9f, 4.9f));
         }
         EditorApplication.Exit(0);
     }

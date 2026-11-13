@@ -53,6 +53,7 @@ namespace Game.Gameplay
         public PlayerInputFrame LastInput { get; private set; }
 
         LocomotionParams _locomotion;
+        float _moveX, _moveZ; int _moveFrame; // planar velocity actually moved (#111: starts and stops take a moment)
         GameRules _rules;
         AimInput _aim;
         readonly ViewRecoil _recoil = new ViewRecoil();
@@ -319,6 +320,12 @@ namespace Game.Gameplay
                 speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
                 if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
                 Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
+                // Coming from anything else (a seat, a ride, a vault) the body starts from standing.
+                if (_moveFrame != Time.frameCount - 1) _moveX = _moveZ = 0f;
+                _moveFrame = Time.frameCount;
+                Locomotion.Accelerate(ref _moveX, ref _moveZ, vx, vz, Time.deltaTime, _locomotion);
+                vx = _moveX;
+                vz = _moveZ;
                 _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
                 _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
                 ReportFall();

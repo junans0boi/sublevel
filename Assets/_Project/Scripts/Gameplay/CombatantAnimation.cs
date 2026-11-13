@@ -115,7 +115,8 @@ namespace Game.Gameplay
 
         public string BaseState => _base;
         // Null while the upper layer is off (empty hands or dead).
-        public string UpperState => _upperWeight > 0.5f ? _upper : null;
+        // A long gun held in both hands (ADR-083) counts too: its pose is code, but it follows the same states.
+        public string UpperState => _upperWeight > 0.5f || _rifle > 0.5f ? _upper : null;
         // The upper-layer state last started, whatever the layer's weight.
         public string UpperStateStarted => _upper;
         // Punches shown so far (both hands).
@@ -165,6 +166,7 @@ namespace Game.Gameplay
             }
             _stance = GetComponent<CombatantStance>();
             FindHead();
+            FindArms();
             // Hip to ankle in the pose the prefab was saved in: what a knee bend shortens.
             Transform thigh = _bones[ThighLeft], shin = _bones[ShinLeft];
             if (thigh != null && shin != null && shin.childCount > 0)
@@ -207,6 +209,7 @@ namespace Game.Gameplay
             _upper = Shoot;
             _upperHoldUntil = Time.time + ShootHold;
             _aimPoseUntil = Time.time + AimAfterShot;
+            KickRifle();
         }
 
         void Update()
@@ -266,8 +269,10 @@ namespace Game.Gameplay
             // A melee weapon keeps the upper layer off: its ready pose and swings are bone turns (ADR-073).
             bool armed = !dead && _combatant.ActiveWeaponId != 0 && !HoldsMelee;
             bool punching = !dead && Time.time < _punchUntil;
-            // The flinch is a whole-body clip: let it through the weapon pose while it plays.
-            bool showUpper = (armed || punching) && _base != Hit;
+            TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
+            // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
+            // hands is posed in code over the base layer (ADR-083), so the clip pose stays off for it.
+            bool showUpper = ((armed && !_rifleWanted) || punching) && _base != Hit;
             float weightRate = punching ? PunchWeightPerSecond : UpperWeightPerSecond;
             _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, weightRate * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
@@ -429,6 +434,7 @@ namespace Game.Gameplay
             // The weapon poses were made for hips that face forward, but a running clip swings and turns the hips;
             // while a weapon pose is on, take that out too or the weapon points off to the side when moving.
             // (Not for the dead: the death clip turns the hips on purpose.)
+            // (A long gun squares the shoulders itself, PoseRifle.)
             float turnBack = -_legTurnShown - (_combatant.Dead.Value ? 0f : HipsYaw() * _upperWeight);
             // About the model's own up: the character's up while standing, along the ground while lying.
             Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
@@ -464,7 +470,7 @@ namespace Game.Gameplay
             Turn(FootRight, foot, legRight);
             // Empty hands: arms out sideways (a weapon pose keeps both arms on the weapon). About the forward
             // axis a positive turn swings a hanging arm out to the right.
-            float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - _upperWeight);
+            float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - Mathf.Max(_upperWeight, _rifle));
             Turn(ArmLeft, -armLift, transform.forward);
             Turn(ArmRight, armLift, transform.forward);
             // Lying with a weapon: the arms (and the weapon in the hand) turn back up by what the pitch minus the head
@@ -476,6 +482,7 @@ namespace Game.Gameplay
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);
             Turn(ArmRight, reach, transform.right);
+            PoseRifle();
             PoseMelee();
             if (_seated > 0.001f) PoseSeated();
 

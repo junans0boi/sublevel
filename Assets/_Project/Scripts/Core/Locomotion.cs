@@ -15,6 +15,10 @@ namespace Game.Core
         // Slow walk (Ctrl held, ADR-065 (3)): this speed standing at the hip, whatever is in the hands; no sprinting.
         public float SlowWalkSpeed = 2.0f;
         public float SlowWalkFootstepVolume = 0.25f; // footsteps this much quieter
+        // Starting and stopping take a moment (#111, ADR-083): ground speed changes at most this fast (m/s per second).
+        // 0 to a run in about 0.15 s, to a sprint in about 0.25 s; a stop from a run in about 0.1 s.
+        public float Acceleration = 30f;
+        public float Deceleration = 45f;
     }
 
     // How the legs keep up when the character moves faster than its clips were animated for (ADR-048).
@@ -55,6 +59,97 @@ namespace Game.Core
             float step = rules.LegTurnDegPerSecond * dt;
             TurnDeg = TurnDeg < target ? Math.Min(target, TurnDeg + step) : Math.Max(target, TurnDeg - step);
         }
+    }
+
+    // How a long gun is held in third person (ADR-083). The character file has only one-handed pistol clips, so the
+    // hold is posed in code: the weapon is placed relative to the right shoulder, the right hand on the grip and the
+    // left on the handguard by arm IK. Low ready (muzzle down, turned in across the body) whenever not aiming, more
+    // so sprinting; shouldered and level when aiming or firing. Angles: pitch positive = muzzle down, yaw positive =
+    // muzzle right, roll positive = top of the weapon to the right. Offsets: the right hand (the grip) from the right
+    // shoulder joint, meters in the character's axes (x right, y up, z forward). The character's arms are short (about
+    // 0.4 m shoulder to wrist), so the grip stays well inside that and the torso turns right to bring the left
+    // shoulder forward, as a shooter stands bladed; a long stock then reaches back past the shoulder.
+    [Serializable]
+    public class RifleHoldRules
+    {
+        public float RaiseSeconds = 0.15f; // low ready to shouldered
+        public float LowerSeconds = 0.3f;  // and back
+        public float IdlePitchDeg = 24f, IdleYawDeg = -14f, IdleRollDeg = -8f;
+        public float MovePitchDeg = 32f, MoveYawDeg = -18f, MoveRollDeg = -10f;
+        public float SprintPitchDeg = 40f, SprintYawDeg = -24f, SprintRollDeg = -14f;
+        public float IdleGripX = -0.07f, IdleGripY = -0.15f, IdleGripZ = 0.21f;
+        public float SprintGripX = -0.11f, SprintGripY = -0.17f, SprintGripZ = 0.17f;
+        public float AimGripX = -0.05f, AimGripY = -0.06f, AimGripZ = 0.26f;
+        public float LowTwistDeg = 15f, AimTwistDeg = 25f; // torso turned right (left shoulder forward)
+        public float MoveFullSpeed = 4f;   // m/s at which the moving low ready is fully shown
+        // Body: torso pitched forward with speed (more sprinting), rolled into a sidestep, leaning into a start.
+        public float RunTorsoPitchDeg = 5f, SprintTorsoPitchDeg = 13f;
+        public float StrafeRollDegPerMps = 1.2f, MaxStrafeRollDeg = 6f;
+        public float AccelPitchDegPerMps2 = 0.4f, MaxAccelPitchDeg = 6f;
+        // Weapon bob over a stride (two steps per locomotion cycle): down at each step, side to side once per cycle.
+        public float BobDownMeters = 0.025f, BobSideMeters = 0.018f, BobRollDeg = 3f;
+        // A shot kicks the weapon back and the muzzle up for a moment.
+        public float KickBackMeters = 0.05f, KickPitchDeg = 5f, KickSeconds = 0.12f;
+    }
+
+    // Where a long gun is: angles (degrees), grip offset (meters) and torso twist (degrees) as RifleHoldRules describes them.
+    public struct RifleHoldPose
+    {
+        public float Pitch, Yaw, Roll, X, Y, Z, Twist;
+
+        public static RifleHoldPose Lerp(RifleHoldPose a, RifleHoldPose b, float t) => new RifleHoldPose
+        {
+            Pitch = a.Pitch + (b.Pitch - a.Pitch) * t, Yaw = a.Yaw + (b.Yaw - a.Yaw) * t, Roll = a.Roll + (b.Roll - a.Roll) * t,
+            X = a.X + (b.X - a.X) * t, Y = a.Y + (b.Y - a.Y) * t, Z = a.Z + (b.Z - a.Z) * t, Twist = a.Twist + (b.Twist - a.Twist) * t,
+        };
+    }
+
+    public static class RifleHold
+    {
+        // One frame of raising (toward 1) or lowering (toward 0) the weapon; linear, each way at its own speed.
+        public static float ReadyStep(float ready, bool raised, float dt, RifleHoldRules r)
+        {
+            if (raised) return r.RaiseSeconds <= 0f ? 1f : Math.Min(1f, ready + dt / r.RaiseSeconds);
+            return r.LowerSeconds <= 0f ? 0f : Math.Max(0f, ready - dt / r.LowerSeconds);
+        }
+
+        // The hold for a ground speed (m/s), how much of a sprint (0..1) and how far raised (0..1).
+        public static RifleHoldPose Pose(float speed, float sprint, float ready, RifleHoldRules r)
+        {
+            var idle = new RifleHoldPose { Pitch = r.IdlePitchDeg, Yaw = r.IdleYawDeg, Roll = r.IdleRollDeg, X = r.IdleGripX, Y = r.IdleGripY, Z = r.IdleGripZ, Twist = r.LowTwistDeg };
+            var move = idle;
+            move.Pitch = r.MovePitchDeg; move.Yaw = r.MoveYawDeg; move.Roll = r.MoveRollDeg;
+            var sprinting = new RifleHoldPose { Pitch = r.SprintPitchDeg, Yaw = r.SprintYawDeg, Roll = r.SprintRollDeg, X = r.SprintGripX, Y = r.SprintGripY, Z = r.SprintGripZ, Twist = r.LowTwistDeg };
+            var aim = new RifleHoldPose { X = r.AimGripX, Y = r.AimGripY, Z = r.AimGripZ, Twist = r.AimTwistDeg };
+            float moving = r.MoveFullSpeed <= 0f ? 1f : Clamp01(speed / r.MoveFullSpeed);
+            var low = RifleHoldPose.Lerp(RifleHoldPose.Lerp(idle, move, moving), sprinting, Clamp01(sprint));
+            return RifleHoldPose.Lerp(low, aim, Clamp01(ready));
+        }
+
+        // Forward pitch of the torso (degrees): with speed, more sprinting, plus a lean into speeding up (back when stopping).
+        public static float TorsoPitch(float speed, float sprint, float forwardAccel, RifleHoldRules r)
+        {
+            float moving = r.MoveFullSpeed <= 0f ? 1f : Clamp01(speed / r.MoveFullSpeed);
+            float lean = Math.Max(-r.MaxAccelPitchDeg, Math.Min(r.MaxAccelPitchDeg, forwardAccel * r.AccelPitchDegPerMps2));
+            return r.RunTorsoPitchDeg * moving + (r.SprintTorsoPitchDeg - r.RunTorsoPitchDeg) * Clamp01(sprint) + lean;
+        }
+
+        // Roll of the torso into a sidestep (degrees, positive = top to the right), `sideSpeed` m/s, right positive.
+        public static float StrafeRoll(float sideSpeed, RifleHoldRules r) =>
+            Math.Max(-r.MaxStrafeRollDeg, Math.Min(r.MaxStrafeRollDeg, sideSpeed * r.StrafeRollDegPerMps));
+
+        // Weapon bob at `phase` (0..1 of a locomotion cycle = two steps), scaled by `amount` (0 standing .. 1 running):
+        // down (meters, at each step), side (meters, right positive), roll (degrees).
+        public static void Bob(float phase, float amount, RifleHoldRules r, out float down, out float side, out float roll)
+        {
+            double a = phase * 2.0 * Math.PI;
+            float step = (float)(0.5 - 0.5 * Math.Cos(2.0 * a)); // two dips per cycle, one per step
+            down = r.BobDownMeters * amount * step;
+            side = r.BobSideMeters * amount * (float)Math.Sin(a);
+            roll = r.BobRollDeg * amount * (float)Math.Sin(a);
+        }
+
+        static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
     }
 
     // There is no jump clip (ADR-048): the air state holds a still pose and the jump itself is posed on top of it
@@ -236,6 +331,22 @@ namespace Game.Core
             float speed = (sprint && moveY > 0.1f ? p.SprintSpeed : p.WalkSpeed) * speedFactor;
             vx = (float)(moveX * cos + moveY * sin) * speed;
             vz = (float)(moveY * cos - moveX * sin) * speed;
+        }
+
+        // One frame of the planar velocity (vx, vz) moving toward the wanted one: speeding up at most at Acceleration,
+        // slowing down (including a change of direction's lost part) at most at Deceleration. 0 disables either limit.
+        public static void Accelerate(ref float vx, ref float vz, float wantX, float wantZ, float dt, LocomotionParams p)
+        {
+            float dx = wantX - vx, dz = wantZ - vz;
+            double gap = Math.Sqrt(dx * dx + dz * dz);
+            if (gap < 1e-6) { vx = wantX; vz = wantZ; return; }
+            // Speeding up when the wanted speed is higher than the current one; otherwise it is slowing or turning.
+            bool faster = wantX * wantX + wantZ * wantZ > vx * vx + vz * vz;
+            float rate = faster ? p.Acceleration : p.Deceleration;
+            if (rate <= 0f || gap <= rate * dt) { vx = wantX; vz = wantZ; return; }
+            float k = (float)(rate * dt / gap);
+            vx += dx * k;
+            vz += dz * k;
         }
 
         public static float VerticalVelocity(float current, bool grounded, bool jump, float dt, LocomotionParams p)

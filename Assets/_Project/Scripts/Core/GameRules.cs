@@ -15,6 +15,7 @@ namespace Game.Core
         public FireRules Fire = new FireRules();
         public CombatFxRules CombatFx = new CombatFxRules();
         public GaitRules Gait = new GaitRules();
+        public RifleHoldRules RifleHold = new RifleHoldRules(); // ADR-083
         public JumpRules Jump = new JumpRules();
         public StanceRules Stance = new StanceRules();
         public FallRules Fall = new FallRules();
