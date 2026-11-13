@@ -10,7 +10,8 @@ namespace Game.Gameplay
     // There are no sidestep clips: the whole model turns toward the way it moves and the torso turns back to the
     // aim, so the legs run where the body goes while the weapon stays on target (ADR-049).
     // Upper layer: arms and torso while armed — weapon lowered when just moving, raised when aiming or firing.
-    // Empty hands leave the upper layer off, so the base clips show their plain arm swing.
+    // Empty hands leave the upper layer off, so the base clips show their plain arm swing; a punch (ADR-059)
+    // raises it for the moment the punch clip plays, also while moving.
     // Also reports the moment a foot touches down (for footsteps) and tilts the torso when leaning.
     // The jump has no clip: the air state holds a standing pose and the push, tuck and landing are bone turns
     // made here on top of it (ADR-048). Crouching has no clip either: the same bone turns bend the knees and the
@@ -27,6 +28,7 @@ namespace Game.Gameplay
     {
         public const string Locomotion = "Locomotion", Air = "Air", Hit = "Hit", Death = "Death";
         public const string Lowered = "Lowered", Aim = "Aim", Shoot = "Shoot";
+        public const string PunchLeft = "PunchLeft", PunchRight = "PunchRight";
         public const string Move = "Move"; // speed along the legs' heading, negative when back-pedalling
         public const string Pace = "Pace"; // playback speed of the locomotion blend only
         public const string AirPhase = "AirPhase"; // which moment of its clip the air state holds (0..1)
@@ -38,6 +40,8 @@ namespace Game.Gameplay
         const float ShootHold = 0.22f;
         const float AimAfterShot = 0.9f;       // the weapon stays up this long after the last shot
         const float UpperWeightPerSecond = 7f;
+        const float PunchHold = 0.5f;          // the upper layer shows the punch this long
+        const float PunchWeightPerSecond = 20f; // a punch is quick: the layer comes up faster than for a weapon
         const float StepMinSpeed = 0.6f;
         const float AirPhasePerSecond = 1.5f;  // how fast the jump pose moves between rise, fall and landing
         const float StepPauseAfterLanding = 0.15f;
@@ -95,6 +99,7 @@ namespace Game.Gameplay
         string _base = Locomotion;
         string _upper;
         float _baseHoldUntil, _upperHoldUntil, _aimPoseUntil;
+        float _punchUntil = -1f;
         float _upperWeight;
         float _lastHp;
         int _lastShotFrame = -1;
@@ -107,6 +112,10 @@ namespace Game.Gameplay
         public string BaseState => _base;
         // Null while the upper layer is off (empty hands or dead).
         public string UpperState => _upperWeight > 0.5f ? _upper : null;
+        // The upper-layer state last started, whatever the layer's weight.
+        public string UpperStateStarted => _upper;
+        // Punches shown so far (both hands).
+        public int PunchesShown { get; private set; }
         // Speed fed to the legs (negative = back-pedalling) and how far they are turned from the facing, right positive.
         public float MoveDrive => _animator != null ? _animator.GetFloat(_move) : 0f;
         public float LegTurnDeg => _legs.TurnDeg;
@@ -124,6 +133,7 @@ namespace Game.Gameplay
             _combatant = GetComponent<Combatant>();
             _motion = GetComponent<CombatantMotion>();
             _combatant.ShotFired += OnShot;
+            _combatant.Punched += OnPunch;
             _leftContact = new FootContact(_footPlantHeight, _footLiftHeight);
             _rightContact = new FootContact(_footPlantHeight, _footLiftHeight);
             _move = Animator.StringToHash(Move);
@@ -154,7 +164,23 @@ namespace Game.Gameplay
             }
         }
 
-        void OnDestroy() => _combatant.ShotFired -= OnShot;
+        void OnDestroy()
+        {
+            _combatant.ShotFired -= OnShot;
+            _combatant.Punched -= OnPunch;
+        }
+
+        void OnPunch(in Combatant.PunchResult punch)
+        {
+            if (_animator == null) return;
+            // Non-looping clips: restarting from the beginning lets the same hand punch twice in a row if it ever has to.
+            var state = punch.Right ? PunchRight : PunchLeft;
+            _animator.CrossFadeInFixedTime(state, 0.05f, UpperLayer, 0f);
+            _upper = state;
+            _punchUntil = Time.time + PunchHold;
+            _upperHoldUntil = _punchUntil;
+            PunchesShown++;
+        }
 
         void OnShot(Vector3 origin, Vector3 end)
         {
@@ -211,9 +237,11 @@ namespace Game.Gameplay
             TrackJumpPose(dead);
 
             bool armed = !dead && _combatant.ActiveWeaponId != 0;
+            bool punching = !dead && Time.time < _punchUntil;
             // The flinch is a whole-body clip: let it through the weapon pose while it plays.
-            bool showUpper = armed && _base != Hit;
-            _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, UpperWeightPerSecond * Time.deltaTime);
+            bool showUpper = (armed || punching) && _base != Hit;
+            float weightRate = punching ? PunchWeightPerSecond : UpperWeightPerSecond;
+            _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, weightRate * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
             if (armed && Time.time >= _upperHoldUntil)
                 // Crouched or lying, the weapon stays up: hanging down from hips this low it would go through the floor.

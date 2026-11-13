@@ -429,6 +429,8 @@ namespace Game.AI
             Move(intent, now);
             Turn(intent);
             if (intent.Fire && weapon != null) Fire(intent, weapon, now);
+            // Empty hands with the enemy in sight (the brain backs off then, still facing it): punch when it is that close.
+            else if (weapon == null && _percept.EnemyVisible) Punch();
         }
 
         void EnsureAgent()
@@ -618,6 +620,19 @@ namespace Game.AI
             if (!_self.ServerFire(Quaternion.LookRotation(to / distance) * off * Vector3.forward)) return;
             if (!weapon.Auto) _nextTrigger = now + Mathf.Max(weapon.FireInterval, _rules.SemiAutoInterval);
             BotNoise.Emit(eye.x, eye.y, eye.z, _rules.GunshotHearingRadius, _self.ObjectId, NoiseKind.Gunshot);
+        }
+
+        // An enemy right in front gets punched (ADR-059), through the same server method as a player's punch;
+        // the server keeps the rate and checks reach and the line.
+        void Punch()
+        {
+            if (_enemy == null || _self.ActiveWeaponId != 0) return;
+            var melee = MeleeRules.Current;
+            var flat = _enemy.transform.position - transform.position;
+            flat.y = 0f;
+            if (flat.sqrMagnitude > melee.BotPunchMeters * melee.BotPunchMeters) return;
+            if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > melee.PunchConeDeg * 0.5f) return;
+            _self.ServerPunch(ChestOf(_enemy) - _self.EyePosition);
         }
 
         // ---- Helpers ----

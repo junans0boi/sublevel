@@ -71,8 +71,23 @@ namespace Game.Tests
             }
             Assert.IsTrue(legsOff, "legs must stay with the base layer");
             Assert.IsTrue(armsOn, "arms belong to the upper layer");
-            CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot" }, layers[1].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[1].stateMachine.states.Select(s => s.state.name));
             Assert.AreEqual("Lowered", layers[1].stateMachine.defaultState.name, "armed and idle means weapon down");
+        }
+
+        [Test]
+        public void UpperLayer_PunchesUseTheFilesPunchClips_AndPlayOnce()
+        {
+            var states = Controller().layers[1].stateMachine.states.Select(s => s.state).ToArray();
+            foreach (var (state, clipName) in new[] { ("PunchLeft", "Punch_Left"), ("PunchRight", "Punch_Right") })
+            {
+                var punch = states.FirstOrDefault(s => s.name == state);
+                Assert.IsNotNull(punch, state);
+                var clip = punch.motion as AnimationClip;
+                Assert.IsNotNull(clip, state + " plays a clip");
+                StringAssert.EndsWith(clipName, clip.name, state);
+                Assert.IsFalse(clip.isLooping, state + " must not loop");
+            }
         }
     }
 }

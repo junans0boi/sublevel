@@ -60,6 +60,7 @@ namespace Game.Gameplay
         IPlayerInput _input;
         float _verticalVelocity;
         readonly FireCadence _fireCadence = new FireCadence();
+        readonly FireCadence _punchCadence = new FireCadence();
         double _clickUntil = -1;
         bool _owner;
 
@@ -294,6 +295,12 @@ namespace Game.Gameplay
             var fire = _rules.Fire;
             // A click that comes a moment too soon is remembered, so quick semi-automatic fire does not swallow clicks.
             if (f.FirePressed) _clickUntil = now + fire.ClickBufferSeconds;
+            // Nothing in hand (none carried, or put away with X): the button punches instead (ADR-059 (1)).
+            if (_combatant.ActiveWeaponId == 0)
+            {
+                TryPunch(f, now);
+                return;
+            }
             var weapon = _combatant.ActiveWeapon;
             if (weapon == null || _combatant.Reloading.Value || _combatant.ActiveMag <= 0) return;
             // Automatic weapons set to single shots (B) fire once per click, and no faster than the server allows.
@@ -303,16 +310,34 @@ namespace Game.Gameplay
             // Scheduled from when the shot was due, not from this frame: a frame always lands a little late, and
             // adding the interval to that would make the rhythm follow the frame times and run slow.
             _fireCadence.Fired(now, interval, fire.ClientCatchUp(interval, Time.deltaTime));
+            var direction = AimDirection();
+            // The host is the server: fire now instead of waiting for the next network tick to carry the request.
+            if (IsServerInitialized) _combatant.ServerFire(direction);
+            else _combatant.CmdFire(direction);
+        }
+
+        // Where a shot or a punch goes from the eyes. While the view is turned away in free look it goes where the
+        // character faces, not where the camera does.
+        Vector3 AimDirection()
+        {
             var eye = _combatant.EyePosition;
-            // While the view is turned away in free look the shot goes where the character faces, not where the camera does.
             bool viewTurned = _freeYaw != 0f || _freePitch != 0f;
             var aim = Camera != null && !viewTurned
                 ? Rig.AimPoint(Camera.transform, transform, AimDistance)
                 : eye + Quaternion.Euler(-(Pitch + _recoil.Pitch), Yaw + _recoil.Yaw, 0f) * Vector3.forward * AimDistance;
-            var direction = (aim - eye).normalized;
-            // The host is the server: fire now instead of waiting for the next network tick to carry the request.
-            if (IsServerInitialized) _combatant.ServerFire(direction);
-            else _combatant.CmdFire(direction);
+            return (aim - eye).normalized;
+        }
+
+        // Held or clicked, at most one punch per PunchInterval; the server keeps the same limit.
+        void TryPunch(in PlayerInputFrame f, double now)
+        {
+            if (!(f.FireHeld || now <= _clickUntil) || !_punchCadence.Ready(now)) return;
+            _clickUntil = -1;
+            double interval = MeleeRules.Current.PunchInterval;
+            _punchCadence.Fired(now, interval, _rules.Fire.ClientCatchUp(interval, Time.deltaTime));
+            var direction = AimDirection();
+            if (IsServerInitialized) _combatant.ServerPunch(direction);
+            else _combatant.CmdPunch(direction);
         }
 
         void PlaceCamera()

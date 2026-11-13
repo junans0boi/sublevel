@@ -27,6 +27,7 @@ namespace Game.Net
             CarryRules.Current = rules.Carry;
             SmokeRules.Current = rules.Smoke;
             BotRules.Current = rules.Bot;
+            MeleeRules.Current = rules.Melee;
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }
