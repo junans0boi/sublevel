@@ -19,6 +19,7 @@ namespace Game.Gameplay
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
         const float RoofClearance = 0.3f;
+        const float CabinLightOverEye = 0.35f; // up under the roof: the own arms and shoulders right by it were blown out white
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -67,10 +68,10 @@ namespace Game.Gameplay
             CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
             if (eyes)
             {
-                // On a motorcycle the rider leans forward over the bars: the view goes with the posed head (view only,
-                // the shot origin stays at the seat's eye), else the camera sits behind the leaning back.
+                // The view goes with the posed head (hips on the cushion, a rider's forward lean), so the own body is
+                // below and behind it, never round the camera. View only: the shot origin stays at the seat's eye.
                 var eye = _combatant.EyePosition;
-                if (vehicle.IsMotorcycle && _animation != null && _animation.HeadEye(out var head)) eye = head;
+                if (_animation != null && _animation.HeadEye(out var head)) eye = head;
                 cam.transform.SetPositionAndRotation(eye, look);
                 _distance = 0f;
                 return;
@@ -135,7 +136,7 @@ namespace Game.Gameplay
                 _cabin.color = new Color(1f, 0.96f, 0.9f);
             }
             _cabin.enabled = on;
-            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * 0.15f, Quaternion.identity);
+            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * CabinLightOverEye, Quaternion.identity);
         }
 
         // How far back from the pivot the camera can go without passing into anything but the car and its occupants.
