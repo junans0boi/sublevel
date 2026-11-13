@@ -49,7 +49,7 @@ namespace Game.AI
         const int KeysWanted = 1;
 
         // What the lockdown asks of a bot right now (#77), in priority order.
-        public enum ZoneGoal { None, Escape, SafeSubZone, ToFinalRegion, Hunt }
+        public enum ZoneGoal { None, Escape, SafeSubZone, ToFinalRegion, Hunt, Elevator }
 
         public static readonly List<BotController> All = new List<BotController>();
 
@@ -679,6 +679,14 @@ namespace Game.AI
             if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
             {
                 urgent = true;
+                // A running station nearer than the pass (ADR-079): ride out instead; standing in it starts the ride.
+                var rides = ElevatorRides.Instance;
+                if (rides != null && rides.ServerBotRide(_self, Flat(target - at), out var station))
+                {
+                    target = station;
+                    pass = -1;
+                    return ZoneGoal.Elevator;
+                }
                 // The border need not run exactly through the pass: once at the point beyond it while still counted
                 // in the closing region, keep on toward the middle of the region beyond.
                 if (Flat(target - at) < EscapeOnwardMeters) _escapeOnward = true;
@@ -830,6 +838,7 @@ namespace Game.AI
                 case ZoneGoal.SafeSubZone: return "safe-subzone";
                 case ZoneGoal.ToFinalRegion: return "to-final-region";
                 case ZoneGoal.Hunt: return "hunt";
+                case ZoneGoal.Elevator: return "elevator";
             }
             switch (_intent.State)
             {

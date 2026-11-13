@@ -90,6 +90,7 @@ namespace Game.Net
 
         void Tick()
         {
+            if (TickCycle()) return;
             var rules = DeploymentRules.Current;
             var doors = ElevatorDoors.Instance;
             // No match in this scene: the car simply stands at the top with its door shut.
@@ -122,6 +123,60 @@ namespace Game.Net
                 _lightsOn = lit;
                 foreach (var l in _lights) if (l != null) l.enabled = lit;
             }
+        }
+
+        // A ride cycle at this station (ADR-079): doors shut, the car goes down or comes up, doors open. The hum,
+        // clunk and chime of ElevatorAudio follow Phase: Rising while moving, Settling behind shut doors, Open after.
+        bool _inCycle;
+
+        bool TickCycle()
+        {
+            var rides = ElevatorRides.Instance;
+            if (rides == null || !rides.StationCycle(_station, out var kind, out double t))
+            {
+                if (!_inCycle) return false;
+                // Over: back to the open, empty car the deployment left.
+                _inCycle = false;
+                transform.position = _top;
+                SetDoor(0f);
+                SetLights(false);
+                Phase = ElevatorPhase.Open;
+                Speed01 = 0f;
+                Offset = 0f;
+                return true;
+            }
+            _inCycle = true;
+            var rules = DeploymentRules.Current;
+            Offset = ElevatorCycle.CarOffset(kind, t, rules);
+            transform.position = _top + Vector3.down * Offset;
+            if (_counterweight != null) _counterweight.position = _counterweightBase + Vector3.up * (Offset * CounterweightRatio);
+            bool moving = ElevatorCycle.Moving(t, rules);
+            Phase = moving ? ElevatorPhase.Rising : ElevatorPhase.Settling;
+            float d = ElevatorCycle.DoorSeconds(rules), m = ElevatorCycle.MoveSeconds(rules);
+            Speed01 = moving ? Mathf.Sin(Mathf.PI * Mathf.Clamp01((float)((t - d) / m))) : 0f;
+            SetDoor(ElevatorCycle.DoorClosed01(t, rules));
+            SetLights(true);
+            return true;
+        }
+
+        // 0 = sunk away (hidden, no collider), 1 = shut.
+        void SetDoor(float shut)
+        {
+            DoorOpened = 1f - shut;
+            if (_door == null) return;
+            _door.localPosition = _doorClosed + Vector3.down * (_doorDrop * DoorOpened);
+            bool gone = shut <= 0f;
+            if (gone == _doorGone) return;
+            _doorGone = gone;
+            foreach (var c in _doorColliders) if (c != null) c.enabled = !gone;
+            foreach (var r in _doorRenderers) if (r != null) r.enabled = !gone;
+        }
+
+        void SetLights(bool lit)
+        {
+            if (lit == _lightsOn) return;
+            _lightsOn = lit;
+            foreach (var l in _lights) if (l != null) l.enabled = lit;
         }
 
         // Where the feet of a combatant standing at `at` go this frame, while the car is still on its way (until the

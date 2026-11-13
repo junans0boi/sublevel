@@ -8,8 +8,9 @@ namespace Game.Gameplay
 {
     // Region-to-region elevator (ADR-076, #76). While the local player stands in a station after the deployment:
     // a panel under the region card lists every region with its lockdown state and time, which ones the elevator
-    // can reach, and the selected destination (F tap = next, F held = ride). While riding: the screen goes dark
-    // with the destination and the seconds left. PlayerController calls the static input and movement hooks.
+    // can reach, and the selected destination (F tap = next, F held = ride). While riding: a band shows
+    // the destination and the seconds left (the car itself moves, ADR-079). PlayerController calls the static
+    // input and movement hooks.
     public sealed class ElevatorPanel
     {
         public const float Width = 320f, RowHeight = 30f, HeaderHeight = 36f, FooterHeight = 34f;
@@ -43,16 +44,19 @@ namespace Game.Gameplay
         // In transit: input is blocked like in the deployment car.
         public static bool Riding => ElevatorRides.Instance != null && ElevatorRides.Instance.LocalRiding;
 
-        // Feet position this frame while riding (the pit) or, once, on arrival (with the way out to face).
-        public static bool TryHold(out Vector3 feet, out bool arrived, out float yawDeg)
+        // Feet position this frame on a moving car floor: the local rider's car (moved across once at the bottom,
+        // `switched`, with the way out to face), or any station car someone merely stands in during a ride cycle.
+        public static bool TryHold(Vector3 at, out Vector3 feet, out bool switched, out float yawDeg)
         {
-            arrived = false;
+            feet = at;
+            switched = false;
             yawDeg = 0f;
-            feet = default;
             var rides = ElevatorRides.Instance;
             if (rides == null) return false;
-            if (rides.LocalTakeArrival(out feet, out yawDeg)) { arrived = true; return true; }
-            return rides.TryLocalHold(out feet);
+            if (rides.TryLocalRide(at, out feet, out switched, out yawDeg)) return true;
+            if (!rides.TryCarFloor(at, out float y)) return false;
+            feet = new Vector3(at.x, y, at.z);
+            return true;
         }
 
         // F in a station: tap (released before the hold time) = next destination, held = ride. True when the key
@@ -135,11 +139,12 @@ namespace Game.Gameplay
             p.Root = root;
             root.gameObject.SetActive(false);
 
-            // The ride: a dark screen with where it goes (drawn over the whole HUD canvas).
-            var transit = UiKit.Fill("ElevatorTransit", canvasRoot);
-            UiKit.Box(transit, new Color(0f, 0f, 0f, 0.94f));
-            p._transitText = UiKit.Label(UiKit.Rect("Text", transit, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(900f, 120f)),
-                "", 30, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            // The ride (the car itself goes down and up, ADR-079): a band above the centre with where it goes.
+            var band = new Vector2(0.5f, 0.5f);
+            var transit = UiKit.Rect("ElevatorTransit", canvasRoot, band, band, new Vector2(0f, 200f), new Vector2(520f, 84f));
+            UiKit.Box(transit, UiKit.Panel);
+            UiKit.Frame(transit, 1f, UiKit.SteelDim);
+            p._transitText = UiKit.Label(UiKit.Fill("Text", transit), "", 24, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
             p.Transit = transit.gameObject;
             p.Transit.SetActive(false);
             return p;

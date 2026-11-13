@@ -138,5 +138,15 @@ namespace Game.Core
             float done = ElevatorRise.Travel((float)((t - d) / m), r.RiseAccelFraction);
             return kind == ElevatorCycleKind.Depart ? depth * done : depth * (1f - done);
         }
+
+        // Metres below the station floor for the rider itself: it stays at the bottom while the empty departure car
+        // goes back up and until the arrival car starts to rise. `t` counts from the start of the station's cycle
+        // it is in (departure before the switch, arrival after).
+        public static float RiderOffset(bool arrived, double t, DeploymentRules r)
+        {
+            float d = DoorSeconds(r), m = MoveSeconds(r);
+            if (!arrived) return t >= d + m ? Math.Max(0f, r.CarStartDepth) : CarOffset(ElevatorCycleKind.Depart, t, r);
+            return t < d ? Math.Max(0f, r.CarStartDepth) : CarOffset(ElevatorCycleKind.Arrive, t, r);
+        }
     }
 }

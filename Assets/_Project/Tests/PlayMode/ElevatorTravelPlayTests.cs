@@ -10,10 +10,10 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // ADR-076 (#76) in the World scene as a host: after the deployment the player holds F in its station, waits
-    // out the ride in the dark and steps out in another region's station; the elevators of a locked region stop
+    // ADR-076 (#76) in the World scene as a host: after the deployment the player holds F in its station, rides
+    // the car down and another one up (ADR-079) and steps out in another region's station; the elevators of a locked region stop
     // and a destination announced during the ride sends the car elsewhere.
-    //   ELEV_SHOT=<file.png> also saves one HUD screenshot of the panel (with a region in warning).
+    //   ELEV_SHOT=<file.png> also saves one screenshot from inside the arrival car on its way up (ADR-079).
     public class ElevatorTravelPlayTests
     {
         sealed class ScriptedInput : IPlayerInput
@@ -50,7 +50,7 @@ namespace Game.Tests
             SceneManager.LoadScene("World");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 40f, "local player in World");
             _savedRules = DeploymentRules.Current;
-            DeploymentRules.Current = new DeploymentRules { TravelSeconds = 2f, TravelHoldSeconds = 1f };
+            DeploymentRules.Current = new DeploymentRules { TravelSeconds = 6f, TravelHoldSeconds = 1f };
             Assert.IsNotNull(ElevatorRides.Instance, "World should have elevator rides next to its doors");
             yield return WaitUntil(() => !SpawnProtection.InputBlocked, 10f, "the deployment doors to open");
             yield return null;
@@ -77,6 +77,18 @@ namespace Game.Tests
             while (Time.realtimeSinceStartup < end) yield return null;
             _input.Frame.InteractHeld = false;
             yield return null;
+        }
+
+        // A car other than `not`, moving up, with the local player in its shaft.
+        static ElevatorCar RisingCarUnderPlayer(int not)
+        {
+            foreach (var car in ElevatorCar.All)
+            {
+                if (car == null || car.Station == not || car.Phase != ElevatorPhase.Rising) continue;
+                var p = car.transform.position;
+                if (new Vector2(Pos.x - p.x, Pos.z - p.z).magnitude < 1.7f) return car;
+            }
+            return null;
         }
 
         static int StationOfRegion(int region, int not = -1)
@@ -116,11 +128,25 @@ namespace Game.Tests
             Assert.AreEqual(chosen, rides.LocalDestination);
             yield return null;
             yield return null;
-            Assert.IsTrue(Hud.Instance.Elevator.TransitShown, "the screen goes dark during the ride");
+            Assert.IsTrue(Hud.Instance.Elevator.TransitShown, "a band shows the ride");
             StringAssert.Contains("엘리베이터 이동 중", Hud.Instance.Elevator.TransitText);
-            Assert.Less(Pos.y, ElevatorDoors.Instance.Sites[start].Spawn.y - 8f, "the rider waits down the shaft");
+            // The real ride (ADR-079): the station door shuts, the car goes down with the rider in it, hums.
+            var startTop = ElevatorDoors.Instance.Sites[start].Spawn;
+            var startCar = ElevatorDoors.Instance.CarOf(start);
+            Assert.IsNotNull(startCar, "World stations have cars");
+            yield return WaitUntil(() => ElevatorDoors.Instance.Doors[start].Blocking, 2f, "the station door to shut");
+            yield return WaitUntil(() => Pos.y < startTop.y - 8f, 5f, "the car to take the rider down");
+            Assert.Less(Mathf.Abs(Pos.y - (startCar.transform.position.y + ElevatorCar.RideLift)), 0.6f, "the rider stands on the car floor");
+            var audio = startCar.GetComponent<ElevatorAudio>();
+            if (audio != null) Assert.Greater(audio.HumsStarted, 0, "the car hums on its way");
 
-            yield return WaitUntil(() => !rides.LocalRiding, 5f, "the arrival");
+            // Changed cars at the bottom: the arrival car comes up with the rider; its doors open at the top.
+            yield return WaitUntil(() => RisingCarUnderPlayer(start) != null, 8f, "the arrival car to rise with the rider");
+            var arrivalCar = RisingCarUnderPlayer(start);
+            Assert.Less(Mathf.Abs(Pos.y - (arrivalCar.transform.position.y + ElevatorCar.RideLift)), 0.6f, "on the arrival car floor");
+            Assert.IsTrue(ElevatorDoors.Instance.Doors[arrivalCar.Station].Blocking, "the arrival doors are shut while it rises");
+            yield return Screenshot();
+            yield return WaitUntil(() => !rides.LocalRiding, 10f, "the arrival");
             yield return null;
             yield return null;
             int arrived = rides.StationAt(Pos);
@@ -158,11 +184,10 @@ namespace Game.Tests
                 if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, s, g.SubZoneCounts(), rules).Order[0] != startRegion) seed = s;
             zones.ServerConfigure(rules, seed);
             int doomed = zones.ServerPlan.Order[0];
-            DeploymentRules.Current.TravelSeconds = 2.5f;
 
             Assert.IsTrue(rides.ServerTryStart(player, start, doomed), "safe -> safe should ride");
             yield return WaitUntil(() => rides.LocalRiding, 3f, "the ride to start");
-            yield return WaitUntil(() => !rides.LocalRiding, 6f, "the arrival");
+            yield return WaitUntil(() => !rides.LocalRiding, 10f, "the arrival");
             yield return null;
             yield return null;
             Assert.AreNotEqual(ZoneState.Safe, zones.StateOf(doomed), "the destination should have been announced during the ride");
@@ -172,24 +197,117 @@ namespace Game.Tests
             Assert.AreNotEqual(doomed, region, "the car should not come out in an announced region");
             Assert.AreEqual(ZoneState.Safe, zones.StateOf(region));
 
-            // The panel now lists the announced region as out of reach (the screenshot is taken here).
+            // The panel now lists the announced region as out of reach.
             yield return null;
-            Assert.IsTrue(Hud.Instance.Elevator.Shown);
+            Assert.IsTrue(Hud.Instance.Elevator.Shown, "the panel after the redirected arrival");
             StringAssert.Contains("중지", Hud.Instance.Elevator.RowText(doomed));
-            yield return Screenshot();
 
             // Locked: its stations stop, for players and for the server.
             yield return WaitUntil(() => zones.StateOf(doomed) == ZoneState.Lockdown, 5f, "the lockdown");
-            int lockedStation = StationOfRegion(doomed);
+            // Bots rode out of the announced region (ADR-079): wait for a station whose car is back up.
+            int lockedStation = -1;
+            yield return WaitUntil(() =>
+            {
+                var all = ElevatorDoors.Instance.Sites;
+                for (int i = 0; i < all.Count; i++) if (all[i].Region == doomed && !rides.StationBusy(i)) { lockedStation = i; return true; }
+                return false;
+            }, 12f, "a station of the locked region at rest");
             var site = ElevatorDoors.Instance.Sites[lockedStation];
             PlayerController.Local.Teleport(site.Spawn + Vector3.up * 0.05f);
             yield return null;
             yield return null;
-            Assert.IsTrue(Hud.Instance.Elevator.Shown);
+            Assert.IsTrue(Hud.Instance.Elevator.Shown, "the panel in the locked station");
             StringAssert.Contains("운행 중지", Hud.Instance.Elevator.FooterText);
             // No cooldown in the way: only the lockdown refuses the ride.
             DeploymentRules.Current.TravelCooldownSeconds = 0f;
             Assert.IsFalse(rides.ServerTryStart(player, lockedStation, region), "a locked region's elevator is off");
+        }
+
+        // Server authority with two riders (ADR-079): a bot rides on its own decision while the player rides, the
+        // server carries the bot and wakes it in the other region; a request for a station the player is not in
+        // comes back refused through the real client -> server broadcast.
+        // Not a remote client: the game has no join path yet (host only), so the second rider is a bot.
+        [UnityTest]
+        public IEnumerator Bot_RidesOutOfAnAnnouncedRegion_AlongsideThePlayer_ServerDecides()
+        {
+            var rides = ElevatorRides.Instance;
+            var zones = ZoneDirector.Instance;
+            var player = Combatant.LocalPlayer;
+            int playerStation = rides.StationAt(Pos);
+            int playerRegion = rides.RegionOfStation(playerStation);
+
+            // A forged request: a station far from the player. The server refuses; nothing moves.
+            int elsewhere = StationOfRegion(playerRegion, playerStation);
+            if (elsewhere < 0) elsewhere = StationOfRegion((playerRegion + 1) % zones.RegionCount);
+            Assert.IsTrue(rides.RequestRide(elsewhere, (playerRegion + 1) % zones.RegionCount));
+            yield return WaitUntil(() => !rides.LocalPending, 3f, "the server's answer");
+            Assert.IsFalse(rides.LocalRiding, "a request from outside the station is refused");
+            Assert.IsFalse(rides.ServerRiding(player));
+
+            // The bot's region closes first; the bot stands in one of its stations, nearer than any pass.
+            var rules = new LockdownRules
+            {
+                FirstWarningSeconds = 1f, WarningSeconds = 30f, LockdownSeconds = 60f, BombardmentSeconds = 60f,
+                MinSecondsBetweenClosings = 1000f, RadiationDps = 0.5f, RadiationGraceSeconds = 5f, KeysPerRegion = 0,
+                SubZoneStartDelaySeconds = 1000f,
+            };
+            var g = zones.Geometry;
+            int seed = 0;
+            for (int sd = 1; sd < 2000 && seed == 0; sd++)
+                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, sd, g.SubZoneCounts(), rules).Order[0] != playerRegion) seed = sd;
+            zones.ServerConfigure(rules, seed);
+            int doomed = zones.ServerPlan.Order[0];
+            int botStation = StationOfRegion(doomed);
+            Combatant bot = null;
+            foreach (var c in Combatant.All)
+                if (c != null && !c.IsPlayer && !c.Dead.Value) { bot = c; break; }
+            Assert.IsNotNull(bot, "World has bots");
+            var botSite = ElevatorDoors.Instance.Sites[botStation].Spawn;
+            // Where the navmesh reaches in that station, as MatchDirector places bots.
+            Assert.IsTrue(UnityEngine.AI.NavMesh.SamplePosition(botSite, out var onMesh, 2.5f, UnityEngine.AI.NavMesh.AllAreas), "a station floor on the navmesh");
+            var agent = bot.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled) Assert.IsTrue(agent.Warp(onMesh.position));
+            else bot.transform.position = onMesh.position;
+            var brain = bot.GetComponent("BotController") as Behaviour;
+            Assert.IsNotNull(brain);
+
+            // The player rides at the same time, to a third region.
+            yield return null;
+            int playerTo = -1;
+            for (int r = 0; r < zones.RegionCount && playerTo < 0; r++) if (r != playerRegion && r != doomed) playerTo = r;
+            Assert.IsTrue(rides.ServerTryStart(player, playerStation, playerTo));
+
+            float until = Time.realtimeSinceStartup + 8f;
+            while (!rides.ServerRiding(bot))
+            {
+                if (Time.realtimeSinceStartup > until)
+                {
+                    var bp = bot.transform.position;
+                    int reg = zones.RegionIndexAt(bp);
+                    zones.TryEscapeTarget(bp, out var exit);
+                    Assert.Fail("the bot never took the elevator: at " + bp + " region " + reg + " (" + zones.StateOf(reg) + "), station "
+                        + botStation + " region " + rides.RegionOfStation(botStation) + " at " + botSite + ", flat "
+                        + new Vector2(bp.x - botSite.x, bp.z - botSite.z).magnitude + ", exit " + exit + ", brain " + brain.enabled
+                        + ", busy " + rides.StationBusy(botStation) + ", cooldown " + rides.ServerCooldownLeft(bot)
+                        + ", goal " + brain.GetType().GetProperty("Goal").GetValue(brain) + ", dead " + bot.Dead.Value);
+                }
+                yield return null;
+            }
+            yield return null; // paused by the rides' own update, not inside the brain's
+            yield return null;
+            Assert.IsFalse(brain.enabled, "the bot's brain rests during the ride");
+            Assert.IsTrue(rides.ServerRiding(player), "two riders at once");
+            yield return WaitUntil(() => !rides.ServerRiding(bot) && !rides.ServerRiding(player), 12f, "both rides to end");
+            yield return null;
+            yield return null;
+            int botArrived = rides.StationAt(bot.transform.position);
+            Assert.GreaterOrEqual(botArrived, 0, "the bot comes out in a station, at " + bot.transform.position);
+            Assert.AreNotEqual(doomed, rides.RegionOfStation(botArrived), "out of the announced region");
+            Assert.IsTrue(brain.enabled, "the bot is awake again");
+            Assert.Greater(rides.ServerCooldownLeft(bot), 0f);
+            int playerArrived = rides.StationAt(Pos);
+            Assert.GreaterOrEqual(playerArrived, 0);
+            Assert.AreEqual(playerTo, rides.RegionOfStation(playerArrived));
         }
 
         // One HUD frame to ELEV_SHOT: the HUD canvas is drawn by the main camera for a moment.

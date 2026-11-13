@@ -210,6 +210,17 @@ namespace Game.Tests
         }
 
         [Test]
+        public void Rider_StaysDown_BetweenTheCars()
+        {
+            var r = new DeploymentRules();
+            float d = ElevatorCycle.DoorSeconds(r), m = ElevatorCycle.MoveSeconds(r), depth = r.CarStartDepth;
+            Assert.AreEqual(0f, ElevatorCycle.RiderOffset(false, d * 0.5, r));
+            Assert.AreEqual(depth, ElevatorCycle.RiderOffset(false, d + m + 0.5, r), "waiting at the bottom for the hand-over");
+            Assert.AreEqual(depth, ElevatorCycle.RiderOffset(true, d * 0.5, r), "the arrival doors are still closing");
+            Assert.AreEqual(0f, ElevatorCycle.RiderOffset(true, d + m + 0.1, r));
+        }
+
+        [Test]
         public void Cycle_ShortTravel_StillMovesForAMoment()
         {
             var r = new DeploymentRules { TravelSeconds = 1f };

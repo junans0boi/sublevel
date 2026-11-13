@@ -296,8 +296,8 @@ namespace Game.Gameplay
                 _verticalVelocity = 0f;
                 _fall.Reset();
             }
-            // Riding to another region (ADR-076): the body waits in the shaft, then steps out at the arrival station.
-            else if (ElevatorPanel.TryHold(out var rideAt, out bool rideArrived, out float rideYaw))
+            // Riding to another region (ADR-076/079): the feet stay on the moving car floor, departure then arrival car.
+            else if (ElevatorPanel.TryHold(transform.position, out var rideAt, out bool rideArrived, out float rideYaw))
             {
                 Teleport(rideAt);
                 if (rideArrived) LookAt(rideAt + Quaternion.Euler(0f, rideYaw, 0f) * Vector3.forward * 20f + Vector3.up * 1.6f);

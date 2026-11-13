@@ -47,7 +47,7 @@ namespace Game.Net
         public int Station => _station;
         // 0 = closed, 1 = fully sunk (then it neither blocks nor shows).
         public float Opened { get; private set; }
-        public bool Blocking => !_gone;
+        public bool Blocking => !_gone || _inCycle;
 
         void Awake()
         {
@@ -74,18 +74,43 @@ namespace Game.Net
 
         void Update() => Tick();
 
+        bool _inCycle;
+
         void Tick()
         {
+            // A ride cycle (ADR-079): the door rises shut and sinks again; afterwards it is gone as before.
+            var rides = ElevatorRides.Instance;
+            if (rides != null && rides.StationCycle(_station, out _, out double cycleT))
+            {
+                _inCycle = true;
+                float shut = ElevatorCycle.DoorClosed01(cycleT, DeploymentRules.Current);
+                Opened = 1f - shut;
+                transform.position = _closed + Vector3.down * (_drop * Opened);
+                Show(shut > 0f);
+                return;
+            }
+            if (_inCycle)
+            {
+                _inCycle = false;
+                Opened = 1f;
+                transform.position = _closed + Vector3.down * _drop;
+                Show(!_gone);
+            }
             if (_gone || double.IsInfinity(_openAt)) return;
             float t = Mathf.Clamp01((float)((Time.timeAsDouble - _openAt) / _slideSeconds));
             if (t <= 0f && Opened <= 0f) return;
             Opened = t;
             transform.position = _closed + Vector3.down * (_drop * t);
             if (t < 1f) return;
-            // Sunk: out of the way for good (a restart reloads the scene).
+            // Sunk: out of the way (a restart reloads the scene; a ride cycle brings it back for a while).
             _gone = true;
-            foreach (var c in _colliders) if (c != null) c.enabled = false;
-            foreach (var r in _renderers) if (r != null) r.enabled = false;
+            Show(false);
+        }
+
+        void Show(bool on)
+        {
+            foreach (var c in _colliders) if (c != null) c.enabled = on;
+            foreach (var r in _renderers) if (r != null) r.enabled = on;
         }
     }
 
