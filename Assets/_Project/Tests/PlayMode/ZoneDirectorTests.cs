@@ -279,6 +279,27 @@ namespace Game.Tests
             Assert.Greater(ZoneFog.Current.Density, ZoneFog.ActiveAbove);
         }
 
+        [UnityTest]
+        public IEnumerator LastRegionToClose_HurtsMoreThanTheFirst_AndTheBannerSaysSo()
+        {
+            var rules = Fast(0.2f, 1f);
+            rules.MinSecondsBetweenClosings = 1.5f;
+            rules.RadiationDps = 0.1f; // never kills while the test looks
+            int player = PlayerRegion();
+            _director.ServerConfigure(rules, FindSeed(rules, p => p.Order[p.Order.Length - 1] == player));
+            Assert.AreEqual(1f, _director.StageOf(player), 1e-4f, "the last closing is stage 1");
+
+            yield return WaitUntil(() => _director.StateOf(player) == ZoneState.Warning, 12f, "the late warning");
+            Assert.AreEqual(0.1f * 5.5f, _director.RadiationDpsOf(player), 1e-4f, "what the lockdown will cost: 0.1 x 5.5");
+            yield return WaitUntil(() => _director.StateOf(player) == ZoneState.Lockdown, 4f, "the lockdown");
+            Assert.AreEqual(0.1f * 5.5f, _director.DamagePerSecondAt(Combatant.LocalPlayer.transform.position), 1e-3f);
+            // Messages ("final region ...") take the banner first; then it names the radiation.
+            yield return WaitUntil(() => ZoneBanner.Instance != null && ZoneBanner.Instance.Shown.Contains("방사능 초당 0.6"), 8f, "the banner naming the radiation");
+            for (int r = 0; r < _director.RegionCount; r++)
+                if (r != player && _director.StageOf(r) < 1f)
+                    Assert.Less(_director.RadiationDpsOf(r), _director.RadiationDpsOf(player), "earlier closings hurt less");
+        }
+
         // ---- Barriers ----
 
         PassBarrier BarrierOf(int pass)

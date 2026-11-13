@@ -310,6 +310,27 @@ namespace Game.Tests
         }
 
         [Test]
+        public void RadiationDps_GrowsWithTheClosingStage_FromTwoToEleven()
+        {
+            var r = new LockdownRules();
+            float prev = 0f;
+            for (int i = 0; i <= 10; i++)
+            {
+                float dps = r.DamagePerSecond(ZoneState.Lockdown, i / 10f);
+                Assert.GreaterOrEqual(dps, prev, "never drops later in the match, stage " + i);
+                prev = dps;
+            }
+            Assert.AreEqual(2f, r.DamagePerSecond(ZoneState.Lockdown, 0f), 1e-4f, "first region: the base");
+            Assert.AreEqual(11f, r.DamagePerSecond(ZoneState.Lockdown, 1f), 1e-4f, "last: PUBG-like 11 per second");
+            Assert.AreEqual(r.DamagePerSecond(ZoneState.Lockdown, 0.5f), r.DamagePerSecond(ZoneState.Bombardment, 0.5f), "bombardment hurts as much");
+            Assert.AreEqual(2.5f * 2f, r.DamagePerSecond(ZoneState.Lockdown, 0.5f), 1e-4f, "middle entry of the table");
+            Assert.AreEqual(r.DamagePerSecond(ZoneState.Lockdown, 1f), r.DamagePerSecond(ZoneState.Lockdown, 5f), "clamped");
+            Assert.AreEqual(0f, r.DamagePerSecond(ZoneState.Warning, 1f), "warning is harmless");
+            Assert.AreEqual(r.ClosedDps, r.DamagePerSecond(ZoneState.Closed, 1f), "closed regions keep their own rate");
+            Assert.Greater(100f / r.DamagePerSecond(ZoneState.Lockdown, 1f), r.RadiationGraceSeconds + 5f, "still not instant at the end");
+        }
+
+        [Test]
         public void BlastDamage_FallsOffBetweenTheRadii()
         {
             var r = new LockdownRules();

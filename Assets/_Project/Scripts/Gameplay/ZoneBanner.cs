@@ -258,7 +258,7 @@ namespace Game.Gameplay
                 {
                     int seconds = Mathf.CeilToInt(least);
                     key = 100000 + warned * 1000 + Mathf.Min(seconds, 999);
-                    if (key != _shownKey) text = _director.RegionNameOf(warned) + " 지역 봉쇄 경고 — " + seconds + "초";
+                    if (key != _shownKey) text = _director.RegionNameOf(warned) + " 지역 봉쇄 경고 — " + seconds + "초 (봉쇄 시 방사능 초당 " + DpsText(_director.RadiationDpsOf(warned)) + ")";
                     else text = _text;
                     colour = UiKit.Accent;
                 }
@@ -267,7 +267,7 @@ namespace Game.Gameplay
                     int seconds = Mathf.CeilToInt(status.SecondsLeft);
                     bool bombing = status.State == ZoneState.Bombardment;
                     key = (bombing ? 300000 : 200000) + status.RegionIndex * 1000 + Mathf.Min(seconds, 999);
-                    if (key != _shownKey) text = status.RegionName + (bombing ? " 지역 폭격 중 — 폐쇄까지 " : " 지역 봉쇄 — 폭격까지 ") + seconds + "초";
+                    if (key != _shownKey) text = status.RegionName + (bombing ? " 지역 폭격 중 — 폐쇄까지 " : " 지역 봉쇄 — 폭격까지 ") + seconds + "초 · 방사능 초당 " + DpsText(_director.RadiationDpsOf(status.RegionIndex));
                     else text = _text;
                     colour = UiKit.Danger;
                 }
@@ -284,6 +284,9 @@ namespace Game.Gameplay
             _bannerText.color = UiKit.Text;
             _bannerFill.color = new Color(colour.r * 0.35f, colour.g * 0.35f, colour.b * 0.35f, 0.86f);
         }
+
+        // "4.5" / "11": health per second, one decimal at most.
+        public static string DpsText(float dps) => dps.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
         bool MissileNearby()
         {

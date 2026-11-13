@@ -25,6 +25,9 @@ namespace Game.Core
         public float RadiationGraceSeconds = 4f;        // standing in a harmful zone this long before it hurts
         public float ClosedDps = 20f;                   // closed regions and sub-zones: lethal in seconds
         public float RadiationTickSeconds = 0.5f;       // damage is applied in steps this long
+        // Later closings hurt more (#141, ADR-109): RadiationDps times these, spread evenly over the closing order
+        // (first region = first entry, the last region and the final region's sub-zones = last entry). 2 -> 11 per second.
+        public float[] RadiationStageScale = { 1f, 1.25f, 1.75f, 2.5f, 3.5f, 4.5f, 5.5f };
 
         // ---- Bombardment ----
         public float BlastIntervalSeconds = 1.6f;       // per bombarded region / sub-zone
@@ -49,13 +52,25 @@ namespace Game.Core
         public int FinalSubZonesMin = 3;                // sub-zones in play in the final region (the last one survives)
         public int FinalSubZonesMax = 4;
 
-        // Health per second a combatant standing in a region in this state loses (after the grace period).
-        public float DamagePerSecond(ZoneState state)
+        // Multiplier on RadiationDps for a closing `stage01` of the way through the order (0 = first, 1 = last).
+        public float RadiationScale(float stage01)
+        {
+            var t = RadiationStageScale;
+            if (t == null || t.Length == 0) return 1f;
+            float x = Math.Max(0f, Math.Min(1f, stage01)) * (t.Length - 1);
+            int i = Math.Min((int)x, t.Length - 1);
+            int j = Math.Min(i + 1, t.Length - 1);
+            return t[i] + (t[j] - t[i]) * (x - i);
+        }
+
+        // Health per second a combatant standing in a region in this state loses (after the grace period);
+        // `stage01` is how late in the closing order the region is.
+        public float DamagePerSecond(ZoneState state, float stage01 = 0f)
         {
             switch (state)
             {
                 case ZoneState.Lockdown:
-                case ZoneState.Bombardment: return RadiationDps;
+                case ZoneState.Bombardment: return RadiationDps * RadiationScale(stage01);
                 case ZoneState.Closed: return ClosedDps;
                 default: return 0f;
             }

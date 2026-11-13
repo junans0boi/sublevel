@@ -348,17 +348,28 @@ namespace Game.Net
             return sub >= 0 && SubZoneState(sub) != ZoneState.Safe;
         }
 
+        // How late in the closing order a region is, 0..1 (the final region 1). Only the host knows the plan; elsewhere 0.
+        public float StageOf(int region)
+        {
+            if (_plan == null || region < 0) return 0f;
+            int index = _plan.ClosingIndexOf(region);
+            return index < 0 ? 1f : _plan.Order.Length <= 1 ? 0f : index / (float)(_plan.Order.Length - 1);
+        }
+
+        // What lockdown radiation costs per second in a region, whatever its state now (the HUD warns with it).
+        public float RadiationDpsOf(int region) => Rules.DamagePerSecond(ZoneState.Lockdown, StageOf(region));
+
         // Radiation at a point right now (health per second, before the grace period).
         public float DamagePerSecondAt(Vector3 position)
         {
             int region = RegionIndexAt(position);
             if (region < 0) return 0f;
             var rules = Rules;
-            float dps = rules.DamagePerSecond(StateOf(region));
+            float dps = rules.DamagePerSecond(StateOf(region), StageOf(region));
             if ((_revealed && region == _final) || (_plan != null && region == _plan.FinalRegion))
             {
                 int sub = _geo.SubZoneAt(position.x, position.z);
-                if (sub >= 0) dps = Mathf.Max(dps, rules.DamagePerSecond(SubZoneState(sub)));
+                if (sub >= 0) dps = Mathf.Max(dps, rules.DamagePerSecond(SubZoneState(sub), 1f));
             }
             return dps;
         }
