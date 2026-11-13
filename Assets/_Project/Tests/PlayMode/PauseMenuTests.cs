@@ -26,8 +26,7 @@ namespace Game.Tests
         }
 
         ScriptedInput _input;
-        bool _hadSensitivity, _hadVolume;
-        float _savedSensitivity, _savedVolume;
+        GameSettings.PrefsSnapshot _prefs;
 
         static IEnumerator WaitUntil(Func<bool> condition, float seconds, string what)
         {
@@ -50,23 +49,12 @@ namespace Game.Tests
 
         // The developer's own saved settings must survive a test run.
         [SetUp]
-        public void RememberPrefs()
-        {
-            _hadSensitivity = PlayerPrefs.HasKey(GameSettings.MouseSensitivityKey);
-            _hadVolume = PlayerPrefs.HasKey(GameSettings.MasterVolumeKey);
-            _savedSensitivity = PlayerPrefs.GetFloat(GameSettings.MouseSensitivityKey, 0f);
-            _savedVolume = PlayerPrefs.GetFloat(GameSettings.MasterVolumeKey, 0f);
-        }
+        public void RememberPrefs() => _prefs = GameSettings.CapturePrefs();
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (_hadSensitivity) PlayerPrefs.SetFloat(GameSettings.MouseSensitivityKey, _savedSensitivity);
-            else PlayerPrefs.DeleteKey(GameSettings.MouseSensitivityKey);
-            if (_hadVolume) PlayerPrefs.SetFloat(GameSettings.MasterVolumeKey, _savedVolume);
-            else PlayerPrefs.DeleteKey(GameSettings.MasterVolumeKey);
-            PlayerPrefs.Save();
-            GameSettings.Load();
+            GameSettings.RestorePrefs(_prefs);
 
             UiFocus.Close();
             PlayerController.InputOverride = null;
@@ -123,6 +111,7 @@ namespace Game.Tests
 
             menu.ShowSettings();
             Assert.IsTrue(menu.SettingsShown);
+            Assert.IsNotNull(menu.Settings, "the 환경 설정 screen");
             menu.Back();
             Assert.IsFalse(menu.SettingsShown);
             Assert.IsTrue(menu.IsOpen, "back stays in the menu");

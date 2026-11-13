@@ -259,5 +259,69 @@ namespace Game.Gameplay
         {
             if (button != null && button.targetGraphic != null) button.targetGraphic.color = selected ? Selected : PanelLight;
         }
+
+        // ---- Full-screen form parts (the settings screen) ----
+
+        // Nearly opaque plate for screens that cover the whole view.
+        public static readonly Color PanelDeep = new Color(0.045f, 0.052f, 0.06f, 0.96f);
+        // Faint row highlight / zebra band.
+        public static readonly Color RowHover = new Color(0.50f, 0.58f, 0.64f, 0.14f);
+        public static readonly Color RowBand = new Color(1f, 1f, 1f, 0.025f);
+
+        // A flat tab: label over a transparent hit area and a thin accent underline shown while selected (SetTab).
+        public static Button TabButton(RectTransform rect, string text, int size, UnityEngine.Events.UnityAction onClick, out Text label, out Image underline)
+        {
+            // White plate tinted by the button's colour block (normal = invisible), so hover still shows.
+            var image = Box(rect, Color.white, true);
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            var colors = button.colors;
+            // Not fully transparent: a mesh culled for zero alpha might stop taking the pointer.
+            colors.normalColor = new Color(1f, 1f, 1f, 0.02f);
+            colors.highlightedColor = new Color(1f, 1f, 1f, 0.06f);
+            colors.pressedColor = new Color(1f, 1f, 1f, 0.1f);
+            colors.selectedColor = colors.normalColor;
+            colors.fadeDuration = 0.05f;
+            button.colors = colors;
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            if (onClick != null) button.onClick.AddListener(onClick);
+            label = Label(Fill("Label", rect, 4f), text, size, TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            underline = Box(Rect("Underline", rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 3f)), Accent);
+            var line = (RectTransform)underline.transform;
+            line.anchorMin = new Vector2(0.12f, 0f);
+            line.anchorMax = new Vector2(0.88f, 0f);
+            line.sizeDelta = new Vector2(0f, 3f);
+            underline.enabled = false;
+            return button;
+        }
+
+        public static void SetTab(Text label, Image underline, bool selected)
+        {
+            if (label != null) label.color = selected ? Text : TextDim;
+            if (underline != null) underline.enabled = selected;
+        }
+
+        // A small steel caption with a hairline running to the right edge of `rect`.
+        public static Text SectionHeader(RectTransform rect, string text)
+        {
+            var label = Label(Fill("Caption", rect), text, 17, Steel, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var line = Rect("Line", rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 1f));
+            line.anchorMin = new Vector2(0f, 0.5f);
+            line.anchorMax = new Vector2(1f, 0.5f);
+            line.offsetMin = new Vector2(label.preferredWidth + 14f, -0.5f);
+            line.offsetMax = new Vector2(0f, 0.5f);
+            Box(line, SteelDim);
+            return label;
+        }
+
+        // Wrapping body text, top-left aligned inside `rect`.
+        public static Text Paragraph(RectTransform rect, string text, int size, Color color)
+        {
+            var label = Label(rect, text, size, color, TextAnchor.UpperLeft);
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
+            label.lineSpacing = 1.15f;
+            return label;
+        }
     }
 }

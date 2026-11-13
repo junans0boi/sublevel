@@ -28,10 +28,11 @@ namespace Game.Gameplay
 
         public bool IsLoading { get; private set; }
         public bool SettingsShown => _settings != null && _settings.activeSelf;
+        public SettingsScreen Settings => _settingsScreen;
         public string LoadingText => _loading != null ? _loading.text : "";
 
-        GameObject _root, _main, _settings;
-        SettingsPanel _settingsPanel;
+        GameObject _root, _main, _settings, _hint;
+        SettingsScreen _settingsScreen;
         Text _loading;
         Button[] _buttons;
 
@@ -72,7 +73,8 @@ namespace Game.Gameplay
         void Update()
         {
             var keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) Back();
+            // Esc in the settings = 뒤로 가기 (drops unapplied changes).
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
@@ -94,8 +96,8 @@ namespace Game.Gameplay
         public void ShowSettings()
         {
             if (IsLoading) return;
-            _settingsPanel.Sync();
             ShowPanels(true);
+            _settingsScreen.Open();
         }
 
         public void Back() => ShowPanels(false);
@@ -108,7 +110,11 @@ namespace Game.Gameplay
 
         void ShowPanels(bool settings)
         {
+            // Leaving the settings any way but 적용 drops what was only previewed.
+            if (!settings && _settings.activeSelf) _settingsScreen.Cancel();
             _main.SetActive(!settings);
+            // The bottom hint line would sit on the settings footer.
+            if (_hint != null) _hint.SetActive(!settings);
             _settings.SetActive(settings);
         }
 
@@ -120,11 +126,12 @@ namespace Game.Gameplay
             UiKit.Box(UiKit.Fill("Background", _root.transform), Background, true);
 
             BuildMain(_root.transform);
-            _settingsPanel = new SettingsPanel();
-            _settings = _settingsPanel.Build(_root.transform, "Settings", Back).gameObject;
+            _settingsScreen = new SettingsScreen();
+            _settings = _settingsScreen.Build(_root.transform, "Settings", Back).gameObject;
             _settings.SetActive(false);
 
             var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(1400f, 30f));
+            _hint = hint.gameObject;
             UiKit.Label(hint, ControlsHint, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
             var version = UiKit.Rect("Version", _root.transform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-24f, 20f), new Vector2(400f, 26f));
             UiKit.Label(version, "v" + Application.version, 18, UiKit.TextDim, TextAnchor.MiddleRight);
