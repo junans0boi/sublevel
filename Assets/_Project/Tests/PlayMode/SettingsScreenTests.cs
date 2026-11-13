@@ -89,6 +89,35 @@ namespace Game.Tests
             Assert.IsFalse(Shown.PreviewSwatchShown);
         }
 
+        // #149 (ADR-117): the bot difficulty is a row on the gameplay tab; stepping it changes the level the bots read, and 적용 saves it.
+        [UnityTest]
+        public IEnumerator BotDifficultyRow_SwitchesTheLevelBotsRun_AndIsSaved()
+        {
+            yield return OpenFromPauseMenu();
+            var screen = Shown;
+            screen.SelectTab(SettingsTab.Gameplay);
+            Assert.IsTrue(screen.Row(SettingId.BotDifficulty).gameObject.activeInHierarchy);
+            Assert.AreEqual(Game.Core.BotDifficulty.Normal, Game.Core.BotLevels.Level, "보통 by default");
+            screen.Focus(screen.Row(SettingId.BotDifficulty));
+            StringAssert.Contains("반응", screen.DescriptionBody);
+
+            screen.Step(SettingId.BotDifficulty, 1);
+            Assert.AreEqual(Game.Core.BotDifficulty.Hard, Game.Core.BotLevels.Level);
+            screen.Step(SettingId.BotDifficulty, -1);
+            screen.Step(SettingId.BotDifficulty, -1);
+            Assert.AreEqual(Game.Core.BotDifficulty.Easy, Game.Core.BotLevels.Level);
+            screen.Apply();
+            Assert.AreEqual(0, UnityEngine.PlayerPrefs.GetInt("settings.botDifficulty"));
+
+            string shots = Environment.GetEnvironmentVariable("INV_SHOTS");
+            if (!string.IsNullOrEmpty(shots))
+            {
+                screen.Step(SettingId.BotDifficulty, 1);
+                screen.Step(SettingId.BotDifficulty, 1);
+                yield return UiShot.Save(System.IO.Path.Combine(shots, "settings_bot_difficulty.png"), 1920, 1080);
+            }
+        }
+
         [UnityTest]
         public IEnumerator Tabs_SwapTheRows()
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Game.Core;
 using Game.Gameplay;
 using Game.Net;
@@ -25,7 +26,12 @@ namespace Game.Tests
         // (NavMeshAgent, fire cadence, lockdown clock, radiation), and the host reads the server's state directly.
         // 2 keeps the frame step well under Time.maximumDeltaTime at editor frame rates. Set 1 if anything misbehaves.
         const float TimeScale = 2f;
-        const int Bots = 15;
+        // MATCH_SIM_BOTS overrides the bot count (the 20-bot scenario of #149).
+        static readonly int Bots = int.TryParse(Environment.GetEnvironmentVariable("MATCH_SIM_BOTS"), out int n) ? n : 15;
+        static readonly Type BotType = Type.GetType("Game.AI.BotController, Game.AI");
+        const float IdleGraceSeconds = 60f;   // elevators and the first looting
+        const float IdleLimitSeconds = 45f;   // standing within IdleMoveMeters this long, not fighting or healing, is idle
+        const float IdleMoveMeters = 1.5f;
         const float RealSecondsLimit = 6f * 60f;
         const int DefaultSeed = 77;
 
@@ -118,8 +124,18 @@ namespace Game.Tests
             int alive = Bots;
             Combatant last = null;
             int aliveWhenOver = -1;
+            var anchors = new System.Collections.Generic.Dictionary<int, KeyValuePair<Vector3, float>>();
+            var idleBots = new System.Collections.Generic.HashSet<int>();
+            var idleReasons = new System.Collections.Generic.List<string>();
+            float nextCensus = 0f;
+            float matchStart = Time.time;
             while (true)
             {
+                if (BotType != null && Time.time >= nextCensus)
+                {
+                    nextCensus = Time.time + 3f;
+                    Census(anchors, idleBots, idleReasons, matchStart);
+                }
                 Assert.AreEqual(ZoneState.Safe, zones.StateOf(finalRegion), "the final region must never start closing");
                 alive = AliveCount(out last);
                 if (state.IsOver || alive <= 1)
@@ -135,6 +151,7 @@ namespace Game.Tests
             float heardBy = Time.realtimeSinceStartup + 5f;
             while (!state.IsOver && Time.realtimeSinceStartup < heardBy) yield return null;
 
+            Debug.Log($"[MatchSimulation] idle census: {idleBots.Count} of {Bots} bots stood still {IdleLimitSeconds:0}+ s: {string.Join("; ", idleReasons)}");
             var log = recorder.Finish();
             var path = recorder.Write(MatchRecorder.DefaultFolder);
             Debug.Log($"[MatchSimulation] over {log.over} in {log.durationSeconds:0} s match time ({log.durationRealSeconds:0} s real), " +
@@ -150,6 +167,33 @@ namespace Game.Tests
             Assert.AreNotEqual(ZoneState.Closed, zones.StateAt(last.transform.position), "the winner stands in a region that is not closed");
             Assert.IsFalse(log.finalInClosingOrder);
             Assert.AreEqual(Bots + 1, log.participants);
+            // Nobody stuck: a bot standing in one spot for long while it was neither fighting nor healing is idle.
+            Assert.LessOrEqual(idleBots.Count, Mathf.Max(1, Bots / 10), "idle bots: " + string.Join("; ", idleReasons));
+            Assert.LessOrEqual(log.stallTotal, Bots * 3, "bots giving up on a target too often: " + log.stallTotal);
+        }
+
+        // Every few seconds: a living bot that is still where it was IdleLimitSeconds ago and is not in a fight or
+        // healing (read by name: this assembly does not reference Game.AI) is counted idle once.
+        static void Census(System.Collections.Generic.Dictionary<int, KeyValuePair<Vector3, float>> anchors,
+            System.Collections.Generic.HashSet<int> idle, System.Collections.Generic.List<string> reasons, float matchStart)
+        {
+            float now = Time.time;
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer || !c.IsServerInitialized || c.Dead.Value) continue;
+                var bot = c.GetComponent(BotType);
+                if (bot == null) continue;
+                var state = BotType.GetProperty("State").GetValue(bot).ToString();
+                bool excused = state == "Engage" || state == "Heal" || state == "Retreat" || c.Knocked.Value || now - matchStart < IdleGraceSeconds;
+                int id = c.ObjectId;
+                if (!anchors.TryGetValue(id, out var anchor) || excused || (c.transform.position - anchor.Key).sqrMagnitude > IdleMoveMeters * IdleMoveMeters)
+                {
+                    anchors[id] = new KeyValuePair<Vector3, float>(c.transform.position, now);
+                    continue;
+                }
+                if (now - anchor.Value >= IdleLimitSeconds && idle.Add(id))
+                    reasons.Add($"{c.name} {state} at {c.transform.position:0} for {now - anchor.Value:0} s");
+            }
         }
     }
 }

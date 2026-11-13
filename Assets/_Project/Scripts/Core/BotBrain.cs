@@ -124,6 +124,8 @@ namespace Game.Core
         int _lastWeaponId;
 
         bool _closing;
+        int _strafeDir = 1;
+        double _strafeUntil;
         double _healReadyAt = -1;
         double _retreatSince = -1;
         double _standUntil;
@@ -243,16 +245,19 @@ namespace Game.Core
                     intent.SwitchWeapon = true;
                     return intent;
                 }
-                if (p.Reloading)
-                {
-                    intent.Crouch = true;
-                    return intent;
-                }
-                if (p.Mag <= 0)
+                if (p.Reloading || p.Mag <= 0)
                 {
                     // `armed` with an empty magazine means there are rounds in reserve.
-                    intent.Reload = true;
+                    if (!p.Reloading) intent.Reload = true;
                     intent.Crouch = true;
+                    // Reloads out of sight when the enemy is far enough to get away from (ADR-117).
+                    if (distance >= rules.ReloadCoverMinMeters)
+                    {
+                        intent.Move = true;
+                        intent.SeekCover = true;
+                        intent.Crouch = false;
+                        intent.MoveTarget = Away(p.Position, p.EnemyPosition, rules.RetreatMeters * 0.5f);
+                    }
                     return intent;
                 }
 
@@ -264,6 +269,23 @@ namespace Game.Core
                     intent.Move = true;
                     intent.MoveTarget = p.EnemyPosition;
                     intent.Sprint = distance > p.WeaponRange;
+                }
+                else if (rules.StrafeMeters > 0f && distance >= rules.StrafeMinTarget)
+                {
+                    // Sidesteps while it shoots, changing side now and then, like a player under fire.
+                    if (now >= _strafeUntil)
+                    {
+                        _strafeDir = _rng.Next(2) == 0 ? -1 : 1;
+                        _strafeUntil = now + Between(rules.StrafeMinSeconds, rules.StrafeMaxSeconds);
+                    }
+                    float dx = p.EnemyPosition.X - p.Position.X, dz = p.EnemyPosition.Z - p.Position.Z;
+                    float len = (float)Math.Sqrt(dx * dx + dz * dz);
+                    if (len > 1e-3f)
+                    {
+                        intent.Move = true;
+                        intent.MoveTarget = new BotVec(p.Position.X - dz / len * rules.StrafeMeters * _strafeDir, p.Position.Y,
+                            p.Position.Z + dx / len * rules.StrafeMeters * _strafeDir);
+                    }
                 }
                 bool reacted = now - _spottedAt >= rules.ReactionSeconds;
                 if (reacted && distance <= p.WeaponRange && now >= _pauseUntil)

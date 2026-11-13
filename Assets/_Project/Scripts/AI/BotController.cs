@@ -105,6 +105,10 @@ namespace Game.AI
         Vector3 _stallFrom;
         float _stallAt;
         float _lastAttackAt = -100f;
+        float _hearFactor = 1f;
+        Vector3 _enemyVelocity, _enemyLastAt;
+        int _enemyVelocityId = -1;
+        float _enemyVelocityTime;
 
         // "봇 N", in spawn order within a match.
         public string DisplayName { get; private set; } = "";
@@ -280,7 +284,10 @@ namespace Game.AI
         void Init()
         {
             _ready = true;
-            _rules = BotRules.Current;
+            _hearFactor = 1f;
+            // The difficulty scales a copy of the data (Normal is the data itself).
+            _rules = BotLevels.For(BotRules.Current, BotLevels.Level);
+            if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
             SyncMatch();
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
@@ -346,6 +353,15 @@ namespace Game.AI
                 float crouched = crouch.EyeDropMeters > 0f ? Mathf.Clamp01(-c.EyeHeightOffset / crouch.EyeDropMeters) : 0f;
                 var gait = c.GetComponent<CombatantStance>();
                 float radius = BotHearing.FootstepRadius(crouched, gait != null && gait.SlowWalk.Value, rules, StanceRules.Current);
+                // A sprint carries further, and what the floor is made of matters (ADR-117, the same ratios the ears of a player use).
+                if (sqr <= radius * radius * 2.7f) // 1.25 sprint x 1.3 metal, squared: only then can the floor matter
+                {
+                    var loco = GameData.Rules.Locomotion;
+                    bool sprint = SoundRules.IsSprint(c.PlanarSpeed, loco.WalkSpeed, loco.SprintSpeed, gait != null ? gait.MoveFactor : 1f);
+                    var feet = c.transform.position;
+                    var surface = BotHearing.SurfaceAt != null ? BotHearing.SurfaceAt(feet.x, feet.y, feet.z) : FootSurface.Concrete;
+                    radius *= (sprint ? SoundRules.SprintStepFactor : 1f) * SoundRules.SurfaceLoudness(surface);
+                }
                 if (sqr <= radius * radius && sqr < stepSqr)
                 {
                     stepHeard = true;
@@ -373,10 +389,11 @@ namespace Game.AI
                 if (noise.SourceId == self) continue;
                 var at = new Vector3(noise.X, noise.Y, noise.Z);
                 float sqr = (at - eye).sqrMagnitude;
-                if (sqr > noise.Radius * noise.Radius || sqr >= heardSqr) continue;
+                float heardRadius = noise.Radius * _hearFactor;
+                if (sqr > heardRadius * heardRadius || sqr >= heardSqr) continue;
                 // A closed door on the way muffles it: the radius shrinks for each one (G11, ADR-104).
                 int shut = DoorSystem.ClosedBetween(at, eye);
-                if (shut > 0 && Mathf.Sqrt(sqr) > noise.Radius * Mathf.Pow(DoorRules.Current.ClosedSoundFactor, shut)) continue;
+                if (shut > 0 && Mathf.Sqrt(sqr) > heardRadius * Mathf.Pow(DoorRules.Current.ClosedSoundFactor, shut)) continue;
                 heard = true;
                 heardAt = at;
                 heardSqr = sqr;
@@ -384,6 +401,14 @@ namespace Game.AI
             _noiseSeen = count;
             if (heard)
             {
+                // Ears are not a map: the place is off by a share of the distance, so a far shot is only a direction.
+                float off = Mathf.Min(Mathf.Sqrt(heardSqr) * rules.HearingErrorFraction, rules.HearingErrorMaxMeters);
+                if (off > 0f)
+                {
+                    double a = _rng.NextDouble() * System.Math.PI * 2;
+                    float r = Mathf.Sqrt((float)_rng.NextDouble()) * off;
+                    heardAt += new Vector3(Mathf.Cos((float)a) * r, 0f, Mathf.Sin((float)a) * r);
+                }
                 _percept.Heard = true;
                 _percept.HeardPosition = ToVec(heardAt);
             }
@@ -442,7 +467,7 @@ namespace Game.AI
                 // A key (ADR-058 (7)) gets it through a locked pass; one is enough.
                 bool wanted = kind == LootKind.Key
                     ? _keys != null && _keys.Keys.Value < KeysWanted
-                    : BotBrain.WantsLoot(kind, slotFree, usesAmmo, reserve, medkits, rules)
+                    : BotBrain.WantsLoot(kind, slotFree, usesAmmo, reserve, medkits, rules) || WantsGear(item, kind)
                       || BotItems.WantsLoot(kind, h != null ? h.Bandages.Value : 99, h != null ? h.FirstAids.Value : 99,
                           h != null ? h.Drinks.Value : 99, h != null ? h.Pills.Value : 99, h != null ? h.Syringes.Value : 99,
                           t != null ? t.Grenades.Value : 99, t != null ? t.Smokes.Value : 99, t != null ? t.Flashes.Value : 99, t != null ? t.Molotovs.Value : 99, rules);
@@ -461,6 +486,16 @@ namespace Game.AI
             _percept.LootVisible = true;
             _percept.LootId = _loot.ObjectId;
             _percept.LootPosition = ToVec(_loot.transform.position);
+        }
+
+        // A helmet or vest better than the one worn (the server takes only a better piece).
+        bool WantsGear(LootItem item, LootKind kind)
+        {
+            if (!Armor.IsArmor(kind)) return false;
+            var gear = _gear;
+            if (gear == null) return false;
+            var slot = Armor.SlotOf(kind);
+            return item.Tier.Value > gear.TierOf(slot);
         }
 
         // Something solid between the two points (other combatants do not count as walls).
@@ -502,7 +537,12 @@ namespace Game.AI
                     _percept.EnemyVisible = false;
                     _enemy = null;
                 }
-                else _percept.EnemyPosition = ToVec(ChestOf(_enemy));
+                else
+                {
+                    var chest = ChestOf(_enemy);
+                    TrackEnemy(chest);
+                    _percept.EnemyPosition = ToVec(chest);
+                }
             }
             if (_percept.LootVisible && (_loot == null || !_loot.IsSpawned))
             {
@@ -975,6 +1015,15 @@ namespace Game.AI
             var to = ToVector(_percept.EnemyPosition) - eye;
             float distance = to.magnitude;
             if (distance < 1e-3f) return;
+            // A bullet that is not judged at once takes time to arrive: lead a target that moves (ADR-117).
+            var ballistics = GameData.Rules.Ballistics;
+            if (_rules.AimLead > 0f && distance > ballistics.InstantMeters)
+            {
+                var lead = _enemyVelocity;
+                lead.y = 0f;
+                to += lead * (Ballistics.FlightSeconds(Ballistics.MuzzleSpeed(weapon, ballistics), distance) * _rules.AimLead);
+                distance = to.magnitude;
+            }
             // The body has to have turned to the target first.
             var flat = new Vector3(to.x, 0f, to.z);
             if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > _rules.FireConeDeg) return;
@@ -1005,6 +1054,21 @@ namespace Game.AI
             if (flat.sqrMagnitude > reach * reach) return;
             if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > strike.ConeDeg * 0.5f) return;
             if (_self.ServerPunch(ChestOf(_enemy) - _self.EyePosition)) _lastAttackAt = Time.time;
+        }
+
+        // The target's velocity from where it was a moment ago (smoothed; zero for a new target).
+        void TrackEnemy(Vector3 chest)
+        {
+            float now = Time.time;
+            if (_enemy.ObjectId != _enemyVelocityId || now - _enemyVelocityTime > 1f)
+            {
+                _enemyVelocityId = _enemy.ObjectId;
+                _enemyVelocity = Vector3.zero;
+            }
+            else if (now > _enemyVelocityTime + 1e-4f)
+                _enemyVelocity = Vector3.Lerp(_enemyVelocity, (chest - _enemyLastAt) / (now - _enemyVelocityTime), 0.25f);
+            _enemyLastAt = chest;
+            _enemyVelocityTime = now;
         }
 
         // ---- Helpers ----

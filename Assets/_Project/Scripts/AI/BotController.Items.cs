@@ -17,6 +17,7 @@ namespace Game.AI
 
         static readonly List<FireSpot> Fires = new List<FireSpot>(8);
 
+        CombatantGear _gear;
         CombatantHealing _healing;
         ThrowableUser _throwables;
         float _blindUntil, _deafUntil;
@@ -65,6 +66,7 @@ namespace Game.AI
 
         void InitItems()
         {
+            _gear = GetComponent<CombatantGear>();
             _healing = GetComponent<CombatantHealing>();
             _throwables = GetComponent<ThrowableUser>();
         }

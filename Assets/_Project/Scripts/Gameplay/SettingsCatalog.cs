@@ -26,6 +26,7 @@ namespace Game.Gameplay
         MouseSensitivity, AimSensitivity, ScopeSens2x, ScopeSens3x, ScopeSens4x, ScopeSens6x, ScopeSens8x, ScopeSens15x, InvertMouseY,
         SightsStyle, ShoulderStyle,
         DefaultView, CrosshairColor, DamageDirection, KillFeed,
+        BotDifficulty, // ADR-117
     }
 
     // One row of the settings screen: where it shows, what it says and how its value is stored.
@@ -203,6 +204,9 @@ namespace Game.Gameplay
             Add(Choice(SettingId.KillFeed, SettingsTab.Gameplay, SettingsPage.Basic, "화면 표시", "킬 로그 표시",
                 "누가 누구를 쓰러뜨렸는지 화면 오른쪽 위에 보여줍니다.",
                 "settings.killFeed", OffOn, 1, SettingKind.Toggle));
+            Add(Choice(SettingId.BotDifficulty, SettingsTab.Gameplay, SettingsPage.Basic, "봇", "봇 난이도",
+                "봇의 반응 속도, 조준 정확도, 시야와 청력을 정합니다. 쉬움은 늦게 알아채고 자주 빗맞히며, 어려움은 빨리 알아채고 정확하게 쏩니다. 다음 매치부터 적용됩니다.",
+                "settings.botDifficulty", Game.Core.BotLevels.Labels, 1));
             return rows;
         }
 

@@ -82,6 +82,7 @@ namespace Game.Tests
         public void ArmedBot_EngagesAVisibleEnemy_OnlyAfterTheReactionTime()
         {
             var rules = Rules();
+            rules.StrafeMeters = 0f; // the sidestep is its own test
             var brain = Brain(rules);
             var first = brain.Think(Seeing(Armed(10.0), 20f));
             Assert.AreEqual(BotState.Engage, first.State);
@@ -145,7 +146,7 @@ namespace Game.Tests
         public void EmptyMagazine_InAFight_ReloadsCrouched()
         {
             var brain = Brain();
-            var p = Seeing(Armed(0), 20f);
+            var p = Seeing(Armed(0), 6f); // too close to get out of its sight
             p.Mag = 0;
             var intent = brain.Think(p);
             Assert.AreEqual(BotState.Engage, intent.State);
@@ -158,6 +159,42 @@ namespace Game.Tests
             intent = brain.Think(p);
             Assert.IsTrue(intent.Crouch, "stays down while reloading");
             Assert.IsFalse(intent.Fire);
+        }
+
+        [Test]
+        public void EmptyMagazine_FarFromTheEnemy_ReloadsOutOfSight()
+        {
+            var brain = Brain();
+            var p = Seeing(Armed(0), 30f);
+            p.Mag = 0;
+            var intent = brain.Think(p);
+            Assert.IsTrue(intent.Reload);
+            Assert.IsTrue(intent.Move && intent.SeekCover, "goes looking for cover");
+            Assert.Less(intent.MoveTarget.Z, 0f, "the fallback is away from the enemy at +Z");
+            p.Time = 0.2;
+            p.Reloading = true;
+            intent = brain.Think(p);
+            Assert.IsFalse(intent.Reload);
+            Assert.IsTrue(intent.SeekCover, "keeps to cover while the reload runs");
+        }
+
+        [Test]
+        public void ShootingAtMidRange_SidestepsAcrossTheLineAndSwitchesSide()
+        {
+            var rules = Rules();
+            var brain = Brain(rules);
+            var sides = new System.Collections.Generic.HashSet<int>();
+            double t = 10.0;
+            for (int i = 0; i < 40; i++, t += 0.5)
+            {
+                var intent = brain.Think(Seeing(Armed(t), 20f));
+                Assert.AreEqual(BotState.Engage, intent.State);
+                Assert.IsTrue(intent.Move, "keeps moving while it shoots");
+                Assert.AreEqual(0f, intent.MoveTarget.Z, 1e-3f, "across the line to the enemy, not toward it");
+                Assert.AreEqual(rules.StrafeMeters, System.Math.Abs(intent.MoveTarget.X), 1e-3f);
+                sides.Add(intent.MoveTarget.X > 0 ? 1 : -1);
+            }
+            Assert.AreEqual(2, sides.Count, "both sides over time");
         }
 
         [Test]

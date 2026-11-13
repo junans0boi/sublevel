@@ -207,6 +207,9 @@ namespace Game.Gameplay
         // terrain layer there (or water below the sea surface), a
         // building's floor by its kind (WorldBuilder names buildings "Lot03_House", "Station01"; their boxes sit on
         // a "Colliders" child), an elevator car or vehicle (metal); concrete otherwise.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void RegisterBotEars() => BotHearing.SurfaceAt = (x, y, z) => SurfaceAt(new Vector3(x, y, z));
+
         public static FootSurface SurfaceAt(Vector3 feet)
         {
             if (!Physics.Raycast(feet + Vector3.up * 0.5f, Vector3.down, out var hit, 1.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))

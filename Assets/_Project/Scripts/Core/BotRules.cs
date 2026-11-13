@@ -11,6 +11,9 @@ namespace Game.Core
         // The rules in use. Defaults until a data loader replaces them, so everything runs without a data file.
         public static BotRules Current = new BotRules();
 
+        // A copy with the same values (the difficulty scales a copy, never the data file's own).
+        public BotRules Clone() => (BotRules)MemberwiseClone();
+
         // ---- Seeing ----
         public float ViewDistance = 70f;
         public float FieldOfViewDeg = 110f;       // full cone, around where the bot faces
@@ -73,6 +76,16 @@ namespace Game.Core
         public int BoostWanted = 2;               // per boost item type
         public int ThrowablesWanted = 2;          // per throwable type
 
+        // ---- Fighting like a player (ADR-117) ----
+        public float StrafeMeters = 3f;           // sidesteps this far while shooting (0 = stands still)
+        public float StrafeMinSeconds = 0.8f;     // then changes side after a time in this range
+        public float StrafeMaxSeconds = 1.8f;
+        public float StrafeMinTarget = 8f;        // closer than this it just stands and shoots
+        public float ReloadCoverMinMeters = 10f;  // reloads out of the enemy's sight when it is at least this far
+        public float AimLead = 1f;                // share of a moving target's travel during the bullet's flight it leads (0 = none)
+        public float HearingErrorFraction = 0.08f; // a heard noise is placed this share of its distance off
+        public float HearingErrorMaxMeters = 6f;
+
         // ---- Items (ADR-116) ----
         public float ThrowIntervalSeconds = 6f;   // between two throws of one bot
         public float FragMinMeters = 10f;         // a fragmentation grenade is thrown at a target between these
@@ -119,6 +132,9 @@ namespace Game.Core
 
     public static class BotHearing
     {
+        // What the ground at a point is made of (x, y, z); set by the audio side, which knows the world. Null = concrete.
+        public static System.Func<float, float, float, FootSurface> SurfaceAt;
+
         // How far a walker's footsteps carry: the full radius, cut by the crouch (`crouchedShare` 0..1 of the way
         // down) and again by slow walking.
         public static float FootstepRadius(float crouchedShare, bool slowWalk, BotRules rules, StanceRules stances)

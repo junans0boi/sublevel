@@ -177,6 +177,9 @@ namespace Game.Gameplay
         public static bool ShowDamageDirection => GetToggle(SettingId.DamageDirection);
         public static bool ShowKillFeed => GetToggle(SettingId.KillFeed);
 
+        // 쉬움 / 보통 / 어려움 (ADR-117). The bots read Game.Core.BotLevels.Level when they start.
+        public static Game.Core.BotDifficulty BotDifficulty => (Game.Core.BotDifficulty)Mathf.Clamp(GetIndex(SettingId.BotDifficulty), 0, 2);
+
         // The mouse look of one frame after the settings: the 1x aim factor while aiming without a magnified scope, the
         // setting of the scope's magnification (`zoom`) blended in as its own slow-down sets in (`scopeFactor` =
         // ScopeView.SensitivityFactor), and the vertical invert.
@@ -244,6 +247,7 @@ namespace Game.Gameplay
         {
             DeviceInput.MouseSensitivity = MouseSensitivity;
             AudioListener.volume = MasterVolume;
+            Game.Core.BotLevels.Level = BotDifficulty;
             GraphicsOptions.Apply();
             Changed?.Invoke();
         }
