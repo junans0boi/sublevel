@@ -20,6 +20,7 @@ namespace Game.Tests
             "helmet_1", "helmet_2", "helmet_3",
             "vest_1", "vest_2", "vest_3",
             "grenade",
+            "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_16x",
         };
 
         static Type IconsType()
@@ -34,7 +35,7 @@ namespace Game.Tests
         static Sprite Get(string key) => (Sprite)IconsType().GetMethod("Get", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { key });
 
         [Test]
-        public void KnownKeys_AreTheExpectedSixteen_WithoutDuplicates()
+        public void KnownKeys_AreTheExpectedTwentyFour_WithoutDuplicates()
         {
             var keys = KnownKeys();
             CollectionAssert.AreEquivalent(Expected, keys);

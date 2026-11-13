@@ -15,7 +15,16 @@ namespace Game.Gameplay
             "helmet_1", "helmet_2", "helmet_3",
             "vest_1", "vest_2", "vest_3",
             "grenade",
+            "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_16x",
         };
+
+        // Icon key of an optic by its id in OpticRules (1..8); empty for none or unknown.
+        static readonly string[] OpticKeys =
+        {
+            "", "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_16x",
+        };
+
+        public static string OpticKey(int opticId) => opticId > 0 && opticId < OpticKeys.Length ? OpticKeys[opticId] : "";
 
         // Caches misses too (stored as null) so repeated lookups never hit Resources again.
         static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
