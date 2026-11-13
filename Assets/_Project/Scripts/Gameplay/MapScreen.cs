@@ -14,6 +14,10 @@ namespace Game.Gameplay
         public const float MapPx = 960f;        // the square picture, in canvas reference pixels
         const int SortingOrder = 101;
         const int GridCells = 8;
+        const float SideWidth = 420f, SideGap = 24f;
+        // Map and side panel centred as one group (1412 px) so 16:10 and 4:3 screens (1728 / 1440 px wide at
+        // 1080 reference height) do not cut the side panel off on the left.
+        const float MapShiftX = (SideWidth + SideGap) * 0.5f;
 
         static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.78f);
         static readonly Color Frame = new Color(0.30f, 0.34f, 0.38f, 1f);
@@ -208,8 +212,8 @@ namespace Game.Gameplay
             var root = _canvas.transform;
             UiKit.Box(UiKit.Fill("Backdrop", root), Backdrop);
 
-            UiKit.Box(UiKit.Rect("Frame", root, Centre, Centre, Vector2.zero, new Vector2(MapPx + 8f, MapPx + 8f)), Frame);
-            _map = UiKit.Rect("Map", root, Centre, Centre, Vector2.zero, new Vector2(MapPx, MapPx));
+            UiKit.Box(UiKit.Rect("Frame", root, Centre, Centre, new Vector2(MapShiftX, 0f), new Vector2(MapPx + 8f, MapPx + 8f)), Frame);
+            _map = UiKit.Rect("Map", root, Centre, Centre, new Vector2(MapShiftX, 0f), new Vector2(MapPx, MapPx));
             var picture = _map.gameObject.AddComponent<RawImage>();
             var texture = MapImage.Get();
             picture.texture = texture;
@@ -321,7 +325,7 @@ namespace Game.Gameplay
 
         void BuildSidePanel(Transform root)
         {
-            var side = UiKit.Rect("Side", root, Centre, new Vector2(1f, 0.5f), new Vector2(-MapPx * 0.5f - 24f, 0f), new Vector2(420f, MapPx));
+            var side = UiKit.Rect("Side", root, Centre, new Vector2(1f, 0.5f), new Vector2(MapShiftX - MapPx * 0.5f - SideGap, 0f), new Vector2(SideWidth, MapPx));
             UiKit.Label(UiKit.Rect("Title", side, TopLeft, TopLeft, Vector2.zero, new Vector2(420f, 56f)), "지도", 44, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
             UiKit.Box(UiKit.Rect("Rule", side, TopLeft, TopLeft, new Vector2(0f, -62f), new Vector2(420f, 2f)), UiKit.Accent);
 

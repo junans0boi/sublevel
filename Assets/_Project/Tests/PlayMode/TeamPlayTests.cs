@@ -251,6 +251,22 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator DeadSpectator_WhoseTeamWins_SeesOnlyTheResultPanel()
+        {
+            yield return Load(TeamMode.Squad);
+            EndProtection();
+            KillOutright(Me, Enemy);
+            Assert.IsTrue(Me.Dead.Value);
+            yield return WaitUntil(() => Hud.Instance.DeathShown, 3f, "the death band while the team plays on");
+            foreach (var c in Combatant.All.Where(c => c != null && c.TeamId.Value != Me.TeamId.Value).ToList()) KillOutright(c, Mates[0]);
+            yield return WaitUntil(() => ResultScreen.Instance != null && ResultScreen.Instance.IsShown, 5f, "the result screen");
+            Assert.AreEqual(MatchOutcome.Won, MatchState.Instance.LocalOutcome);
+            yield return null;
+            Assert.IsFalse(Hud.Instance.DeathShown, "the death band under the win panel");
+            yield return UiShot.Save("Logs/shots/result_dead_won.png", 1920, 1080);
+        }
+
+        [UnityTest]
         public IEnumerator Bots_ReviveAKnockedTeammate()
         {
             TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, BotReviveCalmSeconds = 0.5f };

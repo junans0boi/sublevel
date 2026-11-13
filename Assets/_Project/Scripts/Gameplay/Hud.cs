@@ -252,7 +252,8 @@ namespace Game.Gameplay
             TickMapMarker(me, player, dead);
             TickCrosshair(me, player, dead);
             TickDamageRing(me, player);
-            Show(_death, dead);
+            // The result panel says it all; the band under it only overlapped (a dead spectator whose team won).
+            Show(_death, dead && (ResultScreen.Instance == null || !ResultScreen.Instance.IsShown));
         }
 
         // ---- Per-frame updates ----

@@ -86,7 +86,8 @@ namespace Game.Tests
             Assert.IsTrue(hud.LowHealthShown, "below 30 HP the screen edges warn");
 
             me.ServerTakeDamage(40);
-            yield return WaitUntil(() => hud.DeathShown, 2f, "death message");
+            // The result panel, when there is one, takes the death band's place (they overlapped).
+            yield return WaitUntil(() => hud.DeathShown || (ResultScreen.Instance != null && ResultScreen.Instance.IsShown), 2f, "death message or result");
             Assert.AreEqual(0f, hud.HealthFill, 0.001f);
             Assert.IsFalse(hud.CrosshairVisible, "no crosshair for the dead");
         }

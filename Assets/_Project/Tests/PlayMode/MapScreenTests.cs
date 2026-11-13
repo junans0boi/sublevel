@@ -59,6 +59,34 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator SidePanel_FitsOnTheScreen_At16x10And16x9()
+        {
+            UiFocus.Set(UiScreen.Map);
+            yield return null;
+            var map = MapScreen.Instance.MapArea;
+            var side = (RectTransform)map.parent.Find("Side");
+            Assert.IsNotNull(side);
+            foreach (var size in new[] { new Vector2Int(1728, 1080), new Vector2Int(1920, 1080) })
+            {
+                yield return UiShot.Save($"Logs/shots/map_{size.x}x{size.y}.png", size.x, size.y, () =>
+                {
+                    var canvas = (RectTransform)map.parent;
+                    var bounds = new Rect(canvas.rect.xMin, canvas.rect.yMin, canvas.rect.width, canvas.rect.height);
+                    foreach (var rect in new[] { side, map })
+                    {
+                        var corners = new Vector3[4];
+                        rect.GetWorldCorners(corners);
+                        foreach (var corner in corners)
+                        {
+                            Vector2 local = canvas.InverseTransformPoint(corner);
+                            Assert.IsTrue(bounds.Contains(local), $"{rect.name} corner {local} outside {bounds} at {size}");
+                        }
+                    }
+                });
+            }
+        }
+
+        [UnityTest]
         public IEnumerator OpeningTheFocus_ShowsTheMap_AndTheKeyIsAvailable()
         {
             var screen = MapScreen.Instance;
