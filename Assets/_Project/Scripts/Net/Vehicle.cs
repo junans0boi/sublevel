@@ -405,7 +405,7 @@ namespace Game.Net
 
         // ---- Physics (simulating side only) ----
 
-        bool CanRunEngine => _state == null || (_state.Fuel01 > 0f && !_state.Disabled);
+        bool CanRunEngine => _state == null || Fuel.EngineCanRun(_state.Fuel01, _state.Disabled);
 
         void Simulate(float dt)
         {

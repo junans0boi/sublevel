@@ -51,6 +51,9 @@ namespace Game.Core
             return Math.Max(0f, fuel - rate * dt);
         }
 
+        // An empty tank or a wrecked vehicle stops the engine; it rolls on without pull.
+        public static bool EngineCanRun(float fuel, bool disabled) => fuel > 0f && !disabled;
+
         // Seconds a full tank lasts at this throttle (for the ADR and tests).
         public static float SecondsPerTank(float throttle, bool boost, bool motorcycle, FuelRules rules)
         {
