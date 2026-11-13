@@ -343,6 +343,9 @@ namespace Game.Tests
             Assert.IsFalse(me.ServerGive(unknown), "nobody takes it: refused");
 
             var receiver = me.gameObject.AddComponent<TakesAnything>();
+            // The combatant caches its receivers when it spawns (the gear and throwable components are now among them),
+            // so a component added afterwards has to be picked up again.
+            typeof(Combatant).GetField("_receivers", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(me, null);
             Assert.IsTrue(me.ServerGive(unknown));
             Assert.AreEqual(1, receiver.Taken);
             receiver.Accept = false;

@@ -373,15 +373,16 @@ namespace Game.Tests
             Assert.Greater(Mathf.DeltaAngle(yaw, pc.Yaw), 3f);
         }
 
+        // No map screen exists yet (UiFocus.MapAvailable is never set), so the key does nothing until one is added.
         [UnityTest]
-        public IEnumerator TheMapKey_OpensAndClosesTheMapScreen()
+        public IEnumerator TheMapKey_DoesNothing_UntilAMapScreenExists()
         {
             yield return LoadTestBox();
             Assert.AreEqual(UiScreen.None, UiFocus.Current);
             _input.Frame.Map = true;
             yield return null;
             yield return null;
-            Assert.AreEqual(UiScreen.Map, UiFocus.Current);
+            Assert.AreEqual(UiScreen.None, UiFocus.Current);
             _input.Frame.Map = true;
             yield return null;
             yield return null;

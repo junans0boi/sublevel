@@ -9,6 +9,7 @@ namespace Game.Gameplay
         readonly Image _background;
         readonly Image _sprite;
         readonly Text _fallback;
+        static readonly Color WeaponPlate = new Color(0.66f, 0.70f, 0.74f, 1f);
         string _key;
         string _name;
 
@@ -43,7 +44,9 @@ namespace Game.Gameplay
             bool hasItem = key.Length > 0;
             _sprite.sprite = sprite;
             _sprite.enabled = sprite != null;
-            _background.color = sprite != null || !hasItem ? UiKit.PanelLight : FallbackColor(key);
+            // The weapon renders are dark metal: they need a light plate to read on the dark panels.
+            if (sprite != null && key.StartsWith("weapon_")) _background.color = WeaponPlate;
+            else _background.color = sprite != null || !hasItem ? UiKit.PanelLight : FallbackColor(key);
             _fallback.enabled = sprite == null && hasItem;
             _fallback.text = displayName.Length > 0 ? displayName[0].ToString() : "?";
         }

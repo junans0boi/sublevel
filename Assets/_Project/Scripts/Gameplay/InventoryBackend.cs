@@ -238,7 +238,8 @@ namespace Game.Gameplay
 
         public static void DropArmor(Combatant combatant, int slot)
         {
-            if (combatant != null) combatant.CmdDropArmor(slot);
+            var gear = combatant != null ? combatant.GetComponent<CombatantGear>() : null;
+            if (gear != null) gear.CmdDropArmor(slot);
         }
 
         public static void DropGrenade(Combatant combatant)

@@ -18,6 +18,7 @@ namespace Game.Gameplay
         enum Watch { Game, Front, Side, Behind, Above }
 
         string _folder;
+        bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
         Watch _watch;
         Vector3 _home, _homeForward; // where the player spawned: out of the dummies' sight
@@ -27,11 +28,15 @@ namespace Game.Gameplay
         {
             var args = Environment.GetCommandLineArgs();
             int i = Array.IndexOf(args, "-feelcapture");
-            if (i < 0 || i + 1 >= args.Length) return;
+            int w = Array.IndexOf(args, "-worldshots");
+            if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
+            bool world = i < 0;
+            if (world) i = w;
             var go = new GameObject("FeelCapture");
             DontDestroyOnLoad(go);
             var capture = go.AddComponent<FeelCapture>();
             capture._folder = Path.GetFullPath(args[i + 1]);
+            capture._worldShots = world;
             PlayerController.InputOverride = capture;
         }
 
@@ -39,7 +44,7 @@ namespace Game.Gameplay
         {
             var f = _frame;
             // One-frame presses.
-            _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = false;
+            _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = _frame.Interact = false;
             _frame.ThrowPressed = _frame.ThrowReleased = false;
             _frame.Look = Vector2.zero;
             return f;
@@ -61,6 +66,13 @@ namespace Game.Gameplay
             }
             var me = Combatant.LocalPlayer;
             yield return new WaitForSeconds(1.5f);
+            if (_worldShots)
+            {
+                yield return WorldShots(me);
+                Debug.Log("[FeelCapture] world shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
             _home = me.transform.position;
             _homeForward = me.transform.forward;
 
@@ -91,9 +103,7 @@ namespace Game.Gameplay
             yield return Shot("02_hud_damaged");
             // The script walks into the dummies' sight later on; nothing hurts the player until the scripted death.
             me.ServerDamageFilter = _ => 0f;
-            UiFocus.Set(UiScreen.Inventory);
-            yield return new WaitForSeconds(0.4f);
-            yield return Shot("02_inventory");
+            yield return InventoryShots(me);
             UiFocus.Set(UiScreen.Menu);
             yield return new WaitForSeconds(0.4f);
             yield return Shot("02_menu");
@@ -205,6 +215,193 @@ namespace Game.Gameplay
             Application.Quit();
         }
 
+        // The four-zone inventory with items on the ground, a vest on, two calibres and two weapons, at the two
+        // resolutions that matter, plus a drag in progress.
+        IEnumerator InventoryShots(Combatant me)
+        {
+            var director = MatchDirector.Instance;
+            var gear = me.GetComponent<CombatantGear>();
+            if (gear != null)
+            {
+                gear.ServerEquip(ArmorSlot.Vest, 2);
+                gear.ServerEquip(ArmorSlot.Helmet, 1);
+            }
+            var thrower = me.GetComponent<ThrowableUser>();
+            if (thrower != null) thrower.ServerAdd(2);
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Shotgun12, Amount = 18 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Pistol9, Amount = 36 });
+            if (director != null)
+            {
+                var at = me.transform.position;
+                var fwd = me.transform.forward;
+                var right = me.transform.right;
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = 2, Amount = 30 }, at + fwd * 1.6f - right * 0.8f + Vector3.up * 0.2f);
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Vest, Tier = 3, Amount = 1 }, at + fwd * 1.6f + Vector3.up * 0.2f);
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Helmet, Tier = 2, Amount = 1 }, at + fwd * 1.6f + right * 0.8f + Vector3.up * 0.2f);
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 45 }, at + fwd * 2.2f - right * 0.4f + Vector3.up * 0.2f);
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Medkit, Amount = 1 }, at + fwd * 2.2f + right * 0.4f + Vector3.up * 0.2f);
+                director.ServerSpawnLoot(new LootEntry { Kind = LootKind.Grenade, Amount = 1 }, at + fwd * 1.0f + right * 1.0f + Vector3.up * 0.2f);
+            }
+            yield return new WaitForSeconds(0.8f);
+            foreach (var (w, h) in new[] { (1280, 720), (1920, 1080) })
+            {
+                Screen.SetResolution(w, h, FullScreenMode.Windowed);
+                yield return new WaitForSeconds(1.0f);
+                UiFocus.Set(UiScreen.Inventory);
+                yield return new WaitForSeconds(0.5f);
+                yield return Shot($"02_inventory_{h}p");
+                var screen = InventoryScreen.Instance;
+                if (screen != null && screen.VicinityCount > 0)
+                {
+                    // Dragging a ground item toward the bag, and a weapon card toward the other slot.
+                    screen.BeginDrag(screen.VicinitySource(0));
+                    screen.MoveDrag(new Vector2(w * 0.5f, h * 0.55f), null);
+                    yield return new WaitForSeconds(0.3f);
+                    yield return Shot($"02_inventory_{h}p_drag");
+                    screen.CancelDrag();
+                }
+                UiFocus.Close();
+                yield return new WaitForSeconds(0.3f);
+                if (h == 1080) yield return Shot("02_hud_1080p");
+            }
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSeconds(1.0f);
+        }
+
+        // From the elevator: a run to the nearest loot (through its building), the loot on the floor, a bot far away,
+        // then a fight with it. The player cannot be hurt for the tour.
+        IEnumerator WorldShots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            me.ServerDamageFilter = _ => 0f;
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 90 });
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("w01_elevator");
+
+            // The nearest loot that can be walked to.
+            LootItem best = null;
+            UnityEngine.AI.NavMeshPath path = null;
+            float bestLen = float.MaxValue;
+            foreach (var item in LootItem.All)
+            {
+                if (item == null) continue;
+                var p = new UnityEngine.AI.NavMeshPath();
+                if (!UnityEngine.AI.NavMesh.SamplePosition(item.transform.position, out var target, 2f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                if (!UnityEngine.AI.NavMesh.SamplePosition(me.transform.position, out var start, 3f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                if (!UnityEngine.AI.NavMesh.CalculatePath(start.position, target.position, UnityEngine.AI.NavMesh.AllAreas, p) || p.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) continue;
+                float len = 0f;
+                for (int c = 1; c < p.corners.Length; c++) len += Vector3.Distance(p.corners[c - 1], p.corners[c]);
+                if (len < 25f) continue; // far enough to be a run, near enough to be quick
+                if (len < bestLen) { bestLen = len; best = item; path = p; }
+            }
+            if (best != null)
+            {
+                Debug.Log($"[FeelCapture] running {bestLen:F0} m to loot {best.name}");
+                _frame.Sprint = true;
+                _frame.Move = new Vector2(0f, 1f);
+                int corner = 1;
+                float giveUp = Time.realtimeSinceStartup + 25f;
+                int shots = 0;
+                float nextShot = Time.realtimeSinceStartup + 2f;
+                while (corner < path.corners.Length && Time.realtimeSinceStartup < giveUp)
+                {
+                    var c = path.corners[corner];
+                    var flat = new Vector3(c.x - me.transform.position.x, 0f, c.z - me.transform.position.z);
+                    if (flat.magnitude < 0.9f) { corner++; continue; }
+                    _frame.Sprint = flat.magnitude > 6f;
+                    pc.LookAt(new Vector3(c.x, me.EyePosition.y - 0.2f, c.z));
+                    if (Time.realtimeSinceStartup > nextShot && shots < 2) { shots++; nextShot += 2.5f; yield return Shot("w02_running_" + shots); }
+                    yield return null;
+                }
+                _frame.Move = Vector2.zero;
+                _frame.Sprint = false;
+                float left = Vector3.Distance(me.transform.position, best.transform.position);
+                Debug.Log($"[FeelCapture] after the run: {left:F1} m from the loot, corner {corner}/{path.corners.Length}");
+                if (left > 4f)
+                {
+                    // Stuck on something: stand in the room instead, facing the loot, and say so.
+                    var back = (path.corners[path.corners.Length - 1] - path.corners[Mathf.Max(0, path.corners.Length - 2)]).normalized;
+                    var stand = path.corners[path.corners.Length - 1] - back * 2.5f;
+                    if (UnityEngine.AI.NavMesh.SamplePosition(stand, out var hitStand, 2f, UnityEngine.AI.NavMesh.AllAreas)) stand = hitStand.position;
+                    pc.Teleport(stand + Vector3.up * 0.1f);
+                    Debug.LogWarning("[FeelCapture] the run did not reach the loot; teleported into the room");
+                }
+                yield return new WaitForSeconds(0.5f);
+                pc.LookAt(best.transform.position);
+                yield return new WaitForSeconds(0.5f);
+                yield return Shot("w03_inside_loot");
+                _frame.Interact = true;
+                yield return new WaitForSeconds(0.3f);
+                _frame.Interact = false;
+                // A look around the room.
+                _frame.Look = new Vector2(70f, 0f);
+                yield return null;
+                yield return new WaitForSeconds(0.4f);
+                yield return Shot("w03_inside_look");
+            }
+            else Debug.LogWarning("[FeelCapture] no loot to run to");
+
+            // A bot in the distance: stand about 40 m from it on the navmesh with a clear line.
+            Combatant bot = null;
+            foreach (var c in Combatant.All)
+                if (c != null && !c.IsPlayer && !c.Dead.Value) { bot = c; break; }
+            if (bot == null) { Debug.LogWarning("[FeelCapture] no bot in the match"); yield break; }
+            Vector3 spot = default;
+            bool found = false;
+            for (int a = 0; a < 36 && !found; a++)
+            {
+                float ang = a * 10f * Mathf.Deg2Rad;
+                var probe = bot.transform.position + new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang)) * 28f;
+                if (!UnityEngine.AI.NavMesh.SamplePosition(probe, out var hit, 4f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                var from = hit.position + Vector3.up * 1.6f;
+                var to = bot.transform.position + Vector3.up * 1.3f;
+                if (Physics.Linecast(from, to, out var block) && block.collider.GetComponentInParent<Combatant>() != bot) continue;
+                spot = hit.position;
+                found = true;
+            }
+            if (!found) { Debug.LogWarning("[FeelCapture] no clear line to the bot"); yield break; }
+            pc.Teleport(spot + Vector3.up * 0.1f);
+            yield return null;
+            pc.LookAt(bot.transform.position + Vector3.up * 1.3f);
+            yield return new WaitForSeconds(1.0f);
+            yield return Shot("w04_bot_distance");
+            // Sights up and fire; the bot fights back.
+            _frame.AimHeld = true;
+            yield return new WaitForSeconds(0.7f);
+            for (int n = 0; n < 6 && !bot.Dead.Value; n++)
+            {
+                pc.LookAt(bot.transform.position + Vector3.up * 1.3f);
+                _frame.FirePressed = _frame.FireHeld = true;
+                yield return null;
+                Debug.Log($"[FeelCapture] fight {n}: bot at {Vector3.Distance(bot.transform.position, me.transform.position):F1} m, hp {bot.Hp.Value}, mag {me.ActiveMag}");
+                yield return Shot("w05_bot_fight_" + n);
+                yield return new WaitForSeconds(0.25f);
+            }
+            _frame.AimHeld = false;
+            _frame.FireHeld = false;
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("w06_after");
+            Debug.Log($"[FeelCapture] bot hp {bot.Hp.Value}, dead {bot.Dead.Value}");
+
+            // Leave the bots alone for a minute and report what they do (the player stays out of it, immune).
+            var began = new System.Collections.Generic.Dictionary<Combatant, Vector3>();
+            foreach (var c in Combatant.All) if (c != null && !c.IsPlayer) began[c] = c.transform.position;
+            pc.Teleport(_home + Vector3.up * 0.1f);
+            for (int t = 1; t <= 6; t++)
+            {
+                yield return new WaitForSeconds(10f);
+                int idx = 0;
+                var line = new System.Text.StringBuilder($"[FeelCapture] bots at {t * 10} s:");
+                foreach (var kv in began)
+                {
+                    if (kv.Key == null) continue;
+                    line.Append($" #{idx++}[moved {Vector3.Distance(kv.Key.transform.position, kv.Value):F0} m, hp {kv.Key.Hp.Value:F0}{(kv.Key.Dead.Value ? " dead" : "")}, weapon {kv.Key.ActiveWeaponId}]");
+                }
+                Debug.Log(line.ToString());
+            }
+        }
+
         // Standing against crouched from the side and from behind, then crouch-walking.
         IEnumerator CrouchShots()
         {
@@ -275,6 +472,9 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.6f);
             yield return Shot("40_armor_hud");
 
+            // Aim down so it lands a few metres ahead, in view, instead of flying over the wall.
+            if (pc != null) pc.LookAt(_home + _homeForward * 4f);
+            yield return new WaitForSeconds(0.3f);
             // Aiming (the preview arc), then let go.
             _frame.ThrowPressed = true;
             _frame.ThrowHeld = true;
@@ -284,12 +484,18 @@ namespace Game.Gameplay
             _frame.ThrowReleased = true;
             yield return new WaitForSeconds(0.3f);
             yield return Shot("41_grenade_thrown");
-            // The fuse is counted from the throw: catch the flash, the light and the smoke over three frames.
+            // The fuse is counted from the throw: shots every 0.2 s around the bang, and the moment it is reported.
             float fuse = ThrowableRules.Current.FuseSeconds;
-            yield return new WaitForSeconds(Mathf.Max(0f, fuse - 0.4f));
-            yield return Burst("42_grenade_blast", 3, 0.08f);
-            yield return new WaitForSeconds(1.2f);
-            yield return Shot("42_grenade_smoke");
+            float thrownAt = Time.time - 0.3f;
+            Action<Vector3, FishNet.Object.NetworkObject> logBang = (c, t) => Debug.Log($"[FeelCapture] grenade exploded {Time.time - thrownAt:F2} s after the throw at {c}");
+            ThrownItem.ClientExploded += logBang;
+            yield return new WaitForSeconds(Mathf.Max(0f, fuse - 0.9f));
+            for (int n = 0; n < 9; n++)
+            {
+                yield return Shot($"42_grenade_blast_{n}");
+                yield return new WaitForSeconds(0.12f);
+            }
+            ThrownItem.ClientExploded -= logBang;
         }
 
         Combatant[] Dummies()

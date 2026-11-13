@@ -339,7 +339,7 @@ public static class ItemIconBuilder
         d = Mathf.Max(d, -Circle(p.X, p.Y, 128f, 202f, 30f));                  // neck
         d = Mathf.Max(d, -Circle(p.X, p.Y, 36f, 148f, 36f));                    // arm holes
         d = Mathf.Max(d, -Circle(p.X, p.Y, 220f, 148f, 36f));
-        d = Mathf.Max(d, -(30f - p.Y));                                         // flat bottom
+        d = Mathf.Max(d, 30f - p.Y);                                         // flat bottom
         p.Fill(d, Slate, Shade(p.X - 128f, 90f) * 0.5f + 0.5f);
         // plate pouch with tier bars
         float pouch = RRect(p.X, p.Y, 128f, 100f, 40f, 44f, 8f);

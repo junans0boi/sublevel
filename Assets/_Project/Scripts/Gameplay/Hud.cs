@@ -170,7 +170,9 @@ namespace Game.Gameplay
 
             var me = Combatant.LocalPlayer;
             bool show = me != null;
-            if (_canvas.enabled != show) _canvas.enabled = show;
+            // The inventory has its own copy of everything the HUD shows (armour, ammo, grenades); drawn through its panels it only clutters.
+            bool drawn = show && UiFocus.Current != UiScreen.Inventory;
+            if (_canvas.enabled != drawn) _canvas.enabled = drawn;
             if (!show) return;
 
             var player = PlayerController.Local;

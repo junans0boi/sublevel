@@ -479,24 +479,38 @@ public static partial class WorldBuilder
         return picked;
     }
 
-    // Temporary until M2-2/M2-3: players come up in the elevators in turn, a training dummy holds one convergence
-    // point per region.
+    // Temporary until M2-2/M2-3: players come up in the elevators in turn; bots hold one convergence point per region
+    // (the one farthest from the region's elevators) and four more stand at loot points spread over the rest of the map.
+    const int ExtraBots = 4;
     static void AddMatch(WorldPlan plan, WorldMeshes.HeightField ground, WorldInfo info, List<Vector3> loot)
     {
         var players = info.Elevators.Select(e => MatchKit.At(e.Spawn.x, e.Spawn.y + SpawnLift, e.Spawn.z, e.SpawnYawDeg)).ToArray();
-        var dummies = new List<MatchKit.Spawn>();
+        var chosen = new List<WorldPoint>();
         for (int r = 0; r < plan.Regions.Count; r++)
         {
-            // The point farthest from the region's elevators: the dummies shoot, and nobody should be shot at
-            // while still standing in the elevator.
+            // Nobody should be shot at while still standing in the elevator.
             var point = plan.ConvergencePoints.Where(p => p.Region == r)
                 .OrderByDescending(p => plan.Elevators.Where(e => e.Region == r).Select(e => (e.X - p.X) * (e.X - p.X) + (e.Z - p.Z) * (e.Z - p.Z)).DefaultIfEmpty(0f).Min())
                 .FirstOrDefault();
-            if (point == null) continue;
-            var at = OnGround(ground, point.X, point.Z);
-            dummies.Add(MatchKit.At(at.x, at.y + 0.05f, at.z));
+            if (point != null) chosen.Add(point);
         }
-        MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), dummies.ToArray());
+        // Farthest-point sampling over the loot points (the convergence points are one per region and already used)
+        // keeps the extra bots far from the elevators and from each other.
+        var candidates = loot.Where(l => plan.Elevators.All(e => (e.X - l.x) * (e.X - l.x) + (e.Z - l.z) * (e.Z - l.z) > 60f * 60f)).ToList();
+        float Spread(Vector3 l) => chosen.Select(c => (c.X - l.x) * (c.X - l.x) + (c.Z - l.z) * (c.Z - l.z)).DefaultIfEmpty(1e9f).Min();
+        var extra = new List<Vector3>();
+        for (int n = 0; n < ExtraBots && candidates.Count > 0; n++)
+        {
+            var best = candidates.OrderByDescending(l => Mathf.Min(Spread(l), extra.Select(e => (e.x - l.x) * (e.x - l.x) + (e.z - l.z) * (e.z - l.z)).DefaultIfEmpty(1e9f).Min())).First();
+            extra.Add(best);
+            candidates.Remove(best);
+        }
+        var bots = chosen.Select(point =>
+        {
+            var at = OnGround(ground, point.X, point.Z);
+            return MatchKit.At(at.x, at.y + 0.05f, at.z);
+        }).Concat(extra.Select(l => MatchKit.At(l.x, l.y + 0.05f, l.z))).ToArray();
+        MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), new MatchKit.Spawn[0], bots);
     }
 
     // The outdoor map draws with its own URP renderer: the project's, without the SSAO pass. On this map SSAO and the
