@@ -395,6 +395,23 @@ namespace Game.Net
             return true;
         }
 
+        // Timed healing (CombatantHealing) gives health and uses up a medkit itself when a use finishes.
+        // Returns the health actually given.
+        public float ServerHeal(float amount)
+        {
+            if (!IsServerInitialized || _health == null || _health.IsDead) return 0f;
+            float healed = _health.Heal(amount);
+            if (healed > 0f) Push();
+            return healed;
+        }
+
+        public bool ServerConsumeMedkit()
+        {
+            if (!IsServerInitialized || _loadout == null || !_loadout.RemoveMedkit()) return false;
+            Push();
+            return true;
+        }
+
         // Empties weapons, ammo and medkits. Non-players keep at most DroppedReserveCap rounds per calibre in what
         // they hand back (the rest is gone), so a dummy's 9999 rounds do not litter the ground. `into` (may be null)
         // receives the contents as loot entries; the replicated values are cleared either way.

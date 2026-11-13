@@ -6,7 +6,7 @@ using UnityEngine;
 
 // Generates the inventory item icons into Assets/_Project/Resources/Icons/<key>.png (ADR-054):
 //  - weapons: the project's CC0 weapon models rendered from the side onto a transparent background
-//  - ammo, medkit, armour, grenade: flat glyphs drawn from signed-distance shapes, supersampled
+//  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke: flat glyphs drawn from signed-distance shapes, supersampled
 // Run: tools/unity.sh run-gfx ItemIconBuilder.Build   (exits the editor with 0 on success, 1 on failure)
 public static class ItemIconBuilder
 {
@@ -379,6 +379,56 @@ public static class ItemIconBuilder
         p.Fill(ring, Steel, 1f, false);
     }
 
+    // A rolled bandage seen from the side: cream roll with wound layers, a loose tail and a red stripe.
+    static void DrawBandage(Painter p)
+    {
+        var cloth = new Color(0.93f, 0.90f, 0.82f);
+        // loose tail running off to the right along the floor
+        p.Fill(Box(p.X, p.Y, 182f, 66f, 54f, 7f), cloth * 0.92f, 1f);
+        // the roll: a disc from the front with rings
+        float roll = Circle(p.X, p.Y, 106f, 112f, 68f);
+        p.Fill(roll, cloth, Shade(p.X - 106f, 68f) * 0.5f + 0.5f);
+        if (roll < -4f)
+        {
+            float r = Circle(p.X, p.Y, 106f, 112f, 0f);
+            for (int i = 0; i < 3; i++)
+                if (Mathf.Abs(r - (24f + i * 17f)) < 1.8f) p.Fill(true, new Color(0.62f, 0.58f, 0.5f, 1f));
+            p.Fill(Circle(p.X, p.Y, 106f, 112f, 12f), new Color(0.35f, 0.32f, 0.28f), 1f, false);
+        }
+        // red stripe across the roll
+        if (roll < -4f) p.Fill(Box(p.X, p.Y, 106f, 112f, 66f, 6f) < 0f && Mathf.Abs(p.Y - 112f) < 6f, new Color(0.82f, 0.2f, 0.18f, 1f));
+    }
+
+    // A small first-aid pouch: a soft red case with a zip line and a white cross.
+    static void DrawFirstAid(Painter p)
+    {
+        var red = new Color(0.78f, 0.22f, 0.20f);
+        p.Fill(RRect(p.X, p.Y, 128f, 112f, 92f, 62f, 26f), red, Shade(p.X - 128f, 92f) * 0.5f + 0.5f);
+        // zip line along the top
+        p.Fill(Box(p.X, p.Y, 128f, 152f, 80f, 2.5f), red * 0.55f, 1f, false);
+        // pull tab
+        p.Fill(RRect(p.X, p.Y, 196f, 152f, 14f, 8f, 4f), Steel, 1f, false);
+        float cross = Mathf.Min(Box(p.X, p.Y, 128f, 104f, 38f, 12f), Box(p.X, p.Y, 128f, 104f, 12f, 38f));
+        p.Fill(cross, new Color(0.96f, 0.97f, 0.96f), 1f, false);
+    }
+
+    // A smoke canister: grey cylinder with a collar, a top lever and a puff of smoke above.
+    static void DrawSmoke(Painter p)
+    {
+        var body = new Color(0.55f, 0.58f, 0.60f);
+        float dx = p.X - 112f;
+        p.Fill(Profile(dx, p.Y, 24f, 140f, 44f), body, Shade(dx, 44f));
+        // collar and top cap
+        p.Fill(Profile(dx, p.Y, 132f, 156f, 30f), Steel * 0.85f, Shade(dx, 30f));
+        // coloured band
+        p.Fill(Box(p.X, p.Y, 112f, 86f, 42f, 10f), new Color(0.88f, 0.62f, 0.18f), 1f, false);
+        // spoon lever
+        p.Fill(Mathf.Min(Box(p.X, p.Y, 146f, 164f, 34f, 5f), Box(p.X, p.Y, 176f, 130f, 5f, 38f)), Steel);
+        // the puff: overlapping pale discs
+        float puff = Mathf.Min(Circle(p.X, p.Y, 84f, 200f, 24f), Mathf.Min(Circle(p.X, p.Y, 118f, 214f, 28f), Circle(p.X, p.Y, 156f, 200f, 22f)));
+        p.Fill(puff, new Color(0.86f, 0.88f, 0.90f), 1f);
+    }
+
     static void BuildGlyphs()
     {
         DrawIcon("ammo_9mm", DrawAmmo9mm);
@@ -387,6 +437,9 @@ public static class ItemIconBuilder
         DrawIcon("ammo_12ga", DrawAmmo12ga);
         DrawIcon("medkit", DrawMedkit);
         DrawIcon("grenade", DrawGrenade);
+        DrawIcon("bandage", DrawBandage);
+        DrawIcon("firstaid", DrawFirstAid);
+        DrawIcon("smoke", DrawSmoke);
         for (int tier = 1; tier <= 3; tier++)
         {
             int t = tier;

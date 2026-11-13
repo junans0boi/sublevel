@@ -15,6 +15,7 @@ namespace Game.Gameplay
             "helmet_1", "helmet_2", "helmet_3",
             "vest_1", "vest_2", "vest_3",
             "grenade",
+            "bandage", "firstaid", "smoke",
         };
 
         // Caches misses too (stored as null) so repeated lookups never hit Resources again.
