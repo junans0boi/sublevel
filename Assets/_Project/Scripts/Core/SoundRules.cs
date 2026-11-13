@@ -81,6 +81,10 @@ namespace Game.Core
 
         public static float HeardDistance(float meters, bool suppressed) => suppressed ? meters * SuppressedDistanceFactor : meters;
 
+        // How far a shot is heard by bots (and anything else that listens by radius): the same factor as the ears
+        // above, applied the other way round, so a player and a bot hear a suppressed shot from the same distance.
+        public static float ShotRadius(float radius, bool suppressed) => suppressed ? radius / SuppressedDistanceFactor : radius;
+
         public static void ShotLayers(float heardMeters, out float near, out float far)
         {
             float t = (heardMeters - NearLayerFull) / (FarLayerFull - NearLayerFull);

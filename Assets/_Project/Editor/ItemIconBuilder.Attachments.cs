@@ -50,6 +50,54 @@ public static partial class ItemIconBuilder
             p.Fill(d, Polymer, 1f);
         });
         DrawIcon("att_stock", DrawStock);
+        DrawIcon("att_comp", p => DrawMuzzle(p, 1));
+        DrawIcon("att_flash", p => DrawMuzzle(p, 2));
+        DrawIcon("att_supp", p => DrawMuzzle(p, 3));
+        DrawIcon("att_mag", DrawMagazine);
+    }
+
+    // Muzzle devices seen from the side, mounting ring on the left, the bore end to the right.
+    // 1 compensator: a short block with slots cut across the top; 2 flash hider: a tube ending in prongs;
+    // 3 suppressor: a long fat can with bands.
+    static void DrawMuzzle(Painter p, int kind)
+    {
+        float cy = 128f;
+        // mounting ring (threaded collar)
+        p.Fill(RRect(p.X, p.Y, 44f, cy, 12f, 26f, 4f), PolymerDark, 1f);
+        if (kind == 1)
+        {
+            float body = RRect(p.X, p.Y, 128f, cy, 62f, 36f, 8f);
+            p.Fill(body, Polymer, Shade(p.Y - cy, 36f) * 0.5f + 0.5f);
+            if (body < -4f) for (int i = 0; i < 3; i++) p.Fill(Mathf.Abs(p.X - (100f + i * 28f)) < 6f && p.Y > cy + 4f, PolymerDark);
+            p.Fill(RRect(p.X, p.Y, 194f, cy, 8f, 36f, 3f), PolymerDark, 1f);
+        }
+        else if (kind == 2)
+        {
+            float tube = RRect(p.X, p.Y, 96f, cy, 48f, 26f, 6f);
+            p.Fill(tube, Polymer, Shade(p.Y - cy, 26f) * 0.5f + 0.5f);
+            // three prongs fanning out of the tube end
+            for (int i = -1; i <= 1; i++)
+                p.Fill(RRect(p.X, p.Y, 190f, cy + i * 20f, 40f, 7f, 3f), Polymer, 1.05f);
+            p.Fill(RRect(p.X, p.Y, 150f, cy, 5f, 34f, 2f), PolymerDark, 1f);
+        }
+        else
+        {
+            float can = RRect(p.X, p.Y, 138f, cy, 100f, 38f, 12f);
+            p.Fill(can, Polymer, Shade(p.Y - cy, 38f) * 0.5f + 0.5f);
+            if (can < -4f) for (int i = 0; i < 4; i++) p.Fill(Mathf.Abs(p.X - (86f + i * 42f)) < 2.4f, PolymerDark);
+            p.Fill(RRect(p.X, p.Y, 232f, cy, 6f, 24f, 3f), PolymerDark, 1f);
+        }
+    }
+
+    // A magazine seen from the side: a slightly curved box wider at the top with feed lips and a floor plate.
+    static void DrawMagazine(Painter p)
+    {
+        p.Rotate(-12f, 128f, 128f);
+        float body = RRect(p.X, p.Y, 128f, 120f, 36f, 84f, 8f);
+        p.Fill(body, Polymer, Shade(p.X - 128f, 36f) * 0.5f + 0.5f);
+        if (body < -4f) for (int i = 0; i < 5; i++) p.Fill(Mathf.Abs(p.Y - (70f + i * 22f)) < 2f, PolymerDark);
+        p.Fill(RRect(p.X, p.Y, 128f, 200f, 28f, 8f, 3f), PolymerDark, 1f);
+        p.Fill(RRect(p.X, p.Y, 128f, 34f, 42f, 8f, 4f), Pip, 0.85f);
     }
 
     // The clamp that sits on the rail: a flat block with two bolts.

@@ -231,6 +231,15 @@ namespace Game.Net
         // Seconds between shots of the weapon in hand in its current mode (single shots on an automatic weapon are slower).
         public double FireInterval(WeaponDef weapon) =>
             Loadout.IntervalAfter(weapon, ActiveFireMode, 1, GameData.Rules.Slots.SingleModeMinInterval);
+        // ADR-102: a magazine attachment changed on `slot`; rounds that no longer fit go back to the reserve.
+        public void ServerSetSlotMods(int slot, float magFactor, float reloadFactor)
+        {
+            if (IsServerInitialized && _loadout != null && _loadout.SetSlotMods(slot, magFactor, reloadFactor)) Push();
+        }
+
+        // ADR-102: how far bots hear this combatant's shot; a suppressor shrinks it by the same factor as the ears.
+        public float ShotHearingRadius(float radius) => SoundRules.ShotRadius(radius, OpticsPart != null && OpticsPart.ActiveMods.Suppressed);
+
         // Loadout questions for the bots.
         public bool HasFreeWeaponSlot => WeaponInSlot(0) == 0 || WeaponInSlot(1) == 0 || WeaponInSlot(2) == 0;
         public bool HasAnyWeapon => WeaponInSlot(0) != 0 || WeaponInSlot(1) != 0 || WeaponInSlot(2) != 0;
@@ -405,7 +414,7 @@ namespace Game.Net
                 ServerLaunch(origin, dir, weapon, aimMeters >= 0f ? aimMeters : EffectiveZero);
             }
             // Bots hear the shot where it was fired, whoever fired it.
-            BotNoise.Emit(origin.x, origin.y, origin.z, BotRules.Current.GunshotHearingRadius, ObjectId);
+            BotNoise.Emit(origin.x, origin.y, origin.z, ShotHearingRadius(BotRules.Current.GunshotHearingRadius), ObjectId);
             Push();
             return true;
         }

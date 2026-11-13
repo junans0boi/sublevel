@@ -53,12 +53,12 @@ namespace Game.Tests
             Vector3 origin = me.transform.position + me.transform.forward * 2.2f;
             int n = 0;
             foreach (int id in AllIds)
-                MatchDirector.Instance.ServerSpawnLoot(Optics.ToLoot(id), origin + me.transform.right * (n++ - 3.5f) * 0.45f + Vector3.up * 0.3f);
+                MatchDirector.Instance.ServerSpawnLoot(Optics.ToLoot(id), origin + me.transform.right * (n++ - 3.5f) * 0.32f + Vector3.up * 0.3f);
             yield return new WaitForSeconds(1.5f);
             var go = new GameObject("ShotCam");
             var cam = go.AddComponent<Camera>();
             cam.fieldOfView = 40f;
-            go.transform.position = origin + Vector3.up * 1.4f - me.transform.forward * 1.2f;
+            go.transform.position = origin + Vector3.up * 1.5f - me.transform.forward * 1.1f;
             go.transform.rotation = Quaternion.LookRotation(origin - go.transform.position, Vector3.up);
             yield return Render(cam, Path.Combine(folder, "att_02_ground_models.png"));
             UnityEngine.Object.Destroy(go);

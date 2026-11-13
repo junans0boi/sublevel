@@ -12,7 +12,7 @@ namespace Game.Tests
     {
         const string DataFolder = "Assets/_Project/Data/Resources/GameData/";
         const int Pistol = 1, Smg = 2, Rifle = 3, Shotgun = 4, Sniper = 5;
-        const int VerticalGrip = 12, AngledGrip = 13, CurvedGrip = 14, Stock = 15;
+        const int Compensator = 9, FlashHider = 10, Suppressor = 11, VerticalGrip = 12, AngledGrip = 13, CurvedGrip = 14, Stock = 15, ExtMag = 16;
 
         static readonly OpticRules Rules = new OpticRules();
         static OpticRules Json() => JsonUtility.FromJson<OpticRules>(File.ReadAllText(DataFolder + "optics.json"));
@@ -69,6 +69,9 @@ namespace Game.Tests
                 Assert.AreEqual(a.RecoilPitch, b.RecoilPitch, 1e-5f, a.Name);
                 Assert.AreEqual(a.RecoilYaw, b.RecoilYaw, 1e-5f, a.Name);
                 Assert.AreEqual(a.RecoverFactor, b.RecoverFactor, 1e-5f, a.Name);
+                Assert.AreEqual(a.Suppressed, b.Suppressed, a.Name);
+                Assert.AreEqual(a.MagFactor, b.MagFactor, 1e-5f, a.Name);
+                Assert.AreEqual(a.ReloadFactor, b.ReloadFactor, 1e-5f, a.Name);
             }
             foreach (var w in Rules.AttachmentSlots)
                 CollectionAssert.AreEqual(w.Ids, json.AttachmentsFor(w.WeaponId), "weapon " + w.WeaponId);
@@ -211,6 +214,108 @@ namespace Game.Tests
             var a = Spray(w, null, rules.Recoil, 1f);
             var b = Spray(w, AttachMods.None, rules.Recoil, 1f);
             CollectionAssert.AreEqual(a.pitch, b.pitch);
+        }
+
+        // ---- G7b: muzzle devices and the magazine ----
+
+        [Test]
+        public void MuzzleDevices_FitOnlyTheRightGuns_OnePerPlace()
+        {
+            foreach (var rules in new[] { Rules, Json() })
+            {
+                foreach (int id in new[] { Compensator, FlashHider, Suppressor })
+                {
+                    Assert.AreEqual(AttachSlot.Muzzle, Rules.FindAttachment(id).Slot);
+                    Assert.IsTrue(Optics.CanAttach(Rifle, id, rules));
+                    Assert.IsTrue(Optics.CanAttach(Pistol, id, rules), "a pistol takes a muzzle device");
+                }
+                Assert.IsFalse(Optics.CanAttach(Shotgun, FlashHider, rules));
+                Assert.IsTrue(Optics.CanAttach(Shotgun, Suppressor, rules));
+                Assert.IsTrue(Optics.CanAttach(Pistol, ExtMag, rules));
+                Assert.IsFalse(Optics.CanAttach(Shotgun, ExtMag, rules), "a tube-fed shotgun takes no magazine");
+            }
+        }
+
+        [Test]
+        public void Suppressor_IsTheOnlyQuietOne_AndOnTopOfRecoilItStillStacks()
+        {
+            Assert.IsTrue(Fit(Suppressor).Suppressed);
+            Assert.IsFalse(Fit(Compensator).Suppressed);
+            Assert.IsFalse(Fit(VerticalGrip, Stock).Suppressed);
+            Assert.AreEqual(0.88f * 0.85f * 0.92f, Fit(Compensator, VerticalGrip, Stock).Pitch, 1e-5f);
+            Assert.AreEqual(1f, Fit(ExtMag).Pitch, "a magazine does not touch recoil");
+        }
+
+        [Test]
+        public void SuppressedShot_IsHeardByBotsAndEarsFromTheSameDistance()
+        {
+            float radius = BotRules.Current.GunshotHearingRadius;
+            float quiet = SoundRules.ShotRadius(radius, true);
+            Assert.AreEqual(radius / SoundRules.SuppressedDistanceFactor, quiet, 1e-4f);
+            Assert.AreEqual(radius, SoundRules.ShotRadius(radius, false));
+            // A listener d metres away hears the suppressed shot as one from d x factor metres: inside the bot radius
+            // exactly when d is inside the shrunk radius.
+            foreach (float d in new[] { 5f, quiet - 0.01f, quiet + 0.01f, 60f })
+                Assert.AreEqual(d <= quiet, SoundRules.HeardDistance(d, true) <= radius, "distance " + d);
+        }
+
+        static Loadout RifleLoadout(out int slot, int mag = 30)
+        {
+            var l = new Loadout(Weapons());
+            l.AddWeapon(Rifle, mag);
+            slot = l.WeaponInSlot(0) == Rifle ? 0 : 1;
+            l.AddAmmo(AmmoType.Rifle556, 200);
+            return l;
+        }
+
+        [Test]
+        public void ExtendedMagazine_RaisesTheCapacity_AndTheReloadTakesLongerByTheRatio()
+        {
+            var weapon = Weapons().Find(Rifle);
+            var mods = Fit(ExtMag);
+            Assert.AreEqual(40, Mathf.RoundToInt(weapon.MagSize * mods.MagFactor), "30 -> 40");
+
+            var plain = RifleLoadout(out int s0, 10);
+            Assert.AreEqual(30, plain.MagCapacity(s0));
+            Assert.IsTrue(plain.TryStartReload(0));
+            Assert.IsTrue(plain.Tick(weapon.ReloadTime + 0.01));
+            Assert.AreEqual(30, plain.MagInSlot(s0));
+
+            var big = RifleLoadout(out int s1, 10);
+            Assert.IsTrue(big.SetSlotMods(s1, mods.MagFactor, mods.ReloadFactor));
+            Assert.AreEqual(40, big.MagCapacity(s1));
+            Assert.IsTrue(big.TryStartReload(0));
+            Assert.IsFalse(big.Tick(weapon.ReloadTime + 0.01), "still reloading when the plain one is done");
+            Assert.IsFalse(big.Tick(weapon.ReloadTime * 1.1 - 0.01));
+            Assert.IsTrue(big.Tick(weapon.ReloadTime * mods.ReloadFactor + 0.01));
+            Assert.AreEqual(40, big.MagInSlot(s1), "the bigger magazine fills");
+            Assert.AreEqual(200 - 30, big.Reserve(AmmoType.Rifle556));
+            Assert.IsFalse(big.TryStartReload(10), "a full extended magazine does not reload");
+        }
+
+        [Test]
+        public void TakingTheMagazineOff_ReturnsTheExtraRoundsToTheReserve()
+        {
+            var mods = Fit(ExtMag);
+            var l = RifleLoadout(out int slot, 40);
+            Assert.AreEqual(40, l.MagInSlot(slot) , "placed with 40 before the magazine is told");
+            l.SetSlotMods(slot, mods.MagFactor, mods.ReloadFactor);
+            Assert.AreEqual(40, l.MagInSlot(slot));
+            Assert.IsTrue(l.SetSlotMods(slot, 1f, 1f));
+            Assert.AreEqual(30, l.MagInSlot(slot));
+            Assert.AreEqual(210, l.Reserve(AmmoType.Rifle556));
+            Assert.IsFalse(l.SetSlotMods(slot, 1f, 1f), "nothing changed");
+        }
+
+        [Test]
+        public void ShellLoadedShotgun_IgnoresAMagazineFactor()
+        {
+            var l = new Loadout(Weapons());
+            l.AddWeapon(Shotgun, 0);
+            int slot = l.WeaponInSlot(0) == Shotgun ? 0 : 1;
+            var w = Weapons().Find(Shotgun);
+            l.SetSlotMods(slot, 1.33f, 1.1f);
+            Assert.AreEqual(w.MagSize, l.MagCapacity(slot));
         }
 
         sealed class FloatCompare : System.Collections.IComparer

@@ -29,6 +29,7 @@ namespace Game.Net
         Combatant _combatant;
         // Server truth; the SyncVars mirror it.
         readonly int[] _server = new int[MaxSlots];
+        readonly int[] _applied = new int[MaxSlots]; // what the loadout was last told about (0 = nothing fitted)
         ulong _bag;
         CombatantCarry _carry;
 
@@ -97,6 +98,13 @@ namespace Game.Net
             int count = SlotCount;
             for (int i = 0; i < count; i++)
             {
+                // ADR-102: the magazine attachment's effect on the loadout follows what is fitted (only when it changes).
+                if (_server[i] != _applied[i])
+                {
+                    _applied[i] = _server[i];
+                    var mods = Attachments.ModsOf(_server[i], OpticRules.Current);
+                    _combatant.ServerSetSlotMods(i, mods.MagFactor, mods.ReloadFactor);
+                }
                 if (_server[i] == 0) continue;
                 for (int s = 0; s < Attachments.Slots; s++)
                 {

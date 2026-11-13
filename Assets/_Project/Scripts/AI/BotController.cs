@@ -930,7 +930,7 @@ namespace Game.AI
             if (!_self.ServerFire(Quaternion.LookRotation(to / distance) * off * Vector3.forward, distance)) return;
             _lastAttackAt = now;
             if (!weapon.Auto) _nextTrigger = now + Mathf.Max(weapon.FireInterval, _rules.SemiAutoInterval);
-            BotNoise.Emit(eye.x, eye.y, eye.z, _rules.GunshotHearingRadius, _self.ObjectId, NoiseKind.Gunshot);
+            BotNoise.Emit(eye.x, eye.y, eye.z, _self.ShotHearingRadius(_rules.GunshotHearingRadius), _self.ObjectId, NoiseKind.Gunshot);
         }
 
         // An enemy right in front gets punched (ADR-059), through the same server method as a player's punch;

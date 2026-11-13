@@ -29,6 +29,9 @@ namespace Game.Core
         readonly float _medkitHeal;
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
+        // ADR-102: magazine attachments per slot: multiplies the rounds the magazine holds and the reload time.
+        readonly float[] _magFactor = { 1f, 1f, 1f, 1f, 1f };
+        readonly float[] _reloadFactor = { 1f, 1f, 1f, 1f, 1f };
         // How many times B was pressed for the weapon in each slot (an index into its modes). Cleared whenever
         // the slot gets another weapon.
         readonly int[] _slotModeStep = new int[SlotCount];
@@ -115,6 +118,32 @@ namespace Game.Core
 
         public int WeaponInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotWeapon[slot] : 0;
         public int MagInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotMag[slot] : 0;
+
+        // Rounds the magazine of the weapon in `slot` holds with its magazine attachment (shell-loaded weapons keep theirs).
+        public int MagCapacity(int slot)
+        {
+            var w = slot >= 0 && slot < SlotCount ? _table.Find(_slotWeapon[slot]) : null;
+            if (w == null) return 0;
+            return w.ReloadsByShell || w.MagSize <= 1 ? w.MagSize : Math.Max(w.MagSize, (int)Math.Round(w.MagSize * _magFactor[slot]));
+        }
+
+        // Sets what the magazine attachment on `slot` does. Rounds that no longer fit go back to the reserve.
+        // True when anything changed (the caller pushes the state).
+        public bool SetSlotMods(int slot, float magFactor, float reloadFactor)
+        {
+            if (slot < 0 || slot >= SlotCount) return false;
+            if (_magFactor[slot] == magFactor && _reloadFactor[slot] == reloadFactor) return false;
+            _magFactor[slot] = magFactor;
+            _reloadFactor[slot] = reloadFactor;
+            var w = _table.Find(_slotWeapon[slot]);
+            int cap = MagCapacity(slot);
+            if (w != null && _slotMag[slot] > cap)
+            {
+                _reserve[(int)w.Ammo] += _slotMag[slot] - cap;
+                _slotMag[slot] = cap;
+            }
+            return true;
+        }
         public int Reserve(AmmoType type) => (int)type >= 0 && (int)type < _reserve.Length ? _reserve[(int)type] : 0;
         public WeaponDef ActiveWeapon => _table.Find(_slotWeapon[ActiveSlot]);
         public bool HasAnyWeapon
@@ -208,6 +237,8 @@ namespace Game.Core
             if (_slotWeapon[a] != 0 && !CanHold(b, _slotWeapon[a])) return false;
             int weapon = _slotWeapon[a]; _slotWeapon[a] = _slotWeapon[b]; _slotWeapon[b] = weapon;
             int mag = _slotMag[a]; _slotMag[a] = _slotMag[b]; _slotMag[b] = mag;
+            float mf = _magFactor[a]; _magFactor[a] = _magFactor[b]; _magFactor[b] = mf;
+            float rf = _reloadFactor[a]; _reloadFactor[a] = _reloadFactor[b]; _reloadFactor[b] = rf;
             int step = _slotModeStep[a]; _slotModeStep[a] = _slotModeStep[b]; _slotModeStep[b] = step;
             if (ActiveSlot == a) ActiveSlot = b;
             else if (ActiveSlot == b) ActiveSlot = a;
@@ -292,9 +323,9 @@ namespace Game.Core
         public bool TryStartReload(double now)
         {
             var w = ActiveWeapon;
-            if (w == null || IsReloading || _slotMag[ActiveSlot] >= w.MagSize || _reserve[(int)w.Ammo] <= 0) return false;
+            if (w == null || IsReloading || _slotMag[ActiveSlot] >= MagCapacity(ActiveSlot) || _reserve[(int)w.Ammo] <= 0) return false;
             // Empty takes longer than a tactical reload; a shell-by-shell weapon loads its first round after this.
-            _reloadEndTime = now + w.ReloadSeconds(_slotMag[ActiveSlot]);
+            _reloadEndTime = now + w.ReloadSeconds(_slotMag[ActiveSlot]) * _reloadFactor[ActiveSlot];
             return true;
         }
 
@@ -318,7 +349,7 @@ namespace Game.Core
             }
             _reloadEndTime = -1;
             if (w == null) return true;
-            int need = w.MagSize - _slotMag[ActiveSlot];
+            int need = MagCapacity(ActiveSlot) - _slotMag[ActiveSlot];
             int take = need < _reserve[(int)w.Ammo] ? need : _reserve[(int)w.Ammo];
             _slotMag[ActiveSlot] += take;
             _reserve[(int)w.Ammo] -= take;

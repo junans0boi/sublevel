@@ -27,6 +27,7 @@ namespace Game.Tests
             "drink", "pill", "syringe",
             "backpack_1", "backpack_2", "backpack_3", // ADR-091
             "att_grip_v", "att_grip_a", "att_grip_c", "att_stock", // ADR-100
+            "att_comp", "att_flash", "att_supp", "att_mag", // ADR-102
         };
 
         static Type IconsType()
@@ -39,6 +40,22 @@ namespace Game.Tests
         static string[] KnownKeys() => (string[])IconsType().GetField("KnownKeys", BindingFlags.Public | BindingFlags.Static).GetValue(null);
 
         static Sprite Get(string key) => (Sprite)IconsType().GetMethod("Get", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { key });
+
+        [Test]
+        public void OpticKey_MapsEveryOpticAndAttachmentIdToItsOwnIcon()
+        {
+            var method = IconsType().GetMethod("OpticKey", BindingFlags.Public | BindingFlags.Static);
+            string Key(int id) => (string)method.Invoke(null, new object[] { id });
+            Assert.AreEqual("optic_reddot", Key(1));
+            Assert.AreEqual("optic_15x", Key(8));
+            Assert.AreEqual("att_comp", Key(9));
+            Assert.AreEqual("att_supp", Key(11));
+            Assert.AreEqual("att_grip_v", Key(12));
+            Assert.AreEqual("att_stock", Key(15));
+            Assert.AreEqual("att_mag", Key(16));
+            Assert.AreEqual("", Key(0));
+            Assert.AreEqual("", Key(17));
+        }
 
         [Test]
         public void KnownKeys_AreTheExpectedTwentyNine_WithoutDuplicates()

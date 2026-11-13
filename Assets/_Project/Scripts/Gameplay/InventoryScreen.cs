@@ -936,7 +936,7 @@ namespace Game.Gameplay
                 for (int s = 1; s < Attachments.Slots; s++)
                 {
                     int ci = slot * 4 + s - 1;
-                    var small = UiKit.Rect("Attach" + s, card, TopLeft, TopLeft, new Vector2(width - Pad - (Attachments.Slots - s) * (AttachChip + AttachGap) + AttachGap, -8f), new Vector2(AttachChip, AttachChip));
+                    var small = UiKit.Rect("Attach" + s, card, TopLeft, TopLeft, new Vector2(width - Pad - 12f - (Attachments.Slots - s) * (AttachChip + AttachGap) + AttachGap, -8f), new Vector2(AttachChip, AttachChip));
                     UiKit.Box(small, UiKit.Panel, true);
                     _attachIcon[ci] = InventoryItemIcon.Build(UiKit.Fill("Icon", small, 2f));
                     _attachDrag[ci] = small.gameObject.AddComponent<InventoryDragItem>();

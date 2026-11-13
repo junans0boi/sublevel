@@ -18,6 +18,11 @@ namespace Game.Core
         public float RecoilPitch = 1f;
         public float RecoilYaw = 1f;
         public float RecoverFactor = 1f;
+        // ADR-102: a suppressor shrinks how far the shot is heard (SoundRules.SuppressedDistanceFactor); a magazine
+        // multiplies the rounds it holds and the reload time.
+        public bool Suppressed;
+        public float MagFactor = 1f;
+        public float ReloadFactor = 1f;
     }
 
     // Which attachments (not optics) one weapon takes: its slot table.
@@ -32,6 +37,8 @@ namespace Game.Core
     public class AttachMods
     {
         public float Pitch = 1f, Yaw = 1f, Recover = 1f;
+        public bool Suppressed;
+        public float MagFactor = 1f, ReloadFactor = 1f;
         public static readonly AttachMods None = new AttachMods();
     }
 
@@ -77,6 +84,8 @@ namespace Game.Core
             string text = PlaceName(a.Slot);
             text += Change(" · 위 반동", a.RecoilPitch) + Change(" · 좌우 반동", a.RecoilYaw);
             if (a.RecoverFactor > 1.001f) text += " · 반동 회복 +" + Math.Round((a.RecoverFactor - 1f) * 100f) + "%";
+            if (a.Suppressed) text += " · 총성 들리는 거리 1/" + SoundRules.SuppressedDistanceFactor.ToString("0.#");
+            if (a.MagFactor > 1.001f) text += " · 장전 수 +" + Math.Round((a.MagFactor - 1f) * 100f) + "% · 재장전 +" + Math.Round((a.ReloadFactor - 1f) * 100f) + "%";
             return text;
         }
 
@@ -103,28 +112,37 @@ namespace Game.Core
                 mods.Pitch *= def.RecoilPitch;
                 mods.Yaw *= def.RecoilYaw;
                 mods.Recover *= def.RecoverFactor;
+                mods.Suppressed |= def.Suppressed;
+                mods.MagFactor *= def.MagFactor;
+                mods.ReloadFactor *= def.ReloadFactor;
             }
             return mods ?? AttachMods.None;
         }
 
         // ---- default tables (data in optics.json replaces them) ----
-        // Ids: 12 vertical grip, 13 angled grip, 14 curved grip, 15 reinforced stock; 9-11 and 16 come with ADR-098.
+        // Ids: 9 compensator, 10 flash hider, 11 suppressor, 12 vertical grip, 13 angled grip, 14 curved grip,
+        // 15 reinforced stock, 16 extended magazine.
 
         public static AttachmentDef[] DefaultDefs() => new[]
         {
+            new AttachmentDef { Id = 9, Name = "반동 보정기", Slot = AttachSlot.Muzzle, RecoilPitch = 0.88f, RecoilYaw = 0.9f },
+            new AttachmentDef { Id = 10, Name = "화염 분산기", Slot = AttachSlot.Muzzle, RecoilPitch = 0.95f, RecoilYaw = 0.95f },
+            new AttachmentDef { Id = 11, Name = "소음기", Slot = AttachSlot.Muzzle, RecoilPitch = 0.97f, Suppressed = true },
             new AttachmentDef { Id = 12, Name = "수직 손잡이", Slot = AttachSlot.Grip, RecoilPitch = 0.85f },
             new AttachmentDef { Id = 13, Name = "각진 손잡이", Slot = AttachSlot.Grip, RecoilPitch = 0.95f, RecoilYaw = 0.8f },
             new AttachmentDef { Id = 14, Name = "곡선 손잡이", Slot = AttachSlot.Grip, RecoverFactor = 1.35f },
             new AttachmentDef { Id = 15, Name = "보강 개머리판", Slot = AttachSlot.Stock, RecoilPitch = 0.92f, RecoilYaw = 0.92f, RecoverFactor = 1.1f },
+            new AttachmentDef { Id = 16, Name = "확장 탄창", Slot = AttachSlot.Mag, MagFactor = 1.33f, ReloadFactor = 1.1f },
         };
 
         // Weapon ids as in weapons.json: 1 VK-9, 2 Ordo, 3 Warden, 4 Breacher, 5 Sentinel.
         public static WeaponAttachments[] DefaultSlots() => new[]
         {
-            new WeaponAttachments { WeaponId = 2, Ids = new[] { 12, 13, 14, 15 } },
-            new WeaponAttachments { WeaponId = 3, Ids = new[] { 12, 13, 14, 15 } },
-            new WeaponAttachments { WeaponId = 4, Ids = new[] { 15 } },
-            new WeaponAttachments { WeaponId = 5, Ids = new[] { 15 } },
+            new WeaponAttachments { WeaponId = 1, Ids = new[] { 9, 10, 11, 16 } },
+            new WeaponAttachments { WeaponId = 2, Ids = new[] { 9, 10, 11, 12, 13, 14, 15, 16 } },
+            new WeaponAttachments { WeaponId = 3, Ids = new[] { 9, 10, 11, 12, 13, 14, 15, 16 } },
+            new WeaponAttachments { WeaponId = 4, Ids = new[] { 9, 11, 15 } },
+            new WeaponAttachments { WeaponId = 5, Ids = new[] { 9, 10, 11, 15, 16 } },
         };
     }
 }

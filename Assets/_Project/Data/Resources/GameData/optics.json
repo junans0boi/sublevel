@@ -17,15 +17,20 @@
     { "WeaponId": 5, "Optics": [1, 2, 3, 4, 5, 6, 7, 8] }
   ],
   "AttachmentDefs": [
+    { "Id": 9,  "Name": "반동 보정기", "Slot": 1, "RecoilPitch": 0.88, "RecoilYaw": 0.9 },
+    { "Id": 10, "Name": "화염 분산기", "Slot": 1, "RecoilPitch": 0.95, "RecoilYaw": 0.95 },
+    { "Id": 11, "Name": "소음기", "Slot": 1, "RecoilPitch": 0.97, "Suppressed": true },
     { "Id": 12, "Name": "수직 손잡이", "Slot": 2, "RecoilPitch": 0.85 },
     { "Id": 13, "Name": "각진 손잡이", "Slot": 2, "RecoilPitch": 0.95, "RecoilYaw": 0.8 },
     { "Id": 14, "Name": "곡선 손잡이", "Slot": 2, "RecoverFactor": 1.35 },
-    { "Id": 15, "Name": "보강 개머리판", "Slot": 3, "RecoilPitch": 0.92, "RecoilYaw": 0.92, "RecoverFactor": 1.1 }
+    { "Id": 15, "Name": "보강 개머리판", "Slot": 3, "RecoilPitch": 0.92, "RecoilYaw": 0.92, "RecoverFactor": 1.1 },
+    { "Id": 16, "Name": "확장 탄창", "Slot": 4, "MagFactor": 1.33, "ReloadFactor": 1.1 }
   ],
   "AttachmentSlots": [
-    { "WeaponId": 2, "Ids": [12, 13, 14, 15] },
-    { "WeaponId": 3, "Ids": [12, 13, 14, 15] },
-    { "WeaponId": 4, "Ids": [15] },
-    { "WeaponId": 5, "Ids": [15] }
+    { "WeaponId": 1, "Ids": [9, 10, 11, 16] },
+    { "WeaponId": 2, "Ids": [9, 10, 11, 12, 13, 14, 15, 16] },
+    { "WeaponId": 3, "Ids": [9, 10, 11, 12, 13, 14, 15, 16] },
+    { "WeaponId": 4, "Ids": [9, 11, 15] },
+    { "WeaponId": 5, "Ids": [9, 10, 11, 15, 16] }
   ]
 }

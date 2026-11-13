@@ -96,6 +96,56 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator Suppressor_ShrinksTheBotHearingRadius_AndSetsTheAudioHook()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var gear = me.GetComponent<CombatantOptics>();
+            var audio = me.GetComponent<CombatantAudio>();
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = Rifle, Amount = 30 });
+            yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 2f, "rifle in hand");
+            float loud = me.ShotHearingRadius(BotRules.Current.GunshotHearingRadius);
+            Assert.AreEqual(BotRules.Current.GunshotHearingRadius, loud, 1e-4f);
+
+            Assert.IsTrue(me.ServerGive(Optics.ToLoot(11)));
+            yield return WaitUntil(() => gear.ActiveMods.Suppressed, 2f, "suppressor fitted");
+            Assert.AreEqual(loud / SoundRules.SuppressedDistanceFactor, me.ShotHearingRadius(BotRules.Current.GunshotHearingRadius), 1e-4f, "bots hear it from the shrunk radius");
+            if (audio != null) yield return WaitUntil(() => audio.Suppressed, 2f, "the audio hook is set");
+
+            gear.ServerDetachToBag(Attachments.GearIndex(me.ActiveSlot.Value, AttachSlot.Muzzle));
+            yield return WaitUntil(() => !gear.ActiveMods.Suppressed, 2f, "suppressor off");
+            Assert.AreEqual(loud, me.ShotHearingRadius(BotRules.Current.GunshotHearingRadius), 1e-4f);
+            if (audio != null) yield return WaitUntil(() => !audio.Suppressed, 2f, "the audio hook is cleared");
+        }
+
+        [UnityTest]
+        public IEnumerator ExtendedMagazine_ReloadsToForty_SlowerThanThirty_AndGivesTheRoundsBackWhenRemoved()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var gear = me.GetComponent<CombatantOptics>();
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = Rifle, Amount = 30 });
+            yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 2f, "rifle in hand");
+            int slot = me.ActiveSlot.Value;
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 100 });
+            int reserve = me.ReserveFor(AmmoType.Rifle556);
+            Assert.IsTrue(me.ServerGive(Optics.ToLoot(16)));
+            yield return WaitUntil(() => gear.AttachmentInSlot(slot, AttachSlot.Mag) == 16, 2f, "magazine fitted");
+            yield return new WaitForSeconds(0.6f); // the draw delay
+            float t0 = Time.realtimeSinceStartup;
+            me.CmdReload();
+            yield return WaitUntil(() => me.Reloading.Value, 2f, "reload started");
+            yield return WaitUntil(() => !me.Reloading.Value, 6f, "reload done");
+            float took = Time.realtimeSinceStartup - t0;
+            Assert.AreEqual(40, me.MagInSlot(slot));
+            Assert.GreaterOrEqual(took, 2.4f * 1.1f - 0.1f, "10% longer than the 2.4 s reload of a plain magazine");
+
+            gear.ServerDetachToBag(Attachments.GearIndex(slot, AttachSlot.Mag));
+            yield return WaitUntil(() => me.MagInSlot(slot) == 30, 2f, "back to 30 rounds");
+            yield return WaitUntil(() => me.ReserveFor(AmmoType.Rifle556) == reserve, 2f, "the extra rounds went back to the reserve");
+        }
+
+        [UnityTest]
         public IEnumerator GripGoesInTheBag_WhenTheWeaponTakesNone_AndLeavesWithADroppedWeapon()
         {
             yield return LoadTestBox();

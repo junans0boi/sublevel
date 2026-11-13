@@ -63,6 +63,10 @@ namespace Game.Gameplay
                 case 13: BuildGrip(d, 38f, 1); break;
                 case 14: BuildGrip(d, 0f, 0); break;
                 case 15: BuildStock(d); break;
+                case 9: BuildMuzzle(d, 1); break;
+                case 10: BuildMuzzle(d, 2); break;
+                case 11: BuildMuzzle(d, 3); break;
+                case 16: BuildMagazine(d); break;
                 default: return null;
             }
             mesh = d.ToMesh("Attachment" + id);
@@ -102,6 +106,38 @@ namespace Game.Gameplay
                     prev = next;
                 }
             }
+        }
+
+        // A muzzle device lying along x: collar, then a slotted block (1), a prong tube (2) or a long can (3).
+        static void BuildMuzzle(MeleeMeshes.Draft d, int kind)
+        {
+            const float y = 0.035f;
+            d.Tube(new Vector3(-0.09f, y, 0f), new Vector3(-0.07f, y, 0f), 0.026f, Dark, 12);
+            if (kind == 1)
+            {
+                d.Box(new Vector3(0.0f, y, 0f), new Vector3(0.12f, 0.06f, 0.06f), Body);
+                for (int i = 0; i < 3; i++) d.Box(new Vector3(-0.025f + i * 0.04f, y + 0.03f, 0f), new Vector3(0.012f, 0.004f, 0.062f), Dark);
+            }
+            else if (kind == 2)
+            {
+                d.Tube(new Vector3(-0.07f, y, 0f), new Vector3(0.02f, y, 0f), 0.022f, Body, 12);
+                foreach (float z in new[] { -0.022f, 0f, 0.022f }) d.Box(new Vector3(0.065f, y, z), new Vector3(0.09f, 0.012f, 0.012f), Body);
+            }
+            else
+            {
+                d.Tube(new Vector3(-0.07f, y, 0f), new Vector3(0.17f, y, 0f), 0.034f, Body, 14);
+                for (int i = 0; i < 4; i++) d.Tube(new Vector3(-0.03f + i * 0.06f, y, 0f), new Vector3(-0.026f + i * 0.06f, y, 0f), 0.0355f, Dark, 14);
+                d.Disc(new Vector3(0.17f, y, 0f), 0.02f, Vector3.right, Dark, 12);
+            }
+        }
+
+        // A magazine lying on its side: a box tapering up to the feed lips, floor plate in the accent colour.
+        static void BuildMagazine(MeleeMeshes.Draft d)
+        {
+            d.Box(new Vector3(-0.02f, 0.03f, 0f), new Vector3(0.17f, 0.06f, 0.05f), Body);
+            d.Box(new Vector3(0.075f, 0.03f, 0f), new Vector3(0.05f, 0.06f, 0.05f), Body);
+            d.Box(new Vector3(0.1f, 0.062f, 0f), new Vector3(0.04f, 0.012f, 0.056f), Dark); // feed lips
+            d.Box(new Vector3(-0.115f, 0.03f, 0f), new Vector3(0.012f, 0.066f, 0.058f), Accent); // floor plate
         }
 
         // A stock lying on its side: tube, butt plate with a pad, cheek riser, the receiver stub.

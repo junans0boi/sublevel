@@ -69,6 +69,7 @@ namespace Game.Gameplay
         public int WhizzesPlayed { get; private set; }
         // Hook for suppressors (G7): this combatant's shots sound as if SoundRules.SuppressedDistanceFactor times further.
         public bool Suppressed { get; set; }
+        CombatantOptics _gear;
 
         void Awake()
         {
@@ -267,6 +268,9 @@ namespace Game.Gameplay
         // Reloads play on the body source: heard as far as footsteps, not as far as shots.
         void Update()
         {
+            // ADR-102: a suppressor on the weapon in hand makes this combatant's shots sound further away.
+            if (_gear == null) _gear = GetComponent<CombatantOptics>();
+            Suppressed = _gear != null && _gear.ActiveMods.Suppressed;
             bool reloading = _combatant.Reloading.Value;
             if (reloading && !_wasReloading && Play(_bodySource, ClipFor(_reloadByWeapon, _combatant.ActiveWeaponId), _reloadVolume))
                 ReloadsPlayed++;
