@@ -64,7 +64,8 @@ namespace Game.Net
             var r = Rules;
             float lean;
             if (!AnyOccupant && Mathf.Abs(Speed) < 1f) lean = -r.KickstandRollDeg; // on its stand, leaning left
-            else lean = Vehicles.LeanDeg(Speed, _steerShown / Mathf.Max(1f, r.SteerMaxDeg), r);
+            // Steering share of what the bars may turn at this speed: full A/D is a full lean at speed too (#109).
+            else lean = Vehicles.LeanDeg(Speed, _steerShown / Mathf.Max(1f, Vehicles.SteerLimit(Speed, Vehicles.TopSpeed(false, r), r)), r);
             _leanShown = Mathf.MoveTowards(_leanShown, lean, r.LeanDegPerSecond * dt);
             float wheelie = Seat0.Value >= 0 ? Vehicles.WheelieDeg(ShownAccel, r) : 0f;
             _wheelieShown = Mathf.MoveTowards(_wheelieShown, wheelie, r.WheelieMaxDeg * 4f * dt);

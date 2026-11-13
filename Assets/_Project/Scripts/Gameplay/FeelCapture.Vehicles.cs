@@ -101,6 +101,8 @@ namespace Game.Gameplay
                 // The World's vehicles are spread over the map: only the nearest of each model.
                 if (props != null && all.Any(o => o != v && o.name == v.name && (o.transform.position - home).sqrMagnitude < (v.transform.position - home).sqrMagnitude)) continue;
                 yield return OneVehicle(v, Clean(v.name));
+                // #109: the test box's bikes turning right and left, from behind (they and the rider lean into the turn).
+                if (v.IsMotorcycle && props == null) yield return BikeTurnShots(v, Clean(v.name));
                 pc.Teleport(home);
                 yield return new WaitForSeconds(0.3f);
             }
@@ -273,6 +275,49 @@ namespace Game.Gameplay
             while (VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
             yield return new WaitForSeconds(0.4f);
             foreach (var r in hidden) if (r != null) r.enabled = true;
+        }
+
+        IEnumerator BikeTurnShots(Vehicle v, string tag)
+        {
+            var pc = PlayerController.Local;
+            var me = Combatant.LocalPlayer;
+            foreach (float steer in new[] { 1f, -1f })
+            {
+                // Open floor south of the test box's spawn block, facing +X.
+                v.Body.position = new Vector3(-26f, 0.3f, -21f);
+                v.Body.rotation = Quaternion.Euler(0f, 90f, 0f);
+                v.Body.linearVelocity = v.Body.angularVelocity = Vector3.zero;
+                yield return new WaitForSeconds(0.4f);
+                if (!VehicleSeat.IsAttached(me))
+                {
+                    pc.Teleport(v.DoorPosition(0) + Vector3.up * 0.05f);
+                    yield return null;
+                    yield return null;
+                    _vehicleFrame.Interact = true;
+                    yield return new WaitForSeconds(v.Rules.EnterSeconds + 0.6f);
+                }
+                me.ServerSetHolstered(true);
+                _vehicleFrame.Throttle = 1f;
+                yield return new WaitForSeconds(1.3f);
+                _vehicleFrame.Throttle = 0.4f;
+                _vehicleFrame.Steer = steer;
+                _watched = v;
+                _watch = Watch.Vehicle;
+                _fixFrom = new Vector3(0f, 1.5f, -5.5f);
+                _fixAt = new Vector3(0f, 0.9f, 0f);
+                yield return new WaitForSeconds(0.7f);
+                Debug.Log($"[FeelCapture] veh {tag} turn {steer}: lean {v.LeanShown:F1}, speed {v.SpeedKmh:F0} km/h, up {v.transform.up}");
+                yield return VShot(tag + (steer > 0f ? "_20_turn_right" : "_21_turn_left"));
+                _watch = Watch.Game;
+                _vehicleFrame.Steer = 0f;
+                _vehicleFrame.Throttle = -1f;
+                yield return new WaitForSeconds(1.5f);
+                _vehicleFrame.Throttle = 0f;
+            }
+            _vehicleFrame.Interact = true;
+            float until = Time.realtimeSinceStartup + 3f;
+            while (VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
+            yield return new WaitForSeconds(0.4f);
         }
 
         void SetHandsView(Vehicle v, bool bike, Vector3 eye)

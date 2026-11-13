@@ -229,6 +229,39 @@ namespace Game.Tests
             Assert.AreEqual(Bike.WheelieMaxDeg, Vehicles.WheelieDeg(100f, Bike), 1e-4f);
         }
 
+        // ---- Running people over (#112) ----
+
+        [Test]
+        public void Roadkill_NothingBelowTenKmh_ThenGrowsWithSpeedAndMass()
+        {
+            float slow = Vehicles.Kmh(9f), fast = Vehicles.Kmh(50f);
+            Assert.AreEqual(0f, Vehicles.RoadkillDamage(slow, Car.MassKg, 1, 2, Car), "a low-speed bump");
+            Assert.AreEqual(0f, Vehicles.RoadkillShove(slow, Car.MassKg, Car), "no push either");
+            float car30 = Vehicles.RoadkillDamage(Vehicles.Kmh(30f), Car.MassKg, 1, 2, Car);
+            float car50 = Vehicles.RoadkillDamage(fast, Car.MassKg, 1, 2, Car);
+            Assert.Greater(car30, 0f);
+            Assert.Greater(car50, car30, "faster hurts more");
+            Assert.GreaterOrEqual(car50, 100f, "a car at 50 km/h kills");
+            float bike50 = Vehicles.RoadkillDamage(fast, Bike.MassKg, 1, 2, Bike);
+            Assert.Greater(bike50, 0f);
+            Assert.Less(bike50, car50, "a lighter vehicle hurts less at the same speed");
+            Assert.Greater(Vehicles.RoadkillShove(fast, Car.MassKg, Car), Vehicles.RoadkillShove(Vehicles.Kmh(30f), Car.MassKg, Car), "flung further when faster");
+            Assert.Greater(Vehicles.RoadkillShove(fast, Car.MassKg, Car), Vehicles.RoadkillShove(fast, Bike.MassKg, Bike), "and by a heavier vehicle");
+            Assert.LessOrEqual(Vehicles.RoadkillShove(Vehicles.Kmh(200f), Car.MassKg, Car), Car.RoadkillMaxShove);
+        }
+
+        [Test]
+        public void Roadkill_DriversTeamTakesNoDamage_ButNobodyDrivingHurtsAnyone()
+        {
+            float fast = Vehicles.Kmh(60f);
+            Assert.AreEqual(0f, Vehicles.RoadkillDamage(fast, Car.MassKg, 3, 3, Car), "the driver's teammate");
+            Assert.Greater(Vehicles.RoadkillShove(fast, Car.MassKg, Car), 0f, "is still pushed");
+            Assert.Greater(Vehicles.RoadkillDamage(fast, Car.MassKg, 3, 4, Car), 0f, "another team");
+            Assert.Greater(Vehicles.RoadkillDamage(fast, Car.MassKg, Teams.None, 3, Car), 0f, "a driverless car hurts a team player");
+            Assert.Greater(Vehicles.RoadkillDamage(fast, Car.MassKg, Teams.None, Teams.None, Car), 0f, "and a solo player");
+            Assert.Greater(Vehicles.RoadkillDamage(fast, Car.MassKg, 2, Teams.None, Car), 0f, "solo players are nobody's team");
+        }
+
         [Test]
         public void Rules_ForEachKind()
         {

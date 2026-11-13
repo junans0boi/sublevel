@@ -335,6 +335,7 @@ namespace Game.Net
                 _estimatedVelocity = Vector3.Lerp(_estimatedVelocity, v, 0.5f);
             }
             _lastFixedPosition = transform.position;
+            TickRoadkill();
         }
 
         void LateUpdate()
@@ -512,7 +513,11 @@ namespace Game.Net
                 var tyre = new Vector2(sideForce, alongForce);
                 float most = grip * load;
                 if (tyre.sqrMagnitude > most * most) tyre = tyre.normalized * most;
-                _body.AddForceAtPosition(side * tyre.x + wheelForward * tyre.y, centre);
+                // A motorcycle's sideways grip pushes at the centre of mass height (#109): from the wheel centre it rolled
+                // the frame out of the turn, further than the model's lean into it. The lean is the model's alone.
+                var sideAt = IsMotorcycle ? centre + up * Vector3.Dot(_body.worldCenterOfMass - centre, up) : centre;
+                _body.AddForceAtPosition(side * tyre.x, sideAt);
+                _body.AddForceAtPosition(wheelForward * tyre.y, centre);
             }
 
             if (IsMotorcycle) SimulateTwoWheels(dt, input, wasAirborne, grounded > 0 ? groundNormal.normalized : Vector3.up);

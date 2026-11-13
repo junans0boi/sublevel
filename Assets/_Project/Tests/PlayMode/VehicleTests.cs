@@ -250,6 +250,83 @@ namespace Game.Tests
             Assert.IsFalse(me.Dead.Value);
         }
 
+        // ---- Running people over (#112) ----
+
+        // A training dummy (server-owned) moved onto the vehicle's line `metres` ahead.
+        static Combatant DummyAhead(Vehicle v, float metres)
+        {
+            var me = Combatant.LocalPlayer;
+            Combatant dummy = null;
+            foreach (var c in Combatant.All)
+                if (c != null && c != me && !c.IsPlayer && !c.Dead.Value) { dummy = c; break; }
+            Assert.IsNotNull(dummy, "a training dummy in the test box");
+            var at = v.transform.position + v.transform.forward * metres;
+            dummy.transform.position = new Vector3(at.x, 0f, at.z);
+            return dummy;
+        }
+
+        [UnityTest]
+        public IEnumerator Car_RunsOverAPerson_HurtsByTheSpeed_CreditsTheDriver_AndPushesThem()
+        {
+            yield return LoadTestBox();
+            var car = Find(VehicleKind.Car);
+            var me = Combatant.LocalPlayer;
+            me.ServerDamageFilter = _ => 0f; // the dummies shoot
+            yield return GetOnAsDriver(car);
+            var dummy = DummyAhead(car, 12f);
+            var start = dummy.transform.position;
+            DamageInfo seen = default;
+            dummy.ServerDamageFilter = info => { seen = info; return info.Amount; };
+            car.Body.linearVelocity = car.transform.forward * Vehicles.Kmh(32f); // coasting: hurt, not killed
+            yield return WaitUntil(() => seen.Cause == DamageCause.Vehicle, 3f, "run over");
+            Assert.AreSame(me, seen.Attacker, "the driver gets the credit");
+            Assert.Greater(seen.Amount, 30f, "hurt by the speed");
+            yield return new WaitForSeconds(0.3f);
+            Assert.Greater(car.SpeedKmh, 25f, "the car went through instead of stopping dead");
+            _keys.Frame.Throttle = -1f;
+            yield return new WaitForSeconds(0.4f);
+            Assert.Greater(Flat(dummy.transform.position, start), 1.5f, "pushed away");
+        }
+
+        [UnityTest]
+        public IEnumerator Car_RunsOverTheDriversTeammate_Unhurt_ButADriverlessCarHurtsAnyone()
+        {
+            yield return LoadTestBox();
+            var car = Find(VehicleKind.Car);
+            var carStart = car.transform.position;
+            var carRotation = car.transform.rotation;
+            var me = Combatant.LocalPlayer;
+            me.ServerDamageFilter = _ => 0f;
+            yield return GetOnAsDriver(car);
+            var dummy = DummyAhead(car, 12f);
+            me.TeamId.Value = 4;
+            dummy.TeamId.Value = 4;
+            float hp = dummy.Hp.Value;
+            var start = dummy.transform.position;
+            car.Body.linearVelocity = car.transform.forward * Vehicles.Kmh(32f); // coasting: hurt, not killed
+            yield return new WaitForSeconds(1.5f);
+            _keys.Frame.Throttle = -1f;
+            Assert.AreEqual(hp, dummy.Hp.Value, 1e-4f, "the driver's teammate is not hurt");
+            Assert.Greater(Flat(dummy.transform.position, start), 1.5f, "but pushed");
+            yield return WaitUntil(() => car.SpeedKmh < 3f, 5f, "stopped");
+            _keys.Frame.Throttle = 0f;
+            _keys.Frame.Interact = true;
+            yield return WaitUntil(() => SeatOf(me) < 0, 3f, "out");
+            yield return new WaitForSeconds(1.2f);
+            // Nobody at the wheel: rolling into the same (team) dummy from the start hurts it, with nobody credited.
+            car.Body.position = carStart;
+            car.Body.rotation = carRotation;
+            car.Body.linearVelocity = car.Body.angularVelocity = Vector3.zero;
+            yield return new WaitForSeconds(0.5f);
+            DummyAhead(car, 10f);
+            DamageInfo seen = default;
+            dummy.ServerDamageFilter = info => { seen = info; return info.Amount; };
+            car.Body.linearVelocity = car.transform.forward * Vehicles.Kmh(40f);
+            yield return WaitUntil(() => seen.Cause == DamageCause.Vehicle, 3f, "run over by the empty car");
+            Assert.IsNull(seen.Attacker, "nobody drove");
+            Assert.Greater(seen.Amount, 0f);
+        }
+
         // ---- Motorcycle ----
 
         [UnityTest]
@@ -264,6 +341,56 @@ namespace Game.Tests
             _keys.Frame.Throttle = -1f;
             Assert.Greater(Flat(bike.transform.position, start), 10f, "rode away");
             Assert.Greater(bike.transform.up.y, 0.8f, "still upright");
+        }
+
+        // #109: D turns right and the bike and its rider lean right (into the turn); A the same to the left. Both bikes.
+        [UnityTest]
+        public IEnumerator Motorcycle_Steering_TurnsAndLeansIntoTheTurn_BothBikes()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var bikes = new System.Collections.Generic.List<Vehicle>();
+            foreach (var v in Vehicle.All) if (v != null && v.IsMotorcycle) bikes.Add(v);
+            Assert.GreaterOrEqual(bikes.Count, 2, "both bikes in the test box");
+            foreach (var bike in bikes)
+            {
+                foreach (float steer in new[] { 1f, -1f })
+                {
+                    // Open floor south of the spawn block, facing +X, then a short run up before the turn.
+                    bike.Body.position = new Vector3(-26f, 0.3f, -21f);
+                    bike.Body.rotation = Quaternion.Euler(0f, 90f, 0f);
+                    bike.Body.linearVelocity = bike.Body.angularVelocity = Vector3.zero;
+                    yield return new WaitForSeconds(0.3f);
+                    if (SeatOf(me) != 0) yield return GetOnAsDriver(bike);
+                    me.ServerSetHolstered(true); // a sidearm in hand locks the steering
+                    yield return null;
+                    _keys.Frame.Throttle = 1f;
+                    yield return new WaitForSeconds(1.3f);
+                    _keys.Frame.Throttle = 0.4f;
+                    float yaw = bike.transform.eulerAngles.y;
+                    _keys.Frame.Steer = steer;
+                    yield return new WaitForSeconds(0.8f);
+                    var flatForward = Vector3.ProjectOnPlane(bike.transform.forward, Vector3.up).normalized;
+                    var flatRight = Vector3.Cross(Vector3.up, flatForward);
+                    float turned = Mathf.DeltaAngle(yaw, bike.transform.eulerAngles.y);
+                    float modelLean = Mathf.Asin(Vector3.Dot(bike.Model.up, flatRight)) * Mathf.Rad2Deg;
+                    float riderLean = Mathf.Asin(Vector3.Dot(me.transform.up, flatRight)) * Mathf.Rad2Deg;
+                    float bodyRoll = Mathf.Asin(Vector3.Dot(bike.transform.up, flatRight)) * Mathf.Rad2Deg;
+                    string what = $"{bike.name} steer {steer}: turned {turned:F1}, model lean {modelLean:F1}, rider {riderLean:F1}, body roll {bodyRoll:F1}, speed {bike.SpeedKmh:F0} km/h";
+                    Debug.Log("[#109] " + what);
+                    _keys.Frame.Steer = 0f;
+                    _keys.Frame.Throttle = -1f;
+                    Assert.Greater(turned * steer, 15f, "turned the pressed way: " + what);
+                    Assert.Greater(modelLean * steer, 15f, "the bike leans into the turn: " + what);
+                    Assert.Less(Mathf.Abs(bodyRoll), 8f, "the frame is not rolled out of the turn: " + what);
+                    Assert.Greater(riderLean * steer, 15f, "the rider leans into the turn: " + what);
+                    yield return new WaitForSeconds(1.5f);
+                    _keys.Frame.Throttle = 0f;
+                }
+                _keys.Frame.Interact = true;
+                yield return WaitUntil(() => SeatOf(me) < 0, 3f, "off the bike");
+                yield return new WaitForSeconds(1f);
+            }
         }
 
         [UnityTest]
@@ -286,7 +413,7 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator Motorcycle_OffARamp_AirControlPitchesTheNoseDown()
+        public IEnumerator Motorcycle_OffARamp_AirControlPitchesTheNoseDown_AndRolls()
         {
             yield return LoadTestBox();
             var bike = Find(VehicleKind.Motorcycle);
@@ -299,11 +426,18 @@ namespace Game.Tests
             yield return WaitUntil(() => bike.Airborne, 6f, "off the ramp");
             _keys.Frame.Throttle = 0f;
             float before = bike.transform.eulerAngles.x;
+            var right = bike.transform.right;
+            float rollBefore = Vector3.Dot(bike.transform.up, right);
             _keys.Frame.Pitch = -1f; // Ctrl: nose down
+            _keys.Frame.Roll = 1f;   // E: roll right (#88)
             yield return new WaitForSeconds(0.25f);
             float pitched = Mathf.DeltaAngle(before, bike.transform.eulerAngles.x);
+            float rolled = Mathf.Asin(Mathf.Clamp(Vector3.Dot(bike.transform.up, right), -1f, 1f)) * Mathf.Rad2Deg
+                - Mathf.Asin(Mathf.Clamp(rollBefore, -1f, 1f)) * Mathf.Rad2Deg;
             _keys.Frame.Pitch = 0f;
+            _keys.Frame.Roll = 0f;
             Assert.Greater(pitched, 4f, "the nose went down by " + pitched + " degrees");
+            Assert.Greater(rolled, 4f, "rolled right by " + rolled + " degrees");
             _keys.Frame.Throttle = -1f;
         }
 

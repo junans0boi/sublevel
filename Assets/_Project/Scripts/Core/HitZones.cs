@@ -7,7 +7,7 @@ namespace Game.Core
     public enum HitZone { Body = 0, Head = 1, Limb = 2 }
 
     // What hurt a combatant. Melee: a punch (ADR-059), later the melee slot's weapons.
-    public enum DamageCause { Shot = 0, Fall = 1, Blast = 2, Zone = 3, Melee = 4, Bleed = 5 }
+    public enum DamageCause { Shot = 0, Fall = 1, Blast = 2, Zone = 3, Melee = 4, Bleed = 5, Vehicle = 6 }
 
     // Height bands of a combatant, measured up from the feet. A lowered stance (crouch) shrinks them.
     [Serializable]

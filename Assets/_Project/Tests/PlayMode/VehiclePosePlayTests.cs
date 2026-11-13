@@ -190,7 +190,9 @@ namespace Game.Tests
             var tilted = Quaternion.AngleAxis(30f, bike.transform.forward) * bike.transform.rotation;
             bike.Body.rotation = tilted;
             bike.transform.rotation = tilted;
-            yield return null;
+            // The body interpolates from its last physics pose: two steps for both ends to be the tilted one.
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
             yield return null;
             var marker = bike.Seat(0).transform.position;
             Assert.AreEqual(0f, Vector3.Distance(me.EyePosition, marker), 0.03f, "eye at the seat marker on a tilted bike");

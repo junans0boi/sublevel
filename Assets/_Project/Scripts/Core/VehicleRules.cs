@@ -89,6 +89,14 @@ namespace Game.Core
         public float ExitSafeKmh = 30f;        // getting out faster than this hurts like a fall
         public float ExitLethalKmh = 65f;      // and from this speed on it kills
 
+        // ---- Running people over (#112, ADR-084) ----
+        public float RoadkillMinKmh = 10f;            // closing speed below this only bumps
+        public float RoadkillDamagePerKmh = 2.5f;     // per km/h above RoadkillMinKmh, for a vehicle of RoadkillReferenceMassKg
+        public float RoadkillReferenceMassKg = 1350f; // damage scales with the square root of mass over this
+        public float RoadkillShoveShare = 0.8f;       // of the closing speed given to the person, times the mass share
+        public float RoadkillMaxShove = 12f;          // m/s
+        public float RoadkillLiftShare = 0.35f;       // the upward part of the shove
+
         // ---- Two wheels (motorcycle) ----
         public float MaxLeanDeg = 35f;         // the model leans into turns: steer share x speed share x this
         public float LeanFullSpeedKmh = 50f;
@@ -287,6 +295,26 @@ namespace Game.Core
         // Riders are thrown off by an impact this hard, or by landing this far off the ground's slope.
         public static bool Crashes(float impactSpeed, VehicleRules r) => impactSpeed >= r.CrashImpactSpeed;
         public static bool BadLanding(float tiltDeg, VehicleRules r) => tiltDeg > r.CrashLandAngleDeg;
+
+        // Running someone over (#112, ADR-084): damage from the closing speed (m/s) and the vehicle's mass. Nothing
+        // below RoadkillMinKmh, and nothing when the driver is on the victim's team (they are still pushed). With nobody
+        // driving `driverTeam` is Teams.None: it hurts anyone.
+        public const float PersonMassKg = 80f;
+        public static float RoadkillDamage(float closingSpeed, float massKg, int driverTeam, int victimTeam, VehicleRules r)
+        {
+            float kmh = ToKmh(closingSpeed);
+            if (kmh < r.RoadkillMinKmh || Teams.Same(driverTeam, victimTeam)) return 0f;
+            float mass = (float)Math.Sqrt(Math.Max(0f, massKg) / Math.Max(1f, r.RoadkillReferenceMassKg));
+            return (kmh - r.RoadkillMinKmh) * r.RoadkillDamagePerKmh * mass;
+        }
+
+        // How fast the person is pushed away (m/s): a share of the closing speed, more from a heavier vehicle.
+        public static float RoadkillShove(float closingSpeed, float massKg, VehicleRules r)
+        {
+            if (ToKmh(closingSpeed) < r.RoadkillMinKmh) return 0f;
+            float share = Math.Max(0f, massKg) / (Math.Max(0f, massKg) + PersonMassKg);
+            return Math.Min(r.RoadkillMaxShove, closingSpeed * r.RoadkillShoveShare * share);
+        }
 
         // Water deeper than DrownDepth over the ground under the car stops it.
         public static bool IsDrowned(float waterLevel, float groundY, VehicleRules r) => waterLevel - groundY > r.DrownDepth;
