@@ -9,7 +9,7 @@ using UnityEngine.UI;
 namespace Game.Gameplay
 {
     // The first screen of a normal launch (the MainMenu scene is first in the build): title, 모드(솔로/듀오/스쿼드, ADR-072),
-    // 시작, 설정, 종료.
+    // 시작, 설정, 크레딧(#89), 종료.
     // 시작 loads the match scene, whose MatchDirector hosts a fresh match on a free port (ADR-044). The dev scene picker
     // is not here: `-scene <name>` on the command line is handled by StartScene.
     public class MainMenu : MonoBehaviour
@@ -36,7 +36,7 @@ namespace Game.Gameplay
         public TeamMode Mode { get; private set; } = TeamMatch.Mode;
         public string ModeText => _modeLabel != null ? _modeLabel.text : "";
 
-        GameObject _root, _main, _settings, _hint;
+        GameObject _root, _main, _settings, _hint, _credits;
         SettingsScreen _settingsScreen;
         Text _loading;
         Button[] _buttons;
@@ -81,6 +81,7 @@ namespace Game.Gameplay
             var keyboard = Keyboard.current;
             // Esc in the settings = 뒤로 가기 (drops unapplied changes).
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
@@ -124,6 +125,17 @@ namespace Game.Gameplay
 
         public void Back() => ShowPanels(false);
 
+        // 크레딧 (#89): the assets that ask for credit.
+        public bool CreditsShown => _credits != null && _credits.activeSelf;
+
+        public void ShowCredits()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            _credits.SetActive(true);
+        }
+
         public void Quit()
         {
             if (IsLoading) return;
@@ -138,6 +150,7 @@ namespace Game.Gameplay
             // The bottom hint line would sit on the settings footer.
             if (_hint != null) _hint.SetActive(!settings);
             _settings.SetActive(settings);
+            if (_credits != null) _credits.SetActive(false);
         }
 
         void Build()
@@ -151,6 +164,8 @@ namespace Game.Gameplay
             _settingsScreen = new SettingsScreen();
             _settings = _settingsScreen.Build(_root.transform, "Settings", Back).gameObject;
             _settings.SetActive(false);
+            _credits = new CreditsScreen().Build(_root.transform, Back).gameObject;
+            _credits.SetActive(false);
 
             var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(1400f, 30f));
             _hint = hint.gameObject;
@@ -163,12 +178,13 @@ namespace Game.Gameplay
         {
             var panel = UiKit.CenteredPanel("Main", parent, MainWidth);
             _main = panel.gameObject;
-            _buttons = new Button[4];
+            _buttons = new Button[5];
             float y = UiKit.MenuPadding;
             _buttons[0] = AddButton(panel, "모드", ref y, CycleMode);
             _buttons[1] = AddButton(panel, "시작", ref y, StartGame);
             _buttons[2] = AddButton(panel, "설정", ref y, ShowSettings);
-            _buttons[3] = AddButton(panel, "종료", ref y, Quit);
+            _buttons[3] = AddButton(panel, "크레딧", ref y, ShowCredits);
+            _buttons[4] = AddButton(panel, "종료", ref y, Quit);
             _modeLabel = _buttons[0].GetComponentInChildren<Text>();
             _startLabel = _buttons[1].GetComponentInChildren<Text>();
             SetMode(Mode);

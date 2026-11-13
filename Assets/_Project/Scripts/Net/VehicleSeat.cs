@@ -16,8 +16,15 @@ namespace Game.Net
     {
         [SerializeField] int _index;
         [SerializeField] Transform _door;
+        // Where the hands hold on from this seat (steering wheel rim, handlebar grips), when the model has them (#89).
+        // Children of the steering part, so they turn with it. The seated pose reaches for them with empty hands.
+        [SerializeField] Transform _gripLeft;
+        [SerializeField] Transform _gripRight;
 
         public int Index => _index;
+        public Transform GripLeft => _gripLeft;
+        public Transform GripRight => _gripRight;
+        public bool HasGrips => _gripLeft != null && _gripRight != null;
         // Where an occupant steps in and out: on the ground beside the door.
         public Transform Door => _door != null ? _door : transform;
         public SeatRole Role => Vehicles.RoleOf(_index);
@@ -27,6 +34,19 @@ namespace Game.Net
         {
             _index = index;
             _door = door;
+        }
+
+        public void ConfigureGrips(Transform left, Transform right)
+        {
+            _gripLeft = left;
+            _gripRight = right;
+        }
+
+        // The seat a combatant is attached to in any phase (null when none): the pose reads its grips.
+        public static VehicleSeat SeatOf(Combatant c)
+        {
+            var o = Find(c);
+            return o != null && o.Vehicle != null ? o.Vehicle.Seat(o.Seat) : null;
         }
 
         public enum Phase { Entering, Seated, Switching, Leaving }

@@ -70,6 +70,9 @@ namespace Game.Net
         [SerializeField] bool[] _frontWheel = new bool[0];
         [SerializeField] float _wheelbase = 2.6f;
         [SerializeField] float _halfLength = 2.2f; // nose (or tail) from the centre, for the exit points ahead and behind
+        // This model's mass, wheel size and balance over its type's rules (#89); zeros keep the type's numbers.
+        [SerializeField] VehicleFit _fit;
+        [SerializeField] float _centreOfMassZ;
 
         public readonly SyncVar<int> Seat0 = new SyncVar<int>(-1);
         public readonly SyncVar<int> Seat1 = new SyncVar<int>(-1);
@@ -133,7 +136,24 @@ namespace Game.Net
 
         public VehicleKind Kind => _kind;
         public bool IsMotorcycle => _kind == VehicleKind.Motorcycle;
-        public VehicleRules Rules => VehicleRules.For(_kind);
+        public VehicleRules Rules
+        {
+            get
+            {
+                var rules = VehicleRules.For(_kind);
+                if (!_fit.Any) return rules;
+                // Tuned again whenever the data loader replaces the type's rules.
+                if (!ReferenceEquals(_tunedFrom, rules))
+                {
+                    _tuned = _fit.Apply(rules);
+                    _tunedFrom = rules;
+                }
+                return _tuned;
+            }
+        }
+        VehicleRules _tuned, _tunedFrom;
+        // The front wheels' angle as shown on this side (degrees, positive = right): the steering wheel follows it.
+        public float SteerShown => _steerShown;
         public VehicleState State => _state;
         public Transform Model => _model;
         public int SeatCount => Mathf.Min(_seats.Length, MaxSeats);
@@ -230,7 +250,7 @@ namespace Game.Net
             _body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             _body.angularDamping = 0.4f;
             _defaultDrag = _body.linearDamping;
-            _body.centerOfMass = new Vector3(0f, rules.CentreOfMassHeight, 0f);
+            _body.centerOfMass = new Vector3(0f, rules.CentreOfMassHeight, _centreOfMassZ);
             if (_model == null) _model = transform.Find("Model");
 
             var colliders = new List<Collider>();
@@ -1082,6 +1102,12 @@ namespace Game.Net
             _frontWheel = frontWheel;
             _wheelbase = wheelbase;
             _halfLength = halfLength;
+        }
+
+        public void ConfigureFit(VehicleFit fit, float centreOfMassZ)
+        {
+            _fit = fit;
+            _centreOfMassZ = centreOfMassZ;
         }
     }
 }

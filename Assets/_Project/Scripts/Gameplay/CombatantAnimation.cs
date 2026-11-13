@@ -519,6 +519,7 @@ namespace Game.Gameplay
                 Turn(ArmLeft, r.DriverArmInDeg * free, transform.forward);
                 Turn(ArmRight, -r.DriverArmInDeg * free, transform.forward);
             }
+            PoseVehicleHands(free, astride, s); // #89: hands onto the model's grips, feet along the machine
         }
 
         // Turns a thigh and shin and brings the foot along. In this skeleton the feet are not children of the

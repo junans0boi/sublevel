@@ -13,7 +13,7 @@ namespace Game.Gameplay
     // server of its own solo match) can hand itself the weapons. Strip before a multiplayer release (RISKS).
     // Late: the outside views (LateUpdate) replace the camera after the player has placed it.
     [DefaultExecutionOrder(200)]
-    public class FeelCapture : MonoBehaviour, IPlayerInput, IVehicleInput
+    public partial class FeelCapture : MonoBehaviour, IPlayerInput, IVehicleInput
     {
         const float SpawnTimeoutSeconds = 30f;
 
@@ -40,6 +40,7 @@ namespace Game.Gameplay
         static void Boot()
         {
             var args = Environment.GetCommandLineArgs();
+            if (BootVehicles(args)) return; // -vehshots (#89), FeelCapture.Vehicles.cs
             int i = Array.IndexOf(args, "-feelcapture");
             int w = Array.IndexOf(args, "-worldshots");
             int e = Array.IndexOf(args, "-eleshots");
@@ -104,6 +105,13 @@ namespace Game.Gameplay
                 yield return null;
             }
             var me = Combatant.LocalPlayer;
+            if (_vehShots)
+            {
+                yield return VehShots(me);
+                Debug.Log("[FeelCapture] vehicle shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
             if (_integShots)
             {
                 yield return IntegShots(me);
