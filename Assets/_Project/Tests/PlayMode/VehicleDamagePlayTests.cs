@@ -248,11 +248,12 @@ namespace Game.Tests
             var b = bike.GetComponent<VehicleDamage>().LocalBounds();
             for (int k = 0; k < 6; k++)
             {
-                var at = new Vector3(0f, b.min.y + b.size.y * (0.35f + 0.08f * (k % 3)), b.min.z + b.size.z * (0.3f + 0.1f * k));
+                // The tank and the side panels under the seat (the engine and the frame below are open tubes).
+                var at = new Vector3(0f, b.min.y + b.size.y * (0.62f + 0.06f * (k % 3)), b.min.z + b.size.z * (0.35f + 0.06f * k));
                 yield return ShootAt(me, () => t.TransformPoint(at), () => false, 1);
             }
             yield return new WaitForSeconds(0.3f);
-            Assert.Greater(visual.HolesShown, 0, "holes on the bike");
+            Assert.GreaterOrEqual(visual.HolesShown, 3, "holes on the bike");
             foreach (Transform hole in bike.GetComponentsInChildren<Transform>())
                 if (hole.name == "BulletHole" && hole.GetComponent<MeshFilter>() == null) Assert.IsTrue(hole.parent.GetComponent<MeshFilter>() != null, "a hole sits on a drawn mesh");
             Shot(bike, "bike_01_holes", 3f, 0.8f, 0.2f);

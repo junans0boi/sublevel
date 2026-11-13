@@ -427,10 +427,17 @@ public static class VehicleModels
                 onto.AddQuad(b.center + normal * (b.extents.z + 0.004f), Vector3.right * b.size.x, Vector3.up * Mathf.Min(b.size.y, b.size.x * 0.5f), normal, plateMat);
             }
             parts.Body = combiner.ToMesh(spec.Name + "_Body", out parts.BodyMaterials);
+            // The paint's long edges split so a dent has vertices to bend (ADR-074 (7)).
+            spec.Materials.TryGetValue(Role.Paint, out var paint);
+            parts.Body = Subdivide(parts.Body, parts.BodyMaterials, paint, DentEdge);
             parts.Detachable = new Mesh[VehicleDamageMath.PartCount];
             parts.DetachableMaterials = new Material[VehicleDamageMath.PartCount][];
             for (int i = 0; i < partCombiners.Length; i++)
-                if (partCombiners[i] != null) parts.Detachable[i] = partCombiners[i].ToMesh($"{spec.Name}_{(VehiclePart)i}", out parts.DetachableMaterials[i]);
+                if (partCombiners[i] != null)
+                {
+                    parts.Detachable[i] = partCombiners[i].ToMesh($"{spec.Name}_{(VehiclePart)i}", out parts.DetachableMaterials[i]);
+                    parts.Detachable[i] = Subdivide(parts.Detachable[i], parts.DetachableMaterials[i], paint, DentEdge);
+                }
             // The body's bounds take the parts in (bumpers are the ends of the car: colliders, seats, doors).
             var whole = parts.Body.bounds;
             foreach (var d in parts.Detachable) if (d != null) whole.Encapsulate(d.bounds);
@@ -604,6 +611,90 @@ public static class VehicleModels
         mesh.SetTriangles(tris, 0);
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    const float DentEdge = 0.15f; // no painted edge longer than this (a blast dent is 1.4 m across, a bullet's 0.4 m)
+
+    // Splits every edge of the `paint` triangles longer than `maxEdge` at its middle, pass after pass, in every triangle
+    // that has it (whatever its material): an edge is known by its two end positions, so the triangles on both sides of
+    // a UV seam or a material border split alike (no cracks when the dent moves the new vertex). Null paint: unchanged.
+    static Mesh Subdivide(Mesh mesh, Material[] materials, Material paint, float maxEdge)
+    {
+        if (paint == null || mesh == null) return mesh;
+        var v = new List<Vector3>(mesh.vertices);
+        var n = new List<Vector3>(mesh.normals);
+        var uv = new List<Vector2>(mesh.uv);
+        var subs = new List<List<int>>();
+        for (int s = 0; s < mesh.subMeshCount; s++) subs.Add(new List<int>(mesh.GetTriangles(s)));
+        Vector3Int Key(int i) => Vector3Int.RoundToInt(v[i] * 2000f);
+        (Vector3Int, Vector3Int) Edge(int a, int b)
+        {
+            Vector3Int ka = Key(a), kb = Key(b);
+            return ka.x < kb.x || (ka.x == kb.x && (ka.y < kb.y || (ka.y == kb.y && ka.z <= kb.z))) ? (ka, kb) : (kb, ka);
+        }
+        float max2 = maxEdge * maxEdge;
+        for (int pass = 0; pass < 8; pass++)
+        {
+            var marked = new HashSet<(Vector3Int, Vector3Int)>();
+            for (int s = 0; s < subs.Count; s++)
+            {
+                if (s >= materials.Length || materials[s] != paint) continue;
+                var t = subs[s];
+                for (int i = 0; i + 2 < t.Count; i += 3)
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int a = t[i + k], b = t[i + (k + 1) % 3];
+                        if ((v[a] - v[b]).sqrMagnitude > max2) marked.Add(Edge(a, b));
+                    }
+            }
+            if (marked.Count == 0) break;
+            var mids = new Dictionary<(int, int), int>();
+            int Mid(int a, int b)
+            {
+                var key = a < b ? (a, b) : (b, a);
+                if (mids.TryGetValue(key, out int m)) return m;
+                m = v.Count;
+                v.Add((v[a] + v[b]) * 0.5f);
+                n.Add((n[a] + n[b]).normalized);
+                uv.Add((uv[a] + uv[b]) * 0.5f);
+                mids[key] = m;
+                return m;
+            }
+            for (int s = 0; s < subs.Count; s++)
+            {
+                var t = subs[s];
+                var o = new List<int>(t.Count * 2);
+                for (int i = 0; i + 2 < t.Count; i += 3)
+                {
+                    int[] c = { t[i], t[i + 1], t[i + 2] };
+                    bool[] m = new bool[3];
+                    int count = 0;
+                    for (int k = 0; k < 3; k++) if (m[k] = marked.Contains(Edge(c[k], c[(k + 1) % 3]))) count++;
+                    // Rotate so the cases read the same: one split edge is a-b; two split edges leave c-a whole.
+                    int rot = 0;
+                    if (count == 1) rot = m[0] ? 0 : m[1] ? 1 : 2;
+                    else if (count == 2) rot = (!m[0] ? 1 : !m[1] ? 2 : 0);
+                    int a = c[rot], b = c[(rot + 1) % 3], d = c[(rot + 2) % 3];
+                    switch (count)
+                    {
+                        case 0: o.AddRange(c); break;
+                        case 1: { int ab = Mid(a, b); o.AddRange(new[] { a, ab, d, ab, b, d }); break; }
+                        case 2: { int ab = Mid(a, b), bd = Mid(b, d); o.AddRange(new[] { ab, b, bd, a, ab, bd, a, bd, d }); break; }
+                        default: { int ab = Mid(a, b), bd = Mid(b, d), da = Mid(d, a); o.AddRange(new[] { a, ab, da, ab, b, bd, da, bd, d, ab, bd, da }); break; }
+                    }
+                }
+                subs[s] = o;
+            }
+        }
+        var result = new Mesh { name = mesh.name, indexFormat = v.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+        result.SetVertices(v);
+        result.SetNormals(n);
+        result.SetUVs(0, uv);
+        result.subMeshCount = subs.Count;
+        for (int s = 0; s < subs.Count; s++) result.SetTriangles(subs[s], s);
+        result.RecalculateBounds();
+        result.RecalculateTangents();
+        return result;
     }
 
     static Material Pick(Spec spec, Material source, out Role role)

@@ -40,6 +40,7 @@ namespace Game.Gameplay
         Light _light;
         float _lightStart = -10f;
         float _shakeStart = -10f;
+        float _blastSmokeDue = -1f;
         AudioSource _audio;
         VehicleDamageStage _shown = (VehicleDamageStage)255;
         int _panesShown;
@@ -135,6 +136,7 @@ namespace Game.Gameplay
                 if (_light.enabled) _light.intensity = 9f * (1f - t / 0.7f) * (0.75f + 0.25f * Mathf.PerlinNoise(t * 30f, 0.3f));
             }
             Shake();
+            if (_blastSmokeDue > 0f && Time.time >= _blastSmokeDue && _blastSmoke != null) { _blastSmokeDue = -1f; _blastSmoke.Emit(18); }
         }
 
         // ---- Stages ----
@@ -149,6 +151,8 @@ namespace Game.Gameplay
                 main.startColor = stage == VehicleDamageStage.WhiteSmoke ? WhiteSmoke : BlackSmoke;
                 var emission = _smoke.emission;
                 emission.rateOverTime = stage == VehicleDamageStage.WhiteSmoke ? 5f : stage == VehicleDamageStage.Wrecked ? 4f : 10f;
+                // Above the flames once burning (dark smoke over the fire's root tinted it green).
+                _smoke.transform.localPosition = EngineSpot() + Vector3.up * (stage >= VehicleDamageStage.Burning ? 0.9f : 0f);
                 if (!_smoke.isPlaying) _smoke.Play();
             }
             if (_softGlow != null && stage == VehicleDamageStage.Burning)
@@ -164,9 +168,10 @@ namespace Game.Gameplay
                         var shape = _fire.shape;
                         shape.radius = 0.5f;
                     }
-                    // Yellow at the root, orange, then deep red as it rises and fades (no green: white tint, warm keys).
-                    SetColorOverLife(_fire, new[] { (0f, new Color(1f, 0.72f, 0.3f)), (0.35f, new Color(1f, 0.4f, 0.06f)), (1f, new Color(0.6f, 0.08f, 0.02f)) },
-                        new[] { (0f, 0f), (0.1f, 0.9f), (0.6f, 0.6f), (1f, 0f) });
+                    // Orange at the root, then deep red as it rises and fades. Green stays well under red and the alpha low:
+                    // additive overlaps clip red first, and a yellow core under the smoke read olive green.
+                    SetColorOverLife(_fire, new[] { (0f, new Color(1f, 0.5f, 0.14f)), (0.35f, new Color(1f, 0.3f, 0.05f)), (1f, new Color(0.55f, 0.07f, 0.02f)) },
+                        new[] { (0f, 0f), (0.1f, 0.6f), (0.6f, 0.4f), (1f, 0f) });
                     var emission = _fire.emission;
                     emission.rateOverTime = bike ? 48f : 34f;
                 }
@@ -197,15 +202,19 @@ namespace Game.Gameplay
             {
                 if (_flashPs == null)
                 {
-                    _flashPs = NewBurst("ExplosionFlash", _softGlow, centre, 0.16f, 0f, 7f, 1.3f);
+                    _flashPs = NewBurst("ExplosionFlash", _softGlow, centre, 0.2f, 0f, 6f, 1.3f);
+                    SetColorOverLife(_flashPs, new[] { (0f, Color.white), (1f, new Color(1f, 0.55f, 0.2f)) }, new[] { (0f, 0.9f), (1f, 0f) });
                     _fireball = NewBurst("Fireball", _softGlow, centre, 1.0f, 4f, 1.5f, 2.6f);
-                    SetColorOverLife(_fireball, new[] { (0f, new Color(1f, 0.7f, 0.32f)), (0.25f, new Color(1f, 0.4f, 0.06f)), (0.7f, new Color(0.55f, 0.1f, 0.02f)), (1f, new Color(0.15f, 0.04f, 0.02f)) },
-                        new[] { (0f, 0.85f), (0.6f, 0.55f), (1f, 0f) });
+                    SetColorOverLife(_fireball, new[] { (0f, new Color(1f, 0.55f, 0.2f)), (0.25f, new Color(1f, 0.32f, 0.05f)), (0.7f, new Color(0.5f, 0.08f, 0.02f)), (1f, new Color(0.15f, 0.04f, 0.02f)) },
+                        new[] { (0f, 0.6f), (0.6f, 0.4f), (1f, 0f) });
+                    // The glow over the dark smoke and debris, never under them (a dark core ringed by light).
+                    _flashPs.GetComponent<ParticleSystemRenderer>().sortingFudge = -100f;
+                    _fireball.GetComponent<ParticleSystemRenderer>().sortingFudge = -100f;
                     var shape = _fireball.shape;
                     shape.shapeType = ParticleSystemShapeType.Sphere;
                     shape.radius = 0.8f;
                 }
-                _flashPs.Emit(new ParticleSystem.EmitParams { startColor = new Color(1f, 0.97f, 0.85f, 1f) }, 2);
+                _flashPs.Emit(1);
                 _fireball.Emit(24); // additive: more overlap than this washes the core out to yellow-white
             }
             if (_softDust != null)
@@ -228,7 +237,7 @@ namespace Game.Gameplay
                     smain.gravityModifier = -0.15f;
                 }
                 _debris.Emit(40);
-                _blastSmoke.Emit(18);
+                _blastSmokeDue = Time.time + 0.35f; // the smoke rolls in after the flash
             }
             // The light above the body (from below the car it lit the ground under it, as if the car floated).
             if (_light == null)
