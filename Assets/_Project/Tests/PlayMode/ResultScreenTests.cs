@@ -118,7 +118,8 @@ namespace Game.Tests
             yield return WaitUntil(() => me.ActiveWeaponId == 3, 2f, "rifle in hand");
 
             Kill(me, AnyDummy(), 1);
-            yield return WaitUntil(() => screen.IsShown, 3f, "result screen");
+            // The death cam first (ADR-094).
+            yield return WaitUntil(() => screen.IsShown, ResultScreen.DeathCamSeconds + 3f, "result screen");
             yield return null;
 
             Assert.AreEqual(MatchOutcome.Eliminated, screen.Outcome);
@@ -171,7 +172,7 @@ namespace Game.Tests
             yield return LoadTestBox();
             var before = Combatant.LocalPlayer;
             Kill(before, AnyDummy(), 1);
-            yield return WaitUntil(() => ResultScreen.Instance.IsShown && before.Dead.Value, 3f, "dead with the result up");
+            yield return WaitUntil(() => ResultScreen.Instance.IsShown && before.Dead.Value, ResultScreen.DeathCamSeconds + 3f, "dead with the result up");
 
             _input.Frame.Restart = true;
             yield return WaitUntil(() => Combatant.LocalPlayer != null && !ReferenceEquals(Combatant.LocalPlayer, before)

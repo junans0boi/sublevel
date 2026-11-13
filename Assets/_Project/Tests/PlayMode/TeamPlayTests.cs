@@ -257,7 +257,9 @@ namespace Game.Tests
             EndProtection();
             KillOutright(Me, Enemy);
             Assert.IsTrue(Me.Dead.Value);
-            yield return WaitUntil(() => Hud.Instance.DeathShown, 3f, "the death band while the team plays on");
+            yield return WaitUntil(() => ResultScreen.Instance.Current == ResultScreen.Phase.DeathCam, 3f, "the death cam while the team plays on");
+            yield return null;
+            Assert.IsFalse(Hud.Instance.Visible, "no own HUD over the death cam");
             foreach (var c in Combatant.All.Where(c => c != null && c.TeamId.Value != Me.TeamId.Value).ToList()) KillOutright(c, Mates[0]);
             yield return WaitUntil(() => ResultScreen.Instance != null && ResultScreen.Instance.IsShown, 5f, "the result screen");
             Assert.AreEqual(MatchOutcome.Won, MatchState.Instance.LocalOutcome);

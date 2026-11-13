@@ -38,6 +38,15 @@ namespace Game.Net
         public int WinnerTeam;      // team matches (ADR-072): the winning team; 0 otherwise
     }
 
+    // One combatant's numbers for the result screen (ADR-094): sent when it dies and, for the survivors, when the
+    // match is decided. Damage is health taken off others (not teammates, not oneself); seconds since the match began.
+    public struct PlayerStats : IBroadcast
+    {
+        public int Id;
+        public float Damage;
+        public float Seconds;
+    }
+
     // A client asking for a fresh match (solo has no revival).
     public struct MatchRestartRequest : IBroadcast
     {
@@ -70,6 +79,8 @@ namespace Game.Net
         readonly Dictionary<int, string> _serverNames = new Dictionary<int, string>();
         int _serverSeen = -1, _serverAlive, _serverTotal, _serverPlayers, _serverDummies;
         bool _serverOver;
+        readonly Dictionary<int, float> _serverDamage = new Dictionary<int, float>();
+        float _serverStart;
         int _serverWinnerId = -1;
         string _serverWinnerName = "";
 
@@ -77,6 +88,9 @@ namespace Game.Net
         readonly Dictionary<int, int> _kills = new Dictionary<int, int>();
         readonly Dictionary<int, int> _placements = new Dictionary<int, int>();
         readonly List<KillEntry> _feed = new List<KillEntry>(FeedCapacity);
+        readonly Dictionary<int, KillEntry> _deaths = new Dictionary<int, KillEntry>();
+        readonly Dictionary<int, PlayerStats> _stats = new Dictionary<int, PlayerStats>();
+        readonly Dictionary<int, string> _names = new Dictionary<int, string>();
 
         public int AliveCount { get; private set; }
         public int TotalCount { get; private set; }
@@ -107,6 +121,22 @@ namespace Game.Net
         public int PlacementOf(Combatant combatant) =>
             PlacementWithTeam(combatant, combatant != null && _placements.TryGetValue(combatant.ObjectId, out int placement) ? placement : 0);
 
+        // Every death of the match by victim id (the feed keeps only the latest): who killed whom, with what.
+        public bool TryGetDeath(int victimId, out KillEntry entry) => _deaths.TryGetValue(victimId, out entry);
+        // Who killed this combatant; -1 while it lives or when nobody did (the zone, a fall).
+        public int KillerOf(int victimId) => _deaths.TryGetValue(victimId, out var e) ? e.KillerId : -1;
+
+        // The name the kill feed gave this combatant ("" until it killed or died).
+        public string NameOfId(int id) => _names.TryGetValue(id, out string name) ? name : "";
+
+        // Health this combatant took off others / seconds it lasted; known once it died or the match was decided.
+        public float DamageOf(Combatant combatant) => combatant != null && _stats.TryGetValue(combatant.ObjectId, out var s) ? s.Damage : 0f;
+        public float SecondsOf(Combatant combatant) => combatant != null && _stats.TryGetValue(combatant.ObjectId, out var s) ? s.Seconds : 0f;
+
+        // Server only: health taken off others so far (the server total the result screen shows).
+        public float ServerDamageOf(Combatant combatant) =>
+            combatant != null && _serverDamage.TryGetValue(combatant.ObjectId, out float d) ? d : 0f;
+
         // Server only: the name shown for a combatant ("" before the server has seen it).
         public string ServerNameOf(Combatant combatant) =>
             combatant != null && _serverNames.TryGetValue(combatant.ObjectId, out string name) ? name : "";
@@ -132,7 +162,9 @@ namespace Game.Net
         void Awake()
         {
             Instance = this;
+            _serverStart = Time.time;
             Combatant.ServerDied += OnServerDied;
+            Combatant.ServerDamaged += OnServerDamaged;
         }
 
         void Start() => Started?.Invoke(this);
@@ -145,6 +177,7 @@ namespace Game.Net
             _network = network;
             _network.ClientManager.RegisterBroadcast<KillEntry>(OnKillEntry);
             _network.ClientManager.RegisterBroadcast<MatchStatus>(OnMatchStatus);
+            _network.ClientManager.RegisterBroadcast<PlayerStats>(OnPlayerStats);
             _network.ServerManager.RegisterBroadcast<MatchRestartRequest>(OnRestartRequest);
             _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             BindTeam();
@@ -153,11 +186,13 @@ namespace Game.Net
         void OnDestroy()
         {
             Combatant.ServerDied -= OnServerDied;
+            Combatant.ServerDamaged -= OnServerDamaged;
             if (Instance == this) Instance = null;
             // The manager may already be gone when the scene unloads.
             if (!_bound || _network == null) return;
             _network.ClientManager.UnregisterBroadcast<KillEntry>(OnKillEntry);
             _network.ClientManager.UnregisterBroadcast<MatchStatus>(OnMatchStatus);
+            _network.ClientManager.UnregisterBroadcast<PlayerStats>(OnPlayerStats);
             _network.ServerManager.UnregisterBroadcast<MatchRestartRequest>(OnRestartRequest);
             _network.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
             UnbindTeam();
@@ -241,11 +276,9 @@ namespace Game.Net
                 Alive = _serverAlive,
                 Total = _serverTotal,
             };
-            if (ServerActive)
-            {
-                foreach (var connection in _network.ServerManager.Clients.Values)
-                    if (connection.IsAuthenticated) _network.ServerManager.Broadcast(connection, entry);
-            }
+            // The numbers first, so the screen that the entry opens has them.
+            ServerSendStats(victim);
+            ServerBroadcast(entry);
 
             // Solo: one left; team modes: one team left (ADR-072).
             if (ServerDecided(out var winner))
@@ -253,9 +286,23 @@ namespace Game.Net
                 _serverOver = true;
                 _serverWinnerId = winner != null ? winner.ObjectId : -1;
                 _serverWinnerName = ServerWinnerName(winner);
+                var all = Combatant.All;
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i] != null && all[i].IsServerInitialized && !_serverDead.Contains(all[i].ObjectId)) ServerSendStats(all[i]);
             }
             ServerSendStatus(null);
         }
+
+        void OnServerDamaged(Combatant victim, DamageInfo info, float applied)
+        {
+            var by = info.Attacker;
+            if (by == null || by == victim || !ServerActive || _serverOver) return;
+            _serverDamage.TryGetValue(by.ObjectId, out float sum);
+            _serverDamage[by.ObjectId] = sum + applied;
+        }
+
+        void ServerSendStats(Combatant c) =>
+            ServerBroadcast(new PlayerStats { Id = c.ObjectId, Damage = ServerDamageOf(c), Seconds = Time.time - _serverStart });
 
         Combatant ServerLastAlive()
         {
@@ -328,6 +375,9 @@ namespace Game.Net
         {
             if (entry.KillerId >= 0) _kills[entry.KillerId] = entry.KillerKills;
             _placements[entry.VictimId] = entry.VictimPlacement;
+            _deaths[entry.VictimId] = entry;
+            _names[entry.VictimId] = entry.VictimName;
+            if (entry.KillerId >= 0) _names[entry.KillerId] = entry.KillerName;
             AliveCount = entry.Alive;
             TotalCount = entry.Total;
             if (_feed.Count == FeedCapacity) _feed.RemoveAt(0);
@@ -348,6 +398,12 @@ namespace Game.Net
             WinnerName = status.WinnerName ?? "";
             if (status.Over && status.WinnerId >= 0) _placements[status.WinnerId] = 1;
             if (status.Over) ApplyWinnerTeam(status.WinnerTeam);
+            Changed?.Invoke();
+        }
+
+        void OnPlayerStats(PlayerStats stats, Channel channel)
+        {
+            _stats[stats.Id] = stats;
             Changed?.Invoke();
         }
 

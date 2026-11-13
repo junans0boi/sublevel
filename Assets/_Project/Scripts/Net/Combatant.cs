@@ -66,6 +66,8 @@ namespace Game.Net
         // The event is static, so it outlives scenes: every subscriber must unsubscribe in its own
         // OnDestroy/OnDisable (or OnStopServer). ResetStatics clears it when a play session starts.
         public static event Action<Combatant, DamageInfo> ServerDied;
+        // Server only: raised for every hit that took health off (victim, damage, health actually lost; ADR-094 stats).
+        public static event Action<Combatant, DamageInfo, float> ServerDamaged;
 
         // Server only: lets equipment change incoming damage (armour). Gets the damage as dealt and returns the
         // amount to apply; null means "as dealt". Set by a component on this combatant.
@@ -80,6 +82,7 @@ namespace Game.Net
         static void ResetStatics()
         {
             ServerDied = null;
+            ServerDamaged = null;
             All.Clear();
             LocalPlayer = null;
         }
@@ -558,7 +561,9 @@ namespace Game.Net
             // Teams (ADR-072): nothing between teammates (before armour, which would wear), knocked damage factor.
             if (!ServerTeamAdjust(ref dealt)) return;
             if (ServerDamageFilter != null) dealt.Amount = ServerDamageFilter(dealt);
-            if (_health.ApplyDamage(dealt.Amount) <= 0f) return;
+            float applied = _health.ApplyDamage(dealt.Amount);
+            if (applied <= 0f) return;
+            ServerDamaged?.Invoke(this, dealt, applied);
             // A lethal hit knocks down instead while a teammate stands (ADR-072).
             if (_health.IsDead && ServerTryKnock(dealt)) return;
             Push();

@@ -68,7 +68,7 @@ namespace Game.Gameplay
                 : entry.VictimName + "  [" + tag + "]";
         }
 
-        static string Tag(in KillEntry entry, bool hasKiller)
+        public static string Tag(in KillEntry entry, bool hasKiller)
         {
             switch ((DamageCause)entry.Cause)
             {

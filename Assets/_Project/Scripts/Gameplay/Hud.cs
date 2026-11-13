@@ -232,7 +232,8 @@ namespace Game.Gameplay
             bool show = me != null;
             // The inventory has its own copy of everything the HUD shows (armour, ammo, grenades) and the map
             // screen covers the minimap's job; drawn through them the HUD only clutters (and overlapped the header).
-            bool drawn = show && UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map;
+            // After death the death cam / result / spectate views take over (ADR-094).
+            bool drawn = show && UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map && !ResultScreen.HidesHud;
             if (_canvas.enabled != drawn) _canvas.enabled = drawn;
             if (!show) return;
 
@@ -256,8 +257,8 @@ namespace Game.Gameplay
             TickMapMarker(me, player, dead);
             TickCrosshair(me, player, dead);
             TickDamageRing(me, player);
-            // The result panel says it all; the band under it only overlapped (a dead spectator whose team won).
-            Show(_death, dead && (ResultScreen.Instance == null || !ResultScreen.Instance.IsShown));
+            // The death cam and result panel say it all (ADR-094); the band is for a match without them.
+            Show(_death, dead && ResultScreen.Instance == null);
         }
 
         // ---- Per-frame updates ----
