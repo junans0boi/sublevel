@@ -43,6 +43,7 @@ namespace Game.Gameplay
                 yield break;
             }
             yield return null; // not WaitForEndOfFrame: it can stall in a batch mode editor, and Camera.Render needs no frame end
+            LateUpdate(); // the coroutine resumes before LateUpdate: place the outside camera now
             var pc = PlayerController.Local;
             var cam = pc != null && pc.Camera != null ? pc.Camera : Camera.main;
             if (cam == null) yield break;
