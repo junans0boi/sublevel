@@ -311,6 +311,8 @@ namespace Game.Net
             _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
             _receivers = GetComponents<ILootReceiver>();
             _carry = GetComponent<CombatantCarry>();
+            // A body that someone else's client moves is watched (#161); the host's own and the AI's are not.
+            if (_isPlayer && Owner != null && Owner.IsValid && !Owner.IsLocalClient && GetComponent<MoveGuard>() == null) gameObject.AddComponent<MoveGuard>();
             Push();
         }
 

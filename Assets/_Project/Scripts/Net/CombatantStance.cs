@@ -342,5 +342,28 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdReportFall(float meters) => ServerReportFall(meters);
+
+        // ---- Reconciliation (#161, ADR-126) ----
+
+        // The server put this body back at `back` (MoveGuard saw it go where a body cannot); the owner moves there.
+        public event Action<Vector3> Corrected;
+
+        [Server]
+        public void ServerCorrect(Vector3 back)
+        {
+            if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) Corrected?.Invoke(back);
+            else TargetCorrect(Owner, back);
+        }
+
+        [TargetRpc]
+        void TargetCorrect(NetworkConnection connection, Vector3 back) => Corrected?.Invoke(back);
+
+        // The owner moved itself on purpose (elevator ride, leaving a vehicle): the server's last good place moves too.
+        // Trusted for now; #170 hardens it.
+        [ServerRpc]
+        public void CmdTeleported(Vector3 to)
+        {
+            if (!float.IsNaN(to.x + to.y + to.z) && TryGetComponent<MoveGuard>(out var guard)) guard.Accept(to);
+        }
     }
 }

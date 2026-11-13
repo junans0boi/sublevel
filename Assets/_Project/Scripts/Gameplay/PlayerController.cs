@@ -12,6 +12,7 @@ namespace Game.Gameplay
         const float AimDistance = 300f;
         public const float PingDistance = 600f; // middle-mouse ping reach (ADR-065 (6))
         const float PitchLimit = 80f;
+        const float TeleportTellMeters = 1.5f; // a Teleport this far is announced to the server (MoveGuard)
 
         [SerializeField] Renderer[] _bodyRenderers = new Renderer[0];
 
@@ -125,7 +126,7 @@ namespace Game.Gameplay
             Camera = Camera.main;
             if (Camera != null) Camera.fieldOfView = _rules.Aim.Hip.Fov;
             _combatant.ShotFired += OnOwnShot;
-            if (_stance != null) _stance.ParkourRejected += OnParkourRejected;
+            if (_stance != null) { _stance.ParkourRejected += OnParkourRejected; _stance.Corrected += OnParkourRejected; } // both: end any move, go back
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
             Yaw = transform.eulerAngles.y;
@@ -807,6 +808,8 @@ namespace Game.Gameplay
         {
             // Being moved ends a move under way.
             if (InParkour) AbortParkour();
+            // A far jump is on purpose: tell the server so it does not take it for a cheat (#161).
+            if (_owner && !IsServerInitialized && _stance != null && (position - transform.position).sqrMagnitude > TeleportTellMeters * TeleportTellMeters) _stance.CmdTeleported(position);
             _controller.enabled = false;
             transform.position = position;
             _controller.enabled = true;

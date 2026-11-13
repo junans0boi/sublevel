@@ -54,6 +54,7 @@ namespace Game.Tests
         public Combatant HostPlayer { get; private set; }
         public readonly List<RemoteClient> Clients = new List<RemoteClient>();
         public Action<string> Log;
+        ReplicaLayers _hider;
 
         // Loads `scene` (it hosts its own match) and waits for the host's own player.
         public IEnumerator StartHost(string scene)
@@ -86,9 +87,11 @@ namespace Game.Tests
         {
             var client = new RemoteClient { Input = new HarnessInput() };
             if (token != null) client.Token = token;
+            if (_hider == null) _hider = new GameObject("ReplicaLayers").AddComponent<ReplicaLayers>();
             ushort port = MatchDirector.Instance.Port;
             client.Manager = NetHarness.Build("NM_Remote" + Clients.Count, Host.SpawnablePrefabs, port);
             SessionHelloSender.Attach(client.Manager, client.Token);
+            _hider.Managers.Add(client.Manager);
             if (!client.Manager.ClientManager.StartConnection("127.0.0.1", port)) throw new Exception("remote client failed to start");
             yield return NetHarness.WaitUntil(() => client.Manager.IsClientStarted, "remote client connected+authenticated", Log);
             yield return NetHarness.WaitUntil(() => client.Manager.ClientManager.Connection.FirstObject != null, "remote client got its player", Log);
@@ -162,9 +165,31 @@ namespace Game.Tests
             while (Busy() && Time.realtimeSinceStartup < end) yield return null;
             foreach (var c in Clients) if (c.Manager != null) UnityEngine.Object.Destroy(c.Manager.gameObject);
             Clients.Clear();
+            if (_hider != null) UnityEngine.Object.Destroy(_hider.gameObject);
             SceneManager.LoadScene("Bootstrap");
             yield return null;
             yield return null;
+        }
+    }
+
+    // The remote clients' copies of every object live in the same physics scene as the host's real ones, so the server's
+    // shots would hit those copies (which have no server state). Their colliders go on the Ignore Raycast layer, which
+    // the default ray mask skips; bodies still collide as before. Test-only: in a real host the client IS the server object.
+    public sealed class ReplicaLayers : MonoBehaviour
+    {
+        public readonly List<NetworkManager> Managers = new List<NetworkManager>();
+        void LateUpdate()
+        {
+            foreach (var m in Managers)
+            {
+                if (m == null || !m.IsClientStarted) continue;
+                foreach (var nob in m.ClientManager.Objects.Spawned.Values)
+                {
+                    if (nob == null || nob.IsServerInitialized) continue;
+                    foreach (var c in nob.GetComponentsInChildren<Collider>(true))
+                        if (c.gameObject.layer != 2) c.gameObject.layer = 2;
+                }
+            }
         }
     }
 }
