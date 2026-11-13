@@ -10,6 +10,7 @@ namespace Game.Gameplay
     public class PlayerController : NetworkBehaviour
     {
         const float AimDistance = 300f;
+        public const float PingDistance = 600f; // middle-mouse ping reach (ADR-065 (6))
         const float PitchLimit = 80f;
 
         [SerializeField] Renderer[] _bodyRenderers = new Renderer[0];
@@ -139,7 +140,7 @@ namespace Game.Gameplay
                 f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
             if (SpawnProtection.InputBlocked)
-                f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook };
+                f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook, Ping = f.Ping };
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
             LastInput = f;
@@ -228,6 +229,7 @@ namespace Game.Gameplay
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
             if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
+            if (f.Ping) PingAtCrosshair();
             TryFire(f);
         }
 
@@ -382,6 +384,16 @@ namespace Game.Gameplay
                 if (sqr < bestSqr) { bestSqr = sqr; best = item; }
             }
             return best;
+        }
+
+        // Puts the map marker on the first surface (ground, building) under the crosshair within PingDistance.
+        // Local only for now: team pings come with team mode (the marker already carries an owner and colour).
+        // Returns false when nothing is in reach.
+        public bool PingAtCrosshair()
+        {
+            if (Camera == null || !Rig.TryAimHit(Camera.transform, transform, PingDistance, out var point)) return false;
+            MapMarker.Set(point);
+            return true;
         }
 
         // ---- Hooks for tests and scripted control ----

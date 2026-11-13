@@ -125,8 +125,11 @@ namespace Game.Gameplay
             var uv = new Vector2(local.x / MapPx + 0.5f, local.y / MapPx + 0.5f);
             if (uv.x < 0f || uv.x > 1f || uv.y < 0f || uv.y > 1f) return false;
             var world = MapImage.UvToWorld(uv);
+            // The ground there, so the in-world marker stands on it; the player's height without a terrain.
             var player = PlayerController.Local;
-            world.y = player != null ? player.transform.position.y : 0f;
+            var terrain = Terrain.activeTerrain;
+            world.y = terrain != null ? terrain.SampleHeight(world) + terrain.transform.position.y
+                : player != null ? player.transform.position.y : 0f;
             MapMarker.Set(world);
             Refresh();
             return true;
@@ -323,7 +326,7 @@ namespace Game.Gameplay
             _positionReadout = UiKit.Label(UiKit.Rect("Position", side, TopLeft, TopLeft, new Vector2(0f, -84f), new Vector2(420f, 32f)), "내 위치", 24, UiKit.Text);
             _markerReadout = UiKit.Label(UiKit.Rect("MarkerReadout", side, TopLeft, TopLeft, new Vector2(0f, -122f), new Vector2(420f, 32f)), "마커 없음", 24, MarkerColor);
 
-            string[] hints = { "클릭  마커 지정 / 이동", "우클릭  마커 해제", "M / Esc  닫기" };
+            string[] hints = { "클릭  마커 지정 / 이동", "우클릭  마커 해제", "M / Esc  닫기", "휠 클릭  게임 화면 조준점에 핑" };
             for (int i = 0; i < hints.Length; i++)
                 UiKit.Label(UiKit.Rect("Hint" + i, side, TopLeft, TopLeft, new Vector2(0f, -190f - i * 30f), new Vector2(420f, 28f)), hints[i], 20, UiKit.TextDim);
 

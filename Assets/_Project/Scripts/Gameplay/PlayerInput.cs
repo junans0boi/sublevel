@@ -34,6 +34,7 @@ namespace Game.Gameplay
         public bool Holster;       // X: pressed this frame, puts the weapon away (empty hands) or takes it out again
         public bool CycleThrowable; // T: pressed this frame, switches the selected throwable (frag / smoke)
         public int ZoomSteps;      // mouse wheel this frame: +1 a notch up (zoom in), -1 down, 0 none (ADR-063)
+        public bool Ping;          // middle mouse: pressed this frame, marks the point under the crosshair (ADR-065 (6))
     }
 
     public interface IPlayerInput
@@ -90,6 +91,7 @@ namespace Game.Gameplay
                 f.FireHeld = m.leftButton.isPressed;
                 f.FirePressed = m.leftButton.wasPressedThisFrame;
                 f.AimHeld = m.rightButton.isPressed;
+                f.Ping = m.middleButton.wasPressedThisFrame;
                 // One notch per frame at most, whatever the device reports per notch (120 on Windows, less on macOS).
                 float wheel = m.scroll.ReadValue().y;
                 f.ZoomSteps = wheel > 0.01f ? 1 : wheel < -0.01f ? -1 : 0;

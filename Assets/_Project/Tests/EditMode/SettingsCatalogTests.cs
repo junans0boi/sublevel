@@ -74,7 +74,7 @@ namespace Game.Tests
             string[] expected =
             {
                 "W A S D", "Shift", "Space", "C", "Z", "X", "B", "R", "F", "H", "G", "T", "Q / E", "V", "M", "Tab", "Esc", "1 ~ 5", "Alt",
-                "좌클릭", "우클릭 (꾹)", "우클릭 (짧게)",
+                "좌클릭", "우클릭 (꾹)", "우클릭 (짧게)", "마우스 휠 클릭",
             };
             foreach (var key in expected) Assert.IsTrue(keys.Contains(key), "missing key " + key);
         }
