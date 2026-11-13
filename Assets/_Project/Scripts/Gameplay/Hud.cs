@@ -53,6 +53,7 @@ namespace Game.Gameplay
         HudStatus _status;
         WeaponStrip _strip;
         MinimapView _minimap;
+        WorldMarkerView _worldMarker;
 
         // Bottom centre.
         RectTransform _healthFill;
@@ -138,6 +139,7 @@ namespace Game.Gameplay
         public HudStatus Status => _status;
         public WeaponStrip Strip => _strip;
         public MinimapView Minimap => _minimap;
+        public WorldMarkerView WorldMarker => _worldMarker;
         // The fixed areas of this canvas, for the layout tests (rects as placed, shown or not).
         public IReadOnlyList<RectTransform> LayoutAreas => _areas;
         public int DamageIndicatorsShown
@@ -186,6 +188,8 @@ namespace Game.Gameplay
             _doorNoticeRoot.SetActive(false);
             BuildHealthAndWeapon(root);
             BuildBottomSides(root);
+            // The map marker in the world, under the crosshair (not a fixed area: it follows the marked point).
+            _worldMarker = WorldMarkerView.Build(root);
             BuildCrosshair(root);
             BuildDeath(root);
             _canvas.enabled = false;
@@ -209,6 +213,7 @@ namespace Game.Gameplay
         {
             GameSettings.Changed -= ApplyCrosshairColor;
             if (Instance == this) Instance = null;
+            MapMarker.Clear(); // the marker belongs to this match
             if (_fadeUp != null) Destroy(_fadeUp);
             if (_fadeRight != null) Destroy(_fadeRight);
             if (_fadeUpTexture != null) Destroy(_fadeUpTexture);
@@ -244,6 +249,7 @@ namespace Game.Gameplay
                 _region.Tick(me.transform.position, player.Yaw);
             }
             _minimap.Tick(me.transform.position, player != null ? player.Yaw : 0f, player != null);
+            TickMapMarker(me, player, dead);
             TickCrosshair(me, player, dead);
             TickDamageRing(me, player);
             Show(_death, dead);
@@ -469,6 +475,20 @@ namespace Game.Gameplay
             _damageLeft[slot] = DamageSeconds;
             _damageGroup[slot].alpha = 1f;
             _damagePivot[slot].gameObject.SetActive(true);
+        }
+
+        // The map marker (ADR-065 (6)): cleared on arrival, else shown on the compass strip and in the world with its
+        // distance. One whole-metre distance feeds both labels, so they change together and only when it does.
+        void TickMapMarker(Combatant me, PlayerController player, bool dead)
+        {
+            var position = me.transform.position;
+            if (!dead) MapMarker.TickReach(position);
+            bool has = MapMarker.Has;
+            int metres = has ? Mathf.RoundToInt(MapMarker.DistanceFrom(position)) : 0;
+            float bearing = has ? MapMarker.BearingFrom(position) : 0f;
+            _compass.TickMarker(has && player != null, player != null ? player.Yaw : 0f, bearing, metres);
+            Camera cam = player != null ? player.Camera : null;
+            _worldMarker.Tick(cam, _canvas.scaleFactor, has && !dead && UiFocus.Current == UiScreen.None, metres);
         }
 
         void TickDoorNotice()

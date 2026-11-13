@@ -61,8 +61,19 @@ namespace Game.Gameplay
         public int ElevatorMarkers => _elevators.Count;
         public int BorderLines => _borders.Count;
         public string RegionName { get; private set; } = "";
+        // The map marker (ADR-065 (6)): shown or not, where its diamond sits from the view centre (held just inside
+        // the edge when the marker is farther away) and the length of the line to it.
+        public bool MarkerShown => _markerRoot != null && _markerRoot.activeSelf;
+        public Vector2 MarkerViewPosition => _markerDot != null ? _markerDot.anchoredPosition : Vector2.zero;
+        public float MarkerLineLength => _markerLine != null ? _markerLine.sizeDelta.x : 0f;
+
+        const float MarkerEdge = Minimap.ViewSize * 0.5f - 7f;
 
         RectTransform _content, _arrow, _mapRect;
+        GameObject _markerRoot;
+        RectTransform _markerDot, _markerLine;
+        Image _markerDotFill, _markerLineImage;
+        int _markerVersion = -1;
         RawImage _mapImage;
         GameObject _gridRoot;
         Text _regionLabel;
@@ -111,6 +122,16 @@ namespace Game.Gameplay
                 UiKit.Box(v._gridH[i], gridColor);
             }
 
+            // The map marker and a thin line to it from the player, over the map and under the player arrow.
+            v._markerRoot = UiKit.Rect("MapMarker", clip, centre, centre, Vector2.zero, Vector2.zero).gameObject;
+            v._markerLine = UiKit.Rect("Line", v._markerRoot.transform, centre, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 1.5f));
+            v._markerLineImage = UiKit.Box(v._markerLine, MapMarker.Colour);
+            v._markerDot = UiKit.Rect("Diamond", v._markerRoot.transform, centre, centre, Vector2.zero, new Vector2(9f, 9f));
+            v._markerDot.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            UiKit.Box(UiKit.Fill("Rim", v._markerDot, -1.5f), new Color(0.04f, 0.05f, 0.06f, 0.95f));
+            v._markerDotFill = UiKit.Box(UiKit.Fill("Fill", v._markerDot), MapMarker.Colour);
+            v._markerRoot.SetActive(false);
+
             // Above the world markers, below the frame: the player.
             v._arrow = UiKit.Rect("Player", root, centre, centre, Vector2.zero, new Vector2(ArrowSize, ArrowSize));
             var arrowImage = UiKit.Box(v._arrow, UiKit.Accent);
@@ -148,9 +169,37 @@ namespace Game.Gameplay
                 _mapRect.gameObject.SetActive(texture != null);
                 _gridRoot.SetActive(texture == null);
             }
-            if (!float.IsNaN(_placedAt.x) && (flat - _placedAt).sqrMagnitude < MoveEpsilon * MoveEpsilon) return;
+            bool markerChanged = MapMarker.Version != _markerVersion;
+            if (markerChanged) _markerVersion = MapMarker.Version;
+            if (!float.IsNaN(_placedAt.x) && (flat - _placedAt).sqrMagnitude < MoveEpsilon * MoveEpsilon)
+            {
+                if (markerChanged) PlaceMarker(_placedAt);
+                return;
+            }
             _placedAt = flat;
             PlaceContent(flat);
+            PlaceMarker(flat);
+        }
+
+        // The marker's diamond relative to the player (held just inside the square's edge, along its direction, when
+        // it is out of view) and the line from the centre to it.
+        void PlaceMarker(Vector3 centre)
+        {
+            bool has = MapMarker.Has;
+            if (_markerRoot.activeSelf != has) _markerRoot.SetActive(has);
+            if (!has) return;
+            var colour = MapMarker.Colour;
+            if (_markerDotFill.color != colour)
+            {
+                _markerDotFill.color = colour;
+                _markerLineImage.color = colour;
+            }
+            var at = Minimap.ToView(MapMarker.Position, centre);
+            float reach = Mathf.Max(Mathf.Abs(at.x), Mathf.Abs(at.y));
+            if (reach > MarkerEdge) at *= MarkerEdge / reach;
+            _markerDot.anchoredPosition = at;
+            _markerLine.sizeDelta = new Vector2(at.magnitude, 1.5f);
+            _markerLine.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(at.y, at.x) * Mathf.Rad2Deg);
         }
 
         void PlaceContent(Vector3 centre)

@@ -67,6 +67,15 @@ namespace Game.Gameplay
             return NearestHit(count, player, out var hit) ? hit.point : camera.position + camera.forward * maxDistance;
         }
 
+        // The first surface under the centre of the screen within `maxDistance`, ignoring the player's own colliders.
+        public bool TryAimHit(Transform camera, Transform player, float maxDistance, out Vector3 point)
+        {
+            int count = Physics.RaycastNonAlloc(camera.position, camera.forward, Hits, maxDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            bool hit = NearestHit(count, player, out var nearest);
+            point = hit ? nearest.point : default;
+            return hit;
+        }
+
         static bool NearestHit(int count, Transform ignoreRoot, out RaycastHit nearest)
         {
             nearest = default;
