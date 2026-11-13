@@ -1,16 +1,15 @@
 # PROGRESS — 진행 상황 (타이틀 종료 때마다 갱신)
 
-## 현재 위치
-- 2026-11-13 조준경 통합(#81, ADR-060·062·063·064): 배율별 3D 접안부(URP 오버레이 카메라 30번 레이어, 플레이어 빌드에서 동작 확인), 배율별 레티클, 반사·투영 조준 사이트, 바닥·아이콘 모델. **가변 배율**: 6x 3~6, 8x 4~8, 15x(구 16x) 8~15, 마우스 휠. 설정 선택값 밑줄 제거, 무기 칸 조준경 표시를 아이콘 아래로. 검수: `-scene World -scopeshots <폴더>`.
-- 2026-11-13 웨이브 4 통합: 지역 봉쇄(M3), 저격소총 Sentinel(8x·16x), 시간 회복·가방 용량·탄 자동 줍기·연막탄. 배율 조준경 렌즈를 가리던 무기·조준경 모델 숨김, 레드도트 몸체를 뚫린 고리로, 배율 표시 위치 이동, 방사능 안개를 선형 안개로(빌드에서 지수 안개가 빠짐), 차단기 머티리얼 생성, 스폰 보호가 방사능은 막지 않음(ADR-061). 검수: `-scene World -fastzones -w4shots <폴더>`.
-- 마일스톤: M0, M1, M1.5, M2-1 완료. **M1.6 게임 감각 진행 중: M1.6a, M1.6a-fix 완료(사람 확인 대기)**(ADR-043~049). 한 세션 한 타이틀 규칙(ADR-047)에 따라 멈춤. 다음 타이틀은 `docs/NEXT_TITLES.md`의 **M1.6b 전투 피드백**.
-- 역할: 상담 채팅의 방향 설정·검수 역할을 프로젝트 세션이 이어받음(ADR-047). 문서 세트는 `docs/handoff/`.
-- 진행 중 타이틀: 없음. 열린 이슈: 없음(#2 Fish-Net 라이선스 검토 제외).
-- 조작: WASD 이동, Shift 달리기, Space 점프, 마우스 조준, 좌클릭 사격, 우클릭 꾹 = 견착 / 우클릭 탭 = 조준 켜고 끄기, Q/E 누르는 동안 기울이기, F 줍기, R 재장전, 1/2 무기 전환, H 회복, V 시점 전환, 사망 후 Enter 재시작, Esc 게임 종료(메뉴는 M1.6c).
-- 빌드: `Build/mac/Sublevel.app`, `Build/win/`(압축본 `Build/Sublevel-win64.zip`). 구역 D에서 시작하려면 `-scene ZoneD`.
-- 수치 조정: `Assets/_Project/Data/Resources/GameData/rules.json` — `Aim`, `Lean`(기울이기), `Recoil`, `Gait`(다리 배율·다리 돌림), `Jump`(점프 포즈). 무기별 반동은 `weapons.json`.
-- 화면 검수: `Build/mac/Sublevel.app/Contents/MacOS/Sublevel -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -scene TestBox -feelcapture <폴더>`(빌드의 첫 씬이 야외 맵 World가 되었으므로 `-scene TestBox` 필수) → 대본 입력으로 53장 저장(조준·기울이기·점프·이동, 옆/뒤/위 시점 포함). 포즈 고르기: `tools/unity.sh run-gfx CharacterKit.RenderClipSheet`.
-- 주의: Unity 실행·빌드 후 `ProjectSettings/{ProjectSettings,GraphicsSettings,QualitySettings}.asset`이 저절로 바뀜 → 커밋하지 않고 되돌린다. 원본 다운로드는 `AssetStaging/`(gitignore). batchmode 테스트에서 `WaitForEndOfFrame`을 쓰면 끝나지 않는다(`yield return null` 사용).
+## 현재 위치 (2026-11-13 15:40 갱신)
+- 진행 방식: 마스터 세션이 서브 에이전트를 병렬로 돌리고(코드 작성은 작업 사본에서 Unity 없이), 통합 에이전트 하나가 Unity로 컴파일·테스트·캡처·빌드한다(ADR-047, 052). 이슈 지도는 #55.
+- 게임 시작: 메인 메뉴 → 1km 야외 섬(World). 무작위 지역의 엘리베이터에서 투입(문 3초, 보호 6초).
+- 구현·검증된 것(통합 테스트 통과, 캡처 확인): 조준(견착/탭)·기울이기·앉기(C)·엎드리기(Z)·무장 해제(X, 이동 가속)·점프·주먹(맨손 좌클릭) / 무기 5종(권총·기관단총·소총·산탄총·저격소총 Sentinel), 구경 4종, 5칸 슬롯, 단발/연사(B) / 조준경 8종(반사·투영 조준 사이트, 2·3·4·6·8·15배율, 6배 이상 휠로 가변 배율) / 헬멧·조끼 3단계, 사망 전리품, 파편 수류탄·연막탄(G, T 전환), 시간 회복(붕대·응급키트·구급상자), 가방 용량, 탄약 자동 줍기 / 헤드샷, 낙하 피해, 킬 로그, 승패 화면 / HUD v2(미니맵·5칸 띠·방위·지역 카드), Tab 인벤토리(4구역, 끌어다 놓기, 아이콘), M 전체 지도, Esc 메뉴, 환경 설정(탭 5개) / 봇 AI(줍기·교전·엄폐·회복) / M3 지역 봉쇄(경고→봉쇄→폭격→폐쇄, 통로 차단기, 방사능, 열쇠) / 전체 한글(Noto Sans KR).
+- 진행 중: 지역 간 엘리베이터 이동(#76), 나무·풀·맵 마감(#71), M4 풀 매치 자동 테스트와 봇 16~24명(#77).
+- 보류(사용자 결정): 조준경 마감(#83).
+- 최근 테스트(조준경 통합 32924f1): EditMode 384/384, PlayMode 188 중 183 통과(렌더 예산은 부하 높을 때 불안정, 포트 테스트는 수동 실행 게임과 충돌).
+- 성능: World, 1920x1080, 봇 8~9 — 60Hz p99 약 17.7ms(통과), 제한 해제 평균 2~2.4ms.
+- 빌드: `Build/mac/Sublevel.app`(유니버설, macOS 12+), `Build/Sublevel-win64.zip`, 옮기기용 `~/Desktop/Sublevel-mac.zip`.
+- 환경: git-lfs 필요(PNG는 LFS). Unity 실행 후 ProjectSettings 3개 파일은 되돌린다(EditorBuildSettings는 유지).
 
 ## 사람이 직접 확인할 항목 (M1.6a-fix, Windows 빌드로)
 세션이 빌드 화면 저장본으로 확인한 것: 조준선이 상태별로 달라짐, 조준·FPP에서 무기가 보임, 기울이기 폭, 점프 포즈, 옆·대각선 이동 때 다리·상체 방향, 이동 중 조준 시 총 방향(위에서 본 화면). **정지 화면으로는 알 수 없는 것**이 아래다.
