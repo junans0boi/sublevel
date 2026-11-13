@@ -359,6 +359,22 @@ public static class VehicleBuilder
         return spawner;
     }
 
+    // A match scene with the given vehicles parked where asked (the training range): model names from Cars / Motorcycles.
+    public static VehicleSpawner AddParked(MatchDirector director, params (string model, Vector3 at, float yaw)[] layout)
+    {
+        var spots = new Transform[layout.Length];
+        var models = new int[layout.Length];
+        for (int i = 0; i < layout.Length; i++)
+        {
+            spots[i] = Spot(director, i, layout[i].at, layout[i].yaw);
+            models[i] = Model(layout[i].model);
+        }
+        var spawner = director.gameObject.AddComponent<VehicleSpawner>();
+        spawner.Configure(LoadPrefabs(), spots, models, false, 0f, 0f, 0, null);
+        EditorUtility.SetDirty(spawner);
+        return spawner;
+    }
+
     // The outdoor map: the cars' and motorcycles' SpawnCount parked on road shoulders near compounds (VehicleParking),
     // the car models in turn and the two motorcycles in turn, alternating cars and motorcycles so both spread over the
     // map; the sea level; a 4 m road map so the vehicles know when they are off the road; and the generic pack's

@@ -17,6 +17,7 @@ namespace Game.Gameplay
         public const string SceneName = "MainMenu";
         // The scene 시작 loads.
         public const string MatchScene = "World";
+        public const string TrainingScene = TrainingRange.SceneName;
 
         const int SortOrder = 100;
         const float MainWidth = 460f;
@@ -86,20 +87,25 @@ namespace Game.Gameplay
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
-        public void StartGame()
+        public void StartGame() => Load(MatchScene, Mode);
+
+        // 훈련장 (#153): the same hosted match without bots and lockdown, always solo.
+        public void StartTraining() => Load(TrainingScene, TeamMode.Solo);
+
+        void Load(string scene, TeamMode mode)
         {
             if (IsLoading) return;
-            if (!Application.CanStreamedLevelBeLoaded(MatchScene))
+            if (!Application.CanStreamedLevelBeLoaded(scene))
             {
-                Debug.LogError("[MainMenu] match scene is not in the build: " + MatchScene);
+                Debug.LogError("[MainMenu] scene is not in the build: " + scene);
                 return;
             }
             IsLoading = true;
-            TeamMatch.Mode = Mode;
+            TeamMatch.Mode = mode;
             _loading.text = "불러오는 중...";
             _loading.gameObject.SetActive(true);
             for (int i = 0; i < _buttons.Length; i++) _buttons[i].interactable = false;
-            SceneManager.LoadSceneAsync(MatchScene);
+            SceneManager.LoadSceneAsync(scene);
         }
 
         // 모드 button: 솔로 -> 듀오 -> 스쿼드 -> 솔로.
@@ -179,13 +185,14 @@ namespace Game.Gameplay
         {
             var panel = UiKit.CenteredPanel("Main", parent, MainWidth);
             _main = panel.gameObject;
-            _buttons = new Button[5];
+            _buttons = new Button[6];
             float y = UiKit.MenuPadding;
             _buttons[0] = AddButton(panel, "모드", ref y, CycleMode);
             _buttons[1] = AddButton(panel, "시작", ref y, StartGame);
-            _buttons[2] = AddButton(panel, "설정", ref y, ShowSettings);
-            _buttons[3] = AddButton(panel, "크레딧", ref y, ShowCredits);
-            _buttons[4] = AddButton(panel, "종료", ref y, Quit);
+            _buttons[2] = AddButton(panel, "훈련장", ref y, StartTraining);
+            _buttons[3] = AddButton(panel, "설정", ref y, ShowSettings);
+            _buttons[4] = AddButton(panel, "크레딧", ref y, ShowCredits);
+            _buttons[5] = AddButton(panel, "종료", ref y, Quit);
             _modeLabel = _buttons[0].GetComponentInChildren<Text>();
             _startLabel = _buttons[1].GetComponentInChildren<Text>();
             SetMode(Mode);
@@ -193,9 +200,9 @@ namespace Game.Gameplay
             panel.anchoredPosition = new Vector2(0f, -60f);
 
             // Title block above the button column (children of the column, so it goes away with it when settings show).
-            var title = UiKit.Rect("Title", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 310f), new Vector2(1000f, 120f));
+            var title = UiKit.Rect("Title", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 346f), new Vector2(1000f, 120f));
             UiKit.Label(title, Title, 96, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-            var studio = UiKit.Rect("Studio", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 230f), new Vector2(1000f, 36f));
+            var studio = UiKit.Rect("Studio", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 266f), new Vector2(1000f, 36f));
             UiKit.Label(studio, Studio, 24, UiKit.Accent, TextAnchor.MiddleCenter);
 
             var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -250f), new Vector2(600f, 40f));

@@ -16,6 +16,7 @@ public static class SceneBuilder
         "Assets/_Project/Scenes/TestBox.unity",
         BootstrapPath,
         "Assets/_Project/Scenes/ZoneD.unity",
+        "Assets/_Project/Scenes/TrainingRange.unity",
     };
 
     // The one place that decides which scenes ship. Scenes that have not been generated yet are skipped.
