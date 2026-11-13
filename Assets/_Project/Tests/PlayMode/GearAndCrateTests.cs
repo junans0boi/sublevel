@@ -229,7 +229,6 @@ namespace Game.Tests
             gear.ServerEquip(ArmorSlot.Vest, 2, 100f);
             Assert.AreEqual(Pistol, dummy.Slot2.Value, "the pistol sits in the sidearm slot");
             Assert.AreEqual(Rifle, dummy.Slot0.Value, "the rifle in the first primary slot");
-            int pistolMag = dummy.Mag2.Value;
             int lightRounds = dummy.ReservePistol9.Value;
             Assert.Greater(lightRounds, Combatant.DroppedReserveCap, "the dummy carries far more than it will drop");
             Assert.IsFalse(crate.ServerOpened);
@@ -257,8 +256,9 @@ namespace Game.Tests
             Assert.IsNotNull(medkits, "medkits");
             Assert.IsNotNull(helmet, "the helmet");
             Assert.IsNotNull(vest, "the vest");
-            Assert.AreEqual(30, rifle.Amount.Value, "with its magazine");
-            Assert.AreEqual(pistolMag, pistol.Amount.Value);
+            // ADR-081: guns land unloaded; their rounds join the calibre's (capped) ammo stack.
+            Assert.AreEqual(0, rifle.Amount.Value, "unloaded");
+            Assert.AreEqual(0, pistol.Amount.Value, "unloaded");
             Assert.AreEqual(60, medium.Amount.Value);
             Assert.AreEqual(60, light.Amount.Value, "a dummy leaves at most the cap per calibre");
             Assert.AreEqual(2, medkits.Amount.Value, "both kits in one pickup");
@@ -313,7 +313,7 @@ namespace Game.Tests
             yield return null;
             me.CmdPickup(rifle.NetworkObject);
             yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 3f, "rifle picked up from the crate");
-            Assert.AreEqual(30, me.ActiveMag);
+            Assert.AreEqual(0, me.ActiveMag, "unloaded (ADR-081)");
             me.CmdPickup(medium.NetworkObject);
             yield return WaitUntil(() => me.ReserveRifle556.Value == 60, 3f, "its ammo picked up");
             me.CmdPickup(vest.NetworkObject);
