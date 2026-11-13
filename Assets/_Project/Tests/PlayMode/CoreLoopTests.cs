@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.IO;
 using Game.Core;
@@ -158,7 +159,7 @@ namespace Game.Tests
             Assert.Greater(aim.Shoulder.SpreadFactor, aim.Sights.SpreadFactor);
             Assert.Greater(aim.Hip.MoveFactor, aim.Sights.MoveFactor);
             Assert.Greater(GameData.Rules.Lean.OffsetMeters, 0.1f);
-            foreach (var weapon in GameData.Weapons.Weapons) Assert.Greater(weapon.RecoilPitchDeg, 0f, weapon.Name + " recoil");
+            foreach (var weapon in GameData.Weapons.Weapons.Where(w => w.Category != WeaponCategory.Melee)) Assert.Greater(weapon.RecoilPitchDeg, 0f, weapon.Name + " recoil");
             Assert.AreEqual(MatchDirector.Instance.LootSpawns.Length, LootItem.All.Count, "one item per loot point");
             yield return null;
         }

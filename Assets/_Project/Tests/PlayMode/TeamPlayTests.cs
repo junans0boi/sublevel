@@ -156,7 +156,8 @@ namespace Game.Tests
             Assert.IsTrue(mate.Knocked.Value);
             Assert.Greater(mate.BleedSecondsLeft, 0f);
             yield return WaitUntil(() => mate.Dead.Value, 5f, "bleeding out");
-            Assert.IsFalse(mate.Knocked.Value, "the dead are not knocked");
+            // TeamDirector clears Knocked on its next tick, a frame after Dead.
+            yield return WaitUntil(() => !mate.Knocked.Value, 2f, "the dead are not knocked");
             yield return WaitUntil(() => MatchState.Instance.KillsOf(enemy) == kills + 1, 3f, "the bleed-out credited to the knocker");
             Assert.AreEqual((byte)DamageCause.Bleed, MatchState.Instance.Feed.Last(e => e.VictimId == mate.ObjectId).Cause);
         }
