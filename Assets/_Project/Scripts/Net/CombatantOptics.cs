@@ -160,9 +160,11 @@ namespace Game.Net
             return id;
         }
 
-        // Combatant calls this wherever a weapon leaves a slot (dropped, replaced): the weapon goes alone, its optic
-        // to the bag (the ground when full) (ADR-082).
-        public void ServerOnWeaponRemoved(int slot) => ServerDetachToBag(slot);
+        // Combatant calls this wherever a weapon leaves a slot (dropped, replaced), before it pushes the slot's new
+        // weapon. The weapon goes alone (ADR-081); its optic stays in the slot, so a replacing weapon that takes it
+        // keeps it (G5, ADR-093). The check in Update moves it to the bag (the ground when full) on the next frame
+        // when the slot is now empty or its new weapon refuses it (ADR-082 (4)).
+        public void ServerOnWeaponRemoved(int slot) { }
 
         // Combatant calls this when two weapon slots trade places: their optics trade with them.
         public void ServerOnSlotsSwapped(int a, int b)

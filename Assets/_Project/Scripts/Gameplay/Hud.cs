@@ -406,7 +406,7 @@ namespace Game.Gameplay
             Show(_reload, me.Reloading.Value && !dead);
 
             LootItem loot = !dead && player != null ? player.NearbyLoot : null;
-            bool hasLoot = loot != null;
+            bool hasLoot = loot != null && !PickupList.Showing; // two or more: the list by the crosshair (G5)
             if (hasLoot && !ReferenceEquals(loot, _promptFor))
             {
                 _promptFor = loot;

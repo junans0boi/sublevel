@@ -123,6 +123,7 @@ namespace Game.Gameplay
             screens.AddComponent<PauseMenu>();
             screens.AddComponent<ScopeView>();
             screens.AddComponent<MapScreen>();
+            screens.AddComponent<PickupList>(); // G5 (ADR-093)
         }
 
         // The mouse steers the view while playing and becomes a pointer while a screen is open.
@@ -338,7 +339,7 @@ namespace Game.Gameplay
             // Next to a knocked teammate F revives instead (ADR-072).
             // In a station F is the elevator's (ADR-076): tap = next destination, held = ride.
             bool elevatorKey = ElevatorPanel.HandleInteract(_combatant, f.Interact, f.InteractHeld, Time.deltaTime);
-            if (!elevatorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
+            if (!elevatorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
@@ -629,6 +630,8 @@ namespace Game.Gameplay
 
         LootItem FindNearbyLoot()
         {
+            // G5 (ADR-093): the pickup list's selection; the wheel is the scope's while looking down the sights.
+            if (PickupList.Instance != null) return PickupList.Instance.Refresh(transform.position, _aim.Mode == AimMode.Sights ? 0 : LastInput.ZoomSteps);
             LootItem best = null;
             float bestSqr = Combatant.PickupRange * Combatant.PickupRange;
             foreach (var item in LootItem.All)
