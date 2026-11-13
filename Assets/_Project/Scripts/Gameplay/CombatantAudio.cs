@@ -46,6 +46,8 @@ namespace Game.Gameplay
         public int LandingsPlayed { get; private set; }
         public int HitsPlayed { get; private set; }
         public int PunchesPlayed { get; private set; }
+        // Volume of the last footstep or landing, before the effects volume setting (stance and slow walk applied).
+        public float LastFootstepVolume { get; private set; }
 
         void Awake()
         {
@@ -81,8 +83,9 @@ namespace Game.Gameplay
         {
             if (_footsteps.Length == 0) return false;
             // Cycle instead of picking at random so the same clip never plays twice in a row.
-            // A lowered stance treads more quietly.
+            // A lowered stance or a slow walk treads more quietly.
             if (_stance != null) volume *= _stance.FootstepVolumeFactor;
+            LastFootstepVolume = volume;
             bool played = Play(_bodySource, _footsteps[_nextFootstep], volume);
             _nextFootstep = (_nextFootstep + 1) % _footsteps.Length;
             return played;

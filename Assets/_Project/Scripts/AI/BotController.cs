@@ -281,11 +281,12 @@ namespace Game.AI
                 }
                 if (visible) continue;
 
-                // Footsteps: someone moving fast enough, close enough. Crouching makes them quieter.
+                // Footsteps: someone moving fast enough, close enough. Crouching and slow walking make them quieter.
                 if (c.PlanarSpeed < rules.FootstepMinSpeed) continue;
                 var crouch = StanceRules.Current.Crouch;
                 float crouched = crouch.EyeDropMeters > 0f ? Mathf.Clamp01(-c.EyeHeightOffset / crouch.EyeDropMeters) : 0f;
-                float radius = rules.FootstepHearingRadius * Mathf.Lerp(1f, crouch.FootstepVolumeFactor, crouched);
+                var gait = c.GetComponent<CombatantStance>();
+                float radius = BotHearing.FootstepRadius(crouched, gait != null && gait.SlowWalk.Value, rules, StanceRules.Current);
                 if (sqr <= radius * radius && sqr < stepSqr)
                 {
                     stepHeard = true;

@@ -89,6 +89,7 @@ namespace Game.Gameplay
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
+        float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
         const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
         // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
@@ -126,6 +127,8 @@ namespace Game.Gameplay
         public float CrouchPose => _crouch;
         // How much of the lying pose is shown, 0..1.
         public float PronePose => _prone;
+        // How much of the parkour pose (knees tucked, hands forward onto the top) is shown, 0..1.
+        public float ParkourPose => _parkour;
         public float ModelDrop => _drop;
 
         void Awake()
@@ -205,6 +208,9 @@ namespace Game.Gameplay
             float speed = new Vector2(v.x, v.z).magnitude;
             _legs.Tick(v.x, v.z, Time.deltaTime, GameData.Rules.Gait);
             float proneAmount = dead || _stance == null ? 0f : _stance.ProneAmount;
+            // Vaulting or climbing, replicated so everyone sees it: eased in and out.
+            bool parkour = !dead && _stance != null && _stance.Parkour.Value != 0;
+            _parkour = Mathf.MoveTowards(_parkour, parkour ? 1f : 0f, ParkourRules.Current.PosePerSecond * Time.deltaTime);
             _prone = proneAmount * proneAmount * (3f - 2f * proneAmount);
             // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
             _legTurnShown = _legs.TurnDeg * (1f - _prone);
@@ -294,6 +300,8 @@ namespace Game.Gameplay
                 else tuck = Game.Core.Locomotion.JumpTuck(_motion.VerticalSpeed, jump);
             }
             _push = push;
+            // A vault or climb tucks the knees like the top of a jump, on the ground too.
+            tuck = Mathf.Max(tuck, _parkour * ParkourRules.Current.PoseTuck);
             _tuck = Mathf.MoveTowards(_tuck, tuck, jump.TuckPerSecond * Time.deltaTime);
             // The ground probe reports the landing a little above the floor, so the dip is deepest about as the feet arrive.
             _dip = dead ? 0f : Game.Core.Locomotion.Pulse(Time.time - _landedAt, jump.LandAttackSeconds, jump.LandAbsorbSeconds);
@@ -411,7 +419,9 @@ namespace Game.Gameplay
             float crouchShin = stanceRules.CrouchShinDeg * crouchScale;
             // A weapon pose keeps the weapon level, so only empty hands hunch forward in a crouch.
             float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _upperWeight);
-            Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch, transform.right);
+            var parkourRules = ParkourRules.Current;
+            Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch
+                + parkourRules.PoseTorsoPitchDeg * _parkour, transform.right);
             // Lying: the chest and head come back up (a negative turn about the right axis undoes the forward tip).
             Turn(Torso, -stanceRules.ProneHeadLiftDeg * _prone, transform.right);
             // The legs face where the model is turned, not where the combatant looks.
@@ -436,6 +446,10 @@ namespace Game.Gameplay
             float armUp = -Stances.ProneArmCounterDeg(stanceRules) * _prone * _upperWeight;
             Turn(ArmLeft, armUp, transform.right);
             Turn(ArmRight, armUp, transform.right);
+            // Parkour: both arms reach forward and down onto the top (a negative turn swings a hanging arm forward).
+            float reach = -parkourRules.PoseArmReachDeg * _parkour;
+            Turn(ArmLeft, reach, transform.right);
+            Turn(ArmRight, reach, transform.right);
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;

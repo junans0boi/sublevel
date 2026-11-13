@@ -28,5 +28,6 @@ namespace Game.Core
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();
+        public ParkourRules Parkour = new ParkourRules();
     }
 }

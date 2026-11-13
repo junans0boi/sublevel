@@ -12,6 +12,9 @@ namespace Game.Core
         public float GroundedStick = -2f;
         // Empty hands (nothing held, or the weapon put away with X) move this much faster, walking and sprinting (ADR-058).
         public float UnarmedMoveFactor = 1.12f;
+        // Slow walk (Ctrl held, ADR-065 (3)): this speed standing at the hip, whatever is in the hands; no sprinting.
+        public float SlowWalkSpeed = 2.0f;
+        public float SlowWalkFootstepVolume = 0.25f; // footsteps this much quieter
     }
 
     // How the legs keep up when the character moves faster than its clips were animated for (ADR-048).
@@ -103,14 +106,15 @@ namespace Game.Core
         public float ReportWindowSeconds = 1f;
     }
 
-    // Looking around without turning the character (free look).
+    // Looking around without turning the character (free look, Alt held). The view orbits all the way round
+    // (ADR-065 (2)); the pitch keeps its normal limits.
     [Serializable]
     public class FreeLookRules
     {
         public static FreeLookRules Current = new FreeLookRules();
 
-        public float MaxYawDeg = 120f;            // either side of where the character faces
-        public float ReturnDegPerSecond = 540f;   // how fast the view swings back when the key is released
+        public float ReturnDegPerSecond = 540f;   // fastest the view swings back when the key is released
+        public float ReturnEasePerSecond = 10f;   // the swing back slows down over its last part
     }
 
     // Measures a drop: from the highest point reached off the ground down to where the ground was met again.
@@ -194,8 +198,31 @@ namespace Game.Core
 
         // The share of the full walking or sprinting speed allowed by the aim state, leaning, stance and what is in
         // the hands. The owner moves with it; anything checking the owner's speed must use the same product.
-        public static float MoveSpeedFactor(float aimFactor, float leanFactor, float stanceFactor, bool armed, LocomotionParams p) =>
-            aimFactor * leanFactor * stanceFactor * (armed ? 1f : p.UnarmedMoveFactor);
+        // Slow walking replaces the empty-hands bonus with the slow walk's share of the walking speed.
+        public static float MoveSpeedFactor(float aimFactor, float leanFactor, float stanceFactor, bool armed, LocomotionParams p, bool slowWalk = false)
+        {
+            float hands = slowWalk ? (p.WalkSpeed > 0f ? p.SlowWalkSpeed / p.WalkSpeed : 1f) : armed ? 1f : p.UnarmedMoveFactor;
+            return aimFactor * leanFactor * stanceFactor * hands;
+        }
+
+        // Free look: the view's turn away from the facing after adding `deltaDeg`, kept in -180..180 so the swing
+        // back always takes the short way round.
+        public static float WrapFreeYaw(float freeYaw, float deltaDeg)
+        {
+            float v = (freeYaw + deltaDeg) % 360f;
+            if (v >= 180f) v -= 360f;
+            else if (v < -180f) v += 360f;
+            return v;
+        }
+
+        // One frame of the swing back toward 0: eased (fast at first, gentle at the end) but never faster than
+        // the rule's top speed, and never past 0.
+        public static float FreeLookReturn(float freeDeg, float dt, FreeLookRules rules)
+        {
+            float ease = Math.Abs(freeDeg) * (1f - (float)Math.Exp(-rules.ReturnEasePerSecond * dt));
+            float step = Math.Min(rules.ReturnDegPerSecond * dt, Math.Max(ease, 30f * dt));
+            return Math.Abs(freeDeg) <= step ? 0f : freeDeg - Math.Sign(freeDeg) * step;
+        }
 
         // World-space planar velocity from stick input (x = right, y = forward) relative to a yaw heading.
         public static void PlanarVelocity(float moveX, float moveY, float yawDeg, bool sprint, LocomotionParams p, out float vx, out float vz, float speedFactor = 1f)

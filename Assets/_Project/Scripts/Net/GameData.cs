@@ -29,6 +29,7 @@ namespace Game.Net
             BotRules.Current = rules.Bot;
             MeleeRules.Current = rules.Melee;
             MatchRules.Current = rules.Match ?? new MatchRules();
+            ParkourRules.Current = rules.Parkour;
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

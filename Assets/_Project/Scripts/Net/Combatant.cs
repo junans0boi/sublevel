@@ -412,6 +412,8 @@ namespace Game.Net
                         victim = target.NetworkObject;
                     }
                 }
+                // Window glass on the way breaks; the shot goes on through it (ADR-065 (4)).
+                GlassPanes.ServerBreakAlong(origin, dir, (end - origin).magnitude, ObjectId);
                 RpcShotFx(origin, end, normal, (byte)((int)result | ((int)zone << ShotZoneShift)), victim);
             }
             // Bots hear the shot where it was fired, whoever fired it.

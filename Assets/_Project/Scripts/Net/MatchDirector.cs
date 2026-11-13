@@ -92,6 +92,10 @@ namespace Game.Net
             // Every peer builds the same doors from the scene's elevators; scenes without elevators get none.
             Elevators = ElevatorDoors.TryCreate(gameObject);
             if (Elevators != null) Elevators.Bind(_networkManager);
+            // Window panes (ADR-065 (4)): the server breaks them and tells everyone.
+            var glass = GetComponent<GlassPanes>();
+            if (glass == null) glass = gameObject.AddComponent<GlassPanes>();
+            glass.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost)
