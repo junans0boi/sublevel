@@ -35,6 +35,7 @@ namespace Game.Net
         public bool Over;
         public int WinnerId;        // -1 while playing, or when nobody was left standing
         public string WinnerName;
+        public int WinnerTeam;      // team matches (ADR-072): the winning team; 0 otherwise
     }
 
     // A client asking for a fresh match (solo has no revival).
@@ -47,7 +48,7 @@ namespace Game.Net
     // combatants died (= placement), and declares the winner when one is left. Clients get it as broadcasts, so
     // this needs no network object of its own: MatchDirector adds it next to itself.
     // Dummies and bots count as combatants like players: the match ends when one is left alive.
-    public class MatchState : MonoBehaviour
+    public partial class MatchState : MonoBehaviour
     {
         public const int FeedCapacity = 16;
         const string PlayerName = "플레이어";
@@ -104,7 +105,7 @@ namespace Game.Net
             combatant != null && _kills.TryGetValue(combatant.ObjectId, out int kills) ? kills : 0;
 
         public int PlacementOf(Combatant combatant) =>
-            combatant != null && _placements.TryGetValue(combatant.ObjectId, out int placement) ? placement : 0;
+            PlacementWithTeam(combatant, combatant != null && _placements.TryGetValue(combatant.ObjectId, out int placement) ? placement : 0);
 
         // Server only: the name shown for a combatant ("" before the server has seen it).
         public string ServerNameOf(Combatant combatant) =>
@@ -146,6 +147,7 @@ namespace Game.Net
             _network.ClientManager.RegisterBroadcast<MatchStatus>(OnMatchStatus);
             _network.ServerManager.RegisterBroadcast<MatchRestartRequest>(OnRestartRequest);
             _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
+            BindTeam();
         }
 
         void OnDestroy()
@@ -158,6 +160,7 @@ namespace Game.Net
             _network.ClientManager.UnregisterBroadcast<MatchStatus>(OnMatchStatus);
             _network.ServerManager.UnregisterBroadcast<MatchRestartRequest>(OnRestartRequest);
             _network.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
+            UnbindTeam();
         }
 
         void Update()
@@ -234,7 +237,7 @@ namespace Game.Net
                 Headshot = info.Cause == DamageCause.Shot && info.Zone == HitZone.Head,
                 Cause = (byte)info.Cause,
                 KillerKills = killerKills,
-                VictimPlacement = _serverAlive + 1,
+                VictimPlacement = ServerVictimPlacement(victim),
                 Alive = _serverAlive,
                 Total = _serverTotal,
             };
@@ -244,12 +247,12 @@ namespace Game.Net
                     if (connection.IsAuthenticated) _network.ServerManager.Broadcast(connection, entry);
             }
 
-            if (_serverAlive <= 1)
+            // Solo: one left; team modes: one team left (ADR-072).
+            if (ServerDecided(out var winner))
             {
                 _serverOver = true;
-                var winner = ServerLastAlive();
                 _serverWinnerId = winner != null ? winner.ObjectId : -1;
-                _serverWinnerName = winner != null ? ServerName(winner) : "";
+                _serverWinnerName = ServerWinnerName(winner);
             }
             ServerSendStatus(null);
         }
@@ -276,6 +279,7 @@ namespace Game.Net
                 Over = _serverOver,
                 WinnerId = _serverWinnerId,
                 WinnerName = _serverWinnerName,
+                WinnerTeam = _serverWinnerTeam,
             };
             if (only != null)
             {
@@ -336,13 +340,14 @@ namespace Game.Net
         void OnMatchStatus(MatchStatus status, Channel channel)
         {
             bool winnerPlaced = !status.Over || status.WinnerId < 0 || PlacementOfId(status.WinnerId) == 1;
-            if (status.Alive == AliveCount && status.Total == TotalCount && status.Over == IsOver && status.WinnerId == WinnerId && winnerPlaced) return;
+            if (status.Alive == AliveCount && status.Total == TotalCount && status.Over == IsOver && status.WinnerId == WinnerId && status.WinnerTeam == WinnerTeam && winnerPlaced) return;
             AliveCount = status.Alive;
             TotalCount = status.Total;
             IsOver = status.Over;
             WinnerId = status.WinnerId;
             WinnerName = status.WinnerName ?? "";
             if (status.Over && status.WinnerId >= 0) _placements[status.WinnerId] = 1;
+            if (status.Over) ApplyWinnerTeam(status.WinnerTeam);
             Changed?.Invoke();
         }
 

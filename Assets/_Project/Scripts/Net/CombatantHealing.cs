@@ -126,7 +126,7 @@ namespace Game.Net
         bool ShouldCancel(HealKind kind)
         {
             var c = _combatant;
-            if (c.Dead.Value || c.Reloading.Value) return true;
+            if (c.Dead.Value || c.TeamBlocksAction || c.Reloading.Value) return true;
             float hp = c.Hp.Value;
             if (hp < _baseHp - 1e-4f) return true; // damage
             _baseHp = hp;
@@ -172,7 +172,7 @@ namespace Game.Net
         {
             if (!IsServerInitialized || kind == HealKind.None || UsingKind.Value != 0) return false;
             var c = _combatant;
-            if (c.Dead.Value || c.Reloading.Value || CountOf(kind) <= 0) return false;
+            if (c.Dead.Value || c.TeamBlocksAction || c.Reloading.Value || CountOf(kind) <= 0) return false;
             var rules = HealRules.Current;
             if (!Healing.CanUse(kind, c.Hp.Value, rules)) return false;
             _baseHp = c.Hp.Value;

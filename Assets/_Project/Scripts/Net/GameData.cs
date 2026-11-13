@@ -32,6 +32,7 @@ namespace Game.Net
             ParkourRules.Current = rules.Parkour;
             VehicleRules.Current = rules.Vehicles;
             VehicleRules.Motorcycle = rules.Motorcycles;
+            TeamRules.Current = rules.Team ?? new TeamRules();
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

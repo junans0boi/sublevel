@@ -1,4 +1,5 @@
 using FishNet;
+using Game.Core;
 using Game.Net;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,7 +8,8 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The first screen of a normal launch (the MainMenu scene is first in the build): title, 시작(솔로), 설정, 종료.
+    // The first screen of a normal launch (the MainMenu scene is first in the build): title, 모드(솔로/듀오/스쿼드, ADR-072),
+    // 시작, 설정, 종료.
     // 시작 loads the match scene, whose MatchDirector hosts a fresh match on a free port (ADR-044). The dev scene picker
     // is not here: `-scene <name>` on the command line is handled by StartScene.
     public class MainMenu : MonoBehaviour
@@ -30,11 +32,15 @@ namespace Game.Gameplay
         public bool SettingsShown => _settings != null && _settings.activeSelf;
         public SettingsScreen Settings => _settingsScreen;
         public string LoadingText => _loading != null ? _loading.text : "";
+        // The team mode 시작 will host (ADR-072); the last choice of this session, solo at first.
+        public TeamMode Mode { get; private set; } = TeamMatch.Mode;
+        public string ModeText => _modeLabel != null ? _modeLabel.text : "";
 
         GameObject _root, _main, _settings, _hint;
         SettingsScreen _settingsScreen;
         Text _loading;
         Button[] _buttons;
+        Text _modeLabel, _startLabel;
 
         // Leaves the running match (this process hosts it) and opens the main menu. Both network sides are stopped
         // first so the sockets are closed before the scene, and its NetworkManager, goes away; the next 시작 then
@@ -87,10 +93,26 @@ namespace Game.Gameplay
                 return;
             }
             IsLoading = true;
+            TeamMatch.Mode = Mode;
             _loading.text = "불러오는 중...";
             _loading.gameObject.SetActive(true);
             for (int i = 0; i < _buttons.Length; i++) _buttons[i].interactable = false;
             SceneManager.LoadSceneAsync(MatchScene);
+        }
+
+        // 모드 button: 솔로 -> 듀오 -> 스쿼드 -> 솔로.
+        public void CycleMode()
+        {
+            if (IsLoading) return;
+            SetMode(Teams.Next(Mode));
+        }
+
+        public void SetMode(TeamMode mode)
+        {
+            Mode = mode;
+            string name = Teams.ModeName(mode);
+            if (_modeLabel != null) _modeLabel.text = "모드: " + name;
+            if (_startLabel != null) _startLabel.text = "시작 (" + name + ")";
         }
 
         public void ShowSettings()
@@ -141,11 +163,15 @@ namespace Game.Gameplay
         {
             var panel = UiKit.CenteredPanel("Main", parent, MainWidth);
             _main = panel.gameObject;
-            _buttons = new Button[3];
+            _buttons = new Button[4];
             float y = UiKit.MenuPadding;
-            _buttons[0] = AddButton(panel, "시작 (솔로)", ref y, StartGame);
-            _buttons[1] = AddButton(panel, "설정", ref y, ShowSettings);
-            _buttons[2] = AddButton(panel, "종료", ref y, Quit);
+            _buttons[0] = AddButton(panel, "모드", ref y, CycleMode);
+            _buttons[1] = AddButton(panel, "시작", ref y, StartGame);
+            _buttons[2] = AddButton(panel, "설정", ref y, ShowSettings);
+            _buttons[3] = AddButton(panel, "종료", ref y, Quit);
+            _modeLabel = _buttons[0].GetComponentInChildren<Text>();
+            _startLabel = _buttons[1].GetComponentInChildren<Text>();
+            SetMode(Mode);
             panel.sizeDelta = new Vector2(MainWidth, y - UiKit.MenuButtonGap + UiKit.MenuPadding);
             panel.anchoredPosition = new Vector2(0f, -60f);
 

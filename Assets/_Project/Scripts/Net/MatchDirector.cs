@@ -61,6 +61,8 @@ namespace Game.Net
         public int DeploymentSeed { get; private set; }
         // Server: the elevator index each participant was given (players first, then bots); empty without elevators.
         public IReadOnlyList<int> ElevatorAssignment => _deployment;
+        // Players counted ahead of the bots (participants 0..ExpectedPlayers-1, ADR-055); teams count the same way (ADR-072).
+        public int ExpectedPlayers => _playerPrefab != null ? Mathf.Max(0, _expectedPlayers) : 0;
 
         const float BotSnapMeters = 2f;
         // Feet a little above the station floor, as the builders place spawn points.
@@ -235,7 +237,8 @@ namespace Game.Net
             _expectedPlayersCounted = _playerPrefab != null ? Mathf.Max(0, _expectedPlayers) : 0;
             var slots = new ElevatorSlot[Elevators.Sites.Count];
             for (int i = 0; i < slots.Length; i++) slots[i] = new ElevatorSlot(Elevators.Sites[i].Region);
-            _deployment = Game.Core.Deployment.Assign(_expectedPlayersCounted + BotCount, slots, DeploymentSeed);
+            // A team starts together in one elevator (ADR-072); solo is the plain assignment.
+            _deployment = Game.Core.Teams.Deploy(_expectedPlayersCounted + BotCount, TeamMatch.TeamSize, slots, DeploymentSeed);
             _elevatorLoad = new int[slots.Length];
             Debug.Log($"[MatchDirector] elevator start: {_deployment.Length} participants over {slots.Length} elevators, seed {DeploymentSeed}");
         }

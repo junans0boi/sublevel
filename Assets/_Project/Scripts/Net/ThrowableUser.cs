@@ -164,7 +164,7 @@ namespace Game.Net
         [Server]
         public bool ServerThrow(Vector3 origin, Vector3 velocity, ThrowableKind kind)
         {
-            if (_combatant.Dead.Value || CountOf(kind) <= 0) return false;
+            if (_combatant.Dead.Value || _combatant.TeamBlocksAction || CountOf(kind) <= 0) return false;
             // [VEHICLE HOOK] ADR-065 (5): the driver does not throw; nobody throws while getting in, out or across.
             if (!VehicleSeat.CanThrow(_combatant)) return false;
             if (!IsFinite(origin) || !IsFinite(velocity)) return false;

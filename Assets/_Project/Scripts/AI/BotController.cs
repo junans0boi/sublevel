@@ -16,7 +16,7 @@ namespace Game.AI
     // It walks with a NavMeshAgent that it adds to itself on the server (so the prefab needs none and clients
     // never run one). The agent moves the transform; the combatant's capsule simply rides along.
     [RequireComponent(typeof(Combatant))]
-    public class BotController : MonoBehaviour
+    public partial class BotController : MonoBehaviour
     {
         const float ChestHeight = 1.1f;
         const float HeadHeight = 1.5f; // low enough to stay inside the crouched capsule once scaled
@@ -205,6 +205,12 @@ namespace Game.AI
                 return;
             }
             EnsureAgent();
+            // Knocked down (ADR-072): crawl to a teammate, nothing else.
+            if (_self.Knocked.Value)
+            {
+                TickKnocked(Time.time);
+                return;
+            }
 
             float now = Time.time;
             if (now >= _nextSense)
@@ -214,6 +220,8 @@ namespace Game.AI
             }
             FillSelf();
             _intent = _brain.Think(_percept);
+            // Teams (ADR-072): revive a knocked teammate, keep near the leader.
+            ApplyTeam(ref _intent, now);
             // One-shot senses are the brain's to remember from here on.
             _percept.Heard = false;
             _percept.Stuck = false;
@@ -260,7 +268,7 @@ namespace Game.AI
             for (int i = 0; i < all.Count; i++)
             {
                 var c = all[i];
-                if (c == null || c == _self || c.Dead.Value) continue;
+                if (c == null || c == _self || c.Dead.Value || _self.IsTeammateOf(c)) continue;
                 if (c.IsPlayer && !rules.TargetsPlayers) continue;
                 // One it could neither reach nor hit for a while (a stall) is left alone for a moment.
                 if (c.ObjectId == _ignoredEnemyId && Time.time < _ignoreEnemyUntil) continue;
@@ -271,6 +279,8 @@ namespace Game.AI
                 if (sqr <= viewSqr)
                 {
                     float score = c == _enemy ? sqr * 0.5f : sqr;
+                    // One already knocked down is finished off only when nobody on its feet is closer (ADR-072).
+                    if (c.Knocked.Value) score *= KnockedTargetFactor;
                     bool inCone = sqr <= rules.CloseSenseRadius * rules.CloseSenseRadius || Vector3.Angle(forward, to) <= halfCone;
                     if (inCone && score < seenScore && (Sees(eye, chest, c) || Sees(eye, HeadOf(c), c)))
                     {
@@ -684,7 +694,7 @@ namespace Game.AI
             for (int i = 0; i < all.Count; i++)
             {
                 var c = all[i];
-                if (c == null || c == _self || c.Dead.Value || !c.IsServerInitialized) continue;
+                if (c == null || c == _self || c.Dead.Value || !c.IsServerInitialized || _self.IsTeammateOf(c)) continue;
                 if (c.IsPlayer && !_rules.TargetsPlayers) continue;
                 var p = c.transform.position;
                 float d = (p - at).sqrMagnitude;

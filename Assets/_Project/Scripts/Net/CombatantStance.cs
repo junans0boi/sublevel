@@ -162,7 +162,8 @@ namespace Game.Net
         [Server]
         public void ServerSetStance(Stance stance)
         {
-            if (_combatant.Dead.Value || stance == Current) return;
+            // Knocked down (ADR-072) the body stays lying; the server set it.
+            if (_combatant.Dead.Value || _combatant.Knocked.Value || stance == Current) return;
             // [VEHICLE HOOK] ADR-065 (5): seated stays upright (C / Z mean other things in a vehicle).
             if (VehicleSeat.IsAttached(_combatant)) return;
             var rules = StanceRules.Current;

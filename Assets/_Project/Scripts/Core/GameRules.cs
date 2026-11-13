@@ -31,5 +31,6 @@ namespace Game.Core
         public ParkourRules Parkour = new ParkourRules();
         public VehicleRules Vehicles = new VehicleRules();
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
+        public TeamRules Team = new TeamRules();
     }
 }

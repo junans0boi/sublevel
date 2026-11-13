@@ -94,12 +94,14 @@ namespace Game.Gameplay
             if (outcome != Outcome) Show(outcome);
             if (outcome == MatchOutcome.Playing) return;
 
-            int placement = state.LocalPlacement, total = state.TotalCount, kills = state.LocalKills;
+            // Team matches (ADR-072) place teams: "#2 / 전체 4팀".
+            bool team = Combatant.LocalPlayer != null && Combatant.LocalPlayer.HasTeam;
+            int placement = state.LocalPlacement, total = team ? state.TeamsTotal : state.TotalCount, kills = state.LocalKills;
             if (placement != _shownPlacement || total != _shownTotal)
             {
                 _shownPlacement = placement;
                 _shownTotal = total;
-                _placement.text = "#" + IntText(placement) + " / 전체 " + IntText(total);
+                _placement.text = "#" + IntText(placement) + " / 전체 " + IntText(total) + (team ? "팀" : "");
             }
             if (kills != _shownKills)
             {
@@ -126,7 +128,8 @@ namespace Game.Gameplay
             bool won = outcome == MatchOutcome.Won;
             _title.text = won ? "승리" : "탈락";
             _title.color = won ? UiKit.Accent : UiKit.Danger;
-            _subtitle.text = won ? "최후의 생존자" : "이번 매치에서 탈락했습니다";
+            bool team = Combatant.LocalPlayer != null && Combatant.LocalPlayer.HasTeam;
+            _subtitle.text = won ? (team ? "최후의 생존 팀" : "최후의 생존자") : (team ? "팀이 탈락했습니다" : "이번 매치에서 탈락했습니다");
         }
 
         void Build()

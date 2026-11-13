@@ -14,6 +14,7 @@ namespace Game.Gameplay
         public bool FirePressed;
         public bool Reload;
         public bool Interact;
+        public bool InteractHeld;  // F held: reviving a knocked teammate (ADR-072)
         public bool ToggleView;
         public bool AimHeld;       // right button: hold = shoulder, tap = toggle sights
         public bool LeanLeft;
@@ -63,6 +64,7 @@ namespace Game.Gameplay
                 f.Jump = k.spaceKey.wasPressedThisFrame;
                 f.Reload = k.rKey.wasPressedThisFrame;
                 f.Interact = k.fKey.wasPressedThisFrame;
+                f.InteractHeld = k.fKey.isPressed;
                 f.ToggleView = k.vKey.wasPressedThisFrame;
                 f.LeanLeft = k.qKey.isPressed;
                 f.LeanRight = k.eKey.isPressed;

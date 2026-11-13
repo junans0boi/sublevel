@@ -75,6 +75,7 @@ namespace Game.Gameplay
                 case DamageCause.Fall: return "낙하";
                 case DamageCause.Blast: return "폭발";
                 case DamageCause.Zone: return "방사능";
+                case DamageCause.Bleed: return "출혈";
                 case DamageCause.Melee: return "주먹";
             }
             if (!hasKiller) return "탈락";
@@ -93,30 +94,73 @@ namespace Game.Gameplay
             Instance = this;
             Build();
             MatchState.KillPosted += Post;
+            MatchState.KnockPosted += PostKnock;
         }
 
         void OnDestroy()
         {
             if (Instance != this) return;
             MatchState.KillPosted -= Post;
+            MatchState.KnockPosted -= PostKnock;
             Instance = null;
+        }
+
+        // A knock-down in a team match (ADR-072): "knocker  [weapon · 기절]  victim".
+        public static string Format(in KnockEntry knock)
+        {
+            var entry = new KillEntry { KillerId = knock.KnockerId, KillerName = knock.KnockerName, VictimName = knock.VictimName,
+                WeaponId = knock.WeaponId, Headshot = knock.Headshot, Cause = knock.Cause };
+            bool hasKiller = entry.KillerId >= 0 && !string.IsNullOrEmpty(entry.KillerName);
+            string tag = Tag(in entry, hasKiller) + " · 기절";
+            return hasKiller ? entry.KillerName + "  [" + tag + "]  " + entry.VictimName : entry.VictimName + "  [" + tag + "]";
+        }
+
+        void PostKnock(KnockEntry knock)
+        {
+            if (_row[0] == null) return;
+            Push(Format(in knock), LineColour(knock.KnockerId, knock.VictimId));
+        }
+
+        // Own lines and the team's stand out (ADR-072): losses in red, our side's kills in the member's colour.
+        static Color LineColour(int killerId, int victimId)
+        {
+            var me = Combatant.LocalPlayer;
+            int myId = me != null ? me.ObjectId : int.MinValue;
+            if (victimId == myId) return UiKit.Danger;
+            if (killerId == myId) return UiKit.Accent;
+            var killer = FindCombatant(killerId);
+            var victim = FindCombatant(victimId);
+            if (me != null && me.IsTeammateOf(victim)) return UiKit.Danger;
+            if (me != null && me.IsTeammateOf(killer)) return TeamColours.Of(killer.TeamSlot.Value);
+            return UiKit.Text;
+        }
+
+        static Combatant FindCombatant(int objectId)
+        {
+            if (objectId < 0) return null;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && all[i].ObjectId == objectId) return all[i];
+            return null;
         }
 
         void Post(KillEntry entry)
         {
             // Scene unloads can deliver a last kill after the canvas is gone.
             if (_row[0] == null) return;
+            Push(Format(in entry), LineColour(entry.KillerId, entry.VictimId));
+        }
+
+        void Push(string text, Color colour)
+        {
             for (int i = Rows - 1; i > 0; i--)
             {
                 _text[i] = _text[i - 1];
                 _color[i] = _color[i - 1];
                 _until[i] = _until[i - 1];
             }
-            var me = Combatant.LocalPlayer;
-            int myId = me != null ? me.ObjectId : int.MinValue;
-            _text[0] = Format(in entry);
-            // The local player's own lines stand out; the names already say who is who.
-            _color[0] = entry.VictimId == myId ? UiKit.Danger : entry.KillerId == myId ? UiKit.Accent : UiKit.Text;
+            _text[0] = text;
+            _color[0] = colour;
             _until[0] = Time.time + ShowSeconds;
             if (_shown < Rows) _shown++;
             for (int i = 0; i < _shown; i++)

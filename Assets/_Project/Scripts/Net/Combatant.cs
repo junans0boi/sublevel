@@ -19,7 +19,7 @@ namespace Game.Net
 
     // Anything that can shoot and be shot: players, the training dummy, later bots.
     // The server owns health and loadout; clients read the SyncVars and send requests (ADR-029).
-    public class Combatant : NetworkBehaviour
+    public partial class Combatant : NetworkBehaviour
     {
         public const float PickupRange = 3f;
 
@@ -370,7 +370,8 @@ namespace Game.Net
         public bool ServerFire(Vector3 direction)
         {
             float sqr = direction.sqrMagnitude;
-            if (_health.IsDead || Holstered.Value || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
+            // Knocked down or reviving (ADR-072): no shooting.
+            if (_health.IsDead || TeamBlocksAction || Holstered.Value || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
@@ -434,7 +435,7 @@ namespace Game.Net
         public bool ServerPunch(Vector3 direction)
         {
             float sqr = direction.sqrMagnitude;
-            if (_health == null || _health.IsDead || ActiveWeaponId != 0 || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
+            if (_health == null || _health.IsDead || TeamBlocksAction || ActiveWeaponId != 0 || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
             // [VEHICLE HOOK] ADR-065 (5): no punching from a seat.
             if (!VehicleSeat.CanPunch(this)) return false;
             var rules = MeleeRules.Current;
@@ -543,8 +544,12 @@ namespace Game.Net
         {
             if (!IsServerInitialized || _health == null || _health.IsDead) return;
             var dealt = info;
-            if (ServerDamageFilter != null) dealt.Amount = ServerDamageFilter(info);
+            // Teams (ADR-072): nothing between teammates (before armour, which would wear), knocked damage factor.
+            if (!ServerTeamAdjust(ref dealt)) return;
+            if (ServerDamageFilter != null) dealt.Amount = ServerDamageFilter(dealt);
             if (_health.ApplyDamage(dealt.Amount) <= 0f) return;
+            // A lethal hit knocks down instead while a teammate stands (ADR-072).
+            if (_health.IsDead && ServerTryKnock(dealt)) return;
             Push();
             // The dead take no further damage, so this happens once per life.
             if (_health.IsDead) ServerDied?.Invoke(this, dealt);
@@ -591,7 +596,7 @@ namespace Game.Net
         [Server]
         public void ServerSetStance(AimMode aim, int lean)
         {
-            if (_health.IsDead) return;
+            if (_health.IsDead || Knocked.Value) return;
             bool validAim = aim == AimMode.Hip || ((aim == AimMode.Shoulder || aim == AimMode.Sights) && ActiveWeaponId != 0);
             Aim.Value = validAim ? (int)aim : 0;
             Lean.Value = lean < 0 ? -1 : lean > 0 ? 1 : 0;
@@ -608,7 +613,8 @@ namespace Game.Net
         [Server]
         public void ServerSetHolstered(bool holstered)
         {
-            if (_health.IsDead || Holstered.Value == holstered) return;
+            // Knocked down (ADR-072) the weapon stays put away.
+            if (_health.IsDead || (Knocked.Value && !holstered) || Holstered.Value == holstered) return;
             if (holstered) _loadout.CancelReload();
             Holstered.Value = holstered;
             Push();
@@ -646,7 +652,7 @@ namespace Game.Net
         // Same effect as CmdSelectSlot, for the server's own callers (bots).
         public bool ServerSelectSlot(int slot)
         {
-            if (!IsServerInitialized || _loadout == null || _health.IsDead) return false;
+            if (!IsServerInitialized || _loadout == null || _health.IsDead || Knocked.Value) return false;
             // Choosing a slot, even the one already in hand, takes a put-away weapon out again.
             bool drawn = Holstered.Value;
             if (drawn) Holstered.Value = false;
@@ -658,7 +664,7 @@ namespace Game.Net
         // Same effect as CmdUseMedkit, for the server's own callers (bots).
         public bool ServerUseMedkit()
         {
-            if (!IsServerInitialized || _loadout == null || !_loadout.TryUseMedkit(_health)) return false;
+            if (!IsServerInitialized || _loadout == null || Knocked.Value || !_loadout.TryUseMedkit(_health)) return false;
             Push();
             return true;
         }
@@ -667,7 +673,7 @@ namespace Game.Net
         // Returns the health actually given.
         public float ServerHeal(float amount)
         {
-            if (!IsServerInitialized || _health == null || _health.IsDead) return 0f;
+            if (!IsServerInitialized || _health == null || _health.IsDead || Knocked.Value) return 0f;
             float healed = _health.Heal(amount);
             if (healed > 0f) Push();
             return healed;
@@ -737,7 +743,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickupToSlot(NetworkObject lootObject, int slot)
         {
-            if (_health.IsDead || lootObject == null || slot < 0 || slot >= Loadout.SlotCount) return;
+            if (_health.IsDead || TeamBlocksAction || lootObject == null || slot < 0 || slot >= Loadout.SlotCount) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
@@ -754,7 +760,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickup(NetworkObject lootObject)
         {
-            if (_health.IsDead || lootObject == null) return;
+            if (_health.IsDead || TeamBlocksAction || lootObject == null) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;

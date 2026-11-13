@@ -189,6 +189,21 @@ namespace Game.Gameplay
                 return;
             }
 
+            // Teams (ADR-072): knocked down = crawl only (lying, no weapon, no jumping, sprinting or leaning);
+            // reviving a teammate = kneel still. F held stays in the frame for the revive (TeamHud).
+            bool knocked = _combatant.Knocked.Value;
+            if (knocked || _combatant.Reviving)
+            {
+                if (InParkour) AbortParkour();
+                f.Sprint = f.Jump = f.Crouch = f.Prone = f.AimHeld = f.FireHeld = f.FirePressed = f.LeanLeft = f.LeanRight = false;
+                f.Interact = f.Reload = f.Heal = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
+                f.ThrowHeld = f.ThrowPressed = f.ThrowReleased = false;
+                f.SelectSlot = -1;
+                if (!knocked) f.Move = Vector2.zero;
+                _autoRun = false;
+                LastInput = f;
+            }
+
             // Aiming needs a weapon and wins over sprinting; leaning is for standing and walking only.
             bool armed = _combatant.ActiveWeapon != null;
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
@@ -263,6 +278,7 @@ namespace Game.Gameplay
                 if (Stances.Rises(BodyStance, next, stanceRules) && !_stance.CanReach(stanceRules.For(next).CapsuleHeight)) next = BodyStance;
                 BodyStance = next;
             }
+            if (knocked && _stance != null) BodyStance = Stance.Prone;
             bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up
             sprint &= BodyStance == Stance.Stand;
             Sprinting = sprint;
@@ -288,6 +304,7 @@ namespace Game.Gameplay
                     stanceRules.For(BodyStance).MoveFactor, armed, _locomotion, SlowWalking);
                 // Slower while a bandage or kit is being used.
                 speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
+                if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
                 Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
                 _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
                 _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
@@ -298,7 +315,8 @@ namespace Game.Gameplay
             PlaceCamera();
 
             NearbyLoot = FindNearbyLoot();
-            if (f.Interact && NearbyLoot != null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
+            // Next to a knocked teammate F revives instead (ADR-072).
+            if (f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);

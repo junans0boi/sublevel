@@ -263,7 +263,8 @@ namespace Game.Gameplay
             if (hp != _shownHp)
             {
                 // A rise (medkit, regeneration) shows "회복 중" for a moment.
-                if (!float.IsNaN(_shownHp) && hp > _shownHp) _healingUntil = Time.unscaledTime + 1.2f;
+                // Not the knock bar refilling the health on a knock-down (ADR-072).
+                if (!float.IsNaN(_shownHp) && hp > _shownHp && !me.Knocked.Value) _healingUntil = Time.unscaledTime + 1.2f;
                 _shownHp = hp;
                 HealthFill = Mathf.Clamp01(hp / MaxHp);
                 _healthFill.anchorMax = new Vector2(HealthFill, 1f);

@@ -37,6 +37,8 @@ namespace Game.Gameplay
         public Vector2 MarkerPixels => _markerRect != null ? _markerRect.anchoredPosition : Vector2.zero;
         public bool MarkerVisible => _markerRect != null && _markerRect.gameObject.activeSelf;
         public string MarkerReadout => _markerReadout != null ? _markerReadout.text : "";
+        // The map picture (pivot centre, MapPx square): other views hang their markers on it (teammates, ADR-072).
+        public RectTransform MapArea => _map;
 
         bool _built;
         Canvas _canvas;
