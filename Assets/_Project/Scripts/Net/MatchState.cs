@@ -46,7 +46,7 @@ namespace Game.Net
     // The match's score keeping (ADR-053 (5)). The server counts who is alive, who killed whom and in which order
     // combatants died (= placement), and declares the winner when one is left. Clients get it as broadcasts, so
     // this needs no network object of its own: MatchDirector adds it next to itself.
-    // Training dummies count as combatants until bots replace them.
+    // Dummies and bots count as combatants like players: the match ends when one is left alive.
     public class MatchState : MonoBehaviour
     {
         public const int FeedCapacity = 16;
@@ -109,6 +109,13 @@ namespace Game.Net
         // Server only: the name shown for a combatant ("" before the server has seen it).
         public string ServerNameOf(Combatant combatant) =>
             combatant != null && _serverNames.TryGetValue(combatant.ObjectId, out string name) ? name : "";
+
+        // Server only: gives a combatant its name before the first count would name it ("봇 1" for bots).
+        public void ServerSetName(Combatant combatant, string name)
+        {
+            if (combatant == null || string.IsNullOrEmpty(name)) return;
+            _serverNames[combatant.ObjectId] = name;
+        }
 
         bool ServerActive => _network != null && _network.IsServerStarted;
 

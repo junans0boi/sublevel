@@ -120,9 +120,11 @@ namespace Game.Tests
             yield return null; // a frame for LateUpdate to pose the legs and for the camera to follow
             yield return null;
             Assert.AreEqual(1f, animation.CrouchPose, 0.01f);
-            Assert.Greater(animation.ModelDrop, 0.35f, "the model is lowered");
-            Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.35f, "the hips came down");
-            Assert.Greater(knee.position.y - hips.position.y - standingKnee, 0.2f, "the knees are bent up toward the hips");
+            Assert.Greater(animation.ModelDrop, 0.3f, "the model is lowered");
+            Assert.Less(animation.ModelDrop, 0.5f, "not a kneel");
+            float crouchDrop = animation.ModelDrop;
+            Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.28f, "the hips came down");
+            Assert.Greater(knee.position.y - hips.position.y - standingKnee, 0.12f, "the knees are bent up toward the hips");
             Assert.AreEqual(0.65f, standingCamera - pc.Camera.transform.position.y, 0.1f, "the camera comes down with the eyes");
 
             _input.Frame.Move = new Vector2(0, 1);
@@ -130,7 +132,10 @@ namespace Game.Tests
             float z0 = pc.transform.position.z, t0 = Time.time;
             yield return new WaitForSeconds(0.5f);
             float speed = (pc.transform.position.z - z0) / (Time.time - t0);
+            float walkDrop = animation.ModelDrop;
             _input.Frame.Move = Vector2.zero;
+            Assert.Less(walkDrop, crouchDrop - 0.05f, "walking crouched bends the knees less so the legs can still swing");
+            Assert.Greater(walkDrop, 0.1f, "but the body stays low");
             Assert.AreEqual(2.475f, speed, 0.3f, "walking 4.5 m/s times the crouch factor 0.55");
 
             _input.Frame.Crouch = true;

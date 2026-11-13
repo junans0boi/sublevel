@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using Game.Core;
 using UnityEngine;
 
@@ -23,12 +22,8 @@ namespace Game.Net
         static readonly Vector3 MarkerSize = new Vector3(0.7f, 0.45f, 0.5f);
         static readonly Color MarkerColor = new Color(0.32f, 0.27f, 0.2f);
 
-        // Combatant keeps its loadout to itself and has no call that empties it, so the crate reaches in.
-        // If that field ever goes away the crate falls back to the replicated values (see ServerTakeLoadout).
-        static readonly FieldInfo LoadoutField = typeof(Combatant).GetField("_loadout", BindingFlags.Instance | BindingFlags.NonPublic);
         static readonly List<LootEntry> Contents = new List<LootEntry>(8);
         static Material _fallbackMaterial;
-        static bool _warnedNoLoadout;
 
         Combatant _combatant;
         CombatantGear _gear;
@@ -95,55 +90,9 @@ namespace Game.Net
             Contents.Clear();
         }
 
-        // Moves everything out of the victim's loadout into `into`, and clears what clients see of it.
-        void ServerTakeLoadout(List<LootEntry> into)
-        {
-            var c = _combatant;
-            var loadout = LoadoutField != null ? LoadoutField.GetValue(c) as Loadout : null;
-            if (loadout != null)
-            {
-                for (int slot = 0; slot < Loadout.SlotCount; slot++)
-                {
-                    int weaponId = loadout.RemoveWeapon(slot, out int mag);
-                    if (weaponId != 0) into.Add(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
-                }
-                for (int type = (int)AmmoType.Light; type <= (int)AmmoType.Shell; type++)
-                {
-                    int rounds = loadout.RemoveAmmo((AmmoType)type);
-                    if (rounds > 0) into.Add(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)type, Amount = rounds });
-                }
-                int kits = 0;
-                while (loadout.RemoveMedkit()) kits++;
-                if (kits > 0) into.Add(new LootEntry { Kind = LootKind.Medkit, Amount = kits });
-                c.ActiveSlot.Value = loadout.ActiveSlot;
-            }
-            else
-            {
-                // The loadout could not be reached: go by the replicated values. The dead cannot use what is
-                // still in the loadout, but it should get a proper call on Combatant.
-                if (!_warnedNoLoadout)
-                {
-                    _warnedNoLoadout = true;
-                    Debug.LogWarning("[DeathCrate] Combatant._loadout not found; emptying the replicated loadout only");
-                }
-                if (c.Slot0.Value != 0) into.Add(new LootEntry { Kind = LootKind.Weapon, WeaponId = c.Slot0.Value, Amount = c.Mag0.Value });
-                if (c.Slot1.Value != 0) into.Add(new LootEntry { Kind = LootKind.Weapon, WeaponId = c.Slot1.Value, Amount = c.Mag1.Value });
-                if (c.ReserveLight.Value > 0) into.Add(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Light, Amount = c.ReserveLight.Value });
-                if (c.ReserveMedium.Value > 0) into.Add(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = c.ReserveMedium.Value });
-                if (c.ReserveShell.Value > 0) into.Add(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Shell, Amount = c.ReserveShell.Value });
-                if (c.Medkits.Value > 0) into.Add(new LootEntry { Kind = LootKind.Medkit, Amount = c.Medkits.Value });
-            }
-            // The same fields Combatant pushes from its loadout, now that it is empty.
-            c.Reloading.Value = false;
-            c.Slot0.Value = 0;
-            c.Slot1.Value = 0;
-            c.Mag0.Value = 0;
-            c.Mag1.Value = 0;
-            c.ReserveLight.Value = 0;
-            c.ReserveMedium.Value = 0;
-            c.ReserveShell.Value = 0;
-            c.Medkits.Value = 0;
-        }
+        // Moves everything out of the victim's loadout into `into` and clears what clients see of it. Rounds a
+        // non-player carried beyond Combatant.DroppedReserveCap per calibre are not dropped (a dummy holds 9999).
+        void ServerTakeLoadout(List<LootEntry> into) => _combatant.ServerStripLoadout(into);
 
         // Item `index` of `count` on the ring around the body: pulled in where a wall crosses the ring, and set
         // on the ground under it (slopes, steps).

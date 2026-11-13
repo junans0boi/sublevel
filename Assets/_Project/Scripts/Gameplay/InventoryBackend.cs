@@ -1,6 +1,7 @@
 using FishNet.Object;
 using Game.Core;
 using Game.Net;
+using UnityEngine;
 
 namespace Game.Gameplay
 {
@@ -61,58 +62,54 @@ namespace Game.Gameplay
         public const int HelmetSlot = 0;
         public const int VestSlot = 1;
 
-        static readonly string[] AmmoNames = { "9mm", "5.56mm", "12게이지", "7.62mm" };
         static readonly string[] AmmoKeys = { "ammo_9mm", "ammo_556", "ammo_12ga", "ammo_762" };
 
-        public static string AmmoName(int index) => index >= 0 && index < AmmoNames.Length ? AmmoNames[index] : "탄약";
+        public static string AmmoName(int index) => AmmoNames.Of(index);
         public static string AmmoKey(int index) => index >= 0 && index < AmmoKeys.Length ? AmmoKeys[index] : "";
         public static string WeaponKey(int weaponId) => weaponId > 0 ? "weapon_" + weaponId : "";
         public static int AmmoIndex(WeaponDef weapon) => weapon != null ? (int)weapon.Ammo : -1;
-        // [MASTER] Keep the pending four-calibre enum conversion in this adapter until its names are final.
         public static AmmoType AmmoValue(int index) => (AmmoType)index;
 
-        public static int Reserve(Combatant combatant, int index)
-        {
-            if (combatant == null) return 0;
-            // [MASTER] Replace these legacy fields with the four-calibre replicated contract.
-            switch (index)
-            {
-                case 0: return combatant.ReserveLight.Value;
-                case 1: return combatant.ReserveMedium.Value;
-                case 2: return combatant.ReserveShell.Value;
-                default: return 0;
-            }
-        }
+        public static int Reserve(Combatant combatant, int index) =>
+            combatant == null || !AmmoNames.IsValid((AmmoType)index) ? 0 : combatant.ReserveFor((AmmoType)index);
 
         public static int Grenades(Combatant combatant)
         {
-            // [MASTER] Read the replicated grenade count once Combatant exposes it.
-            return 0;
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.Grenades.Value : 0;
         }
 
         public static InventoryGearState Gear(Combatant combatant, int slot)
         {
-            // [MASTER] Bridge CombatantGear.TierOf/DurabilityOf/MaxDurabilityOf/Has here.
-            return default;
+            var gear = combatant != null && (slot == HelmetSlot || slot == VestSlot) ? combatant.GetComponent<CombatantGear>() : null;
+            if (gear == null) return default;
+            var armorSlot = (ArmorSlot)slot;
+            return new InventoryGearState(gear.Has(armorSlot), gear.TierOf(armorSlot),
+                Mathf.RoundToInt(gear.DurabilityOf(armorSlot)), Mathf.RoundToInt(gear.MaxDurabilityOf(armorSlot)));
         }
 
         public static bool TryArmorSlot(LootItem loot, out int slot)
         {
-            // [MASTER] Map the armour LootKind values after the gear branch lands.
             slot = -1;
-            return false;
+            if (loot == null) return false;
+            var kind = (LootKind)loot.Kind.Value;
+            if (!Armor.IsArmor(kind)) return false;
+            slot = (int)Armor.SlotOf(kind);
+            return true;
         }
 
-        public static bool IsGrenade(LootItem loot)
-        {
-            // [MASTER] Map the throwable LootKind after the grenade branch lands.
-            return false;
-        }
+        public static bool IsGrenade(LootItem loot) => loot != null && (LootKind)loot.Kind.Value == LootKind.Grenade;
 
+        // Mirrors the server's rule (CombatantGear.ServerTryTake): only a better piece is taken.
         public static bool CanEquipArmor(Combatant combatant, LootItem loot, int slot)
         {
-            // [MASTER] Reject a lower-tier replacement using CombatantGear and the armour loot payload.
-            return TryArmorSlot(loot, out int lootSlot) && lootSlot == slot;
+            if (!TryArmorSlot(loot, out int lootSlot) || lootSlot != slot) return false;
+            var gear = combatant != null ? combatant.GetComponent<CombatantGear>() : null;
+            if (gear == null) return false;
+            var armorSlot = (ArmorSlot)slot;
+            var candidate = new ArmorPiece { Tier = loot.Tier.Value, Durability = loot.Durability.Value };
+            var current = new ArmorPiece { Tier = gear.TierOf(armorSlot), Durability = gear.DurabilityOf(armorSlot) };
+            return Armor.IsBetter(candidate, current);
         }
 
         public static string LootName(LootItem item)
@@ -146,7 +143,7 @@ namespace Game.Gameplay
                 case LootKind.Ammo: return AmmoKey(item.Ammo.Value);
                 case LootKind.Medkit: return "medkit";
                 default:
-                    if (TryArmorSlot(item, out int slot)) return (slot == HelmetSlot ? "helmet_" : "vest_") + item.Amount.Value;
+                    if (TryArmorSlot(item, out int slot)) return (slot == HelmetSlot ? "helmet_" : "vest_") + item.Tier.Value;
                     return IsGrenade(item) ? "grenade" : "";
             }
         }
@@ -246,26 +243,11 @@ namespace Game.Gameplay
 
         public static void DropGrenade(Combatant combatant)
         {
-            // [MASTER] Call the authoritative grenade drop request once its name is finalized.
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            if (user != null) user.CmdDropGrenade();
         }
 
-        public static void EquipArmor(Combatant combatant, LootItem loot, int slot)
-        {
-            // [MASTER] Replace with the authoritative armour-to-slot request if it differs from CmdPickup.
-            Pickup(combatant, loot);
-        }
-
-        // [MASTER] Temporary extension: an instance ServerRpc with this exact name takes precedence after merge.
-        public static void CmdSwapWeaponSlots(this Combatant combatant)
-        {
-        }
-
-        // [MASTER] Temporary extension: current pickup remains authoritative but cannot honor the requested slot.
-        public static void CmdPickupToSlot(this Combatant combatant, NetworkObject loot, int slot) => combatant.CmdPickup(loot);
-
-        // [MASTER] Temporary extension until Combatant.CmdDropArmor(int) arrives with the gear branch.
-        public static void CmdDropArmor(this Combatant combatant, int slot)
-        {
-        }
+        // The server takes the piece only when it is better than the worn one (see CanEquipArmor).
+        public static void EquipArmor(Combatant combatant, LootItem loot, int slot) => Pickup(combatant, loot);
     }
 }

@@ -10,8 +10,8 @@ namespace Game.Tests
         {
             Weapons = new[]
             {
-                new WeaponDef { Id = 1, Name = "P", Ammo = AmmoType.Light, Damage = 20, FireInterval = 0.5f, MagSize = 3, ReloadTime = 1f },
-                new WeaponDef { Id = 2, Name = "S", Ammo = AmmoType.Shell, Damage = 10, FireInterval = 1f, MagSize = 2, ReloadTime = 2f },
+                new WeaponDef { Id = 1, Name = "P", Ammo = AmmoType.Pistol9, Damage = 20, FireInterval = 0.5f, MagSize = 3, ReloadTime = 1f },
+                new WeaponDef { Id = 2, Name = "S", Ammo = AmmoType.Shotgun12, Damage = 10, FireInterval = 1f, MagSize = 2, ReloadTime = 2f },
             }
         };
 
@@ -60,13 +60,13 @@ namespace Game.Tests
         {
             var l = new Loadout(Table());
             l.AddWeapon(1, 0);
-            l.AddAmmo(AmmoType.Light, 3);
+            l.AddAmmo(AmmoType.Pistol9, 3);
             Assert.IsTrue(l.TryStartReload(0));
 
             l.RemoveWeapon(0, out _);
             Assert.IsFalse(l.IsReloading);
             Assert.IsFalse(l.Tick(5), "nothing left to finish");
-            Assert.AreEqual(3, l.Reserve(AmmoType.Light), "the reserve is untouched");
+            Assert.AreEqual(3, l.Reserve(AmmoType.Pistol9), "the reserve is untouched");
         }
 
         [Test]
@@ -86,14 +86,14 @@ namespace Game.Tests
         public void DroppingAmmo_ReturnsTheWholeReserve_AndZeroesIt()
         {
             var l = new Loadout(Table());
-            l.AddAmmo(AmmoType.Light, 45);
-            l.AddAmmo(AmmoType.Shell, 8);
+            l.AddAmmo(AmmoType.Pistol9, 45);
+            l.AddAmmo(AmmoType.Shotgun12, 8);
 
-            Assert.AreEqual(45, l.RemoveAmmo(AmmoType.Light));
-            Assert.AreEqual(0, l.Reserve(AmmoType.Light));
-            Assert.AreEqual(8, l.Reserve(AmmoType.Shell), "other types are untouched");
-            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Light), "nothing left");
-            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Medium), "never had any");
+            Assert.AreEqual(45, l.RemoveAmmo(AmmoType.Pistol9));
+            Assert.AreEqual(0, l.Reserve(AmmoType.Pistol9));
+            Assert.AreEqual(8, l.Reserve(AmmoType.Shotgun12), "other types are untouched");
+            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Pistol9), "nothing left");
+            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Rifle556), "never had any");
             Assert.AreEqual(0, l.RemoveAmmo((AmmoType)7), "no such type");
         }
 

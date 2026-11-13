@@ -73,11 +73,13 @@ public static class ZoneDBuilder
         var navMesh = BakeNavMesh(zone.transform, obstacles, layout);
         Set(zone.AddComponent<ZoneNavMesh>(), "_data", p => p.objectReferenceValue = navMesh);
 
-        // Temporary until M2-2/M2-3: the player starts at the elevators, training dummies hold the convergence points.
+        // Until the elevator drop (M2-3): the player starts at the elevators and three bots hold convergence points.
+        // No training dummies here; they stay in the test box for the regression tests.
         MatchKit.AddMatch(
             layout.Elevators.Select(e => MatchKit.At(e.X, 0.1f, e.Z, e.FacingDeg)).ToArray(),
             layout.LootPoints.Select(p => MatchKit.At(p.X, p.Y, p.Z)).ToArray(),
-            layout.ConvergencePoints.Select(p => MatchKit.At(p.X, 0, p.Z)).ToArray());
+            new MatchKit.Spawn[0],
+            layout.ConvergencePoints.Take(3).Select(p => MatchKit.At(p.X, 0, p.Z)).ToArray());
 
         var cam = new GameObject("Main Camera") { tag = "MainCamera" };
         var camera = cam.AddComponent<Camera>();

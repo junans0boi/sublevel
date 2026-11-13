@@ -2,7 +2,19 @@ using System;
 
 namespace Game.Core
 {
-    public enum AmmoType { Light = 0, Medium = 1, Shell = 2 }
+    // Four calibres (ADR-054). The numbers are stored in data and sent over the network: never reorder.
+    public enum AmmoType { Pistol9 = 0, Rifle556 = 1, Shotgun12 = 2, Rifle762 = 3 }
+
+    public static class AmmoNames
+    {
+        public const int Count = 4;
+        static readonly string[] Names = { "9mm", "5.56mm", "12게이지", "7.62mm" };
+
+        // The one place that names a calibre for the player.
+        public static string Of(AmmoType type) => Of((int)type);
+        public static string Of(int type) => type >= 0 && type < Names.Length ? Names[type] : "탄약";
+        public static bool IsValid(AmmoType type) => (int)type >= 0 && (int)type < Count;
+    }
 
     // One weapon's tuning values. Loaded from data (ADR-032); Id 0 means "no weapon".
     [Serializable]

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using FishNet.Connection;
@@ -6,6 +7,7 @@ using FishNet.Object;
 using FishNet.Transporting;
 using Game.Core;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace Game.Net
@@ -20,16 +22,22 @@ namespace Game.Net
         [SerializeField] Transform[] _playerSpawns = new Transform[0];
         [SerializeField] Transform[] _lootSpawns = new Transform[0];
         [SerializeField] Transform[] _dummySpawns = new Transform[0];
+        // Bots (M2-2): one per spawn point, started with the match. Both empty = a match without bots.
+        [SerializeField] NetworkObject _botPrefab;
+        [SerializeField] Transform[] _botSpawns = new Transform[0];
         [SerializeField] int _seed = 12345;
         [SerializeField] bool _startAsHost = true;
 
         public static MatchDirector Instance { get; private set; }
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
+        public Transform[] BotSpawns => _botSpawns;
         public int Seed => _seed;
         public ushort Port { get; private set; }
         // Score keeping for this match: alive count, kills, placement, winner.
         public MatchState State { get; private set; }
+
+        const float BotSnapMeters = 2f;
 
         int _nextPlayerSpawn;
 
@@ -117,6 +125,43 @@ namespace Game.Net
                 var dummy = Instantiate(_dummyPrefab, point.position, point.rotation);
                 _networkManager.ServerManager.Spawn(dummy);
             }
+
+            ServerSpawnBots();
+        }
+
+        // One bot per spawn point, put on the navmesh when there is one within reach. Bots are ordinary combatants:
+        // MatchState counts them as they spawn (it recounts whenever the combatant list changes).
+        void ServerSpawnBots()
+        {
+            if (_botPrefab == null || _botSpawns == null || _botSpawns.Length == 0) return;
+            ServerGiveBotsPlacesToGo();
+            int number = 0;
+            foreach (var point in _botSpawns)
+            {
+                if (point == null) continue;
+                var position = point.position;
+                if (NavMesh.SamplePosition(position, out var hit, BotSnapMeters, NavMesh.AllAreas)) position = hit.position;
+                var bot = Instantiate(_botPrefab, position, point.rotation);
+                _networkManager.ServerManager.Spawn(bot);
+                number++;
+                var combatant = bot.GetComponent<Combatant>();
+                if (combatant != null && State != null) State.ServerSetName(combatant, "봇 " + number);
+            }
+        }
+
+        // The places bots wander between: loot, dummies and where bots start. Game.AI sits above this assembly, so
+        // its entry point is called by name; a build without it just leaves bots on their own defaults.
+        void ServerGiveBotsPlacesToGo()
+        {
+            var method = System.Type.GetType("Game.AI.BotController, Game.AI")?.GetMethod("SetPointsOfInterest",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (method == null) return;
+            var points = new List<Vector3>();
+            foreach (var group in new[] { _lootSpawns, _dummySpawns, _botSpawns })
+                if (group != null)
+                    foreach (var t in group)
+                        if (t != null) points.Add(t.position);
+            method.Invoke(null, new object[] { points });
         }
 
         public void ServerSpawnLoot(LootEntry entry, Vector3 position)

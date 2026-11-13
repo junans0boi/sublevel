@@ -223,15 +223,15 @@ namespace Game.Tests
 
             // On top of the pistol and light ammo it armed itself with.
             Assert.IsTrue(dummy.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = Rifle, Amount = 30 }));
-            Assert.IsTrue(dummy.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = 60 }));
+            Assert.IsTrue(dummy.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 60 }));
             Assert.IsTrue(dummy.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 }));
             gear.ServerEquip(ArmorSlot.Helmet, 1);
             gear.ServerEquip(ArmorSlot.Vest, 2, 100f);
             Assert.AreEqual(Pistol, dummy.Slot0.Value);
             Assert.AreEqual(Rifle, dummy.Slot1.Value);
             int pistolMag = dummy.Mag0.Value;
-            int lightRounds = dummy.ReserveLight.Value;
-            Assert.Greater(lightRounds, 0);
+            int lightRounds = dummy.ReservePistol9.Value;
+            Assert.Greater(lightRounds, Combatant.DroppedReserveCap, "the dummy carries far more than it will drop");
             Assert.IsFalse(crate.ServerOpened);
             Assert.IsFalse(crate.MarkerVisible);
 
@@ -245,8 +245,8 @@ namespace Game.Tests
 
             var rifle = FindLoot(lootBefore, LootKind.Weapon, Rifle);
             var pistol = FindLoot(lootBefore, LootKind.Weapon, Pistol);
-            var medium = FindLoot(lootBefore, LootKind.Ammo, 0, (int)AmmoType.Medium);
-            var light = FindLoot(lootBefore, LootKind.Ammo, 0, (int)AmmoType.Light);
+            var medium = FindLoot(lootBefore, LootKind.Ammo, 0, (int)AmmoType.Rifle556);
+            var light = FindLoot(lootBefore, LootKind.Ammo, 0, (int)AmmoType.Pistol9);
             var medkits = FindLoot(lootBefore, LootKind.Medkit);
             var helmet = FindLoot(lootBefore, LootKind.Helmet);
             var vest = FindLoot(lootBefore, LootKind.Vest);
@@ -260,7 +260,7 @@ namespace Game.Tests
             Assert.AreEqual(30, rifle.Amount.Value, "with its magazine");
             Assert.AreEqual(pistolMag, pistol.Amount.Value);
             Assert.AreEqual(60, medium.Amount.Value);
-            Assert.AreEqual(lightRounds, light.Amount.Value);
+            Assert.AreEqual(60, light.Amount.Value, "a dummy leaves at most the cap per calibre");
             Assert.AreEqual(2, medkits.Amount.Value, "both kits in one pickup");
             Assert.AreEqual(1, helmet.Tier.Value);
             Assert.AreEqual(60f, helmet.Durability.Value, 1e-3f);
@@ -287,9 +287,10 @@ namespace Game.Tests
             Assert.AreEqual(0, dummy.Mag0.Value);
             Assert.AreEqual(0, dummy.Mag1.Value);
             Assert.AreEqual(0, dummy.ActiveWeaponId);
-            Assert.AreEqual(0, dummy.ReserveLight.Value);
-            Assert.AreEqual(0, dummy.ReserveMedium.Value);
-            Assert.AreEqual(0, dummy.ReserveShell.Value);
+            Assert.AreEqual(0, dummy.ReservePistol9.Value);
+            Assert.AreEqual(0, dummy.ReserveRifle556.Value);
+            Assert.AreEqual(0, dummy.ReserveShotgun12.Value);
+            Assert.AreEqual(0, dummy.ReserveRifle762.Value);
             Assert.AreEqual(0, dummy.Medkits.Value);
             Assert.IsFalse(dummy.Reloading.Value);
             Assert.IsFalse(gear.Has(ArmorSlot.Helmet));
@@ -312,7 +313,7 @@ namespace Game.Tests
             yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 3f, "rifle picked up from the crate");
             Assert.AreEqual(30, me.ActiveMag);
             me.CmdPickup(medium.NetworkObject);
-            yield return WaitUntil(() => me.ReserveMedium.Value == 60, 3f, "its ammo picked up");
+            yield return WaitUntil(() => me.ReserveRifle556.Value == 60, 3f, "its ammo picked up");
             me.CmdPickup(vest.NetworkObject);
             yield return WaitUntil(() => GearOf(me).VestTier.Value == 2, 3f, "the vest picked up");
             Assert.AreEqual(100f, GearOf(me).VestDurability.Value, 1e-3f);

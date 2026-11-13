@@ -58,8 +58,7 @@ namespace Game.Net
         static readonly string[] HelmetNames = { "헬멧", "헬멧 1단계", "헬멧 2단계", "헬멧 3단계" };
         static readonly string[] VestNames = { "조끼", "조끼 1단계", "조끼 2단계", "조끼 3단계" };
 
-        public static string Ammo(AmmoType type) =>
-            type == AmmoType.Light ? "소형 탄약" : type == AmmoType.Medium ? "중형 탄약" : "산탄";
+        public static string Ammo(AmmoType type) => AmmoNames.Of(type) + " 탄약";
 
         // "2단계"; empty for no tier.
         public static string Tier(int tier) =>
@@ -82,6 +81,7 @@ namespace Game.Net
                 case LootKind.Weapon: return GameData.Weapons.Find(weaponId)?.Name ?? "무기";
                 case LootKind.Ammo: return Ammo(ammo);
                 case LootKind.Medkit: return "구급상자";
+                case LootKind.Grenade: return "수류탄";
                 case LootKind.Helmet: return OfArmor(ArmorSlot.Helmet, tier);
                 case LootKind.Vest: return OfArmor(ArmorSlot.Vest, tier);
                 default: return "물건";
@@ -105,14 +105,14 @@ namespace Game.Net
             return "x" + item.Amount.Value;
         }
 
-        // One line for the pickup prompt: "Warden", "중형 탄약 x30", "구급상자", "헬멧 2단계 (내구도 110)".
+        // One line for the pickup prompt: "Warden", "5.56mm 탄약 x30", "구급상자", "헬멧 2단계 (내구도 110)".
         public static string Label(LootItem item)
         {
             if (item == null) return "";
             var kind = (LootKind)item.Kind.Value;
             if (kind == LootKind.Ammo) return Of(item) + " x" + item.Amount.Value;
             if (Armor.IsArmor(kind)) return Of(item) + " (내구도 " + Points(item.Durability.Value) + ")";
-            if (kind == LootKind.Medkit && item.Amount.Value > 1) return Of(item) + " x" + item.Amount.Value;
+            if ((kind == LootKind.Medkit || kind == LootKind.Grenade) && item.Amount.Value > 1) return Of(item) + " x" + item.Amount.Value;
             return Of(item);
         }
 

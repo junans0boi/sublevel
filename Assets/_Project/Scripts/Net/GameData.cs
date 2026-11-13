@@ -20,6 +20,10 @@ namespace Game.Net
             StanceRules.Current = rules.Stance;
             FallRules.Current = rules.Fall;
             FreeLookRules.Current = rules.FreeLook;
+            ArmorRules.Current = rules.Armor;
+            CrateRules.Current = rules.Crate;
+            ThrowableRules.Current = rules.Throwables;
+            BotRules.Current = rules.Bot;
             return rules;
         }
 

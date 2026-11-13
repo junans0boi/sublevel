@@ -9,7 +9,7 @@ namespace Game.Core
         readonly float _medkitHeal;
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
-        readonly int[] _reserve = new int[3];
+        readonly int[] _reserve = new int[AmmoNames.Count];
         readonly FireCadence _cadence = new FireCadence();
         double _reloadEndTime = -1;
 
@@ -25,7 +25,7 @@ namespace Game.Core
 
         public int WeaponInSlot(int slot) => _slotWeapon[slot];
         public int MagInSlot(int slot) => _slotMag[slot];
-        public int Reserve(AmmoType type) => _reserve[(int)type];
+        public int Reserve(AmmoType type) => (int)type >= 0 && (int)type < _reserve.Length ? _reserve[(int)type] : 0;
         public WeaponDef ActiveWeapon => _table.Find(_slotWeapon[ActiveSlot]);
 
         // Puts the weapon in the first empty slot, or replaces the active one.
@@ -52,7 +52,35 @@ namespace Game.Core
 
         public int AddWeapon(int weaponId, int ammoInMag) => AddWeapon(weaponId, ammoInMag, out _);
 
-        public void AddAmmo(AmmoType type, int amount) => _reserve[(int)type] += amount;
+        // Puts the weapon in a chosen slot. Returns the weapon that was there (0 if none) and its magazine.
+        // The new weapon is taken in hand when the slot was the active one or nothing was held.
+        public int AddWeaponToSlot(int slot, int weaponId, int ammoInMag, out int replacedMag)
+        {
+            replacedMag = 0;
+            if (slot < 0 || slot >= SlotCount || weaponId == 0) return 0;
+            int replaced = _slotWeapon[slot];
+            replacedMag = _slotMag[slot];
+            _slotWeapon[slot] = weaponId;
+            _slotMag[slot] = ammoInMag;
+            if (slot == ActiveSlot) _reloadEndTime = -1;
+            if (ActiveWeapon == null) ActiveSlot = slot;
+            return replaced;
+        }
+
+        // Trades the two slots; the weapon in hand stays in hand (the active slot follows it).
+        public bool SwapSlots()
+        {
+            if (_slotWeapon[0] == 0 && _slotWeapon[1] == 0) return false;
+            int weapon = _slotWeapon[0]; _slotWeapon[0] = _slotWeapon[1]; _slotWeapon[1] = weapon;
+            int mag = _slotMag[0]; _slotMag[0] = _slotMag[1]; _slotMag[1] = mag;
+            ActiveSlot = 1 - ActiveSlot;
+            return true;
+        }
+
+        public void AddAmmo(AmmoType type, int amount)
+        {
+            if ((int)type >= 0 && (int)type < _reserve.Length) _reserve[(int)type] += amount;
+        }
         public void AddMedkits(int amount) => Medkits += amount;
 
         // Switching slots cancels a reload in progress.
