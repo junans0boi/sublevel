@@ -48,8 +48,9 @@ namespace Game.Core
         static readonly float[] Zooms = { 2f, 3f, 4f, 6f, 8f, 15f };
         // Lens radius falls from 3x to 4x (small window, body covers much) and grows again for 6x and 8x (large lens).
         static readonly float[] Lens = { 0.30f, 0.28f, 0.21f, 0.34f, 0.38f, 0.40f };
-        static readonly float[] Rim = { 0.38f, 0.37f, 0.30f, 0.43f, 0.47f, 0.49f };
-        static readonly float[] Outer = { 0.50f, 0.57f, 0.44f, 0.66f, 0.80f, 0.84f };
+        // 4x: a thin eye ring (ADR-071; the first ring and body were too thick and covered most of the view).
+        static readonly float[] Rim = { 0.38f, 0.37f, 0.28f, 0.43f, 0.47f, 0.49f };
+        static readonly float[] Outer = { 0.50f, 0.57f, 0.36f, 0.66f, 0.80f, 0.84f };
         static readonly float[] Depth = { 0.05f, 0.04f, 0.11f, 0.08f, 0.10f, 0.12f };
 
         // Scope bodies on the weapon: 3x short and chunky, 4x long and slim, 6x thick, 8x long sniper scope.

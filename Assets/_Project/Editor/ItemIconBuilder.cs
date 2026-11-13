@@ -126,9 +126,11 @@ public static class ItemIconBuilder
         var metal = new Material(SceneLook.OpticMetal);
         metal.SetColor("_BaseColor", new Color(0.30f, 0.31f, 0.33f));
         var materials = new[] { metal, SceneLook.OpticGlass, SceneLook.OpticWindow };
-        // Three-quarter view from the right side, a little in front and above: the muzzle end points to the right.
-        var dir = new Vector3(0.80f, 0.36f, 0.48f).normalized;
+        // Mostly from the right side, a little in front and above: the muzzle end points to the right, and a long
+        // scope lies across the icon instead of along its diagonal.
+        var dir = new Vector3(0.88f, 0.30f, 0.37f).normalized;
         var rotation = Quaternion.LookRotation(-dir, Vector3.up);
+        var inverse = Quaternion.Inverse(rotation);
         try
         {
             foreach (var def in new OpticRules().Optics)
@@ -138,19 +140,21 @@ public static class ItemIconBuilder
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterials = materials;
-                var b = mesh.bounds;
-                float halfW = 0f, halfH = 0f;
-                var inverse = Quaternion.Inverse(rotation);
-                for (int i = 0; i < 8; i++)
+                // Framed on the model's own outline in this view (not its bounding box, whose corners stand far off
+                // a slim scope), so every optic fills the icon (ADR-071: they read too small in the inventory).
+                var min = new Vector2(float.MaxValue, float.MaxValue);
+                var max = new Vector2(float.MinValue, float.MinValue);
+                foreach (var v in mesh.vertices)
                 {
-                    var corner = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
-                    var local = inverse * (corner - b.center);
-                    halfW = Mathf.Max(halfW, Mathf.Abs(local.x));
-                    halfH = Mathf.Max(halfH, Mathf.Abs(local.y));
+                    var local = inverse * v;
+                    min = Vector2.Min(min, local);
+                    max = Vector2.Max(max, local);
                 }
+                var mid = (min + max) * 0.5f;
+                float halfW = (max.x - min.x) * 0.5f, halfH = (max.y - min.y) * 0.5f;
                 camGo.transform.rotation = rotation;
-                camGo.transform.position = b.center + dir * 5f;
-                cam.orthographicSize = Mathf.Max(halfW, halfH) * 1.1f;
+                camGo.transform.position = rotation * new Vector3(mid.x, mid.y, 0f) + dir * 5f;
+                cam.orthographicSize = Mathf.Max(halfW, halfH) * 1.04f;
                 var pixels = RenderTransparent(cam, OpticSize * OpticSuper, OpticSize * OpticSuper, OpticSuper);
                 Save(pixels, OpticSize, OpticSize, OpticKey(def));
                 UnityEngine.Object.DestroyImmediate(go);

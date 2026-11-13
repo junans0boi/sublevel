@@ -17,7 +17,10 @@ namespace Game.Gameplay
         public const int Metal = 0, Glass = 1, Window = 2, SubMeshCount = 3;
 
         // Sight windows in model space: the trapezoid of the reflex sight and the hexagon of the projector sight.
-        public const float ReflexWindowY = 0.023f, ReflexWindowZ = 0.008f;
+        // The reflex sight stands on a riser (ADR-071): the eye sits higher over the weapon, so less of the receiver
+        // behind the sight fills the bottom of the screen.
+        public const float ReflexRiser = 0.012f;
+        public const float ReflexWindowY = 0.023f + ReflexRiser, ReflexWindowZ = 0.008f;
         public const float ProjectorWindowY = 0.0215f, ProjectorWindowZ = 0.021f;
 
         static readonly Dictionary<int, Mesh> Models = new Dictionary<int, Mesh>();
@@ -65,22 +68,32 @@ namespace Game.Gameplay
 
         // ---------------------------------------------------------------- 1x sights
 
-        // "반사 조준 사이트": a low deck on a rail clamp, a trapezoid window in an asymmetric frame (thick left post,
-        // thin right post), an emitter hump at the rear and an adjuster knob on the right.
+        // "반사 조준 사이트": a low deck on a slim riser over a rail clamp, a trapezoid window in an asymmetric frame
+        // (thick left post, thin right post), an emitter hump at the rear and an adjuster knob on the right.
         static void Reflex(Draft d)
         {
+            const float r = ReflexRiser;
             var id = Frame.Identity;
-            // Base and deck as one low prism with chamfered top edges (not stacked blocks), a clamp jaw on the right.
+            var up = Frame.At(new Vector3(0f, r, 0f));
+            // Riser: a clamp foot on the rail and a stem narrower than the deck, so from the eye the sight reads as a
+            // window on a post rather than a block sitting on the receiver.
+            d.Prism(new[]
+            {
+                new Vector2(-0.0110f, 0f), new Vector2(0.0110f, 0f), new Vector2(0.0110f, 0.0030f),
+                new Vector2(0.0065f, 0.0050f), new Vector2(-0.0065f, 0.0050f), new Vector2(-0.0110f, 0.0030f),
+            }, -0.017f, 0.017f, Metal, id);
+            d.Box(Frame.At(new Vector3(0f, (0.005f + r) * 0.5f, 0.001f)), new Vector3(0.012f, r - 0.004f, 0.026f), Metal); // stem, 0.0045 .. r + 0.0005
+            d.Box(Frame.At(new Vector3(0.0120f, 0.0012f, 0f)), new Vector3(0.003f, 0.006f, 0.018f), Metal);        // clamp jaw
+            HexBolt(d, new Vector3(0.0135f, 0.0012f, 0.004f), Vector3.right, 0.0024f, 0.0025f);
+            HexBolt(d, new Vector3(0.0135f, 0.0012f, -0.006f), Vector3.right, 0.0024f, 0.0025f);
+            // The deck on the riser as one low prism with chamfered top edges (not stacked blocks).
             d.Prism(new[]
             {
                 new Vector2(-0.0100f, 0f), new Vector2(0.0100f, 0f), new Vector2(0.0100f, 0.0040f),
                 new Vector2(0.0070f, 0.0100f), new Vector2(-0.0070f, 0.0100f), new Vector2(-0.0100f, 0.0040f),
-            }, -0.017f, 0.017f, Metal, id);
-            d.Box(Frame.At(new Vector3(0.0115f, 0.0010f, 0f)), new Vector3(0.003f, 0.006f, 0.018f), Metal);        // clamp jaw
-            HexBolt(d, new Vector3(0.0130f, 0.0010f, 0.004f), Vector3.right, 0.0024f, 0.0025f);
-            HexBolt(d, new Vector3(0.0130f, 0.0010f, -0.006f), Vector3.right, 0.0024f, 0.0025f);
-            d.Box(Frame.At(new Vector3(0f, 0.0110f, -0.0125f)), new Vector3(0.007f, 0.0015f, 0.007f), Metal);      // emitter, below the window line
-            d.Box(Frame.At(new Vector3(-0.0085f, 0.0075f, -0.007f)), new Vector3(0.002f, 0.0025f, 0.006f), Metal); // left button
+            }, -0.017f, 0.017f, Metal, up);
+            d.Box(Frame.At(new Vector3(0f, r + 0.0110f, -0.0125f)), new Vector3(0.007f, 0.0015f, 0.007f), Metal);      // emitter, below the window line
+            d.Box(Frame.At(new Vector3(-0.0085f, r + 0.0075f, -0.007f)), new Vector3(0.002f, 0.0025f, 0.006f), Metal); // left button
 
             // The window: inner trapezoid; the frame is thicker on the left than on the right.
             var inner = new[]
@@ -91,13 +104,13 @@ namespace Game.Gameplay
             {
                 new Vector2(-0.0128f, 0.0098f), new Vector2(0.0116f, 0.0098f), new Vector2(0.0086f, 0.0366f), new Vector2(-0.0097f, 0.0366f),
             };
-            d.PolyRing(outer, inner, 0.0055f, 0.0105f, Metal, id);
+            d.PolyRing(outer, inner, 0.0055f, 0.0105f, Metal, up);
             // A short visor over the top bar toward the front.
-            d.Box(Frame.At(new Vector3(-0.0005f, 0.0372f, 0.0105f)), new Vector3(0.0175f, 0.0012f, 0.006f), Metal);
-            d.Polygon(inner, ReflexWindowZ, Window, id, true);
+            d.Box(Frame.At(new Vector3(-0.0005f, r + 0.0372f, 0.0105f)), new Vector3(0.0175f, 0.0012f, 0.006f), Metal);
+            d.Polygon(inner, ReflexWindowZ, Window, up, true);
 
             // Adjuster knob on the right of the deck, turning about x: knurled side and a flat cap.
-            var knob = Frame.Along(new Vector3(0.0085f, 0.0065f, -0.008f), Vector3.right);
+            var knob = Frame.Along(new Vector3(0.0085f, r + 0.0065f, -0.008f), Vector3.right);
             d.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.0040f, 0f), new Vector2(0.0040f, 0.0055f), new Vector2(0.0034f, 0.0062f), new Vector2(0f, 0.0062f) }, 20, Metal, knob);
             d.KnurlBand(0.0040f, 0.0005f, 0.0008f, 0.0050f, 12, Metal, knob);
         }
@@ -225,8 +238,9 @@ namespace Game.Gameplay
 
             if (b.FlipCaps)
             {
-                // 2x, 3x: open flip caps. The eye cap swings out to the right on a vertical hinge, the front cap stands up.
-                FlipCap(d, new Vector3(e, h, zE), Vector3.up, e * 1.03f, new Vector3(-e, 0f, -0.0015f), Quaternion.AngleAxis(120f, Vector3.up));
+                // 2x, 3x: open flip caps. The eye cap folds right round its vertical hinge and lies along the right of
+                // the eye bell, splayed a little (ADR-071: it no longer hangs behind the eye lens); the front cap stands up.
+                FlipCap(d, new Vector3(e, h, zE), Vector3.up, e * 1.03f, new Vector3(-e, 0f, -0.0015f), Quaternion.AngleAxis(100f, Vector3.up));
                 FlipCap(d, new Vector3(0f, h + o, zO), Vector3.right, o * 1.03f, new Vector3(0f, -o, 0.0015f), Quaternion.AngleAxis(-115f, Vector3.right));
             }
 
@@ -360,7 +374,8 @@ namespace Game.Gameplay
                 // zoomed scene) with a bevelled front edge that catches the light (ADR-060 (1)(2)).
                 float zb = zR + 0.012f;
                 float hb = OpticLook.ViewHeightAt(zb, OpticLook.HousingFovDeg);
-                float hw = 0.54f * hb, hh = 0.46f * hb, bevel = 0.045f * hb, bevelDepth = 0.003f;
+                // Kept close round the eye ring (ADR-071: the first body was too thick and hid most of the screen).
+                float hw = 0.43f * hb, hh = 0.39f * hb, bevel = 0.035f * hb, bevelDepth = 0.003f;
                 const int n = 48;
                 float hole = rOuter / Mathf.Cos(Mathf.PI / n);
                 var full = new Vector2[n];
@@ -396,16 +411,14 @@ namespace Game.Gameplay
 
             if (look.FlipCap)
             {
-                // 2x, 3x: an open flip cap hanging at the left of the eye ring, seen at an angle, on a hinge arm.
-                float zc = zR + 0.012f;
-                float hc = OpticLook.ViewHeightAt(zc, OpticLook.HousingFovDeg);
-                float capRadius = 0.19f * hc;
-                var centre = new Vector3(-(outer + 0.21f) * hc, -0.02f * hc, zc);
-                var capFrame = new Frame(centre, Quaternion.AngleAxis(25f, Vector3.up));
-                d.Lathe(new[] { new Vector2(0f, -0.002f), new Vector2(capRadius, -0.002f), new Vector2(capRadius, 0.002f), new Vector2(capRadius * 0.85f, 0.002f), new Vector2(capRadius * 0.85f, 0.0005f), new Vector2(0f, 0.0005f) }, 40, Metal, capFrame);
-                float armFrom = OpticLook.HousingRadius(outer * 0.97f, zR);
-                float armTo = (outer + 0.05f) * hc;
-                d.Box(Frame.At(new Vector3(-(armFrom + armTo) * 0.5f, -0.02f * hc, zR + 0.006f)), new Vector3(armTo - armFrom, 0.05f * hc, 0.006f), Metal);
+                // 2x, 3x: the open eye cap is folded along the side of the eye bell (as on the model), so from the eye
+                // only its hinge shows: a small lug with a pin at the right of the eye ring (ADR-071; the cap used to
+                // hang at the left of the ring as a large disc). The folded cap itself is hidden behind the ring face.
+                float hR = OpticLook.ViewHeightAt(zR, OpticLook.HousingFovDeg);
+                float lugW = 0.045f * hR, lugH = 0.10f * hR;
+                d.Box(Frame.At(new Vector3(rOuter + lugW * 0.5f - 0.001f, 0f, zR + 0.005f)), new Vector3(lugW, lugH, 0.012f), Metal);
+                var pin = Frame.Along(new Vector3(rOuter + lugW * 0.6f, -lugH * 0.5f - 0.0004f, zR + 0.004f), Vector3.up);
+                d.Lathe(new[] { new Vector2(0f, 0f), new Vector2(lugW * 0.32f, 0f), new Vector2(lugW * 0.32f, lugH + 0.0008f), new Vector2(0f, lugH + 0.0008f) }, 16, Metal, pin);
             }
 
             if (look.SideTurret)
