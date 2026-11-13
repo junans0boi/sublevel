@@ -12,9 +12,12 @@ namespace Game.Gameplay
     [DefaultExecutionOrder(95)]
     public class VehicleCamera : MonoBehaviour
     {
-        const float PivotHeight = 1.7f;
-        const float Distance = 6.5f;
-        const float MotorcycleScale = 0.75f;
+        // The orbit is sized from the vehicle model's bounds (low sports car, tall pickup, long van): the pivot just
+        // over the roof, so a camera pulled in by a wall stays above the body instead of inside it.
+        const float PivotOverTop = 0.4f;
+        const float MotorcycleMinPivot = 1.5f; // over the rider's head, not just the bike
+        const float DistancePerLength = 1f;
+        const float DistanceExtra = 2.2f;
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -22,8 +25,11 @@ namespace Game.Gameplay
         PlayerController _player;
         Combatant _combatant;
         VehicleInput _input;
-        float _distance = Distance;
+        float _distance = 6.5f;
         Vehicle _aimingPast;
+        Vehicle _framed;
+        Vector3 _pivotLocal;
+        float _orbit;
         Light _cabin;
 
         // True while this frame's camera was placed by the car camera.
@@ -58,14 +64,44 @@ namespace Game.Gameplay
                 _distance = 0f;
                 return;
             }
-            // The motorcycle is smaller: the camera comes closer and lower.
-            float scale = vehicle.IsMotorcycle ? MotorcycleScale : 1f;
-            var pivot = vehicle.transform.position + Vector3.up * (PivotHeight * scale);
+            if (vehicle != _framed) Frame(vehicle);
+            var pivot = vehicle.transform.TransformPoint(new Vector3(_pivotLocal.x, 0f, _pivotLocal.z)) + Vector3.up * _pivotLocal.y;
             var back = look * Vector3.back;
-            float wanted = ClearDistance(vehicle, pivot, back, Distance * scale);
+            float wanted = ClearDistance(vehicle, pivot, back, _orbit);
             // Pulled in at once when something is in the way, eased back out.
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
             cam.transform.SetPositionAndRotation(pivot + back * _distance, look);
+        }
+
+        // The model's bounds in the vehicle's own space (renderers only: the occupants are not children).
+        void Frame(Vehicle vehicle)
+        {
+            _framed = vehicle;
+            var t = vehicle.transform;
+            var local = new Bounds(Vector3.zero, Vector3.zero);
+            bool any = false;
+            foreach (var r in vehicle.GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
+                var b = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var p = t.InverseTransformPoint(new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z));
+                    if (!any) { local = new Bounds(p, Vector3.zero); any = true; }
+                    else local.Encapsulate(p);
+                }
+            }
+            if (!any) local = new Bounds(Vector3.up * 0.7f, new Vector3(1.8f, 1.4f, 4.5f));
+            Orbit(local, vehicle.IsMotorcycle, out float height, out _orbit);
+            _pivotLocal = new Vector3(local.center.x, height, local.center.z);
+        }
+
+        // Pivot height over the vehicle's origin and the camera distance for a model with these local bounds.
+        public static void Orbit(Bounds local, bool motorcycle, out float pivotHeight, out float distance)
+        {
+            pivotHeight = local.max.y + PivotOverTop;
+            if (motorcycle) pivotHeight = Mathf.Max(pivotHeight, MotorcycleMinPivot);
+            distance = local.size.z * DistancePerLength + DistanceExtra;
         }
 
         // The cabin is dark under the roof in first person (the sun and the sky do not reach in): one soft fill light

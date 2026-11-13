@@ -75,7 +75,7 @@ namespace Game.Gameplay
         readonly FallTracker _fall = new FallTracker();
         CombatantStance _stance; // missing on a prefab built before stances existed: the player then only stands
         System.Random _recoilRng;
-        bool _bodyHidden;
+        int _bodyShown; // 0 all, 1 none (eye view), 2 all but the head (eye view, seated, empty hands)
         CharacterController _controller;
         Combatant _combatant;
         WeaponVisual _weaponVisual;
@@ -207,6 +207,8 @@ namespace Game.Gameplay
             // Aiming needs a gun (not a melee weapon, ADR-073) and wins over sprinting; leaning is for standing and walking only.
             bool armed = !Melee.CanStrike(_combatant.ActiveWeapon);
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
+
+            FollowVehicleHeading();
 
             // Free look turns only the view, and only from the hip: the character keeps facing and moving where it
             // did while the camera orbits all the way round. Letting go swings the view back the short way.
@@ -568,9 +570,36 @@ namespace Game.Gameplay
                 if (hide && !_combatant.Dead.Value) _weaponVisual.ShowAtEye(Camera.transform, _aim.Mode == AimMode.Sights);
                 else _weaponVisual.ShowInHand();
             }
-            if (hide == _bodyHidden) return;
-            _bodyHidden = hide;
-            foreach (var r in _bodyRenderers) r.enabled = !hide;
+            // Seated with empty hands, only the head goes (its shadow stays): the own arms on the wheel or the bars
+            // and the legs show in the eye view.
+            int shown = !hide ? 0 : VehicleSeat.IsAttached(_combatant) && _combatant.ActiveWeaponId == 0 ? 2 : 1;
+            if (shown == _bodyShown) return;
+            _bodyShown = shown;
+            foreach (var r in _bodyRenderers)
+            {
+                if (r == null) continue;
+                bool head = r.name.Contains("Head");
+                r.enabled = shown != 1;
+                r.shadowCastingMode = shown == 2 && head ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
+            }
+        }
+
+        // Seated, the view turns with the vehicle (the mouse looks around relative to its heading), and getting in
+        // faces the view the vehicle's way: the third-person camera starts behind it and stays there through turns.
+        bool _inVehicle;
+        float _vehicleHeading;
+
+        void FollowVehicleHeading()
+        {
+            var vehicle = VehicleSeat.VehicleOf(_combatant);
+            if (vehicle == null) { _inVehicle = false; return; }
+            var forward = vehicle.transform.forward;
+            if (new Vector2(forward.x, forward.z).sqrMagnitude < 1e-4f) return; // nose straight up or down: keep the view
+            float heading = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            if (!_inVehicle) Yaw = heading;
+            else Yaw += Mathf.DeltaAngle(_vehicleHeading, heading);
+            _inVehicle = true;
+            _vehicleHeading = heading;
         }
 
         LootItem FindNearbyLoot()

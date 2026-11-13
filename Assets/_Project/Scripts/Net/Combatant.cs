@@ -151,11 +151,13 @@ namespace Game.Net
 
         public bool IsPlayer => _isPlayer;
         // Where this combatant sees and shoots from. Leaning moves it sideways (never through a wall).
-        public Vector3 EyePosition => UprightEye + transform.right * _leanOffset + Vector3.down * (GameData.Rules.Lean.EyeDropMeters * Mathf.Abs(_lean.Value));
+        public Vector3 EyePosition => UprightEye + transform.right * _leanOffset - BodyUp * (GameData.Rules.Lean.EyeDropMeters * Mathf.Abs(_lean.Value));
         public AimMode AimMode => (AimMode)Aim.Value;
         // -1..1, eased: how far the lean has actually got.
         public float LeanAmount => _lean.Value;
-        Vector3 UprightEye => transform.position + Vector3.up * (_eyeHeight + EyeHeightOffset);
+        Vector3 UprightEye => transform.position + BodyUp * (_eyeHeight + EyeHeightOffset);
+        // Seated, the eyes are above the seat along the vehicle's up (a leaning motorcycle, a car on a slope); on foot straight up.
+        Vector3 BodyUp => VehicleSeat.IsAttached(this) ? transform.up : Vector3.up;
         // Metres per second along the ground, averaged over the last moment. Measured on every side.
         public float PlanarSpeed { get; private set; }
         // No ground close under the feet right now.

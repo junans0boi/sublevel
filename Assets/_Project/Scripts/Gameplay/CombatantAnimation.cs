@@ -164,6 +164,7 @@ namespace Game.Gameplay
                 if (slot >= 0) _bones[slot] = _jumpBones[i];
             }
             _stance = GetComponent<CombatantStance>();
+            FindHead();
             // Hip to ankle in the pose the prefab was saved in: what a knee bend shortens.
             Transform thigh = _bones[ThighLeft], shin = _bones[ShinLeft];
             if (thigh != null && shin != null && shin.childCount > 0)

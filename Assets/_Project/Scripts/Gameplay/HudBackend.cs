@@ -75,12 +75,12 @@ namespace Game.Gameplay
         // The speed of the car the player sits in (km/h, never negative); 0 when not in a car.
         public static float VehicleSpeedKmh(Combatant me) => VehicleSeat.TryGet(me, out var vehicle, out _) ? vehicle.SpeedKmh : 0f;
 
-        // "운전석", "조수석", "뒷좌석"; "" when not in a car.
-        public static string VehicleSeatName(Combatant me)
-        {
-            int number = VehicleSeatNumber(me);
-            return number == 0 ? "" : number == 1 ? "운전석" : number == 2 ? "조수석" : "뒷좌석";
-        }
+        // "운전석", "조수석", "뒷좌석" in a car, "운전", "동승" on a motorcycle; "" when not in a vehicle.
+        public static string VehicleSeatName(Combatant me) =>
+            VehicleSeat.TryGet(me, out var vehicle, out int seat) ? SeatName(seat, vehicle.IsMotorcycle) : "";
+
+        public static string SeatName(int seat, bool motorcycle) =>
+            seat < 0 ? "" : motorcycle ? (seat == 0 ? "운전" : "동승") : seat == 0 ? "운전석" : seat == 1 ? "조수석" : "뒷좌석";
 
         // On foot next to a car with a free seat: F gets in.
         public static bool VehicleEnterable(Combatant me) =>

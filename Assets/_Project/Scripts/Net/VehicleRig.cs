@@ -23,6 +23,8 @@ namespace Game.Net
 
         public Transform Steering => _steering;
         public float SteeringRatio => _steeringRatio;
+        // The steering part's turn this frame about its Z, in degrees (the driver's hands follow a wheel only so far, U5).
+        public float SteeringShownDeg { get; private set; }
 
         void Awake()
         {
@@ -35,7 +37,7 @@ namespace Game.Net
         {
             if (_vehicle == null) return;
             if (_steering != null)
-                _steering.localRotation = _steeringRest * Quaternion.AngleAxis(SteeringAngle(), Vector3.forward);
+                _steering.localRotation = _steeringRest * Quaternion.AngleAxis(SteeringShownDeg = SteeringAngle(), Vector3.forward);
             var wheel = _vehicle.WheelPivot(_swingWheel);
             if (_swingarm != null && wheel != null && _swingarm.parent != null)
             {
