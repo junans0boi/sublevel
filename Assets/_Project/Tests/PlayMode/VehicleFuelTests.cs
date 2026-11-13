@@ -15,9 +15,17 @@ namespace Game.Tests
     // Set FUEL_SHOT=<png path> to also save one frame of the HUD while driving.
     public class VehicleFuelTests
     {
-        sealed class NoPlayerInput : IPlayerInput
+        // Look is applied once, then cleared.
+        sealed class ScriptedPlayerInput : IPlayerInput
         {
-            public PlayerInputFrame Read() => new PlayerInputFrame { SelectSlot = -1 };
+            public Vector2 Look;
+
+            public PlayerInputFrame Read()
+            {
+                var f = new PlayerInputFrame { SelectSlot = -1, Look = Look };
+                Look = Vector2.zero;
+                return f;
+            }
         }
 
         sealed class ScriptedVehicleInput : IVehicleInput
@@ -34,6 +42,7 @@ namespace Game.Tests
         }
 
         ScriptedVehicleInput _keys;
+        ScriptedPlayerInput _look;
 
         static IEnumerator WaitUntil(Func<bool> condition, float seconds, string what)
         {
@@ -48,7 +57,8 @@ namespace Game.Tests
         IEnumerator LoadAndDrive()
         {
             _keys = new ScriptedVehicleInput();
-            PlayerController.InputOverride = new NoPlayerInput();
+            _look = new ScriptedPlayerInput();
+            PlayerController.InputOverride = _look;
             VehicleInput.InputOverride = _keys;
             SceneManager.LoadScene("TestBox");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 15f, "local player spawned");
@@ -125,9 +135,45 @@ namespace Game.Tests
             Assert.Greater(VehicleHud.Instance.SpeedShown, 0, "the speed readout moves");
             Assert.Less(tank.Fuel01, FuelRules.Current.JerrycanAmount, "driving burns fuel");
             _keys.Frame.Throttle = -1f;
+        }
+
+        // The status shows the seat instead of a stance; the driver's pistol is what the weapon panel names; the
+        // third-person camera sits behind and above the car once the view is turned to its heading.
+        [UnityTest]
+        public IEnumerator Driver_HudShowsTheSeat_AndThePistolInHand()
+        {
+            yield return LoadAndDrive();
+            var car = Car;
+            var me = Combatant.LocalPlayer;
+            var status = Hud.Instance.Status;
+            Assert.AreEqual(HudStatus.DrivingShown, status.StanceShown, "운전");
+            Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 12 }), "pistol");
+            me.ServerSelectSlot(2); // false when the pickup already put it in hand
+            yield return WaitUntil(() => Hud.Instance.ActiveWeaponName != "", 2f, "the pistol on the weapon panel");
+
+            // The mouse turns the orbit camera: face the car's heading, a little down.
+            float heading = car.transform.eulerAngles.y;
+            _look.Look = new Vector2(Mathf.DeltaAngle(PlayerController.Local.ViewYaw, heading), -12f - PlayerController.Local.ViewPitch);
+            _keys.Frame.Throttle = 1f;
+            yield return new WaitForSeconds(1.2f);
+            var cam = PlayerController.Local.Camera.transform;
+            var local = car.transform.InverseTransformPoint(cam.position);
+            Assert.Less(local.z, -3f, "the camera is behind the car");
+            Assert.Greater(local.y, 1.5f, "and above it");
 
             string shot = Environment.GetEnvironmentVariable("FUEL_SHOT");
             if (!string.IsNullOrEmpty(shot)) Shot(shot);
+            _keys.Frame.Throttle = -1f;
+
+            yield return SwitchToPassenger(car);
+            Assert.AreEqual(HudStatus.RidingShown, status.StanceShown, "탑승");
+        }
+
+        IEnumerator SwitchToPassenger(Vehicle car)
+        {
+            _keys.Frame.Seat = 1;
+            yield return WaitUntil(() => VehicleSeat.TryGet(Combatant.LocalPlayer, out _, out int seat) && seat == 1, 3f, "the passenger seat");
+            yield return null;
         }
 
         [UnityTest]

@@ -92,7 +92,9 @@ namespace Game.Gameplay
         public const float Width = 320f, Height = 168f;
         const int Pips = 3;
 
-        static readonly string[] StanceNames = { "서기", "앉기", "엎드림" };
+        // After the three stances: in a vehicle (ADR-075), the driver's seat or any other seat.
+        public const int DrivingShown = 3, RidingShown = 4;
+        static readonly string[] StanceNames = { "서기", "앉기", "엎드림", "운전", "탑승" };
 
         public RectTransform Root { get; private set; }
 
@@ -155,7 +157,7 @@ namespace Game.Gameplay
 
         public void Tick(Combatant me)
         {
-            ShowStance((int)HudBackend.StanceOf(me));
+            ShowStance(VehicleSeat.TryGet(me, out _, out int seat) ? (seat == Vehicles.DriverSeat ? DrivingShown : RidingShown) : (int)HudBackend.StanceOf(me));
 
             // In the elevator: a countdown to the doors; after that the protection time.
             bool doors = HudBackend.DoorsClosed;
@@ -202,6 +204,8 @@ namespace Game.Gameplay
             switch (stance)
             {
                 case (int)Stance.Crouch:
+                case DrivingShown:
+                case RidingShown:
                     Place(_glyphA, new Vector2(-5f, -4f), new Vector2(8f, 18f));
                     Place(_glyphB, new Vector2(2f, -13f), new Vector2(22f, 6f));
                     _glyphB.gameObject.SetActive(true);
