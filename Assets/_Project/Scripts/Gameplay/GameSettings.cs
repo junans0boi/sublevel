@@ -176,6 +176,8 @@ namespace Game.Gameplay
         public static Color CrosshairColor => CrosshairColors[Mathf.Clamp(GetIndex(SettingId.CrosshairColor), 0, CrosshairColors.Length - 1)];
         public static bool ShowDamageDirection => GetToggle(SettingId.DamageDirection);
         public static bool ShowKillFeed => GetToggle(SettingId.KillFeed);
+        public static Game.Core.DayTimeChoice DayTimeSetting => (Game.Core.DayTimeChoice)GetIndex(SettingId.DayTime);
+        public static Game.Core.WeatherChoice WeatherSetting => (Game.Core.WeatherChoice)GetIndex(SettingId.Weather);
 
         // 쉬움 / 보통 / 어려움 (ADR-117). The bots read Game.Core.BotLevels.Level when they start.
         public static Game.Core.BotDifficulty BotDifficulty => (Game.Core.BotDifficulty)Mathf.Clamp(GetIndex(SettingId.BotDifficulty), 0, 2);

@@ -107,7 +107,7 @@ namespace Game.Tests
             Assert.AreEqual(6, Count(SettingsTab.Graphics, SettingsPage.Advanced));
             Assert.AreEqual(4, Count(SettingsTab.Audio, SettingsPage.Basic));
             Assert.AreEqual(11, Count(SettingsTab.Controls, SettingsPage.Basic));
-            Assert.AreEqual(5, Count(SettingsTab.Gameplay, SettingsPage.Basic));
+            Assert.AreEqual(7, Count(SettingsTab.Gameplay, SettingsPage.Basic)); // + time of day and weather (ADR-119)
             Assert.AreEqual(0, Count(SettingsTab.Audio, SettingsPage.Advanced), "only graphics has an advanced page");
             Assert.Greater(SettingsCatalog.KeyBindings.Length, 15);
             foreach (var id in SettingsCatalog.AdvancedRows)

@@ -27,6 +27,7 @@ namespace Game.Gameplay
         SightsStyle, ShoulderStyle,
         DefaultView, CrosshairColor, DamageDirection, KillFeed,
         BotDifficulty, // ADR-117
+        DayTime, Weather, // ADR-119
     }
 
     // One row of the settings screen: where it shows, what it says and how its value is stored.
@@ -207,6 +208,12 @@ namespace Game.Gameplay
             Add(Choice(SettingId.BotDifficulty, SettingsTab.Gameplay, SettingsPage.Basic, "봇", "봇 난이도",
                 "봇의 반응 속도, 조준 정확도, 시야와 청력을 정합니다. 쉬움은 늦게 알아채고 자주 빗맞히며, 어려움은 빨리 알아채고 정확하게 쏩니다. 다음 매치부터 적용됩니다.",
                 "settings.botDifficulty", Game.Core.BotLevels.Labels, 1));
+            Add(Choice(SettingId.DayTime, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "시간대",
+                "무작위: 매치마다 시작 시각이 달라지고 경기 중 시간이 흐릅니다. 그 밖의 값은 그 시간대로 고정합니다.",
+                "settings.dayTime", new[] { "무작위", "낮", "저녁", "밤" }, 0));
+            Add(Choice(SettingId.Weather, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "날씨",
+                "무작위: 매치마다 날씨가 달라집니다. 비와 안개는 시야를 줄입니다.",
+                "settings.weather", new[] { "무작위", "맑음", "비", "안개" }, 0));
             return rows;
         }
 
