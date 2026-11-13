@@ -30,6 +30,9 @@ namespace Game.Gameplay
         // The stance this player has asked for; the replicated one is on CombatantStance.
         public Stance BodyStance { get; private set; }
         public bool Sprinting { get; private set; }
+        // In deep water, swimming (ADR-112).
+        public bool Swimming => _swimming;
+        bool _swimming;
         // Free look (Alt held): the view orbits away from where the character faces by these angles (ADR-065 (2)).
         public bool FreeLooking { get; private set; }
         // Auto-run (=): walking forward on its own until W or S is pressed, aiming starts or a screen opens (ADR-065 (1)).
@@ -134,6 +137,7 @@ namespace Game.Gameplay
             screens.AddComponent<PauseMenu>();
             screens.AddComponent<ScopeView>();
             screens.AddComponent<ScopeControl>(); // G10b (ADR-103)
+            screens.AddComponent<SwimHud>();      // G12 (ADR-112)
             screens.AddComponent<MapScreen>();
             screens.AddComponent<PickupList>(); // G5 (ADR-093)
         }
@@ -311,6 +315,12 @@ namespace Game.Gameplay
                 BodyStance = next;
             }
             if (knocked && _stance != null) BodyStance = Stance.Prone;
+            // Deep water (G12, ADR-112): swim lying on the surface; out of it the body stands again.
+            float waterDepth = WaterVolume.DepthAt(transform.position, out float waterSurface, out float waterFloor);
+            bool wasSwimming = _swimming;
+            _swimming = !ExternalControl && !knocked && Swim.Swimming(_swimming, waterDepth, SwimRules.Current);
+            if (_swimming) BodyStance = Stance.Prone;
+            else if (wasSwimming && BodyStance == Stance.Prone) BodyStance = Stance.Stand;
             bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up
             // Crouched, Shift sprints crouched (ADR-095), except the sprint held when C took the body down (#105).
             sprint &= BodyStance == Stance.Stand || (BodyStance == Stance.Crouch && !_sprintOverruled);
@@ -335,6 +345,22 @@ namespace Game.Gameplay
             // Riding the elevator car up (ADR-065 (1)): the car carries the feet, nothing else moves the body.
             else if (SpawnProtection.InputBlocked && ElevatorCar.TryRideFloor(transform.position, out float rideFeet))
                 Teleport(new Vector3(transform.position.x, rideFeet, transform.position.z));
+            else if (_swimming)
+            {
+                // Swimming (ADR-112): about 46% of the sprint speed, floating to the surface (Ctrl held: diving), no jumping.
+                var swim = SwimRules.Current;
+                float swimFactor = Swim.Speed(_locomotion.SprintSpeed, swim) / _locomotion.WalkSpeed;
+                Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, false, _locomotion, out var swx, out var swz, swimFactor);
+                if (_moveFrame != Time.frameCount - 1) _moveX = _moveZ = 0f;
+                _moveFrame = Time.frameCount;
+                Locomotion.Accelerate(ref _moveX, ref _moveZ, swx, swz, Time.deltaTime, _locomotion);
+                float eyeAboveFeet = Stances.EyeHeight(_combatant.UprightEyeHeight, Stance.Prone, stanceRules);
+                float targetFeet = Swim.TargetFeetY(waterSurface, waterFloor, eyeAboveFeet, SlowWalking, swim);
+                float rise = Mathf.Clamp((targetFeet - transform.position.y) / Mathf.Max(Time.deltaTime, 1e-3f), -swim.VerticalSpeed, swim.VerticalSpeed);
+                _verticalVelocity = 0f;
+                _fall.Reset();
+                _controller.Move(new Vector3(_moveX, rise, _moveZ) * Time.deltaTime);
+            }
             else
             {
                 // A long gun slows walking and sprinting by its kind (ADR-095); the other factors slow it further.
@@ -630,6 +656,8 @@ namespace Game.Gameplay
                 TryPunch(f, now);
                 return;
             }
+            // No shooting from the water (ADR-112).
+            if (_swimming) { _burstLeft = 0; return; }
             var weapon = _combatant.ActiveWeapon;
             // A shell-by-shell reload gives way to a shot (ADR-089).
             if (weapon == null || (_combatant.Reloading.Value && !weapon.ReloadsByShell) || _combatant.ActiveMag <= 0) { _burstLeft = 0; return; }

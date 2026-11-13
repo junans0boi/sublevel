@@ -58,6 +58,8 @@ namespace Game.Tests
             SceneManager.LoadScene("TestBox");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 15f, "local player spawned");
             yield return WaitUntil(() => Vehicle.All.Count(v => v != null) >= 2, 10f, "vehicles");
+            // The test box's dummies shoot at whoever stands in view; this test is about poses, not survival.
+            Combatant.LocalPlayer.ServerDamageFilter = _ => 0f;
             yield return new WaitForSeconds(1f);
         }
 

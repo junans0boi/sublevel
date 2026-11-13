@@ -164,6 +164,7 @@ namespace Game.Net
         public AimMode AimMode => (AimMode)Aim.Value;
         // -1..1, eased: how far the lean has actually got.
         public float LeanAmount => _lean.Value;
+        public float UprightEyeHeight => _eyeHeight;
         Vector3 UprightEye => transform.position + BodyUp * (_eyeHeight + EyeHeightOffset);
         // Seated, the eyes are above the seat along the vehicle's up (a leaning motorcycle, a car on a slope); on foot straight up.
         Vector3 BodyUp => VehicleSeat.IsAttached(this) ? transform.up : Vector3.up;
@@ -287,6 +288,8 @@ namespace Game.Net
         {
             All.Add(this);
             _speedFrom = transform.position;
+            // Swimming and the breath (ADR-112): every peer reads the body against the water.
+            if (GetComponent<CombatantSwim>() == null) gameObject.AddComponent<CombatantSwim>();
         }
 
         public override void OnStopNetwork()
@@ -392,7 +395,7 @@ namespace Game.Net
         {
             float sqr = direction.sqrMagnitude;
             // Knocked down or reviving (ADR-072): no shooting.
-            if (_health.IsDead || TeamBlocksAction || Holstered.Value || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
+            if (_health.IsDead || TeamBlocksAction || Holstered.Value || CombatantSwim.In(this) || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;

@@ -130,12 +130,14 @@ namespace Game.Tests
             Assert.AreEqual(100f, dummy.Hp.Value);
 
             Assert.IsTrue(ShootAt(me, dummy.transform.position + Vector3.up * 1.1f), "body shot fired");
+            yield return new WaitForSeconds(0.25f); // 40 m is beyond the instant range (ADR-098): the bullet flies for 0.05 s
             Assert.AreEqual(18f, dummy.Hp.Value, 1e-3f, "82 at 40 m (no falloff before 100 m)");
             Assert.IsFalse(ShootAt(me, dummy.transform.position + Vector3.up * 1.65f), "bolt-action pace: 1.3 s between shots");
             Assert.AreEqual(18f, dummy.Hp.Value, 1e-3f);
 
             yield return new WaitForSeconds(1.4f);
             Assert.IsTrue(ShootAt(me, dummy.transform.position + Vector3.up * 1.65f), "head shot fired");
+            yield return new WaitForSeconds(0.25f);
             Assert.AreEqual(0f, dummy.Hp.Value);
             Assert.IsTrue(dummy.Dead.Value);
         }

@@ -77,6 +77,7 @@ namespace Game.Gameplay
                 case DamageCause.Zone: return "방사능";
                 case DamageCause.Bleed: return "출혈";
                 case DamageCause.Fire: return "화염";
+                case DamageCause.Drown: return "익사";
                 case DamageCause.Vehicle: return "차량"; // run over (#112)
                 case DamageCause.Melee: return GameData.Weapons.Find(entry.WeaponId)?.Name ?? "주먹"; // fist or melee weapon (ADR-073)
             }
