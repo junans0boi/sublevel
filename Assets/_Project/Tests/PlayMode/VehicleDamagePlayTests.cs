@@ -256,6 +256,7 @@ namespace Game.Tests
             foreach (Transform hole in bike.GetComponentsInChildren<Transform>())
                 if (hole.name == "BulletHole" && hole.GetComponent<MeshFilter>() == null) Assert.IsTrue(hole.parent.GetComponent<MeshFilter>() != null, "a hole sits on a drawn mesh");
             Shot(bike, "bike_01_holes", 3f, 0.8f, 0.2f);
+            me.ServerDamageFilter = null; // the explosion must hurt again
             yield return BurnToWreck(bike, "bike_");
         }
     }
