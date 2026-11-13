@@ -108,6 +108,7 @@ namespace Game.Gameplay
             _combatant = GetComponent<Combatant>();
             _user = GetComponent<ThrowableUser>();
             _block = new MaterialPropertyBlock();
+            SpatialAudio.Apply(_blastSource, SpatialAudio.Category.Explosion);
             ThrownItem.ClientExploded += OnExploded;
             ThrownItem.ClientSmoked += OnSmoked;
             Build();

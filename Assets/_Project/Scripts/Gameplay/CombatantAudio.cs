@@ -35,6 +35,7 @@ namespace Game.Gameplay
         Combatant _combatant;
         CombatantAnimation _animation;
         CombatantStance _stance; // may be missing
+        AudioLowPassFilter _distantShot; // muffles far gunshots (SpatialAudio.DistantCutoff)
         bool _wasReloading;
         float _lastHp;
         int _nextFootstep;
@@ -54,6 +55,9 @@ namespace Game.Gameplay
             _combatant = GetComponent<Combatant>();
             _animation = GetComponent<CombatantAnimation>();
             _stance = GetComponent<CombatantStance>();
+            SpatialAudio.Apply(_weaponSource, SpatialAudio.Category.Gunshot);
+            SpatialAudio.Apply(_bodySource, SpatialAudio.Category.Body);
+            if (_weaponSource != null) _distantShot = _weaponSource.gameObject.AddComponent<AudioLowPassFilter>();
             _combatant.ShotFired += OnShot;
             _combatant.Punched += OnPunch;
             _animation.FootDown += OnFootDown;
@@ -94,6 +98,7 @@ namespace Game.Gameplay
         void OnShot(Vector3 origin, Vector3 end)
         {
             if (!_shots.IsNewShot(Time.timeAsDouble)) return;
+            if (_distantShot != null) _distantShot.cutoffFrequency = SpatialAudio.DistantCutoff(SpatialAudio.DistanceToListener(_weaponSource.transform.position));
             if (Play(_weaponSource, ClipFor(_shotByWeapon, _combatant.ActiveWeaponId), _shotVolume,
                     PitchFor(_shotPitchByWeapon, _combatant.ActiveWeaponId))) ShotsPlayed++;
         }
@@ -107,10 +112,11 @@ namespace Game.Gameplay
             if (Play(_bodySource, clip, landed ? _punchImpactVolume : _punchSwingVolume, landed ? 1f : _punchSwingPitch)) PunchesPlayed++;
         }
 
+        // Reloads play on the body source: heard as far as footsteps, not as far as shots.
         void Update()
         {
             bool reloading = _combatant.Reloading.Value;
-            if (reloading && !_wasReloading && Play(_weaponSource, ClipFor(_reloadByWeapon, _combatant.ActiveWeaponId), _reloadVolume))
+            if (reloading && !_wasReloading && Play(_bodySource, ClipFor(_reloadByWeapon, _combatant.ActiveWeaponId), _reloadVolume))
                 ReloadsPlayed++;
             _wasReloading = reloading;
 

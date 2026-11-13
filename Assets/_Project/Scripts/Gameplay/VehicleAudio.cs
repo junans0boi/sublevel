@@ -35,11 +35,11 @@ namespace Game.Gameplay
         {
             _vehicle = GetComponent<Vehicle>();
             _hornState = GetComponent<VehicleHorn>();
-            _engineSource = Source("Engine", 3f, 60f, Engine);
-            _hornSource = Source("Horn", 4f, 90f, Horn);
+            _engineSource = Source("Engine", Engine);
+            _hornSource = Source("Horn", Horn);
         }
 
-        AudioSource Source(string name, float near, float far, AudioClip clip)
+        AudioSource Source(string name, AudioClip clip)
         {
             var go = new GameObject(name);
             go.transform.SetParent(transform, false);
@@ -48,12 +48,7 @@ namespace Game.Gameplay
             source.playOnAwake = false;
             source.loop = true;
             source.clip = clip;
-            source.spatialBlend = 1f;
-            source.rolloffMode = AudioRolloffMode.Linear;
-            source.minDistance = near;
-            source.maxDistance = far;
-            source.dopplerLevel = 0f;
-            return source;
+            return SpatialAudio.Apply(source, SpatialAudio.Category.Vehicle);
         }
 
         void LateUpdate()

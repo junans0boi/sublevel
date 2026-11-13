@@ -13,7 +13,6 @@ namespace Game.Gameplay
         const float ShardSeconds = 1.4f;
         const float Gravity = 9.81f;
         const float CrashVolume = 1f;
-        const float CrashMaxDistance = 60f;
         const int SampleRate = 44100;
         const float CrashSeconds = 0.9f;
 
@@ -105,10 +104,7 @@ namespace Game.Gameplay
             go.transform.SetParent(transform, false);
             go.transform.position = at;
             var source = go.AddComponent<AudioSource>();
-            source.spatialBlend = 1f;
-            source.rolloffMode = AudioRolloffMode.Linear;
-            source.minDistance = 4f;
-            source.maxDistance = CrashMaxDistance;
+            SpatialAudio.Apply(source, SpatialAudio.Category.Impact);
             source.playOnAwake = false;
             source.PlayOneShot(CrashClip(), CrashVolume * GameSettings.EffectsVolume);
             CrashesPlayed++;

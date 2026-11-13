@@ -256,10 +256,7 @@ namespace Game.Gameplay
             {
                 _audio = gameObject.AddComponent<AudioSource>();
                 _audio.playOnAwake = false;
-                _audio.spatialBlend = 1f;
-                _audio.rolloffMode = AudioRolloffMode.Linear;
-                _audio.minDistance = 5f;
-                _audio.maxDistance = 180f;
+                SpatialAudio.Apply(_audio, SpatialAudio.Category.Explosion);
             }
             _audio.PlayOneShot(Bang(), 1f);
         }

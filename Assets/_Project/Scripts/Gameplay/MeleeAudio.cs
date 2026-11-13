@@ -36,6 +36,7 @@ namespace Game.Gameplay
         {
             _combatant = GetComponent<Combatant>();
             _combatant.Punched += OnPunch;
+            SpatialAudio.Apply(_source, SpatialAudio.Category.Body);
         }
 
         void OnDestroy() => _combatant.Punched -= OnPunch;

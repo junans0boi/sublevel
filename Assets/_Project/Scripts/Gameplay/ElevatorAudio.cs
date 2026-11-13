@@ -17,7 +17,6 @@ namespace Game.Gameplay
         const float HumVolume = 0.55f;
         const float ClunkVolume = 0.9f;
         const float ChimeVolume = 0.6f;
-        const float NearMeters = 2f, FarMeters = 28f;
 
         static AudioClip _hum, _clunk, _chime;
 
@@ -48,12 +47,7 @@ namespace Game.Gameplay
             go.transform.localPosition = new Vector3(0f, 1.3f, 0f);
             var source = go.AddComponent<AudioSource>();
             source.playOnAwake = false;
-            source.spatialBlend = 1f;
-            source.rolloffMode = AudioRolloffMode.Linear;
-            source.minDistance = NearMeters;
-            source.maxDistance = FarMeters;
-            source.dopplerLevel = 0f;
-            return source;
+            return SpatialAudio.Apply(source, SpatialAudio.Category.Elevator);
         }
 
         // After ElevatorCar.Update has set this frame's phase (order between components is not guaranteed, so a
