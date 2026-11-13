@@ -20,6 +20,7 @@ namespace Game.Gameplay
         int _shownRegion = -2, _shownMeters = int.MinValue;
         float _shownArrowZ = float.NaN;
         ZoneState _shownState = ZoneState.Safe;
+        int _shownSeconds = -1;
 
         public bool Shown => Root != null && Root.gameObject.activeSelf;
         public string NameShown => Shown ? _name.text : "";
@@ -37,13 +38,13 @@ namespace Game.Gameplay
             var topLeft = new Vector2(0f, 1f);
             UiKit.Label(UiKit.Rect("Caption", root, topLeft, topLeft, new Vector2(14f, -6f), new Vector2(120f, 22f)), "현재 지역", 18, UiKit.TextDim);
             c._name = UiKit.Label(UiKit.Rect("Name", root, topLeft, topLeft, new Vector2(14f, -28f), new Vector2(292f, 34f)), "", 26, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            c._state = UiKit.Label(UiKit.Rect("State", root, topLeft, topLeft, new Vector2(14f, -68f), new Vector2(120f, 28f)), "상태  " + StateSafe, 20, UiKit.Text);
+            c._state = UiKit.Label(UiKit.Rect("State", root, topLeft, topLeft, new Vector2(14f, -68f), new Vector2(150f, 28f)), "상태  " + StateSafe, 20, UiKit.Text);
 
             // Nearest pass: an arrow turned relative to the way the player faces, and the distance.
-            c._passRoot = UiKit.Rect("Pass", root, topLeft, topLeft, new Vector2(150f, -66f), new Vector2(160f, 32f)).gameObject;
+            c._passRoot = UiKit.Rect("Pass", root, topLeft, topLeft, new Vector2(170f, -66f), new Vector2(140f, 32f)).gameObject;
             c._arrow = UiKit.Rect("Arrow", c._passRoot.transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(2f, 0f), new Vector2(24f, 24f));
             UiKit.Box(c._arrow, UiKit.TextDim).sprite = HudSprites.Arrow;
-            c._pass = UiKit.Label(UiKit.Rect("Distance", c._passRoot.transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(34f, 0f), new Vector2(126f, 30f)),
+            c._pass = UiKit.Label(UiKit.Rect("Distance", c._passRoot.transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(34f, 0f), new Vector2(106f, 30f)),
                 "", 20, UiKit.TextDim);
             c._arrowRoot = c._arrow.gameObject;
             c._passRoot.SetActive(false);
@@ -72,10 +73,13 @@ namespace Game.Gameplay
             // The lockdown state where the player stands (safe when there is no lockdown in this scene).
             var zone = ZoneStatus.Current;
             var state = zone.Valid ? zone.State : ZoneState.Safe;
-            if (state != _shownState)
+            // With the time this state still lasts (ADR-076, #76): "상태  경고 0:32".
+            int seconds = zone.Valid && zone.SecondsLeft >= 0f ? Mathf.CeilToInt(zone.SecondsLeft) : -1;
+            if (state != _shownState || seconds != _shownSeconds)
             {
                 _shownState = state;
-                _state.text = "상태  " + ZoneStatus.Label(state);
+                _shownSeconds = seconds;
+                _state.text = "상태  " + ZoneStatus.Label(state) + (seconds >= 0 ? " " + ElevatorPanel.Clock(seconds) : "");
                 _state.color = state == ZoneState.Safe ? UiKit.Text : state == ZoneState.Warning ? UiKit.Accent : UiKit.Danger;
             }
 

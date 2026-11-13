@@ -173,6 +173,7 @@ namespace Game.Net
             var doors = host.GetComponent<ElevatorDoors>();
             if (doors == null) doors = host.AddComponent<ElevatorDoors>();
             doors.Setup(sites);
+            ElevatorRides.Attach(doors);
             return doors;
         }
 
@@ -217,6 +218,7 @@ namespace Game.Net
             _network.ClientManager.RegisterBroadcast<ElevatorDoorStatus>(OnDoorStatus);
             _network.ClientManager.RegisterBroadcast<SpawnProtectionEnded>(OnProtectionEnded);
             _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
+            GetComponent<ElevatorRides>()?.Bind(network);
         }
 
         // ---- Door geometry ----

@@ -162,7 +162,7 @@ namespace Game.Gameplay
             if (UiFocus.Current != UiScreen.None || (ResultScreen.BlocksGameplay && !_combatant.Dead.Value))
                 f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
-            if (SpawnProtection.InputBlocked)
+            if (SpawnProtection.InputBlocked || ElevatorPanel.Riding)
                 f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook, Ping = f.Ping };
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
@@ -295,6 +295,12 @@ namespace Game.Gameplay
                 _verticalVelocity = 0f;
                 _fall.Reset();
             }
+            // Riding to another region (ADR-076): the body waits in the shaft, then steps out at the arrival station.
+            else if (ElevatorPanel.TryHold(out var rideAt, out bool rideArrived, out float rideYaw))
+            {
+                Teleport(rideAt);
+                if (rideArrived) LookAt(rideAt + Quaternion.Euler(0f, rideYaw, 0f) * Vector3.forward * 20f + Vector3.up * 1.6f);
+            }
             // Riding the elevator car up (ADR-065 (1)): the car carries the feet, nothing else moves the body.
             else if (SpawnProtection.InputBlocked && ElevatorCar.TryRideFloor(transform.position, out float rideFeet))
                 Teleport(new Vector3(transform.position.x, rideFeet, transform.position.z));
@@ -318,7 +324,9 @@ namespace Game.Gameplay
 
             NearbyLoot = FindNearbyLoot();
             // Next to a knocked teammate F revives instead (ADR-072).
-            if (f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
+            // In a station F is the elevator's (ADR-076): tap = next destination, held = ride.
+            bool elevatorKey = ElevatorPanel.HandleInteract(_combatant, f.Interact, f.InteractHeld, Time.deltaTime);
+            if (!elevatorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);

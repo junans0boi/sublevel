@@ -47,6 +47,7 @@ namespace Game.Gameplay
         // Parts.
         CompassStrip _compass;
         RegionCard _region;
+        ElevatorPanel _elevator;
         Text _doorNotice;
         GameObject _doorNoticeRoot;
         int _doorShown = -1;
@@ -137,6 +138,7 @@ namespace Game.Gameplay
         public string HealingText => _healingLabel != null ? _healingLabel.text : "";
         public CompassStrip Compass => _compass;
         public RegionCard Region => _region;
+        public ElevatorPanel Elevator => _elevator;
         public HudStatus Status => _status;
         public WeaponStrip Strip => _strip;
         public MinimapView Minimap => _minimap;
@@ -249,6 +251,7 @@ namespace Game.Gameplay
                 _compass.Tick(player.Yaw);
                 _region.Tick(me.transform.position, player.Yaw);
             }
+            _elevator.Tick(me);
             _minimap.Tick(me.transform.position, player != null ? player.Yaw : 0f, player != null);
             TickMapMarker(me, player, dead);
             TickCrosshair(me, player, dead);
@@ -548,6 +551,8 @@ namespace Game.Gameplay
 
             _region = RegionCard.Build(root, TopLeft, new Vector2(Margin, -TopMargin));
             _areas.Add(_region.Root);
+            // Under the region card, only while standing in a station (ADR-076).
+            _elevator = ElevatorPanel.Build(root, TopLeft, new Vector2(Margin, -TopMargin - RegionCard.Height - StackGap));
 
             _killDigits = StatCard(root, "Kills", "처치", -Margin);
             _aliveDigits = StatCard(root, "Alive", "생존", -Margin - StatWidth - StackGap);
