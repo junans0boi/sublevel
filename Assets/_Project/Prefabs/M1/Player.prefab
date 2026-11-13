@@ -29,6 +29,8 @@ GameObject:
   - component: {fileID: 1538409648251872508}
   - component: {fileID: 2052501616250901503}
   - component: {fileID: 3474345992037120123}
+  - component: {fileID: 3777837417702565424}
+  - component: {fileID: 6447916058575282723}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -237,6 +239,7 @@ MonoBehaviour:
   - {fileID: 501600688736983308}
   - {fileID: 1927464014632468374}
   - {fileID: 7627345224410793369}
+  ExternalControl: 0
 --- !u!114 &8378014710849914900
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -296,6 +299,7 @@ MonoBehaviour:
   - {fileID: 6261717914344250933}
   _forwardClipSpeed: 2.8567827
   _backClipSpeed: 2.9665442
+  _walkClipSpeed: 1.3091096
   _footPlantHeight: 0.068523854
   _footLiftHeight: 0.12497527
 --- !u!114 &8876791603509334058
@@ -562,6 +566,30 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1965005716079168494}
   _networkObjectCache: {fileID: 0}
+--- !u!114 &3777837417702565424
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 699511508354863022}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46fdced6593c24015bc4fa89387cfc76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.VehicleInput
+--- !u!114 &6447916058575282723
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 699511508354863022}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00e0e50753004402f9ff5ffb3dfaea01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.VehicleCamera
 --- !u!1 &2445312799480901989
 GameObject:
   m_ObjectHideFlags: 0
