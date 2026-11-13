@@ -18,6 +18,23 @@ namespace Game.Core
         public float DoorWallOverlap = 0.1f;  // metres the door reaches into the side walls on each side
     }
 
+    // How many take part in a match (#77, M4 gate: 16-24 combatants). Data: rules.json "Match".
+    // Only maps with elevators use BotCount; maps without them (TestBox, ZoneD) keep one bot per scene spawn point.
+    [Serializable]
+    public class MatchRules
+    {
+        public const int MaxBotsLimit = 23;   // 24 participants with the player
+
+        // Set from data when there is any; tests may replace it.
+        public static MatchRules Current = new MatchRules();
+
+        public int BotCount = 15;             // + the player = 16
+        public int MaxBots = MaxBotsLimit;
+
+        // BotCount within 0..MaxBots (and never above MaxBotsLimit).
+        public int ClampedBotCount => Math.Max(0, Math.Min(BotCount, Math.Min(Math.Max(0, MaxBots), MaxBotsLimit)));
+    }
+
     // One elevator as the assignment sees it: the region it stands in (any id; equal ids = same region).
     public struct ElevatorSlot
     {

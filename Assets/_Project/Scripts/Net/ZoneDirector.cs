@@ -83,6 +83,7 @@ namespace Game.Net
             ClientBlastIncoming = null;
             ClientBlastImpact = null;
             ClientPassOpened = null;
+            RulesOverride = null;
         }
 
         struct PendingBlast
@@ -246,15 +247,28 @@ namespace Game.Net
         // Where a combatant in a region that has been announced (or is closing) should walk to get out: just beyond
         // the pass into the neighbouring region that stays open longest. False when the region is safe, off the
         // island, or has no way out. Bots call this on the server; the barrier is theirs to wait at or to open.
-        public bool TryEscapeTarget(Vector3 from, out Vector3 target)
+        public bool TryEscapeTarget(Vector3 from, out Vector3 target) => TryEscapeTarget(from, -1, out target, out _, out _);
+
+        // The same, naming the pass and the region beyond it. `skipPass` (>= 0) is left out unless it is the only
+        // way (a bot that got stuck on the way to it tries another).
+        public bool TryEscapeTarget(Vector3 from, int skipPass, out Vector3 target, out int pass, out int toRegion)
+        {
+            if (TryEscapeTargetExcept(from, skipPass, out target, out pass, out toRegion)) return true;
+            return skipPass >= 0 && TryEscapeTargetExcept(from, -1, out target, out pass, out toRegion);
+        }
+
+        bool TryEscapeTargetExcept(Vector3 from, int skipPass, out Vector3 target, out int pass, out int toRegion)
         {
             target = default;
+            pass = -1;
+            toRegion = -1;
             int region = RegionIndexAt(from);
             if (region < 0 || StateOf(region) == ZoneState.Safe) return false;
             int best = -1, bestOther = -1;
             float bestUntil = -1f, bestD = float.MaxValue;
             for (int p = 0; p < _geo.PassCount; p++)
             {
+                if (p == skipPass) continue;
                 int other = _geo.PassA[p] == region ? _geo.PassB[p] : _geo.PassB[p] == region ? _geo.PassA[p] : -1;
                 if (other < 0 || !Lockdown.IsPassable(StateOf(other))) continue;
                 // With the plan (the server) the best neighbour is the one that stays open longest; without it, the nearest.
@@ -270,7 +284,68 @@ namespace Game.Net
             float yaw = _geo.PassYawDeg[best] * Mathf.Deg2Rad;
             float sign = _geo.PassB[best] == bestOther ? 1f : -1f; // the pass faces from A into B
             target = new Vector3(_geo.PassX[best] + Mathf.Sin(yaw) * sign * ExitReach, _geo.PassY[best], _geo.PassZ[best] + Mathf.Cos(yaw) * sign * ExitReach);
+            pass = best;
+            toRegion = bestOther;
             return true;
+        }
+
+        // ---- What bots need to know about the lockdown (#77) ----
+
+        // The middle of a region on the ground (its hub).
+        public Vector3 RegionCentre(int region) =>
+            EnsureGeometry() && region >= 0 && region < _geo.RegionCount ? new Vector3(_geo.CentreX[region], _geo.CentreY[region], _geo.CentreZ[region]) : Vector3.zero;
+
+        // Every region but the final one is closed: only the final region is left to fight in.
+        public bool OnlyFinalRegionLeft
+        {
+            get
+            {
+                int final = FinalRegion;
+                if (final < 0 || !EnsureGeometry()) return false;
+                for (int r = 0; r < _geo.RegionCount; r++)
+                    if (r != final && StateOf(r) != ZoneState.Closed) return false;
+                return true;
+            }
+        }
+
+        // Inside the final region once its sub-zones have started closing: where to go when the sub-zone the point is
+        // in is no longer safe. The target is the centre of the nearest sub-zone of that region that is still safe;
+        // `urgent` when the point's own sub-zone is already being bombarded or closed. False when the point's
+        // sub-zone is safe, outside the final region, or before anything there has been announced.
+        public bool TrySafeSubZoneTarget(Vector3 from, out Vector3 target, out bool urgent)
+        {
+            target = default;
+            urgent = false;
+            int final = FinalRegion;
+            if (final < 0 || !EnsureGeometry() || RegionIndexAt(from) != final) return false;
+            int at = _geo.SubZoneAt(from.x, from.z);
+            if (at < 0) return false;
+            var state = SubZoneState(at);
+            if (state == ZoneState.Safe) return false;
+            urgent = state == ZoneState.Bombardment || state == ZoneState.Closed;
+            float bestD = float.MaxValue;
+            for (int s = 0; s < _geo.SubZoneTotal; s++)
+            {
+                if (_geo.SubRegion[s] != final || SubZoneState(s) != ZoneState.Safe) continue;
+                float dx = from.x - _geo.SubX[s], dz = from.z - _geo.SubZ[s];
+                float d = dx * dx + dz * dz;
+                if (d >= bestD) continue;
+                bestD = d;
+                target = new Vector3(_geo.SubX[s], _geo.SubY[s], _geo.SubZ[s]);
+            }
+            return bestD < float.MaxValue;
+        }
+
+        // Is the point somewhere the lockdown is going to take soon: a region that is no longer safe, or (in the
+        // final region) a sub-zone that is no longer safe? Bots stop wandering to such places.
+        public bool IsDoomed(Vector3 position)
+        {
+            int region = RegionIndexAt(position);
+            if (region < 0) return false;
+            if (StateOf(region) != ZoneState.Safe) return true;
+            if (region != FinalRegion) return false;
+            int sub = _geo.SubZoneAt(position.x, position.z);
+            return sub >= 0 && SubZoneState(sub) != ZoneState.Safe;
         }
 
         // Radiation at a point right now (health per second, before the grace period).
@@ -295,13 +370,20 @@ namespace Game.Net
             Instance = this;
             // Review builds only (hidden, removed before release with -feelcapture/-perfcapture): `-fastzones` runs a
             // whole closing in about a minute so warning, lockdown, radiation and bombardment can be seen quickly.
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-fastzones") >= 0)
+            var args = Environment.GetCommandLineArgs();
+            if (Array.IndexOf(args, "-fastzones") >= 0)
                 _rules = new LockdownRules
                 {
                     FirstWarningSeconds = 40f, WarningSeconds = 10f, LockdownSeconds = 30f, BombardmentSeconds = 15f,
                     MinSecondsBetweenClosings = 60f, RadiationGraceSeconds = 1f,
                 };
+            // `-autoplay <folder>` (#77, same release rule): the quick match the simulation test plays.
+            if (Array.IndexOf(args, "-autoplay") >= 0) _rules = LockdownRules.QuickMatch();
+            if (RulesOverride != null) _rules = RulesOverride;
         }
+
+        // Tests: the rules every director of the following scene loads starts with (null = as configured).
+        public static LockdownRules RulesOverride;
 
         void Start()
         {
@@ -387,7 +469,9 @@ namespace Game.Net
         public void ServerStartClock()
         {
             if (!EnsureGeometry()) return;
-            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 1;
+            // A new plan every match (the closing order and the final region are random per match, SPEC 3): the
+            // director's per-match seed, not the scene's fixed loot seed (which made every match end in one region).
+            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.LockdownSeed : 1;
             _planSeed = _seed != 0 ? _seed : unchecked(matchSeed ^ 0x5EED5);
             _plan = Lockdown.Plan(_geo.RegionCount, _geo.PassA, _geo.PassB, _planSeed, _geo.SubZoneCounts(), Rules);
             _rng = new System.Random(unchecked(_planSeed * 31 + 7));

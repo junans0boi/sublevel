@@ -36,14 +36,23 @@ namespace Game.Net
         public static MatchDirector Instance { get; private set; }
         // Tests: forces the deployment seed of the next matches (null = as configured).
         public static int? DeploymentSeedOverride;
+        // Tests: forces the lockdown seed of the next matches (null = random per match, or the scene seed when the
+        // deployment is not random).
+        public static int? LockdownSeedOverride;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => DeploymentSeedOverride = null;
+        static void ResetStatics()
+        {
+            DeploymentSeedOverride = null;
+            LockdownSeedOverride = null;
+        }
 
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
         public Transform[] BotSpawns => _botSpawns;
         public int Seed => _seed;
+        // Seeds this match's lockdown plan (closing order, final region): new every match (#77).
+        public int LockdownSeed { get; private set; }
         public ushort Port { get; private set; }
         // Score keeping for this match: alive count, kills, placement, winner.
         public MatchState State { get; private set; }
@@ -69,6 +78,9 @@ namespace Game.Net
         void Awake()
         {
             Instance = this;
+            LockdownSeed = LockdownSeedOverride ?? (_randomDeployment ? unchecked(_seed * 7919 ^ System.Environment.TickCount ^ (int)System.DateTime.Now.Ticks) : _seed);
+            // A new match: the bots' stall counts start again.
+            BotStats.Clear();
             // Scenes built before the match state existed get one here, so no scene has to be rebuilt for it.
             State = GetComponent<MatchState>();
             if (State == null) State = gameObject.AddComponent<MatchState>();
@@ -159,21 +171,26 @@ namespace Game.Net
             ServerSpawnBots();
         }
 
-        // One bot per spawn point, put on the navmesh when there is one within reach. Bots are ordinary combatants:
+        // The bots of the match, put on the navmesh when there is one within reach. Bots are ordinary combatants:
         // MatchState counts them as they spawn (it recounts whenever the combatant list changes).
+        // On a map with elevators there are MatchRules.BotCount of them, each in the elevator the deployment gave it
+        // (the scene's bot spawn points are not needed); elsewhere one per scene spawn point.
         void ServerSpawnBots()
         {
-            if (_botPrefab == null || _botSpawns == null || _botSpawns.Length == 0) return;
+            int count = BotCount;
+            if (count <= 0) return;
             ServerGiveBotsPlacesToGo();
             int number = 0;
-            foreach (var point in _botSpawns)
+            int spawnPoints = _botSpawns != null ? _botSpawns.Length : 0;
+            for (int i = 0; i < count; i++)
             {
-                if (point == null) continue;
+                var point = spawnPoints > 0 ? _botSpawns[i % spawnPoints] : null;
                 // With elevators a bot starts in the one the deployment gave it (bots follow the players in the
                 // assignment), otherwise at its spawn point.
                 bool inElevator = TryElevatorFor(_expectedPlayersCounted + number, out var position, out var rotation);
                 if (!inElevator)
                 {
+                    if (point == null) continue;
                     position = point.position;
                     rotation = point.rotation;
                 }
@@ -187,16 +204,22 @@ namespace Game.Net
             }
         }
 
-        int BotCount
+        // How many bots this match has: by data on a map with elevators (16-24 combatants, #77), otherwise one per
+        // scene spawn point.
+        public int BotCount
         {
             get
             {
-                if (_botPrefab == null || _botSpawns == null) return 0;
+                if (_botPrefab == null) return 0;
+                if (HasElevators) return (MatchRules.Current ?? new MatchRules()).ClampedBotCount;
+                if (_botSpawns == null) return 0;
                 int count = 0;
                 foreach (var point in _botSpawns) if (point != null) count++;
                 return count;
             }
         }
+
+        bool HasElevators => Elevators != null && Elevators.Sites.Count > 0;
 
         // ADR-055 (1)(4): one assignment for everyone who starts the match, players first, then bots.
         void ServerPlanDeployment()
@@ -225,11 +248,26 @@ namespace Game.Net
                 elevator = 0;
                 for (int i = 1; i < _elevatorLoad.Length; i++) if (_elevatorLoad[i] < _elevatorLoad[elevator]) elevator = i;
             }
-            _elevatorLoad[elevator]++;
+            int sharing = _elevatorLoad[elevator]++;
             var site = Elevators.Sites[elevator];
-            position = site.Spawn + Vector3.up * ElevatorSpawnLift;
             rotation = Quaternion.Euler(0f, site.YawDeg, 0f);
+            // More participants than elevators (ADR-055: then elevators are shared): side by side in the bay.
+            position = site.Spawn + rotation * SharedOffset(sharing) + Vector3.up * ElevatorSpawnLift;
             return true;
+        }
+
+        // Where the n-th occupant of one elevator stands, relative to its spawn point (x right, z out of the door).
+        // The bay is Buildings.ElevatorBay (3 m) square; a body is 0.7 m wide.
+        static Vector3 SharedOffset(int occupant)
+        {
+            switch (occupant)
+            {
+                case 0: return Vector3.zero;
+                case 1: return new Vector3(0.8f, 0f, 0f);
+                case 2: return new Vector3(-0.8f, 0f, 0f);
+                case 3: return new Vector3(0.8f, 0f, -0.8f);
+                default: return new Vector3(-0.8f, 0f, -0.8f);
+            }
         }
 
         void ServerProtect(Combatant combatant)

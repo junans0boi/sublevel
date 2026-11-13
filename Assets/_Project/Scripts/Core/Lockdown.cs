@@ -61,6 +61,17 @@ namespace Game.Core
             }
         }
 
+        // A whole match in about six minutes of match time (the default runs about nineteen): the match simulation
+        // test and `-autoplay` (#77). The waits are cut hard; the warnings stay long enough for a sprinting bot to
+        // reach a pass from most of a region (7 m/s), so a closing is still escaped by walking, not only with keys.
+        public static LockdownRules QuickMatch() => new LockdownRules
+        {
+            FirstWarningSeconds = 45f, WarningSeconds = 40f, LockdownSeconds = 20f, BombardmentSeconds = 10f,
+            MinSecondsBetweenClosings = 50f,
+            RadiationDps = 4f, RadiationGraceSeconds = 2f, ClosedDps = 20f,
+            SubZoneStartDelaySeconds = 10f, SubZoneWarningSeconds = 30f, SubZoneBombardmentSeconds = 10f, SubZoneSpacingSeconds = 40f,
+        };
+
         // The same rules with every timeline value divided, for tests and quick matches.
         public LockdownRules Scaled(float divisor)
         {
@@ -133,7 +144,9 @@ namespace Game.Core
             for (int i = 0; i < n; i++) plan.ClosingOf[i] = -1;
             if (n == 0) return plan;
 
-            uint rng = unchecked((uint)seed * 2654435761u + 0x9E3779B9u);
+            // The seed is mixed once before use: without it neighbouring seeds (0, 1, 2, ...) drew the final region
+            // unevenly (one region final in 14.5 % of seeds 0..199 instead of about 25 %, #77).
+            uint rng = Mix(unchecked((uint)seed * 2654435761u + 0x9E3779B9u));
             plan.FinalRegion = NextInt(ref rng, n);
 
             // Everyone but the final region, shuffled.
@@ -395,7 +408,14 @@ namespace Game.Core
             unchecked
             {
                 s += 0x9E3779B9u;
-                uint z = s;
+                return Mix(s);
+            }
+        }
+
+        static uint Mix(uint z)
+        {
+            unchecked
+            {
                 z = (z ^ (z >> 16)) * 0x85EBCA6Bu;
                 z = (z ^ (z >> 13)) * 0xC2B2AE35u;
                 return z ^ (z >> 16);

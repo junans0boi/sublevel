@@ -134,6 +134,9 @@ namespace Game.Core
 
         // Places worth walking to (shared, never modified here). Null or empty: wander at random.
         public BotVec[] PointsOfInterest { get; set; }
+        // Points of interest it may wander to (null: all). The controller leaves out places the lockdown is about to
+        // take (#77); when none is allowed, every point is.
+        public Func<BotVec, bool> RoamFilter { get; set; }
 
         public BotState State { get; private set; }
 
@@ -365,9 +368,17 @@ namespace Game.Core
                 int start = _rng.Next(points.Length);
                 int pick = start;
                 float farthest = -1f;
+                var filter = RoamFilter;
+                if (filter != null)
+                {
+                    bool any = false;
+                    for (int i = 0; i < points.Length && !any; i++) any = filter(points[i]);
+                    if (!any) filter = null;
+                }
                 for (int i = 0; i < points.Length; i++)
                 {
                     int index = (start + i) % points.Length;
+                    if (filter != null && !filter(points[index])) continue;
                     float distance = BotVec.PlanarDistance(from, points[index]);
                     if (distance >= rules.RoamMinMeters)
                     {
