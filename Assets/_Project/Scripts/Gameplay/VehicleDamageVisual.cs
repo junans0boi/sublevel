@@ -18,7 +18,7 @@ namespace Game.Gameplay
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly Color WhiteSmoke = new Color(0.85f, 0.85f, 0.85f, 0.45f);
         static readonly Color BlackSmoke = new Color(0.08f, 0.08f, 0.08f, 0.7f);
-        static readonly Color Fire = new Color(1f, 0.45f, 0.1f, 1f);
+        static readonly Color Fire = new Color(1f, 0.32f, 0.04f, 1f);
         static readonly Color Charred = new Color(0.1f, 0.09f, 0.085f, 1f);
         static readonly Color HoleColor = new Color(0.03f, 0.03f, 0.03f, 1f);
 
@@ -34,6 +34,31 @@ namespace Game.Gameplay
         Material _glow, _dust;
         readonly List<(Renderer renderer, int index, Material original)> _glass = new List<(Renderer, int, Material)>();
         Material _crackedGlass, _goneGlass;
+        Material _softGlow, _softDust; // the effect materials with a round soft sprite (particles are plain quads)
+        static Texture2D _puff;
+
+        // A copy of an effect material drawing a soft round puff (made here, no texture asset).
+        static Material Soft(Material source)
+        {
+            if (source == null) return null;
+            if (_puff == null)
+            {
+                const int n = 64;
+                _puff = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "VehiclePuff", wrapMode = TextureWrapMode.Clamp };
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                        float a = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
+                        _puff.SetPixel(x, y, new Color(1f, 1f, 1f, a * a * (3f - 2f * a)));
+                    }
+                _puff.Apply();
+            }
+            var m = new Material(source) { name = source.name + "_Puff" };
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", _puff);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", _puff);
+            return m;
+        }
 
         void Awake()
         {
@@ -57,6 +82,8 @@ namespace Game.Gameplay
         {
             var view = FindAnyObjectByType<ThrowableView>();
             if (view != null) { _glow = view.GlowMaterial; _dust = view.DustMaterial; }
+            _softGlow = Soft(_glow);
+            _softDust = Soft(_dust);
             foreach (var r in GetComponentsInChildren<Renderer>())
             {
                 var mats = r.sharedMaterials;
@@ -79,7 +106,7 @@ namespace Game.Gameplay
             _shown = stage;
             if (_dust != null && stage >= VehicleDamageStage.WhiteSmoke)
             {
-                if (_smoke == null) _smoke = NewEmitter("Smoke", _dust, 2.4f, 1.1f, 0.9f, 2.6f);
+                if (_smoke == null) _smoke = NewEmitter("Smoke", _softDust, 2.4f, 1.1f, 0.9f, 2.6f);
                 var main = _smoke.main;
                 main.startColor = stage == VehicleDamageStage.WhiteSmoke ? WhiteSmoke : BlackSmoke;
                 var emission = _smoke.emission;
@@ -88,7 +115,7 @@ namespace Game.Gameplay
             }
             if (_glow != null && stage == VehicleDamageStage.Burning)
             {
-                if (_fire == null) _fire = NewEmitter("Fire", _glow, 0.6f, 1.6f, 0.55f, 1.2f);
+                if (_fire == null) _fire = NewEmitter("Fire", _softGlow, 0.6f, 1.6f, 0.55f, 1.2f);
                 var main = _fire.main;
                 main.startColor = Fire;
                 var emission = _fire.emission;
@@ -101,7 +128,7 @@ namespace Game.Gameplay
                 // The burnt-out shell: the body and everything on it darkened.
                 foreach (var r in GetComponentsInChildren<MeshRenderer>())
                 {
-                    if (r.GetComponent<ParticleSystem>() != null || _holes.Contains(r.transform)) continue;
+                    if (r.name == "BulletHole" || r.name == "Back") continue;
                     r.GetPropertyBlock(_block);
                     _block.SetColor(BaseColorId, Charred);
                     r.SetPropertyBlock(_block);
@@ -139,7 +166,7 @@ namespace Game.Gameplay
             if (_crackedGlass != null) return _crackedGlass;
             _crackedGlass = new Material(_glass[0].original) { name = "VehicleGlass_Cracked" };
             // Milky and less see-through: a crazed pane.
-            if (_crackedGlass.HasProperty(BaseColorId)) _crackedGlass.SetColor(BaseColorId, new Color(0.92f, 0.94f, 0.95f, 0.78f));
+            if (_crackedGlass.HasProperty(BaseColorId)) _crackedGlass.SetColor(BaseColorId, new Color(0.86f, 0.89f, 0.92f, 0.9f));
             return _crackedGlass;
         }
 
@@ -161,21 +188,28 @@ namespace Game.Gameplay
             else
             {
                 var go = new GameObject("BulletHole");
-                go.AddComponent<MeshFilter>().sharedMesh = CombatFxMeshes.Disc;
-                var mr = go.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = _dust;
-                mr.shadowCastingMode = ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-                mr.GetPropertyBlock(_block);
-                _block.SetColor(BaseColorId, HoleColor);
-                mr.SetPropertyBlock(_block);
+                // Two discs back to back: seen from either side whatever the shader's culling.
+                var back = new GameObject("Back");
+                back.transform.SetParent(go.transform, false);
+                back.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                foreach (var part in new[] { go, back })
+                {
+                    part.AddComponent<MeshFilter>().sharedMesh = CombatFxMeshes.Disc;
+                    var r = part.AddComponent<MeshRenderer>();
+                    r.sharedMaterial = _dust;
+                    r.shadowCastingMode = ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                    r.GetPropertyBlock(_block);
+                    _block.SetColor(BaseColorId, HoleColor);
+                    r.SetPropertyBlock(_block);
+                }
                 hole = go.transform;
                 hole.SetParent(transform, false);
                 _holes.Add(hole);
             }
             var n = localNormal.sqrMagnitude > 0f ? localNormal.normalized : Vector3.up;
-            // A hair off the surface, lying flat on it.
-            hole.localPosition = local + n * 0.004f;
+            // The hit is on the collider box, a few cm inside the drawn panel: out onto the paint.
+            hole.localPosition = local + n * 0.04f;
             hole.localRotation = Quaternion.LookRotation(-n);
             hole.localScale = Vector3.one * rules.DecalSize;
         }
@@ -186,7 +220,7 @@ namespace Game.Gameplay
             {
                 if (_burst == null)
                 {
-                    _burst = NewEmitter("Explosion", _glow, 0.7f, 7f, 1.3f, 0.6f);
+                    _burst = NewEmitter("Explosion", _softGlow, 0.7f, 7f, 1.3f, 0.6f);
                     var emission = _burst.emission;
                     emission.rateOverTime = 0f;
                 }
