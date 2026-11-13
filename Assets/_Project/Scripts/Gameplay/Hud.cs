@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
@@ -5,8 +6,14 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The in-game HUD (UI_SPEC 1): separate areas built in code with UiKit. It only shows what the server decided.
-    // Texts are rewritten only when the shown value changes, so a steady frame allocates nothing.
+    // The in-game HUD (UI_SPEC 1, ADR-057): separate areas built in code with UiKit, a "field terminal" look.
+    // It only shows what the server decided and reads server data through HudBackend. Texts are rewritten only
+    // when the shown value changes, so a steady frame allocates nothing.
+    //
+    // Layout (reference 1920x1080; every area is a direct child of the canvas with a point anchor, so the
+    // layout tests can place them at any resolution):
+    //   top centre  compass            top left   region card          top right  alive/kill cards + kill feed
+    //   bottom left player status      bottom centre  weapon + health  bottom right  minimap over the weapon strip
     public class Hud : MonoBehaviour
     {
         public static Hud Instance { get; private set; }
@@ -21,54 +28,56 @@ namespace Game.Gameplay
         const float DamageSeconds = 1f, DamageRadius = 240f;
         const int DamageSlots = 4, DamageSegments = 5;
         const float DamageSegmentDeg = 9f;
-        const float CompassWidth = 560f, CompassPixelsPerDegree = 4f;
-        const int CompassSteps = 24; // one mark every 15 degrees
         const string Dash = "—";
 
-        static readonly string[] Directions = { "북", "북동", "동", "남동", "남", "남서", "서", "북서" };
-        static readonly string[] SmallInts = new string[1000];
-        static readonly string[] Headings = new string[360];
+        // Bottom centre geometry: a bottom-anchored stack of health, weapon, then the transient prompts.
+        const float CentreWidth = 560f, HealthHeight = 44f, WeaponHeight = 112f, StackGap = 8f;
+        const float StatWidth = 150f, StatHeight = 44f, TopMargin = 24f;
+        const float StripGap = 10f;
+
+        static readonly Vector2 Centre = new Vector2(0.5f, 0.5f);
+        static readonly Vector2 MidLeft = new Vector2(0f, 0.5f);
+        static readonly Vector2 MidRight = new Vector2(1f, 0.5f);
+        static readonly Vector2 TopLeft = new Vector2(0f, 1f);
+        static readonly Vector2 BottomRight = new Vector2(1f, 0f);
 
         Canvas _canvas;
+        readonly List<RectTransform> _areas = new List<RectTransform>();
+
+        // Parts.
+        CompassStrip _compass;
+        RegionCard _region;
+        HudStatus _status;
+        WeaponStrip _strip;
+        MinimapView _minimap;
 
         // Bottom centre.
         RectTransform _healthFill;
         Image _healthFillImage;
-        Text _healthLabel;
-        GameObject _reload, _prompt;
+        Image[] _healthFrame;
+        HudDigits _healthDigits;
+        GameObject _healing, _reload, _prompt;
         Text _promptLabel;
         GameObject _promptIconRoot;
         InventoryItemIcon _promptIcon;
         LootItem _promptFor;
         float _shownHp = float.NaN;
         int _shownHpInt = int.MinValue;
+        float _healingUntil;
+        bool _lowShown;
 
-        // Bottom right.
-        readonly Image[] _slotBack = new Image[2];
-        readonly Image[] _slotBar = new Image[2];
-        readonly Text[] _slotKey = new Text[2];
-        readonly Text[] _slotName = new Text[2];
-        readonly int[] _slotWeapon = { int.MinValue, int.MinValue };
-        Text _magLabel, _reserveLabel, _ammoTypeLabel;
+        // Weapon in hand (bottom centre).
+        Text _weaponName, _fireMode, _caliber, _slash;
+        GameObject _caliberBox;
+        HudDigits _magDigits, _reserveDigits;
         GameObject _activeWeaponIconRoot;
         InventoryItemIcon _activeWeaponIcon;
-        int _shownActive = -1, _shownAmmoWeapon = int.MinValue, _shownMag = int.MinValue, _shownReserve = int.MinValue;
+        int _shownActive = int.MinValue, _shownAmmoWeapon = int.MinValue, _shownMag = int.MinValue, _shownReserve = int.MinValue;
+        string _shownFireMode;
 
-        // Bottom left, top right.
-        Text _medkitLabel, _aliveLabel;
-        readonly Text[] _gearLabel = new Text[2];
-        readonly RectTransform[] _gearFill = new RectTransform[2];
-        GameObject _grenadeRow;
-        Text _grenadeLabel;
-        int _shownMedkits = int.MinValue, _shownAlive = int.MinValue;
-        readonly int[] _shownGearHash = { int.MinValue, int.MinValue };
-        int _shownGrenades = int.MinValue;
-
-        // Top centre.
-        readonly RectTransform[] _compassMarks = new RectTransform[CompassSteps];
-        Text _headingLabel;
-        float _shownHeading = float.NaN;
-        int _shownHeadingInt = int.MinValue;
+        // Top right.
+        HudDigits _aliveDigits, _killDigits;
+        int _shownAlive = int.MinValue, _shownKills = int.MinValue;
 
         // Centre.
         GameObject _crosshair, _dot, _bars;
@@ -95,19 +104,29 @@ namespace Game.Gameplay
         public float HealthFill { get; private set; } = 1f;      // 0..1
         public string AmmoText { get; private set; } = Dash;     // "mag / reserve" of the weapon in hand
         public string AmmoTypeText { get; private set; } = "맨손";
+        public string FireModeText => _shownFireMode ?? "";
         public string ActiveWeaponIconKey => _activeWeaponIcon != null ? _activeWeaponIcon.Key : "";
         public int ActiveSlotShown => _shownActive;
-        public string ActiveWeaponName => _shownActive >= 0 && _shownActive < 2 ? _slotName[_shownActive].text : "";
+        public string ActiveWeaponName => _shownAmmoWeapon > 0 ? _weaponName.text : "";
         public bool CrosshairVisible => Visible && _crosshair.activeSelf;
         public bool HitMarkerVisible => _hitMarker != null && _hitMarker.activeSelf;
         public bool HeadMarkerShown { get; private set; }         // the last hit marker was for a head hit
         public bool ReloadingShown => _reload.activeSelf;
         public string PromptText => _prompt.activeSelf ? _promptLabel.text : "";
         public string PromptIconKey => _promptIcon != null && _prompt.activeSelf ? _promptIcon.Key : "";
-        public bool GrenadeShown => _grenadeRow != null && _grenadeRow.activeSelf;
+        public bool GrenadeShown => _strip != null && _strip.GrenadesShown > 0;
         public bool LowHealthShown => _vignette.alpha > 0f;
         public bool DeathShown => _death.activeSelf;
         public int AliveShown => _shownAlive;
+        public int KillsShown => _shownKills;
+        public bool HealingShown => _healing.activeSelf;
+        public CompassStrip Compass => _compass;
+        public RegionCard Region => _region;
+        public HudStatus Status => _status;
+        public WeaponStrip Strip => _strip;
+        public MinimapView Minimap => _minimap;
+        // The fixed areas of this canvas, for the layout tests (rects as placed, shown or not).
+        public IReadOnlyList<RectTransform> LayoutAreas => _areas;
         public int DamageIndicatorsShown
         {
             get
@@ -144,11 +163,9 @@ namespace Game.Gameplay
 
             BuildVignette(root);
             BuildDamageRing(root);
-            BuildCompass(root);
-            BuildAlive(root);
-            BuildHealth(root);
-            BuildWeapons(root);
-            BuildConsumables(root);
+            BuildTop(root);
+            BuildHealthAndWeapon(root);
+            BuildBottomSides(root);
             BuildCrosshair(root);
             BuildDeath(root);
             _canvas.enabled = false;
@@ -170,8 +187,9 @@ namespace Game.Gameplay
 
             var me = Combatant.LocalPlayer;
             bool show = me != null;
-            // The inventory has its own copy of everything the HUD shows (armour, ammo, grenades); drawn through its panels it only clutters.
-            bool drawn = show && UiFocus.Current != UiScreen.Inventory;
+            // The inventory has its own copy of everything the HUD shows (armour, ammo, grenades) and the map
+            // screen covers the minimap's job; drawn through them the HUD only clutters (and overlapped the header).
+            bool drawn = show && UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map;
             if (_canvas.enabled != drawn) _canvas.enabled = drawn;
             if (!show) return;
 
@@ -179,9 +197,16 @@ namespace Game.Gameplay
             bool dead = me.Dead.Value;
             TickHealth(me, dead);
             TickWeapons(me);
-            TickSmallTexts(me);
+            _strip.Tick(me);
+            _status.Tick(me);
+            TickTopRight();
             TickPrompt(me, player, dead);
-            if (player != null) TickCompass(player.Yaw);
+            if (player != null)
+            {
+                _compass.Tick(player.Yaw);
+                _region.Tick(me.transform.position, player.Yaw);
+            }
+            _minimap.Tick(me.transform.position, player != null ? player.Yaw : 0f, player != null);
             TickCrosshair(me, player, dead);
             TickDamageRing(me, player);
             Show(_death, dead);
@@ -194,6 +219,8 @@ namespace Game.Gameplay
             float hp = me.Hp.Value;
             if (hp != _shownHp)
             {
+                // A rise (medkit, regeneration) shows "회복 중" for a moment.
+                if (!float.IsNaN(_shownHp) && hp > _shownHp) _healingUntil = Time.unscaledTime + 1.2f;
                 _shownHp = hp;
                 HealthFill = Mathf.Clamp01(hp / MaxHp);
                 _healthFill.anchorMax = new Vector2(HealthFill, 1f);
@@ -202,9 +229,19 @@ namespace Game.Gameplay
                 if (shown != _shownHpInt)
                 {
                     _shownHpInt = shown;
-                    _healthLabel.text = IntText(shown);
+                    _healthDigits.Set(shown);
+                }
+                bool low = hp < LowHp;
+                if (low != _lowShown)
+                {
+                    // Low health is shown by the frame turning red rather than by blinking.
+                    _lowShown = low;
+                    var line = low ? UiKit.Danger : UiKit.SteelDim;
+                    for (int i = 0; i < _healthFrame.Length; i++) _healthFrame[i].color = line;
+                    _healthDigits.SetColor(low ? UiKit.Danger : UiKit.Text);
                 }
             }
+            Show(_healing, Time.unscaledTime < _healingUntil && !dead);
 
             // Stronger the closer to zero, with a slow pulse; a canvas group fades it without rebuilding meshes.
             float vignette = 0f;
@@ -216,39 +253,31 @@ namespace Game.Gameplay
 
         void TickWeapons(Combatant me)
         {
-            int active = me.ActiveSlot.Value;
-            ShowSlotWeapon(0, me.Slot0.Value);
-            ShowSlotWeapon(1, me.Slot1.Value);
-            if (active != _shownActive)
-            {
-                _shownActive = active;
-                for (int i = 0; i < 2; i++)
-                {
-                    bool on = i == active;
-                    _slotBack[i].enabled = on;
-                    _slotBar[i].enabled = on;
-                    _slotName[i].color = on ? UiKit.Text : UiKit.TextDim;
-                    _slotName[i].fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
-                    _slotKey[i].color = on ? UiKit.Accent : UiKit.TextDim;
-                }
-            }
-
-            WeaponDef weapon = me.ActiveWeapon;
-            int id = weapon != null ? weapon.Id : 0;
-            int mag = weapon != null ? me.ActiveMag : 0;
-            int reserve = weapon != null ? InventoryBackend.Reserve(me, InventoryBackend.AmmoIndex(weapon)) : 0;
-            if (id == _shownAmmoWeapon && mag == _shownMag && reserve == _shownReserve) return;
+            int active = HudBackend.ActiveSlot(me);
+            int id = HudBackend.ActiveWeaponId(me);
+            WeaponDef weapon = id != 0 ? GameData.Weapons.Find(id) : null;
+            if (weapon == null) id = 0;
+            int mag = weapon != null ? HudBackend.ActiveMag(me) : 0;
+            int reserve = HudBackend.Reserve(me, weapon);
+            string mode = weapon != null ? HudBackend.FireModeOf(me, active) : "";
+            if (active == _shownActive && id == _shownAmmoWeapon && mag == _shownMag && reserve == _shownReserve && mode == _shownFireMode) return;
+            _shownActive = active;
             _shownAmmoWeapon = id;
             _shownMag = mag;
             _shownReserve = reserve;
+            _shownFireMode = mode;
             if (weapon == null)
             {
                 AmmoText = Dash;
                 AmmoTypeText = "맨손";
-                _magLabel.text = Dash;
-                _magLabel.color = UiKit.TextDim;
-                _reserveLabel.text = "";
-                _ammoTypeLabel.text = "맨손";
+                _weaponName.text = "맨손";
+                _weaponName.color = UiKit.TextDim;
+                _fireMode.text = "";
+                _caliberBox.SetActive(false);
+                _magDigits.Set(-1);
+                _magDigits.SetColor(UiKit.TextDim);
+                _reserveDigits.Set(-1);
+                _slash.enabled = false;
                 _activeWeaponIcon.Set("", "맨손");
                 _activeWeaponIconRoot.SetActive(false);
                 return;
@@ -256,66 +285,32 @@ namespace Game.Gameplay
             int ammoIndex = InventoryBackend.AmmoIndex(weapon);
             AmmoText = IntText(mag) + " / " + IntText(reserve);
             AmmoTypeText = InventoryBackend.AmmoName(ammoIndex);
-            _magLabel.text = IntText(mag);
-            _magLabel.color = mag == 0 ? UiKit.Danger : UiKit.Text;
-            _reserveLabel.text = "/ " + IntText(reserve);
-            _ammoTypeLabel.text = AmmoTypeText;
+            _weaponName.text = weapon.Name;
+            _weaponName.color = UiKit.Text;
+            _fireMode.text = mode;
+            _caliber.text = AmmoTypeText;
+            _caliberBox.SetActive(true);
+            _magDigits.Set(mag);
+            _magDigits.SetColor(mag == 0 ? UiKit.Danger : UiKit.Text);
+            _reserveDigits.Set(reserve);
+            _slash.enabled = true;
             _activeWeaponIcon.Set(InventoryBackend.WeaponKey(id), weapon.Name);
             _activeWeaponIconRoot.SetActive(true);
         }
 
-        void ShowSlotWeapon(int slot, int weaponId)
+        void TickTopRight()
         {
-            if (_slotWeapon[slot] == weaponId) return;
-            _slotWeapon[slot] = weaponId;
-            WeaponDef weapon = GameData.Weapons.Find(weaponId);
-            _slotName[slot].text = weapon != null ? weapon.Name : Dash;
-        }
-
-        void TickSmallTexts(Combatant me)
-        {
-            int medkits = me.Medkits.Value;
-            if (medkits != _shownMedkits)
-            {
-                _shownMedkits = medkits;
-                _medkitLabel.text = "x" + IntText(medkits);
-                _medkitLabel.color = medkits > 0 ? UiKit.Text : UiKit.TextDim;
-            }
-
-            for (int slot = 0; slot < 2; slot++)
-            {
-                var gear = InventoryBackend.Gear(me, slot);
-                int hash = (gear.Has ? 1 : 0) ^ gear.Tier * 397 ^ gear.Durability * 31 ^ gear.MaxDurability;
-                if (hash == _shownGearHash[slot]) continue;
-                _shownGearHash[slot] = hash;
-                string name = slot == InventoryBackend.HelmetSlot ? "헬멧" : "조끼";
-                _gearLabel[slot].text = gear.Has ? name + " " + gear.Tier + "단계  " + gear.Durability + "/" + gear.MaxDurability : name + "  —";
-                _gearLabel[slot].color = gear.Has ? UiKit.Text : UiKit.TextDim;
-                _gearFill[slot].anchorMax = new Vector2(Mathf.Clamp01(gear.Fraction), 1f);
-            }
-
-            int grenades = InventoryBackend.Grenades(me);
-            if (grenades != _shownGrenades)
-            {
-                _shownGrenades = grenades;
-                _grenadeLabel.text = "x" + IntText(grenades);
-                Show(_grenadeRow, grenades > 0);
-            }
-
-            // The match's own count when it has one (it is what the kill feed and placements use).
-            int alive = 0;
-            var match = MatchState.Instance;
-            if (match != null && match.TotalCount > 0) alive = match.AliveCount;
-            else
-            {
-                var all = Combatant.All;
-                for (int i = 0; i < all.Count; i++)
-                    if (all[i] != null && !all[i].Dead.Value) alive++;
-            }
+            int alive = HudBackend.Alive();
             if (alive != _shownAlive)
             {
                 _shownAlive = alive;
-                _aliveLabel.text = IntText(alive);
+                _aliveDigits.Set(alive);
+            }
+            int kills = HudBackend.Kills();
+            if (kills != _shownKills)
+            {
+                _shownKills = kills;
+                _killDigits.Set(kills);
             }
         }
 
@@ -336,31 +331,12 @@ namespace Game.Gameplay
             Show(_prompt, hasLoot);
         }
 
-        void TickCompass(float yaw)
-        {
-            float heading = Mathf.Repeat(yaw, 360f);
-            if (heading == _shownHeading) return;
-            _shownHeading = heading;
-            // Everything is laid out by its angle from the view direction; the strip's mask cuts off the rest.
-            for (int i = 0; i < CompassSteps; i++)
-            {
-                var mark = _compassMarks[i];
-                float x = Mathf.DeltaAngle(heading, i * (360f / CompassSteps)) * CompassPixelsPerDegree;
-                mark.anchoredPosition = new Vector2(x, mark.anchoredPosition.y);
-            }
-            int shown = Mathf.RoundToInt(heading) % 360;
-            if (shown != _shownHeadingInt)
-            {
-                _shownHeadingInt = shown;
-                _headingLabel.text = Headings[shown] ?? (Headings[shown] = shown.ToString("000"));
-            }
-        }
-
         // Shows how the weapon is aimed (ADR-048): four lines at the edge of the spread cone from the hip, closer
         // together when shouldered, a single dot when looking down the sights or with empty hands.
+        // Hidden while a magnified scope overlay is up (it draws its own reticle).
         void TickCrosshair(Combatant me, PlayerController player, bool dead)
         {
-            bool visible = !dead && UiFocus.Current == UiScreen.None;
+            bool visible = !dead && UiFocus.Current == UiScreen.None && !HudBackend.ScopeActive;
             Show(_crosshair, visible);
             if (!visible)
             {
@@ -438,15 +414,12 @@ namespace Game.Gameplay
 
         // ---- Construction ----
 
-        static readonly Vector2 Centre = new Vector2(0.5f, 0.5f);
-        static readonly Vector2 MidLeft = new Vector2(0f, 0.5f);
-        static readonly Vector2 MidRight = new Vector2(1f, 0.5f);
-        static readonly Vector2 TopLeft = new Vector2(0f, 1f);
-
+        // A dark plate with a thin steel outline.
         static RectTransform Panel(string name, Transform parent, Vector2 anchor, Vector2 position, Vector2 size)
         {
             var rect = UiKit.Rect(name, parent, anchor, anchor, position, size);
             UiKit.Box(rect, UiKit.Panel);
+            UiKit.Frame(rect, 1f, UiKit.SteelDim);
             return rect;
         }
 
@@ -456,22 +429,78 @@ namespace Game.Gameplay
             return UiKit.Label(UiKit.Rect(name, parent, anchor, anchor, position, size), text, fontSize, color, align, style);
         }
 
-        void BuildHealth(Transform root)
+        // Top centre compass, top left region card, top right alive and kill cards (the kill feed stacks below them).
+        void BuildTop(Transform root)
+        {
+            _compass = CompassStrip.Build(root, TopMargin);
+            _areas.Add(_compass.Strip);
+            _areas.Add(_compass.Heading);
+
+            _region = RegionCard.Build(root, TopLeft, new Vector2(Margin, -TopMargin));
+            _areas.Add(_region.Root);
+
+            _killDigits = StatCard(root, "Kills", "처치", -Margin);
+            _aliveDigits = StatCard(root, "Alive", "생존", -Margin - StatWidth - StackGap);
+        }
+
+        HudDigits StatCard(Transform root, string name, string caption, float x)
+        {
+            var card = Panel(name, root, Vector2.one, new Vector2(x, -TopMargin), new Vector2(StatWidth, StatHeight));
+            Label("Caption", card, MidLeft, new Vector2(14f, 0f), new Vector2(60f, 40f), caption, 20, UiKit.TextDim);
+            var digits = HudDigits.Build("Digits", card, MidRight, MidRight, new Vector2(-12f, 0f), 3, 20f, 40f, 28, UiKit.Text);
+            digits.Set(0);
+            _areas.Add(card);
+            return digits;
+        }
+
+        void BuildHealthAndWeapon(Transform root)
         {
             var bottom = new Vector2(0.5f, 0f);
-            var panel = Panel("Health", root, bottom, new Vector2(0f, Margin), new Vector2(480f, 48f));
-            _healthLabel = Label("Value", panel, MidLeft, new Vector2(16f, 0f), new Vector2(64f, 40f), "100", 28, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            var track = UiKit.Rect("Track", panel, MidLeft, MidLeft, new Vector2(88f, 0f), new Vector2(376f, 12f));
-            UiKit.Box(track, UiKit.PanelLight);
+
+            // Health: thin wide bar, the number in fixed-width digits, a frame that turns red when low.
+            var health = Panel("Health", root, bottom, new Vector2(0f, Margin), new Vector2(CentreWidth, HealthHeight));
+            _healthFrame = UiKit.Frame(health, 1.5f, UiKit.SteelDim);
+            _healthDigits = HudDigits.Build("Value", health, MidLeft, MidLeft, new Vector2(12f, 0f), 3, 20f, 40f, 28, UiKit.Text);
+            _healthDigits.Set(100);
+            var track = UiKit.Rect("Track", health, MidLeft, MidLeft, new Vector2(84f, 0f), new Vector2(330f, 8f));
+            UiKit.Box(track, UiKit.SteelDim);
             _healthFill = UiKit.Fill("Fill", track);
             _healthFillImage = UiKit.Box(_healthFill, UiKit.Health);
+            var healing = Label("Healing", health, MidRight, new Vector2(-12f, 0f), new Vector2(110f, 36f), "회복 중", 18, UiKit.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            _healing = healing.gameObject;
+            _healing.SetActive(false);
+            _areas.Add(health);
 
-            var reload = Panel("Reloading", root, bottom, new Vector2(0f, Margin + 58f), new Vector2(200f, 32f));
+            // The weapon in hand: name, fire mode, calibre badge and the magazine / reserve digits.
+            float weaponY = Margin + HealthHeight + StackGap;
+            var weapon = Panel("Weapon", root, bottom, new Vector2(0f, weaponY), new Vector2(CentreWidth, WeaponHeight));
+            var iconRect = UiKit.Rect("WeaponIcon", weapon, TopLeft, TopLeft, new Vector2(12f, -12f), new Vector2(100f, 64f));
+            _activeWeaponIcon = InventoryItemIcon.Build(iconRect);
+            _activeWeaponIconRoot = iconRect.gameObject;
+            _activeWeaponIconRoot.SetActive(false);
+            _weaponName = Label("Name", weapon, TopLeft, new Vector2(124f, -10f), new Vector2(214f, 32f), "맨손", 26, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _fireMode = Label("FireMode", weapon, TopLeft, new Vector2(124f, -48f), new Vector2(80f, 28f), "", 20, UiKit.Text);
+            var badge = UiKit.Rect("Caliber", weapon, TopLeft, TopLeft, new Vector2(206f, -49f), new Vector2(120f, 26f));
+            UiKit.Frame(badge, 1f, UiKit.Steel);
+            _caliber = UiKit.Label(UiKit.Fill("Text", badge), "", 18, UiKit.Text, TextAnchor.MiddleCenter);
+            _caliberBox = badge.gameObject;
+            _caliberBox.SetActive(false);
+            _magDigits = HudDigits.Build("Mag", weapon, TopLeft, TopLeft, new Vector2(344f, -14f), 3, 32f, 64f, 54, UiKit.TextDim);
+            _magDigits.Set(-1);
+            _slash = Label("Slash", weapon, TopLeft, new Vector2(440f, -26f), new Vector2(16f, 40f), "/", 28, UiKit.TextDim, TextAnchor.MiddleCenter);
+            _slash.enabled = false;
+            _reserveDigits = HudDigits.Build("Reserve", weapon, TopLeft, TopLeft, new Vector2(458f, -26f), 3, 26f, 40f, 30, UiKit.TextDim);
+            _reserveDigits.Set(-1);
+            _areas.Add(weapon);
+
+            // Transient prompts above the stack (not part of the fixed layout).
+            float reloadY = weaponY + WeaponHeight + StackGap;
+            var reload = Panel("Reloading", root, bottom, new Vector2(0f, reloadY), new Vector2(200f, 32f));
             UiKit.Label(UiKit.Fill("Label", reload), "재장전 중", 18, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             _reload = reload.gameObject;
             _reload.SetActive(false);
 
-            var prompt = Panel("Pickup", root, bottom, new Vector2(0f, Margin + 100f), new Vector2(460f, 52f));
+            var prompt = Panel("Pickup", root, bottom, new Vector2(0f, reloadY + 32f + StackGap), new Vector2(460f, 52f));
             var promptIconRect = UiKit.Rect("Icon", prompt, MidLeft, MidLeft, new Vector2(8f, 0f), new Vector2(40f, 40f));
             _promptIcon = InventoryItemIcon.Build(promptIconRect);
             _promptIconRoot = promptIconRect.gameObject;
@@ -480,86 +509,17 @@ namespace Game.Gameplay
             _prompt.SetActive(false);
         }
 
-        void BuildWeapons(Transform root)
+        // Bottom left: the player's own status. Bottom right: the minimap over the weapon strip.
+        void BuildBottomSides(Transform root)
         {
-            var corner = new Vector2(1f, 0f);
-            var panel = Panel("Weapons", root, corner, new Vector2(-Margin, Margin), new Vector2(380f, 220f));
-            var iconRect = UiKit.Rect("WeaponIcon", panel, TopLeft, TopLeft, new Vector2(18f, -14f), new Vector2(82f, 72f));
-            _activeWeaponIcon = InventoryItemIcon.Build(iconRect);
-            _activeWeaponIconRoot = iconRect.gameObject;
-            _activeWeaponIconRoot.SetActive(false);
-            _ammoTypeLabel = Label("AmmoType", panel, TopLeft, new Vector2(114f, -12f), new Vector2(236f, 24f), "맨손", 18, UiKit.TextDim);
-            _magLabel = Label("Mag", panel, TopLeft, new Vector2(104f, -36f), new Vector2(126f, 60f), Dash, 50, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
-            _reserveLabel = Label("Reserve", panel, TopLeft, new Vector2(240f, -42f), new Vector2(120f, 60f), "", 27, UiKit.TextDim);
+            // [RESERVED] The squad member list (team mode, M5) goes in the free block directly above this card.
+            _status = HudStatus.Build(root, Vector2.zero, new Vector2(Margin, Margin));
+            _areas.Add(_status.Root);
 
-            for (int i = 0; i < 2; i++)
-            {
-                var row = UiKit.Rect("Slot" + (i + 1), panel, TopLeft, TopLeft, new Vector2(12f, -128f - 42f * i), new Vector2(356f, 38f));
-                _slotBack[i] = UiKit.Box(row, UiKit.PanelLight);
-                _slotBack[i].enabled = false;
-                _slotBar[i] = UiKit.Box(UiKit.Rect("Active", row, MidLeft, MidLeft, Vector2.zero, new Vector2(4f, 38f)), UiKit.Accent);
-                _slotBar[i].enabled = false;
-                _slotKey[i] = Label("Key", row, MidLeft, new Vector2(16f, 0f), new Vector2(24f, 38f), i == 0 ? "1" : "2", 20, UiKit.TextDim);
-                _slotName[i] = Label("Name", row, MidLeft, new Vector2(48f, 0f), new Vector2(296f, 38f), Dash, 22, UiKit.TextDim);
-            }
-        }
-
-        void BuildConsumables(Transform root)
-        {
-            var panel = Panel("Consumables", root, Vector2.zero, new Vector2(Margin, Margin), new Vector2(320f, 190f));
-            Label("MedkitName", panel, TopLeft, new Vector2(16f, -10f), new Vector2(116f, 36f), "구급상자", 20, UiKit.TextDim);
-            _medkitLabel = Label("MedkitCount", panel, TopLeft, new Vector2(138f, -10f), new Vector2(70f, 36f), "x0", 24, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Label("MedkitKey", panel, TopLeft, new Vector2(250f, -10f), new Vector2(50f, 36f), "[H]", 20, UiKit.TextDim, TextAnchor.MiddleRight);
-
-            for (int slot = 0; slot < 2; slot++)
-            {
-                float y = -58f - slot * 48f;
-                _gearLabel[slot] = Label(slot == 0 ? "Helmet" : "Vest", panel, TopLeft, new Vector2(16f, y), new Vector2(288f, 28f), slot == 0 ? "헬멧  —" : "조끼  —", 18, UiKit.TextDim);
-                var track = UiKit.Rect(slot == 0 ? "HelmetTrack" : "VestTrack", panel, TopLeft, TopLeft, new Vector2(16f, y - 29f), new Vector2(288f, 6f));
-                UiKit.Box(track, UiKit.PanelLight);
-                _gearFill[slot] = UiKit.Fill("Fill", track);
-                UiKit.Box(_gearFill[slot], new Color(0.32f, 0.72f, 0.58f, 1f));
-                _gearFill[slot].anchorMax = new Vector2(0f, 1f);
-            }
-
-            _grenadeRow = UiKit.Rect("Grenade", panel, TopLeft, TopLeft, new Vector2(16f, -154f), new Vector2(288f, 28f)).gameObject;
-            Label("Name", _grenadeRow.transform, MidLeft, Vector2.zero, new Vector2(160f, 28f), "수류탄", 18, UiKit.TextDim);
-            _grenadeLabel = Label("Count", _grenadeRow.transform, new Vector2(1f, 0.5f), Vector2.zero, new Vector2(80f, 28f), "x0", 20, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
-            _grenadeRow.SetActive(false);
-        }
-
-        void BuildAlive(Transform root)
-        {
-            var panel = Panel("Alive", root, Vector2.one, new Vector2(-Margin, -24f), new Vector2(170f, 44f));
-            Label("Name", panel, MidLeft, new Vector2(16f, 0f), new Vector2(80f, 40f), "생존", 20, UiKit.TextDim);
-            _aliveLabel = Label("Count", panel, MidRight, new Vector2(-16f, 0f), new Vector2(70f, 40f), "0", 26, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
-        }
-
-        void BuildCompass(Transform root)
-        {
-            var top = new Vector2(0.5f, 1f);
-            var strip = Panel("Compass", root, top, new Vector2(0f, -24f), new Vector2(CompassWidth, 40f));
-            var mask = strip.gameObject.AddComponent<RectMask2D>();
-            mask.softness = new Vector2Int(48, 0);
-            for (int i = 0; i < CompassSteps; i++)
-            {
-                if (i % 3 != 0)
-                {
-                    // A plain mark between the lettered directions.
-                    _compassMarks[i] = UiKit.Rect("Mark" + i * 15, strip, Centre, Centre, new Vector2(0f, 10f), new Vector2(2f, 8f));
-                    UiKit.Box(_compassMarks[i], UiKit.TextDim);
-                    continue;
-                }
-                int direction = i / 3;
-                bool cardinal = direction % 2 == 0;
-                var label = Label(Directions[direction], strip, Centre, Vector2.zero, new Vector2(60f, 32f), Directions[direction], cardinal ? 22 : 18,
-                    direction == 0 ? UiKit.Accent : cardinal ? UiKit.Text : UiKit.TextDim, TextAnchor.MiddleCenter, cardinal ? FontStyle.Bold : FontStyle.Normal);
-                _compassMarks[i] = label.rectTransform;
-            }
-            // The view direction: a notch under the strip and the heading in degrees.
-            UiKit.Box(UiKit.Rect("Notch", root, top, top, new Vector2(0f, -64f), new Vector2(2f, 8f)), UiKit.Accent);
-            var heading = Panel("Heading", root, top, new Vector2(0f, -74f), new Vector2(72f, 30f));
-            _headingLabel = UiKit.Label(UiKit.Fill("Label", heading), "000", 20, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _strip = WeaponStrip.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin));
+            _areas.Add(_strip.Root);
+            _minimap = MinimapView.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin + WeaponStrip.CellHeight + StripGap));
+            _areas.Add(_minimap.Root);
         }
 
         void BuildCrosshair(Transform root)
@@ -704,12 +664,8 @@ namespace Game.Gameplay
             if (go.activeSelf != on) go.SetActive(on);
         }
 
-        // Cached so the numbers that change most (health, ammo) never allocate after their first use.
-        static string IntText(int value)
-        {
-            if (value < 0 || value >= SmallInts.Length) return value.ToString();
-            return SmallInts[value] ?? (SmallInts[value] = value.ToString());
-        }
+        // Cached so the numbers that change most never allocate after their first use.
+        static string IntText(int value) => HudDigits.IntText(value);
 
         static string LootLabel(LootItem item)
         {

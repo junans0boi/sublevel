@@ -17,6 +17,10 @@ namespace Game.Gameplay
         public static readonly Color Health = new Color(0.86f, 0.88f, 0.90f, 1f);
         public static readonly Color Danger = new Color(0.82f, 0.22f, 0.18f, 1f);
 
+        // "Field terminal" look of the in-game HUD: thin steel lines on dark plates (ADR-057).
+        public static readonly Color Steel = new Color(0.50f, 0.58f, 0.64f, 1f);
+        public static readonly Color SteelDim = new Color(0.30f, 0.36f, 0.41f, 1f);
+
         static Font _font;
         static Sprite _white;
 
@@ -115,6 +119,47 @@ namespace Game.Gameplay
             label.verticalOverflow = VerticalWrapMode.Overflow;
             label.raycastTarget = false;
             return label;
+        }
+
+        // A thin outline just inside `parent`: top, bottom, left, right.
+        public static Image[] Frame(RectTransform parent, float thickness, Color color)
+        {
+            var lines = new Image[4];
+            lines[0] = Box(Edge("Top", parent, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, thickness)), color);
+            lines[1] = Box(Edge("Bottom", parent, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, thickness)), color);
+            lines[2] = Box(Edge("Left", parent, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(thickness, 0f)), color);
+            lines[3] = Box(Edge("Right", parent, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(thickness, 0f)), color);
+            return lines;
+        }
+
+        static RectTransform Edge(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.pivot = pivot;
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = size;
+            return rect;
+        }
+
+        // Four corner brackets (two arms each, `length` long) on `parent`; returns the eight arms.
+        public static Image[] Brackets(RectTransform parent, float length, float thickness, Color color)
+        {
+            var arms = new Image[8];
+            int n = 0;
+            for (int cy = 0; cy < 2; cy++)
+            {
+                for (int cx = 0; cx < 2; cx++)
+                {
+                    var corner = new Vector2(cx, cy);
+                    arms[n++] = Box(Rect("BracketH", parent, corner, corner, Vector2.zero, new Vector2(length, thickness)), color);
+                    arms[n++] = Box(Rect("BracketV", parent, corner, corner, Vector2.zero, new Vector2(thickness, length)), color);
+                }
+            }
+            return arms;
         }
 
         // A clickable panel with a centred label. Highlights under the pointer.
