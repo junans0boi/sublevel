@@ -25,6 +25,7 @@ namespace Game.Core
         public CrateRules Crate = new CrateRules();
         public ThrowableRules Throwables = new ThrowableRules();
         public HealRules Heal = new HealRules();
+        public BoostRules Boost = new BoostRules();
         public CarryRules Carry = new CarryRules();
         public SmokeRules Smoke = new SmokeRules();
         public BotRules Bot = new BotRules();

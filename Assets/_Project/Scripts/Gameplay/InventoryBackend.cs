@@ -149,6 +149,11 @@ namespace Game.Gameplay
                 case LootKind.Key: return KeyHolder.KeyName;
                 case LootKind.Bandage: return HealRules.BandageName;
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
+                case LootKind.Drink: return HealRules.DrinkName;
+                case LootKind.Pill: return HealRules.PillName;
+                case LootKind.Syringe: return HealRules.SyringeName;
+                case LootKind.Flash: return ThrowableRules.FlashName;
+                case LootKind.Molotov: return ThrowableRules.MolotovName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
                 case LootKind.Jerrycan: return FuelRules.JerrycanName;
                 case LootKind.Backpack: return "가방";
@@ -163,6 +168,11 @@ namespace Game.Gameplay
                 case LootKind.Key: return "key";
                 case LootKind.Bandage: return "bandage";
                 case LootKind.FirstAidKit: return "firstaid";
+                case LootKind.Drink: return "drink";
+                case LootKind.Pill: return "pill";
+                case LootKind.Syringe: return "syringe";
+                case LootKind.Flash: return "flash";
+                case LootKind.Molotov: return "molotov";
                 case LootKind.Smoke: return "smoke";
                 case LootKind.Jerrycan: return "jerrycan";
                 default: return "";
@@ -175,7 +185,7 @@ namespace Game.Gameplay
             string name = ExtraName(kind);
             if (name.Length == 0) return "아이템";
             if (kind == LootKind.Backpack) return LootNames.Of(kind, 0, AmmoType.Pistol9, loot.Tier.Value) + "\n장구류 · 용량 늘림";
-            string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke ? "투척물" : kind == LootKind.Jerrycan ? "차량 주유" : "회복";
+            string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke || kind == LootKind.Flash || kind == LootKind.Molotov ? "투척물" : kind == LootKind.Jerrycan ? "차량 주유" : "회복";
             return name + "\n" + type + " · 수량 " + loot.Amount.Value + "개";
         }
 

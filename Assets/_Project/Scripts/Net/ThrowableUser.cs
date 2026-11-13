@@ -46,6 +46,9 @@ namespace Game.Net
 
         // ---- Read-only, every side (HUD) ----
 
+        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-101/102).
+        public int ExtraTenths => 0;
+
         public ThrowableKind SelectedKind => (ThrowableKind)Selected.Value;
         public int CountOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? Smokes.Value : Grenades.Value;
         public int SelectedCount => CountOf(SelectedKind);

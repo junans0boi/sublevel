@@ -208,7 +208,7 @@ namespace Game.Gameplay
             {
                 if (InParkour) AbortParkour();
                 f.Sprint = f.Jump = f.Crouch = f.Prone = f.AimHeld = f.FireHeld = f.FirePressed = f.LeanLeft = f.LeanRight = false;
-                f.Interact = f.Reload = f.Heal = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
+                f.Interact = f.Reload = f.Heal = f.Boost = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
                 f.ThrowHeld = f.ThrowPressed = f.ThrowReleased = false;
                 f.SelectSlot = -1;
                 if (!knocked) f.Move = Vector2.zero;
@@ -276,7 +276,10 @@ namespace Game.Gameplay
             // raising the weapon drops back to a walk, so no shot ever leaves a sprint. Slow walking never sprints.
             bool firing = armed && (f.FireHeld || f.FirePressed);
             SlowWalking = f.SlowWalk && !ExternalControl;
-            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl;
+            // Healing is walk-only, and a jump ends it (ADR-099).
+            bool healing = CombatantHealing.IsUsing(_combatant);
+            if (healing && f.Jump) GetComponent<CombatantHealing>().RequestCancel();
+            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl && !healing;
 
             // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
             if (f.Jump && !ExternalControl && _stance != null && _controller.isGrounded && BodyStance != Stance.Prone && TryStartParkour())
@@ -333,7 +336,7 @@ namespace Game.Gameplay
                 float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
                     stanceRules.For(BodyStance).MoveFactor, armed ? Locomotion.CarryFactor(_combatant.ActiveWeapon, _locomotion) : 1f, _locomotion, SlowWalking);
                 // Slower while a bandage or kit is being used.
-                speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
+                speedFactor *= CombatantHealing.MoveFactorOf(_combatant) * CombatantHealing.BoostSpeedOf(_combatant);
                 if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
                 Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
                 // Coming from anything else (a seat, a ride, a vault) the body starts from standing.
@@ -367,6 +370,7 @@ namespace Game.Gameplay
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
+            if (f.Boost) GetComponent<CombatantHealing>()?.RequestBoost();
             if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
             if (f.Ping) PingAtCrosshair();
             // No shooting (or punching) while free looking: the camera is not where the weapon points (PUBG-like).

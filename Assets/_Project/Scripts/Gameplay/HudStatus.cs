@@ -89,7 +89,7 @@ namespace Game.Gameplay
     // [RESERVED] Squad member list (team mode, M5): the block above this card is left free on purpose. Not rendered.
     public sealed class HudStatus
     {
-        public const float Width = 320f, Height = 168f;
+        public const float Width = 320f, Height = 200f;
         const int Pips = 3;
 
         // After the three stances: in a vehicle (ADR-075), the driver's seat or any other seat.
@@ -97,6 +97,15 @@ namespace Game.Gameplay
         static readonly string[] StanceNames = { "서기", "앉기", "엎드림", "운전", "탑승" };
 
         public RectTransform Root { get; private set; }
+
+        // Boost gauge (ADR-099): four segments filling bottom up in steps, and how many boost items are carried.
+        readonly RectTransform[] _boostFill = new RectTransform[Boost.Steps];
+        readonly Image[] _boostImage = new Image[Boost.Steps];
+        Text _boostCount;
+        int _shownBoostKey = int.MinValue;
+        int _boostItemsShown = -1;
+        public float BoostFillShown(int step) => _boostFill[step].anchorMax.x;
+        public int BoostItemsShown => _boostItemsShown;
 
         RectTransform _glyphA, _glyphB;
         Text _stanceLabel, _protectLabel, _medkitLabel;
@@ -152,7 +161,42 @@ namespace Game.Gameplay
             s._medkitLabel = UiKit.Label(UiKit.Rect("MedkitCount", root, topLeft, topLeft, new Vector2(124f, -124f), new Vector2(70f, 30f)), "x0", 22, UiKit.TextDim,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
             UiKit.Label(UiKit.Rect("MedkitKey", root, topLeft, topLeft, new Vector2(240f, -124f), new Vector2(64f, 30f)), "[H]", 20, UiKit.TextDim, TextAnchor.MiddleRight);
+            UiKit.Label(UiKit.Rect("BoostName", root, topLeft, topLeft, new Vector2(16f, -160f), new Vector2(70f, 30f)), "부스트", 20, UiKit.TextDim);
+            for (int i = 0; i < Boost.Steps; i++)
+            {
+                var track = UiKit.Rect("Boost" + i, root, topLeft, topLeft, new Vector2(92f + i * 50f, -170f), new Vector2(46f, 10f));
+                UiKit.Box(track, UiKit.SteelDim);
+                s._boostFill[i] = UiKit.Fill("Fill", track);
+                s._boostFill[i].anchorMax = new Vector2(0f, 1f);
+                s._boostImage[i] = UiKit.Box(s._boostFill[i], UiKit.Accent);
+            }
+            s._boostCount = UiKit.Label(UiKit.Rect("BoostCount", root, topLeft, topLeft, new Vector2(296f - 56f, -160f), new Vector2(60f, 30f)), "x0 [J]", 18, UiKit.TextDim, TextAnchor.MiddleRight);
             return s;
+        }
+
+        void ShowBoost(Combatant me)
+        {
+            var heal = me.GetComponent<CombatantHealing>();
+            float gauge = heal != null ? heal.Gauge.Value : 0f;
+            int items = heal != null ? heal.Drinks.Value + heal.Pills.Value + heal.Syringes.Value : 0;
+            int key = Mathf.RoundToInt(gauge * 4f) * 100 + items;
+            if (key == _shownBoostKey) return;
+            _shownBoostKey = key;
+            var rules = BoostRules.Current;
+            float per = rules.MaxGauge / Boost.Steps;
+            int step = Boost.Step(gauge, rules);
+            for (int i = 0; i < Boost.Steps; i++)
+            {
+                _boostFill[i].anchorMax = new Vector2(Mathf.Clamp01((gauge - i * per) / per), 1f);
+                // The steps that speed the body up read stronger.
+                _boostImage[i].color = i >= 2 ? UiKit.Text : UiKit.Accent;
+            }
+            if (items != _boostItemsShown)
+            {
+                _boostItemsShown = items;
+                _boostCount.text = "x" + HudDigits.IntText(items) + " [J]";
+                _boostCount.color = items > 0 ? UiKit.Text : UiKit.TextDim;
+            }
         }
 
         public void Tick(Combatant me)
@@ -172,6 +216,7 @@ namespace Game.Gameplay
                 if (on) _protectLabel.text = doors ? "문 열림 " + HudDigits.IntText(seconds) : "보호 " + HudDigits.IntText(seconds) + "초";
             }
 
+            ShowBoost(me);
             int medkits = me.Medkits.Value;
             if (medkits != _shownMedkits)
             {

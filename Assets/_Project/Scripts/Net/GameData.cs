@@ -24,6 +24,7 @@ namespace Game.Net
             CrateRules.Current = rules.Crate;
             ThrowableRules.Current = rules.Throwables;
             HealRules.Current = rules.Heal;
+            BoostRules.Current = rules.Boost ?? new BoostRules();
             CarryRules.Current = rules.Carry;
             SmokeRules.Current = rules.Smoke;
             BotRules.Current = rules.Bot;

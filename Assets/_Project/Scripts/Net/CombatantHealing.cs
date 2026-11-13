@@ -16,6 +16,11 @@ namespace Game.Net
     {
         public readonly SyncVar<int> Bandages = new SyncVar<int>();
         public readonly SyncVar<int> FirstAids = new SyncVar<int>();
+        // Boost items (ADR-099) and the boost gauge they fill (0..BoostRules.MaxGauge, drains by itself).
+        public readonly SyncVar<int> Drinks = new SyncVar<int>();
+        public readonly SyncVar<int> Pills = new SyncVar<int>();
+        public readonly SyncVar<int> Syringes = new SyncVar<int>();
+        public readonly SyncVar<float> Gauge = new SyncVar<float>();
         // The HealKind being used; 0 = nothing.
         public readonly SyncVar<int> UsingKind = new SyncVar<int>();
         // Server clock (Time.timeAsDouble) when the use began, and how long it takes.
@@ -36,6 +41,8 @@ namespace Game.Net
 
         // Server snapshot taken when a use begins: what counts as "something happened" afterwards.
         float _baseHp;
+        // Server truth of the gauge (the SyncVar follows it in coarse steps) and the health owed to the next whole point.
+        float _gauge, _owedHeal;
         int _baseSlot, _baseMag0, _baseMag1, _baseMag2, _baseThrows;
 
         // Server counters, for tests.
@@ -59,12 +66,28 @@ namespace Game.Net
                 case HealKind.Bandage: return Bandages.Value;
                 case HealKind.FirstAid: return FirstAids.Value;
                 case HealKind.Medkit: return _combatant.Medkits.Value;
+                case HealKind.Drink: return Drinks.Value;
+                case HealKind.Pill: return Pills.Value;
+                case HealKind.Syringe: return Syringes.Value;
                 default: return 0;
             }
         }
 
         // What H would use right now (None when nothing fits).
         public HealKind BestFit => Healing.BestFit(_combatant.Hp.Value, Bandages.Value, FirstAids.Value, _combatant.Medkits.Value, HealRules.Current);
+
+        // Bag room of the carried boost items.
+        public int BoostTenths => Drinks.Value * Carry.Tenths(CarryRules.Current.Drink) + Pills.Value * Carry.Tenths(CarryRules.Current.Pill)
+            + Syringes.Value * Carry.Tenths(CarryRules.Current.Syringe);
+
+        public int BoostStep => Boost.Step(Gauge.Value, BoostRules.Current);
+        public float Gauge01 => BoostRules.Current.MaxGauge > 0f ? Mathf.Clamp01(Gauge.Value / BoostRules.Current.MaxGauge) : 0f;
+
+        public static bool IsUsing(Combatant c) => c != null && c.TryGetComponent(out CombatantHealing healing) && healing.Using;
+
+        // Speed bonus of the boost gauge's upper steps (1 when there is none).
+        public static float BoostSpeedOf(Combatant c) =>
+            c != null && c.TryGetComponent(out CombatantHealing healing) ? Boost.SpeedFactor(healing.Gauge.Value, BoostRules.Current) : 1f;
 
         // The walking-speed factor of a combatant: below 1 while it heals. PlayerController multiplies its speed by it.
         public static float MoveFactorOf(Combatant c)
@@ -106,7 +129,31 @@ namespace Game.Net
 
         void Update()
         {
-            if (IsServerInitialized && UsingKind.Value != 0) ServerTick(Time.timeAsDouble);
+            if (!IsServerInitialized) return;
+            if (UsingKind.Value != 0) ServerTick(Time.timeAsDouble);
+            ServerBoostTick(Time.deltaTime);
+        }
+
+        // The gauge drains and heals a little; health is given in whole points.
+        public void ServerBoostTick(float dt)
+        {
+            if (_gauge <= 0f) return;
+            if (_combatant.Dead.Value) { _gauge = _owedHeal = 0f; Gauge.Value = 0f; return; }
+            _owedHeal += Boost.Tick(ref _gauge, dt, BoostRules.Current);
+            if (_owedHeal >= 1f)
+            {
+                _combatant.ServerHeal(Mathf.Floor(_owedHeal));
+                _owedHeal -= Mathf.Floor(_owedHeal);
+            }
+            // The replicated value moves in coarse steps, not every frame.
+            if (_gauge <= 0f || Mathf.Abs(_gauge - Gauge.Value) >= 0.5f) Gauge.Value = _gauge;
+        }
+
+        // Test and bot hook: fills the gauge as a finished boost item would.
+        public void ServerAddGauge(float amount)
+        {
+            _gauge = Boost.Add(_gauge, amount, BoostRules.Current);
+            Gauge.Value = _gauge;
         }
 
         // Cancels the use when something got in the way, or finishes it when its time is out.
@@ -141,18 +188,25 @@ namespace Game.Net
 
         void Finish(HealKind kind)
         {
-            float amount = Healing.Amount(kind, _combatant.Hp.Value, HealRules.Current);
+            var rules = HealRules.Current;
+            float amount = Healing.Amount(kind, _combatant.Hp.Value, rules);
             bool used;
             switch (kind)
             {
                 case HealKind.Bandage: used = Bandages.Value > 0; if (used) Bandages.Value--; break;
                 case HealKind.FirstAid: used = FirstAids.Value > 0; if (used) FirstAids.Value--; break;
+                case HealKind.Drink: used = Drinks.Value > 0; if (used) Drinks.Value--; break;
+                case HealKind.Pill: used = Pills.Value > 0; if (used) Pills.Value--; break;
+                case HealKind.Syringe: used = Syringes.Value > 0; if (used) Syringes.Value--; break;
                 default: used = _combatant.ServerConsumeMedkit(); break;
             }
             UsingKind.Value = 0;
             if (!used) { ServerCancelled++; return; }
-            _combatant.ServerHeal(amount);
+            if (Healing.IsBoost(kind)) ServerAddGauge(Healing.For(kind, rules).Boost);
+            else _combatant.ServerHeal(amount);
             ServerCompleted++;
+            // A bandage goes on by itself while health is under its ceiling and there are more (ADR-099).
+            if (kind == HealKind.Bandage) ServerBegin(HealKind.Bandage);
         }
 
         // Stops the use; the item stays. Safe to call when nothing is being used.
@@ -174,7 +228,7 @@ namespace Game.Net
             var c = _combatant;
             if (c.Dead.Value || c.TeamBlocksAction || c.Reloading.Value || CountOf(kind) <= 0) return false;
             var rules = HealRules.Current;
-            if (!Healing.CanUse(kind, c.Hp.Value, rules)) return false;
+            if (Healing.IsBoost(kind) ? !Healing.CanUseBoost(kind, c.Hp.Value, _gauge, rules, BoostRules.Current) : !Healing.CanUse(kind, c.Hp.Value, rules)) return false;
             _baseHp = c.Hp.Value;
             _baseSlot = c.ActiveSlot.Value;
             _baseMag0 = c.Mag0.Value;
@@ -192,11 +246,17 @@ namespace Game.Net
         // Returns how many were taken (the bag may refuse some or all).
         public int ServerAdd(HealKind kind, int amount)
         {
-            if (!IsServerInitialized || amount <= 0 || (kind != HealKind.Bandage && kind != HealKind.FirstAid)) return 0;
-            var loot = kind == HealKind.Bandage ? HealRules.BandageLootKind : HealRules.FirstAidLootKind;
-            int taken = _carry != null ? _carry.FitCount(loot, AmmoType.Pistol9, amount) : amount;
+            if (!IsServerInitialized || amount <= 0 || kind == HealKind.None || kind == HealKind.Medkit) return 0;
+            int taken = _carry != null ? _carry.FitCount(Healing.LootOf(kind), AmmoType.Pistol9, amount) : amount;
             if (taken <= 0) return 0;
-            if (kind == HealKind.Bandage) Bandages.Value += taken; else FirstAids.Value += taken;
+            switch (kind)
+            {
+                case HealKind.Bandage: Bandages.Value += taken; break;
+                case HealKind.FirstAid: FirstAids.Value += taken; break;
+                case HealKind.Drink: Drinks.Value += taken; break;
+                case HealKind.Pill: Pills.Value += taken; break;
+                default: Syringes.Value += taken; break;
+            }
             return taken;
         }
 
@@ -206,7 +266,7 @@ namespace Game.Net
         {
             if (!IsServerInitialized || loot == null || _combatant.Dead.Value) return false;
             var kind = Healing.KindOfLoot(loot.Kind);
-            if (kind != HealKind.Bandage && kind != HealKind.FirstAid) return false;
+            if (kind == HealKind.None || kind == HealKind.Medkit) return false;
             int wanted = Mathf.Max(1, loot.Amount);
             int taken = ServerAdd(kind, wanted);
             if (taken <= 0) return false;
@@ -221,6 +281,14 @@ namespace Game.Net
         public void RequestUse()
         {
             if (IsServerInitialized) ServerUse(); else CmdUse();
+        }
+
+        // J: the smallest boost item carried.
+        public void RequestBoost()
+        {
+            var kind = Healing.BestBoost(Drinks.Value, Pills.Value, Syringes.Value);
+            if (kind == HealKind.None) return;
+            if (IsServerInitialized) ServerBegin(kind); else CmdUseKind((int)kind);
         }
 
         public void RequestCancel()
@@ -243,10 +311,17 @@ namespace Game.Net
         public void CmdDrop(int kind)
         {
             if (_combatant.Dead.Value || MatchDirector.Instance == null) return;
-            LootKind loot;
-            if (kind == (int)HealKind.Bandage && Bandages.Value > 0) { Bandages.Value--; loot = HealRules.BandageLootKind; }
-            else if (kind == (int)HealKind.FirstAid && FirstAids.Value > 0) { FirstAids.Value--; loot = HealRules.FirstAidLootKind; }
-            else return;
+            var heal = (HealKind)kind;
+            if (heal == HealKind.None || heal == HealKind.Medkit || CountOf(heal) <= 0) return;
+            switch (heal)
+            {
+                case HealKind.Bandage: Bandages.Value--; break;
+                case HealKind.FirstAid: FirstAids.Value--; break;
+                case HealKind.Drink: Drinks.Value--; break;
+                case HealKind.Pill: Pills.Value--; break;
+                default: Syringes.Value--; break;
+            }
+            var loot = Healing.LootOf(heal);
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = loot, Amount = 1 },
                 transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
         }

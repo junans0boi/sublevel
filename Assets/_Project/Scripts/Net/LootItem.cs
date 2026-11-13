@@ -98,6 +98,11 @@ namespace Game.Net
                 case LootKind.Key: return KeyHolder.KeyName;
                 case LootKind.Bandage: return HealRules.BandageName;
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
+                case LootKind.Drink: return HealRules.DrinkName;
+                case LootKind.Pill: return HealRules.PillName;
+                case LootKind.Syringe: return HealRules.SyringeName;
+                case LootKind.Flash: return ThrowableRules.FlashName;
+                case LootKind.Molotov: return ThrowableRules.MolotovName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
                 case LootKind.Jerrycan: return FuelRules.JerrycanName;
                 case LootKind.Backpack: return tier >= 1 && tier < BackpackNames.Length ? BackpackNames[tier] : BackpackNames[0];
@@ -137,7 +142,8 @@ namespace Game.Net
         // Consumables and keys that stack: the prompt adds "x2" when there is more than one.
         public static bool IsCounted(LootKind kind) =>
             kind == LootKind.Medkit || kind == LootKind.Grenade || kind == LootKind.Key ||
-            kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke || kind == LootKind.Jerrycan;
+            kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke || kind == LootKind.Jerrycan ||
+            kind == LootKind.Drink || kind == LootKind.Pill || kind == LootKind.Syringe || kind == LootKind.Flash || kind == LootKind.Molotov;
 
         // What a combatant wears in a slot, for an inventory row: "2단계  88 / 110", or "없음".
         public static string Worn(CombatantGear gear, ArmorSlot slot)

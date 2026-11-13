@@ -21,6 +21,8 @@ namespace Game.Core
         // Its own numbers (fuse, cloud) are SmokeRules.
         public const LootKind SmokeLootKind = LootKind.Smoke;
         public const string SmokeName = "연막탄";
+        public const string FlashName = "섬광탄";
+        public const string MolotovName = "화염병";
 
         public int MaxCarried = 3;
         public float FuseSeconds = 4f;          // counted from the throw; there is no cooking yet

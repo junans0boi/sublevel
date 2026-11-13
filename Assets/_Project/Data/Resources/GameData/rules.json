@@ -60,16 +60,20 @@
     "BlastDamage": 100.0, "BlastInnerRadius": 2.0, "BlastOuterRadius": 9.0, "PreviewStepSeconds": 0.06, "PreviewSeconds": 2.6
   },
   "Heal": {
-    "Bandage":  { "Seconds": 3.0, "Amount": 12.0,  "MaxHp": 75.0 },
-    "FirstAid": { "Seconds": 6.0, "Amount": 40.0,  "MaxHp": 75.0 },
+    "Bandage":  { "Seconds": 4.0, "Amount": 10.0,  "MaxHp": 75.0 },
+    "FirstAid": { "Seconds": 6.0, "Amount": 75.0,  "MaxHp": 75.0 },
     "Medkit":   { "Seconds": 8.0, "Amount": 100.0, "MaxHp": 100.0 },
+    "Drink":    { "Seconds": 4.0, "Amount": 0.0, "MaxHp": 0.0, "Boost": 40.0 },
+    "Pill":     { "Seconds": 6.0, "Amount": 0.0, "MaxHp": 0.0, "Boost": 60.0 },
+    "Syringe":  { "Seconds": 6.0, "Amount": 0.0, "MaxHp": 0.0, "Boost": 100.0 },
     "MoveFactor": 0.6
   },
+  "Boost": { "MaxGauge": 100.0, "DrainPerSecond": 0.8, "HealPerSecond": [0.25, 0.5, 0.75, 1.0], "SpeedBonus": [0.0, 0.0, 0.025, 0.05] },
   "Carry": {
     "Capacity": 60.0, "VestBonus1": 25.0, "VestBonus2": 25.0, "VestBonus3": 25.0,
     "BackpackBonus1": 75.0, "BackpackBonus2": 100.0, "BackpackBonus3": 125.0,
     "Ammo9mm": 0.2, "Ammo556": 0.3, "Ammo12ga": 0.8, "Ammo762": 0.5,
-    "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Grenade": 3.0, "Smoke": 3.0, "Jerrycan": 20.0,
+    "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Drink": 1.0, "Pill": 2.0, "Syringe": 2.0, "Flash": 2.0, "Molotov": 3.0, "Grenade": 3.0, "Smoke": 3.0, "Jerrycan": 20.0,
     "AutoPickupMeters": 1.5, "AutoPickupInterval": 0.25
   },
   "Smoke": { "MaxCarried": 3, "FuseSeconds": 2.0, "Radius": 5.0, "Seconds": 25.0, "CentreLiftMeters": 1.0, "MinChordMeters": 1.5 },

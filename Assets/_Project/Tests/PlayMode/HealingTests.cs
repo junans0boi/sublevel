@@ -72,7 +72,7 @@ namespace Game.Tests
             Assert.IsTrue(healing.Using);
             Assert.AreEqual(HealKind.Bandage, healing.Kind);
             Assert.AreEqual("붕대", healing.ItemName);
-            Assert.AreEqual(3f, healing.Seconds, 1e-3f);
+            Assert.AreEqual(4f, healing.Seconds, 1e-3f);
             Assert.AreEqual(HealRules.Current.MoveFactor, CombatantHealing.MoveFactorOf(me), 1e-4f);
             Assert.Less(CombatantHealing.MoveFactorOf(me), 1f);
 
@@ -83,10 +83,15 @@ namespace Game.Tests
             Assert.AreEqual(0.5f, healing.Progress01, 0.2f);
             Assert.IsFalse(healing.ServerBegin(HealKind.FirstAid), "one use at a time");
 
-            yield return WaitUntil(() => !healing.Using, 5f, "the bandage finished");
-            Assert.AreEqual(62f, me.Hp.Value, 1e-3f, "+12");
+            yield return WaitUntil(() => healing.ServerCompleted >= 1, 6f, "the first bandage finished");
+            Assert.AreEqual(60f, me.Hp.Value, 1e-3f, "+10");
             Assert.AreEqual(1, healing.Bandages.Value);
-            Assert.AreEqual(1, healing.ServerCompleted);
+            Assert.IsTrue(healing.Using, "the next bandage goes on by itself (ADR-099)");
+
+            yield return WaitUntil(() => !healing.Using, 6f, "the second bandage finished and nothing is left");
+            Assert.AreEqual(70f, me.Hp.Value, 1e-3f);
+            Assert.AreEqual(0, healing.Bandages.Value);
+            Assert.AreEqual(2, healing.ServerCompleted);
             Assert.AreEqual(1f, CombatantHealing.MoveFactorOf(me));
             Assert.AreEqual(0f, healing.Progress01);
         }
@@ -108,6 +113,43 @@ namespace Game.Tests
             Assert.IsFalse(healing.ServerBegin(HealKind.Bandage), "at 75 a bandage cannot help");
             Assert.IsFalse(healing.ServerUse());
             Assert.AreEqual(1, healing.Bandages.Value);
+        }
+
+        [UnityTest]
+        public IEnumerator Bandages_RepeatAndStopAt75_WithOneLeft()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var healing = Healer(me);
+            me.ServerTakeDamage(40f); // 60
+            healing.ServerAdd(HealKind.Bandage, 3);
+            Assert.IsTrue(healing.ServerUse());
+            yield return WaitUntil(() => !healing.Using, 14f, "the bandages ran out of room");
+            Assert.AreEqual(75f, me.Hp.Value, 1e-3f, "60 + 10 + 5: it stops at 75");
+            Assert.AreEqual(1, healing.Bandages.Value, "the third bandage was not used");
+        }
+
+        [UnityTest]
+        public IEnumerator ADrink_FillsTheGauge_AndHealsSlowly_AndSpeedsUpOnTheTopSteps()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var healing = Healer(me);
+            me.ServerTakeDamage(50f);
+            Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Syringe, Amount = 1 }), "ServerGive hands boost items to CombatantHealing");
+            Assert.AreEqual(1, healing.Syringes.Value);
+            Assert.IsTrue(healing.ServerBegin(HealKind.Syringe));
+            Assert.AreEqual(6f, healing.Seconds, 1e-3f);
+            Assert.AreEqual(0f, healing.Gauge.Value, "nothing before it is done");
+            yield return WaitUntil(() => !healing.Using, 9f, "the syringe finished");
+            Assert.AreEqual(0, healing.Syringes.Value);
+            Assert.Greater(healing.Gauge.Value, 90f, "the gauge is full");
+            Assert.AreEqual(4, healing.BoostStep);
+            Assert.AreEqual(1.05f, CombatantHealing.BoostSpeedOf(me), 1e-4f, "top step: +5% speed");
+            float hp0 = me.Hp.Value;
+            yield return new WaitForSeconds(5f);
+            Assert.Greater(me.Hp.Value, hp0 + 2f, "it heals a little each second, not at once");
+            Assert.Less(me.Hp.Value, hp0 + 10f);
         }
 
         [UnityTest]

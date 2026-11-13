@@ -15,11 +15,11 @@ namespace Game.Tests
         [Test]
         public void Defaults_AreTheAgreedNumbers()
         {
-            Assert.AreEqual(3f, Rules.Bandage.Seconds, 1e-4f);
-            Assert.AreEqual(12f, Rules.Bandage.Amount, 1e-4f);
+            Assert.AreEqual(4f, Rules.Bandage.Seconds, 1e-4f);
+            Assert.AreEqual(10f, Rules.Bandage.Amount, 1e-4f);
             Assert.AreEqual(75f, Rules.Bandage.MaxHp, 1e-4f);
             Assert.AreEqual(6f, Rules.FirstAid.Seconds, 1e-4f);
-            Assert.AreEqual(40f, Rules.FirstAid.Amount, 1e-4f);
+            Assert.AreEqual(75f, Rules.FirstAid.Amount, 1e-4f);
             Assert.AreEqual(75f, Rules.FirstAid.MaxHp, 1e-4f);
             Assert.AreEqual(8f, Rules.Medkit.Seconds, 1e-4f);
             Assert.AreEqual(100f, Rules.Medkit.MaxHp, 1e-4f);
@@ -31,11 +31,11 @@ namespace Game.Tests
         [Test]
         public void Amount_StopsAtTheItemsCeiling()
         {
-            Assert.AreEqual(12f, Healing.Amount(HealKind.Bandage, 50f, Rules), 1e-4f);
+            Assert.AreEqual(10f, Healing.Amount(HealKind.Bandage, 50f, Rules), 1e-4f);
             Assert.AreEqual(5f, Healing.Amount(HealKind.Bandage, 70f, Rules), 1e-4f, "only up to 75");
             Assert.AreEqual(0f, Healing.Amount(HealKind.Bandage, 75f, Rules), 1e-4f);
             Assert.AreEqual(0f, Healing.Amount(HealKind.Bandage, 90f, Rules), 1e-4f, "never takes health away");
-            Assert.AreEqual(40f, Healing.Amount(HealKind.FirstAid, 30f, Rules), 1e-4f);
+            Assert.AreEqual(45f, Healing.Amount(HealKind.FirstAid, 30f, Rules), 1e-4f, "30 -> 75");
             Assert.AreEqual(25f, Healing.Amount(HealKind.FirstAid, 50f, Rules), 1e-4f, "50 + 25 = 75");
             Assert.AreEqual(100f - 12f, Healing.Amount(HealKind.Medkit, 12f, Rules), 1e-4f, "the medkit fills up");
             Assert.AreEqual(1f, Healing.Amount(HealKind.Medkit, 99f, Rules), 1e-4f);

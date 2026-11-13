@@ -14,6 +14,7 @@ namespace Game.Gameplay
         public bool FirePressed;
         public bool Reload;
         public bool Interact;
+        public bool Boost;         // J: drink the smallest boost item carried
         public bool InteractHeld;  // F held: reviving a knocked teammate (ADR-072)
         public bool ToggleView;
         public bool AimHeld;       // right button: hold = shoulder, tap = toggle sights
@@ -71,6 +72,7 @@ namespace Game.Gameplay
                 f.Menu = k.escapeKey.wasPressedThisFrame;
                 f.Inventory = k.tabKey.wasPressedThisFrame;
                 f.Heal = k.hKey.wasPressedThisFrame;
+                f.Boost = k.jKey.wasPressedThisFrame;
                 f.Restart = k.enterKey.wasPressedThisFrame;
                 f.Crouch = k.cKey.wasPressedThisFrame;
                 f.Prone = k.zKey.wasPressedThisFrame;

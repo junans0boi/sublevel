@@ -37,6 +37,11 @@ namespace Game.Gameplay
                 case LootKind.Bandage: BuildBandage(d); break;
                 case LootKind.FirstAidKit: BuildFirstAid(d); break;
                 case LootKind.Smoke: BuildSmoke(d); break;
+                case LootKind.Flash: BuildFlash(d); break;
+                case LootKind.Molotov: BuildMolotov(d); break;
+                case LootKind.Drink: BuildDrink(d); break;
+                case LootKind.Pill: BuildPill(d); break;
+                case LootKind.Syringe: BuildSyringe(d); break;
                 case LootKind.Jerrycan: BuildJerrycan(d); break;
                 case LootKind.Backpack: BuildBackpack(d, Mathf.Clamp(tier, 1, 3)); break;
                 default: return null;
@@ -67,6 +72,11 @@ namespace Game.Gameplay
                 case LootKind.Vest: into[Body] = LootView.ArmorColor(kind, tier); into[Accent] = new Color(0.96f, 0.82f, 0.38f); break;
                 case LootKind.Grenade: into[Body] = new Color(0.30f, 0.37f, 0.19f); into[Accent] = new Color(0.70f, 0.72f, 0.75f); break;
                 case LootKind.Smoke: into[Body] = new Color(0.50f, 0.53f, 0.56f); into[Accent] = new Color(0.88f, 0.62f, 0.18f); break;
+                case LootKind.Flash: into[Body] = new Color(0.78f, 0.80f, 0.84f); into[Accent] = new Color(0.96f, 0.84f, 0.25f); break;
+                case LootKind.Molotov: into[Body] = new Color(0.22f, 0.40f, 0.24f); into[Accent] = new Color(0.82f, 0.74f, 0.55f); break;
+                case LootKind.Drink: into[Body] = new Color(0.14f, 0.58f, 0.62f); into[Accent] = new Color(0.95f, 0.80f, 0.20f); break;
+                case LootKind.Pill: into[Body] = new Color(0.86f, 0.52f, 0.14f); into[Accent] = White; break;
+                case LootKind.Syringe: into[Body] = new Color(0.78f, 0.18f, 0.20f); into[Accent] = new Color(0.82f, 0.88f, 0.90f); break;
                 case LootKind.Key: into[Body] = Brass; into[Accent] = new Color(0.78f, 0.22f, 0.20f); break;
                 case LootKind.Jerrycan: into[Body] = new Color(0.62f, 0.16f, 0.10f); into[Accent] = new Color(0.70f, 0.72f, 0.75f); break;
                 case LootKind.Backpack: into[Body] = BackpackColors[Mathf.Clamp(tier, 1, 3) - 1]; into[Accent] = new Color(0.96f, 0.82f, 0.38f); break;
@@ -183,6 +193,65 @@ namespace Game.Gameplay
             d.Tube(new Vector3(-0.025f, r, 0f), new Vector3(0.0f, r, 0f), r + 0.002f, Accent, 14);
             d.Box(new Vector3(0.02f, r * 2f + 0.003f, 0f), new Vector3(0.08f, 0.006f, 0.016f), Dark); // lever
             Ring(d, new Vector3(0.085f, r, 0.028f), 0.014f, 0.003f, Dark);
+        }
+
+        // A flash grenade on its side: a pale steel can, a yellow band, a dark cap with the lever and a pull ring.
+        static void BuildFlash(MeleeMeshes.Draft d)
+        {
+            const float r = 0.036f;
+            d.Tube(new Vector3(-0.06f, r, 0f), new Vector3(0.05f, r, 0f), r, Body, 14);
+            d.Tube(new Vector3(0.05f, r, 0f), new Vector3(0.072f, r, 0f), r * 0.8f, Dark, 12);
+            d.Tube(new Vector3(-0.045f, r, 0f), new Vector3(-0.02f, r, 0f), r + 0.002f, Accent, 14);
+            d.Tube(new Vector3(-0.012f, r, 0f), new Vector3(0.012f, r, 0f), r + 0.002f, Accent, 14);
+            d.Box(new Vector3(0.015f, r * 2f + 0.003f, 0f), new Vector3(0.085f, 0.006f, 0.016f), Dark); // lever
+            Ring(d, new Vector3(0.082f, r, 0.026f), 0.014f, 0.003f, Dark);
+        }
+
+        // A fire bottle on its side: a green glass bottle with a long neck and a pale rag stuffed into the mouth.
+        static void BuildMolotov(MeleeMeshes.Draft d)
+        {
+            const float r = 0.04f;
+            d.Tube(new Vector3(-0.08f, r, 0f), new Vector3(0.03f, r, 0f), r, Body, 14);
+            d.Tube(new Vector3(0.03f, r, 0f), new Vector3(0.1f, r * 0.55f, 0f), r * 0.5f, Body, 12);
+            d.Tube(new Vector3(0.1f, r * 0.55f, 0f), new Vector3(0.14f, r * 0.55f, 0f), r * 0.32f, Body, 10);
+            d.Tube(new Vector3(0.135f, r * 0.55f, 0f), new Vector3(0.17f, r * 0.55f, 0.01f), 0.014f, Accent, 8); // rag in the mouth
+            d.Tube(new Vector3(0.165f, r * 0.55f, 0.01f), new Vector3(0.2f, 0.012f, 0.04f), 0.01f, Accent, 8);   // loose end
+            d.Tube(new Vector3(-0.04f, r, 0f), new Vector3(0.0f, r, 0f), r + 0.002f, Accent, 14);                  // label
+        }
+
+        // A drink can on its side: a body, a rim at each end, a band and the pull tab on the top end.
+        static void BuildDrink(MeleeMeshes.Draft d)
+        {
+            const float r = 0.04f, half = 0.085f;
+            d.Tube(new Vector3(-half, r, 0f), new Vector3(half, r, 0f), r, Body, 14);
+            d.Tube(new Vector3(-half - 0.012f, r, 0f), new Vector3(-half, r, 0f), r * 0.86f, Dark, 12);
+            d.Tube(new Vector3(half, r, 0f), new Vector3(half + 0.012f, r, 0f), r * 0.86f, Dark, 12);
+            d.Tube(new Vector3(-0.03f, r, 0f), new Vector3(0.03f, r, 0f), r + 0.002f, Accent, 14); // band
+            d.Box(new Vector3(half + 0.012f, r + r * 0.86f, 0f), new Vector3(0.022f, 0.004f, 0.016f), Accent); // tab
+        }
+
+        // A pill bottle on its side: an amber body, a dark cap, a pale label round it and two pills in front.
+        static void BuildPill(MeleeMeshes.Draft d)
+        {
+            const float r = 0.032f;
+            d.Tube(new Vector3(-0.055f, r, 0f), new Vector3(0.045f, r, 0f), r, Body, 14);
+            d.Tube(new Vector3(0.045f, r, 0f), new Vector3(0.075f, r, 0f), r + 0.003f, Dark, 14);
+            d.Tube(new Vector3(-0.035f, r, 0f), new Vector3(0.02f, r, 0f), r + 0.002f, Accent, 14);
+            d.Tube(new Vector3(-0.02f, 0.008f, 0.07f), new Vector3(0.004f, 0.008f, 0.07f), 0.008f, Accent, 8);
+            d.Tube(new Vector3(0.02f, 0.008f, 0.088f), new Vector3(0.044f, 0.008f, 0.092f), 0.008f, Accent, 8);
+        }
+
+        // An auto-injector on its side: a clear barrel with a coloured fill, a plunger with a thumb rest, a needle guard.
+        static void BuildSyringe(MeleeMeshes.Draft d)
+        {
+            const float r = 0.02f;
+            d.Tube(new Vector3(-0.07f, r, 0f), new Vector3(0.07f, r, 0f), r, Accent, 12);
+            d.Tube(new Vector3(-0.045f, r, 0f), new Vector3(0.05f, r, 0f), r * 0.7f, Body, 10); // fluid
+            d.Tube(new Vector3(-0.12f, r, 0f), new Vector3(-0.07f, r, 0f), 0.005f, Dark, 8); // plunger rod
+            d.Box(new Vector3(-0.125f, r, 0f), new Vector3(0.008f, 0.022f, 0.05f), Dark); // thumb rest
+            d.Box(new Vector3(-0.07f, r, 0f), new Vector3(0.008f, 0.012f, 0.06f), Dark); // finger flange
+            d.Tube(new Vector3(0.07f, r, 0f), new Vector3(0.1f, r, 0f), r * 0.55f, Dark, 8); // hub
+            d.Tube(new Vector3(0.1f, r, 0f), new Vector3(0.15f, r, 0f), 0.003f, Accent, 6); // needle
         }
 
         // A key lying flat: a ring bow, the shaft with two teeth, and a red tag through the bow.

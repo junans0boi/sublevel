@@ -582,6 +582,7 @@ public static partial class ItemIconBuilder
             DrawIcon("vest_" + t, p => DrawVest(p, t));
         }
         DrawBackpacks(); // ItemIconBuilder.Backpack.cs (ADR-091)
+        DrawItems(); // ItemIconBuilder.Items.cs (ADR-099)
     }
 
     static void DrawIcon(string key, Action<Painter> draw)
