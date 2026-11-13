@@ -58,6 +58,14 @@ namespace Game.Gameplay
         public Vector3 FingerTip(int side) => _tipShown[side];
         public Vector3 TorsoUpShown { get; private set; }
 
+        // Where the posed head's eyes are (the seated eye view on a motorcycle follows the rider's forward lean).
+        public bool HeadEye(out Vector3 eye)
+        {
+            eye = _head != null ? _head.position + transform.up * HeadEyeUp + transform.forward * HeadEyeForward : transform.position;
+            return _head != null && _seated > 0.99f;
+        }
+        const float HeadEyeUp = 0.08f, HeadEyeForward = 0.1f;
+
         Vector3 PalmNow(int side) =>
             _wrist[side] != null && _fingers[side] != null && _fingers[side][3] != null
                 ? Vector3.Lerp(_wrist[side].position, _fingers[side][3].position, PalmShare) : transform.position;

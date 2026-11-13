@@ -43,8 +43,11 @@ namespace Game.Gameplay
                 yield break;
             }
             yield return null; // not WaitForEndOfFrame: it can stall in a batch mode editor, and Camera.Render needs no frame end
-            LateUpdate(); // the coroutine resumes before LateUpdate: place the outside camera now
             var pc = PlayerController.Local;
+            // The coroutine resumes before LateUpdate: the vehicle camera (seated views) and then the outside camera
+            // are placed now, or the shot shows where PlayerController's Update left the camera.
+            if (pc != null && pc.TryGetComponent<VehicleCamera>(out var vehicleCamera)) vehicleCamera.Place();
+            LateUpdate();
             var cam = pc != null && pc.Camera != null ? pc.Camera : Camera.main;
             if (cam == null) yield break;
             const int w = 1280, h = 720;

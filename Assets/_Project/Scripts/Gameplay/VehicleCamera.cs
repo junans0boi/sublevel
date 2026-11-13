@@ -18,7 +18,7 @@ namespace Game.Gameplay
         const float MotorcycleMinPivot = 1.5f; // over the rider's head, not just the bike
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
-        const float MotorcycleEyeBack = 0.2f;
+        const float RoofClearance = 0.3f;
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -26,6 +26,8 @@ namespace Game.Gameplay
         PlayerController _player;
         Combatant _combatant;
         VehicleInput _input;
+        CombatantAnimation _animation;
+        Bounds _local;
         float _distance = 6.5f;
         Vehicle _aimingPast;
         Vehicle _framed;
@@ -41,11 +43,15 @@ namespace Game.Gameplay
             _player = GetComponent<PlayerController>();
             _combatant = GetComponent<Combatant>();
             _input = GetComponent<VehicleInput>();
+            _animation = GetComponent<CombatantAnimation>();
         }
 
         void OnDisable() => SetAimIgnore(null);
 
-        void LateUpdate()
+        void LateUpdate() => Place();
+
+        // Also called by the capture tool, whose shots are taken before LateUpdate.
+        public void Place()
         {
             Active = false;
             if (_player == null || PlayerController.Local != _player || _combatant == null) return;
@@ -61,9 +67,10 @@ namespace Game.Gameplay
             CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
             if (eyes)
             {
-                // On a motorcycle the eye is right over the bars: the view sits a little back (view only, the shot
-                // origin stays at the eye) so the bars and gauges are in the lower frame.
-                var eye = _combatant.EyePosition - (vehicle.IsMotorcycle ? vehicle.transform.forward * MotorcycleEyeBack : Vector3.zero);
+                // On a motorcycle the rider leans forward over the bars: the view goes with the posed head (view only,
+                // the shot origin stays at the seat's eye), else the camera sits behind the leaning back.
+                var eye = _combatant.EyePosition;
+                if (vehicle.IsMotorcycle && _animation != null && _animation.HeadEye(out var head)) eye = head;
                 cam.transform.SetPositionAndRotation(eye, look);
                 _distance = 0f;
                 return;
@@ -74,7 +81,11 @@ namespace Game.Gameplay
             float wanted = ClearDistance(vehicle, pivot, back, _orbit);
             // Pulled in at once when something is in the way, eased back out.
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
-            cam.transform.SetPositionAndRotation(pivot + back * _distance, look);
+            // Pulled in close (a wall behind), the camera would end up inside the body: over the roof instead.
+            var at = vehicle.transform.InverseTransformPoint(pivot + back * _distance);
+            if (Mathf.Abs(at.x - _local.center.x) < _local.extents.x && Mathf.Abs(at.z - _local.center.z) < _local.extents.z && at.y < _local.max.y + RoofClearance)
+                at.y = _local.max.y + RoofClearance;
+            cam.transform.SetPositionAndRotation(vehicle.transform.TransformPoint(at), look);
         }
 
         // The model's bounds in the vehicle's own space (renderers only: the occupants are not children).
@@ -96,6 +107,7 @@ namespace Game.Gameplay
                 }
             }
             if (!any) local = new Bounds(Vector3.up * 0.7f, new Vector3(1.8f, 1.4f, 4.5f));
+            _local = local;
             Orbit(local, vehicle.IsMotorcycle, out float height, out _orbit);
             _pivotLocal = new Vector3(local.center.x, height, local.center.z);
         }
