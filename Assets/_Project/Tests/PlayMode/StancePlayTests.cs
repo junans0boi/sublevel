@@ -175,6 +175,66 @@ namespace Game.Tests
             Assert.IsTrue(pc.Sprinting);
         }
 
+        // #105 (PUBG): C mid-sprint crouch-walks on with Shift still held, C again stands and runs; the inventory
+        // keeps the held keys going while the pause menu stops the body.
+        [UnityTest]
+        public IEnumerator CrouchWhileSprinting_KeepsMoving_AndTheInventoryKeepsTheMovementKeys()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var pc = PlayerController.Local;
+            var stance = StanceOf(me);
+            yield return new WaitForSeconds(0.3f);
+            // Running east along the spawn area, south of its sight blocker.
+            pc.Teleport(new Vector3(-10f, 0.1f, -20f));
+            pc.LookAt(new Vector3(20f, 1.6f, -20f));
+            yield return new WaitForSeconds(0.2f);
+
+            _input.Frame.Sprint = true;
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsTrue(pc.Sprinting);
+            _input.Frame.Crouch = true;
+            yield return null;
+            yield return null;
+            float x0 = pc.transform.position.x, t0 = Time.time;
+            yield return new WaitForSeconds(0.4f);
+            Assert.AreEqual(Stance.Crouch, stance.Current, "C with Shift held crouches and stays down");
+            Assert.IsFalse(pc.Sprinting);
+            Assert.Greater((pc.transform.position.x - x0) / (Time.time - t0), 2f, "and keeps crouch-walking");
+
+            _input.Frame.Crouch = true;
+            yield return null;
+            yield return null;
+            x0 = pc.transform.position.x; t0 = Time.time;
+            yield return new WaitForSeconds(0.3f);
+            Assert.AreEqual(Stance.Stand, stance.Current, "C again stands up on the move");
+            Assert.IsTrue(pc.Sprinting);
+            Assert.Greater((pc.transform.position.x - x0) / (Time.time - t0), 4f, "running again");
+
+            _input.Frame.Sprint = false;
+            float yaw = pc.Yaw;
+            UiFocus.Set(UiScreen.Inventory);
+            _input.Frame.Look = new Vector2(5f, 0f);
+            _input.Frame.FireHeld = true;
+            _input.Frame.Crouch = true;
+            yield return null;
+            _input.Frame.Look = Vector2.zero;
+            _input.Frame.FireHeld = false;
+            x0 = pc.transform.position.x; t0 = Time.time;
+            yield return new WaitForSeconds(0.3f);
+            Assert.Greater((pc.transform.position.x - x0) / (Time.time - t0), 2f, "W keeps walking over the inventory");
+            Assert.AreEqual(Stance.Crouch, stance.Current, "C crouches over the inventory");
+            Assert.AreEqual(yaw, pc.Yaw, 1e-3f, "the mouse does not turn the view");
+
+            UiFocus.Set(UiScreen.Menu);
+            yield return null;
+            x0 = pc.transform.position.x;
+            yield return new WaitForSeconds(0.3f);
+            Assert.AreEqual(x0, pc.transform.position.x, 0.05f, "the pause menu holds the body still");
+            UiFocus.Close();
+        }
+
         [UnityTest]
         public IEnumerator Crouched_PassesA1_2mGap_AndCannotStandUpUnderIt()
         {

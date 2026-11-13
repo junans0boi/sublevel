@@ -61,6 +61,7 @@ namespace Game.Gameplay
         const float MaxViewPitch = 89f;
 
         bool _autoRun;
+        bool _sprintOverruled; // C or Z pressed during this sprint: it no longer gets the body up
         float _lastMoveY;
         bool _sentSlowWalk;
         float _slowWalkSentAt;
@@ -154,13 +155,13 @@ namespace Game.Gameplay
         {
             if (!_owner) return;
             var f = _input.Read();
-            // Screens that take over the mouse (pause menu, inventory): the keys that open and close them still
-            // work, everything else is ignored so the character stands still and does not shoot.
+            // Screens that take over the mouse: the keys that open and close them still work; over the inventory and
+            // the map the movement keys keep working too, everything else is ignored (no look, aim or fire).
             if (f.Menu) UiFocus.Toggle(UiScreen.Menu);
             else if (f.Inventory && !_combatant.Dead.Value && !ResultScreen.BlocksGameplay) UiFocus.Toggle(UiScreen.Inventory);
             else if (f.Map && UiFocus.MapAvailable && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Map);
-            if (UiFocus.Current != UiScreen.None || (ResultScreen.BlocksGameplay && !_combatant.Dead.Value))
-                f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
+            f = UiFocus.GameplayInput(UiFocus.Current, f);
+            if (ResultScreen.BlocksGameplay && !_combatant.Dead.Value) f = new PlayerInputFrame { SelectSlot = -1 };
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
             if (SpawnProtection.InputBlocked || ElevatorPanel.Riding)
                 f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook, Ping = f.Ping };
@@ -233,7 +234,7 @@ namespace Game.Gameplay
             if (f.AutoRun) _autoRun = !_autoRun;
             bool freshForwardBack = Mathf.Abs(f.Move.y) > 0.1f && Mathf.Abs(_lastMoveY) <= 0.1f;
             _lastMoveY = f.Move.y;
-            if (freshForwardBack || aim != AimMode.Hip || UiFocus.Current != UiScreen.None || SpawnProtection.InputBlocked
+            if (freshForwardBack || aim != AimMode.Hip || UiFocus.Current == UiScreen.Menu || SpawnProtection.InputBlocked
                 || ExternalControl || ResultScreen.BlocksGameplay) _autoRun = false;
             if (_autoRun) f.Move.y = 1f;
 
@@ -270,14 +271,17 @@ namespace Game.Gameplay
                 return;
             }
 
-            // C toggles the crouch and Z lying down; jumping or sprinting gets up instead. Rising (lying to crouching,
-            // anything to standing) needs room overhead for the taller capsule.
+            // C toggles the crouch and Z lying down; jumping or sprinting gets up instead, but not the sprint that was
+            // held when C or Z took the body down (#105: C mid-run crouch-walks on until Shift or W is pressed again).
+            // Rising (lying to crouching, anything to standing) needs room overhead for the taller capsule.
             bool wasStanding = BodyStance == Stance.Stand;
             var stanceRules = StanceRules.Current;
+            if (!sprint) _sprintOverruled = false;
+            else if (f.Crouch || f.Prone) _sprintOverruled = true;
             if (_stance == null) BodyStance = Stance.Stand;
             else if (!ExternalControl)
             {
-                var next = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint, true, stanceRules);
+                var next = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint && !_sprintOverruled, true, stanceRules);
                 if (Stances.Rises(BodyStance, next, stanceRules) && !_stance.CanReach(stanceRules.For(next).CapsuleHeight)) next = BodyStance;
                 BodyStance = next;
             }

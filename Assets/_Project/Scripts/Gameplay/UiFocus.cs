@@ -18,6 +18,22 @@ namespace Game.Gameplay
 
         public static void Close() => Set(UiScreen.None);
 
+        // What gameplay still gets of a frame while `screen` is open (#105, PUBG): over the inventory and the map
+        // the held movement keys keep the body going (walk, sprint, slow walk, crouch, prone) while the mouse only
+        // drives the screen; the pause menu holds the player still.
+        public static PlayerInputFrame GameplayInput(UiScreen screen, PlayerInputFrame f)
+        {
+            if (screen == UiScreen.None) return f;
+            var kept = new PlayerInputFrame { SelectSlot = -1 };
+            if (screen == UiScreen.Menu) return kept;
+            kept.Move = f.Move;
+            kept.Sprint = f.Sprint;
+            kept.SlowWalk = f.SlowWalk;
+            kept.Crouch = f.Crouch;
+            kept.Prone = f.Prone;
+            return kept;
+        }
+
         public static void Set(UiScreen screen)
         {
             if (Current == screen) return;
