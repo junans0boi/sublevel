@@ -520,6 +520,34 @@ public static partial class ItemIconBuilder
         p.Fill(puff, new Color(0.86f, 0.88f, 0.90f), 1f);
     }
 
+    // A generic jerrycan (ADR-075): a tall rust-red can seen from the side, three carry handles on top, a capped spout
+    // on the front corner and a pressed cross on the side panel. No markings.
+    static void DrawJerrycan(Painter p)
+    {
+        var paint = new Color(0.62f, 0.17f, 0.11f);
+        float body = RRect(p.X, p.Y, 126f, 104f, 70f, 82f, 12f);
+        p.Fill(body, paint, Shade(p.X - 126f, 70f));
+        if (body < -6f)
+        {
+            // Pressed cross: two diagonal ridges inside an inset panel.
+            float panel = RRect(p.X, p.Y, 126f, 100f, 54f, 64f, 8f);
+            if (Mathf.Abs(panel) < 2f) p.Fill(true, new Color(paint.r * 0.7f, paint.g * 0.7f, paint.b * 0.7f, 1f));
+            float dx = p.X - 126f, dy = p.Y - 100f;
+            if (panel < -3f && (Mathf.Abs(dx * 0.76f - dy * 0.65f) < 3f || Mathf.Abs(dx * 0.76f + dy * 0.65f) < 3f))
+                p.Fill(true, new Color(paint.r * 1.2f, paint.g * 1.2f, paint.b * 1.2f, 1f));
+        }
+        // three handles along the top: bars with holes
+        for (int i = 0; i < 3; i++)
+        {
+            float cx = 92f + i * 34f;
+            float handle = Mathf.Max(RRect(p.X, p.Y, cx, 198f, 13f, 12f, 5f), -RRect(p.X, p.Y, cx, 198f, 6f, 5f, 2f));
+            p.Fill(handle, paint * 0.85f, 1f);
+        }
+        // spout with a steel cap on the front top corner
+        p.Fill(RRect(p.X, p.Y, 196f, 184f, 12f, 16f, 4f), paint * 0.8f, 1f);
+        p.Fill(RRect(p.X, p.Y, 202f, 204f, 13f, 8f, 3f), Steel, 1f);
+    }
+
     // The lockdown key: a brass key card-ring and bit, lying across the icon.
     static void DrawKey(Painter p)
     {
@@ -546,6 +574,7 @@ public static partial class ItemIconBuilder
         DrawIcon("firstaid", DrawFirstAid);
         DrawIcon("smoke", DrawSmoke);
         DrawIcon("key", DrawKey);
+        DrawIcon("jerrycan", DrawJerrycan);
         for (int tier = 1; tier <= 3; tier++)
         {
             int t = tier;

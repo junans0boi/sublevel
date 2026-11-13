@@ -67,7 +67,7 @@
   "Carry": {
     "Capacity": 60.0, "VestBonus1": 10.0, "VestBonus2": 20.0, "VestBonus3": 30.0,
     "Ammo9mm": 0.2, "Ammo556": 0.3, "Ammo12ga": 0.8, "Ammo762": 0.5,
-    "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Grenade": 3.0, "Smoke": 3.0,
+    "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Grenade": 3.0, "Smoke": 3.0, "Jerrycan": 20.0,
     "AutoPickupMeters": 1.5, "AutoPickupInterval": 0.25
   },
   "Smoke": { "MaxCarried": 3, "FuseSeconds": 2.0, "Radius": 5.0, "Seconds": 25.0, "CentreLiftMeters": 1.0, "MinChordMeters": 1.5 },
@@ -130,5 +130,11 @@
     "KnockedHp": 100.0, "BleedPerSecond": 2.5, "BleedGrowthPerKnock": 0.5, "KnockedMoveFactor": 1.0, "KnockedDamageFactor": 1.0,
     "ReviveSeconds": 10.0, "ReviveRangeMeters": 2.0, "ReviveKeepMeters": 2.75, "ReviveHp": 10.0,
     "BotFollowMeters": 14.0, "BotRegroupMeters": 35.0, "BotReviveSearchMeters": 45.0, "BotReviveCalmSeconds": 2.0
+  },
+  "Fuel": {
+    "IdlePerSecond": 0.000667, "ThrottlePerSecond": 0.003333, "BoostFactor": 2.0, "MotorcycleFactor": 0.7,
+    "SpawnMin": 0.35, "SpawnMax": 0.9, "LowShare": 0.15,
+    "JerrycanSeconds": 5.0, "JerrycanAmount": 0.6, "RefuelRangeMeters": 1.6, "RefuelKeepMeters": 2.5, "RefuelMaxKmh": 10.0, "FullShare": 0.995,
+    "HornHearingRadius": 60.0, "HornNoiseInterval": 1.0
   }
 }

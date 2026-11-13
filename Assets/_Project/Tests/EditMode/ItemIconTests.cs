@@ -23,6 +23,7 @@ namespace Game.Tests
             "grenade",
             "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_15x",
             "bandage", "firstaid", "smoke", "key",
+            "jerrycan",
         };
 
         static Type IconsType()

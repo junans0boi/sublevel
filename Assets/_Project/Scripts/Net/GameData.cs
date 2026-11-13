@@ -33,6 +33,7 @@ namespace Game.Net
             VehicleRules.Current = rules.Vehicles;
             VehicleRules.Motorcycle = rules.Motorcycles;
             TeamRules.Current = rules.Team ?? new TeamRules();
+            FuelRules.Current = rules.Fuel ?? new FuelRules();
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

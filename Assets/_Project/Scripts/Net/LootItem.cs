@@ -98,6 +98,7 @@ namespace Game.Net
                 case LootKind.Bandage: return HealRules.BandageName;
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
+                case LootKind.Jerrycan: return FuelRules.JerrycanName;
                 default: return "물건";
             }
         }
@@ -134,7 +135,7 @@ namespace Game.Net
         // Consumables and keys that stack: the prompt adds "x2" when there is more than one.
         public static bool IsCounted(LootKind kind) =>
             kind == LootKind.Medkit || kind == LootKind.Grenade || kind == LootKind.Key ||
-            kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke;
+            kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke || kind == LootKind.Jerrycan;
 
         // What a combatant wears in a slot, for an inventory row: "2단계  88 / 110", or "없음".
         public static string Worn(CombatantGear gear, ArmorSlot slot)

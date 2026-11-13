@@ -343,6 +343,7 @@ public static class TestBoxBuilder
         // Lockdown keys, timed healing and the bag limit (with automatic ammo pickup).
         go.AddComponent<KeyHolder>();
         go.AddComponent<CombatantHealing>();
+        go.AddComponent<CombatantJerrycan>(); // ADR-075: jerrycans (before the bag, which counts them)
         go.AddComponent<CombatantCarry>();
         // [VEHICLE HOOK] ADR-065 (5): vehicle keys and camera for the local player.
         go.AddComponent<VehicleInput>();

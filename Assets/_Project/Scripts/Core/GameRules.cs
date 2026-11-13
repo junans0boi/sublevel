@@ -32,5 +32,6 @@ namespace Game.Core
         public VehicleRules Vehicles = new VehicleRules();
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
         public TeamRules Team = new TeamRules();
+        public FuelRules Fuel = new FuelRules();
     }
 }

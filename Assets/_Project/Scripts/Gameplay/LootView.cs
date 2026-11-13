@@ -24,6 +24,9 @@ namespace Game.Gameplay
         static readonly Vector3 HelmetShape = new Vector3(0.8f, 0.8f, 0.8f);
         static readonly Vector3 VestShape = new Vector3(1f, 1.3f, 0.55f);
         static readonly Vector3 OpticShape = new Vector3(0.45f, 0.45f, 1.1f);
+        // Jerrycan (ADR-075): an upright red-brown can until it gets its own model.
+        static readonly Vector3 JerrycanShape = new Vector3(0.45f, 1.25f, 0.9f);
+        static readonly Color JerrycanColor = new Color(0.62f, 0.16f, 0.10f);
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int ColorId = Shader.PropertyToID("_Color");
         // The optic model's longest side on the floor (metres), within these enlargement limits.
@@ -77,8 +80,9 @@ namespace Game.Gameplay
             if (kind == _shownKind && weapon == _shownWeapon && tier == _shownTier && optic == _shownOptic) return;
             bool armor = Armor.IsArmor((LootKind)kind);
             bool opticKind = kind == (int)LootKind.Optic;
+            bool can = kind == (int)LootKind.Jerrycan;
             // Kinds this prefab has no material for keep whatever was shown, except armour and optics, which are tinted.
-            if (_renderer == null || kind < 0 || (!armor && !opticKind && kind >= _materialsByKind.Length)) return;
+            if (_renderer == null || kind < 0 || (!armor && !opticKind && !can && kind >= _materialsByKind.Length)) return;
             _shownKind = kind;
             _shownWeapon = weapon;
             _shownTier = tier;
@@ -86,14 +90,14 @@ namespace Game.Gameplay
 
             if (kind < _materialsByKind.Length) _renderer.sharedMaterial = _materialsByKind[kind];
             else if (_materialsByKind.Length > 0) _renderer.sharedMaterial = _materialsByKind[0];
-            if (armor || opticKind)
+            if (armor || opticKind || can)
             {
                 _tint ??= new MaterialPropertyBlock();
-                var color = armor ? ArmorColor((LootKind)kind, tier) : OpticColor(optic);
+                var color = can ? JerrycanColor : armor ? ArmorColor((LootKind)kind, tier) : OpticColor(optic);
                 _tint.SetColor(BaseColorId, color);
                 _tint.SetColor(ColorId, color);
                 _renderer.SetPropertyBlock(_tint);
-                _renderer.transform.localScale = Vector3.Scale(_boxScale, opticKind ? OpticShape : kind == (int)LootKind.Helmet ? HelmetShape : VestShape);
+                _renderer.transform.localScale = Vector3.Scale(_boxScale, can ? JerrycanShape : opticKind ? OpticShape : kind == (int)LootKind.Helmet ? HelmetShape : VestShape);
             }
             else
             {

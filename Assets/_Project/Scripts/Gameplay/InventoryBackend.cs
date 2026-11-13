@@ -15,6 +15,7 @@ namespace Game.Gameplay
         Bandage,
         FirstAid,
         Smoke,
+        Jerrycan, // ADR-075
         Weapon,
         Helmet,
         Vest,
@@ -65,7 +66,8 @@ namespace Game.Gameplay
         public const int BandageRow = 6;
         public const int FirstAidRow = 7;
         public const int SmokeRow = 8;
-        public const int BackpackRows = 9;
+        public const int JerrycanRow = 9;
+        public const int BackpackRows = 10;
         public const int HelmetSlot = 0;
         public const int VestSlot = 1;
 
@@ -90,6 +92,12 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             return user != null ? user.Smokes.Value : 0;
+        }
+
+        public static int Jerrycans(Combatant combatant)
+        {
+            var cans = combatant != null ? combatant.GetComponent<CombatantJerrycan>() : null;
+            return cans != null ? cans.Count.Value : 0;
         }
 
         public static int Bandages(Combatant combatant)
@@ -141,6 +149,7 @@ namespace Game.Gameplay
                 case LootKind.Bandage: return HealRules.BandageName;
                 case LootKind.FirstAidKit: return HealRules.FirstAidName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
+                case LootKind.Jerrycan: return FuelRules.JerrycanName;
                 default: return "";
             }
         }
@@ -153,6 +162,7 @@ namespace Game.Gameplay
                 case LootKind.Bandage: return "bandage";
                 case LootKind.FirstAidKit: return "firstaid";
                 case LootKind.Smoke: return "smoke";
+                case LootKind.Jerrycan: return "jerrycan";
                 default: return "";
             }
         }
@@ -162,7 +172,7 @@ namespace Game.Gameplay
             var kind = (LootKind)loot.Kind.Value;
             string name = ExtraName(kind);
             if (name.Length == 0) return "아이템";
-            string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke ? "투척물" : "회복";
+            string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke ? "투척물" : kind == LootKind.Jerrycan ? "차량 주유" : "회복";
             return name + "\n" + type + " · 수량 " + loot.Amount.Value + "개";
         }
 
@@ -257,6 +267,8 @@ namespace Game.Gameplay
                     return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 더블클릭 사용";
                 case InventorySourceKind.Smoke:
                     return ThrowableRules.SmokeName + "\n보유 " + Smokes(combatant) + "개";
+                case InventorySourceKind.Jerrycan:
+                    return FuelRules.JerrycanName + "\n보유 " + Jerrycans(combatant) + "개 · 차량 옆에서 J 또는 더블클릭 주유";
                 case InventorySourceKind.Weapon:
                     int weaponId = WeaponId(combatant, source.Index);
                     var weapon = GameData.Weapons.Find(weaponId);
@@ -424,6 +436,19 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             if (user != null) user.CmdDropSmoke();
+        }
+
+        public static void DropJerrycan(Combatant combatant)
+        {
+            var cans = combatant != null ? combatant.GetComponent<CombatantJerrycan>() : null;
+            if (cans != null) cans.CmdDrop();
+        }
+
+        // Starts pouring a jerrycan into the vehicle next to the player (or stops a pour).
+        public static void UseJerrycan(Combatant combatant)
+        {
+            var cans = combatant != null ? combatant.GetComponent<CombatantJerrycan>() : null;
+            if (cans != null) cans.RequestToggle();
         }
 
         // One bandage or first-aid kit onto the ground (HealKind as int).

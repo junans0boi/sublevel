@@ -18,6 +18,7 @@ namespace Game.Net
         CombatantGear _gear;
         CombatantHealing _healing;
         ThrowableUser _throwables;
+        CombatantJerrycan _jerrycans;
         float _nextScan;
         int _slotAmmoA, _slotAmmoB, _slotAmmoC;
         // Ammo that just left the bag (dropped, or loaded into a weapon) is not picked up again while standing
@@ -41,6 +42,7 @@ namespace Game.Net
             _gear = GetComponent<CombatantGear>();
             _healing = GetComponent<CombatantHealing>();
             _throwables = GetComponent<ThrowableUser>();
+            _jerrycans = GetComponent<CombatantJerrycan>();
         }
 
         public override void OnStartClient()
@@ -64,7 +66,8 @@ namespace Game.Net
         public int UsedTenths => Carry.UsedTenths(CarryRules.Current,
             _combatant.ReservePistol9.Value, _combatant.ReserveRifle556.Value, _combatant.ReserveShotgun12.Value, _combatant.ReserveRifle762.Value,
             _healing != null ? _healing.Bandages.Value : 0, _healing != null ? _healing.FirstAids.Value : 0, _combatant.Medkits.Value,
-            _throwables != null ? _throwables.Grenades.Value : 0, _throwables != null ? _throwables.Smokes.Value : 0);
+            _throwables != null ? _throwables.Grenades.Value : 0, _throwables != null ? _throwables.Smokes.Value : 0)
+            + (_jerrycans != null ? _jerrycans.Count.Value * Carry.Tenths(CarryRules.Current.Jerrycan) : 0); // ADR-075
 
         // The bag's size: the base plus what the worn vest adds (a broken vest adds nothing).
         public int CapacityTenths => Carry.CapacityTenths(CarryRules.Current, _gear != null ? _gear.VestTier.Value : 0);

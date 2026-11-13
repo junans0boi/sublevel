@@ -18,7 +18,7 @@ namespace Game.Gameplay
         const float GroundWidth = 340f, BagWidth = 360f, GearWidth = 360f, WeaponWidth = 560f;
         const float Pad = 14f, HeaderHeight = 54f;
         const float GroundRowHeight = 54f, GroundRowGap = 6f;
-        const float BagRowHeight = 68f, BagRowGap = 8f;
+        const float BagRowHeight = 62f, BagRowGap = 6f; // ten rows with the jerrycan (ADR-075)
         const float GearCardHeight = 220f, WeaponCardHeight = 142f, WeaponCardGap = 8f;
 
         static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.62f);
@@ -248,6 +248,8 @@ namespace Game.Gameplay
             _packDrags[InventoryBackend.FirstAidRow].Configure(this, FirstAidSource());
             ShowPackRow(InventoryBackend.SmokeRow, InventoryBackend.Smokes(me));
             _packDrags[InventoryBackend.SmokeRow].Configure(this, SmokeSource());
+            ShowPackRow(InventoryBackend.JerrycanRow, InventoryBackend.Jerrycans(me));
+            _packDrags[InventoryBackend.JerrycanRow].Configure(this, JerrycanSource());
 
             // The bag's load against its size; red when over (the server then refuses what does not fit).
             string carry = InventoryBackend.CarryLabel(me);
@@ -265,6 +267,7 @@ namespace Game.Gameplay
                 int hash = InventoryBackend.Bandages(me);
                 hash = hash * 31 + InventoryBackend.FirstAids(me);
                 hash = hash * 31 + InventoryBackend.Smokes(me);
+                hash = hash * 31 + InventoryBackend.Jerrycans(me);
                 hash = hash * 31 + InventoryBackend.Keys(me);
                 hash = hash * 31 + InventoryBackend.CarryHash(me);
                 return hash;
@@ -367,6 +370,7 @@ namespace Game.Gameplay
         public InventoryDragSource BandageSource() => new InventoryDragSource(InventorySourceKind.Bandage, null, 0);
         public InventoryDragSource FirstAidSource() => new InventoryDragSource(InventorySourceKind.FirstAid, null, 0);
         public InventoryDragSource SmokeSource() => new InventoryDragSource(InventorySourceKind.Smoke, null, 0);
+        public InventoryDragSource JerrycanSource() => new InventoryDragSource(InventorySourceKind.Jerrycan, null, 0);
         public InventoryDragSource WeaponSource(int slot) => slot >= 0 && slot < Loadout.SlotCount
             ? new InventoryDragSource(InventorySourceKind.Weapon, null, slot) : default;
         public InventoryDragSource GearSource(int slot) => slot == InventoryBackend.HelmetSlot
@@ -413,6 +417,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Bandage: InventoryBackend.DropHealing(me, HealKind.Bandage); return true;
                 case InventorySourceKind.FirstAid: InventoryBackend.DropHealing(me, HealKind.FirstAid); return true;
                 case InventorySourceKind.Smoke: InventoryBackend.DropSmoke(me); return true;
+                case InventorySourceKind.Jerrycan: InventoryBackend.DropJerrycan(me); return true;
                 default: return false;
             }
         }
@@ -425,6 +430,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Bandage: count = InventoryBackend.Bandages(me); return true;
                 case InventorySourceKind.FirstAid: count = InventoryBackend.FirstAids(me); return true;
                 case InventorySourceKind.Smoke: count = InventoryBackend.Smokes(me); return true;
+                case InventorySourceKind.Jerrycan: count = InventoryBackend.Jerrycans(me); return true;
                 default: count = 0; return false;
             }
         }
@@ -495,6 +501,7 @@ namespace Game.Gameplay
             else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
             else if (source.Kind == InventorySourceKind.Bandage && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.Bandage);
             else if (source.Kind == InventorySourceKind.FirstAid && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.FirstAid);
+            else if (source.Kind == InventorySourceKind.Jerrycan && clickCount >= 2) InventoryBackend.UseJerrycan(me);
             else if (source.Kind == InventorySourceKind.Weapon && InventoryBackend.WeaponId(me, source.Index) != 0)
                 InventoryBackend.SelectSlot(me, source.Index);
         }
@@ -644,6 +651,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Bandage: key = "bandage"; name = HealRules.BandageName; break;
                 case InventorySourceKind.FirstAid: key = "firstaid"; name = HealRules.FirstAidName; break;
                 case InventorySourceKind.Smoke: key = "smoke"; name = ThrowableRules.SmokeName; break;
+                case InventorySourceKind.Jerrycan: key = "jerrycan"; name = FuelRules.JerrycanName; break;
             }
         }
 
@@ -763,6 +771,7 @@ namespace Game.Gameplay
                 else if (i == InventoryBackend.BandageRow) { name = HealRules.BandageName; key = "bandage"; }
                 else if (i == InventoryBackend.FirstAidRow) { name = HealRules.FirstAidName; key = "firstaid"; }
                 else if (i == InventoryBackend.SmokeRow) { name = ThrowableRules.SmokeName; key = "smoke"; }
+                else if (i == InventoryBackend.JerrycanRow) { name = FuelRules.JerrycanName; key = "jerrycan"; }
                 else { name = "수류탄"; key = "grenade"; }
                 _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 50f, 50f));
                 _packIcons[i].Set(key, name);

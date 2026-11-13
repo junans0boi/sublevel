@@ -27,6 +27,7 @@ namespace Game.Core
         public float Medkit = 6f;
         public float Grenade = 3f;
         public float Smoke = 3f;
+        public float Jerrycan = 20f; // ADR-075
 
         // Ammo on the ground this close is picked up by walking over it (when it fits and a weapon uses it).
         public float AutoPickupMeters = 1.5f;
@@ -69,6 +70,7 @@ namespace Game.Core
             if (kind == ThrowableRules.SmokeLootKind) return Tenths(rules.Smoke);
             if (kind == HealRules.BandageLootKind) return Tenths(rules.Bandage);
             if (kind == HealRules.FirstAidLootKind) return Tenths(rules.FirstAid);
+            if (kind == FuelRules.JerrycanLootKind) return Tenths(rules.Jerrycan);
             return 0;
         }
 
