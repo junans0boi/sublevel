@@ -47,6 +47,13 @@ namespace Game.Gameplay
         public Transform EyeCamera => _atEye != 0 ? _eyeCamera : null;
         // The model shown for a weapon id, or null.
         public GameObject ModelFor(int weaponId) => weaponId > 0 && weaponId < _modelsByWeaponId.Length ? _modelsByWeaponId[weaponId] : null;
+        // How the model of a weapon id was fitted when the prefab was built (AttachmentVisual places parts by it).
+        public bool TryFit(int weaponId, out Fit fit)
+        {
+            bool ok = weaponId > 0 && weaponId < _fitByWeaponId.Length;
+            fit = ok ? _fitByWeaponId[weaponId] : default;
+            return ok;
+        }
         // True while the weapon at the eye (and the optic on it) is not drawn because a magnified scope fills the view.
         public bool HiddenForScope => _hiddenModel != 0;
 
