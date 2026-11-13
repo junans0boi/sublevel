@@ -24,6 +24,7 @@ namespace Game.Gameplay
         VehicleInput _input;
         float _distance = Distance;
         Vehicle _aimingPast;
+        Light _cabin;
 
         // True while this frame's camera was placed by the car camera.
         public bool Active { get; private set; }
@@ -44,12 +45,13 @@ namespace Game.Gameplay
             var vehicle = VehicleSeat.VehicleOf(_combatant);
             SetAimIgnore(vehicle);
             var cam = _player.Camera;
-            if (vehicle == null || cam == null) return;
+            if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = false; return; }
             Active = true;
 
             float yaw = _player.ViewYaw, pitch = _player.ViewPitch;
             var look = Quaternion.Euler(-pitch, yaw, 0f);
             bool eyes = (_input != null ? _input.EyeView : _player.Rig.Mode == ViewMode.FirstPerson) || _combatant.AimMode == AimMode.Sights;
+            CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
             if (eyes)
             {
                 cam.transform.SetPositionAndRotation(_combatant.EyePosition, look);
@@ -64,6 +66,24 @@ namespace Game.Gameplay
             // Pulled in at once when something is in the way, eased back out.
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
             cam.transform.SetPositionAndRotation(pivot + back * _distance, look);
+        }
+
+        // The cabin is dark under the roof in first person (the sun and the sky do not reach in): one soft fill light
+        // follows the seated eye, off in third person and on a motorcycle. No shadows, so it costs next to nothing.
+        void CabinLight(Vehicle vehicle, bool on)
+        {
+            if (_cabin == null)
+            {
+                if (!on) return;
+                _cabin = new GameObject("CabinLight").AddComponent<Light>();
+                _cabin.type = LightType.Point;
+                _cabin.shadows = LightShadows.None;
+                _cabin.range = 3.2f;
+                _cabin.intensity = 1.6f;
+                _cabin.color = new Color(1f, 0.96f, 0.9f);
+            }
+            _cabin.enabled = on;
+            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * 0.15f, Quaternion.identity);
         }
 
         // How far back from the pivot the camera can go without passing into anything but the car and its occupants.

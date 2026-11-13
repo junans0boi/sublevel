@@ -91,8 +91,10 @@ namespace Game.Gameplay
             if (props != null) yield return PropShots(props.transform);
             var all = Vehicle.All.Where(v => v != null).OrderBy(v => v.name).ToList();
             var home = me.transform.position;
+            string only = Environment.GetEnvironmentVariable("VEH_ONLY"); // comma list of names (re-shoots)
             foreach (var v in all)
             {
+                if (!string.IsNullOrEmpty(only) && !only.Split(',').Contains(Clean(v.name))) continue;
                 // The World's vehicles are spread over the map: only the nearest of each model.
                 if (props != null && all.Any(o => o != v && o.name == v.name && (o.transform.position - home).sqrMagnitude < (v.transform.position - home).sqrMagnitude)) continue;
                 yield return OneVehicle(v, Clean(v.name));
@@ -102,6 +104,16 @@ namespace Game.Gameplay
             VehicleShotsDone = true;
         }
 
+        // How far the lowest point of the vehicle's renderers is above the ground below it (ground = first hit from just above that point).
+        static void LogGap(Vehicle v, string tag, string when)
+        {
+            var rs = v.GetComponentsInChildren<Renderer>();
+            float low = float.MaxValue; Vector3 at = v.transform.position;
+            foreach (var r in rs) if (r.bounds.min.y < low) { low = r.bounds.min.y; at = r.bounds.center; }
+            string ground = Physics.Raycast(new Vector3(at.x, low + 0.05f, at.z), Vector3.down, out var gh, 3f, ~0, QueryTriggerInteraction.Ignore) ? $"{gh.point.y:F3}" : "none";
+            Debug.Log($"[FeelCapture] veh {tag} ({when}): lowest renderer y {low:F3}, ground y {ground}, body y {v.transform.position.y:F3}, wheels grounded {v.WheelCount}");
+        }
+
         static string Clean(string name) => name.Replace("(Clone)", "").Trim();
 
         IEnumerator OneVehicle(Vehicle v, string tag)
@@ -109,6 +121,11 @@ namespace Game.Gameplay
             var pc = PlayerController.Local;
             var me = Combatant.LocalPlayer;
             Debug.Log("[FeelCapture] veh " + tag + " begin");
+            // The others stand in the way of the outside views: hidden for this vehicle's shots (shadows too).
+            var hidden = new List<Renderer>();
+            foreach (var o in Vehicle.All)
+                if (o != null && o != v) foreach (var r in o.GetComponentsInChildren<Renderer>()) if (r.enabled) { r.enabled = false; hidden.Add(r); }
+            LogGap(v, tag, "start");
             var bounds = new Bounds(v.transform.position, Vector3.zero);
             foreach (var r in v.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(r.bounds);
             float halfLength = Mathf.Max(1f, bounds.extents.z, bounds.extents.x);
@@ -133,9 +150,17 @@ namespace Game.Gameplay
             pc.Teleport(v.DoorPosition(0) + Vector3.up * 0.05f);
             yield return null;
             yield return null;
-            _vehicleFrame.Interact = true;
-            float until = Time.realtimeSinceStartup + 3f;
-            while (!VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
+            float until;
+            // Loot lying beside the door takes the F key (the pickup comes first): out of the way for the shot.
+            if (pc.NearbyLoot != null) { Debug.Log("[FeelCapture] veh " + tag + ": hiding loot at the door " + pc.NearbyLoot.name); pc.NearbyLoot.gameObject.SetActive(false); }
+            // F may pick up loot lying beside it first: ask again until seated.
+            for (int tries = 0; tries < 4 && !VehicleSeat.IsAttached(me); tries++)
+            {
+                _vehicleFrame.Interact = true;
+                float wait = Time.realtimeSinceStartup + 1.2f;
+                while (!VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < wait) yield return null;
+                if (!VehicleSeat.IsAttached(me)) Debug.Log($"[FeelCapture] veh {tag}: enter try {tries} failed, nearest {Vehicle.NearestEnterable(me.transform.position, 3f, out float nd)?.name} {nd:F2} m, door {v.DoorPosition(0)}, me {me.transform.position}");
+            }
             yield return new WaitForSeconds(v.Rules.EnterSeconds + 0.5f);
             Debug.Log($"[FeelCapture] veh {tag}: seated {VehicleSeat.SeatedAmount(me):F2}, seat eye {v.Seat(0).transform.localPosition}, wheel r {v.Rules.WheelRadius:F3}, mass {v.Rules.MassKg}, up {v.transform.up}");
             pc.LookAt(v.transform.position + v.transform.forward * 30f + Vector3.up * 1f);
@@ -162,6 +187,14 @@ namespace Game.Gameplay
             pc.LookAt(me.EyePosition + v.transform.forward * 10f - Vector3.up * 2.5f);
             yield return new WaitForSeconds(0.3f);
             yield return VShot(tag + "_06_driver_fpp");
+            if (bike)
+            {
+                // Looking down at the bars and the hands.
+                pc.LookAt(me.EyePosition + v.transform.forward * 3f - Vector3.up * 2.2f);
+                yield return new WaitForSeconds(0.3f);
+                yield return VShot(tag + "_06b_fpp_down");
+                pc.LookAt(me.EyePosition + v.transform.forward * 10f - Vector3.up * 2.5f);
+            }
             pc.LookAt(me.EyePosition - v.transform.right * 10f + v.transform.forward * 3f);
             yield return new WaitForSeconds(0.3f);
             yield return VShot(tag + "_07_fpp_left");
@@ -176,6 +209,7 @@ namespace Game.Gameplay
             _watch = Watch.Vehicle;
             _fixFrom = new Vector3(-halfLength * 0.9f, height * 0.6f, halfLength * 1.9f);
             _fixAt = new Vector3(0f, height * 0.3f, halfLength * 0.4f);
+            LogGap(v, tag, "steering");
             yield return VShot(tag + "_09_steer_wheels");
             _fixFrom = new Vector3(-(bike ? 2.2f : 2.6f), eye.y - 0.1f, eye.z + 0.4f);
             _fixAt = new Vector3(eye.x * 0.5f, eye.y - 0.45f, eye.z + 0.25f);
@@ -223,6 +257,7 @@ namespace Game.Gameplay
             until = Time.realtimeSinceStartup + 3f;
             while (VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
             yield return new WaitForSeconds(0.4f);
+            foreach (var r in hidden) if (r != null) r.enabled = true;
         }
 
         // Parked and wrecked cars: the first few from a standing height, a few metres off.
