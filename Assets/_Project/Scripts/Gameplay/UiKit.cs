@@ -134,5 +134,85 @@ namespace Game.Gameplay
             Label(Fill("Label", rect, 8f), text, size, Text, TextAnchor.MiddleCenter);
             return button;
         }
+
+        // ---- Menu layout parts (shared by the main menu, the pause menu and the settings panel) ----
+
+        public const float MenuPadding = 28f;
+        public const float MenuButtonHeight = 56f;
+        public const float MenuButtonGap = 12f;
+
+        // A centred column panel; the caller sets its height once the content is laid out.
+        public static RectTransform CenteredPanel(string name, Transform parent, float width)
+        {
+            var panel = Rect(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(width, 100f));
+            Box(panel, Panel, true);
+            return panel;
+        }
+
+        // A row hung from the top of a panel, `y` reference pixels down, `x` from its centre.
+        public static RectTransform HangRow(string name, Transform panel, float width, float height, float y, float x = 0f) =>
+            Rect(name, panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(x, -y), new Vector2(width, height));
+
+        // A full-width menu button; returns the y below it.
+        public static float MenuButton(Transform panel, string text, float panelWidth, float y, UnityEngine.Events.UnityAction onClick)
+        {
+            Button(HangRow(text, panel, panelWidth - MenuPadding * 2f, MenuButtonHeight, y), text, 24, onClick);
+            return y + MenuButtonHeight + MenuButtonGap;
+        }
+
+        // Caption on the left, current value on the right, slider underneath.
+        public static Slider SliderRow(Transform panel, string caption, float width, ref float y, float min, float max, float value, out Text valueLabel)
+        {
+            var header = HangRow(caption, panel, width, 26f, y);
+            Label(Fill("Caption", header), caption, 18, TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            valueLabel = Label(Fill("Value", header), "", 18, Text, TextAnchor.MiddleRight);
+            y += 30f;
+            var slider = BuildSlider(HangRow(caption + " Slider", panel, width, 22f, y), min, max, value);
+            y += 22f + 24f;
+            return slider;
+        }
+
+        // A plain uGUI slider from kit boxes: track, accent fill and a block handle.
+        public static Slider BuildSlider(RectTransform rect, float min, float max, float value)
+        {
+            const float handleWidth = 14f;
+            var track = Fill("Track", rect);
+            track.offsetMin = new Vector2(0f, 6f);
+            track.offsetMax = new Vector2(0f, -6f);
+            Box(track, PanelLight, true);
+
+            var fillArea = Fill("Fill Area", rect);
+            fillArea.offsetMin = new Vector2(0f, 6f);
+            fillArea.offsetMax = new Vector2(0f, -6f);
+            var fill = Fill("Fill", fillArea);
+            Box(fill, Accent);
+
+            var handleArea = Fill("Handle Area", rect);
+            handleArea.offsetMin = new Vector2(handleWidth * 0.5f, 0f);
+            handleArea.offsetMax = new Vector2(-handleWidth * 0.5f, 0f);
+            var handle = Fill("Handle", handleArea);
+            handle.sizeDelta = new Vector2(handleWidth, 0f);
+            var handleImage = Box(handle, Text, true);
+
+            var slider = rect.gameObject.AddComponent<Slider>();
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.navigation = new Navigation { mode = Navigation.Mode.None };
+            slider.targetGraphic = handleImage;
+            slider.fillRect = fill;
+            slider.handleRect = handle;
+            slider.wholeNumbers = false;
+            slider.minValue = min;
+            slider.maxValue = max;
+            slider.SetValueWithoutNotify(value);
+            return slider;
+        }
+
+        public static readonly Color Selected = new Color(0.55f, 0.36f, 0.08f, 0.95f);
+
+        // Marks a button made by Button() as the chosen option of a group.
+        public static void SetSelected(Button button, bool selected)
+        {
+            if (button != null && button.targetGraphic != null) button.targetGraphic.color = selected ? Selected : PanelLight;
+        }
     }
 }
