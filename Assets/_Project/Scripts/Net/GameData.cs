@@ -28,6 +28,7 @@ namespace Game.Net
             SmokeRules.Current = rules.Smoke;
             BotRules.Current = rules.Bot;
             MeleeRules.Current = rules.Melee;
+            MatchRules.Current = rules.Match ?? new MatchRules();
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }

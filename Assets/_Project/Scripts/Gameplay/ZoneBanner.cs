@@ -25,6 +25,12 @@ namespace Game.Gameplay
         [SerializeField] AudioClip _incomingClip;
 
         public static ZoneBanner Instance { get; private set; }
+        // A spectator camera (-autoplay, #77): with the local player out, the status card and the radiation fog
+        // follow this point instead. Null = nothing while the player is out.
+        public static Vector3? SpectatorFeet;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetSpectator() => SpectatorFeet = null;
 
         ZoneDirector _director;
         AudioSource _audio;
@@ -175,13 +181,14 @@ namespace Game.Gameplay
         {
             var me = Combatant.LocalPlayer;
             var state = ZoneState.Safe;
-            if (me == null || me.Dead.Value)
+            bool alive = me != null && !me.Dead.Value;
+            if (!alive && SpectatorFeet == null)
             {
                 ZoneStatus.Current = default;
             }
             else
             {
-                var feet = me.transform.position;
+                var feet = alive ? me.transform.position : SpectatorFeet.Value;
                 int region = _director.RegionIndexAt(feet);
                 if (region < 0)
                 {

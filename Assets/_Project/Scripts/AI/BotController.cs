@@ -31,6 +31,25 @@ namespace Game.AI
         const float CoverSeconds = 1.5f;
         const float ActionRetrySeconds = 0.5f;
         const int CoverDirections = 8;
+        // Long walks (#77): a far target is reached by stepping along NavMesh.CalculatePath corners, one waypoint
+        // WaypointAheadMeters ahead at a time, planned again every RouteRepathSeconds (a path across the island may
+        // come back partial; the bot then walks to its end and plans again from there).
+        const float RouteLongMeters = 30f;
+        const float WaypointAheadMeters = 40f;
+        const float RouteRepathSeconds = 3f;
+        const float RouteTargetMoveMeters = 8f;
+        const float WaypointReachedMeters = 3f;
+        const float FarSnapMeters = 15f;
+        // No headway (moved less than StallMeters) for StallSeconds while not shooting, healing or reloading: the bot
+        // drops what it was after and picks something else; the reason is counted in BotStats.
+        const float StallSeconds = 6f;
+        const float StallMeters = 2f;
+        const float IgnoreSeconds = 10f;
+        const float EscapeOnwardMeters = 6f;
+        const int KeysWanted = 1;
+
+        // What the lockdown asks of a bot right now (#77), in priority order.
+        public enum ZoneGoal { None, Escape, SafeSubZone, ToFinalRegion, Hunt }
 
         public static readonly List<BotController> All = new List<BotController>();
 
@@ -72,12 +91,29 @@ namespace Game.AI
         float _nextTrigger;
         float _nextAction;
 
+        NavMeshPath _route;
+        readonly Vector3[] _corners = new Vector3[64];
+        bool _routing;
+        float _routeRetryAt;
+        ZoneGoal _goal;
+        int _goalPass = -1;
+        bool _escapeOnward;
+        int _skipPass = -1;
+        float _skipPassUntil;
+        int _ignoredEnemyId = -1;
+        float _ignoreEnemyUntil;
+        Vector3 _stallFrom;
+        float _stallAt;
+        float _lastAttackAt = -100f;
+
         // "봇 N", in spawn order within a match.
         public string DisplayName { get; private set; } = "";
         public BotState State => _intent.State;
         public BotIntent Intent => _intent;
         public Combatant Target => _percept.EnemyVisible ? _enemy : null;
         public bool OnNavMesh => _agent != null && _agent.enabled && _agent.isOnNavMesh;
+        // What the lockdown made this bot do on its last update (None when it followed its own brain).
+        public ZoneGoal Goal => _goal;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -143,7 +179,15 @@ namespace Game.AI
             _stance = GetComponent<CombatantStance>();
         }
 
-        void OnEnable() => All.Add(this);
+        void OnEnable()
+        {
+            All.Add(this);
+            // Held behind a shut elevator door (disabled) is not being stuck.
+            _stallFrom = transform.position;
+            _stallAt = Time.time;
+            _progressFrom = transform.position;
+            _progressAt = Time.time;
+        }
 
         void OnDisable()
         {
@@ -174,6 +218,7 @@ namespace Game.AI
             _percept.Heard = false;
             _percept.Stuck = false;
             Act(now);
+            WatchStall(now);
         }
 
         void Init()
@@ -185,7 +230,8 @@ namespace Game.AI
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
-            _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points };
+            _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
+            _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
             _maxHp = Mathf.Max(1f, _self.Hp.Value);
             _named++;
@@ -216,6 +262,8 @@ namespace Game.AI
                 var c = all[i];
                 if (c == null || c == _self || c.Dead.Value) continue;
                 if (c.IsPlayer && !rules.TargetsPlayers) continue;
+                // One it could neither reach nor hit for a while (a stall) is left alone for a moment.
+                if (c.ObjectId == _ignoredEnemyId && Time.time < _ignoreEnemyUntil) continue;
                 var chest = ChestOf(c);
                 var to = chest - eye;
                 float sqr = to.sqrMagnitude;
@@ -323,7 +371,11 @@ namespace Game.AI
                     usesAmmo = _self.CarriesWeaponFor(ammo);
                     reserve = _self.ReserveFor(ammo);
                 }
-                if (!BotBrain.WantsLoot(kind, emptySlot, usesAmmo, reserve, medkits, rules)) continue;
+                // A key (ADR-058 (7)) gets it through a locked pass; one is enough.
+                bool wanted = kind == LootKind.Key
+                    ? _keys != null && _keys.Keys.Value < KeysWanted
+                    : BotBrain.WantsLoot(kind, emptySlot, usesAmmo, reserve, medkits, rules);
+                if (!wanted) continue;
                 var at = item.transform.position;
                 float sqr = (at - feet).sqrMagnitude;
                 bool better = unarmed && isWeapon && !bestIsWeapon ? sqr <= rules.LootRadius * rules.LootRadius : sqr < bestSqr;
@@ -467,16 +519,30 @@ namespace Game.AI
         void Move(in BotIntent intent, float now)
         {
             if (!OnNavMesh) return;
-            // A region in lockdown (or announced): get out through the pass that stays open longest, whatever the
-            // brain wanted. The server's director knows the plan; there is none in scenes without a lockdown.
+            var at = transform.position;
+            // The lockdown first (#77): out of a region that is closing, out of a closing sub-zone of the final
+            // region, into the final region once it is named, and at the very end toward the others. Urgent goals
+            // take over the legs whatever the brain wants (it still aims and shoots); the others only when the brain
+            // is just wandering or looking into something.
+            _goal = CurrentZoneGoal(at, out var goalTarget, out bool urgent, out _goalPass);
+            if (_goal != ZoneGoal.Escape) _escapeOnward = false;
             var zones = ZoneDirector.Instance;
-            Vector3 escape = default;
-            bool escaping = zones != null && zones.TryEscapeTarget(transform.position, out escape);
-            // At a shut barrier with a key: open it (ServerUseKey refuses when the pass is out of reach).
-            if (escaping && _keys != null && _keys.Keys.Value > 0
-                && zones.TryNearestExit(transform.position, out int exitPass, out _, out _) && zones.IsPassBlocking(exitPass))
-                _keys.ServerUseKey(exitPass);
-            if (!intent.Move && !escaping)
+            // The very end with nothing to shoot with: running away would never end the match. Fists out, go at it.
+            if (_percept.EnemyVisible && _enemy != null && !CanFight && zones != null && zones.OnlyFinalRegionLeft)
+            {
+                if (_self.ActiveWeaponId != 0) _self.ServerSetHolstered(true);
+                _goal = ZoneGoal.Hunt;
+                goalTarget = _enemy.transform.position;
+                urgent = true;
+            }
+            // At a shut barrier with a key: open it (it stays open for everyone for a while).
+            if (_goal == ZoneGoal.Escape && _goalPass >= 0 && _keys != null && _keys.Keys.Value > 0 && zones.IsPassBlocking(_goalPass)
+                && zones.PassDistance(_goalPass, at) <= zones.Rules.PassInteractRange)
+                _keys.ServerUseKey(_goalPass);
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || intent.State == BotState.Roam || intent.State == BotState.Investigate);
+            if (!zoneMove) _goal = ZoneGoal.None;
+
+            if (!intent.Move && !zoneMove)
             {
                 if (!_agent.isStopped)
                 {
@@ -484,13 +550,14 @@ namespace Game.AI
                     _agent.velocity = Vector3.zero;
                 }
                 _hasDestination = false;
+                _routing = false;
                 _progressFrom = transform.position;
                 _progressAt = now;
                 return;
             }
 
-            var target = escaping ? escape : ToVector(intent.MoveTarget);
-            if (intent.SeekCover && !escaping)
+            var target = zoneMove ? goalTarget : ToVector(intent.MoveTarget);
+            if (intent.SeekCover && !zoneMove)
             {
                 var threat = ToVector(intent.Threat);
                 if (now >= _coverUntil)
@@ -502,13 +569,19 @@ namespace Game.AI
             }
 
             var locomotion = GameData.Rules.Locomotion;
-            float speed = (intent.Sprint || escaping) && !intent.Crouch ? locomotion.SprintSpeed : locomotion.WalkSpeed;
+            float speed = (intent.Sprint || zoneMove) && !intent.Crouch ? locomotion.SprintSpeed : locomotion.WalkSpeed;
             if (_stance != null) speed *= _stance.MoveFactor;
             _agent.speed = speed;
 
-            if (!_hasDestination || now >= _nextRepath || (target - _destination).sqrMagnitude > RepathMoveMeters * RepathMoveMeters)
+            bool far = Flat(target - at) > RouteLongMeters;
+            float moveLimit = far ? RouteTargetMoveMeters : RepathMoveMeters;
+            // Stepping along a long route: the waypoint is (nearly) reached, plan the next one now.
+            bool waypointDone = _routing && !_agent.pathPending && _agent.remainingDistance <= WaypointReachedMeters;
+            // No route last time: a long search is not run again every frame.
+            if (far && !_hasDestination && now < _routeRetryAt) return;
+            if (!_hasDestination || now >= _nextRepath || waypointDone || (target - _destination).sqrMagnitude > moveLimit * moveLimit)
             {
-                _nextRepath = now + RepathSeconds;
+                _nextRepath = now + (far ? RouteRepathSeconds : RepathSeconds);
                 if (!_hasDestination)
                 {
                     _progressFrom = transform.position;
@@ -516,7 +589,24 @@ namespace Game.AI
                 }
                 _hasDestination = true;
                 _destination = target;
-                if (!NavMesh.SamplePosition(target, out var hit, DestinationSnapMeters, NavMesh.AllAreas) || !_agent.SetDestination(hit.position))
+                _routing = false;
+                if (!SnapToNavMesh(target, far, out var onMesh))
+                {
+                    GiveUp(intent, now);
+                    return;
+                }
+                var next = onMesh;
+                if (far)
+                {
+                    if (!NextWaypoint(onMesh, out next))
+                    {
+                        _routeRetryAt = now + RouteRepathSeconds;
+                        GiveUp(intent, now);
+                        return;
+                    }
+                    _routing = true;
+                }
+                if (!_agent.SetDestination(next))
                 {
                     GiveUp(intent, now);
                     return;
@@ -533,7 +623,10 @@ namespace Game.AI
             if (now - _progressAt >= ProgressSeconds)
             {
                 bool arrived = !_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance + 0.5f;
-                if (!arrived && (transform.position - _progressFrom).sqrMagnitude < ProgressMeters * ProgressMeters) GiveUp(intent, now);
+                bool moved = (transform.position - _progressFrom).sqrMagnitude >= ProgressMeters * ProgressMeters;
+                if (!arrived && !moved) GiveUp(intent, now);
+                // At the end of a waypoint (or of a partial route), or a lockdown goal: plan on from here.
+                else if (arrived && (_routing || zoneMove)) _hasDestination = false;
                 // Arrived as far as the navmesh goes, yet the brain still wants to get closer (a pickup out of
                 // reach, a point of interest off the navmesh): let it choose something else.
                 else if (arrived && !intent.PickUp && !intent.SeekCover && intent.State != BotState.Engage) GiveUp(intent, now);
@@ -542,10 +635,191 @@ namespace Game.AI
             }
         }
 
+        // A weapon with rounds in hand or in another slot (what the brain calls being able to fight).
+        bool CanFight => (_percept.HasWeapon && (_percept.Mag > 0 || _percept.Reserve > 0)) || _percept.OtherSlotUsable;
+
+        // The lockdown's wish for a bot standing at `at` (see ZoneGoal), with where to go and whether it overrides
+        // everything the brain wants. `pass` is the pass of an escape, else -1.
+        ZoneGoal CurrentZoneGoal(Vector3 at, out Vector3 target, out bool urgent, out int pass)
+        {
+            target = default;
+            urgent = false;
+            pass = -1;
+            var zones = ZoneDirector.Instance;
+            if (zones == null || zones.RegionCount == 0) return ZoneGoal.None;
+
+            int skip = Time.time < _skipPassUntil ? _skipPass : -1;
+            if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
+            {
+                urgent = true;
+                // The border need not run exactly through the pass: once at the point beyond it while still counted
+                // in the closing region, keep on toward the middle of the region beyond.
+                if (Flat(target - at) < EscapeOnwardMeters) _escapeOnward = true;
+                if (_escapeOnward) target = zones.RegionCentre(toRegion);
+                return ZoneGoal.Escape;
+            }
+            if (zones.TrySafeSubZoneTarget(at, out target, out urgent)) return ZoneGoal.SafeSubZone;
+            int final = zones.FinalRegion;
+            if (final < 0) return ZoneGoal.None;
+            if (zones.RegionIndexAt(at) != final)
+            {
+                target = zones.RegionCentre(final);
+                return ZoneGoal.ToFinalRegion;
+            }
+            // Only the final region is left: nobody may hide until the end, the bots go looking for each other.
+            if (zones.OnlyFinalRegionLeft && TryNearestEnemy(at, out target)) return ZoneGoal.Hunt;
+            return ZoneGoal.None;
+        }
+
+        // The nearest living combatant this bot may fight (endgame knowledge, like a shrinking final circle). One
+        // standing where the lockdown is closing in is only chosen when nobody else is left: it will come out or die.
+        bool TryNearestEnemy(Vector3 at, out Vector3 position)
+        {
+            position = default;
+            var zones = ZoneDirector.Instance;
+            float best = float.MaxValue, bestDoomed = float.MaxValue;
+            Vector3 doomedAt = default;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var c = all[i];
+                if (c == null || c == _self || c.Dead.Value || !c.IsServerInitialized) continue;
+                if (c.IsPlayer && !_rules.TargetsPlayers) continue;
+                var p = c.transform.position;
+                float d = (p - at).sqrMagnitude;
+                if (zones != null && zones.IsDoomed(p))
+                {
+                    if (d < bestDoomed) { bestDoomed = d; doomedAt = p; }
+                    continue;
+                }
+                if (d >= best) continue;
+                best = d;
+                position = p;
+            }
+            if (best < float.MaxValue) return true;
+            position = doomedAt;
+            return bestDoomed < float.MaxValue;
+        }
+
+        // Points of interest worth wandering to: not where the lockdown is about to be, and inside the final region
+        // once it is known.
+        bool RoamAllowed(BotVec point)
+        {
+            var zones = ZoneDirector.Instance;
+            if (zones == null || zones.RegionCount == 0) return true;
+            var p = ToVector(point);
+            if (zones.IsDoomed(p)) return false;
+            int final = zones.FinalRegion;
+            return final < 0 || zones.RegionIndexAt(p) == final;
+        }
+
+        // The navmesh point for a target; far targets (region centres, points past a pass) may lie farther off it.
+        static bool SnapToNavMesh(Vector3 target, bool far, out Vector3 onMesh)
+        {
+            onMesh = default;
+            if (NavMesh.SamplePosition(target, out var hit, DestinationSnapMeters, NavMesh.AllAreas))
+            {
+                onMesh = hit.position;
+                return true;
+            }
+            if (!far || !NavMesh.SamplePosition(target, out hit, FarSnapMeters, NavMesh.AllAreas)) return false;
+            onMesh = hit.position;
+            return true;
+        }
+
+        // The next stop on the way to a far goal: WaypointAheadMeters along the planned path (or its end). False
+        // when there is no path at all, or a partial one that ends where the bot already stands.
+        bool NextWaypoint(Vector3 goal, out Vector3 waypoint)
+        {
+            waypoint = goal;
+            var from = transform.position;
+            if (_route == null) _route = new NavMeshPath();
+            if (!NavMesh.CalculatePath(from, goal, NavMesh.AllAreas, _route) || _route.status == NavMeshPathStatus.PathInvalid) return false;
+            int count = _route.GetCornersNonAlloc(_corners);
+            if (count == 0) return false;
+            waypoint = _corners[count - 1];
+            float walked = 0f;
+            for (int i = 1; i < count; i++)
+            {
+                var a = _corners[i - 1];
+                var b = _corners[i];
+                float segment = Vector3.Distance(a, b);
+                if (walked + segment >= WaypointAheadMeters)
+                {
+                    waypoint = segment > 1e-3f ? Vector3.Lerp(a, b, (WaypointAheadMeters - walked) / segment) : b;
+                    break;
+                }
+                walked += segment;
+            }
+            return !(_route.status == NavMeshPathStatus.PathPartial && Flat(waypoint - from) < 1.5f);
+        }
+
+        // ---- Stall detector (#77) ----
+
+        void WatchStall(float now)
+        {
+            // No navmesh (a test box): the bot holds its ground on purpose.
+            if (!OnNavMesh) return;
+            var position = transform.position;
+            bool busy = _intent.State == BotState.Heal || _self.Reloading.Value || now - _lastAttackAt < StallSeconds;
+            if (busy || (position - _stallFrom).sqrMagnitude > StallMeters * StallMeters)
+            {
+                _stallFrom = position;
+                _stallAt = now;
+                return;
+            }
+            if (now - _stallAt < StallSeconds) return;
+
+            string reason = StallReason();
+            BotStats.CountStall(reason);
+            Debug.Log($"[Bot] {DisplayName} made no headway for {StallSeconds:0} s ({reason}) at {position}; picking a new target");
+            // Whatever it was after is dropped: the enemy it could neither reach nor hit, the pass it could not get
+            // to, the pickup or the place it was walking to.
+            if (_enemy != null && (_percept.EnemyVisible || _intent.State == BotState.Engage))
+            {
+                _ignoredEnemyId = _enemy.ObjectId;
+                _ignoreEnemyUntil = now + IgnoreSeconds;
+                _enemy = null;
+                _percept.EnemyVisible = false;
+            }
+            if (_goal == ZoneGoal.Escape && _goalPass >= 0)
+            {
+                _skipPass = _goalPass;
+                _skipPassUntil = now + IgnoreSeconds;
+                _escapeOnward = false;
+            }
+            GiveUp(_intent, now);
+            _stallFrom = position;
+            _stallAt = now;
+        }
+
+        string StallReason()
+        {
+            switch (_goal)
+            {
+                case ZoneGoal.Escape:
+                    var zones = ZoneDirector.Instance;
+                    return zones != null && _goalPass >= 0 && zones.IsPassBlocking(_goalPass) ? "escape-barrier" : "escape";
+                case ZoneGoal.SafeSubZone: return "safe-subzone";
+                case ZoneGoal.ToFinalRegion: return "to-final-region";
+                case ZoneGoal.Hunt: return "hunt";
+            }
+            switch (_intent.State)
+            {
+                case BotState.Engage: return _percept.EnemyVisible ? "engage-unreachable" : "engage";
+                case BotState.Loot: return "loot";
+                case BotState.Investigate: return "investigate";
+                case BotState.Retreat: return "retreat";
+                case BotState.Heal: return "heal";
+                default: return _intent.Move ? "roam" : "idle";
+            }
+        }
+
         void GiveUp(in BotIntent intent, float now)
         {
             _percept.Stuck = true;
             _hasDestination = false;
+            _routing = false;
             _hasCover = false;
             _coverUntil = 0f;
             _progressFrom = transform.position;
@@ -618,6 +892,7 @@ namespace Game.AI
             float radius = Mathf.Sqrt((float)_rng.NextDouble()) * error;
             var off = Quaternion.Euler(Mathf.Sin((float)angle) * radius, Mathf.Cos((float)angle) * radius, 0f);
             if (!_self.ServerFire(Quaternion.LookRotation(to / distance) * off * Vector3.forward)) return;
+            _lastAttackAt = now;
             if (!weapon.Auto) _nextTrigger = now + Mathf.Max(weapon.FireInterval, _rules.SemiAutoInterval);
             BotNoise.Emit(eye.x, eye.y, eye.z, _rules.GunshotHearingRadius, _self.ObjectId, NoiseKind.Gunshot);
         }
@@ -632,7 +907,7 @@ namespace Game.AI
             flat.y = 0f;
             if (flat.sqrMagnitude > melee.BotPunchMeters * melee.BotPunchMeters) return;
             if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > melee.PunchConeDeg * 0.5f) return;
-            _self.ServerPunch(ChestOf(_enemy) - _self.EyePosition);
+            if (_self.ServerPunch(ChestOf(_enemy) - _self.EyePosition)) _lastAttackAt = Time.time;
         }
 
         // ---- Helpers ----
@@ -652,5 +927,7 @@ namespace Game.AI
         static BotVec ToVec(Vector3 v) => new BotVec(v.x, v.y, v.z);
 
         static Vector3 ToVector(BotVec v) => new Vector3(v.X, v.Y, v.Z);
+
+        static float Flat(Vector3 v) => new Vector2(v.x, v.z).magnitude;
     }
 }

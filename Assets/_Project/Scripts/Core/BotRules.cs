@@ -71,6 +71,34 @@ namespace Game.Core
 
     public enum NoiseKind : byte { Gunshot = 0, Footstep = 1, Other = 2 }
 
+    // Why bots got stuck, counted over a match (#77): a bot that made no headway for a while gives up its target
+    // and the reason is counted here. The match log and tests read it; the match director clears it per match.
+    public static class BotStats
+    {
+        static readonly System.Collections.Generic.Dictionary<string, int> Counts = new System.Collections.Generic.Dictionary<string, int>();
+
+        public static int Total { get; private set; }
+
+        public static void CountStall(string reason)
+        {
+            if (string.IsNullOrEmpty(reason)) reason = "unknown";
+            Counts.TryGetValue(reason, out int n);
+            Counts[reason] = n + 1;
+            Total++;
+        }
+
+        public static int StallsOf(string reason) => reason != null && Counts.TryGetValue(reason, out int n) ? n : 0;
+
+        // A copy, reason -> count.
+        public static System.Collections.Generic.Dictionary<string, int> Snapshot() => new System.Collections.Generic.Dictionary<string, int>(Counts);
+
+        public static void Clear()
+        {
+            Counts.Clear();
+            Total = 0;
+        }
+    }
+
     // Sounds bots can hear: "a noise at a position that carries this far". Whoever makes a noise on the server
     // calls Emit; bots read what is new since they last listened. A fixed ring, so neither side allocates and
     // nobody has to unsubscribe.

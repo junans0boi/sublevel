@@ -29,6 +29,8 @@ case "$cmd" in
     args=(-batchmode -projectPath "$ROOT" -runTests -testPlatform "$mode" -testResults "Logs/test-$mode.xml" -logFile "Logs/test-$mode.log")
     [[ "$mode" == "editmode" ]] && args=(-nographics "${args[@]}")
     [[ -n "$filter" ]] && args+=(-testFilter "$filter")
+    # TEST_CATEGORY: e.g. 'Long' (only the long match simulation, #77) or '!Long' (everything else).
+    [[ -n "${TEST_CATEGORY:-}" ]] && args+=(-testCategory "$TEST_CATEGORY")
     "$UNITY_PATH" "${args[@]}" ;;
   build)
     case "${1:?mac|win}" in
