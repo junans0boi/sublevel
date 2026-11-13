@@ -124,6 +124,16 @@ namespace Game.Net
             Bag.Value = _bag;
         }
 
+        // ADR-103: the owner's zero distance for the optic in hand; the shot crosses the line of sight there. Snapped to
+        // the optic's list. Sent again whenever the optic in hand changes.
+        [ServerRpc]
+        public void CmdSetZero(int meters)
+        {
+            var def = ActiveOpticDef;
+            var rules = GameData.Rules.Ballistics;
+            _combatant.ZeroMeters = Zeroing.Distance(def, rules, Zeroing.IndexOf(def, rules, meters));
+        }
+
         // ---- Server API ----
 
         // Fits an optic to the weapon in `slot`. An optic already there is replaced and goes to the bag (the ground

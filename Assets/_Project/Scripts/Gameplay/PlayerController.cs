@@ -133,6 +133,7 @@ namespace Game.Gameplay
             screens.AddComponent<InventoryScreen>();
             screens.AddComponent<PauseMenu>();
             screens.AddComponent<ScopeView>();
+            screens.AddComponent<ScopeControl>(); // G10b (ADR-103)
             screens.AddComponent<MapScreen>();
             screens.AddComponent<PickupList>(); // G5 (ADR-093)
         }
@@ -676,8 +677,8 @@ namespace Game.Gameplay
                 Aim = _aim.Mode,
                 Lean = _combatant.LeanAmount,
                 LeanRollDeg = Rig.IsEyeView(_aim.Mode) ? _rules.Lean.EyeViewRollDeg : _rules.Lean.ThirdPersonRollDeg,
-                RecoilPitch = Mathf.Min(_recoil.Pitch, MaxViewPitch - ViewPitch), // never past straight up
-                RecoilYaw = _recoil.Yaw,
+                RecoilPitch = Mathf.Min(_recoil.Pitch + ScopeControl.SwayPitch, MaxViewPitch - ViewPitch), // never past straight up
+                RecoilYaw = _recoil.Yaw + ScopeControl.SwayYaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
             };
             var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();

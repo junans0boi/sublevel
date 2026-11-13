@@ -38,6 +38,8 @@ namespace Game.Gameplay
         public static bool HidesWeapon { get; private set; }
         // True while a magnified scope is up: the HUD hides its bottom weapon panel (ammo shows under the lens).
         public static bool HidesHudWeapon { get; private set; }
+        // True while a magnified scope is up (the optic in hand is a scope and the sights are raised).
+        public static bool Scoped { get; private set; }
         public static ScopeView Instance { get; private set; }
         // The zoom of the optic on the weapon in hand right now (variable scopes: set with the mouse wheel while in
         // sights, ADR-063); 1 when there is no magnified optic. Kept while leaving and re-entering sights; back to the
@@ -52,12 +54,13 @@ namespace Game.Gameplay
             FovOverride = 0f;
             HidesWeapon = false;
             HidesHudWeapon = false;
+            Scoped = false;
             CurrentZoom = 1f;
         }
 
         // Unnamed layer (ProjectSettings/TagManager has no free named one) that only the housing camera draws.
         public const int HousingLayer = 30;
-        public const string ZeroText = "영점 100m";
+        public static string ZeroText(float meters) => "영점 " + Mathf.RoundToInt(meters) + "m";
 
         const float ReferenceHeight = 1080f;
         const float FadePerSecond = 8f;
@@ -92,7 +95,10 @@ namespace Game.Gameplay
         GameObject _reflexReticle, _projectorReticle;
         RectTransform _shade, _lensEdge, _ink, _lit, _zoomRect, _zeroRect, _ammoRect;
         Image _shadeImage, _inkImage, _litImage;
-        Text _zoomLabel, _ammoLabel;
+        Text _zoomLabel, _ammoLabel, _zeroLabel;
+        RectTransform _breathRect;
+        Image _breathFill;
+        int _shownZero = 100;
         readonly List<Object> _owned = new List<Object>();
         readonly Dictionary<int, Sprite> _shadeSprites = new Dictionary<int, Sprite>();
         readonly Sprite[] _inkSprites = new Sprite[4], _litSprites = new Sprite[4];
@@ -138,6 +144,7 @@ namespace Game.Gameplay
             var def = CurrentOptic();
             bool scoped = def != null && def.Kind == OpticKind.Scope && def.Zoom > 1f;
             bool reticle = def != null && !scoped;
+            Scoped = scoped;
 
             // The mouse wheel turns a variable scope while looking through it (read from the player's last input:
             // this runs before PlayerController, so every frame's wheel is seen exactly once).
@@ -178,7 +185,7 @@ namespace Game.Gameplay
             if (!draw) return;
             if (_scopeGroup.alpha != ScopeBlend) _scopeGroup.alpha = ScopeBlend;
             if (_reticleGroup.alpha != ReticleBlend) _reticleGroup.alpha = ReticleBlend;
-            if (ScopeBlend > 0f) TickAmmo();
+            if (ScopeBlend > 0f) { TickAmmo(); TickZeroAndBreath(); }
         }
 
         // Resets the zoom to the optic's highest whenever the weapon in hand, its slot or its optic changes.
@@ -250,7 +257,18 @@ namespace Game.Gameplay
             bool below = r + 60f + 15f <= ReferenceHeight * 0.5f - BottomHudReserve;
             _zeroRect.anchoredPosition = new Vector2(0f, below ? -r - 30f : -r + 66f);
             _ammoRect.anchoredPosition = new Vector2(0f, below ? -r - 60f : -r + 38f);
+            _breathRect.anchoredPosition = new Vector2(0f, below ? -r - 82f : -r + 16f);
             if (_housingFilter != null) _housingFilter.sharedMesh = OpticMeshes.Eyepiece(def.Zoom);
+        }
+
+        // The zero distance and the breath bar under the lens (ADR-103).
+        void TickZeroAndBreath()
+        {
+            int zero = Mathf.RoundToInt(ScopeControl.ZeroMeters);
+            if (zero != _shownZero) { _shownZero = zero; _zeroLabel.text = ZeroText(zero); }
+            var breath = ScopeControl.Breath;
+            _breathFill.rectTransform.anchorMax = new Vector2(Mathf.Clamp01(breath.Fraction), 1f);
+            _breathFill.color = breath.Winded ? UiKit.Danger : breath.Holding ? UiKit.Accent : UiKit.Steel;
         }
 
         void TickAmmo()
@@ -397,10 +415,15 @@ namespace Game.Gameplay
             _zoomLabel = UiKit.Label(_zoomRect, "", 22, new Color(0.92f, 0.92f, 0.9f, 0.85f), TextAnchor.MiddleCenter, FontStyle.Bold);
             Shadowed(_zoomLabel);
             _zeroRect = UiKit.Rect("Zero", group, centre, centre, Vector2.zero, new Vector2(200f, 26f));
-            Shadowed(UiKit.Label(_zeroRect, ZeroText, 17, UiKit.TextDim, TextAnchor.MiddleCenter));
+            _zeroLabel = UiKit.Label(_zeroRect, ZeroText(100f), 17, UiKit.TextDim, TextAnchor.MiddleCenter);
+            Shadowed(_zeroLabel);
             _ammoRect = UiKit.Rect("Ammo", group, centre, centre, Vector2.zero, new Vector2(200f, 30f));
             _ammoLabel = UiKit.Label(_ammoRect, "", 22, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
             Shadowed(_ammoLabel);
+            // Breath: a thin bar under the ammo count that drains while Shift holds the breath.
+            _breathRect = UiKit.Rect("Breath", group, centre, centre, Vector2.zero, new Vector2(120f, 5f));
+            UiKit.Box(_breathRect, new Color(0f, 0f, 0f, 0.55f));
+            _breathFill = UiKit.Box(UiKit.Fill("Fill", _breathRect), UiKit.Steel);
         }
 
         void BuildReticles(Transform root)

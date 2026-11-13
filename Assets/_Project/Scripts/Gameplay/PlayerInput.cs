@@ -38,6 +38,7 @@ namespace Game.Gameplay
         public bool Holster;       // X: pressed this frame, puts the weapon away (empty hands) or takes it out again
         public bool CycleThrowable; // T: pressed this frame, switches the selected throwable (frag / smoke)
         public int ZoomSteps;      // mouse wheel this frame: +1 a notch up (zoom in), -1 down, 0 none (ADR-063)
+        public int ZeroSteps;      // PageUp +1 / PageDown -1 this frame: scope zero distance (ADR-103)
         public bool Ping;          // middle mouse: pressed this frame, marks the point under the crosshair (ADR-065 (6))
     }
 
@@ -86,6 +87,7 @@ namespace Game.Gameplay
                 f.Map = k.mKey.wasPressedThisFrame;
                 f.Holster = k.xKey.wasPressedThisFrame;
                 f.CycleThrowable = k.tKey.wasPressedThisFrame;
+                f.ZeroSteps = (k.pageUpKey.wasPressedThisFrame ? 1 : 0) - (k.pageDownKey.wasPressedThisFrame ? 1 : 0);
                 // Ctrl + a number is kept for vehicle seats; on foot it selects nothing.
                 if (f.SlowWalk) { }
                 else if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;

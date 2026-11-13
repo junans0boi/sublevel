@@ -103,6 +103,50 @@ namespace Game.Tests
             Destroy(floor);
         }
 
+        // ADR-099: zeroed at 300 m the bullet crosses the line of sight there and hits a 0.5 m target on it; with the
+        // default 100 m zero it passes under.
+        [UnityTest]
+        public IEnumerator Zero300_HitsA300mTarget_Zero100_Misses()
+        {
+            PlayerController.InputOverride = new Idle();
+            SceneManager.LoadScene("TestBox");
+            yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 15f, "local player spawned");
+            yield return null;
+            var me = Combatant.LocalPlayer;
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = Sentinel, Amount = 5 });
+            yield return WaitUntil(() => me.ActiveWeaponId == Sentinel, 2f, "sniper in hand");
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.transform.position = new Vector3(3000f, -0.5f, 3000f);
+            floor.transform.localScale = new Vector3(60f, 1f, 60f);
+            PlayerController.Local.Teleport(new Vector3(3000f, 0.1f, 3000f));
+            yield return new WaitForSeconds(1.5f);
+            var eye = me.EyePosition;
+            var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            target.transform.position = eye + Vector3.forward * 300f;
+            target.transform.localScale = Vector3.one * 0.5f;
+            Physics.SyncTransforms();
+            var seen = new System.Collections.Generic.List<Combatant.ShotResult>();
+            void Grab(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Impact) seen.Add(s); }
+            me.ShotResolved += Grab;
+            me.StanceSpreadFactor = 0f;
+
+            me.ZeroMeters = 100f;
+            Assert.IsTrue(me.ServerFire(Vector3.forward));
+            yield return new WaitForSeconds(1.0f);
+            Assert.AreEqual(0, seen.Count, "zeroed at 100 m the bullet is about 0.45 m under the target at 300 m");
+
+            yield return new WaitForSeconds(0.6f);
+            me.ZeroMeters = 300f;
+            me.StanceSpreadFactor = 0f;
+            Assert.IsTrue(me.ServerFire(Vector3.forward), "second shot");
+            yield return WaitUntil(() => seen.Count > 0, 3f, "the zeroed bullet landed");
+            Assert.AreEqual(300f, Vector3.Distance(seen[0].End, eye), 1f);
+            Assert.AreEqual(eye.y, seen[0].End.y, 0.25f, "on the target");
+            me.ShotResolved -= Grab;
+            Destroy(target);
+            Destroy(floor);
+        }
+
         static void Destroy(GameObject go) => UnityEngine.Object.Destroy(go);
     }
 }
