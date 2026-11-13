@@ -497,7 +497,7 @@ namespace Game.Gameplay
             if (left == _doorShown) return;
             _doorShown = left;
             _doorNoticeRoot.SetActive(left > 0);
-            if (left > 0) _doorNotice.text = "엘리베이터 도착 중  ·  문 열림 " + left;
+            if (left > 0) _doorNotice.text = "엘리베이터 상승 중  ·  문 열림 " + left;
         }
 
         // ---- Construction ----

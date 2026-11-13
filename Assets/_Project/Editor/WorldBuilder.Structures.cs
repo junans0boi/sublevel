@@ -137,7 +137,7 @@ public static partial class WorldBuilder
             var e = plan.Elevators[i];
             int seed = unchecked((int)Hash(plan.Seed, 100000 + i));
             var placed = PlaceBuilding(root, $"{StationPrefix}{i:00}", BuildingKind.ElevatorStation, e.X, e.Y, e.Z,
-                WorldElevator.StationWidth, WorldElevator.StationDepth, e.FacingDeg, seed, ground, store, nav, ref renderers);
+                WorldElevator.StationWidth, WorldElevator.StationDepth, e.FacingDeg, seed, ground, store, nav, ref renderers, shaftHole: true);
             var station = placed.Plan;
             if (station.HasSpawn)
             {
@@ -152,6 +152,7 @@ public static partial class WorldBuilder
             }
             pieces += station.Pieces.Count;
             AddElevatorDoor(root, i, placed);
+            AddElevatorShaft(root, i, placed, store);
             stations.Add(placed);
         }
         Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes combined into {renderers} renderers");
@@ -194,10 +195,14 @@ public static partial class WorldBuilder
 
     // One GameObject per building: the boxes of its plan combined into one mesh per material (inside parts apart
     // from the shell so they can be dropped with distance), one BoxCollider per box, one navmesh source per box.
+    // shaftHole (stations, ADR-065 (1)): the floor slab is built around the elevator shaft's opening; the navmesh
+    // still gets the whole slab, since the car fills the opening at floor level whenever anyone can walk there.
     static Placed PlaceBuilding(Transform parent, string name, BuildingKind kind, float x, float y, float z, float sizeX, float sizeZ, float yawDeg,
-        int seed, WorldMeshes.HeightField ground, WorldMeshes.Store store, List<NavMeshBuildSource> nav, ref int rendererCount)
+        int seed, WorldMeshes.HeightField ground, WorldMeshes.Store store, List<NavMeshBuildSource> nav, ref int rendererCount, bool shaftHole = false)
     {
         var plan = Buildings.Generate(kind, sizeX, sizeZ, seed);
+        bool cutSlab = shaftHole && plan.HasSpawn;
+        var hole = cutSlab ? ShaftOpening(plan) : default;
         var rotation = Quaternion.Euler(0f, yawDeg, 0f); // yaw 0 = +Z, 90 = +X, as in the plan
         var origin = new Vector3(x, FootY(ground, x, y, z, plan.Width, plan.Depth, rotation), z);
         var placed = new Placed { Name = name, Plan = plan, Origin = origin, Rotation = rotation };
@@ -229,16 +234,21 @@ public static partial class WorldBuilder
             var center = new Vector3(piece.X, piece.Y, piece.Z);
             var size = new Vector3(piece.SizeX, piece.SizeY, piece.SizeZ);
             bool interior = piece.Kind == SurfaceKind.WallInner || piece.Kind == SurfaceKind.Prop || piece.Kind == SurfaceKind.Stairs;
-            Batch(SurfaceFor(kind, piece, style), interior).Add(center, size, skipBottom: piece.MinY <= 0.001f);
+            var parts = cutSlab && piece.Name == "Slab" ? SplitAround(center, size, hole) : new List<(Vector3 center, Vector3 size)> { (center, size) };
+            foreach (var part in parts)
+                Batch(SurfaceFor(kind, piece, style), interior).Add(part.center, part.size, skipBottom: piece.MinY <= 0.001f);
             // A house's rooms get a plastered ceiling: without it the underside of the roof shows roof tiles and
             // the underside of an upper floor shows floor boards.
             if (kind == BuildingKind.House && piece.MinY > 1.5f && (piece.Kind == SurfaceKind.Roof || piece.Kind == SurfaceKind.Floor)
                 && size.x > 0.7f && size.z > 0.7f)
                 Batch(WorldMaterials.PlasterInner, true).Add(new Vector3(piece.X, piece.MinY, piece.Z), new Vector3(size.x - 0.5f, 0.03f, size.z - 0.5f));
 
-            var box = colliders.AddComponent<BoxCollider>();
-            box.center = center;
-            box.size = size;
+            foreach (var part in parts)
+            {
+                var box = colliders.AddComponent<BoxCollider>();
+                box.center = part.center;
+                box.size = part.size;
+            }
 
             // Floors and stairs are walked on; walls, roofs, trim and props only get in the way (a roof nobody
             // can reach would otherwise become an island of navmesh).
@@ -257,8 +267,11 @@ public static partial class WorldBuilder
         {
             var floor = SurfaceFor(kind, new BuildingPiece { Kind = SurfaceKind.Floor }, style);
             float top = Mathf.Min(0.05f, plan.FloorY * 0.5f);
-            Batch(floor, false).Add(new Vector3(0f, (top - FoundationDepth) * 0.5f, 0f),
-                new Vector3(plan.Width - 0.1f, top + FoundationDepth, plan.Depth - 0.1f), skipBottom: true);
+            var skirtCenter = new Vector3(0f, (top - FoundationDepth) * 0.5f, 0f);
+            var skirtSize = new Vector3(plan.Width - 0.1f, top + FoundationDepth, plan.Depth - 0.1f);
+            // Around the shaft too: its top would otherwise show as a floor inside the rising car.
+            foreach (var part in cutSlab ? SplitAround(skirtCenter, skirtSize, hole) : new List<(Vector3 center, Vector3 size)> { (skirtCenter, skirtSize) })
+                Batch(floor, false).Add(part.center, part.size, skipBottom: true);
         }
 
         var all = new List<Renderer>();

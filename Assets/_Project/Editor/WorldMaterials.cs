@@ -212,6 +212,9 @@ public static class WorldMaterials
     public static Surface Bedding => Set("Bedding", "PaintedPlaster017", new Color(0.50f, 0.56f, 0.62f), 3f, 1.5f, smoothness: 0.4f, bumpScale: 0.5f);
     public static Surface Concrete => Set("Concrete", "Concrete047A", Color.white, 3f, 3f);
     public static Surface ConcreteDark => Set("ConcreteDark", "Concrete047A", new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
+    // Elevator shaft walls (ADR-065 (1)): the same concrete, much darker, so the shaft reads as underground under
+    // the sky's ambient light.
+    public static Surface ShaftConcrete => Set("ShaftConcrete", "Concrete047A", new Color(0.40f, 0.40f, 0.39f), 2f, 2f);
     public static Surface PaintedMetal => Set("PaintedMetal", "PaintedMetal014", new Color(0.60f, 0.66f, 0.68f), 1.5f, 1.5f);
     public static Surface RustyMetal => Set("RustyMetal", "Metal022", new Color(0.55f, 0.60f, 0.62f), 1.5f, 1.5f, smoothness: 0.8f);
     public static Surface Asphalt => Set("Asphalt", "Asphalt015", new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
@@ -294,6 +297,20 @@ public static class WorldMaterials
         var mat = Asset("World_ElevatorDoorSeam", "Universal Render Pipeline/Lit");
         mat.SetColor("_BaseColor", new Color(0.08f, 0.08f, 0.09f));
         mat.SetFloat("_Smoothness", 0.2f);
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    // Lamps in the elevator shaft and the car ceiling: warm white, emissive (the post volume's bloom gives the glow;
+    // the real light comes from a few point lights the builder places).
+    public static Material ShaftLamp()
+    {
+        var mat = Asset("World_ShaftLamp", "Universal Render Pipeline/Lit");
+        mat.SetColor("_BaseColor", new Color(1f, 0.92f, 0.78f));
+        mat.SetFloat("_Smoothness", 0.6f);
+        mat.EnableKeyword("_EMISSION");
+        mat.SetColor("_EmissionColor", new Color(1f, 0.82f, 0.58f) * 3f);
+        mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
         EditorUtility.SetDirty(mat);
         return mat;
     }
