@@ -102,10 +102,12 @@ namespace Game.Tests
             yield return WaitUntil(() => me.ActiveWeaponId == 3, 2f, "rifle in hand");
             yield return WaitUntil(() => hud.AmmoText != "—", 2f, "ammo readout");
             Assert.AreEqual("30 / 0", hud.AmmoText);
+            Assert.AreEqual("5.56mm", hud.AmmoTypeText);
+            Assert.AreEqual("weapon_3", hud.ActiveWeaponIconKey);
             Assert.AreEqual(0, hud.ActiveSlotShown);
             Assert.AreEqual("Warden", hud.ActiveWeaponName);
 
-            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = 60 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = InventoryBackend.AmmoValue(1), Amount = 60 });
             yield return WaitUntil(() => hud.AmmoText != "30 / 0", 2f, "reserve readout");
             Assert.AreEqual("30 / 60", hud.AmmoText);
         }
