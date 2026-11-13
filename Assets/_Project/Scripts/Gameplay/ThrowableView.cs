@@ -40,6 +40,8 @@ namespace Game.Gameplay
 
         // Materials are assets made by the builder: shaders cannot be looked up in a player build.
         [SerializeField] Material _glowMaterial; // additive: blast flash, preview arc, landing mark
+        public Material GlowMaterial => _glowMaterial; // shared with VehicleDamageVisual (#90)
+        public Material DustMaterial => _dustMaterial;
         [SerializeField] Material _dustMaterial; // alpha blended: smoke puffs
         [SerializeField] Material _smokeMaterial; // alpha blended: smoke cloud puffs; falls back to _dustMaterial
         [SerializeField] Color _cloudColor = new Color(0.8f, 0.81f, 0.82f, 0.32f);

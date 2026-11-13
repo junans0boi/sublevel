@@ -33,5 +33,7 @@ namespace Game.Core
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
         public TeamRules Team = new TeamRules();
         public FuelRules Fuel = new FuelRules();
+        public VehicleDamageRules VehicleDamage = new VehicleDamageRules();                         // #90, ADR-074
+        public VehicleDamageRules MotorcycleDamage = VehicleDamageRules.MotorcycleDefaults();
     }
 }

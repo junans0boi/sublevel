@@ -225,6 +225,9 @@ namespace Game.Net
                 });
             }
             Victims.Clear();
+            // [VEHICLE HOOK] #90: vehicles near the blast.
+            var blastRules = _rules;
+            VehicleDamage.ServerBlastAll(centre, d => Throwables.BlastDamage(d, blastRules), VehicleDamageRules.Current.GrenadeToVehicleFactor);
 
             ServerExploded?.Invoke(centre, attacker);
             RpcExploded(centre, attacker != null ? attacker.NetworkObject : null);

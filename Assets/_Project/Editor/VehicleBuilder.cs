@@ -87,6 +87,8 @@ public static class VehicleBuilder
         root.AddComponent<VehicleFuel>();  // ADR-075: tank, horn, engine sound
         root.AddComponent<VehicleHorn>();
         root.AddComponent<Game.Gameplay.VehicleAudio>();
+        root.AddComponent<VehicleDamage>();   // #90, ADR-074: health, tyres, glass, fire, explosion
+        root.AddComponent<Game.Gameplay.VehicleDamageVisual>();
         model = new GameObject("Model").transform;
         model.SetParent(root.transform, false);
         return root;

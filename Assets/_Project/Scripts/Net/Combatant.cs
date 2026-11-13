@@ -396,11 +396,13 @@ namespace Game.Net
                 var result = ShotHit.None;
                 var zone = HitZone.Body;
                 NetworkObject victim = null;
+                Collider stoppedBy = null;
                 // [VEHICLE HOOK] same as Physics.Raycast on foot; from a seat it passes the shooter's own car and its occupants.
                 if (VehicleSeat.Raycast(this, origin, dir, weapon.Range, out var hit))
                 {
                     end = hit.point;
                     normal = hit.normal;
+                    stoppedBy = hit.collider;
                     result = ShotHit.World;
                     var target = hit.collider.GetComponentInParent<Combatant>();
                     // A body that is already dead stops the shot like any other obstacle.
@@ -422,6 +424,8 @@ namespace Game.Net
                 }
                 // Window glass on the way breaks; the shot goes on through it (ADR-065 (4)).
                 GlassPanes.ServerBreakAlong(origin, dir, (end - origin).magnitude, ObjectId);
+                // [VEHICLE HOOK] #90: vehicle glass, tyres and body on the shot's line.
+                VehicleDamage.ServerShotAll(origin, dir, (end - origin).magnitude, stoppedBy, end, DamageRules.ForZone(weapon, (end - origin).magnitude, HitZone.Body));
                 RpcShotFx(origin, end, normal, (byte)((int)result | ((int)zone << ShotZoneShift)), victim);
             }
             // Bots hear the shot where it was fired, whoever fired it.

@@ -34,6 +34,8 @@ namespace Game.Net
             VehicleRules.Motorcycle = rules.Motorcycles;
             TeamRules.Current = rules.Team ?? new TeamRules();
             FuelRules.Current = rules.Fuel ?? new FuelRules();
+            VehicleDamageRules.Current = rules.VehicleDamage ?? new VehicleDamageRules();
+            VehicleDamageRules.Motorcycle = rules.MotorcycleDamage ?? VehicleDamageRules.MotorcycleDefaults();
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }
