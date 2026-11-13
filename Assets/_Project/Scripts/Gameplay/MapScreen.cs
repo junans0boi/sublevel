@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
@@ -25,6 +26,7 @@ namespace Game.Gameplay
         static readonly Color GridColor = new Color(1f, 1f, 1f, 0.07f);
         static readonly Color PassColor = new Color(0.92f, 0.92f, 0.86f, 1f);
         static readonly Color MarkerColor = new Color(0.40f, 0.85f, 0.95f, 1f);
+        static readonly Color SupplyColor = new Color(1f, 0.42f, 0.08f, 1f);
         static readonly Color Dark = new Color(0.04f, 0.05f, 0.06f, 0.95f);
         static readonly Vector2 Centre = new Vector2(0.5f, 0.5f);
         static readonly Vector2 TopLeft = new Vector2(0f, 1f);
@@ -40,6 +42,9 @@ namespace Game.Gameplay
         public Vector2 PlayerArrowPixels => _arrow != null ? _arrow.anchoredPosition : Vector2.zero;
         public Vector2 MarkerPixels => _markerRect != null ? _markerRect.anchoredPosition : Vector2.zero;
         public bool MarkerVisible => _markerRect != null && _markerRect.gameObject.activeSelf;
+        // Supply crates shown on the map right now (#144), and where the first one is, in map pixels.
+        public int SupplyMarkersShown { get; private set; }
+        public Vector2 FirstSupplyPixels => _supplyRects.Count > 0 ? _supplyRects[0].anchoredPosition : Vector2.zero;
         public string MarkerReadout => _markerReadout != null ? _markerReadout.text : "";
         // The map picture (pivot centre, MapPx square): other views hang their markers on it (teammates, ADR-072).
         public RectTransform MapArea => _map;
@@ -48,6 +53,7 @@ namespace Game.Gameplay
         Canvas _canvas;
         RectTransform _map;
         RectTransform _arrow, _arrowLabel, _markerRect, _markerLabelRect;
+        readonly List<RectTransform> _supplyRects = new List<RectTransform>();
         Text _markerLabel, _markerReadout, _positionReadout;
         int _lastDistance = -1, _lastCompass = -1, _lastCell = -1;
 
@@ -169,6 +175,8 @@ namespace Game.Gameplay
                 }
             }
 
+            RefreshSupply();
+
             bool has = MapMarker.Has;
             if (_markerRect.gameObject.activeSelf != has)
             {
@@ -194,6 +202,34 @@ namespace Game.Gameplay
             _lastCompass = compass;
             _markerLabel.text = distance + " m";
             _markerReadout.text = "마커 " + distance + " m  ·  " + MapProjection.CompassName(bearing);
+        }
+
+        // One square marker per crate that has come down and not been opened yet, drawn under the player's marker.
+        void RefreshSupply()
+        {
+            var director = SupplyDirector.Instance;
+            int count = director != null ? director.Crates.Count : 0;
+            while (_supplyRects.Count < count) _supplyRects.Add(BuildSupplyMarker());
+            SupplyMarkersShown = count;
+            for (int i = 0; i < _supplyRects.Count; i++)
+            {
+                bool on = i < count;
+                if (_supplyRects[i].gameObject.activeSelf != on) _supplyRects[i].gameObject.SetActive(on);
+                if (on) _supplyRects[i].anchoredPosition = PixelsOf(director.Crates[i].Position);
+            }
+        }
+
+        RectTransform BuildSupplyMarker()
+        {
+            var rect = UiKit.Rect("Supply", _map, BottomLeft, Centre, Vector2.zero, new Vector2(20f, 20f));
+            UiKit.Box(UiKit.Fill("Edge", rect, -3f), Dark);
+            UiKit.Box(UiKit.Fill("Fill", rect), SupplyColor);
+            var label = UiKit.Rect("Label", rect, Centre, new Vector2(0f, 0.5f), new Vector2(18f, 0f), new Vector2(110f, 24f));
+            UiKit.Label(label, "보급", 20, SupplyColor, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var shadow = label.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = Dark;
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
+            return rect;
         }
 
         // Pixels from the map's south-west corner, kept inside the picture.
@@ -341,6 +377,7 @@ namespace Game.Gameplay
             Legend(side, ref y, "엘리베이터", UiKit.Accent, 45f, new Vector2(15f, 15f));
             Legend(side, ref y, "통로", PassColor, 0f, new Vector2(18f, 7f));
             Legend(side, ref y, "마커", MarkerColor, 45f, new Vector2(15f, 15f));
+            Legend(side, ref y, "보급 상자", SupplyColor, 0f, new Vector2(15f, 15f));
         }
 
         static void Legend(RectTransform side, ref float y, string text, Color colour, float rotation, Vector2 size)

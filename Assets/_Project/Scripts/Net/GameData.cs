@@ -7,7 +7,7 @@ namespace Game.Net
     public static class GameData
     {
         static WeaponTable _weapons;
-        static LootTable _loot;
+        static LootTable _loot, _supply;
         static GameRules _rules;
 
         public static WeaponTable Weapons => _weapons ??= Load<WeaponTable>("GameData/weapons");
@@ -27,6 +27,7 @@ namespace Game.Net
             BoostRules.Current = rules.Boost ?? new BoostRules();
             CarryRules.Current = rules.Carry;
             SmokeRules.Current = rules.Smoke;
+            SupplyRules.Current = rules.Supply ?? new SupplyRules();
             FlashRules.Current = rules.Flash ?? new FlashRules();
             MolotovRules.Current = rules.Molotov ?? new MolotovRules();
             BotRules.Current = rules.Bot;
@@ -51,6 +52,7 @@ namespace Game.Net
             _ = Rules;
         }
         public static LootTable Loot => _loot ??= Load<LootTable>("GameData/loot");
+        public static LootTable SupplyLoot => _supply ??= Load<LootTable>("GameData/supply");
 
         static T Load<T>(string path)
         {

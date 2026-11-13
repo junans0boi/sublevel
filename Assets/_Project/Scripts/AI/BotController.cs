@@ -141,6 +141,43 @@ namespace Game.AI
                 if (All[i]._brain != null) All[i]._brain.PointsOfInterest = list;
         }
 
+        // The supply crate (#144, ADR-113): bots roam toward it too. Its spot counts SupplyRules.BotWeight times
+        // among their places to go, until somebody opens it. shortcut: no race to it, no check for rivals nearby.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void HookSupply()
+        {
+            SupplyDirector.Dropped -= OnSupplyDropped;
+            SupplyDirector.Dropped += OnSupplyDropped;
+            SupplyDirector.Opened -= OnSupplyOpened;
+            SupplyDirector.Opened += OnSupplyOpened;
+        }
+
+        static void OnSupplyDropped(SupplyCrate crate)
+        {
+            SyncMatch();
+            var at = ToVec(crate.Position);
+            int weight = Mathf.Max(1, SupplyRules.Current.BotWeight);
+            var list = new BotVec[_points.Length + weight];
+            _points.CopyTo(list, 0);
+            for (int i = 0; i < weight; i++) list[_points.Length + i] = at;
+            SetPoints(list);
+        }
+
+        static void OnSupplyOpened(SupplyCrate crate)
+        {
+            var at = ToVec(crate.Position);
+            var list = new List<BotVec>(_points.Length);
+            foreach (var p in _points) if (p.X != at.X || p.Z != at.Z) list.Add(p);
+            SetPoints(list.ToArray());
+        }
+
+        static void SetPoints(BotVec[] list)
+        {
+            _points = list;
+            for (int i = 0; i < All.Count; i++)
+                if (All[i]._brain != null) All[i]._brain.PointsOfInterest = list;
+        }
+
         // Once per match (the director is new after every scene load).
         static void SyncMatch()
         {

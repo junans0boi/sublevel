@@ -397,9 +397,11 @@ namespace Game.Gameplay
             // In a station F is the elevator's (ADR-076): tap = next destination, held = ride.
             bool elevatorKey = ElevatorPanel.HandleInteract(_combatant, f.Interact, f.InteractHeld, Time.deltaTime);
             // A door in reach and in view opens or shuts (G11, ADR-104); otherwise F picks up.
-            bool doorKey = !elevatorKey && f.Interact && TeamHud.ReviveCandidate(_combatant) == null
+            // F held next to a landed supply crate opens it (#144, ADR-113); a tap still picks up.
+            bool supplyKey = !elevatorKey && SupplyView.HandleInteract(_combatant, f.InteractHeld, Time.deltaTime);
+            bool doorKey = !elevatorKey && !supplyKey && f.Interact && TeamHud.ReviveCandidate(_combatant) == null
                 && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, Camera != null ? Camera.transform.forward : transform.forward);
-            if (!elevatorKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
+            if (!elevatorKey && !supplyKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);

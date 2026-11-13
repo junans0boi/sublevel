@@ -28,6 +28,7 @@ namespace Game.Core
         public BoostRules Boost = new BoostRules();
         public CarryRules Carry = new CarryRules();
         public SmokeRules Smoke = new SmokeRules();
+        public SupplyRules Supply = new SupplyRules();
         public FlashRules Flash = new FlashRules();
         public MolotovRules Molotov = new MolotovRules();
         public BotRules Bot = new BotRules();

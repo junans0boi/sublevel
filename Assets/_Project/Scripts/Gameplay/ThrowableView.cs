@@ -51,6 +51,7 @@ namespace Game.Gameplay
         [SerializeField] Material _glowMaterial; // additive: blast flash, preview arc, landing mark
         public Material GlowMaterial => _glowMaterial; // shared with VehicleDamageVisual (#90)
         public Material DustMaterial => _dustMaterial;
+        public Material CloudMaterial => _smokeMaterial != null ? _smokeMaterial : _dustMaterial;
         [SerializeField] Material _dustMaterial; // alpha blended: smoke puffs
         [SerializeField] Material _smokeMaterial; // alpha blended: smoke cloud puffs; falls back to _dustMaterial
         [SerializeField] Color _cloudColor = new Color(0.8f, 0.81f, 0.82f, 0.32f);
