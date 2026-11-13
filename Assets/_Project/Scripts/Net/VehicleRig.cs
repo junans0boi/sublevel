@@ -1,3 +1,4 @@
+using Game.Core;
 using UnityEngine;
 
 namespace Game.Net
@@ -34,7 +35,7 @@ namespace Game.Net
         {
             if (_vehicle == null) return;
             if (_steering != null)
-                _steering.localRotation = _steeringRest * Quaternion.AngleAxis(_vehicle.SteerShown * _steeringRatio, Vector3.forward);
+                _steering.localRotation = _steeringRest * Quaternion.AngleAxis(SteeringAngle(), Vector3.forward);
             var wheel = _vehicle.WheelPivot(_swingWheel);
             if (_swingarm != null && wheel != null && _swingarm.parent != null)
             {
@@ -44,6 +45,20 @@ namespace Game.Net
                 float angle = Vector3.SignedAngle(new Vector3(0f, rest.y, rest.z), new Vector3(0f, now.y, now.z), Vector3.right);
                 _swingarm.localRotation = Quaternion.AngleAxis(angle, Vector3.right) * _swingRest;
             }
+        }
+
+        // A car's wheel (#100): the share of the lock usable at this speed, times ±WheelLockDeg, so a full turn of the
+        // input shows the same big turn of the wheel at any speed (the front wheels' own angle shrinks with speed and
+        // times the ratio was barely visible). A handlebar (ratio > 0) follows the fork as built.
+        const float WheelLockDeg = 150f;
+
+        float SteeringAngle()
+        {
+            if (_steeringRatio > 0f) return _vehicle.SteerShown * _steeringRatio;
+            var r = _vehicle.Rules;
+            float limit = Vehicles.SteerLimit(_vehicle.Speed, Vehicles.TopSpeed(false, r), r);
+            float share = limit > 0.01f ? Mathf.Clamp(_vehicle.SteerShown / limit, -1f, 1f) : 0f;
+            return share * WheelLockDeg * Mathf.Sign(_steeringRatio);
         }
 
         // Editor builder only.
