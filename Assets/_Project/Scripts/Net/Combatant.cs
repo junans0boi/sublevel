@@ -98,6 +98,7 @@ namespace Game.Net
             public ShotHit Hit;
             public Combatant Victim; // null unless a combatant was hit
             public HitZone Zone;     // where on the victim; Body when no combatant was hit
+            public BulletSurface Surface; // what the shot ended on (Body for a combatant)
 
             public ShotPhase Phase;  // Whole unless the bullet was still flying (ADR-098)
 
@@ -832,7 +833,7 @@ namespace Game.Net
         // Runs locally too, so a host sees and hears the shot in the frame it was fired instead of a network tick
         // later (ticks are 33 ms apart, which made the rhythm of automatic fire uneven).
         [ObserversRpc(RunLocally = true)]
-        void RpcShotFx(Vector3 origin, Vector3 end, Vector3 normal, byte hit, NetworkObject victim)
+        void RpcShotFx(Vector3 origin, Vector3 end, Vector3 normal, byte hit, NetworkObject victim, byte surface)
         {
             // A server without a client has nothing to show.
             if (!IsClientStarted) return;
@@ -847,6 +848,7 @@ namespace Game.Net
                 Hit = (ShotHit)(hit & ShotHitMask),
                 Zone = (HitZone)((hit >> ShotZoneShift) & ShotZoneMask),
                 Victim = victim != null ? victim.GetComponent<Combatant>() : null,
+                Surface = (BulletSurface)surface,
                 Phase = impact ? ShotPhase.Impact : (hit & ShotLaunchBit) != 0 ? ShotPhase.Launch : ShotPhase.Whole,
             };
             ShotResolved.Invoke(in shot);

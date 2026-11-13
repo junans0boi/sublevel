@@ -14,6 +14,7 @@ namespace Game.Core
         public RecoilRules Recoil = new RecoilRules();
         public FireRules Fire = new FireRules();
         public BallisticsRules Ballistics = new BallisticsRules(); // ADR-098
+        public PenetrationRules Penetration = new PenetrationRules(); // ADR-114
         public CombatFxRules CombatFx = new CombatFxRules();
         public GaitRules Gait = new GaitRules();
         public RifleHoldRules RifleHold = new RifleHoldRules(); // ADR-083
