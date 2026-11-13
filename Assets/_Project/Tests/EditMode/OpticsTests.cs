@@ -18,7 +18,7 @@ namespace Game.Tests
         {
             Assert.AreEqual(8, Rules.Optics.Length);
             CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, Rules.Optics.Select(o => o.Id).ToArray());
-            CollectionAssert.AreEqual(new[] { "레드도트", "홀로그램", "2배율", "3배율", "4배율", "6배율", "8배율", "16배율" },
+            CollectionAssert.AreEqual(new[] { "반사 조준 사이트", "투영 조준 사이트", "2배율", "3배율", "4배율", "6배율", "8배율", "16배율" },
                 Rules.Optics.Select(o => o.Name).ToArray());
             CollectionAssert.AreEqual(new float[] { 1, 1, 2, 3, 4, 6, 8, 16 }, Rules.Optics.Select(o => o.Zoom).ToArray());
         }

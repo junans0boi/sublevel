@@ -2,7 +2,8 @@ using System;
 
 namespace Game.Core
 {
-    // How an optic looks through (ADR-056 / ADR-058). Dot and Holo are 1x sights drawn as a reticle over the weapon;
+    // How an optic looks through (ADR-056 / ADR-058 / ADR-060). Dot and Holo are the 1x sights — our own designs,
+    // "반사 조준 사이트" (reflex) and "투영 조준 사이트" (projector) — with a reticle over the weapon;
     // Scope narrows the field of view. The numbers are stored in data: never reorder.
     public enum OpticKind { Dot = 0, Holo = 1, Scope = 2 }
 
@@ -37,8 +38,8 @@ namespace Game.Core
 
         public OpticDef[] Optics =
         {
-            new OpticDef { Id = 1, Name = "레드도트", Kind = OpticKind.Dot, Zoom = 1f, SensitivityFactor = 1f, Reticle = ReticleStyle.Dot },
-            new OpticDef { Id = 2, Name = "홀로그램", Kind = OpticKind.Holo, Zoom = 1f, SensitivityFactor = 1f, Reticle = ReticleStyle.Ring },
+            new OpticDef { Id = 1, Name = "반사 조준 사이트", Kind = OpticKind.Dot, Zoom = 1f, SensitivityFactor = 1f, Reticle = ReticleStyle.Dot },
+            new OpticDef { Id = 2, Name = "투영 조준 사이트", Kind = OpticKind.Holo, Zoom = 1f, SensitivityFactor = 1f, Reticle = ReticleStyle.Ring },
             new OpticDef { Id = 3, Name = "2배율", Kind = OpticKind.Scope, Zoom = 2f, SensitivityFactor = 0.574f, Reticle = ReticleStyle.Crosshair },
             new OpticDef { Id = 4, Name = "3배율", Kind = OpticKind.Scope, Zoom = 3f, SensitivityFactor = 0.415f, Reticle = ReticleStyle.Crosshair },
             new OpticDef { Id = 5, Name = "4배율", Kind = OpticKind.Scope, Zoom = 4f, SensitivityFactor = 0.330f, Reticle = ReticleStyle.Crosshair },

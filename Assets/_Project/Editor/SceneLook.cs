@@ -109,6 +109,82 @@ public static class SceneLook
     public static Material Plates => Pbr("MetalPlates006", "World_MetalPlates006", bumpScale: 0.5f, smoothness: 0.6f);
     public static Material Accent => Pbr("PaintedMetal004", "World_PaintedMetal004");
 
+    // ---- Optic parts (OpticMeshes, ADR-060): shared by the combatant and loot prefabs and the item icons ----
+
+    static Material LitAsset(string name)
+    {
+        var path = $"{MaterialDir}/{name}.mat";
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat == null)
+        {
+            mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            AssetDatabase.CreateAsset(mat, path);
+        }
+        return mat;
+    }
+
+    // Dark matte metal: the CC0 PaintedMetal014 set (colour for a little variation, normal for wear) tinted near-black.
+    public static Material OpticMetal
+    {
+        get
+        {
+            const string id = "PaintedMetal014";
+            var mat = LitAsset("Optic_Metal");
+            mat.SetTexture("_BaseMap", Load<Texture2D>($"{TextureDir}/{id}/{id}_color.jpg"));
+            mat.SetTexture("_BumpMap", Load<Texture2D>($"{TextureDir}/{id}/{id}_normal.jpg"));
+            mat.EnableKeyword("_NORMALMAP");
+            mat.SetTexture("_MetallicGlossMap", null);
+            mat.DisableKeyword("_METALLICSPECGLOSSMAP");
+            mat.SetFloat("_BumpScale", 0.5f);
+            mat.SetFloat("_Metallic", 0.55f);
+            mat.SetFloat("_Smoothness", 0.3f);
+            mat.SetColor("_BaseColor", new Color(0.12f, 0.12f, 0.13f));
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+    }
+
+    // The faces of scope lenses: dark, glossy, opaque.
+    public static Material OpticGlass
+    {
+        get
+        {
+            var mat = LitAsset("Optic_Glass");
+            mat.SetColor("_BaseColor", new Color(0.04f, 0.07f, 0.09f));
+            mat.SetFloat("_Metallic", 0f);
+            mat.SetFloat("_Smoothness", 0.92f);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+    }
+
+    // The window of the 1x sights: faintly tinted, see-through. The transparent setup is done by hand because the
+    // blend mode is normally applied by the material inspector.
+    public static Material OpticWindow
+    {
+        get
+        {
+            var mat = LitAsset("Optic_Window");
+            mat.SetColor("_BaseColor", new Color(0.55f, 0.75f, 0.72f, 0.16f));
+            mat.SetFloat("_Metallic", 0f);
+            mat.SetFloat("_Smoothness", 0.95f);
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            mat.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetShaderPassEnabled("DepthOnly", false);
+            mat.SetShaderPassEnabled("ShadowCaster", false);
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+    }
+
     public static T Load<T>(string path) where T : Object
     {
         var asset = AssetDatabase.LoadAssetAtPath<T>(path);

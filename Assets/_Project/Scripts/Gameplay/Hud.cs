@@ -88,6 +88,7 @@ namespace Game.Gameplay
 
         // Centre.
         GameObject _crosshair, _dot, _bars;
+        GameObject _weaponPanel; // hidden while a magnified scope is up (ADR-060 (5)): the ammo shows under the lens
         RectTransform _barLeft, _barRight, _barUp, _barDown;
         float _gap = -1f, _placedGap = -1f;
         GameObject _hitMarker;
@@ -116,6 +117,7 @@ namespace Game.Gameplay
         public int ActiveSlotShown => _shownActive;
         public string ActiveWeaponName => _shownAmmoWeapon > 0 ? _weaponName.text : "";
         public bool CrosshairVisible => Visible && _crosshair.activeSelf;
+        public bool WeaponPanelVisible => Visible && _weaponPanel.activeSelf;
         public bool HitMarkerVisible => _hitMarker != null && _hitMarker.activeSelf;
         public bool HeadMarkerShown { get; private set; }         // the last hit marker was for a head hit
         public bool ReloadingShown => _reload.activeSelf;
@@ -215,6 +217,7 @@ namespace Game.Gameplay
             bool dead = me.Dead.Value;
             TickHealth(me, dead);
             TickWeapons(me);
+            Show(_weaponPanel, !ScopeView.HidesHudWeapon);
             _strip.Tick(me);
             _status.Tick(me);
             TickDoorNotice();
@@ -550,6 +553,7 @@ namespace Game.Gameplay
             _reserveDigits = HudDigits.Build("Reserve", weapon, TopLeft, TopLeft, new Vector2(458f, -26f), 3, 26f, 40f, 30, UiKit.TextDim);
             _reserveDigits.Set(-1);
             _areas.Add(weapon);
+            _weaponPanel = weapon.gameObject;
 
             // Transient prompts above the stack (not part of the fixed layout).
             float reloadY = weaponY + WeaponHeight + StackGap;

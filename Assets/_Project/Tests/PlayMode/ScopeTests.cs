@@ -12,8 +12,8 @@ namespace Game.Tests
 {
     // Optics (ADR-056 / ADR-058) in the real TestBox scene as a host: attaching by pickup, what a weapon refuses,
     // what happens to the optic when the weapon is dropped, and the view through it.
-    // Needs CombatantOptics on the Player prefab (TestBoxBuilder). The view tests also need ScopeView created by
-    // PlayerController and the camera reading ScopeView.FovOverride; they are ignored until that is wired.
+    // Needs CombatantOptics and OpticVisual (with its optic materials) on the Player prefab (TestBoxBuilder), ScopeView
+    // created by PlayerController and the camera reading ScopeView.FovOverride.
     public class ScopeTests
     {
         sealed class ScriptedInput : IPlayerInput
@@ -221,12 +221,38 @@ namespace Game.Tests
             Assert.AreEqual(scoped, ScopeView.FovOverride, 0.01f);
             Assert.AreEqual(Optics.SensitivityFor(4f), ScopeView.SensitivityFactor, 0.02f);
 
+            // The 3D eyepiece housing is up, in front of the camera, and the HUD weapon panel makes way for it.
+            var view = ScopeView.Instance;
+            Assert.IsNotNull(view, "ScopeView created by PlayerController");
+            yield return WaitUntil(() => view.ScopeBlend >= 1f, 2f, "the scope fully up");
+            Assert.IsNotNull(view.Housing, "the eyepiece housing is built (needs OpticVisual materials on the Player prefab)");
+            Assert.IsTrue(view.Housing.activeInHierarchy, "the eyepiece housing is shown");
+            var housingRenderer = view.Housing.GetComponent<Renderer>();
+            Assert.IsNotNull(housingRenderer);
+            Assert.IsTrue(housingRenderer.enabled);
+            var local = pc.Camera.transform.InverseTransformPoint(housingRenderer.bounds.center);
+            Assert.Greater(local.z, 0.05f, "the housing sits in front of the camera, past its near plane");
+            Assert.Less(Mathf.Abs(local.x), 0.05f, "and on the line of sight");
+            Assert.AreEqual(OpticLook.For(4f).LensRadius * 1080f, view.LensRadiusUnits, 0.5f);
+            if (view.HousingCamera != null)
+            {
+                Assert.IsTrue(view.HousingCamera.enabled, "the overlay camera draws the housing");
+                Assert.AreEqual(1 << ScopeView.HousingLayer, view.HousingCamera.cullingMask);
+                Assert.AreEqual(0, pc.Camera.cullingMask & (1 << ScopeView.HousingLayer), "the main camera does not draw the housing layer");
+            }
+            Assert.IsTrue(ScopeView.HidesHudWeapon);
+            yield return null;
+            Assert.IsFalse(Hud.Instance.WeaponPanelVisible, "the HUD weapon panel is hidden while scoped");
+
             yield return Tap();
             yield return WaitUntil(() => me.AimMode == AimMode.Hip, 2f, "sights off");
             yield return WaitUntil(() => Mathf.Abs(pc.Camera.fieldOfView - GameData.Rules.Aim.Hip.Fov) < 1f, 3f, "field of view back");
             yield return WaitUntil(() => !ScopeView.Active, 2f, "the overlay gone");
             Assert.AreEqual(0f, ScopeView.FovOverride);
             Assert.AreEqual(1f, ScopeView.SensitivityFactor, 0.01f);
+            Assert.IsFalse(view.Housing.activeInHierarchy, "the housing is put away");
+            yield return null;
+            Assert.IsTrue(Hud.Instance.WeaponPanelVisible, "the HUD weapon panel is back");
         }
 
         [UnityTest]
@@ -244,6 +270,21 @@ namespace Game.Tests
             yield return WaitUntil(() => Mathf.Abs(pc.Camera.fieldOfView - GameData.Rules.Aim.Sights.Fov) < 1f, 3f, "sights field of view");
             Assert.AreEqual(0f, ScopeView.FovOverride, "a 1x sight does not zoom");
             Assert.AreEqual(1f, ScopeView.SensitivityFactor, 0.01f);
+            Assert.IsFalse(ScopeView.HidesHudWeapon, "the HUD weapon panel stays for a 1x sight");
+
+            // The reflex sight's window frames the middle of the screen.
+            var visual = me.GetComponent<OpticVisual>();
+            Assert.IsNotNull(visual, "OpticVisual on the Player prefab");
+            yield return WaitUntil(() => visual.Window != null, 2f, "the sight model on the weapon");
+            var cam = pc.Camera;
+            yield return WaitUntil(() =>
+            {
+                var p = cam.WorldToScreenPoint(visual.Window.position);
+                float tolerance = 0.03f * cam.pixelWidth;
+                return p.z > 0f && Mathf.Abs(p.x - cam.pixelWidth * 0.5f) < tolerance && Mathf.Abs(p.y - cam.pixelHeight * 0.5f) < tolerance;
+            }, 2f, "the sight window centred on the screen (within 3% of its width)");
+            var at = cam.transform.InverseTransformPoint(visual.Window.position);
+            Assert.Greater(at.z, cam.nearClipPlane, "the window is in front of the camera");
         }
 
         [UnityTest]

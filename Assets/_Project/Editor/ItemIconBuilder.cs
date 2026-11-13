@@ -1,12 +1,15 @@
 using System;
 using System.IO;
+using Game.Core;
+using Game.Gameplay;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
 // Generates the inventory item icons into Assets/_Project/Resources/Icons/<key>.png (ADR-054):
 //  - weapons: the project's CC0 weapon models rendered from the side onto a transparent background
-//  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke, key, optics: flat glyphs drawn from signed-distance shapes, supersampled
+//  - optics: the code-built optic models (OpticMeshes, ADR-060) in a three-quarter side view, transparent background
+//  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke, key: flat glyphs drawn from signed-distance shapes, supersampled
 // Run: tools/unity.sh run-gfx ItemIconBuilder.Build   (exits the editor with 0 on success, 1 on failure)
 public static class ItemIconBuilder
 {
@@ -21,6 +24,7 @@ public static class ItemIconBuilder
         {
             Directory.CreateDirectory(OutDir);
             BuildWeapons();
+            BuildOptics();
             BuildGlyphs();
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             Debug.Log("[ItemIconBuilder] done: " + OutDir);
@@ -80,6 +84,85 @@ public static class ItemIconBuilder
             UnityEngine.Object.DestroyImmediate(camGo);
             UnityEngine.Object.DestroyImmediate(key);
             UnityEngine.Object.DestroyImmediate(fill);
+            RenderSettings.ambientMode = oldAmbientMode;
+            RenderSettings.ambientLight = oldAmbient;
+        }
+    }
+
+    // ---------------------------------------------------------------- optics
+
+    const int OpticSize = 256, OpticSuper = 2;
+
+    public static string OpticKey(OpticDef def)
+    {
+        if (def.Kind == OpticKind.Dot) return "optic_reddot";
+        if (def.Kind == OpticKind.Holo) return "optic_holo";
+        return "optic_" + Mathf.RoundToInt(def.Zoom) + "x";
+    }
+
+    static void BuildOptics()
+    {
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        var oldAmbientMode = RenderSettings.ambientMode;
+        var oldAmbient = RenderSettings.ambientLight;
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.50f, 0.51f, 0.54f);
+
+        var camGo = new GameObject("IconCamera");
+        var cam = camGo.AddComponent<Camera>();
+        cam.orthographic = true;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.nearClipPlane = 0.01f;
+        cam.farClipPlane = 20f;
+        cam.allowHDR = false;
+        cam.allowMSAA = true;
+        cam.aspect = 1f;
+
+        var key = MakeLight("Key", new Vector3(-0.5f, -0.7f, -0.45f), new Color(1f, 0.96f, 0.9f), 1.5f);
+        var fill = MakeLight("Fill", new Vector3(-0.7f, -0.1f, 0.6f), new Color(0.75f, 0.85f, 1f), 0.6f);
+        var rim = MakeLight("Rim", new Vector3(0.4f, -0.3f, 0.85f), new Color(1f, 1f, 1f), 0.8f);
+
+        // The icons use a lighter copy of the optic metal so the dark body reads on the dark inventory panels.
+        var metal = new Material(SceneLook.OpticMetal);
+        metal.SetColor("_BaseColor", new Color(0.30f, 0.31f, 0.33f));
+        var materials = new[] { metal, SceneLook.OpticGlass, SceneLook.OpticWindow };
+        // Three-quarter view from the right side, a little in front and above: the muzzle end points to the right.
+        var dir = new Vector3(0.80f, 0.36f, 0.48f).normalized;
+        var rotation = Quaternion.LookRotation(-dir, Vector3.up);
+        try
+        {
+            foreach (var def in new OpticRules().Optics)
+            {
+                var go = new GameObject("Optic");
+                var mesh = OpticMeshes.Model(def);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterials = materials;
+                var b = mesh.bounds;
+                float halfW = 0f, halfH = 0f;
+                var inverse = Quaternion.Inverse(rotation);
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    var local = inverse * (corner - b.center);
+                    halfW = Mathf.Max(halfW, Mathf.Abs(local.x));
+                    halfH = Mathf.Max(halfH, Mathf.Abs(local.y));
+                }
+                camGo.transform.rotation = rotation;
+                camGo.transform.position = b.center + dir * 5f;
+                cam.orthographicSize = Mathf.Max(halfW, halfH) * 1.1f;
+                var pixels = RenderTransparent(cam, OpticSize * OpticSuper, OpticSize * OpticSuper, OpticSuper);
+                Save(pixels, OpticSize, OpticSize, OpticKey(def));
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(metal);
+            UnityEngine.Object.DestroyImmediate(camGo);
+            UnityEngine.Object.DestroyImmediate(key);
+            UnityEngine.Object.DestroyImmediate(fill);
+            UnityEngine.Object.DestroyImmediate(rim);
             RenderSettings.ambientMode = oldAmbientMode;
             RenderSettings.ambientLight = oldAmbient;
         }
@@ -379,48 +462,6 @@ public static class ItemIconBuilder
         p.Fill(ring, Steel, 1f, false);
     }
 
-    static readonly Color OpticBody = new Color(0.30f, 0.32f, 0.37f);
-    static readonly Color Glass = new Color(0.32f, 0.52f, 0.68f);
-    static readonly Color Ember = new Color(0.95f, 0.30f, 0.22f);
-
-    // Red dot (ring = false) and holographic (ring = true) sights seen from the side-front: a housing with a window.
-    static void DrawSight(Painter p, bool ring)
-    {
-        p.Fill(RRect(p.X, p.Y, 128f, 64f, 78f, 12f, 5f), OpticBody * 0.8f);          // rail foot
-        p.Fill(RRect(p.X, p.Y, 128f, 118f, 66f, 54f, 14f), OpticBody, Shade(p.X - 128f, 66f) * 0.5f + 0.5f);
-        p.Fill(RRect(p.X, p.Y, 128f, 120f, 48f, 38f, 8f), Glass * 0.55f, 1f, false);  // window
-        if (!ring)
-        {
-            p.Fill(Circle(p.X, p.Y, 128f, 120f, 9f), Ember, 1f, false);
-            return;
-        }
-        float ringD = Mathf.Abs(Circle(p.X, p.Y, 128f, 120f, 26f)) - 3.5f;
-        p.Fill(Mathf.Min(ringD, Circle(p.X, p.Y, 128f, 120f, 4.5f)), Pip, 1f, false);
-        p.Fill(Mathf.Min(Box(p.X, p.Y, 128f, 156f, 2.5f, 6f), Box(p.X, p.Y, 128f, 84f, 2.5f, 6f)), Pip, 1f, false);
-    }
-
-    // A magnifying scope lying along the icon: the tube grows with the zoom, with one to three amber bands.
-    static void DrawScope(Painter p, int zoom)
-    {
-        float hl = Mathf.Min(100f, 58f + 5f * zoom);
-        float ht = 21f + 1.3f * zoom;
-        int bands = zoom <= 3 ? 1 : zoom <= 6 ? 2 : 3;
-        float cx = 128f, cy = 118f;
-        // mounts under the tube
-        p.Fill(Mathf.Min(Box(p.X, p.Y, cx - hl * 0.5f, cy - ht - 8f, 9f, 10f), Box(p.X, p.Y, cx + hl * 0.5f, cy - ht - 8f, 9f, 10f)), OpticBody * 0.8f);
-        // tube, bells
-        p.Fill(RRect(p.X, p.Y, cx, cy, hl, ht, 8f), OpticBody, Shade(p.Y - cy, ht) * 0.5f + 0.5f);
-        p.Fill(RRect(p.X, p.Y, cx + hl - 6f, cy, 20f, ht * 1.32f, 7f), OpticBody * 0.85f, Shade(p.Y - cy, ht * 1.3f) * 0.5f + 0.5f);
-        p.Fill(RRect(p.X, p.Y, cx - hl + 4f, cy, 14f, ht * 1.14f, 6f), OpticBody * 0.85f, Shade(p.Y - cy, ht * 1.1f) * 0.5f + 0.5f);
-        // lens on the front bell
-        p.Fill(Ellipse(p.X, p.Y, cx + hl + 6f, cy, 7f, ht * 1.05f), Glass, 1f, false);
-        // amber bands
-        for (int i = 0; i < bands; i++)
-            p.Fill(Box(p.X, p.Y, cx - hl * 0.42f + i * 18f, cy, 4f, ht - 4f), Pip, 1f, false);
-        // turret knob on top
-        p.Fill(RRect(p.X, p.Y, cx + hl * 0.05f, cy + ht + 8f, 11f, 9f, 3f), OpticBody * 0.9f);
-    }
-
     // A rolled bandage seen from the side: cream roll with wound layers, a loose tail and a red stripe.
     static void DrawBandage(Painter p)
     {
@@ -493,13 +534,6 @@ public static class ItemIconBuilder
         DrawIcon("ammo_12ga", DrawAmmo12ga);
         DrawIcon("medkit", DrawMedkit);
         DrawIcon("grenade", DrawGrenade);
-        DrawIcon("optic_reddot", p => DrawSight(p, false));
-        DrawIcon("optic_holo", p => DrawSight(p, true));
-        foreach (int zoom in new[] { 2, 3, 4, 6, 8, 16 })
-        {
-            int z = zoom;
-            DrawIcon("optic_" + z + "x", p => DrawScope(p, z));
-        }
         DrawIcon("bandage", DrawBandage);
         DrawIcon("firstaid", DrawFirstAid);
         DrawIcon("smoke", DrawSmoke);

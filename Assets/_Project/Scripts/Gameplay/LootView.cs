@@ -6,14 +6,18 @@ namespace Game.Gameplay
 {
     // Colours a pickup by what it holds; weapon pickups show the weapon's model instead of the box.
     // Armour has no model yet: a box tinted by piece and tier (helmets blue, vests orange, darker = higher tier),
-    // small and cubic for a helmet, tall and flat for a vest. An optic is a small dark-tinted bar: red-ish for the
-    // dot and holographic sights, bluer the higher the zoom.
+    // small and cubic for a helmet, tall and flat for a vest. An optic shows the same code-built model as on the
+    // weapon (OpticMeshes), enlarged so it reads on the floor; without the optic materials it falls back to a tinted bar.
     [RequireComponent(typeof(LootItem))]
     public class LootView : MonoBehaviour
     {
         [SerializeField] Renderer _renderer;
         [SerializeField] Material[] _materialsByKind = new Material[0];
         [SerializeField] GameObject[] _weaponModelsById = new GameObject[0];
+        // Dark metal, lens glass and see-through window for the optic model (the same ones as OpticVisual).
+        [SerializeField] Material _opticMetal;
+        [SerializeField] Material _opticGlass;
+        [SerializeField] Material _opticWindow;
 
         static readonly Color[] HelmetColors = { new Color(0.55f, 0.75f, 0.95f), new Color(0.2f, 0.5f, 0.95f), new Color(0.1f, 0.2f, 0.6f) };
         static readonly Color[] VestColors = { new Color(0.95f, 0.7f, 0.5f), new Color(0.9f, 0.4f, 0.15f), new Color(0.55f, 0.15f, 0.05f) };
@@ -22,6 +26,8 @@ namespace Game.Gameplay
         static readonly Vector3 OpticShape = new Vector3(0.45f, 0.45f, 1.1f);
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int ColorId = Shader.PropertyToID("_Color");
+        // The optic model's longest side on the floor (metres), within these enlargement limits.
+        const float OpticLootSize = 0.34f, OpticMinScale = 1.4f, OpticMaxScale = 4.5f;
 
         LootItem _item;
         MaterialPropertyBlock _tint;
@@ -30,6 +36,11 @@ namespace Game.Gameplay
         int _shownWeapon = -1;
         int _shownTier = -1;
         int _shownOptic = -1;
+        GameObject _opticModel;
+        MeshFilter _opticMesh;
+
+        // The optic model shown for this pickup (null when it holds no optic or the materials are missing).
+        public GameObject OpticModel => _opticModel != null && _opticModel.activeSelf ? _opticModel : null;
 
         // The box colour of an armour pickup. Tiers outside the table get the nearest one.
         public static Color ArmorColor(LootKind kind, int tier)
@@ -91,9 +102,42 @@ namespace Game.Gameplay
             }
 
             bool hasModel = weapon > 0 && weapon < _weaponModelsById.Length && _weaponModelsById[weapon] != null;
-            _renderer.enabled = !hasModel;
+            bool opticModel = opticKind && ShowOptic(OpticRules.Current.Find(optic));
+            if (!opticKind && _opticModel != null) _opticModel.SetActive(false);
+            _renderer.enabled = !hasModel && !opticModel;
             for (int i = 0; i < _weaponModelsById.Length; i++)
                 if (_weaponModelsById[i] != null) _weaponModelsById[i].SetActive(hasModel && i == weapon);
+        }
+
+        // Puts the optic model in place of the box; false when it cannot be drawn.
+        bool ShowOptic(OpticDef def)
+        {
+            if (def == null || _opticMetal == null)
+            {
+                if (_opticModel != null) _opticModel.SetActive(false);
+                return false;
+            }
+            if (_opticModel == null)
+            {
+                _opticModel = new GameObject("OpticModel");
+                _opticModel.layer = gameObject.layer;
+                _opticModel.transform.SetParent(transform, false);
+                _opticMesh = _opticModel.AddComponent<MeshFilter>();
+                var r = _opticModel.AddComponent<MeshRenderer>();
+                var glass = _opticGlass != null ? _opticGlass : _opticMetal;
+                r.sharedMaterials = new[] { _opticMetal, glass, _opticWindow != null ? _opticWindow : glass };
+            }
+            var mesh = OpticMeshes.Model(def);
+            _opticMesh.sharedMesh = mesh;
+            var size = mesh.bounds.size;
+            float scale = Mathf.Clamp(OpticLootSize / Mathf.Max(1e-4f, Mathf.Max(size.x, Mathf.Max(size.y, size.z))), OpticMinScale, OpticMaxScale);
+            var t = _opticModel.transform;
+            // Lying on its rail, turned a little so the side and the window both show; centred on the pickup point.
+            t.localRotation = Quaternion.Euler(0f, 35f, 0f);
+            t.localScale = Vector3.one * scale;
+            t.localPosition = -(t.localRotation * mesh.bounds.center) * scale;
+            _opticModel.SetActive(true);
+            return true;
         }
     }
 }
