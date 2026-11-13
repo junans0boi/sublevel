@@ -27,11 +27,9 @@ namespace Game.Core
         // The rules in use. Defaults until the data loader replaces them, so everything runs without a data file.
         public static HealRules Current = new HealRules();
 
-        // Loot kinds of the new pickups. Core/Loot.cs belongs to another batch, so the values are fixed here, well
-        // away from the kinds being added there; the enum gets the matching names on integration
-        // (`Bandage = 13, FirstAidKit = 14`). The medkit keeps LootKind.Medkit.
-        public const LootKind BandageLootKind = (LootKind)13;
-        public const LootKind FirstAidLootKind = (LootKind)14;
+        // Loot kinds of the new pickups. The medkit keeps LootKind.Medkit.
+        public const LootKind BandageLootKind = LootKind.Bandage;
+        public const LootKind FirstAidLootKind = LootKind.FirstAidKit;
         public const string BandageName = "붕대";
         public const string FirstAidName = "응급키트";
         public const string MedkitName = "구급상자";

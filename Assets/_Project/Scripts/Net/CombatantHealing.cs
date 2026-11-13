@@ -36,7 +36,7 @@ namespace Game.Net
 
         // Server snapshot taken when a use begins: what counts as "something happened" afterwards.
         float _baseHp;
-        int _baseSlot, _baseMag0, _baseMag1, _baseThrows;
+        int _baseSlot, _baseMag0, _baseMag1, _baseMag2, _baseThrows;
 
         // Server counters, for tests.
         public int ServerCompleted { get; private set; }
@@ -131,9 +131,10 @@ namespace Game.Net
             if (hp < _baseHp - 1e-4f) return true; // damage
             _baseHp = hp;
             if (c.ActiveSlot.Value != _baseSlot) return true;
-            if (c.Mag0.Value < _baseMag0 || c.Mag1.Value < _baseMag1) return true; // a shot
+            if (c.Mag0.Value < _baseMag0 || c.Mag1.Value < _baseMag1 || c.Mag2.Value < _baseMag2) return true; // a shot
             _baseMag0 = c.Mag0.Value;
             _baseMag1 = c.Mag1.Value;
+            _baseMag2 = c.Mag2.Value;
             if (_throwables != null && _throwables.ServerThrows != _baseThrows) return true;
             return CountOf(kind) <= 0; // dropped meanwhile
         }
@@ -178,6 +179,7 @@ namespace Game.Net
             _baseSlot = c.ActiveSlot.Value;
             _baseMag0 = c.Mag0.Value;
             _baseMag1 = c.Mag1.Value;
+            _baseMag2 = c.Mag2.Value;
             _baseThrows = _throwables != null ? _throwables.ServerThrows : 0;
             double now = Time.timeAsDouble;
             _localStart = now;
@@ -231,6 +233,10 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdCancel() => ServerCancel();
+
+        // The inventory's double click on a bandage or kit row: that item, not the best fit.
+        [ServerRpc]
+        public void CmdUseKind(int kind) => ServerBegin((HealKind)kind);
 
         // Dropping from the inventory screen: one item lands on the ground in front.
         [ServerRpc]

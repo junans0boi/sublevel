@@ -2,7 +2,7 @@ using System;
 
 namespace Game.Core
 {
-    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2, Helmet = 3, Vest = 4, Grenade = 10, Optic = 11 }
+    public enum LootKind { Weapon = 0, Ammo = 1, Medkit = 2, Helmet = 3, Vest = 4, Grenade = 10, Optic = 11, Key = 12, Bandage = 13, FirstAidKit = 14, Smoke = 15 }
 
     [Serializable]
     public class LootEntry

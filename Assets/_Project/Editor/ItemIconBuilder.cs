@@ -6,7 +6,7 @@ using UnityEngine;
 
 // Generates the inventory item icons into Assets/_Project/Resources/Icons/<key>.png (ADR-054):
 //  - weapons: the project's CC0 weapon models rendered from the side onto a transparent background
-//  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke, optics: flat glyphs drawn from signed-distance shapes, supersampled
+//  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke, key, optics: flat glyphs drawn from signed-distance shapes, supersampled
 // Run: tools/unity.sh run-gfx ItemIconBuilder.Build   (exits the editor with 0 on success, 1 on failure)
 public static class ItemIconBuilder
 {
@@ -471,6 +471,20 @@ public static class ItemIconBuilder
         p.Fill(puff, new Color(0.86f, 0.88f, 0.90f), 1f);
     }
 
+    // The lockdown key: a brass key card-ring and bit, lying across the icon.
+    static void DrawKey(Painter p)
+    {
+        var brass = new Color(0.80f, 0.66f, 0.32f);
+        // bow: a ring with a hole
+        float bow = Mathf.Max(Circle(p.X, p.Y, 78f, 128f, 40f), -Circle(p.X, p.Y, 78f, 128f, 16f));
+        // shaft and two teeth
+        float shaft = Box(p.X, p.Y, 150f, 128f, 56f, 9f);
+        float teeth = Mathf.Min(Box(p.X, p.Y, 186f, 108f, 7f, 14f), Box(p.X, p.Y, 164f, 110f, 6f, 11f));
+        p.Fill(Mathf.Min(bow, Mathf.Min(shaft, teeth)), brass, Shade(p.Y - 128f, 40f) * 0.5f + 0.5f);
+        // a red tag through the ring: it opens a lockdown barrier
+        p.Fill(RRect(p.X, p.Y, 62f, 70f, 16f, 22f, 5f), new Color(0.78f, 0.22f, 0.20f), 1f);
+    }
+
     static void BuildGlyphs()
     {
         DrawIcon("ammo_9mm", DrawAmmo9mm);
@@ -489,6 +503,7 @@ public static class ItemIconBuilder
         DrawIcon("bandage", DrawBandage);
         DrawIcon("firstaid", DrawFirstAid);
         DrawIcon("smoke", DrawSmoke);
+        DrawIcon("key", DrawKey);
         for (int tier = 1; tier <= 3; tier++)
         {
             int t = tier;

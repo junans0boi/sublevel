@@ -232,6 +232,8 @@ namespace Game.Net
 
         // Server: who else may take loot kinds the loadout does not know (armour, grenades).
         ILootReceiver[] _receivers;
+        // Server: the bag limit (null on a prefab without one: no limit).
+        CombatantCarry _carry;
 
         public override void OnStartNetwork()
         {
@@ -256,6 +258,7 @@ namespace Game.Net
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
             _receivers = GetComponents<ILootReceiver>();
+            _carry = GetComponent<CombatantCarry>();
             Push();
         }
 
@@ -412,9 +415,15 @@ namespace Game.Net
         }
 
         // Returns false when nothing on this combatant takes that kind of loot (it then stays where it was).
-        [Server]
-        public bool ServerGive(LootEntry loot)
+        public bool ServerGive(LootEntry loot) => ServerGive(loot, out _);
+
+        // Same, and asks the bag first: `loot.Amount` is cut down to what fits and `leftover` is what stays on the
+        // ground. False when none of it fits. Checked by hand instead of [Server]: this overload has an out parameter.
+        public bool ServerGive(LootEntry loot, out int leftover)
         {
+            leftover = 0;
+            if (!IsServerInitialized || loot == null || _loadout == null) return false;
+            if (_carry != null && !_carry.ServerFit(loot, out leftover)) return false;
             switch (loot.Kind)
             {
                 case LootKind.Weapon:
@@ -556,8 +565,14 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSelectSlot(int slot) => ServerSelectSlot(slot);
 
+        // H: timed healing when this combatant has it (the player); otherwise the instant medkit (bots use ServerUseMedkit).
         [ServerRpc]
-        public void CmdUseMedkit() => ServerUseMedkit();
+        public void CmdUseMedkit()
+        {
+            var h = GetComponent<CombatantHealing>();
+            if (h != null) { h.ServerUse(); return; }
+            ServerUseMedkit();
+        }
 
         // The two primary weapons trade places; the one in hand stays in hand.
         [ServerRpc]
@@ -597,7 +612,12 @@ namespace Game.Net
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
-            if (ServerGive(item.ToEntry())) item.Despawn();
+            var e = item.ToEntry();
+            if (ServerGive(e, out int left))
+            {
+                if (left > 0) item.Amount.Value = left;
+                else item.Despawn();
+            }
         }
 
         // Dropping from the inventory screen: the item leaves the loadout and lands on the ground in front.

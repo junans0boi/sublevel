@@ -94,6 +94,10 @@ namespace Game.Net
                 case LootKind.Helmet: return OfArmor(ArmorSlot.Helmet, tier);
                 case LootKind.Vest: return OfArmor(ArmorSlot.Vest, tier);
                 case LootKind.Optic: return OfOptic(optic);
+                case LootKind.Key: return KeyHolder.KeyName;
+                case LootKind.Bandage: return HealRules.BandageName;
+                case LootKind.FirstAidKit: return HealRules.FirstAidName;
+                case LootKind.Smoke: return ThrowableRules.SmokeName;
                 default: return "물건";
             }
         }
@@ -123,9 +127,14 @@ namespace Game.Net
             var kind = (LootKind)item.Kind.Value;
             if (kind == LootKind.Ammo) return Of(item) + " x" + item.Amount.Value;
             if (Armor.IsArmor(kind)) return Of(item) + " (내구도 " + Points(item.Durability.Value) + ")";
-            if ((kind == LootKind.Medkit || kind == LootKind.Grenade) && item.Amount.Value > 1) return Of(item) + " x" + item.Amount.Value;
+            if (IsCounted(kind) && item.Amount.Value > 1) return Of(item) + " x" + item.Amount.Value;
             return Of(item);
         }
+
+        // Consumables and keys that stack: the prompt adds "x2" when there is more than one.
+        public static bool IsCounted(LootKind kind) =>
+            kind == LootKind.Medkit || kind == LootKind.Grenade || kind == LootKind.Key ||
+            kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke;
 
         // What a combatant wears in a slot, for an inventory row: "2단계  88 / 110", or "없음".
         public static string Worn(CombatantGear gear, ArmorSlot slot)

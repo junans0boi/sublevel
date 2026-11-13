@@ -13,15 +13,13 @@ namespace Game.Core
         // The rules in use. Defaults until the data loader replaces them, so everything runs without a data file.
         public static ThrowableRules Current = new ThrowableRules();
 
-        // The loot kind of a grenade pickup. Core/Loot.cs belongs to another batch, so the value is fixed here
-        // and kept well away from the kinds being added there; the enum gets the matching name on integration
-        // (`Grenade = 10`).
-        public const LootKind GrenadeLootKind = (LootKind)10;
+        // The loot kind of a grenade pickup.
+        public const LootKind GrenadeLootKind = LootKind.Grenade;
         // Shown in the inventory and on pickups.
         public const string GrenadeName = "파편 수류탄";
-        // The smoke grenade: its loot kind is fixed here the same way (`Smoke = 15` in the enum on integration).
+        // The smoke grenade's loot kind.
         // Its own numbers (fuse, cloud) are SmokeRules.
-        public const LootKind SmokeLootKind = (LootKind)15;
+        public const LootKind SmokeLootKind = LootKind.Smoke;
         public const string SmokeName = "연막탄";
 
         public int MaxCarried = 3;

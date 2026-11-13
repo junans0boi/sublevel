@@ -59,8 +59,6 @@ namespace Game.Net
         // The doors open on their own this long after the server started if no player ever arrives.
         const float PlayerWaitSeconds = 15f;
 
-        const float BotSnapMeters = 2f;
-
         int _nextPlayerSpawn;
         int _playersPlaced;
         int _expectedPlayersCounted;

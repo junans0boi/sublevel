@@ -44,6 +44,7 @@ namespace Game.AI
         Combatant _self;
         CombatantStance _stance;
         NavMeshAgent _agent;
+        KeyHolder _keys; // null on a prefab without keys
         BotBrain _brain;
         BotRules _rules;
         System.Random _rng;
@@ -179,6 +180,7 @@ namespace Game.AI
         {
             _ready = true;
             _rules = BotRules.Current;
+            _keys = GetComponent<KeyHolder>();
             SyncMatch();
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
@@ -281,6 +283,8 @@ namespace Game.AI
         // A clear line from the eyes to that point on that combatant.
         bool Sees(Vector3 eye, Vector3 point, Combatant target)
         {
+            // A smoke cloud hides whoever is in or behind it.
+            if (SmokeSight.Blocks(eye, point)) return false;
             var to = point - eye;
             float distance = to.magnitude;
             if (distance < 1e-3f) return true;
@@ -461,7 +465,16 @@ namespace Game.AI
         void Move(in BotIntent intent, float now)
         {
             if (!OnNavMesh) return;
-            if (!intent.Move)
+            // A region in lockdown (or announced): get out through the pass that stays open longest, whatever the
+            // brain wanted. The server's director knows the plan; there is none in scenes without a lockdown.
+            var zones = ZoneDirector.Instance;
+            Vector3 escape = default;
+            bool escaping = zones != null && zones.TryEscapeTarget(transform.position, out escape);
+            // At a shut barrier with a key: open it (ServerUseKey refuses when the pass is out of reach).
+            if (escaping && _keys != null && _keys.Keys.Value > 0
+                && zones.TryNearestExit(transform.position, out int exitPass, out _, out _) && zones.IsPassBlocking(exitPass))
+                _keys.ServerUseKey(exitPass);
+            if (!intent.Move && !escaping)
             {
                 if (!_agent.isStopped)
                 {
@@ -474,8 +487,8 @@ namespace Game.AI
                 return;
             }
 
-            var target = ToVector(intent.MoveTarget);
-            if (intent.SeekCover)
+            var target = escaping ? escape : ToVector(intent.MoveTarget);
+            if (intent.SeekCover && !escaping)
             {
                 var threat = ToVector(intent.Threat);
                 if (now >= _coverUntil)
@@ -487,7 +500,7 @@ namespace Game.AI
             }
 
             var locomotion = GameData.Rules.Locomotion;
-            float speed = intent.Sprint && !intent.Crouch ? locomotion.SprintSpeed : locomotion.WalkSpeed;
+            float speed = (intent.Sprint || escaping) && !intent.Crouch ? locomotion.SprintSpeed : locomotion.WalkSpeed;
             if (_stance != null) speed *= _stance.MoveFactor;
             _agent.speed = speed;
 

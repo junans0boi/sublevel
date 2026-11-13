@@ -19,7 +19,7 @@ namespace Game.Net
         CombatantHealing _healing;
         ThrowableUser _throwables;
         float _nextScan;
-        int _slotAmmoA, _slotAmmoB;
+        int _slotAmmoA, _slotAmmoB, _slotAmmoC;
         // Ammo that just left the bag (dropped, or loaded into a weapon) is not picked up again while standing
         // where it left: automatic pickup stays off until the combatant has walked away from that spot.
         int _lastReserveTotal;
@@ -131,7 +131,8 @@ namespace Game.Net
             }
             _slotAmmoA = AmmoOf(_combatant.Slot0.Value);
             _slotAmmoB = AmmoOf(_combatant.Slot1.Value);
-            if (_slotAmmoA < 0 && _slotAmmoB < 0) return;
+            _slotAmmoC = AmmoOf(_combatant.Slot2.Value); // the sidearm
+            if (_slotAmmoA < 0 && _slotAmmoB < 0 && _slotAmmoC < 0) return;
             float reachSqr = reach * reach;
             var items = LootItem.All;
             // Backwards: taking an item removes it from the list.
@@ -141,7 +142,7 @@ namespace Game.Net
                 var item = items[i];
                 if (item == null || !item.IsSpawned || item.Kind.Value != (int)LootKind.Ammo) continue;
                 int type = item.Ammo.Value;
-                if (type != _slotAmmoA && type != _slotAmmoB) continue;
+                if (type != _slotAmmoA && type != _slotAmmoB && type != _slotAmmoC) continue;
                 if ((item.transform.position - here).sqrMagnitude > reachSqr) continue;
                 int amount = item.Amount.Value;
                 int fit = FitCount(LootKind.Ammo, (AmmoType)type, amount);

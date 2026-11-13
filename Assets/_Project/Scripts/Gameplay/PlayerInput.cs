@@ -32,6 +32,7 @@ namespace Game.Gameplay
         public bool ThrowReleased; // G: let go this frame
         public bool Map;           // M: open or close the full map
         public bool Holster;       // X: pressed this frame, puts the weapon away (empty hands) or takes it out again
+        public bool CycleThrowable; // T: pressed this frame, switches the selected throwable (frag / smoke)
     }
 
     public interface IPlayerInput
@@ -74,6 +75,7 @@ namespace Game.Gameplay
                 f.ThrowReleased = k.gKey.wasReleasedThisFrame;
                 f.Map = k.mKey.wasPressedThisFrame;
                 f.Holster = k.xKey.wasPressedThisFrame;
+                f.CycleThrowable = k.tKey.wasPressedThisFrame;
                 if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
                 else if (k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
                 else if (k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;

@@ -12,6 +12,9 @@ namespace Game.Gameplay
         Ammo,
         Medkit,
         Grenade,
+        Bandage,
+        FirstAid,
+        Smoke,
         Weapon,
         Helmet,
         Vest,
@@ -58,7 +61,10 @@ namespace Game.Gameplay
         public const int AmmoTypeCount = 4;
         public const int MedkitRow = 4;
         public const int GrenadeRow = 5;
-        public const int BackpackRows = 6;
+        public const int BandageRow = 6;
+        public const int FirstAidRow = 7;
+        public const int SmokeRow = 8;
+        public const int BackpackRows = 9;
         public const int HelmetSlot = 0;
         public const int VestSlot = 1;
 
@@ -77,6 +83,86 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             return user != null ? user.Grenades.Value : 0;
+        }
+
+        public static int Smokes(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.Smokes.Value : 0;
+        }
+
+        public static int Bandages(Combatant combatant)
+        {
+            var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
+            return healing != null ? healing.Bandages.Value : 0;
+        }
+
+        public static int FirstAids(Combatant combatant)
+        {
+            var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
+            return healing != null ? healing.FirstAids.Value : 0;
+        }
+
+        public static int Keys(Combatant combatant)
+        {
+            var keys = combatant != null ? combatant.GetComponent<KeyHolder>() : null;
+            return keys != null ? keys.Keys.Value : 0;
+        }
+
+        // The bag's load: "가방 용량 23/60" and 0..1 (more when over), from the local player's CombatantCarry.
+        // Empty label and 0 without one.
+        public static string CarryLabel(Combatant combatant)
+        {
+            var carry = combatant != null ? combatant.GetComponent<CombatantCarry>() : null;
+            return carry != null ? carry.Label : "";
+        }
+
+        public static float CarryFraction(Combatant combatant)
+        {
+            var carry = combatant != null ? combatant.GetComponent<CombatantCarry>() : null;
+            return carry != null ? carry.Fraction : 0f;
+        }
+
+        // Changes whenever the load or the bag's size does (for the screen's refresh hash).
+        public static int CarryHash(Combatant combatant)
+        {
+            var carry = combatant != null ? combatant.GetComponent<CombatantCarry>() : null;
+            return carry != null ? carry.UsedTenths * 997 + carry.CapacityTenths : 0;
+        }
+
+        // Kinds added after the first inventory (lockdown key, bandage, first-aid kit, smoke): name, icon, tooltip.
+        // "" when the item is none of them.
+        static string ExtraName(LootKind kind)
+        {
+            switch (kind)
+            {
+                case LootKind.Key: return KeyHolder.KeyName;
+                case LootKind.Bandage: return HealRules.BandageName;
+                case LootKind.FirstAidKit: return HealRules.FirstAidName;
+                case LootKind.Smoke: return ThrowableRules.SmokeName;
+                default: return "";
+            }
+        }
+
+        public static string ExtraIconKey(LootKind kind)
+        {
+            switch (kind)
+            {
+                case LootKind.Key: return "key";
+                case LootKind.Bandage: return "bandage";
+                case LootKind.FirstAidKit: return "firstaid";
+                case LootKind.Smoke: return "smoke";
+                default: return "";
+            }
+        }
+
+        static string ExtraDescription(LootItem loot)
+        {
+            var kind = (LootKind)loot.Kind.Value;
+            string name = ExtraName(kind);
+            if (name.Length == 0) return "아이템";
+            string type = kind == LootKind.Key ? "봉쇄 통로 개방" : kind == LootKind.Smoke ? "투척물" : "회복";
+            return name + "\n" + type + " · 수량 " + loot.Amount.Value + "개";
         }
 
         public static InventoryGearState Gear(Combatant combatant, int slot)
@@ -124,7 +210,9 @@ namespace Game.Gameplay
                 case LootKind.Medkit: return "구급상자";
                 default:
                     if (TryArmorSlot(item, out int slot)) return slot == HelmetSlot ? "헬멧" : "조끼";
-                    return IsGrenade(item) ? "수류탄" : "아이템";
+                    if (IsGrenade(item)) return "수류탄";
+                    string extra = ExtraName((LootKind)item.Kind.Value);
+                    return extra.Length > 0 ? extra : "아이템";
             }
         }
 
@@ -144,7 +232,7 @@ namespace Game.Gameplay
                 case LootKind.Medkit: return "medkit";
                 default:
                     if (TryArmorSlot(item, out int slot)) return (slot == HelmetSlot ? "helmet_" : "vest_") + item.Tier.Value;
-                    return IsGrenade(item) ? "grenade" : "";
+                    return IsGrenade(item) ? "grenade" : ExtraIconKey((LootKind)item.Kind.Value);
             }
         }
 
@@ -160,6 +248,12 @@ namespace Game.Gameplay
                     return "구급상자\n보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개";
                 case InventorySourceKind.Grenade:
                     return "수류탄\n보유 " + Grenades(combatant) + "개";
+                case InventorySourceKind.Bandage:
+                    return HealRules.BandageName + "\n보유 " + Bandages(combatant) + "개 · 더블클릭 사용";
+                case InventorySourceKind.FirstAid:
+                    return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 더블클릭 사용";
+                case InventorySourceKind.Smoke:
+                    return ThrowableRules.SmokeName + "\n보유 " + Smokes(combatant) + "개";
                 case InventorySourceKind.Weapon:
                     int weaponId = WeaponId(combatant, source.Index);
                     var weapon = GameData.Weapons.Find(weaponId);
@@ -189,7 +283,7 @@ namespace Game.Gameplay
                 case LootKind.Medkit: return "구급상자\n소모품 · 수량 " + loot.Amount.Value + "개";
                 default:
                     if (TryArmorSlot(loot, out int slot)) return (slot == HelmetSlot ? "헬멧" : "조끼") + "\n장구류";
-                    return IsGrenade(loot) ? "수류탄\n투척물 · 수량 " + loot.Amount.Value + "개" : "아이템";
+                    return IsGrenade(loot) ? "수류탄\n투척물 · 수량 " + loot.Amount.Value + "개" : ExtraDescription(loot);
             }
         }
 
@@ -286,6 +380,26 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             if (user != null) user.CmdDropGrenade();
+        }
+
+        public static void DropSmoke(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            if (user != null) user.CmdDropSmoke();
+        }
+
+        // One bandage or first-aid kit onto the ground (HealKind as int).
+        public static void DropHealing(Combatant combatant, HealKind kind)
+        {
+            var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
+            if (healing != null) healing.CmdDrop((int)kind);
+        }
+
+        // Starts that bandage or kit (timed; the server refuses at full health or while busy).
+        public static void UseHealing(Combatant combatant, HealKind kind)
+        {
+            var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
+            if (healing != null) healing.CmdUseKind((int)kind);
         }
 
         // The server takes the piece only when it is better than the worn one (see CanEquipArmor).

@@ -42,8 +42,8 @@ namespace Game.Gameplay
     }
 
     // What a camera or the render settings should do about radiation: a fog the local player sees while standing in a
-    // region in lockdown or worse. Current is eased frame by frame by ZoneBanner. The master's camera wiring reads it:
-    //   if (ZoneFog.Current.Active) { RenderSettings.fogColor = Current.Colour; RenderSettings.fogDensity = Mathf.Max(baseDensity, Current.Density); }
+    // region in lockdown or worse. Current is eased frame by frame by ZoneBanner; ZoneFogView applies it to the
+    // render settings and restores the scene's fog afterwards.
     public struct ZoneFogState
     {
         public bool Active;     // Density is above the threshold: apply it

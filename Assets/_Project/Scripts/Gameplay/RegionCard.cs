@@ -1,15 +1,16 @@
+using Game.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
     // Top left: where the local player is. The region is the one whose centre is nearest on the ground
-    // (WorldInfo.Current); the card is hidden when the scene has no map. The state is fixed to "안전" until the
-    // lockdown system exists (M3), and the pass arrow is a placeholder that points at the nearest pass of the region.
+    // (WorldInfo.Current); the card is hidden when the scene has no map. The state is the lockdown's for that region
+    // (ZoneStatus.Current, "안전" without a lockdown); the arrow points at the nearest pass of the region.
     public sealed class RegionCard
     {
         public const float Width = 320f, Height = 104f;
-        public const string StateSafe = "안전"; // [MASTER] ZoneStatus.Current once lockdown exists (M3)
+        public const string StateSafe = "안전";
 
         public RectTransform Root { get; private set; }
 
@@ -18,6 +19,7 @@ namespace Game.Gameplay
         GameObject _arrowRoot, _passRoot;
         int _shownRegion = -2, _shownMeters = int.MinValue;
         float _shownArrowZ = float.NaN;
+        ZoneState _shownState = ZoneState.Safe;
 
         public bool Shown => Root != null && Root.gameObject.activeSelf;
         public string NameShown => Shown ? _name.text : "";
@@ -65,6 +67,16 @@ namespace Game.Gameplay
                 _shownRegion = region;
                 _name.text = world.Regions[region].Name ?? "";
                 _shownMeters = int.MinValue;
+            }
+
+            // The lockdown state where the player stands (safe when there is no lockdown in this scene).
+            var zone = ZoneStatus.Current;
+            var state = zone.Valid ? zone.State : ZoneState.Safe;
+            if (state != _shownState)
+            {
+                _shownState = state;
+                _state.text = "상태  " + ZoneStatus.Label(state);
+                _state.color = state == ZoneState.Safe ? UiKit.Text : state == ZoneState.Warning ? UiKit.Accent : UiKit.Danger;
             }
 
             // The nearest pass that leaves this region.

@@ -17,8 +17,10 @@ namespace Game.AI
         {
             if (bot == null || item == null || !bot.IsServerInitialized || bot.Dead.Value || !item.IsSpawned) return false;
             if ((item.transform.position - bot.transform.position).sqrMagnitude > Combatant.PickupRange * Combatant.PickupRange) return false;
-            if (!bot.ServerGive(item.ToEntry())) return false;
-            item.Despawn();
+            // What the bag has no room for stays on the ground.
+            if (!bot.ServerGive(item.ToEntry(), out int left)) return false;
+            if (left > 0) item.Amount.Value = left;
+            else item.Despawn();
             return true;
         }
 

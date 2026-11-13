@@ -62,12 +62,13 @@ public static class TestBoxBuilder
         EditorApplication.Exit(0);
     }
 
-    // Loot box materials, indexed by LootKind (Weapon 0, Ammo 1, Medkit 2, Helmet 3, Vest 4, 5-9 unused, Grenade 10).
+    // Loot box materials, indexed by LootKind (Weapon 0, Ammo 1, Medkit 2, Helmet 3, Vest 4, 5-9 unused, Grenade 10,
+    // Optic 11, Key 12, Bandage 13, First-aid kit 14, Smoke 15).
     // Armour is tinted per tier at run time (LootView), so its material only sets the base look. Muted on purpose.
     static Material[] BuildLootMaterials()
     {
         var other = Lit("LootOther", new Color(0.5f, 0.5f, 0.5f));
-        var mats = new Material[11];
+        var mats = new Material[16];
         for (int i = 0; i < mats.Length; i++) mats[i] = other;
         mats[0] = Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f));
         mats[1] = Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f));
@@ -75,6 +76,11 @@ public static class TestBoxBuilder
         mats[3] = Lit("LootHelmet", new Color(0.35f, 0.5f, 0.7f));
         mats[4] = Lit("LootVest", new Color(0.7f, 0.45f, 0.25f));
         mats[10] = Lit("LootGrenade", new Color(0.33f, 0.4f, 0.2f));
+        mats[11] = Lit("LootOptic", new Color(0.2f, 0.22f, 0.26f));
+        mats[12] = Lit("LootKey", new Color(0.72f, 0.6f, 0.28f));
+        mats[13] = Lit("LootBandage", new Color(0.82f, 0.78f, 0.68f));
+        mats[14] = Lit("LootFirstAid", new Color(0.62f, 0.24f, 0.22f));
+        mats[15] = Lit("LootSmoke", new Color(0.46f, 0.49f, 0.52f));
         return mats;
     }
 
@@ -82,7 +88,7 @@ public static class TestBoxBuilder
     // combatant prefab; the outdoor world builder can use the same (BuildGearAssets + AddGear).
     public struct GearAssets
     {
-        public Material Glow, Dust, CrateMarker;
+        public Material Glow, Dust, CrateMarker, Smoke;
         public NetworkObject ThrownGrenade;
     }
 
@@ -98,10 +104,16 @@ public static class TestBoxBuilder
         // A visual only: no collider (the server casts its own spheres), 14 cm across.
         var body = Shape(PrimitiveType.Sphere, "Visual", go.transform, Vector3.zero, Vector3.one * 0.14f, Lit("ThrownGrenade", new Color(0.25f, 0.3f, 0.17f)), false);
         Set(thrown, "_visual", p => p.objectReferenceValue = body);
+        // The smoke canister: a small grey cylinder, shown instead of the grenade when the throw is a smoke.
+        var canister = Shape(PrimitiveType.Cylinder, "SmokeVisual", go.transform, Vector3.zero, new Vector3(0.09f, 0.08f, 0.09f), Lit("ThrownSmoke", new Color(0.46f, 0.49f, 0.52f)), false);
+        canister.SetActive(false);
+        Set(thrown, "_smokeVisual", p => p.objectReferenceValue = canister);
         return new GearAssets
         {
             Glow = glow,
             Dust = dust,
+            // Alpha blended like the shot dust, for the smoke cloud's puffs (tinted by ThrowableView._cloudColor).
+            Smoke = FxMaterial("SmokeCloud", Color.white, false),
             CrateMarker = Lit("DeathCrateMarker", new Color(0.32f, 0.27f, 0.2f)),
             ThrownGrenade = SavePrefab(go, "ThrownGrenade"),
         };
@@ -119,6 +131,8 @@ public static class TestBoxBuilder
         var view = go.AddComponent<ThrowableView>();
         Set(view, "_glowMaterial", p => p.objectReferenceValue = gear.Glow);
         Set(view, "_dustMaterial", p => p.objectReferenceValue = gear.Dust);
+        Set(view, "_smokeMaterial", p => p.objectReferenceValue = gear.Smoke != null ? gear.Smoke : gear.Dust);
+        Set(view, "_cloudColor", p => p.colorValue = new Color(0.8f, 0.81f, 0.82f, 0.32f));
         // Placeholder: the shotgun shot, pitched down, until the explosion sound is licensed (ASSETS).
         var blast = Source(go.transform, "BlastAudio", 1f, 5f, 120f);
         Set(view, "_blastSource", p => p.objectReferenceValue = blast);
@@ -285,6 +299,10 @@ public static class TestBoxBuilder
         SetArray(controller, "_bodyRenderers", renderers);
         WireShotFx(view, go, gear.Glow, gear.Dust);
         AddGear(go, gear);
+        // Lockdown keys, timed healing and the bag limit (with automatic ammo pickup).
+        go.AddComponent<KeyHolder>();
+        go.AddComponent<CombatantHealing>();
+        go.AddComponent<CombatantCarry>();
         return SavePrefab(go, "Player");
     }
 
@@ -320,6 +338,10 @@ public static class TestBoxBuilder
         AddCharacter(go);
         WireShotFx(view, go, gear.Glow, gear.Dust);
         AddGear(go, gear);
+        // Keys to open a barrier on the way out of a closing region, and the same bag limit as a player. Bots heal
+        // with the instant medkit (BotServerActions.UseMedkit), so no CombatantHealing.
+        go.AddComponent<KeyHolder>();
+        go.AddComponent<CombatantCarry>();
         return SavePrefab(go, "Bot");
     }
 

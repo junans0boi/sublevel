@@ -10,9 +10,8 @@ namespace Game.Net
     [RequireComponent(typeof(Combatant))]
     public class KeyHolder : NetworkBehaviour, ILootReceiver
     {
-        // The loot kind of a key pickup. Core/Loot.cs belongs to another batch, so the value is fixed here and kept
-        // away from the kinds being added there; the enum gets the matching name on integration (`Key = 12`).
-        public const LootKind KeyLootKind = (LootKind)12;
+        // The loot kind of a key pickup.
+        public const LootKind KeyLootKind = LootKind.Key;
         // Shown on pickups and in the inventory.
         public const string KeyName = "봉쇄 열쇠";
         public const int MaxCarried = 4;
