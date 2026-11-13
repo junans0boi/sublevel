@@ -48,3 +48,12 @@
 - 완료: 통합(#71 #83 #92 #93), #91 연료·HUD·엔진음, #94 #95 #101 UI, #77 롱테스트, 차량 좌석 실측(ADR-077)·손/자세/카메라(ADR-078), #90 피해 1·2차(ADR-074), #76 엘리베이터(ADR-076·079·080).
 - 남은 일: DirtBike 1인칭 정면에서 핸들바 안 보임(눈 높이, VehicleModels.cs) / #90 폭발 섬광 고리 모양·불 밑단 초록 기·찌그러짐 가시성 확인·오토바이 탄흔·떠 있는 흰 구체/흰 판 / PlayMode 실패 1건 `VehiclePosePlayTests.SeatedOnATiltedMotorcycle_TheEyeStaysAtTheSeatMarker`(기울기 15.7° < 20°) / #76 봇이 승강장 6.6m 앞에서 멈춤 원인, 원격 2인 테스트(접속 경로 필요) / #88 미착수 / 사람 확인: 엔진음·엘리베이터 소리 청취, GoblinV12 엠블럼·번호판 라이선스.
 - 작업 방식: 전수 점검(사진 대조표 + 코드) → 한 번에 수정 → 캡처 1회로 메인이 직접 엄격 판정. 복사본 ../sublevel-b, -c, -d 는 병렬용(삭제해도 됨).
+
+## 8. 2026-11-14 플레이 후기 세션 종료 시점 (토큰 소진으로 중단)
+- 완료·push: #105 이동 중 UI·앉기, #106 3D 사운드(ADR-086), #107 #110 #113 인벤토리(ADR-081·082), #108 파쿠르 밖→안(ADR-088), #109 #112 #88 오토바이 기울기·로드킬(ADR-084·085), #111 양손 로우레디(ADR-083), #114 바닥 아이템 모델, G5 줍기 목록 #116(ADR-093), PUBG 차이 분석 `docs/PUBG_GAP_V2.md`.
+- **중단된 작업 (미커밋, 테스트 미완 — 각 복사본 작업 트리에만 있음. 이어서 하려면 해당 복사본에서 diff 검토 → 테스트 → 커밋)**:
+  - `../sublevel-b`: G1 총기 손맛·TTK(ADR-089·090, Aiming/Fire/WeaponDef/Loadout/DamageRules/weapons.json) + G2 방어구·가방(ADR-091, Armor/Carry/CombatantGear/loot.json/LootMeshes/ItemIcons) 섞여 있음.
+  - `../sublevel-c`: #121 조준 견착·앉아걷기 발 뜸 + G3 이동 수치(ADR-095·096, Locomotion/Stance/CombatantAnimation*) + G4 소리 단서(ADR-092, CombatantAudio/SpatialAudio/Audio·ASSET_LEDGER) 섞여 있음.
+  - `../sublevel-d`: #115 모서리 매달리기(ADR-087, 레지 테스트 통과·캡처 전) + G6 데스캠·관전(ADR-094, SpectateCamera/ResultScreen/MatchState) 섞여 있음.
+- 다음 순서: 위 WIP 마무리 → P1(G7 부착물, G8 회복·부스트, G9 투척물, G10 탄도·영점, G11 문, G12 수영, G13 기절·업기, G14 설정) → 리뷰 빌드.
+- 병렬 규칙: scratchpad의 agent_rules.md 내용 = 복사본별 Unity 잠금, 소유 파일만 수정, `git commit -- <paths>`, rebase --autostash.
