@@ -468,7 +468,7 @@ public static class VehicleBuilder
         Box(kit, Plate, new Vector3(0f, 0.47f, 2.175f), Quaternion.identity, new Vector3(0.48f, 0.11f, 0.01f));
         Box(kit, Plate, new Vector3(0f, 0.68f, -2.16f), Quaternion.identity, new Vector3(0.48f, 0.11f, 0.01f));
 
-        Interior(kit);
+        CabinInterior(kit);
         return kit.ToMesh("Car_Body");
     }
 
@@ -526,7 +526,7 @@ public static class VehicleBuilder
     }
 
     // What shows through the glass: the dashboard, the steering wheel, the seat backs and headrests.
-    static void Interior(MeshKit kit)
+    static void CabinInterior(MeshKit kit)
     {
         RoundedBox(kit, Interior, new Vector3(0f, 1.04f, 0.86f), new Vector3(1.6f, 0.1f, 0.36f), 0.03f);
         // Steering wheel in front of the driver, tilted toward them: a ring of short beams, a hub and a column.

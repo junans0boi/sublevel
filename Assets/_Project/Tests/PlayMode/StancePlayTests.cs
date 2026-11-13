@@ -306,9 +306,9 @@ namespace Game.Tests
             var pc = PlayerController.Local;
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
             yield return WaitUntil(() => me.ActiveWeaponId == 3, 2f, "rifle in hand");
-            // Along the south wall, heading east: out of every dummy's sight range.
-            pc.Teleport(new Vector3(-25f, 0.1f, -27f));
-            pc.LookAt(new Vector3(25f, 1.7f, -27f));
+            // Along the south wall, heading east past the parked car (z = -27): out of every dummy's sight range.
+            pc.Teleport(new Vector3(-25f, 0.1f, -29f));
+            pc.LookAt(new Vector3(25f, 1.7f, -29f));
             int shots = 0;
             void OnShot(Vector3 from, Vector3 to) => shots++;
             me.ShotFired += OnShot;

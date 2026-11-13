@@ -62,6 +62,7 @@ namespace Game.Gameplay
         // Ground speed the clips were authored for (m/s), measured when the character was built.
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
+        [SerializeField] float _walkClipSpeed = 1.3f; // the walk clip alone (the slow walk plays it, sped up)
         // Foot height above the character's origin: planted below the first, in the air above the second.
         [SerializeField] float _footPlantHeight = 0.12f;
         [SerializeField] float _footLiftHeight = 0.2f;
@@ -226,10 +227,14 @@ namespace Game.Gameplay
             var proneRules = StanceRules.Current;
             _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * _prone, Vector3.right)
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
-            _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
+            // Slow walk (Ctrl, ADR-065 (3)): its speed falls between the walk and run clips, whose cycles do not line up,
+            // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
+            bool slowWalk = !dead && _stance != null && _stance.SlowWalk.Value && !_legs.Backward && _walkClipSpeed > 0f;
+            float shown = slowWalk ? Mathf.Min(speed, _walkClipSpeed) : speed;
+            _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
-            float clipSpeed = _legs.Backward ? _backClipSpeed : _forwardClipSpeed;
+            float clipSpeed = _legs.Backward ? _backClipSpeed : slowWalk ? _walkClipSpeed : _forwardClipSpeed;
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);

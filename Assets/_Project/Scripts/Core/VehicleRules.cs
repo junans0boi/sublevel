@@ -210,14 +210,17 @@ namespace Game.Core
             NoThroughZero(-Math.Sign(forwardSpeed) * decel, forwardSpeed, dt);
 
         // An acceleration against the motion that would pass zero speed within this step only brings it to rest.
+        // A body parked on its springs creeps by hairs (1e-10 m/s either way): that is a standstill, not motion.
         static float NoThroughZero(float a, float speed, float dt)
         {
-            if (dt <= 0f || a * speed >= 0f) return a;
+            if (dt <= 0f || a * speed >= 0f || Math.Abs(speed) < StandstillSpeed) return a;
             if (Math.Abs(a) * dt > Math.Abs(speed)) return -speed / dt;
             return a;
         }
 
         // 1 at a standstill, falling steeply near the top speed (so the car gets close to it in reasonable time).
+        const float StandstillSpeed = 1e-3f; // m/s
+
         static float Fade(float fraction)
         {
             fraction = Math.Max(0f, Math.Min(1f, fraction));

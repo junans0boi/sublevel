@@ -44,6 +44,8 @@ namespace Game.Gameplay
         public ParkourMove ParkourUnderWay => _parkour.Move;
         public ParkourPlan LastParkourPlan { get; private set; }
         public bool ParkourGoingBack => _parkourBack;
+        // The last move that finished was run back to its start (S early in it).
+        public bool LastParkourTakenBack { get; private set; }
         public float ViewYaw => Yaw + _freeYaw;
         public float ViewPitch => Pitch + _freePitch;
         // This frame's input as the character got it (empty while a screen is open), for other owner-side
@@ -365,6 +367,7 @@ namespace Game.Gameplay
         void FinishParkour()
         {
             bool cancelled = _parkourBack;
+            LastParkourTakenBack = cancelled;
             transform.position = cancelled ? _parkour.Start : _parkour.End;
             EndParkourLocally();
             if (IsServerInitialized) _stance.ServerEndParkour(transform.position, cancelled);

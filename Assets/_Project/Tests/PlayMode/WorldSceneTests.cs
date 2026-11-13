@@ -60,6 +60,11 @@ namespace Game.Tests
             Assert.IsNotNull(world, "World scene should contain a WorldInfo");
             var player = PlayerController.Local.transform;
 
+            // The car rises out of its shaft before the doors open (ADR-065 (1)): stand still from then on.
+            float doors = Time.realtimeSinceStartup + 30f;
+            while (SpawnProtection.InputBlocked && Time.realtimeSinceStartup < doors) yield return null;
+            Assert.IsFalse(SpawnProtection.InputBlocked, "the elevator doors open");
+
             // Not falling: the height holds for a second.
             float lowest = player.position.y, highest = lowest;
             float end = Time.time + 1f;

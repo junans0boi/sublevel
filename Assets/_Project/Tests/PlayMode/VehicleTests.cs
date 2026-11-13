@@ -280,7 +280,7 @@ namespace Game.Tests
             yield return SwitchTo(bike, 1);
             Assert.AreEqual(1, SeatOf(me), "on the pillion");
             Assert.IsTrue(VehicleSeat.Astride(me));
-            Assert.IsTrue(me.ServerSelectSlot(RifleSlot));
+            Assert.AreEqual(Rifle, me.ActiveWeaponId, "the rifle taken out on the rider's seat is still in hand");
             yield return new WaitForSeconds(0.2f);
             Assert.IsTrue(me.ServerFire(bike.transform.forward), "the pillion fires the rifle");
         }

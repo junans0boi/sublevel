@@ -31,6 +31,7 @@ namespace Game.Gameplay
         const float EdgeDrop = 0.25f;         // the top ends where the surface falls away by this much
         const float LandingMargin = 0.2f;     // past the far side, clear of it
         const float MaxLandingDrop = 2.0f;    // ground farther below than this: the move ends in the air and the body falls
+        const float GroundProbe = 0.25f;      // the ground under the feet is looked for this far above and below them
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
         static readonly Collider[] Overlaps = new Collider[16];
@@ -41,6 +42,9 @@ namespace Game.Gameplay
         {
             var plan = new ParkourPlan { Move = ParkourMove.None, Start = body.position };
             var feet = body.position;
+            // Heights are measured from the ground under the feet: a standing character controller floats its skin
+            // width (about 8 cm) above it.
+            if (Cast(feet + Vector3.up * GroundProbe, Vector3.down, GroundProbe * 2f, body, out float ground)) feet.y += GroundProbe - ground;
             var forward = Quaternion.Euler(0f, yawDeg, 0f) * Vector3.forward;
             float reach = radius + rules.ProbeMeters;
 

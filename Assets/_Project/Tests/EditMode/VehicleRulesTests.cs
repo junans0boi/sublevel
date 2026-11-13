@@ -93,6 +93,15 @@ namespace Game.Tests
         }
 
         [Test]
+        public void Throttle_FromAStandstillThatCreptBackByAHair_StillPullsFully()
+        {
+            // A parked body on its springs reads speeds like -1e-10 m/s; the pull must not be clipped as if braking.
+            float top = Vehicles.TopSpeed(false, Car);
+            Assert.AreEqual(Car.EngineAccel, Vehicles.DriveAccel(-1e-10f, 1f, top, 7f, Dt, Car), 1e-4f, "forward");
+            Assert.AreEqual(-Car.EngineAccel * Car.ReverseAccelFactor, Vehicles.DriveAccel(1e-10f, -1f, top, 7f, Dt, Car), 1e-4f, "reverse");
+        }
+
+        [Test]
         public void Boost_RaisesTopSpeedAndPull()
         {
             Assert.AreEqual(Vehicles.Kmh(Car.BoostMaxKmh), Vehicles.TopSpeed(false, true, Car), 1e-4f);

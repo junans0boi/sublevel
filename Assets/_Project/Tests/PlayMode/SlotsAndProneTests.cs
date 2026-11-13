@@ -62,11 +62,11 @@ namespace Game.Tests
         static void Give(Combatant me, int weaponId, int mag) =>
             Assert.IsTrue(me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag }), "weapon " + weaponId + " accepted");
 
-        // Along the south wall, heading east: out of every dummy's sight range.
+        // Along the south wall, heading east past the parked car (z = -27): out of every dummy's sight range.
         static void GoToTheQuietLane(PlayerController pc)
         {
-            pc.Teleport(new Vector3(-25f, 0.1f, -27f));
-            pc.LookAt(new Vector3(25f, 1.7f, -27f));
+            pc.Teleport(new Vector3(-25f, 0.1f, -29f));
+            pc.LookAt(new Vector3(25f, 1.7f, -29f));
         }
 
         static float EyeHeight(Combatant c) => c.EyePosition.y - c.transform.position.y;
@@ -323,14 +323,14 @@ namespace Game.Tests
             Assert.AreEqual(7f * 1.12f, unarmedSprint, 0.45f);
 
             _input.Frame.Sprint = false;
-            pc.Teleport(new Vector3(-25f, 0.1f, -27f));
+            pc.Teleport(new Vector3(-25f, 0.1f, -29f));
             float unarmedWalk = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => unarmedWalk = s);
             Assert.AreEqual(4.5f * 1.12f, unarmedWalk, 0.3f, "unarmed walk");
 
             _input.Frame.SelectSlot = 0;
             yield return WaitUntil(() => !me.Holstered.Value, 2f, "rifle out again");
-            pc.Teleport(new Vector3(-25f, 0.1f, -27f));
+            pc.Teleport(new Vector3(-25f, 0.1f, -29f));
             float armedWalk = 0f;
             yield return MeasureEastSpeed(pc, 1.0f, s => armedWalk = s);
             Assert.AreEqual(4.5f, armedWalk, 0.3f, "armed walk");
