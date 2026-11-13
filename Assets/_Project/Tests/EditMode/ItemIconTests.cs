@@ -14,7 +14,7 @@ namespace Game.Tests
 
         static readonly string[] Expected =
         {
-            "weapon_1", "weapon_2", "weapon_3", "weapon_4",
+            "weapon_1", "weapon_2", "weapon_3", "weapon_4", "weapon_5",
             "ammo_9mm", "ammo_556", "ammo_762", "ammo_12ga",
             "medkit",
             "helmet_1", "helmet_2", "helmet_3",
@@ -35,7 +35,7 @@ namespace Game.Tests
         static Sprite Get(string key) => (Sprite)IconsType().GetMethod("Get", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { key });
 
         [Test]
-        public void KnownKeys_AreTheExpectedTwentyFour_WithoutDuplicates()
+        public void KnownKeys_AreTheExpectedTwentyFive_WithoutDuplicates()
         {
             var keys = KnownKeys();
             CollectionAssert.AreEquivalent(Expected, keys);

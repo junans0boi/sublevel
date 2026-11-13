@@ -232,9 +232,10 @@ public static class TestBoxBuilder
         var audio = go.AddComponent<CombatantAudio>();
         Set(audio, "_weaponSource", p => p.objectReferenceValue = Source(go.transform, "WeaponAudio", 1.3f, 3f, 70f));
         Set(audio, "_bodySource", p => p.objectReferenceValue = Source(go.transform, "BodyAudio", 0.3f, 1.5f, 25f));
-        // Indexed by weapon id: none, VK-9, Ordo, Warden, Breacher.
-        SetArray(audio, "_shotByWeapon", Clips(WeaponAudioDir + "FreeFirearmLibrary/", null, "shot_pistol.wav", "shot_smg.wav", "shot_rifle.wav", "shot_shotgun.wav"));
-        SetArray(audio, "_reloadByWeapon", Clips(WeaponAudioDir + "OgaGunReload/", null, "reload_pistol.wav", "reload_rifle.wav", "reload_rifle.wav", "reload_shotgun.wav"));
+        // Indexed by weapon id: none, VK-9, Ordo, Warden, Breacher, Sentinel. Sentinel reuses the rifle shot (CombatantAudio plays it lower)
+        // and the shotgun reload (heavier, slower) until a dedicated bolt-action sound exists.
+        SetArray(audio, "_shotByWeapon", Clips(WeaponAudioDir + "FreeFirearmLibrary/", null, "shot_pistol.wav", "shot_smg.wav", "shot_rifle.wav", "shot_shotgun.wav", "shot_rifle.wav"));
+        SetArray(audio, "_reloadByWeapon", Clips(WeaponAudioDir + "OgaGunReload/", null, "reload_pistol.wav", "reload_rifle.wav", "reload_rifle.wav", "reload_shotgun.wav", "reload_shotgun.wav"));
         SetArray(audio, "_footsteps", Clips(FoleyDir, "footstep_concrete_000.ogg", "footstep_concrete_001.ogg", "footstep_concrete_002.ogg", "footstep_concrete_003.ogg", "footstep_concrete_004.ogg"));
         SetArray(audio, "_hits", Clips(FoleyDir, "impactPunch_medium_000.ogg", "impactPunch_medium_001.ogg", "impactPunch_medium_002.ogg"));
         return visual.BodyRenderers;

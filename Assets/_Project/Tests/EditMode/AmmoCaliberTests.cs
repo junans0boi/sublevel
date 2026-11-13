@@ -115,12 +115,13 @@ namespace Game.Tests
         public void WeaponData_EachAmmoIsAValidCaliber_AndMatchesAdr054()
         {
             var table = JsonUtility.FromJson<WeaponTable>(File.ReadAllText(DataFolder + "weapons.json"));
-            Assert.AreEqual(4, table.Weapons.Length);
+            Assert.AreEqual(5, table.Weapons.Length);
             foreach (var weapon in table.Weapons) Assert.IsTrue(AmmoNames.IsValid(weapon.Ammo), weapon.Name);
             Assert.AreEqual(AmmoType.Pistol9, table.Find(1).Ammo, "VK-9");
             Assert.AreEqual(AmmoType.Pistol9, table.Find(2).Ammo, "Ordo");
             Assert.AreEqual(AmmoType.Rifle556, table.Find(3).Ammo, "Warden");
             Assert.AreEqual(AmmoType.Shotgun12, table.Find(4).Ammo, "Breacher");
+            Assert.AreEqual(AmmoType.Rifle762, table.Find(5).Ammo, "Sentinel");
         }
 
         [Test]

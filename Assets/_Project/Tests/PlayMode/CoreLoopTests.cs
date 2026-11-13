@@ -143,7 +143,7 @@ namespace Game.Tests
         [UnityTest]
         public IEnumerator DataFiles_LoadAndAreConsistent()
         {
-            Assert.AreEqual(4, GameData.Weapons.Weapons.Length);
+            Assert.AreEqual(5, GameData.Weapons.Weapons.Length);
             foreach (var entry in GameData.Loot.Entries)
                 if (entry.Kind == LootKind.Weapon)
                     Assert.IsNotNull(GameData.Weapons.Find(entry.WeaponId), "loot refers to weapon " + entry.WeaponId);

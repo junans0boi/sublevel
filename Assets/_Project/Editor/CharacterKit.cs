@@ -30,6 +30,8 @@ public static class CharacterKit
         new WeaponModel { Id = 2, File = "SubmachineGun_1.fbx", Length = 0.50f, MuzzleAlongMinusX = true, Forward = 0.14f, Up = 0.00f }, // Ordo
         new WeaponModel { Id = 3, File = "Bullpup_1.fbx", Length = 0.75f, MuzzleAlongMinusX = true, Forward = 0.09f, Up = 0.01f },       // Warden
         new WeaponModel { Id = 4, File = "Shotgun_1.fbx", Length = 0.95f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },       // Breacher
+        // Sentinel: no sniper model in the pack, so the assault rifle scaled long stands in (placeholder shape).
+        new WeaponModel { Id = 5, File = "AssaultRifle_1.fbx", Length = 1.05f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },   // Sentinel
     };
 
     const string MaskPath = SceneLook.GeneratedDir + "/CharacterUpperBody.mask";
