@@ -22,6 +22,8 @@ namespace Game.Net
         public readonly SyncVar<int> Smokes = new SyncVar<int>();
         // The ThrowableKind the next throw uses.
         public readonly SyncVar<int> Selected = new SyncVar<int>();
+        // A fragmentation grenade with its pin out, burning its fuse in the hand (ADR-101).
+        public readonly SyncVar<bool> Cooking = new SyncVar<bool>();
 
         // The local player's own, for the HUD and the inventory. Null when there is none.
         public static ThrowableUser Local { get; private set; }
@@ -32,6 +34,7 @@ namespace Game.Net
         Combatant _combatant;
         CombatantCarry _carry;
         double _nextThrowAt;
+        double _cookStart; // this side's clock when it learned the pin was pulled
         bool _missingPrefabLogged;
 
         // Server: how many grenades this combatant has thrown, and the last one (null once it is gone).
@@ -42,11 +45,22 @@ namespace Game.Net
         {
             _combatant = GetComponent<Combatant>();
             _carry = GetComponent<CombatantCarry>();
+            Cooking.OnChange += (previous, next, asServer) => { if (next) _cookStart = Time.timeAsDouble; };
+        }
+
+        // Seconds the pin has been out (0 when not cooking) and what is left of the fuse.
+        public float CookedSeconds => Cooking.Value ? (float)(Time.timeAsDouble - _cookStart) : 0f;
+        public float CookRemaining => Cooking.Value ? Throwables.FuseLeft(ThrowableRules.Current.FuseSeconds, CookedSeconds) : 0f;
+
+        void Update()
+        {
+            // Out of fuse in the hand, or the hand died: it goes off where it is.
+            if (IsServerInitialized && Cooking.Value && (_combatant.Dead.Value || CookRemaining <= 0f)) ServerHandExplode();
         }
 
         // ---- Read-only, every side (HUD) ----
 
-        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-101/102).
+        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-102/103).
         public int ExtraTenths => 0;
 
         public ThrowableKind SelectedKind => (ThrowableKind)Selected.Value;
@@ -146,17 +160,55 @@ namespace Game.Net
             if (IsServerInitialized) ServerCycle(); else CmdCycle();
         }
 
+        // Pulls the pin of the selected fragmentation grenade (R while holding the throw key). The fuse now runs in the
+        // hand; the throw uses what is left and when it is out the grenade goes off in the hand.
+        [Server]
+        public bool ServerBeginCook()
+        {
+            if (Cooking.Value || SelectedKind != ThrowableKind.Frag || Grenades.Value <= 0) return false;
+            if (_combatant.Dead.Value || _combatant.TeamBlocksAction || !VehicleSeat.CanThrow(_combatant) || Time.timeAsDouble < _nextThrowAt) return false;
+            _cookStart = Time.timeAsDouble;
+            Cooking.Value = true;
+            return true;
+        }
+
+        // The hand opens on a live grenade: it is used up and bursts at the hand.
+        [Server]
+        void ServerHandExplode()
+        {
+            Cooking.Value = false;
+            if (Grenades.Value <= 0 || _thrownPrefab == null) return;
+            var dir = transform.forward;
+            Grenades.Value--;
+            var thrown = Instantiate(_thrownPrefab, ThrowOrigin(dir), Quaternion.identity);
+            var item = thrown.GetComponent<ThrownItem>();
+            item.Init(_combatant, Vector3.zero, ThrowableRules.Current, ThrowableKind.Frag, 0f);
+            ServerManager.Spawn(thrown);
+            LastThrown = item;
+            ServerThrows++;
+            _nextThrowAt = Time.timeAsDouble + ThrowableRules.Current.MinThrowInterval;
+        }
+
         // A throw the way a player makes it: from the hand, along where they look.
         [Server]
         public bool ServerThrowAimed(Vector3 direction) => ServerThrowAimed(direction, SelectedKind);
 
         [Server]
-        public bool ServerThrowAimed(Vector3 direction, ThrowableKind kind)
+        public bool ServerThrowAimed(Vector3 direction, ThrowableKind kind) => ServerThrowAimed(direction, kind, false);
+
+        // `roll`: low and level along the ground from the hip instead of a lob from the hand.
+        [Server]
+        public bool ServerThrowAimed(Vector3 direction, ThrowableKind kind, bool roll)
         {
             float sqr = direction.sqrMagnitude;
             if (float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
             direction.Normalize();
-            return ServerThrow(ThrowOrigin(direction), ThrowVelocity(direction, ThrowableRules.Current), kind);
+            var rules = ThrowableRules.Current;
+            if (!roll) return ServerThrow(ThrowOrigin(direction), ThrowVelocity(direction, rules), kind);
+            Throwables.RollVelocity(direction.x, direction.y, direction.z, rules, out float vx, out float vz);
+            var flat = new Vector3(vx, 0f, vz);
+            if (flat.sqrMagnitude < 1e-6f) return false;
+            return ServerThrow(transform.position + Vector3.up * rules.RollHandHeight + flat.normalized * ThrowableRules.Current.ArmDistance * 0.5f, flat, kind);
         }
 
         // Throws one of the selected kind from a point with a velocity. Refused when dead, out of them, too soon after
@@ -186,9 +238,12 @@ namespace Game.Net
             velocity = Vector3.ClampMagnitude(velocity, rules.ThrowSpeed);
             _nextThrowAt = now + rules.MinThrowInterval;
             if (kind == ThrowableKind.Smoke) Smokes.Value--; else Grenades.Value--;
+            // A cooked grenade keeps burning from where the pin left it.
+            float fuse = -1f;
+            if (kind == ThrowableKind.Frag && Cooking.Value) { fuse = CookRemaining; Cooking.Value = false; }
             var thrown = Instantiate(_thrownPrefab, origin, Quaternion.identity);
             var item = thrown.GetComponent<ThrownItem>();
-            item.Init(_combatant, velocity, rules, kind);
+            item.Init(_combatant, velocity, rules, kind, fuse);
             ServerManager.Spawn(thrown);
             LastThrown = item;
             ServerThrows++;
@@ -205,6 +260,17 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdThrow(Vector3 direction) => ServerThrowAimed(direction);
+
+        [ServerRpc]
+        public void CmdThrowRoll(Vector3 direction, bool roll) => ServerThrowAimed(direction, SelectedKind, roll);
+
+        [ServerRpc]
+        public void CmdCook() => ServerBeginCook();
+
+        public void RequestCook()
+        {
+            if (IsServerInitialized) ServerBeginCook(); else CmdCook();
+        }
 
         [ServerRpc]
         public void CmdCycle() => ServerCycle();

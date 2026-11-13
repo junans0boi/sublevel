@@ -17,7 +17,7 @@ namespace Game.Tests
         public void Defaults_AreTheAgreedNumbers()
         {
             var rules = new SmokeRules();
-            Assert.AreEqual(2f, rules.FuseSeconds, 1e-4f);
+            Assert.AreEqual(1f, rules.FuseSeconds, 1e-4f);
             Assert.AreEqual(5f, rules.Radius, 1e-4f);
             Assert.AreEqual(25f, rules.Seconds, 1e-4f);
             Assert.AreEqual(3, rules.MaxCarried);
@@ -104,8 +104,8 @@ namespace Game.Tests
         {
             Assert.AreEqual(ThrowableKind.Smoke, Throwables.Next(ThrowableKind.Frag));
             Assert.AreEqual(ThrowableKind.Frag, Throwables.Next(ThrowableKind.Smoke));
-            Assert.AreEqual(2f, Throwables.FuseOf(ThrowableKind.Smoke, new ThrowableRules(), new SmokeRules()), 1e-4f);
-            Assert.AreEqual(4f, Throwables.FuseOf(ThrowableKind.Frag, new ThrowableRules(), new SmokeRules()), 1e-4f);
+            Assert.AreEqual(1f, Throwables.FuseOf(ThrowableKind.Smoke, new ThrowableRules(), new SmokeRules()), 1e-4f);
+            Assert.AreEqual(5f, Throwables.FuseOf(ThrowableKind.Frag, new ThrowableRules(), new SmokeRules()), 1e-4f);
             Assert.AreEqual("연막탄", Throwables.NameOf(ThrowableKind.Smoke));
             Assert.AreEqual(ThrowableRules.SmokeLootKind, Throwables.LootKindOf(ThrowableKind.Smoke));
             Assert.AreEqual(ThrowableRules.GrenadeLootKind, Throwables.LootKindOf(ThrowableKind.Frag));

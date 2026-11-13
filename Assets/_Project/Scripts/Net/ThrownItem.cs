@@ -71,13 +71,16 @@ namespace Game.Net
         // Server, before spawning.
         public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules) => Init(thrower, velocity, rules, ThrowableKind.Frag);
 
-        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules, ThrowableKind kind)
+        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules, ThrowableKind kind) => Init(thrower, velocity, rules, kind, -1f);
+
+        // `fuseOverride` >= 0: the seconds left (a cooked grenade); otherwise the kind's full fuse.
+        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules, ThrowableKind kind, float fuseOverride)
         {
             _thrower = thrower;
             _velocity = velocity;
             _rules = rules;
             Kind.Value = (int)kind;
-            _fuse = Throwables.FuseOf(kind, rules, SmokeRules.Current);
+            _fuse = fuseOverride >= 0f ? fuseOverride : Throwables.FuseOf(kind, rules, SmokeRules.Current);
         }
 
         public override void OnStartNetwork()
@@ -213,13 +216,19 @@ namespace Game.Net
                 var nearest = new Vector3(feet.x, Mathf.Clamp(centre.y, feet.y, feet.y + height), feet.z);
                 float damage = Throwables.BlastDamage(Vector3.Distance(centre, nearest), _rules);
                 if (damage <= 0f) continue;
+                // Lying down and a vest cut a blast (ADR-101). The vest takes its share without wearing, so the hit is
+                // cut here and sent as an unprotected zone.
+                bool prone = victim.TryGetComponent(out CombatantStance stance) && stance.Current == Stance.Prone;
+                float vest = victim.TryGetComponent(out CombatantGear gear)
+                    ? Armor.ReductionOf(ArmorSlot.Vest, gear.VestTier.Value, gear.VestDurability.Value, ArmorRules.Current) : 0f;
+                damage = Throwables.AdjustBlast(damage, prone, vest, _rules);
                 var chest = feet + Vector3.up * (ChestHeight * height / zones.StandingHeight);
                 if (!Reaches(centre, chest)) continue;
                 victim.ServerTakeDamage(new DamageInfo
                 {
                     Amount = damage,
                     Attacker = attacker,
-                    Zone = HitZone.Body,
+                    Zone = HitZone.Limb, // not Body: the vest was counted above and does not wear
                     WeaponId = 0,
                     Cause = DamageCause.Blast,
                 });

@@ -11,11 +11,12 @@ namespace Game.Tests
         {
             var rules = new ThrowableRules();
             Assert.AreEqual(3, rules.MaxCarried);
-            Assert.AreEqual(4f, rules.FuseSeconds, 1e-4f);
+            Assert.AreEqual(5f, rules.FuseSeconds, 1e-4f);
             Assert.AreEqual(18f, rules.ThrowSpeed, 1e-4f);
             Assert.AreEqual(100f, rules.BlastDamage, 1e-4f);
-            Assert.AreEqual(2f, rules.BlastInnerRadius, 1e-4f);
-            Assert.AreEqual(9f, rules.BlastOuterRadius, 1e-4f);
+            Assert.AreEqual(3.5f, rules.BlastInnerRadius, 1e-4f);
+            Assert.AreEqual(8.5f, rules.BlastMidRadius, 1e-4f);
+            Assert.AreEqual(10f, rules.BlastOuterRadius, 1e-4f);
             Assert.AreEqual(10, (int)ThrowableRules.GrenadeLootKind, "the value the loot enum gets for grenades");
         }
 
@@ -94,21 +95,58 @@ namespace Game.Tests
         }
 
         [Test]
-        public void BlastDamage_IsFullUpClose_AndFallsToNothing()
+        public void BlastDamage_IsLethalMediumWeak_ByRing()
         {
-            var rules = new ThrowableRules(); // 100 up to 2 m, linear to 0 at 9 m
+            var rules = new ThrowableRules(); // 100 to 3.5 m, 40 at 8.5 m, 0 at 10 m
             Assert.AreEqual(100f, Throwables.BlastDamage(0f, rules), 1e-4f);
-            Assert.AreEqual(100f, Throwables.BlastDamage(2f, rules), 1e-4f);
-            Assert.AreEqual(85.7143f, Throwables.BlastDamage(3f, rules), 1e-3f, "100 x 6/7");
-            Assert.AreEqual(50f, Throwables.BlastDamage(5.5f, rules), 1e-4f, "half way down");
-            Assert.AreEqual(14.2857f, Throwables.BlastDamage(8f, rules), 1e-3f, "100 x 1/7");
-            Assert.AreEqual(0f, Throwables.BlastDamage(9f, rules), 1e-4f);
+            Assert.AreEqual(100f, Throwables.BlastDamage(3.5f, rules), 1e-4f, "lethal ring");
+            Assert.AreEqual(70f, Throwables.BlastDamage(6f, rules), 1e-3f, "half way between 100 and 40");
+            Assert.AreEqual(40f, Throwables.BlastDamage(8.5f, rules), 1e-4f, "medium ring edge");
+            Assert.AreEqual(20f, Throwables.BlastDamage(9.25f, rules), 1e-3f, "weak ring: half of 40");
+            Assert.AreEqual(0f, Throwables.BlastDamage(10f, rules), 1e-4f);
             Assert.AreEqual(0f, Throwables.BlastDamage(30f, rules), 1e-4f);
 
             // A blast without a falloff band: all or nothing.
-            var flat = new ThrowableRules { BlastDamage = 40f, BlastInnerRadius = 5f, BlastOuterRadius = 5f };
+            var flat = new ThrowableRules { BlastDamage = 40f, BlastInnerRadius = 5f, BlastMidRadius = 5f, BlastOuterRadius = 5f };
             Assert.AreEqual(40f, Throwables.BlastDamage(5f, flat), 1e-4f);
             Assert.AreEqual(0f, Throwables.BlastDamage(5.1f, flat), 1e-4f);
+        }
+
+        [Test]
+        public void ProneAndVest_CutTheBlast()
+        {
+            var rules = new ThrowableRules();
+            Assert.AreEqual(100f, Throwables.AdjustBlast(100f, false, 0f, rules), 1e-4f);
+            Assert.AreEqual(80f, Throwables.AdjustBlast(100f, true, 0f, rules), 1e-4f, "lying down: -20%");
+            Assert.AreEqual(60f, Throwables.AdjustBlast(100f, false, 0.4f, rules), 1e-4f, "a level 2 vest");
+            Assert.AreEqual(48f, Throwables.AdjustBlast(100f, true, 0.4f, rules), 1e-4f, "both");
+            Assert.AreEqual(0f, Throwables.AdjustBlast(100f, false, 3f, rules), 1e-4f, "never more than all of it");
+            Assert.AreEqual(100f, Throwables.AdjustBlast(100f, false, -1f, rules), 1e-4f);
+        }
+
+        [Test]
+        public void Armor_ReductionOf_FollowsTheTierAndAKeptBrokenVest()
+        {
+            var rules = ArmorRules.Current;
+            Assert.AreEqual(0f, Armor.ReductionOf(ArmorSlot.Vest, 0, 0f, rules));
+            Assert.AreEqual(0.30f, Armor.ReductionOf(ArmorSlot.Vest, 1, 150f, rules), 1e-4f);
+            Assert.AreEqual(0.55f, Armor.ReductionOf(ArmorSlot.Vest, 3, 10f, rules), 1e-4f);
+            Assert.AreEqual(rules.BrokenVestReduction, Armor.ReductionOf(ArmorSlot.Vest, 3, 0f, rules), 1e-4f, "a broken vest keeps its 20%");
+        }
+
+        [Test]
+        public void FuseLeft_AndRoll()
+        {
+            Assert.AreEqual(2f, Throwables.FuseLeft(5f, 3f), 1e-4f);
+            Assert.AreEqual(0f, Throwables.FuseLeft(5f, 5f), 1e-4f, "out of fuse: it goes off in the hand");
+            Assert.AreEqual(0f, Throwables.FuseLeft(5f, 9f), 1e-4f);
+            Assert.AreEqual(5f, Throwables.FuseLeft(5f, -1f), 1e-4f);
+            var rules = new ThrowableRules();
+            Throwables.RollVelocity(3f, 2f, 4f, rules, out float vx, out float vz);
+            Assert.AreEqual(rules.RollSpeed, (float)System.Math.Sqrt(vx * vx + vz * vz), 1e-3f, "the pitch is ignored");
+            Assert.AreEqual(rules.RollSpeed * 0.6f, vx, 1e-3f);
+            Throwables.RollVelocity(0f, 1f, 0f, rules, out vx, out vz);
+            Assert.AreEqual(0f, vx + vz, "straight up: nowhere to roll");
         }
 
         [Test]

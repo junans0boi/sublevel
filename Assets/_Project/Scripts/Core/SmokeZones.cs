@@ -10,7 +10,7 @@ namespace Game.Core
         public static SmokeRules Current = new SmokeRules();
 
         public int MaxCarried = 3;
-        public float FuseSeconds = 2f;        // counted from the throw
+        public float FuseSeconds = 1f;        // counted from the throw (PUBG 1 s, ADR-101)
         public float Radius = 5f;             // metres, of the cloud
         public float Seconds = 25f;           // how long the cloud lasts
         public float CentreLiftMeters = 1f;   // the cloud's centre sits this far above where the canister came to rest

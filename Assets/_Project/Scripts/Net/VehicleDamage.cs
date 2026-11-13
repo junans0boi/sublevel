@@ -332,7 +332,8 @@ namespace Game.Net
             int parts = Parts.Value;
             for (int i = 0; i < _parts.Length; i++) if (_parts[i] != null) parts = VehicleDamageMath.SetPart(parts, i, PartState.Fallen);
             Parts.Value = parts;
-            var blast = new ThrowableRules { BlastDamage = r.ExplosionDamage, BlastInnerRadius = r.ExplosionInnerRadius, BlastOuterRadius = r.ExplosionOuterRadius };
+            // Straight line from full damage at the inner radius to nothing at the outer one (no medium ring, unlike the grenade, ADR-101).
+            var blast = new ThrowableRules { BlastDamage = r.ExplosionDamage, BlastInnerRadius = r.ExplosionInnerRadius, BlastMidRadius = r.ExplosionInnerRadius, BlastMidDamage = r.ExplosionDamage, BlastOuterRadius = r.ExplosionOuterRadius };
             var victims = new List<Combatant>(Combatant.All);
             foreach (var c in victims)
             {

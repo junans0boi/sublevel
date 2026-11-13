@@ -88,6 +88,7 @@ namespace Game.Gameplay
         int _bodyShown; // 0 all, 1 none (eye view), 2 all but the head (eye view, seated, empty hands)
         CharacterController _controller;
         Combatant _combatant;
+        ThrowableView _throwView;
         WeaponVisual _weaponVisual;
         IPlayerInput _input;
         float _verticalVelocity;
@@ -101,6 +102,7 @@ namespace Game.Gameplay
         {
             _controller = GetComponent<CharacterController>();
             _combatant = GetComponent<Combatant>();
+            _throwView = GetComponent<ThrowableView>();
             _weaponVisual = GetComponent<WeaponVisual>();
             _stance = GetComponent<CombatantStance>();
             _controller.enabled = false;
@@ -366,7 +368,7 @@ namespace Game.Gameplay
             bool elevatorKey = ElevatorPanel.HandleInteract(_combatant, f.Interact, f.InteractHeld, Time.deltaTime);
             if (!elevatorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
-            if (f.Reload) _combatant.CmdReload();
+            if (f.Reload && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload();
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();

@@ -133,16 +133,16 @@ namespace Game.Tests
             Combatant dummy = null;
             yield return AQuietDummy(d => dummy = d);
             Assert.AreEqual(100f, dummy.Hp.Value);
-            Assert.AreEqual(4f, ThrowableRules.Current.FuseSeconds, 1e-4f);
+            Assert.AreEqual(5f, ThrowableRules.Current.FuseSeconds, 1e-4f);
 
             int hits = 0;
             DamageInfo seen = default;
             var filterBefore = Watch(dummy, d => { hits++; seen = d; });
 
             Assert.AreEqual(1, user.ServerAdd(1));
-            // Dropped rather than thrown: it falls straight down and lies 3 m to the dummy's side.
+            // Dropped rather than thrown: it falls straight down and lies 5 m to the dummy's side (the medium ring).
             float thrownAt = Time.time;
-            Assert.IsTrue(user.ServerThrow(dummy.transform.position + new Vector3(3f, 0.5f, 0f), Vector3.zero), Wiring);
+            Assert.IsTrue(user.ServerThrow(dummy.transform.position + new Vector3(5f, 0.5f, 0f), Vector3.zero), Wiring);
             Assert.AreEqual(0, user.Grenades.Value, "the grenade left the pack");
             Assert.IsNotNull(user.LastThrown);
 
@@ -151,16 +151,16 @@ namespace Game.Tests
             Assert.AreEqual(100f, dummy.Hp.Value);
             Assert.IsTrue(user.LastThrown.Resting, "it came to rest on the floor");
 
-            yield return WaitUntil(() => _blasts == 1, 6f, "the grenade went off");
-            Assert.AreEqual(4f, _blastTime - thrownAt, 0.5f, "four seconds after the throw");
+            yield return WaitUntil(() => _blasts == 1, 7f, "the grenade went off");
+            Assert.AreEqual(5f, _blastTime - thrownAt, 0.5f, "five seconds after the throw");
             Assert.AreEqual(me, _blastBy);
-            Assert.AreEqual(3f, Vector3.Distance(_blastAt, dummy.transform.position), 0.15f, "it lay where it was dropped");
+            Assert.AreEqual(5f, Vector3.Distance(_blastAt, dummy.transform.position), 0.15f, "it lay where it was dropped");
 
             Assert.AreEqual(1, hits, "one blast, one damage");
             Assert.AreEqual(me, seen.Attacker);
             Assert.AreEqual(DamageCause.Blast, seen.Cause);
             Assert.AreEqual(0, seen.WeaponId);
-            Assert.AreEqual(85.7f, seen.Amount, 3f, "100 x 6/7 at 3 m");
+            Assert.AreEqual(82f, seen.Amount, 3f, "100 down to 40 between 3.5 and 8.5 m: 82 at 5 m");
             Assert.Less(dummy.Hp.Value, 100f);
             if (filterBefore == null) Assert.AreEqual(100f - seen.Amount, dummy.Hp.Value, 1e-2f);
             Assert.IsFalse(dummy.Dead.Value);
@@ -177,6 +177,85 @@ namespace Game.Tests
 
             // The spent grenade is removed from the match.
             yield return WaitUntil(() => user.LastThrown == null, 3f, "the grenade object despawned");
+        }
+
+        [UnityTest]
+        public IEnumerator CookingThreeSeconds_ThenThrowing_BlastsTwoSecondsLater()
+        {
+            yield return LoadTestBox(-1f); // the real five second fuse
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            yield return AQuietDummy(d => { });
+            Assert.AreEqual(1, user.ServerAdd(1));
+            Assert.IsFalse(user.Cooking.Value);
+            Assert.IsTrue(user.ServerBeginCook(), "the pin comes out");
+            Assert.IsTrue(user.Cooking.Value);
+            Assert.AreEqual(1, user.Grenades.Value, "still in the hand: not used up until thrown");
+            yield return new WaitForSeconds(3f);
+            Assert.AreEqual(2f, user.CookRemaining, 0.3f);
+            Assert.AreEqual(0, _blasts);
+            float thrownAt = Time.time;
+            Assert.IsTrue(user.ServerThrowAimed(me.transform.forward), Wiring);
+            Assert.IsFalse(user.Cooking.Value);
+            yield return WaitUntil(() => _blasts == 1, 5f, "the cooked grenade went off");
+            Assert.AreEqual(2f, _blastTime - thrownAt, 0.4f, "what was left of the fuse, not a fresh five seconds");
+        }
+
+        [UnityTest]
+        public IEnumerator CookedUntilTheFuseEnds_GoesOffInTheHand()
+        {
+            yield return LoadTestBox(-1f);
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            yield return AQuietDummy(d => { });
+            Assert.AreEqual(1, user.ServerAdd(1));
+            float cookedAt = Time.time;
+            Assert.IsTrue(user.ServerBeginCook());
+            yield return WaitUntil(() => _blasts == 1, 8f, "it went off in the hand");
+            Assert.AreEqual(5f, _blastTime - cookedAt, 0.5f);
+            Assert.Less(Vector3.Distance(_blastAt, me.transform.position + Vector3.up), 2.5f, "at the hand");
+            Assert.AreEqual(me, _blastBy);
+            Assert.Less(me.Hp.Value, 100f, "the thrower paid for holding it");
+            Assert.AreEqual(0, user.Grenades.Value);
+            Assert.IsFalse(user.Cooking.Value);
+        }
+
+        [UnityTest]
+        public IEnumerator ARoll_LeavesLowAndLevel_AtTheRollSpeed()
+        {
+            yield return LoadTestBox(0.5f);
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            yield return AQuietDummy(d => { });
+            Assert.AreEqual(1, user.ServerAdd(1));
+            // Looking a little up: a throw would lob, a roll stays on the ground.
+            var look = (me.transform.forward + Vector3.up * 0.4f).normalized;
+            Assert.IsTrue(user.ServerThrowAimed(look, ThrowableKind.Frag, true), Wiring);
+            var v = user.LastThrown.Velocity;
+            Assert.AreEqual(0f, v.y, 1e-3f, "level");
+            Assert.AreEqual(ThrowableRules.Current.RollSpeed, new Vector2(v.x, v.z).magnitude, 1e-2f);
+            Assert.Less(user.LastThrown.transform.position.y - me.transform.position.y, 0.6f, "from the hip");
+        }
+
+        [UnityTest]
+        public IEnumerator AVest_CutsTheBlast_WithoutWearing()
+        {
+            yield return LoadTestBox(0.5f);
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            Combatant dummy = null;
+            yield return AQuietDummy(d => dummy = d);
+            var gear = dummy.GetComponent<CombatantGear>();
+            Assert.IsNotNull(gear, "the dummy needs CombatantGear");
+            gear.ServerEquip(ArmorSlot.Vest, 2);
+            float worn = gear.VestDurability.Value;
+            Assert.Greater(worn, 0f);
+            Assert.AreEqual(1, user.ServerAdd(1));
+            Assert.IsTrue(user.ServerThrow(dummy.transform.position + new Vector3(1f, 0.5f, 0f), Vector3.zero), Wiring);
+            yield return WaitUntil(() => _blasts == 1, 4f, "the grenade went off");
+            yield return null;
+            Assert.AreEqual(100f - 100f * (1f - ArmorRules.Current.Find(ArmorSlot.Vest, 2).Reduction), dummy.Hp.Value, 1.5f, "the vest's share of 100 was cut");
+            Assert.AreEqual(worn, gear.VestDurability.Value, 1e-3f, "a blast does not wear the vest");
         }
 
         [UnityTest]

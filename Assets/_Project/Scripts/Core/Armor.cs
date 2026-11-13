@@ -113,6 +113,17 @@ namespace Game.Core
             return amount - absorbed;
         }
 
+        // The share of a hit this slot's piece would take (a broken vest keeps its own), for damage that is cut by
+        // the armour without wearing it (grenade blasts, ADR-101). 0 for nothing worn.
+        public static float ReductionOf(ArmorSlot slot, int tier, float durability, ArmorRules rules)
+        {
+            if (tier <= 0) return 0f;
+            var def = rules.Find(slot, tier);
+            if (def == null) return 0f;
+            if (durability < BrokenBelow) return slot == ArmorSlot.Vest ? Clamp01(rules.BrokenVestReduction) : 0f;
+            return Clamp01(def.Reduction);
+        }
+
         static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
 
         // Worth swapping for: a higher tier, or the same tier in better shape. Anything beats wearing nothing, any

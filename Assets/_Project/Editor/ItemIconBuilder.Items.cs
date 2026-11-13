@@ -2,7 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-// Icons of the boost items and the extra throwables (ADR-099/101/102): flat glyphs from signed-distance shapes, like the
+// Icons of the boost items and the extra throwables (ADR-099/102/103): flat glyphs from signed-distance shapes, like the
 // other items, no markings. tools/unity.sh run ItemIconBuilder.BuildItemsOnly -> Resources/Icons/{drink,pill,syringe,...}.png
 public static partial class ItemIconBuilder
 {

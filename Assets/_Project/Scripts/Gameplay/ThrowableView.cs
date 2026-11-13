@@ -31,7 +31,7 @@ namespace Game.Gameplay
         const int CloudPool = 3;          // clouds shown at once per thrower (carry limit 3; the oldest makes room)
         const int CloudPuffs = 12;
         const float CloudGrowSeconds = 1.5f;
-        const float CloudFadeSeconds = 3f;
+        const float CloudFadeSeconds = 5f; // PUBG: thinner for the last 5 s (ADR-101)
         const float CloudSpread = 0.6f;   // of the radius: how far from the centre the puffs sit
         const float CloudPuffMin = 0.55f; // puff size as a share of the radius
         const float CloudPuffMax = 0.8f;
@@ -88,6 +88,8 @@ namespace Game.Gameplay
         public int BlastsShown { get; private set; }
         public int BlastSoundsPlayed { get; private set; }
         public int ThrowsRequested { get; private set; }
+        // Holding the throw key (pin in or not): R and the reload key are then the cook key (ADR-101).
+        public bool Aiming => _aiming;
         public bool PreviewVisible => _arc != null && _arc.enabled;
         public int PreviewPointCount => PreviewVisible ? _arc.positionCount : 0;
         public Vector3 LastBlastCentre { get; private set; }
@@ -238,18 +240,26 @@ namespace Game.Gameplay
                 return;
             }
 
-            // Along where the character looks, like its shots.
+            // Along where the character looks, like its shots. The aim button held turns the throw into a roll.
             var direction = Quaternion.Euler(-player.Pitch, player.Yaw, 0f) * Vector3.forward;
+            bool roll = input.AimHeld;
+            if (input.Reload) _user.RequestCook();
             if (input.ThrowReleased)
             {
                 StopAiming();
                 ThrowsRequested++;
                 // The host is the server: throw now instead of waiting for the next network tick.
-                if (_user.IsServerInitialized) _user.ServerThrowAimed(direction);
-                else _user.CmdThrow(direction);
+                if (_user.IsServerInitialized) _user.ServerThrowAimed(direction, _user.SelectedKind, roll);
+                else _user.CmdThrowRoll(direction, roll);
                 return;
             }
-            ShowArc(_user.ThrowOrigin(direction), ThrowableUser.ThrowVelocity(direction, ThrowableRules.Current));
+            var rules = ThrowableRules.Current;
+            if (roll)
+            {
+                Throwables.RollVelocity(direction.x, direction.y, direction.z, rules, out float rx, out float rz);
+                ShowArc(transform.position + Vector3.up * rules.RollHandHeight, new Vector3(rx, 0f, rz));
+            }
+            else ShowArc(_user.ThrowOrigin(direction), ThrowableUser.ThrowVelocity(direction, rules));
         }
 
         void StopAiming()

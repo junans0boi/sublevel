@@ -25,7 +25,7 @@ namespace Game.Core
         public const string MolotovName = "화염병";
 
         public int MaxCarried = 3;
-        public float FuseSeconds = 4f;          // counted from the throw; there is no cooking yet
+        public float FuseSeconds = 5f;          // counted from the pin (cooking runs it in the hand), ADR-101
         public float ThrowSpeed = 18f;          // m/s as it leaves the hand
         public float LoftDeg = 10f;             // the throw leaves this much above where the thrower looks
         public float MinThrowInterval = 1f;     // seconds between two throws of one combatant
@@ -39,9 +39,18 @@ namespace Game.Core
         public float RestSpeed = 0.8f;          // slower than this after landing on a floor: it stays there
         public float FloorNormalY = 0.6f;       // a surface at least this upright-facing counts as a floor
 
+        // Lethal / medium / weak rings (ADR-101, PUBG ratio): full damage inside Inner, down to MidDamage at Mid, to
+        // nothing at Outer. Lying down takes ProneReduction off; a vest takes its own share without wearing.
         public float BlastDamage = 100f;
-        public float BlastInnerRadius = 2f;     // full damage up to here
-        public float BlastOuterRadius = 9f;     // nothing from here on
+        public float BlastInnerRadius = 3.5f;
+        public float BlastMidRadius = 8.5f;
+        public float BlastMidDamage = 40f;
+        public float BlastOuterRadius = 10f;
+        public float ProneReduction = 0.2f;
+
+        // A rolled grenade leaves the hand low at this speed along the ground, from this far above the feet.
+        public float RollSpeed = 7f;
+        public float RollHandHeight = 0.35f;
 
         // Preview arc: how finely and how far ahead the flight is drawn.
         public float PreviewStepSeconds = 0.06f;
@@ -96,7 +105,30 @@ namespace Game.Core
         {
             if (distance <= rules.BlastInnerRadius) return rules.BlastDamage;
             if (distance >= rules.BlastOuterRadius || rules.BlastOuterRadius <= rules.BlastInnerRadius) return 0f;
-            return rules.BlastDamage * (rules.BlastOuterRadius - distance) / (rules.BlastOuterRadius - rules.BlastInnerRadius);
+            float mid = Math.Min(Math.Max(rules.BlastMidRadius, rules.BlastInnerRadius), rules.BlastOuterRadius);
+            if (distance <= mid)
+                return mid <= rules.BlastInnerRadius ? rules.BlastDamage
+                    : rules.BlastDamage + (rules.BlastMidDamage - rules.BlastDamage) * (distance - rules.BlastInnerRadius) / (mid - rules.BlastInnerRadius);
+            return rules.BlastMidDamage * (rules.BlastOuterRadius - distance) / (rules.BlastOuterRadius - mid);
+        }
+
+        // What reaches the body: lying down and a vest both cut the blast, the vest by `vestReduction` (0..1).
+        public static float AdjustBlast(float damage, bool prone, float vestReduction, ThrowableRules rules)
+        {
+            float v = vestReduction < 0f ? 0f : vestReduction > 1f ? 1f : vestReduction;
+            return damage * (prone ? 1f - rules.ProneReduction : 1f) * (1f - v);
+        }
+
+        // Seconds a grenade still has to burn after `cooked` seconds in the hand (0 = it goes off in the hand).
+        public static float FuseLeft(float fuse, float cooked) => Math.Max(0f, fuse - Math.Max(0f, cooked));
+
+        // A roll goes level along the ground whatever the pitch of the view; zero when looking straight up or down.
+        public static void RollVelocity(float dx, float dy, float dz, ThrowableRules rules, out float vx, out float vz)
+        {
+            float len = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (len < 1e-4f) { vx = vz = 0f; return; }
+            vx = dx / len * rules.RollSpeed;
+            vz = dz / len * rules.RollSpeed;
         }
 
         public static string NameOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? ThrowableRules.SmokeName : ThrowableRules.GrenadeName;

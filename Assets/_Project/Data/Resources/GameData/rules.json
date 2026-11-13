@@ -55,9 +55,9 @@
   },
   "Crate": { "RingRadius": 0.9, "LiftMeters": 0.3, "WallClearance": 0.25, "MarkerSeconds": 90.0 },
   "Throwables": {
-    "MaxCarried": 3, "FuseSeconds": 4.0, "ThrowSpeed": 18.0, "LoftDeg": 10.0, "MinThrowInterval": 1.0, "Gravity": 9.81,
+    "MaxCarried": 3, "FuseSeconds": 5.0, "ThrowSpeed": 18.0, "LoftDeg": 10.0, "MinThrowInterval": 1.0, "Gravity": 9.81,
     "Radius": 0.07, "ArmDistance": 1.0, "Restitution": 0.35, "SurfaceFriction": 0.7, "RestSpeed": 0.8, "FloorNormalY": 0.6,
-    "BlastDamage": 100.0, "BlastInnerRadius": 2.0, "BlastOuterRadius": 9.0, "PreviewStepSeconds": 0.06, "PreviewSeconds": 2.6
+    "BlastDamage": 100.0, "BlastInnerRadius": 3.5, "BlastMidRadius": 8.5, "BlastMidDamage": 40.0, "BlastOuterRadius": 10.0, "ProneReduction": 0.2, "RollSpeed": 7.0, "RollHandHeight": 0.35, "PreviewStepSeconds": 0.06, "PreviewSeconds": 2.6
   },
   "Heal": {
     "Bandage":  { "Seconds": 4.0, "Amount": 10.0,  "MaxHp": 75.0 },
@@ -76,7 +76,7 @@
     "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Drink": 1.0, "Pill": 2.0, "Syringe": 2.0, "Flash": 2.0, "Molotov": 3.0, "Grenade": 3.0, "Smoke": 3.0, "Jerrycan": 20.0,
     "AutoPickupMeters": 1.5, "AutoPickupInterval": 0.25
   },
-  "Smoke": { "MaxCarried": 3, "FuseSeconds": 2.0, "Radius": 5.0, "Seconds": 25.0, "CentreLiftMeters": 1.0, "MinChordMeters": 1.5 },
+  "Smoke": { "MaxCarried": 3, "FuseSeconds": 1.0, "Radius": 5.0, "Seconds": 25.0, "CentreLiftMeters": 1.0, "MinChordMeters": 1.5 },
   "Bot": {
     "ViewDistance": 70.0, "FieldOfViewDeg": 110.0, "CloseSenseRadius": 3.0, "SenseInterval": 0.15, "TargetsPlayers": true,
     "GunshotHearingRadius": 80.0, "FootstepHearingRadius": 14.0, "FootstepMinSpeed": 2.0, "SlowWalkHearingFactor": 0.3, "GlassHearingRadius": 40.0,
