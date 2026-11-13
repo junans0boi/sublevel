@@ -152,13 +152,13 @@ namespace Game.Tests
             Shot(car, "01b_door_close", 2.6f, 0.3f, 0.2f);
             Shot(car, "01c_front", 0.8f, 6.5f, 0.5f);
 
-            // A blast at the right rear: that side caves in, the glass near it shatters.
+            // A blast at the left rear (the camera side; the right is against the wall): that side caves in, the glass shatters.
             int dentsBefore = visual.DentsShown;
-            damage.ServerBlast(t.position + t.right * 2.6f - t.forward * 1.2f + Vector3.up * 0.6f, d => 40f, 1f);
+            damage.ServerBlast(t.position - t.right * 2.4f - t.forward * 1.2f + Vector3.up * 0.6f, d => 40f, 1f);
             yield return null;
             Assert.Greater(visual.DentsShown, dentsBefore, "the blast dented the body");
             yield return new WaitForSeconds(0.3f);
-            Shot(car, "01d_blast_dent", -5.5f, -3.5f, 0.8f);
+            Shot(car, "01d_blast_dent", 4.5f, -2.5f, 0.2f);
         }
 
         // Black smoke, fire (disabled), the explosion (hurting who stands beside it, with light and sound), the wreck.

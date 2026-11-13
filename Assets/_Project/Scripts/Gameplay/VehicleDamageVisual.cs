@@ -145,7 +145,7 @@ namespace Game.Gameplay
                 {
                     _fire = NewEmitter("Fire", _softGlow, EngineSpot(), 0.7f, 1.4f, 0.5f, 1.4f, 120);
                     // Yellow at the root, orange, then deep red as it rises and fades (no green: white tint, warm keys).
-                    SetColorOverLife(_fire, new[] { (0f, new Color(1f, 0.85f, 0.35f)), (0.35f, new Color(1f, 0.45f, 0.08f)), (1f, new Color(0.6f, 0.08f, 0.02f)) },
+                    SetColorOverLife(_fire, new[] { (0f, new Color(1f, 0.72f, 0.3f)), (0.35f, new Color(1f, 0.4f, 0.06f)), (1f, new Color(0.6f, 0.08f, 0.02f)) },
                         new[] { (0f, 0f), (0.1f, 0.9f), (0.6f, 0.6f), (1f, 0f) });
                     var emission = _fire.emission;
                     emission.rateOverTime = 34f;
@@ -184,15 +184,15 @@ namespace Game.Gameplay
                 if (_flashPs == null)
                 {
                     _flashPs = NewBurst("ExplosionFlash", _softGlow, centre, 0.16f, 0f, 7f, 1.3f);
-                    _fireball = NewBurst("Fireball", _softGlow, centre, 1.0f, 4.5f, 1.6f, 3.4f);
-                    SetColorOverLife(_fireball, new[] { (0f, new Color(1f, 0.95f, 0.6f)), (0.25f, new Color(1f, 0.55f, 0.1f)), (0.7f, new Color(0.7f, 0.15f, 0.03f)), (1f, new Color(0.2f, 0.05f, 0.02f)) },
-                        new[] { (0f, 1f), (0.6f, 0.7f), (1f, 0f) });
+                    _fireball = NewBurst("Fireball", _softGlow, centre, 1.0f, 4f, 1.5f, 2.6f);
+                    SetColorOverLife(_fireball, new[] { (0f, new Color(1f, 0.7f, 0.32f)), (0.25f, new Color(1f, 0.4f, 0.06f)), (0.7f, new Color(0.55f, 0.1f, 0.02f)), (1f, new Color(0.15f, 0.04f, 0.02f)) },
+                        new[] { (0f, 0.85f), (0.6f, 0.55f), (1f, 0f) });
                     var shape = _fireball.shape;
                     shape.shapeType = ParticleSystemShapeType.Sphere;
                     shape.radius = 0.8f;
                 }
                 _flashPs.Emit(new ParticleSystem.EmitParams { startColor = new Color(1f, 0.97f, 0.85f, 1f) }, 2);
-                _fireball.Emit(36);
+                _fireball.Emit(24); // additive: more overlap than this washes the core out to yellow-white
             }
             if (_softDust != null)
             {
@@ -323,7 +323,7 @@ namespace Game.Gameplay
                     _paneDecalState[p] = state;
                     var r = _paneDecals[p].GetComponent<MeshRenderer>();
                     r.sharedMaterial = state >= 2 ? _shatterMat : _crackMat;
-                    _paneDecals[p].localScale = Vector3.one * (state >= 2 ? 0.75f : 0.42f);
+                    _paneDecals[p].localScale = Vector3.one * (state >= 2 ? 0.55f : 0.42f);
                 }
             }
         }
