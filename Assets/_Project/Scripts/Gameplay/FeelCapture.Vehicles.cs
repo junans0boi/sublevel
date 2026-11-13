@@ -188,6 +188,9 @@ namespace Game.Gameplay
                 _fixAt = new Vector3(0f, eye.y - 0.5f, eye.z);
                 yield return VShot(tag + "_05c_driver_front");
             }
+            // #102: the hands on the wheel / bars, close up (from the passenger's head in a car, beside the bars on a bike).
+            SetHandsView(v, bike, eye);
+            yield return VShot(tag + "_05d_hands");
             _watch = Watch.Game;
             _vehicleFrame.ToggleView = true;
             yield return new WaitForSeconds(0.5f);
@@ -221,6 +224,8 @@ namespace Game.Gameplay
             _fixFrom = new Vector3(-(bike ? 2.2f : 2.6f), eye.y - 0.1f, eye.z + 0.4f);
             _fixAt = new Vector3(eye.x * 0.5f, eye.y - 0.45f, eye.z + 0.25f);
             yield return VShot(tag + "_10_steer_driver");
+            SetHandsView(v, bike, eye);
+            yield return VShot(tag + "_10b_steer_hands");
             _vehicleFrame.Steer = 0f;
             _watch = Watch.Game;
             yield return new WaitForSeconds(0.6f);
@@ -265,6 +270,17 @@ namespace Game.Gameplay
             while (VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
             yield return new WaitForSeconds(0.4f);
             foreach (var r in hidden) if (r != null) r.enabled = true;
+        }
+
+        void SetHandsView(Vehicle v, bool bike, Vector3 eye)
+        {
+            var seat = v.Seat(0);
+            var grips = seat.HasGrips ? (seat.GripLeft.position + seat.GripRight.position) * 0.5f : seat.transform.position;
+            var at = v.transform.InverseTransformPoint(grips);
+            _watched = v;
+            _watch = Watch.Vehicle;
+            _fixFrom = bike ? at + new Vector3(-0.95f, 0.3f, 0.15f) : new Vector3(-eye.x, eye.y + 0.05f, eye.z + 0.05f);
+            _fixAt = at;
         }
 
         // Parked and wrecked cars: the first few from a standing height, a few metres off.

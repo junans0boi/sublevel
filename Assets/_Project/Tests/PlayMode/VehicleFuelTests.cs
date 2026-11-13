@@ -166,28 +166,30 @@ namespace Game.Tests
             me.ServerSetHolstered(true);
             var wheel = car.GetComponent<VehicleRig>().Steering;
             var straight = wheel.localRotation;
-            _keys.Frame.Steer = 1f;
+            _keys.Frame.Steer = -1f; // left, away from the test box's side wall
             yield return new WaitForSeconds(0.6f);
             Assert.Greater(Quaternion.Angle(straight, wheel.localRotation), 90f, "the steering wheel turns visibly");
 
             string shot = Environment.GetEnvironmentVariable("FUEL_SHOT");
             if (!string.IsNullOrEmpty(shot)) Shot(shot.Replace(".png", "_3p.png"));
-            _keys.Frame.ToggleView = true;
+            var rig = PlayerController.Local.Rig;
+            if (rig.Mode != ViewMode.FirstPerson) rig.ToggleMode();
             yield return new WaitForSeconds(0.3f);
             if (!string.IsNullOrEmpty(shot)) Shot(shot.Replace(".png", "_1p.png"));
+            if (rig.Mode == ViewMode.FirstPerson) rig.ToggleMode();
             _keys.Frame.Throttle = -1f;
             _keys.Frame.Steer = 0f;
-            yield return new WaitForSeconds(2f);
+            yield return WaitUntil(() => car.SpeedKmh < 0.5f, 5f, "stopped");
+            _keys.Frame.Throttle = 0f;
+            yield return new WaitForSeconds(0.5f);
             // #97: the car's shadow from a low side view, to see that it meets the tyres.
             if (!string.IsNullOrEmpty(shot))
             {
                 var side = PlayerController.Local.Camera.transform;
                 var at = car.transform.position + Vector3.up * 0.4f;
-                side.SetPositionAndRotation(at + car.transform.right * 5.5f + Vector3.up * 0.5f, Quaternion.LookRotation(-car.transform.right * 5.5f - Vector3.up * 0.5f));
+                side.SetPositionAndRotation(at - car.transform.right * 5.5f + Vector3.up * 0.5f, Quaternion.LookRotation(car.transform.right * 5.5f - Vector3.up * 0.5f));
                 Shot(shot.Replace(".png", "_shadow.png"));
             }
-            _keys.Frame.ToggleView = true;
-            yield return null;
 
             yield return SwitchToPassenger(car);
             Assert.AreEqual(HudStatus.RidingShown, status.StanceShown, "탑승");

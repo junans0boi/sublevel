@@ -32,8 +32,59 @@ namespace Game.Gameplay
             if (!_driverPose || free <= 0.001f) return;
             var seat = VehicleSeat.SeatOf(_combatant);
             if (seat == null || !seat.HasGrips) return;
-            Reach(0, ArmLeft, seat.GripLeft.position, free);
-            Reach(1, ArmRight, seat.GripRight.position, free);
+            var left = seat.GripLeft.position;
+            var right = seat.GripRight.position;
+            // The bar each hand closes round: a handlebar runs grip to grip; a steering wheel's rim runs round its
+            // column (the grips' parent turns about its local Z), so at each grip it is the rim's tangent.
+            var wheel = seat.GripLeft.parent;
+            Vector3 axisL, axisR;
+            if (astride || wheel == null) axisL = axisR = (right - left).normalized;
+            else
+            {
+                axisL = Vector3.Cross(wheel.forward, left - wheel.position).normalized;
+                axisR = Vector3.Cross(wheel.forward, right - wheel.position).normalized;
+            }
+            Grip(0, ArmLeft, left, axisL, free);
+            Grip(1, ArmRight, right, axisR, free);
+        }
+
+        // #102: the palm, not the wrist bone, goes onto the grip, and the hand turns so its knuckle line lies along
+        // the bar: the arm reaches to the wrist point that puts the knuckles just past the bar, then the hand is
+        // pointed on along the arm (square to the bar) and twisted so the fingers curl round it.
+        const float PalmShare = 0.8f; // of wrist -> middle knuckle: where the bar sits in the closed hand
+
+        void Grip(int side, int upperIndex, Vector3 grip, Vector3 axis, float weight)
+        {
+            var wrist = _wrist[side];
+            var fingers = _fingers[side];
+            var upper = _bones[upperIndex];
+            if (wrist == null || upper == null || fingers == null || fingers[3] == null || axis.sqrMagnitude < 0.5f)
+            {
+                Reach(side, upperIndex, grip, weight);
+                return;
+            }
+            float palm = Vector3.Distance(wrist.position, fingers[3].position) * PalmShare;
+            var along = Vector3.ProjectOnPlane(grip - upper.position, axis);
+            if (along.sqrMagnitude < 1e-6f) along = transform.forward;
+            along.Normalize();
+            Reach(side, upperIndex, grip - along * palm, weight, false);
+
+            // Point the hand on along the arm, square to the bar...
+            var pointing = fingers[3].position - wrist.position;
+            var turn = Quaternion.FromToRotation(pointing, Vector3.Slerp(pointing.normalized, along, weight));
+            wrist.rotation = turn * wrist.rotation;
+            // ...then about that line until the knuckles (index -> little finger) lie along the bar, whichever way
+            // round is nearer the clip's hand.
+            if (fingers[9] != null)
+            {
+                var line = (fingers[3].position - wrist.position).normalized;
+                var knuckles = Vector3.ProjectOnPlane(fingers[9].position - fingers[0].position, line);
+                var bar = Vector3.ProjectOnPlane(axis, line);
+                if (Vector3.Dot(knuckles, bar) < 0f) bar = -bar;
+                if (knuckles.sqrMagnitude > 1e-8f && bar.sqrMagnitude > 1e-8f)
+                    wrist.rotation = Quaternion.AngleAxis(Vector3.SignedAngle(knuckles, bar, line) * weight, line) * wrist.rotation;
+            }
+            CloseHand(side, weight);
         }
 
         void FindGripBones()
@@ -68,7 +119,7 @@ namespace Game.Gameplay
         }
 
         // Upper arm, forearm and wrist reach `target` (blended in by `weight`).
-        void Reach(int side, int upperIndex, Vector3 target, float weight)
+        void Reach(int side, int upperIndex, Vector3 target, float weight, bool close = true)
         {
             var upper = _bones[upperIndex];
             var fore = _forearm[side];
@@ -106,7 +157,7 @@ namespace Game.Gameplay
             if (elbowOff.sqrMagnitude > 1e-6f && pole.sqrMagnitude > 1e-6f)
                 Turn(upperIndex, Vector3.SignedAngle(elbowOff, pole, line), line);
 
-            CloseHand(side, weight);
+            if (close) CloseHand(side, weight);
         }
 
         // The fingers curl across the palm: about the knuckle line (index to little finger).
