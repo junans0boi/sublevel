@@ -27,6 +27,7 @@ namespace Game.Gameplay
         readonly ShotGrouper _shots = new ShotGrouper(PelletWindow);
         Combatant _combatant;
         CombatantAnimation _animation;
+        CombatantStance _stance; // may be missing
         bool _wasReloading;
         float _lastHp;
         int _nextFootstep;
@@ -42,6 +43,7 @@ namespace Game.Gameplay
         {
             _combatant = GetComponent<Combatant>();
             _animation = GetComponent<CombatantAnimation>();
+            _stance = GetComponent<CombatantStance>();
             _combatant.ShotFired += OnShot;
             _animation.FootDown += OnFootDown;
             _animation.Landed += OnLanded;
@@ -69,6 +71,8 @@ namespace Game.Gameplay
         {
             if (_footsteps.Length == 0) return false;
             // Cycle instead of picking at random so the same clip never plays twice in a row.
+            // A lowered stance treads more quietly.
+            if (_stance != null) volume *= _stance.FootstepVolumeFactor;
             bool played = Play(_bodySource, _footsteps[_nextFootstep], volume);
             _nextFootstep = (_nextFootstep + 1) % _footsteps.Length;
             return played;

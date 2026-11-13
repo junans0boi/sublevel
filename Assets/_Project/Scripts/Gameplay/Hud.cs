@@ -88,6 +88,7 @@ namespace Game.Gameplay
         public string ActiveWeaponName => _shownActive >= 0 && _shownActive < 2 ? _slotName[_shownActive].text : "";
         public bool CrosshairVisible => Visible && _crosshair.activeSelf;
         public bool HitMarkerVisible => _hitMarker != null && _hitMarker.activeSelf;
+        public bool HeadMarkerShown { get; private set; }         // the last hit marker was for a head hit
         public bool ReloadingShown => _reload.activeSelf;
         public string PromptText => _prompt.activeSelf ? _promptLabel.text : "";
         public bool LowHealthShown => _vignette.alpha > 0f;
@@ -107,9 +108,10 @@ namespace Game.Gameplay
         // ---- Combat feedback entry points; safe to call when no HUD exists ----
 
         // An X around the crosshair when the local player's shot lands; red and larger for a kill.
-        public static void HitMarker(bool kill)
+        // A hit on the head shows in the accent colour (a kill stays red).
+        public static void HitMarker(bool kill, bool head = false)
         {
-            if (Instance != null) Instance.ShowHitMarker(kill);
+            if (Instance != null) Instance.ShowHitMarker(kill, head);
         }
 
         // An arc on a ring around the screen centre, pointing at whoever hurt the local player.
@@ -257,10 +259,16 @@ namespace Game.Gameplay
                 _medkitLabel.color = medkits > 0 ? UiKit.Text : UiKit.TextDim;
             }
 
+            // The match's own count when it has one (it is what the kill feed and placements use).
             int alive = 0;
-            var all = Combatant.All;
-            for (int i = 0; i < all.Count; i++)
-                if (all[i] != null && !all[i].Dead.Value) alive++;
+            var match = MatchState.Instance;
+            if (match != null && match.TotalCount > 0) alive = match.AliveCount;
+            else
+            {
+                var all = Combatant.All;
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i] != null && !all[i].Dead.Value) alive++;
+            }
             if (alive != _shownAlive)
             {
                 _shownAlive = alive;
@@ -324,7 +332,7 @@ namespace Game.Gameplay
                 _gap = -1f;
                 return;
             }
-            float wanted = Mathf.Max(MinGap, Crosshair.GapPixels(weapon.SpreadDeg * GameData.Rules.Aim.For(aim).SpreadFactor, cam.fieldOfView, ReferenceHeight));
+            float wanted = Mathf.Max(MinGap, Crosshair.GapPixels(weapon.SpreadDeg * me.SpreadFactor, cam.fieldOfView, ReferenceHeight));
             _gap = _gap < 0f ? wanted : Mathf.Lerp(_gap, wanted, 1f - Mathf.Exp(-GapChangePerSecond * Time.unscaledDeltaTime));
             if (Mathf.Abs(_gap - _placedGap) < 0.02f) return;
             _placedGap = _gap;
@@ -359,11 +367,12 @@ namespace Game.Gameplay
             }
         }
 
-        void ShowHitMarker(bool kill)
+        void ShowHitMarker(bool kill, bool head)
         {
-            Color color = kill ? UiKit.Danger : Color.white;
+            HeadMarkerShown = head;
+            Color color = kill ? UiKit.Danger : head ? UiKit.Accent : Color.white;
             for (int i = 0; i < _hitArms.Length; i++) _hitArms[i].color = color;
-            float scale = kill ? 1.5f : 1f;
+            float scale = kill ? (head ? 1.8f : 1.5f) : head ? 1.25f : 1f;
             _hitMarker.transform.localScale = new Vector3(scale, scale, 1f);
             _hitMarkerUntil = Time.unscaledTime + HitMarkerSeconds;
             _hitMarker.SetActive(true);

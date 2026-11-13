@@ -5,6 +5,7 @@ using UnityEngine;
 namespace Game.AI
 {
     // M1 stand-in opponent (ADR-030): stands still and shoots any living player it can see. Server-side only.
+    // Its shots go through Combatant.ServerFire like a player's, so damage carries the dummy as the attacker.
     [RequireComponent(typeof(Combatant))]
     public class TrainingDummy : MonoBehaviour
     {
@@ -41,9 +42,17 @@ namespace Game.AI
             if (target == null) return;
             _nextShot = Time.time + _shotInterval;
             var eye = _self.EyePosition;
-            var toChest = target.transform.position + Vector3.up * ChestHeight - eye;
+            var toChest = ChestOf(target) - eye;
             var error = Quaternion.Euler(AimError(), AimError(), 0f);
             _self.ServerFire(Quaternion.LookRotation(toChest) * error * Vector3.forward);
+        }
+
+        // The chest sits lower when the target's stance is lower (crouching), so the dummy neither sees nor aims
+        // over a target that ducked behind cover.
+        static Vector3 ChestOf(Combatant target)
+        {
+            var zones = GameData.Rules.Fire.Zones;
+            return target.transform.position + Vector3.up * (ChestHeight * zones.Height(target.EyeHeightOffset) / zones.StandingHeight);
         }
 
         float AimError() => (float)(_rng.NextDouble() * 2 - 1) * _aimErrorDeg;
@@ -56,7 +65,7 @@ namespace Game.AI
             foreach (var c in Combatant.All)
             {
                 if (!c.IsPlayer || c.Dead.Value) continue;
-                var to = c.transform.position + Vector3.up * ChestHeight - eye;
+                var to = ChestOf(c) - eye;
                 if (to.sqrMagnitude > bestSqr) continue;
                 if (!Physics.Raycast(eye, to.normalized, out var hit, _sightRange, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
                 if (hit.collider.GetComponentInParent<Combatant>() != c) continue;

@@ -3,6 +3,8 @@ using System;
 namespace Game.Core
 {
     // What one projectile ended on. Sent with every shot so clients can show impacts and hit confirmation.
+    // Where on a combatant it landed travels next to it as a HitZone (Combatant.ShotResult.Zone), so a headshot
+    // is Combatant or Kill with Zone == Head. Values stay below 16: the zone shares the byte on the wire.
     public enum ShotHit : byte { None = 0, World = 1, Combatant = 2, Kill = 3 }
 
     // How strictly fire timing is kept on each side.
@@ -17,6 +19,11 @@ namespace Game.Core
         public float ClientCatchUpSeconds = 0.035f;
         // A click on a semi-automatic weapon that comes this much too soon fires as soon as the weapon is ready.
         public float ClickBufferSeconds = 0.12f;
+        // Movement spread (DamageRules.MovementSpread): none up to the first planar speed (m/s), full from the second.
+        public float MoveSpreadMinSpeed = 0.5f;
+        public float MoveSpreadFullSpeed = 4.5f;
+        // Head / body / limb height bands (ADR-053).
+        public HitZoneRules Zones = new HitZoneRules();
 
         public double ServerEarly(double interval) => Math.Min(ServerEarlySeconds, interval * MaxEarlyFraction);
 
@@ -76,5 +83,6 @@ namespace Game.Core
         public float HitConfirmPitch = 1.7f;
         public float KillConfirmVolume = 0.8f;
         public float KillConfirmPitch = 1.1f;
+        public float HeadConfirmPitch = 2.2f;     // a hit on the head that does not kill sounds sharper
     }
 }

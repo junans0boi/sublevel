@@ -85,8 +85,79 @@ namespace Game.Core
         public float LandPitchDeg = 8f;
     }
 
+    // Falling hurts (ADR-053): nothing up to a safe drop, then more with every metre, lethal around the second height.
+    [Serializable]
+    public class FallRules
+    {
+        // The rules in use. Defaults until the data loader replaces them.
+        public static FallRules Current = new FallRules();
+
+        public float SafeMeters = 3f;
+        public float LethalMeters = 12f;
+        public float LethalDamage = 100f;
+        // Movement belongs to the owner (ADR-029), so the owner reports its falls. The server believes a report
+        // only up to the drop it watched itself plus this much, and waits this long for its own view to catch up.
+        public float ReportToleranceMeters = 1f;
+        public float ReportWindowSeconds = 1f;
+    }
+
+    // Looking around without turning the character (free look).
+    [Serializable]
+    public class FreeLookRules
+    {
+        public static FreeLookRules Current = new FreeLookRules();
+
+        public float MaxYawDeg = 120f;            // either side of where the character faces
+        public float ReturnDegPerSecond = 540f;   // how fast the view swings back when the key is released
+    }
+
+    // Measures a drop: from the highest point reached off the ground down to where the ground was met again.
+    public class FallTracker
+    {
+        bool _inAir;
+        float _peak;
+
+        public bool InAir => _inAir;
+
+        // Call every frame with the current height. Returns the metres dropped on the frame of landing, else 0.
+        public float Tick(bool grounded, float height)
+        {
+            if (!grounded)
+            {
+                if (!_inAir || height > _peak) _peak = height;
+                _inAir = true;
+                return 0f;
+            }
+            if (!_inAir) return 0f;
+            _inAir = false;
+            return Math.Max(0f, _peak - height);
+        }
+
+        // How far below its highest point a fall still in progress is.
+        public float DroppedSoFar(float height) => _inAir ? Math.Max(0f, _peak - height) : 0f;
+
+        // A teleport is not a fall.
+        public void Reset() => _inAir = false;
+    }
+
     public static class Locomotion
     {
+        // Damage for dropping `meters`: none up to the safe height, then rising evenly, lethal at the lethal height
+        // (and more beyond it).
+        public static float FallDamage(float meters, FallRules rules)
+        {
+            if (!(meters > rules.SafeMeters)) return 0f; // also false for NaN
+            if (rules.LethalMeters <= rules.SafeMeters) return rules.LethalDamage;
+            return (meters - rules.SafeMeters) / (rules.LethalMeters - rules.SafeMeters) * rules.LethalDamage;
+        }
+
+        // The drop the server accepts from an owner's report: never more than what it watched plus the tolerance.
+        public static float AcceptedFall(float reportedMeters, float observedMeters, FallRules rules)
+        {
+            if (!(reportedMeters > 0f) || float.IsInfinity(reportedMeters)) return 0f;
+            return Math.Min(reportedMeters, Math.Max(0f, observedMeters) + rules.ReportToleranceMeters);
+        }
+
         // Playback speed for the legs when moving at `speed` with a clip animated for `clipSpeed`.
         public static float LegPace(float speed, float clipSpeed, GaitRules rules)
         {

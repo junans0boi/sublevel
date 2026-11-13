@@ -22,7 +22,15 @@ namespace Game.Gameplay
         public bool Inventory;     // Tab: open or close the inventory
         public bool Heal;
         public bool Restart;
-        public int SelectSlot;     // -1 = none
+        public int SelectSlot;     // -1 = none; keys 1-5 give 0-4 (0-1 weapons, the rest for later equipment)
+        public bool Crouch;        // C: pressed this frame, toggles crouching
+        public bool Prone;         // Z: pressed this frame, toggles lying down
+        public bool FreeLook;      // Alt held: the mouse turns the view, not the character
+        public bool FireMode;      // B: pressed this frame, switches single shots / automatic
+        public bool ThrowHeld;     // G held: a throw is being aimed
+        public bool ThrowPressed;  // G: pressed this frame
+        public bool ThrowReleased; // G: let go this frame
+        public bool Map;           // M: open or close the full map
     }
 
     public interface IPlayerInput
@@ -56,8 +64,19 @@ namespace Game.Gameplay
                 f.Inventory = k.tabKey.wasPressedThisFrame;
                 f.Heal = k.hKey.wasPressedThisFrame;
                 f.Restart = k.enterKey.wasPressedThisFrame;
+                f.Crouch = k.cKey.wasPressedThisFrame;
+                f.Prone = k.zKey.wasPressedThisFrame;
+                f.FreeLook = k.leftAltKey.isPressed;
+                f.FireMode = k.bKey.wasPressedThisFrame;
+                f.ThrowHeld = k.gKey.isPressed;
+                f.ThrowPressed = k.gKey.wasPressedThisFrame;
+                f.ThrowReleased = k.gKey.wasReleasedThisFrame;
+                f.Map = k.mKey.wasPressedThisFrame;
                 if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
                 else if (k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
+                else if (k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;
+                else if (k.digit4Key.wasPressedThisFrame) f.SelectSlot = 3;
+                else if (k.digit5Key.wasPressedThisFrame) f.SelectSlot = 4;
             }
             if (m != null)
             {

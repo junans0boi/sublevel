@@ -15,5 +15,8 @@ namespace Game.Core
         public CombatFxRules CombatFx = new CombatFxRules();
         public GaitRules Gait = new GaitRules();
         public JumpRules Jump = new JumpRules();
+        public StanceRules Stance = new StanceRules();
+        public FallRules Fall = new FallRules();
+        public FreeLookRules FreeLook = new FreeLookRules();
     }
 }

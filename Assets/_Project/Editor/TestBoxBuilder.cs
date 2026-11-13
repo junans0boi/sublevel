@@ -208,6 +208,7 @@ public static class TestBoxBuilder
         go.AddComponent<NetworkObject>();
         go.AddComponent<NetworkTransform>();
         var combatant = go.AddComponent<Combatant>();
+        go.AddComponent<CombatantStance>();
         var controller = go.AddComponent<PlayerController>();
         var view = go.AddComponent<CombatantView>();
         var renderers = AddCharacter(go);
@@ -224,6 +225,7 @@ public static class TestBoxBuilder
         capsule.height = 1.8f; capsule.radius = 0.35f; capsule.center = new Vector3(0, 0.9f, 0);
         go.AddComponent<NetworkObject>();
         go.AddComponent<Combatant>();
+        go.AddComponent<CombatantStance>();
         go.AddComponent<TrainingDummy>();
         var view = go.AddComponent<CombatantView>();
         AddCharacter(go);

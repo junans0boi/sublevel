@@ -26,6 +26,16 @@ namespace Game.Gameplay
 
         public AimMode Aim => _aim.Mode;
         public int Lean { get; private set; }
+        // The stance this player has asked for; the replicated one is on CombatantStance.
+        public Stance BodyStance { get; private set; }
+        public bool Sprinting { get; private set; }
+        // Free look: the view is turned away from where the character faces by these angles.
+        public bool FreeLooking { get; private set; }
+        public float ViewYaw => Yaw + _freeYaw;
+        public float ViewPitch => Pitch + _freePitch;
+        // This frame's input as the character got it (empty while a screen is open), for other owner-side
+        // components that act on keys of their own (fire mode, throwing, slots 3-5).
+        public PlayerInputFrame LastInput { get; private set; }
 
         LocomotionParams _locomotion;
         GameRules _rules;
@@ -37,6 +47,11 @@ namespace Game.Gameplay
 
         int _sentAim, _sentLean;
         float _stanceSentAt;
+        int _sentBodyStance;
+        float _bodyStanceSentAt;
+        float _freeYaw, _freePitch;
+        readonly FallTracker _fall = new FallTracker();
+        CombatantStance _stance; // missing on a prefab built before stances existed: the player then only stands
         System.Random _recoilRng;
         bool _bodyHidden;
         CharacterController _controller;
@@ -53,6 +68,7 @@ namespace Game.Gameplay
             _controller = GetComponent<CharacterController>();
             _combatant = GetComponent<Combatant>();
             _weaponVisual = GetComponent<WeaponVisual>();
+            _stance = GetComponent<CombatantStance>();
             _controller.enabled = false;
             _rules = GameData.Rules;
             _locomotion = _rules.Locomotion;
@@ -84,7 +100,7 @@ namespace Game.Gameplay
         void UpdateCursor()
         {
             if (Application.isBatchMode || InputOverride != null) return;
-            bool playing = UiFocus.Current == UiScreen.None;
+            bool playing = UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay;
             Cursor.lockState = playing ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !playing;
         }
@@ -113,9 +129,11 @@ namespace Game.Gameplay
             // Screens that take over the mouse (pause menu, inventory): the keys that open and close them still
             // work, everything else is ignored so the character stands still and does not shoot.
             if (f.Menu) UiFocus.Toggle(UiScreen.Menu);
-            else if (f.Inventory && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Inventory);
-            if (UiFocus.Current != UiScreen.None)
+            else if (f.Inventory && !_combatant.Dead.Value && !ResultScreen.BlocksGameplay) UiFocus.Toggle(UiScreen.Inventory);
+            else if (f.Map && UiFocus.MapAvailable && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Map);
+            if (UiFocus.Current != UiScreen.None || (ResultScreen.BlocksGameplay && !_combatant.Dead.Value))
                 f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
+            LastInput = f;
             UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
 
@@ -123,26 +141,61 @@ namespace Game.Gameplay
             {
                 _aim.Update(false, Time.timeAsDouble, false);
                 Lean = 0;
+                BodyStance = Stance.Stand;
+                Sprinting = false;
+                FreeLooking = false;
+                _freeYaw = _freePitch = 0f;
                 SendStance();
+                SendBodyStance();
                 if (f.Restart) _combatant.CmdRequestRestart();
                 PlaceCamera();
                 return;
             }
 
-            Yaw += f.Look.x;
-            Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
+            // Aiming needs a weapon and wins over sprinting; leaning is for standing and walking only.
+            bool armed = _combatant.ActiveWeapon != null;
+            var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
+
+            // Free look turns only the view, and only from the hip: the character keeps facing (and shooting)
+            // where it did. Letting go swings the view back.
+            FreeLooking = f.FreeLook && aim == AimMode.Hip;
+            if (FreeLooking)
+            {
+                var freeLook = FreeLookRules.Current;
+                _freeYaw = Mathf.Clamp(_freeYaw + f.Look.x, -freeLook.MaxYawDeg, freeLook.MaxYawDeg);
+                _freePitch = Mathf.Clamp(_freePitch + f.Look.y, -PitchLimit - Pitch, PitchLimit - Pitch);
+            }
+            else
+            {
+                float back = FreeLookRules.Current.ReturnDegPerSecond * Time.deltaTime;
+                _freeYaw = Mathf.MoveTowards(_freeYaw, 0f, back);
+                _freePitch = Mathf.MoveTowards(_freePitch, 0f, back);
+                Yaw += f.Look.x;
+                Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
+            }
             transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
 
-            // Aiming needs a weapon and wins over sprinting; leaning is for standing and walking only.
-            var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, _combatant.ActiveWeapon != null);
-            bool sprint = f.Sprint && aim == AimMode.Hip;
-            Lean = sprint && f.Move.y > 0.1f ? 0 : (f.LeanRight ? 1 : 0) - (f.LeanLeft ? 1 : 0);
-            SendStance();
+            // Sprinting is forward only, and neither aiming nor firing goes with it: pulling the trigger or
+            // raising the weapon drops back to a walk, so no shot ever leaves a sprint.
+            bool firing = armed && (f.FireHeld || f.FirePressed);
+            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !firing;
 
-            float speedFactor = _rules.Aim.For(aim).MoveFactor * (Lean != 0 ? _rules.Lean.MoveFactor : 1f);
+            // C toggles the crouch; jumping or sprinting gets up instead, when there is room overhead.
+            bool wasStanding = BodyStance == Stance.Stand;
+            if (_stance == null) BodyStance = Stance.Stand;
+            else BodyStance = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint, wasStanding || _stance.CanStand(), StanceRules.Current);
+            bool jump = f.Jump && wasStanding; // out of a crouch the key only stands up
+            sprint &= BodyStance == Stance.Stand;
+            Sprinting = sprint;
+            Lean = sprint ? 0 : (f.LeanRight ? 1 : 0) - (f.LeanLeft ? 1 : 0);
+            SendStance();
+            SendBodyStance();
+
+            float speedFactor = _rules.Aim.For(aim).MoveFactor * (Lean != 0 ? _rules.Lean.MoveFactor : 1f) * StanceRules.Current.For(BodyStance).MoveFactor;
             Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
-            _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, f.Jump, Time.deltaTime, _locomotion);
+            _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
             _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
+            ReportFall();
 
             if (f.ToggleView) Rig.ToggleMode();
             PlaceCamera();
@@ -167,6 +220,30 @@ namespace Game.Gameplay
             _sentLean = Lean;
             _stanceSentAt = Time.time;
             _combatant.CmdSetStance(aim, Lean);
+        }
+
+        // The same for crouching and standing up. The host is the server and sets it without a request.
+        void SendBodyStance()
+        {
+            if (_stance == null) return;
+            int stance = (int)BodyStance;
+            bool changed = stance != _sentBodyStance;
+            bool stale = stance != _stance.State.Value && Time.time - _bodyStanceSentAt > StanceResendSeconds;
+            if (!changed && !stale) return;
+            _sentBodyStance = stance;
+            _bodyStanceSentAt = Time.time;
+            if (IsServerInitialized) _stance.ServerSetStance(BodyStance);
+            else _stance.CmdSetStance(stance);
+        }
+
+        // Movement is ours (ADR-029), so we measure our own drops and tell the server about the ones that can
+        // hurt; it checks the number against what it saw before applying damage.
+        void ReportFall()
+        {
+            float dropped = _fall.Tick(_controller.isGrounded, transform.position.y);
+            if (_stance == null || dropped <= FallRules.Current.SafeMeters) return;
+            if (IsServerInitialized) _stance.ServerReportFall(dropped);
+            else _stance.CmdReportFall(dropped);
         }
 
         // Our own shots kick the view; the kicked view is what the next shot aims with.
@@ -194,7 +271,11 @@ namespace Game.Gameplay
             // adding the interval to that would make the rhythm follow the frame times and run slow.
             _fireCadence.Fired(now, weapon.FireInterval, fire.ClientCatchUp(weapon.FireInterval, Time.deltaTime));
             var eye = _combatant.EyePosition;
-            var aim = Camera != null ? Rig.AimPoint(Camera.transform, transform, AimDistance) : eye + transform.forward * AimDistance;
+            // While the view is turned away in free look the shot goes where the character faces, not where the camera does.
+            bool viewTurned = _freeYaw != 0f || _freePitch != 0f;
+            var aim = Camera != null && !viewTurned
+                ? Rig.AimPoint(Camera.transform, transform, AimDistance)
+                : eye + Quaternion.Euler(-(Pitch + _recoil.Pitch), Yaw + _recoil.Yaw, 0f) * Vector3.forward * AimDistance;
             var direction = (aim - eye).normalized;
             // The host is the server: fire now instead of waiting for the next network tick to carry the request.
             if (IsServerInitialized) _combatant.ServerFire(direction);
@@ -210,11 +291,11 @@ namespace Game.Gameplay
                 Aim = _aim.Mode,
                 Lean = _combatant.LeanAmount,
                 LeanRollDeg = Rig.IsEyeView(_aim.Mode) ? _rules.Lean.EyeViewRollDeg : _rules.Lean.ThirdPersonRollDeg,
-                RecoilPitch = Mathf.Min(_recoil.Pitch, MaxViewPitch - Pitch), // never past straight up
+                RecoilPitch = Mathf.Min(_recoil.Pitch, MaxViewPitch - ViewPitch), // never past straight up
                 RecoilYaw = _recoil.Yaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
             };
-            Rig.Place(Camera.transform, transform, _combatant.EyePosition, Yaw, Pitch, view, Time.deltaTime);
+            Rig.Place(Camera.transform, transform, _combatant.EyePosition, ViewYaw, ViewPitch, view, Time.deltaTime);
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
             Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, aimRules.For(_aim.Mode).Fov, ease);
 
@@ -252,6 +333,7 @@ namespace Game.Gameplay
             transform.position = position;
             _controller.enabled = true;
             _verticalVelocity = 0f;
+            _fall.Reset(); // being moved is not a fall
         }
 
         public void LookAt(Vector3 worldPoint)

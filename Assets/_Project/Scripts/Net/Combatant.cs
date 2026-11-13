@@ -7,6 +7,16 @@ using UnityEngine;
 
 namespace Game.Net
 {
+    // One instance of damage on the server: how much, who did it, where it landed and why (ADR-053).
+    public struct DamageInfo
+    {
+        public float Amount;
+        public Combatant Attacker; // null when nobody did it (a fall, the zone)
+        public HitZone Zone;
+        public int WeaponId;       // 0 when no weapon was involved
+        public DamageCause Cause;
+    }
+
     // Anything that can shoot and be shot: players, the training dummy, later bots.
     // The server owns health and loadout; clients read the SyncVars and send requests (ADR-029).
     public class Combatant : NetworkBehaviour
@@ -36,6 +46,29 @@ namespace Game.Net
         public static readonly List<Combatant> All = new List<Combatant>();
         public static Combatant LocalPlayer { get; private set; }
 
+        // Server only: raised once when a combatant dies, with the damage that killed it (victim, last damage; the
+        // amount is what was left after ServerDamageFilter). It fires after the victim's SyncVars are updated.
+        // The event is static, so it outlives scenes: every subscriber must unsubscribe in its own
+        // OnDestroy/OnDisable (or OnStopServer). ResetStatics clears it when a play session starts.
+        public static event Action<Combatant, DamageInfo> ServerDied;
+
+        // Server only: lets equipment change incoming damage (armour). Gets the damage as dealt and returns the
+        // amount to apply; null means "as dealt". Set by a component on this combatant.
+        public Func<DamageInfo, float> ServerDamageFilter { get; set; }
+
+        // Set by the stance component on every side (server, owner, observers) so all of them agree on the eyes:
+        // metres added to the upright eye height (negative when crouched), and the stance's share of the spread.
+        public float EyeHeightOffset { get; set; }
+        public float StanceSpreadFactor { get; set; } = 1f;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            ServerDied = null;
+            All.Clear();
+            LocalPlayer = null;
+        }
+
         // Raised on every client for each projectile: (origin, end point).
         public event Action<Vector3, Vector3> ShotFired;
 
@@ -46,6 +79,9 @@ namespace Game.Net
             public Vector3 Normal;   // of the surface that was hit; back along the shot when nothing was
             public ShotHit Hit;
             public Combatant Victim; // null unless a combatant was hit
+            public HitZone Zone;     // where on the victim; Body when no combatant was hit
+
+            public readonly bool Head => Victim != null && Zone == HitZone.Head;
         }
 
         public delegate void ShotResolvedHandler(in ShotResult shot);
@@ -59,12 +95,23 @@ namespace Game.Net
         // Kept between the leaned eye and a wall; larger than the camera's own collision radius so the
         // third-person camera cast never starts inside the wall.
         const float LeanWallClearance = 0.1f;
+        // The hit kind and the hit zone travel in one byte of the shot effect: kind in the low half, zone above.
+        const int ShotZoneShift = 4;
+        const int ShotHitMask = (1 << ShotZoneShift) - 1;
+        // Planar speed is measured over a short window: on the server a remote owner's position arrives in steps.
+        const float SpeedWindowSeconds = 0.1f;
+        const float TeleportDistance = 5f;
+        // Same ground probe as the presentation side (CombatantMotion).
+        const float GroundProbeRadius = 0.2f;
+        const float GroundProbeStartHeight = 0.5f;
 
         Health _health;
         Loadout _loadout;
         System.Random _rng;
         readonly LeanState _lean = new LeanState();
         float _leanOffset;
+        Vector3 _speedFrom;
+        float _speedClock;
 
         public bool IsPlayer => _isPlayer;
         // Where this combatant sees and shoots from. Leaning moves it sideways (never through a wall).
@@ -72,7 +119,21 @@ namespace Game.Net
         public AimMode AimMode => (AimMode)Aim.Value;
         // -1..1, eased: how far the lean has actually got.
         public float LeanAmount => _lean.Value;
-        Vector3 UprightEye => transform.position + Vector3.up * _eyeHeight;
+        Vector3 UprightEye => transform.position + Vector3.up * (_eyeHeight + EyeHeightOffset);
+        // Metres per second along the ground, averaged over the last moment. Measured on every side.
+        public float PlanarSpeed { get; private set; }
+        // No ground close under the feet right now.
+        public bool Airborne => !Physics.SphereCast(transform.position + Vector3.up * GroundProbeStartHeight, GroundProbeRadius, Vector3.down, out _,
+            GroundProbeStartHeight - GroundProbeRadius + GameData.Rules.Jump.GroundProbeMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        // The spread cone of the active weapon is its SpreadDeg times this: aim mode, stance and own movement.
+        // The server uses exactly this for a shot; clients can show it (crosshair).
+        public float SpreadFactor => SpreadFactorWith(ActiveWeapon);
+
+        float SpreadFactorWith(WeaponDef weapon)
+        {
+            float factor = GameData.Rules.Aim.For(AimMode).SpreadFactor * StanceSpreadFactor;
+            return weapon == null ? factor : factor * DamageRules.MovementSpread(weapon, PlanarSpeed, Airborne, GameData.Rules.Fire);
+        }
         public int ActiveWeaponId => ActiveSlot.Value == 0 ? Slot0.Value : Slot1.Value;
         public int ActiveMag => ActiveSlot.Value == 0 ? Mag0.Value : Mag1.Value;
         public WeaponDef ActiveWeapon => GameData.Weapons.Find(ActiveWeaponId);
@@ -80,7 +141,11 @@ namespace Game.Net
         public int ReserveFor(AmmoType type) =>
             type == AmmoType.Light ? ReserveLight.Value : type == AmmoType.Medium ? ReserveMedium.Value : ReserveShell.Value;
 
-        public override void OnStartNetwork() => All.Add(this);
+        public override void OnStartNetwork()
+        {
+            All.Add(this);
+            _speedFrom = transform.position;
+        }
 
         public override void OnStopNetwork()
         {
@@ -116,6 +181,20 @@ namespace Game.Net
                 if (Lean.Value != 0 && _health.IsDead) Lean.Value = 0;
             }
             TickLean();
+            TickSpeed();
+        }
+
+        void TickSpeed()
+        {
+            _speedClock += Time.deltaTime;
+            if (_speedClock < SpeedWindowSeconds) return;
+            var moved = transform.position - _speedFrom;
+            // A teleport (spawn, test hook) is not movement.
+            bool teleported = moved.sqrMagnitude > TeleportDistance * TeleportDistance;
+            moved.y = 0f;
+            PlanarSpeed = teleported ? 0f : moved.magnitude / _speedClock;
+            _speedFrom = transform.position;
+            _speedClock = 0f;
         }
 
         // Runs on every side from the replicated lean, so the eye position agrees between server and clients.
@@ -167,13 +246,17 @@ namespace Game.Net
             if (weapon == null || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval))) return false;
 
             var aim = Quaternion.LookRotation(direction.normalized);
-            int pellets = DamageRules.ShotOffsets(weapon, _rng, YawBuf, PitchBuf, GameData.Rules.Aim.For(AimMode).SpreadFactor);
+            // Aim mode and stance narrow the cone; moving or being off the ground widens it.
+            float spread = SpreadFactorWith(weapon);
+            var zones = GameData.Rules.Fire.Zones;
+            int pellets = DamageRules.ShotOffsets(weapon, _rng, YawBuf, PitchBuf, spread);
             for (int i = 0; i < pellets; i++)
             {
                 var dir = aim * Quaternion.Euler(PitchBuf[i], YawBuf[i], 0f) * Vector3.forward;
                 var end = origin + dir * weapon.Range;
                 var normal = -dir;
                 var result = ShotHit.None;
+                var zone = HitZone.Body;
                 NetworkObject victim = null;
                 if (Physics.Raycast(origin, dir, out var hit, weapon.Range, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 {
@@ -184,25 +267,46 @@ namespace Game.Net
                     // A body that is already dead stops the shot like any other obstacle.
                     if (target != null && target != this && !target._health.IsDead)
                     {
-                        target.ServerTakeDamage(DamageRules.AtDistance(weapon, hit.distance));
+                        // The zone comes from how high on the victim the shot landed, in the victim's current stance.
+                        zone = HitZones.At(hit.point.y - target.transform.position.y, target.EyeHeightOffset, zones);
+                        target.ServerTakeDamage(new DamageInfo
+                        {
+                            Amount = DamageRules.ForZone(weapon, hit.distance, zone),
+                            Attacker = this,
+                            Zone = zone,
+                            WeaponId = weapon.Id,
+                            Cause = DamageCause.Shot,
+                        });
                         result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
                         victim = target.NetworkObject;
                     }
                 }
-                RpcShotFx(origin, end, normal, (byte)result, victim);
+                RpcShotFx(origin, end, normal, (byte)((int)result | ((int)zone << ShotZoneShift)), victim);
             }
             Push();
             return true;
         }
 
+        // Damage with nothing known about it (tests, scripted events).
         [Server]
-        public void ServerTakeDamage(float amount)
+        public void ServerTakeDamage(float amount) => ServerTakeDamage(new DamageInfo { Amount = amount });
+
+        // Every damage on the server ends up here. Checked by hand instead of [Server]: this overload takes its
+        // argument by reference.
+        public void ServerTakeDamage(in DamageInfo info)
         {
-            if (_health.ApplyDamage(amount) > 0f) Push();
+            if (!IsServerInitialized || _health == null || _health.IsDead) return;
+            var dealt = info;
+            if (ServerDamageFilter != null) dealt.Amount = ServerDamageFilter(info);
+            if (_health.ApplyDamage(dealt.Amount) <= 0f) return;
+            Push();
+            // The dead take no further damage, so this happens once per life.
+            if (_health.IsDead) ServerDied?.Invoke(this, dealt);
         }
 
+        // Returns false when nothing on this combatant takes that kind of loot (it then stays where it was).
         [Server]
-        public void ServerGive(LootEntry loot)
+        public bool ServerGive(LootEntry loot)
         {
             switch (loot.Kind)
             {
@@ -214,8 +318,14 @@ namespace Game.Net
                     break;
                 case LootKind.Ammo: _loadout.AddAmmo(loot.Ammo, loot.Amount); break;
                 case LootKind.Medkit: _loadout.AddMedkits(loot.Amount); break;
+                default:
+                    // Kinds the loadout does not know (armour, throwables, ...) belong to another component.
+                    var receiver = GetComponent<ILootReceiver>();
+                    if (receiver == null || !receiver.ServerTryTake(loot)) return false;
+                    break;
             }
             Push();
+            return true;
         }
 
         [Server]
@@ -263,8 +373,7 @@ namespace Game.Net
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
-            ServerGive(item.ToEntry());
-            item.Despawn();
+            if (ServerGive(item.ToEntry())) item.Despawn();
         }
 
         // Dropping from the inventory screen: the item leaves the loadout and lands on the ground in front.
@@ -323,7 +432,8 @@ namespace Game.Net
                 Origin = origin,
                 End = end,
                 Normal = normal,
-                Hit = (ShotHit)hit,
+                Hit = (ShotHit)(hit & ShotHitMask),
+                Zone = (HitZone)(hit >> ShotZoneShift),
                 Victim = victim != null ? victim.GetComponent<Combatant>() : null,
             };
             ShotResolved.Invoke(in shot);

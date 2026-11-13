@@ -28,13 +28,22 @@ namespace Game.Net
         public Transform[] DummySpawns => _dummySpawns;
         public int Seed => _seed;
         public ushort Port { get; private set; }
+        // Score keeping for this match: alive count, kills, placement, winner.
+        public MatchState State { get; private set; }
 
         int _nextPlayerSpawn;
 
-        void Awake() => Instance = this;
+        void Awake()
+        {
+            Instance = this;
+            // Scenes built before the match state existed get one here, so no scene has to be rebuilt for it.
+            State = GetComponent<MatchState>();
+            if (State == null) State = gameObject.AddComponent<MatchState>();
+        }
 
         void Start()
         {
+            State.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost)

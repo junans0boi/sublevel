@@ -1,0 +1,339 @@
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+
+// Materials, terrain layers and generated textures of the outdoor map (ADR-052). The source maps are the CC0 sets
+// under Art/ (ASSET_LEDGER A-0007..A-0023); everything derived from them is written under Prefabs/World.
+public static class WorldMaterials
+{
+    public const string GeneratedDir = "Assets/_Project/Prefabs/World";
+    public const string TextureDir = GeneratedDir + "/Textures";
+    public const string MaterialDir = GeneratedDir + "/Materials";
+    public const string LayerDir = GeneratedDir + "/Terrain";
+    const string ArtMaterials = "Assets/_Project/Art/Materials";
+    const string ArtModels = "Assets/_Project/Art/Models";
+    const string WaterShader = "Game/WorldWater";
+    const string TerrainShader = "Universal Render Pipeline/Terrain/Lit";
+
+    // A material and the size in metres one repeat of its texture covers (some sets are twice as wide as high).
+    public struct Surface
+    {
+        public Material Material;
+        public Vector2 Tile;
+    }
+
+    static readonly Dictionary<string, Material> Cache = new Dictionary<string, Material>();
+
+    static readonly string[] SurfaceSets =
+    {
+        "Ground037", "Ground081", "Rock051", "Ground054", "Asphalt015", "Bricks097", "PaintedPlaster017",
+        "CorrugatedSteel005", "RoofingTiles014B", "Planks039", "Concrete047A", "Metal022", "PaintedMetal014",
+    };
+
+    // (folder, file prefix) of the rock models.
+    public static readonly (string Folder, string File)[] RockSets =
+    {
+        ("Rock07", "rock_07"), ("Rock09", "rock_09"), ("RockMossSet01", "rock_moss_set_01"),
+    };
+
+    static readonly Color[] BrickTints = { Color.white, new Color(0.84f, 0.80f, 0.78f), new Color(1f, 0.90f, 0.82f) };
+    static readonly Color[] PlasterTints = { new Color(0.90f, 0.88f, 0.82f), new Color(0.76f, 0.81f, 0.84f), new Color(0.88f, 0.79f, 0.66f) };
+    static readonly Color[] SteelTints = { new Color(0.74f, 0.77f, 0.80f), new Color(0.52f, 0.60f, 0.56f), new Color(0.68f, 0.52f, 0.46f) };
+    static readonly Color[] RoofTints = { Color.white, new Color(0.80f, 0.74f, 0.70f), new Color(0.70f, 0.72f, 0.76f) };
+
+    public const int Variants = 3;
+
+    // Packs the masks every material needs. Call once before any material is asked for.
+    public static void Prepare()
+    {
+        Directory.CreateDirectory(TextureDir);
+        Directory.CreateDirectory(MaterialDir);
+        Directory.CreateDirectory(LayerDir);
+        Cache.Clear();
+        foreach (var id in SurfaceSets) PackSurfaceMask(id);
+        foreach (var (folder, file) in RockSets) PackRockMask(folder, file);
+        AssetDatabase.Refresh();
+        foreach (var id in SurfaceSets) ImportTexture(MaskPath(id), true, false, TextureWrapMode.Repeat, true);
+        foreach (var (_, file) in RockSets) ImportTexture(MaskPath(file), true, false, TextureWrapMode.Repeat, true);
+    }
+
+    static string MaskPath(string id) => $"{TextureDir}/{id}_mask.png";
+
+    // One mask for both URP Lit (metallic R, smoothness A, occlusion G) and the terrain shader's mask map
+    // (R metallic, G occlusion, B height, A smoothness): ambientCG ships these as separate maps.
+    static void PackSurfaceMask(string id)
+    {
+        var outPath = MaskPath(id);
+        if (File.Exists(outPath)) return;
+        var rough = LoadFile($"{ArtMaterials}/{id}/{id}_roughness.jpg");
+        if (rough == null) throw new FileNotFoundException("roughness map missing for " + id);
+        var ao = LoadFile($"{ArtMaterials}/{id}/{id}_ao.jpg");
+        var metal = LoadFile($"{ArtMaterials}/{id}/{id}_metallic.jpg");
+        var r = rough.GetPixels32();
+        var a = SameSize(ao, rough) ? ao.GetPixels32() : null;
+        var m = SameSize(metal, rough) ? metal.GetPixels32() : null;
+        var packed = new Color32[r.Length];
+        for (int i = 0; i < r.Length; i++)
+            packed[i] = new Color32(m != null ? m[i].r : (byte)0, a != null ? a[i].r : (byte)255, 128, (byte)(255 - r[i].r));
+        WritePng(outPath, rough.width, rough.height, packed);
+        Destroy(rough, ao, metal);
+    }
+
+    // Poly Haven packs AO, roughness and metalness into the R, G and B of one "arm" map.
+    static void PackRockMask(string folder, string file)
+    {
+        var outPath = MaskPath(file);
+        if (File.Exists(outPath)) return;
+        var arm = LoadFile($"{ArtModels}/{folder}/{file}_arm.jpg");
+        if (arm == null) throw new FileNotFoundException("arm map missing for " + file);
+        var p = arm.GetPixels32();
+        var packed = new Color32[p.Length];
+        for (int i = 0; i < p.Length; i++)
+            packed[i] = new Color32(p[i].b, p[i].r, 128, (byte)(255 - p[i].g));
+        WritePng(outPath, arm.width, arm.height, packed);
+        Destroy(arm);
+    }
+
+    static bool SameSize(Texture2D tex, Texture2D like) => tex != null && tex.width == like.width && tex.height == like.height;
+
+    static void Destroy(params Texture2D[] textures)
+    {
+        foreach (var tex in textures)
+            if (tex != null) Object.DestroyImmediate(tex);
+    }
+
+    // Reads an image file straight from disk: the imported textures under Art/ are not readable.
+    static Texture2D LoadFile(string path)
+    {
+        if (!File.Exists(path)) return null;
+        var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
+        if (!tex.LoadImage(File.ReadAllBytes(path)))
+        {
+            Object.DestroyImmediate(tex);
+            return null;
+        }
+        return tex;
+    }
+
+    public static void WritePng(string path, int width, int height, Color32[] pixels)
+    {
+        var tex = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+        tex.SetPixels32(pixels);
+        File.WriteAllBytes(path, tex.EncodeToPNG());
+        Object.DestroyImmediate(tex);
+    }
+
+    // AssetImportRules only covers Art/, so generated textures get their import settings here.
+    public static Texture2D ImportTexture(string path, bool linear, bool normalMap, TextureWrapMode wrap, bool compressed)
+    {
+        AssetDatabase.ImportAsset(path);
+        var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) throw new FileNotFoundException("generated texture was not imported: " + path);
+        var type = normalMap ? TextureImporterType.NormalMap : TextureImporterType.Default;
+        var compression = compressed ? TextureImporterCompression.Compressed : TextureImporterCompression.Uncompressed;
+        bool dirty = false;
+        if (importer.textureType != type) { importer.textureType = type; dirty = true; }
+        if (!normalMap && importer.sRGBTexture == linear) { importer.sRGBTexture = !linear; dirty = true; }
+        if (importer.wrapMode != wrap) { importer.wrapMode = wrap; dirty = true; }
+        if (importer.textureCompression != compression) { importer.textureCompression = compression; dirty = true; }
+        if (!importer.mipmapEnabled) { importer.mipmapEnabled = true; dirty = true; }
+        if (importer.isReadable) { importer.isReadable = false; dirty = true; }
+        if (dirty) importer.SaveAndReimport();
+        return SceneLook.Load<Texture2D>(path);
+    }
+
+    static Material Asset(string name, string shaderName)
+    {
+        var path = $"{MaterialDir}/{name}.mat";
+        var shader = Shader.Find(shaderName);
+        if (shader == null) throw new FileNotFoundException("shader not found: " + shaderName);
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat == null)
+        {
+            mat = new Material(shader);
+            AssetDatabase.CreateAsset(mat, path);
+        }
+        else if (mat.shader != shader) mat.shader = shader;
+        return mat;
+    }
+
+    // URP Lit from a colour, normal and packed mask map; the same recipe as SceneLook's test box materials.
+    static Material Lit(string name, string colorPath, string normalPath, string maskPath, Color tint, float smoothness, float bumpScale)
+    {
+        if (Cache.TryGetValue(name, out var cached) && cached != null) return cached;
+        var mat = Asset(name, "Universal Render Pipeline/Lit");
+        var mask = SceneLook.Load<Texture2D>(maskPath);
+        mat.SetTexture("_BaseMap", SceneLook.Load<Texture2D>(colorPath));
+        mat.SetTexture("_BumpMap", SceneLook.Load<Texture2D>(normalPath));
+        mat.SetTexture("_MetallicGlossMap", mask);
+        mat.SetTexture("_OcclusionMap", mask);
+        mat.EnableKeyword("_NORMALMAP");
+        mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+        mat.EnableKeyword("_OCCLUSIONMAP");
+        mat.SetFloat("_Smoothness", smoothness);
+        mat.SetFloat("_BumpScale", bumpScale);
+        mat.SetFloat("_OcclusionStrength", 1f);
+        mat.SetColor("_BaseColor", tint);
+        EditorUtility.SetDirty(mat);
+        Cache[name] = mat;
+        return mat;
+    }
+
+    static Surface Set(string name, string id, Color tint, float tileX, float tileY, float smoothness = 1f, float bumpScale = 1f) => new Surface
+    {
+        Material = Lit("World_" + name, $"{ArtMaterials}/{id}/{id}_color.jpg", $"{ArtMaterials}/{id}/{id}_normal.jpg", MaskPath(id), tint, smoothness, bumpScale),
+        Tile = new Vector2(tileX, tileY),
+    };
+
+    static int Wrap(int variant) => ((variant % Variants) + Variants) % Variants;
+
+    // Tinted variants so a street is not one colour. Bricks, plaster and planks are 2:1 sets.
+    public static Surface Brick(int variant) => Set("Brick" + Wrap(variant), "Bricks097", BrickTints[Wrap(variant)], 2.4f, 1.2f);
+    public static Surface Plaster(int variant) => Set("Plaster" + Wrap(variant), "PaintedPlaster017", PlasterTints[Wrap(variant)], 3f, 1.5f);
+    public static Surface PlasterInner => Set("PlasterInner", "PaintedPlaster017", new Color(0.80f, 0.79f, 0.75f), 3f, 1.5f);
+    public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.8f);
+    public static Surface SteelRoof => Set("SteelRoof", "CorrugatedSteel005", new Color(0.58f, 0.60f, 0.62f), 2f, 2f, smoothness: 0.8f);
+    public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), "RoofingTiles014B", RoofTints[Wrap(variant)], 2f, 2f);
+    public static Surface Planks => Set("Planks", "Planks039", Color.white, 2.4f, 1.2f);
+    public static Surface PlanksDark => Set("PlanksDark", "Planks039", new Color(0.72f, 0.64f, 0.55f), 1.6f, 0.8f);
+    public static Surface Concrete => Set("Concrete", "Concrete047A", Color.white, 3f, 3f);
+    public static Surface ConcreteDark => Set("ConcreteDark", "Concrete047A", new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
+    public static Surface PaintedMetal => Set("PaintedMetal", "PaintedMetal014", new Color(0.85f, 0.85f, 0.85f), 1.5f, 1.5f);
+    public static Surface RustyMetal => Set("RustyMetal", "Metal022", new Color(0.80f, 0.78f, 0.76f), 1.5f, 1.5f, smoothness: 0.8f);
+    public static Surface Asphalt => Set("Asphalt", "Asphalt015", new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
+    public static Surface DirtRoad => Set("DirtRoad", "Ground081", new Color(0.88f, 0.86f, 0.82f), 5f, 2.5f);
+
+    public static Material Rock(int set)
+    {
+        var (folder, file) = RockSets[set];
+        var dir = $"{ArtModels}/{folder}/{file}";
+        return Lit("World_" + folder, dir + "_color.jpg", dir + "_normal.jpg", MaskPath(file), Color.white, 1f, 1f);
+    }
+
+    public static string RockModelPath(int set) => $"{ArtModels}/{RockSets[set].Folder}/{RockSets[set].File}.fbx";
+
+    // ---- terrain ----
+
+    // Order matches WorldPlan.Splat: grass, dirt/gravel, rock, sand/mud. Tile sizes are large enough that the
+    // repeat does not show from eye height (Ground081 is a 2:1 set).
+    public static TerrainLayer[] TerrainLayers() => new[]
+    {
+        Layer("Grass", "Ground037", new Vector2(7f, 7f), 0.12f),
+        Layer("Dirt", "Ground081", new Vector2(9f, 4.5f), 0.15f),
+        Layer("Rock", "Rock051", new Vector2(10f, 10f), 0.2f),
+        Layer("Mud", "Ground054", new Vector2(6f, 6f), 0.3f),
+    };
+
+    static TerrainLayer Layer(string name, string id, Vector2 tileSize, float fallbackSmoothness)
+    {
+        var path = $"{LayerDir}/World_{name}.terrainlayer";
+        var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(path);
+        if (layer == null)
+        {
+            layer = new TerrainLayer();
+            AssetDatabase.CreateAsset(layer, path);
+        }
+        layer.diffuseTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg");
+        layer.normalMapTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg");
+        layer.maskMapTexture = SceneLook.Load<Texture2D>(MaskPath(id));
+        layer.tileSize = tileSize;
+        layer.tileOffset = Vector2.zero;
+        layer.normalScale = 1f;
+        // Used only if the mask map is not read (the shader's _MASKMAP keyword off).
+        layer.metallic = 0f;
+        layer.smoothness = fallbackSmoothness;
+        EditorUtility.SetDirty(layer);
+        return layer;
+    }
+
+    // Our own copy of the URP terrain material so the per-pixel normal and mask map keywords are certain to be on
+    // (they are shader features: the inspector normally sets them).
+    public static Material Terrain()
+    {
+        var mat = Asset("World_Terrain", TerrainShader);
+        mat.SetFloat("_EnableInstancedPerPixelNormal", 1f);
+        mat.EnableKeyword("_TERRAIN_INSTANCED_PERPIXEL_NORMAL");
+        mat.EnableKeyword("_MASKMAP");
+        mat.SetFloat("_EnableHeightBlend", 0f);
+        mat.DisableKeyword("_TERRAIN_BLEND_HEIGHT");
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    // ---- water ----
+
+    public static Material Water(Texture2D normals, Texture2D depth, float mapSize, float depthRange)
+    {
+        var mat = Asset("World_Water", WaterShader);
+        mat.SetTexture("_NormalMap", normals);
+        mat.SetTexture("_DepthMap", depth);
+        mat.SetFloat("_MapSize", mapSize);
+        mat.SetFloat("_DepthRange", depthRange);
+        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    // Tileable wave normals made here from summed sine waves with whole-number frequencies (so the texture wraps):
+    // no downloaded water texture exists in CC0 that we trust (ADR-052).
+    public static Texture2D WaterNormals(int seed)
+    {
+        const int size = 512;
+        const int waves = 28;
+        var path = TextureDir + "/WaterNormals.png";
+        var rng = new System.Random(seed);
+        var kx = new float[waves];
+        var ky = new float[waves];
+        var amp = new float[waves];
+        var phase = new float[waves];
+        for (int w = 0; w < waves; w++)
+        {
+            // Frequencies from 2 to 24 cycles across the tile, in every direction; higher ones are weaker.
+            float freq = 2f + 22f * (float)rng.NextDouble();
+            float angle = (float)(rng.NextDouble() * System.Math.PI * 2.0);
+            int fx = Mathf.RoundToInt(freq * Mathf.Cos(angle)), fy = Mathf.RoundToInt(freq * Mathf.Sin(angle));
+            if (fx == 0 && fy == 0) fx = 3;
+            kx[w] = fx * 2f * Mathf.PI;
+            ky[w] = fy * 2f * Mathf.PI;
+            amp[w] = 1f / Mathf.Sqrt(fx * fx + fy * fy);
+            phase[w] = (float)(rng.NextDouble() * System.Math.PI * 2.0);
+        }
+
+        // The summed slopes come to about 20 at their steepest; this keeps the steepest waves near 25 degrees
+        // before the shader's own strength.
+        const float slopeScale = 0.02f;
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            float v = (y + 0.5f) / size;
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size;
+                float dx = 0f, dy = 0f;
+                for (int w = 0; w < waves; w++)
+                {
+                    float c = Mathf.Cos(kx[w] * u + ky[w] * v + phase[w]) * amp[w];
+                    dx += c * kx[w];
+                    dy += c * ky[w];
+                }
+                var n = new Vector3(-dx * slopeScale, -dy * slopeScale, 1f).normalized;
+                pixels[y * size + x] = new Color32(
+                    (byte)Mathf.Clamp(Mathf.RoundToInt((n.x * 0.5f + 0.5f) * 255f), 0, 255),
+                    (byte)Mathf.Clamp(Mathf.RoundToInt((n.y * 0.5f + 0.5f) * 255f), 0, 255),
+                    (byte)Mathf.Clamp(Mathf.RoundToInt((n.z * 0.5f + 0.5f) * 255f), 0, 255), 255);
+            }
+        }
+        WritePng(path, size, size, pixels);
+        return ImportTexture(path, true, true, TextureWrapMode.Repeat, true);
+    }
+
+    // Water depth over the whole map for the water shader: R = depth / depthRange, clamped. Not compressed:
+    // block compression would band the shoreline fade.
+    public static Texture2D WaterDepth(Color32[] pixels, int size)
+    {
+        var path = TextureDir + "/WaterDepth.png";
+        WritePng(path, size, size, pixels);
+        return ImportTexture(path, true, false, TextureWrapMode.Clamp, false);
+    }
+}

@@ -24,6 +24,13 @@ namespace Game.Core
         public float MinDamageFactor = 1f;
         public float RecoilPitchDeg;  // view kick per shot, before the aim stance's factor
         public float RecoilYawDeg;    // random left/right kick, up to this much
+        // Damage multipliers by where the hit lands (ADR-053).
+        public float HeadFactor = 2f;
+        public float BodyFactor = 1f;
+        public float LimbFactor = 0.75f;
+        // Spread multipliers for a shooter moving at full walking speed or more, and for one off the ground.
+        public float MoveSpreadFactor = 1.5f;
+        public float AirSpreadFactor = 2.5f;
     }
 
     [Serializable]

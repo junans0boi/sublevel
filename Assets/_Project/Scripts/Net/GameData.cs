@@ -11,7 +11,25 @@ namespace Game.Net
         static GameRules _rules;
 
         public static WeaponTable Weapons => _weapons ??= Load<WeaponTable>("GameData/weapons");
-        public static GameRules Rules => _rules ??= Load<GameRules>("GameData/rules");
+        public static GameRules Rules => _rules ??= LoadRules();
+
+        // Rule sets that live in their own static `Current` (so pure code runs without a data file) follow the data.
+        static GameRules LoadRules()
+        {
+            var rules = Load<GameRules>("GameData/rules");
+            StanceRules.Current = rules.Stance;
+            FallRules.Current = rules.Fall;
+            FreeLookRules.Current = rules.FreeLook;
+            return rules;
+        }
+
+        // Before anything reads a `Current`: components may look at one without touching Rules first.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void LoadAtStart()
+        {
+            _rules = null;
+            _ = Rules;
+        }
         public static LootTable Loot => _loot ??= Load<LootTable>("GameData/loot");
 
         static T Load<T>(string path)

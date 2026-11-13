@@ -56,7 +56,7 @@ namespace Game.Gameplay
         int _nextImpact;
 
         // Per shot (a shotgun's pellets are one shot): what the local player has already been told.
-        bool _hitShown, _killShown, _damageShown;
+        bool _hitShown, _killShown, _headShown, _damageShown;
 
         // Counters so tests can tell that effects were shown without looking.
         public int MuzzleFlashes { get; private set; }
@@ -64,7 +64,13 @@ namespace Game.Gameplay
         public int ImpactsShown { get; private set; }
         public int HitConfirms { get; private set; }
         public int KillConfirms { get; private set; }
+        public int HeadshotConfirms { get; private set; }
         public int DamageDirectionsShown { get; private set; }
+
+        // Raised for the local player's own shot when it lands on a head, at most once per shot (true = it killed).
+        // Comes right after the usual hit marker call; a HUD that wants a headshot marker listens here and
+        // unsubscribes when it or this view goes away.
+        public event System.Action<bool> HeadshotConfirmed;
 
         void Awake()
         {
@@ -161,7 +167,7 @@ namespace Game.Gameplay
 
             if (_shots.IsNewShot(Time.timeAsDouble))
             {
-                _hitShown = _killShown = _damageShown = false;
+                _hitShown = _killShown = _headShown = _damageShown = false;
                 _muzzle = MuzzlePoint(shot.Origin, dir, out float sizeFactor);
                 ShowMuzzleFlash(dir, sizeFactor);
             }
@@ -283,16 +289,21 @@ namespace Game.Gameplay
                 DamageDirectionsShown++;
                 Hud.DamageFrom(transform.position);
             }
-            // One marker per shot; a later pellet of the same shot that kills upgrades it.
-            if (_combatant != local || (_hitShown && !(kill && !_killShown))) return;
+            if (_combatant != local) return;
+            // One marker per shot; a later pellet of the same shot that kills or lands on the head upgrades it.
+            bool head = shot.Head && !_headShown;
+            if (_hitShown && !(kill && !_killShown) && !head) return;
             if (!_hitShown) HitConfirms++;
-            if (kill) KillConfirms++;
+            if (kill && !_killShown) KillConfirms++;
+            if (head) HeadshotConfirms++;
             _hitShown = true;
             _killShown |= kill;
-            Hud.HitMarker(kill);
+            _headShown |= head;
+            Hud.HitMarker(kill || _killShown, _headShown);
+            if (head) HeadshotConfirmed?.Invoke(kill || _killShown);
             var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
             if (_confirmSource == null || clip == null) return;
-            _confirmSource.pitch = kill ? _fx.KillConfirmPitch : _fx.HitConfirmPitch;
+            _confirmSource.pitch = kill ? _fx.KillConfirmPitch : shot.Head ? _fx.HeadConfirmPitch : _fx.HitConfirmPitch;
             _confirmSource.PlayOneShot(clip, kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume);
         }
 

@@ -1,0 +1,220 @@
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+// Mesh helpers of the outdoor map builder: the height field the terrain is made from, boxes combined into one
+// mesh per material, road strips, and the asset the generated meshes are stored in.
+public static class WorldMeshes
+{
+    // The heightmap as the terrain will draw it: bilinear between samples, in metres.
+    public sealed class HeightField
+    {
+        readonly float[,] _heights01; // [z, x], 0..1
+        readonly int _res;
+        readonly float _size, _maxHeight, _cell;
+
+        public HeightField(float[,] heights01, float size, float maxHeight)
+        {
+            _heights01 = heights01;
+            _res = heights01.GetLength(0);
+            _size = size;
+            _maxHeight = maxHeight;
+            _cell = size / (_res - 1);
+        }
+
+        public int Resolution => _res;
+        public float Size => _size;
+
+        // Height at a heightmap sample.
+        public float At(int ix, int iz) => _heights01[Mathf.Clamp(iz, 0, _res - 1), Mathf.Clamp(ix, 0, _res - 1)] * _maxHeight;
+
+        public float Height(float x, float z)
+        {
+            Sample(x, z, out float height, out _);
+            return height;
+        }
+
+        // Height and steepness (rise over run) at a world position.
+        public void Sample(float x, float z, out float height, out float slopeTan)
+        {
+            float fx = Mathf.Clamp(x / _cell, 0f, _res - 1), fz = Mathf.Clamp(z / _cell, 0f, _res - 1);
+            int ix = Mathf.Min((int)fx, _res - 2), iz = Mathf.Min((int)fz, _res - 2);
+            float tx = fx - ix, tz = fz - iz;
+            float h00 = _heights01[iz, ix], h10 = _heights01[iz, ix + 1], h01 = _heights01[iz + 1, ix], h11 = _heights01[iz + 1, ix + 1];
+            height = Mathf.Lerp(Mathf.Lerp(h00, h10, tx), Mathf.Lerp(h01, h11, tx), tz) * _maxHeight;
+            float gx = Mathf.Lerp(h10 - h00, h11 - h01, tz) * _maxHeight / _cell;
+            float gz = Mathf.Lerp(h01 - h00, h11 - h10, tx) * _maxHeight / _cell;
+            slopeTan = Mathf.Sqrt(gx * gx + gz * gz);
+        }
+    }
+
+    // Generated meshes live in one asset file instead of in the scene, which would otherwise carry every vertex as text.
+    public sealed class Store
+    {
+        readonly string _path;
+        bool _created;
+
+        public int Count { get; private set; }
+        public long Triangles { get; private set; }
+
+        public Store(string path)
+        {
+            _path = path;
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
+        }
+
+        public Mesh Add(Mesh mesh)
+        {
+            if (!_created)
+            {
+                AssetDatabase.CreateAsset(mesh, _path);
+                _created = true;
+            }
+            else AssetDatabase.AddObjectToAsset(mesh, _path);
+            Count++;
+            for (int i = 0; i < mesh.subMeshCount; i++) Triangles += mesh.GetIndexCount(i) / 3;
+            return mesh;
+        }
+    }
+
+    // Axis-aligned boxes in one local frame, combined into a single mesh. Texture coordinates come from the
+    // position in that frame, so the pattern keeps its size and runs on across neighbouring boxes of one wall.
+    public sealed class BoxBatch
+    {
+        static readonly (Vector3 n, Vector3 r, Vector3 u)[] Faces =
+        {
+            (Vector3.up, Vector3.right, Vector3.forward), (Vector3.down, Vector3.right, Vector3.back),
+            (Vector3.forward, Vector3.left, Vector3.up), (Vector3.back, Vector3.right, Vector3.up),
+            (Vector3.right, Vector3.forward, Vector3.up), (Vector3.left, Vector3.back, Vector3.up),
+        };
+
+        readonly List<Vector3> _vertices = new List<Vector3>();
+        readonly List<Vector3> _normals = new List<Vector3>();
+        readonly List<Vector2> _uvs = new List<Vector2>();
+        readonly List<int> _triangles = new List<int>();
+        readonly Vector2 _tile;
+
+        public BoxBatch(Vector2 metersPerTile)
+        {
+            _tile = new Vector2(Mathf.Max(metersPerTile.x, 0.01f), Mathf.Max(metersPerTile.y, 0.01f));
+        }
+
+        public int Boxes { get; private set; }
+
+        public void Add(Vector3 center, Vector3 size, bool skipBottom = false)
+        {
+            var h = size * 0.5f;
+            for (int f = 0; f < Faces.Length; f++)
+            {
+                if (skipBottom && f == 1) continue;
+                var (n, r, u) = Faces[f];
+                float halfR = Mathf.Abs(Vector3.Dot(r, h)), halfU = Mathf.Abs(Vector3.Dot(u, h));
+                var c = center + Vector3.Scale(n, h);
+                int first = _vertices.Count;
+                for (int i = 0; i < 4; i++)
+                {
+                    float sr = i == 1 || i == 2 ? 1f : -1f, su = i >= 2 ? 1f : -1f;
+                    var p = c + r * (sr * halfR) + u * (su * halfU);
+                    _vertices.Add(p);
+                    _normals.Add(n);
+                    _uvs.Add(new Vector2(Vector3.Dot(p, r) / _tile.x, Vector3.Dot(p, u) / _tile.y));
+                }
+                _triangles.Add(first); _triangles.Add(first + 2); _triangles.Add(first + 1);
+                _triangles.Add(first); _triangles.Add(first + 3); _triangles.Add(first + 2);
+            }
+            Boxes++;
+        }
+
+        public Mesh ToMesh(string name)
+        {
+            var mesh = new Mesh { name = name };
+            if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.SetVertices(_vertices);
+            mesh.SetNormals(_normals);
+            mesh.SetUVs(0, _uvs);
+            mesh.SetTriangles(_triangles, 0);
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+    }
+
+    // Road surfaces: strips three vertices wide laid on the ground along polylines, combined into one mesh.
+    public sealed class StripBatch
+    {
+        readonly List<Vector3> _vertices = new List<Vector3>();
+        readonly List<Vector2> _uvs = new List<Vector2>();
+        readonly List<int> _triangles = new List<int>();
+        readonly Vector2 _tile;
+
+        public StripBatch(Vector2 metersPerTile)
+        {
+            _tile = new Vector2(Mathf.Max(metersPerTile.x, 0.01f), Mathf.Max(metersPerTile.y, 0.01f));
+        }
+
+        public bool Empty => _triangles.Count == 0;
+        public float Length { get; private set; }
+
+        // points: the centre line in the ground plane (x, z), already sampled finely enough to follow the ground.
+        public void Add(IReadOnlyList<Vector2> points, float width, HeightField ground, float lift)
+        {
+            if (points.Count < 2 || width <= 0f) return;
+            int first = _vertices.Count;
+            float along = 0f;
+            var right = Vector2.right;
+            for (int i = 0; i < points.Count; i++)
+            {
+                var tangent = points[Mathf.Min(i + 1, points.Count - 1)] - points[Mathf.Max(i - 1, 0)];
+                if (tangent.sqrMagnitude > 1e-6f)
+                {
+                    tangent.Normalize();
+                    right = new Vector2(tangent.y, -tangent.x); // forward (0, 1) has right (1, 0)
+                }
+                if (i > 0) along += Vector2.Distance(points[i - 1], points[i]);
+                for (int k = 0; k < 3; k++)
+                {
+                    var p = points[i] + right * ((k - 1) * width * 0.5f);
+                    _vertices.Add(new Vector3(p.x, ground.Height(p.x, p.y) + lift, p.y));
+                    _uvs.Add(new Vector2(k * width * 0.5f / _tile.x, along / _tile.y));
+                }
+            }
+            for (int i = 0; i < points.Count - 1; i++)
+            {
+                for (int k = 0; k < 2; k++)
+                {
+                    int a = first + i * 3 + k, b = a + 1, c = a + 3, d = c + 1;
+                    _triangles.Add(a); _triangles.Add(c); _triangles.Add(b);
+                    _triangles.Add(b); _triangles.Add(c); _triangles.Add(d);
+                }
+            }
+            Length += along;
+        }
+
+        public Mesh ToMesh(string name)
+        {
+            var mesh = new Mesh { name = name };
+            if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.SetVertices(_vertices);
+            mesh.SetUVs(0, _uvs);
+            mesh.SetTriangles(_triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+    }
+
+    // A flat rectangle facing up, centred on the origin.
+    public static Mesh Quad(string name, float sizeX, float sizeZ)
+    {
+        float hx = sizeX * 0.5f, hz = sizeZ * 0.5f;
+        var mesh = new Mesh { name = name };
+        mesh.SetVertices(new List<Vector3> { new Vector3(-hx, 0, -hz), new Vector3(hx, 0, -hz), new Vector3(hx, 0, hz), new Vector3(-hx, 0, hz) });
+        mesh.SetNormals(new List<Vector3> { Vector3.up, Vector3.up, Vector3.up, Vector3.up });
+        mesh.SetUVs(0, new List<Vector2> { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) });
+        mesh.SetTriangles(new List<int> { 0, 2, 1, 0, 3, 2 }, 0);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+}

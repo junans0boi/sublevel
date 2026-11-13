@@ -17,7 +17,8 @@ namespace Game.Core
         // Returns the damage actually applied. The dead take no further damage.
         public float ApplyDamage(float amount)
         {
-            if (IsDead || amount <= 0f) return 0f;
+            // Written so that NaN is refused too.
+            if (IsDead || !(amount > 0f)) return 0f;
             float applied = Math.Min(amount, Current);
             Current -= applied;
             return applied;

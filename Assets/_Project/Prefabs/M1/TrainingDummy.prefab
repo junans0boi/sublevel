@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 539032514963778103}
   - component: {fileID: 3786954397018569053}
   - component: {fileID: 7059624455276183955}
+  - component: {fileID: 6220133630878808888}
   - component: {fileID: 4288756381042622664}
   - component: {fileID: 827447221935705976}
   - component: {fileID: 7576104679039782579}
@@ -142,6 +143,21 @@ MonoBehaviour:
   _isPlayer: 0
   _maxHealth: 100
   _eyeHeight: 1.6
+--- !u!114 &6220133630878808888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2543248305865702539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 71fc9f51056c14b9b9998601505c5ee1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Net::Game.Net.CombatantStance
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 3786954397018569053}
+  _networkObjectCache: {fileID: 0}
 --- !u!114 &4288756381042622664
 MonoBehaviour:
   m_ObjectHideFlags: 0

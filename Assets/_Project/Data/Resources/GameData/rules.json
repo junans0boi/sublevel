@@ -9,7 +9,11 @@
   },
   "Lean": { "OffsetMeters": 0.25, "EyeDropMeters": 0.04, "EyeViewRollDeg": 6.0, "ThirdPersonRollDeg": 0.0, "BodyRollDeg": 10.0, "ChangePerSecond": 8.0, "MoveFactor": 0.85 },
   "Recoil": { "RecoverDegPerSecond": 14.0, "MaxPitchDeg": 12.0 },
-  "Fire": { "ServerEarlySeconds": 0.05, "MaxEarlyFraction": 0.4, "ClientCatchUpSeconds": 0.035, "ClickBufferSeconds": 0.12 },
+  "Fire": {
+    "ServerEarlySeconds": 0.05, "MaxEarlyFraction": 0.4, "ClientCatchUpSeconds": 0.035, "ClickBufferSeconds": 0.12,
+    "MoveSpreadMinSpeed": 0.5, "MoveSpreadFullSpeed": 4.5,
+    "Zones": { "StandingHeight": 1.8, "HeadMeters": 0.3, "LimbFraction": 0.45, "MinHeight": 0.6 }
+  },
   "CombatFx": {
     "MuzzleForward": 0.6, "MuzzleDrop": 0.22, "MuzzleFlashSize": [0.0, 0.28, 0.32, 0.4, 0.6], "MuzzleFlashSeconds": 0.05, "EyeViewFlashFactor": 0.45,
     "MuzzleLightIntensity": 6.0, "MuzzleLightRange": 7.0,
@@ -23,5 +27,14 @@
     "TakeoffSeconds": 0.1, "TakeoffToeDeg": 30.0, "TakeoffArchDeg": 6.0,
     "TuckThighDeg": 68.0, "TuckShinDeg": 95.0, "TuckSpeed": 4.0, "FallTuck": 0.2, "TuckPerSecond": 10.0, "TorsoPitchDeg": 8.0, "ArmLiftDeg": 35.0,
     "LandAttackSeconds": 0.06, "LandAbsorbSeconds": 0.25, "LandBendDeg": 28.0, "LandDropMeters": 0.09, "LandPitchDeg": 8.0
-  }
+  },
+  "Stance": {
+    "Stand":  { "EyeDropMeters": 0.0,  "CapsuleHeight": 1.8, "MoveFactor": 1.0,  "SpreadFactor": 1.0,  "FootstepVolumeFactor": 1.0 },
+    "Crouch": { "EyeDropMeters": 0.65, "CapsuleHeight": 1.0, "MoveFactor": 0.55, "SpreadFactor": 0.7,  "FootstepVolumeFactor": 0.4 },
+    "Prone":  { "EyeDropMeters": 1.3,  "CapsuleHeight": 0.7, "MoveFactor": 0.25, "SpreadFactor": 0.45, "FootstepVolumeFactor": 0.2 },
+    "ProneEnabled": false, "ChangePerSecond": 5.0, "HeadClearanceMeters": 0.05,
+    "CrouchKneeDeg": 72.0, "CrouchTorsoPitchDeg": 6.0
+  },
+  "Fall": { "SafeMeters": 3.0, "LethalMeters": 12.0, "LethalDamage": 100.0, "ReportToleranceMeters": 1.0, "ReportWindowSeconds": 1.0 },
+  "FreeLook": { "MaxYawDeg": 120.0, "ReturnDegPerSecond": 540.0 }
 }
