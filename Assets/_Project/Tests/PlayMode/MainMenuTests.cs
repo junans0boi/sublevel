@@ -20,9 +20,7 @@ namespace Game.Tests
         }
 
         // The developer's own saved settings must survive a test run.
-        float _sensitivity, _volume, _aim;
-        int _preset, _view;
-        bool _hadSensitivity, _hadVolume, _hadAim, _hadPreset, _hadView;
+        GameSettings.PrefsSnapshot _prefs;
 
         static IEnumerator WaitUntil(Func<bool> condition, float seconds, string what)
         {
@@ -35,41 +33,18 @@ namespace Game.Tests
         }
 
         [SetUp]
-        public void RememberPrefs()
-        {
-            _hadSensitivity = PlayerPrefs.HasKey(GameSettings.MouseSensitivityKey);
-            _hadVolume = PlayerPrefs.HasKey(GameSettings.MasterVolumeKey);
-            _hadAim = PlayerPrefs.HasKey(GameSettings.AimSensitivityKey);
-            _hadPreset = PlayerPrefs.HasKey(GraphicsOptions.PresetKey);
-            _hadView = PlayerPrefs.HasKey(GameSettings.DefaultViewKey);
-            _sensitivity = PlayerPrefs.GetFloat(GameSettings.MouseSensitivityKey, 0f);
-            _volume = PlayerPrefs.GetFloat(GameSettings.MasterVolumeKey, 0f);
-            _aim = PlayerPrefs.GetFloat(GameSettings.AimSensitivityKey, 0f);
-            _preset = PlayerPrefs.GetInt(GraphicsOptions.PresetKey, 0);
-            _view = PlayerPrefs.GetInt(GameSettings.DefaultViewKey, 0);
-        }
+        public void RememberPrefs() => _prefs = GameSettings.CapturePrefs();
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            Restore(GameSettings.MouseSensitivityKey, _hadSensitivity, _sensitivity);
-            Restore(GameSettings.MasterVolumeKey, _hadVolume, _volume);
-            Restore(GameSettings.AimSensitivityKey, _hadAim, _aim);
-            if (_hadPreset) PlayerPrefs.SetInt(GraphicsOptions.PresetKey, _preset); else PlayerPrefs.DeleteKey(GraphicsOptions.PresetKey);
-            if (_hadView) PlayerPrefs.SetInt(GameSettings.DefaultViewKey, _view); else PlayerPrefs.DeleteKey(GameSettings.DefaultViewKey);
-            PlayerPrefs.Save();
-            GameSettings.Load();
+            GameSettings.RestorePrefs(_prefs);
 
             UiFocus.Close();
             PlayerController.InputOverride = null;
             SceneManager.LoadScene("Bootstrap");
             yield return null;
             yield return null;
-        }
-
-        static void Restore(string key, bool had, float value)
-        {
-            if (had) PlayerPrefs.SetFloat(key, value); else PlayerPrefs.DeleteKey(key);
         }
 
         static IEnumerator LoadMainMenu()
@@ -91,6 +66,33 @@ namespace Game.Tests
             Assert.IsTrue(menu.SettingsShown);
             menu.Back();
             Assert.IsFalse(menu.SettingsShown);
+        }
+
+        [UnityTest]
+        public IEnumerator MainMenu_Settings_BackDropsPreview_ApplyKeeps()
+        {
+            yield return LoadMainMenu();
+            var menu = MainMenu.Instance;
+            menu.ShowSettings();
+            var screen = menu.Settings;
+            Assert.IsNotNull(screen);
+            Assert.AreEqual("환경 설정", screen.Root.Find("Title").GetComponent<UnityEngine.UI.Text>().text);
+
+            float before = GameSettings.AimSensitivityFactor;
+            float target = before > 1f ? 0.6f : 1.3f;
+            screen.SelectTab(SettingsTab.Controls);
+            screen.Row(SettingId.AimSensitivity).Slider.value = target;
+            Assert.AreEqual(target, GameSettings.AimSensitivityFactor, 0.0001f);
+            screen.Back();
+            Assert.IsFalse(menu.SettingsShown, "뒤로 가기 returns to the main column");
+            Assert.AreEqual(before, GameSettings.AimSensitivityFactor, 0.0001f, "dropped");
+
+            menu.ShowSettings();
+            screen.Row(SettingId.AimSensitivity).Slider.value = target;
+            screen.Apply();
+            screen.Back();
+            Assert.AreEqual(target, GameSettings.AimSensitivityFactor, 0.0001f, "kept");
+            Assert.AreEqual(target, PlayerPrefs.GetFloat(GameSettings.AimSensitivityKey), 0.0001f, "saved");
         }
 
         [UnityTest]

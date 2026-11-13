@@ -4,41 +4,30 @@ using UnityEngine;
 
 namespace Game.Tests
 {
-    // The graphics presets and the new persisted settings: what each preset means, clamping, and PlayerPrefs round trips.
+    // The graphics presets and the persisted settings: what each preset means, the level tables, clamping, and
+    // PlayerPrefs round trips.
     public class GraphicsOptionsTests
     {
-        bool _hadPreset, _hadAim, _hadView;
-        int _preset, _view;
-        float _aim;
+        GameSettings.PrefsSnapshot _prefs;
 
         [SetUp]
         public void RememberPrefs()
         {
-            _hadPreset = PlayerPrefs.HasKey(GraphicsOptions.PresetKey);
-            _hadAim = PlayerPrefs.HasKey(GameSettings.AimSensitivityKey);
-            _hadView = PlayerPrefs.HasKey(GameSettings.DefaultViewKey);
-            _preset = PlayerPrefs.GetInt(GraphicsOptions.PresetKey, 0);
-            _aim = PlayerPrefs.GetFloat(GameSettings.AimSensitivityKey, 0f);
-            _view = PlayerPrefs.GetInt(GameSettings.DefaultViewKey, 0);
-        }
-
-        [TearDown]
-        public void RestorePrefs()
-        {
-            if (_hadPreset) PlayerPrefs.SetInt(GraphicsOptions.PresetKey, _preset); else PlayerPrefs.DeleteKey(GraphicsOptions.PresetKey);
-            if (_hadAim) PlayerPrefs.SetFloat(GameSettings.AimSensitivityKey, _aim); else PlayerPrefs.DeleteKey(GameSettings.AimSensitivityKey);
-            if (_hadView) PlayerPrefs.SetInt(GameSettings.DefaultViewKey, _view); else PlayerPrefs.DeleteKey(GameSettings.DefaultViewKey);
-            PlayerPrefs.Save();
+            _prefs = GameSettings.CapturePrefs();
+            foreach (var def in SettingsCatalog.All) PlayerPrefs.DeleteKey(def.Key);
             GameSettings.Load();
         }
 
+        [TearDown]
+        public void RestorePrefs() => GameSettings.RestorePrefs(_prefs);
+
         [Test]
-        public void Presets_ScaleShadowsAndResolutionUpwards()
+        public void Presets_ScaleShadowsUpwards()
         {
             Assert.Less(GraphicsOptions.ShadowDistance(GraphicsPreset.Low), GraphicsOptions.ShadowDistance(GraphicsPreset.Medium));
             Assert.Less(GraphicsOptions.ShadowDistance(GraphicsPreset.Medium), GraphicsOptions.ShadowDistance(GraphicsPreset.High));
-            Assert.Less(GraphicsOptions.RenderScale(GraphicsPreset.Low), GraphicsOptions.RenderScale(GraphicsPreset.Medium));
-            Assert.AreEqual(1f, GraphicsOptions.RenderScale(GraphicsPreset.High), 0.0001f);
+            Assert.AreEqual(50f, GraphicsOptions.ShadowDistance(GraphicsPreset.Medium), 0.001f, "보통 is the URP asset's own distance");
+            Assert.AreEqual(0f, GraphicsOptions.ShadowDistanceFor(0), "그림자 끔");
         }
 
         [Test]
@@ -50,28 +39,61 @@ namespace Game.Tests
         }
 
         [Test]
+        public void LevelTables_MatchTheSpec()
+        {
+            Assert.AreEqual(2, GraphicsOptions.TextureMipLimit(0));
+            Assert.AreEqual(1, GraphicsOptions.TextureMipLimit(1));
+            Assert.AreEqual(0, GraphicsOptions.TextureMipLimit(2));
+            Assert.AreEqual(300f, GraphicsOptions.FarClip(0));
+            Assert.AreEqual(500f, GraphicsOptions.FarClip(1));
+            Assert.AreEqual(700f, GraphicsOptions.FarClip(2), "높음 = the World scene's own far clip");
+            Assert.AreEqual(900f, GraphicsOptions.FarClip(3));
+            Assert.AreEqual(-1, GraphicsOptions.FrameCap(0), "무제한");
+            Assert.AreEqual(144, GraphicsOptions.FrameCap(3));
+            Assert.AreEqual(FullScreenMode.Windowed, GraphicsOptions.ScreenMode(2));
+            Assert.AreEqual(FullScreenMode.FullScreenWindow, GraphicsOptions.ScreenMode(1));
+        }
+
+        [Test]
         public void Labels_AreKorean()
         {
             Assert.AreEqual("낮음", GraphicsOptions.Label(GraphicsPreset.Low));
             Assert.AreEqual("보통", GraphicsOptions.Label(GraphicsPreset.Medium));
             Assert.AreEqual("높음", GraphicsOptions.Label(GraphicsPreset.High));
+            Assert.AreEqual("사용자 설정", GraphicsOptions.Label(GraphicsPreset.Custom));
         }
 
         [Test]
         public void Preset_ClampsAndRoundTrips()
         {
-            Assert.AreEqual(GraphicsPreset.High, GraphicsOptions.Clamp((GraphicsPreset)9));
+            Assert.AreEqual(GraphicsPreset.Custom, GraphicsOptions.Clamp((GraphicsPreset)9));
             Assert.AreEqual(GraphicsPreset.Low, GraphicsOptions.Clamp((GraphicsPreset)(-3)));
 
             GraphicsOptions.Preset = GraphicsPreset.High;
             Assert.AreEqual((int)GraphicsPreset.High, PlayerPrefs.GetInt(GraphicsOptions.PresetKey));
+            Assert.AreEqual(SettingsCatalog.PresetValue(SettingsCatalog.PresetHigh, SettingId.Shadows), PlayerPrefs.GetInt("settings.shadows"),
+                "a preset saves the advanced rows it sets");
             GraphicsOptions.Preset = GraphicsPreset.Low;
             GraphicsOptions.Load();
             Assert.AreEqual(GraphicsPreset.Low, GraphicsOptions.Preset, "the saved preset is read back");
 
             PlayerPrefs.SetInt(GraphicsOptions.PresetKey, 77);
             GraphicsOptions.Load();
-            Assert.AreEqual(GraphicsPreset.High, GraphicsOptions.Preset, "a corrupt saved value is clamped");
+            Assert.AreEqual(GraphicsPreset.Custom, GraphicsOptions.Preset, "a corrupt saved value is clamped");
+        }
+
+        [Test]
+        public void ResolutionList_IsNeverEmpty_AndRoundTripsAsText()
+        {
+            var def = SettingsCatalog.Get(SettingId.Resolution);
+            Assert.Greater(def.OptionCount, 0);
+            int index = GraphicsOptions.NativeResolutionIndex;
+            string text = GraphicsOptions.ResolutionText(index);
+            StringAssert.Contains("x", text);
+            Assert.AreEqual(index, GraphicsOptions.ResolutionIndex(text));
+            var size = GraphicsOptions.ResolutionSize(index);
+            Assert.Greater(size.x, 0);
+            Assert.Greater(size.y, 0);
         }
 
         [Test]
@@ -95,6 +117,21 @@ namespace Game.Tests
             GameSettings.DefaultViewFirstPerson = false;
             GameSettings.Load();
             Assert.IsFalse(GameSettings.DefaultViewFirstPerson);
+        }
+
+        [Test]
+        public void GameplayReaders_FollowTheRows()
+        {
+            GameSettings.Preview(SettingId.CrosshairColor, 1f);
+            Assert.Greater(GameSettings.CrosshairColor.g, GameSettings.CrosshairColor.r, "녹색");
+            GameSettings.Preview(SettingId.KillFeed, 0f);
+            Assert.IsFalse(GameSettings.ShowKillFeed);
+            GameSettings.Preview(SettingId.ViewDistance, 3f);
+            Assert.AreEqual(900f, GameSettings.ViewDistanceMeters);
+            GameSettings.Preview(SettingId.Effects, 0f);
+            Assert.IsFalse(GameSettings.HighEffects);
+            GameSettings.Revert();
+            Assert.IsTrue(GameSettings.ShowKillFeed);
         }
     }
 }

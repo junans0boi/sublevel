@@ -21,11 +21,12 @@ namespace Game.Gameplay
 
         public bool IsOpen => _root != null && _root.activeSelf;
         public bool SettingsShown => _settings != null && _settings.activeSelf;
+        public SettingsScreen Settings => _settingsScreen;
 
         GameObject _root;
         GameObject _main;
         GameObject _settings;
-        SettingsPanel _settingsPanel;
+        SettingsScreen _settingsScreen;
 
         void Awake()
         {
@@ -60,11 +61,11 @@ namespace Game.Gameplay
         // SETTINGS
         public void ShowSettings()
         {
-            _settingsPanel.Sync();
             ShowPanels(true);
+            _settingsScreen.Open();
         }
 
-        // BACK
+        // BACK (unapplied settings are dropped)
         public void Back() => ShowPanels(false);
 
         // QUIT: straight out, no confirmation.
@@ -83,6 +84,8 @@ namespace Game.Gameplay
         void ShowPanels(bool settings)
         {
             if (_main == null || _settings == null) return;
+            // Leaving the settings any way but 적용 drops what was only previewed.
+            if (!settings && _settings.activeSelf) _settingsScreen.Cancel();
             _main.SetActive(!settings);
             _settings.SetActive(settings);
         }
@@ -113,8 +116,9 @@ namespace Game.Gameplay
 
         void BuildSettings(Transform parent)
         {
-            _settingsPanel = new SettingsPanel();
-            _settings = _settingsPanel.Build(parent, "Settings", Back).gameObject;
+            _settingsScreen = new SettingsScreen();
+            _settings = _settingsScreen.Build(parent, "Settings", Back).gameObject;
+            _settings.SetActive(false);
         }
 
         // A centred column; its height is set once the content is laid out.
