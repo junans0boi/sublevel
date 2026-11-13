@@ -122,6 +122,8 @@ namespace Game.Gameplay
         public bool WeaponPanelVisible => Visible && _weaponPanel.activeSelf;
         public bool HitMarkerVisible => _hitMarker != null && _hitMarker.activeSelf;
         public bool HeadMarkerShown { get; private set; }         // the last hit marker was for a head hit
+        public bool LimbMarkerShown { get; private set; }         // ... for the legs (and not a kill)
+        public Color HitMarkerColor { get; private set; }
         public bool ReloadingShown => _reload.activeSelf;
         public string PromptText => _prompt.activeSelf ? _promptLabel.text : "";
         public string PromptIconKey => _promptIcon != null && _prompt.activeSelf ? _promptIcon.Key : "";
@@ -160,9 +162,10 @@ namespace Game.Gameplay
 
         // An X around the crosshair when the local player's shot lands; red and larger for a kill.
         // A hit on the head shows in the accent colour (a kill stays red).
-        public static void HitMarker(bool kill, bool head = false)
+        // A hit on the legs shows smaller and pale blue (#152): body white, legs pale blue, head accent, kill red.
+        public static void HitMarker(bool kill, bool head = false, bool limb = false)
         {
-            if (Instance != null) Instance.ShowHitMarker(kill, head);
+            if (Instance != null) Instance.ShowHitMarker(kill, head, limb);
         }
 
         // An arc on a ring around the screen centre, pointing at whoever hurt the local player.
@@ -477,12 +480,16 @@ namespace Game.Gameplay
             }
         }
 
-        void ShowHitMarker(bool kill, bool head)
+        static readonly Color LimbMarker = new Color(0.66f, 0.82f, 1f, 1f);
+
+        void ShowHitMarker(bool kill, bool head, bool limb)
         {
             HeadMarkerShown = head;
-            Color color = kill ? UiKit.Danger : head ? UiKit.Accent : Color.white;
+            LimbMarkerShown = limb && !head && !kill;
+            Color color = kill ? UiKit.Danger : head ? UiKit.Accent : LimbMarkerShown ? LimbMarker : Color.white;
+            HitMarkerColor = color;
             for (int i = 0; i < _hitArms.Length; i++) _hitArms[i].color = color;
-            float scale = kill ? (head ? 1.8f : 1.5f) : head ? 1.25f : 1f;
+            float scale = kill ? (head ? 1.8f : 1.5f) : head ? 1.25f : LimbMarkerShown ? 0.85f : 1f;
             _hitMarker.transform.localScale = new Vector3(scale, scale, 1f);
             _hitMarkerUntil = Time.unscaledTime + HitMarkerSeconds;
             _hitMarker.SetActive(true);

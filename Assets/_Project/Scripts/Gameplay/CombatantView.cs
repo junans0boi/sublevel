@@ -53,6 +53,7 @@ namespace Game.Gameplay
         Vector3[] _impactPoint, _impactNormal;
         float[] _impactStart;
         bool[] _impactOn;
+        BulletSurface[] _impactSurface;
         int _nextImpact;
 
         // Per shot (a shotgun's pellets are one shot): what the local player has already been told.
@@ -66,6 +67,7 @@ namespace Game.Gameplay
         public int KillConfirms { get; private set; }
         public int HeadshotConfirms { get; private set; }
         public int DamageDirectionsShown { get; private set; }
+        public BulletSurface LastImpactSurface { get; private set; }
 
         // Raised for the local player's own shot when it lands on a head, at most once per shot (true = it killed).
         // Comes right after the usual hit marker call; a HUD that wants a headshot marker listens here and
@@ -126,6 +128,7 @@ namespace Game.Gameplay
             _impactNormal = new Vector3[ImpactPool];
             _impactStart = new float[ImpactPool];
             _impactOn = new bool[ImpactPool];
+            _impactSurface = new BulletSurface[ImpactPool];
             for (int i = 0; i < ImpactPool; i++)
             {
                 var root = new GameObject("Impact").transform;
@@ -171,7 +174,7 @@ namespace Game.Gameplay
             // A bullet still flying shows its muzzle now and its impact when it lands (ADR-098).
             if (shot.Phase == Combatant.ShotPhase.Impact)
             {
-                if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal);
+                if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal, shot.Surface);
                 Confirm(shot);
                 return;
             }
@@ -183,7 +186,7 @@ namespace Game.Gameplay
             }
             if (shot.Phase == Combatant.ShotPhase.Launch) return;
             ShowTracer(_muzzle, shot.End);
-            if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal);
+            if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal, shot.Surface);
             Confirm(shot);
         }
 
@@ -203,7 +206,7 @@ namespace Game.Gameplay
             HitConfirms++;
             if (kill) KillConfirms++;
             if (punch.Head) HeadshotConfirms++;
-            Hud.HitMarker(kill, punch.Head);
+            Hud.HitMarker(kill, punch.Head, punch.Zone == HitZone.Limb);
             if (punch.Head) HeadshotConfirmed?.Invoke(kill);
             var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
             if (_confirmSource == null || clip == null) return;
@@ -276,7 +279,7 @@ namespace Game.Gameplay
             line.widthMultiplier = width;
         }
 
-        void ShowImpact(Vector3 point, Vector3 normal)
+        void ShowImpact(Vector3 point, Vector3 normal, BulletSurface surface)
         {
             int i = _nextImpact;
             _nextImpact = (_nextImpact + 1) % ImpactPool;
@@ -284,10 +287,14 @@ namespace Game.Gameplay
             _impactNormal[i] = normal.sqrMagnitude > 1e-6f ? normal.normalized : Vector3.up;
             _impactStart[i] = Time.time;
             _impactOn[i] = true;
-            _impactFlashRenderer[i].enabled = true;
+            _impactSurface[i] = surface;
+            var look = ImpactLooks.Of(surface);
+            _impactFlashRenderer[i].enabled = look.Flash > 0f;
             _impactDustRenderer[i].enabled = GameSettings.HighEffects; // low effects: the flash only
             PlaceImpact(i, ViewCamera());
             ImpactsShown++;
+            LastImpactSurface = surface;
+            BulletMarks.Add(point, normal, look, _dustMaterial); // stays on walls and ground (#152)
         }
 
         // Returns false when the impact has run its course.
@@ -299,14 +306,19 @@ namespace Game.Gameplay
             // The discs face the camera; the dust drifts off the surface, grows and fades.
             var rotation = camera != null ? camera.rotation : Quaternion.LookRotation(_impactNormal[i]);
             _impacts[i].SetPositionAndRotation(_impactPoint[i] + _impactNormal[i] * (SurfaceOffset + _fx.DustDriftSpeed * age), rotation);
-            _impactDust[i].localScale = Vector3.one * (_fx.DustSize * Mathf.Lerp(1f, _fx.DustGrowth, k));
-            var color = _dustColor;
+            var look = ImpactLooks.Of(_impactSurface[i]);
+            _impactDust[i].localScale = Vector3.one * (_fx.DustSize * look.DustSize * Mathf.Lerp(1f, _fx.DustGrowth, k));
+            var color = look.Dust;
             color.a *= 1f - k;
             _block.SetColor(BaseColorId, color);
             _impactDustRenderer[i].SetPropertyBlock(_block);
 
             if (age < _fx.ImpactFlashSeconds)
-                _impactFlash[i].localScale = Vector3.one * (_fx.ImpactFlashSize * (1f - 0.5f * age / _fx.ImpactFlashSeconds));
+            {
+                _impactFlash[i].localScale = Vector3.one * (_fx.ImpactFlashSize * look.Flash * (1f - 0.5f * age / _fx.ImpactFlashSeconds));
+                _block.SetColor(BaseColorId, look.FlashColor);
+                _impactFlashRenderer[i].SetPropertyBlock(_block);
+            }
             else if (_impactFlashRenderer[i].enabled)
                 _impactFlashRenderer[i].enabled = false;
             return true;
@@ -335,7 +347,7 @@ namespace Game.Gameplay
             _hitShown = true;
             _killShown |= kill;
             _headShown |= head;
-            Hud.HitMarker(kill || _killShown, _headShown);
+            Hud.HitMarker(kill || _killShown, _headShown, shot.Zone == HitZone.Limb);
             if (head) HeadshotConfirmed?.Invoke(kill || _killShown);
             var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
             if (_confirmSource == null || clip == null) return;
