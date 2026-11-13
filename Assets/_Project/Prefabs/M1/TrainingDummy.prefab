@@ -18,8 +18,10 @@ GameObject:
   - component: {fileID: 7576104679039782579}
   - component: {fileID: 3760708995802330822}
   - component: {fileID: 7126440772801514521}
+  - component: {fileID: 4989561298758133727}
   - component: {fileID: 2771897398777207857}
   - component: {fileID: 6430767321360323818}
+  - component: {fileID: 8877302492093432223}
   - component: {fileID: 830993213506720630}
   - component: {fileID: 7611241556279619076}
   - component: {fileID: 4954645101816613685}
@@ -278,6 +280,41 @@ MonoBehaviour:
   _sightsAnchor: {x: 0, y: -0.035, z: 0.22}
   _hipAnchor: {x: 0.13, y: -0.13, z: 0.28}
   _anchorChangePerSecond: 12
+--- !u!114 &4989561298758133727
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2543248305865702539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbd93047451654b2c981f4e4fb667079, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.OpticVisual
+  _modelsByWeaponId:
+  - {fileID: 0}
+  - {fileID: 5639427100828651236}
+  - {fileID: 9144087951642426066}
+  - {fileID: 1404580586284949545}
+  - {fileID: 8478144230280756962}
+  _fitByWeaponId:
+  - Rotation: {x: 0, y: 0, z: 0, w: 0}
+    CenterOffset: {x: 0, y: 0, z: 0}
+    Size: {x: 0, y: 0, z: 0}
+  - Rotation: {x: -0.50000006, y: 0.49999997, z: 0.50000006, w: 0.49999997}
+    CenterOffset: {x: -0.000000014901161, y: 0.022800922, z: 0.07519424}
+    Size: {x: 0.042642504, y: 0.1532259, z: 0.24000001}
+  - Rotation: {x: -0.50000006, y: 0.49999997, z: 0.50000006, w: 0.49999997}
+    CenterOffset: {x: 0.000000029802322, y: 0.018643737, z: 0.1597535}
+    Size: {x: 0.057484478, y: 0.30827022, z: 0.5}
+  - Rotation: {x: -0.50000006, y: 0.49999997, z: 0.50000006, w: 0.49999997}
+    CenterOffset: {x: 0.000000014901161, y: 0.049949527, z: 0.013601303}
+    Size: {x: 0.044364303, y: 0.22022462, z: 0.75}
+  - Rotation: {x: -0.50000006, y: 0.49999997, z: 0.50000006, w: 0.49999997}
+    CenterOffset: {x: 0, y: -0.009593844, z: 0.21733391}
+    Size: {x: 0.044938087, y: 0.17174959, z: 0.95}
+  _material: {fileID: 2100000, guid: 61522edf62ac34c6985c60e31a1bce81, type: 2}
 --- !u!114 &2771897398777207857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -331,6 +368,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c88a2cffd993244b08673e827ba3ada7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Net::Game.Net.CombatantGear
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 3786954397018569053}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &8877302492093432223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2543248305865702539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a9d900fdcd2f41abaae854ac7695495, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Net::Game.Net.CombatantOptics
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 3786954397018569053}
   _networkObjectCache: {fileID: 0}

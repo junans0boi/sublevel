@@ -212,9 +212,9 @@ namespace Game.Gameplay
             picture.raycastTarget = false;
 
             BuildGrid();
-            BuildRegionNames(world);
             BuildPasses(world);
             BuildElevators(world);
+            BuildRegionNames(world); // over the markers, under the marker and the arrow
             BuildMarker();
             BuildPlayer();
             BuildSidePanel(root);
@@ -248,12 +248,15 @@ namespace Game.Gameplay
         {
             foreach (var region in world.Regions)
             {
-                var rect = UiKit.Rect("Region " + region.Id, _map, BottomLeft, Centre, PixelsOf(region.Centre), new Vector2(240f, 40f));
-                var label = UiKit.Label(rect, region.Name, 30, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+                var rect = UiKit.Rect("Region " + region.Id, _map, BottomLeft, Centre, PixelsOf(region.Centre) + new Vector2(0f, 34f), new Vector2(240f, 36f));
+                var label = UiKit.Label(rect, region.Name, 26, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
                 var shadow = rect.gameObject.AddComponent<Shadow>();
                 shadow.effectColor = Dark;
                 shadow.effectDistance = new Vector2(2f, -2f);
-                label.color = new Color(0.96f, 0.96f, 0.92f, 0.92f);
+                var outline = rect.gameObject.AddComponent<Outline>();
+                outline.effectColor = Dark;
+                outline.effectDistance = new Vector2(1.5f, -1.5f);
+                label.color = new Color(0.96f, 0.96f, 0.92f, 0.85f);
             }
         }
 

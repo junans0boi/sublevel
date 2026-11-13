@@ -77,6 +77,7 @@ namespace Game.Net
             ServerOpened = true;
             Contents.Clear();
             ServerTakeLoadout(Contents);
+            GetComponent<CombatantOptics>()?.ServerStripOptics(Contents);
             if (_gear != null)
             {
                 var helmet = _gear.ServerRemove(ArmorSlot.Helmet);

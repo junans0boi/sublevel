@@ -80,7 +80,8 @@ namespace Game.Gameplay
             ShowGrenades(HudBackend.Grenades(me));
 
             int active = HudBackend.ActiveSlot(me);
-            if (active < 0 || active >= Cells) active = -1;
+            // Highlight only what is really in hand: an empty slot is no selection.
+            if (active < 0 || active >= HudBackend.Throwable || HudBackend.WeaponInSlot(me, active) == 0) active = -1;
             if (active != _shownActive)
             {
                 _shownActive = active;

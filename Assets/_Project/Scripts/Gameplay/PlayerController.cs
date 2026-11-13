@@ -80,6 +80,7 @@ namespace Game.Gameplay
             if (!IsOwner) return;
             _owner = true;
             Local = this;
+            if (GameSettings.DefaultViewFirstPerson && Rig.Mode == ViewMode.ThirdPerson) Rig.ToggleMode();
             _input = InputOverride ?? new DeviceInput();
             _controller.enabled = true;
             Camera = Camera.main;
@@ -94,6 +95,8 @@ namespace Game.Gameplay
             var screens = new GameObject("Screens");
             screens.AddComponent<InventoryScreen>();
             screens.AddComponent<PauseMenu>();
+            screens.AddComponent<ScopeView>();
+            screens.AddComponent<MapScreen>();
         }
 
         // The mouse steers the view while playing and becomes a pointer while a screen is open.
@@ -133,6 +136,13 @@ namespace Game.Gameplay
             else if (f.Map && UiFocus.MapAvailable && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Map);
             if (UiFocus.Current != UiScreen.None || (ResultScreen.BlocksGameplay && !_combatant.Dead.Value))
                 f = new PlayerInputFrame { SelectSlot = -1, AimHeld = false };
+            // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
+            if (SpawnProtection.InputBlocked)
+                f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook };
+            // Scopes slow the mouse by their zoom; the settings add a factor of their own while aiming.
+            float lookFactor = ScopeView.SensitivityFactor;
+            if (_aim.Mode != AimMode.Hip) lookFactor *= GameSettings.AimSensitivityFactor;
+            f.Look *= lookFactor;
             LastInput = f;
             UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
@@ -317,7 +327,8 @@ namespace Game.Gameplay
             };
             Rig.Place(Camera.transform, transform, _combatant.EyePosition, ViewYaw, ViewPitch, view, Time.deltaTime);
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
-            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, aimRules.For(_aim.Mode).Fov, ease);
+            float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride : aimRules.For(_aim.Mode).Fov;
+            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget, ease);
 
             // Hide our own body whenever the camera sits at the eyes so it does not block the view; the weapon
             // moves in front of the camera instead.

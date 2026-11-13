@@ -204,7 +204,6 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        [Ignore("needs master wiring: PlayerController must add ScopeView to the Screens object and PlaceCamera must ease the camera to ScopeView.FovOverride when it is above 0")]
         public IEnumerator TapAim_WithA4xOptic_NarrowsTheView_AndReleasingRestoresIt()
         {
             yield return LoadTestBox();
@@ -231,7 +230,6 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        [Ignore("needs master wiring: PlayerController must add ScopeView to the Screens object (and Hud must hide its crosshair while ScopeView.Active)")]
         public IEnumerator TapAim_WithARedDot_ShowsTheReticle_WithoutMagnification()
         {
             yield return LoadTestBox();
@@ -249,7 +247,6 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        [Ignore("needs master wiring: PlayerController must add ScopeView to the Screens object")]
         public IEnumerator ShoulderAim_WithAScope_DoesNotMagnify()
         {
             yield return LoadTestBox();

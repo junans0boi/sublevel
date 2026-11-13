@@ -18,6 +18,7 @@ namespace Game.Gameplay
         enum Watch { Game, Front, Side, Behind, Above }
 
         string _folder;
+        bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
         bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
         Watch _watch;
@@ -29,6 +30,8 @@ namespace Game.Gameplay
             var args = Environment.GetCommandLineArgs();
             int i = Array.IndexOf(args, "-feelcapture");
             int w = Array.IndexOf(args, "-worldshots");
+            int e = Array.IndexOf(args, "-eleshots");
+            if (e >= 0 && e + 1 < args.Length) { w = e; }
             if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
             bool world = i < 0;
             if (world) i = w;
@@ -37,6 +40,7 @@ namespace Game.Gameplay
             var capture = go.AddComponent<FeelCapture>();
             capture._folder = Path.GetFullPath(args[i + 1]);
             capture._worldShots = world;
+            capture._eleShots = e >= 0 && e + 1 < args.Length;
             PlayerController.InputOverride = capture;
         }
 
@@ -46,6 +50,7 @@ namespace Game.Gameplay
             // One-frame presses.
             _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = _frame.Interact = false;
             _frame.ThrowPressed = _frame.ThrowReleased = false;
+            _frame.Prone = _frame.Holster = _frame.FireMode = _frame.Map = false;
             _frame.Look = Vector2.zero;
             return f;
         }
@@ -65,6 +70,12 @@ namespace Game.Gameplay
                 yield return null;
             }
             var me = Combatant.LocalPlayer;
+            if (_eleShots)
+            {
+                yield return EleShots(me);
+                Application.Quit();
+                yield break;
+            }
             yield return new WaitForSeconds(1.5f);
             if (_worldShots)
             {
@@ -208,6 +219,7 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.5f);
 
             yield return CrouchShots();
+            yield return Wave3Shots(me);
             yield return GearShots(me);
             yield return MatchShots(me);
 
@@ -278,6 +290,12 @@ namespace Game.Gameplay
             me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 90 });
             yield return new WaitForSeconds(0.5f);
             yield return Shot("w01_elevator");
+            yield return HudResolutions("h_world");
+            UiFocus.Set(UiScreen.Map);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("w10_map");
+            UiFocus.Close();
+            yield return new WaitForSeconds(0.3f);
 
             // The nearest loot that can be walked to.
             LootItem best = null;
@@ -498,6 +516,172 @@ namespace Game.Gameplay
             ThrownItem.ClientExploded -= logBang;
         }
 
+        // The HUD at the three resolutions that matter.
+        IEnumerator HudResolutions(string prefix)
+        {
+            foreach (var (w, h) in new[] { (1280, 720), (1920, 1080), (2560, 1440) })
+            {
+                Screen.SetResolution(w, h, FullScreenMode.Windowed);
+                yield return new WaitForSeconds(1.2f);
+                Debug.Log($"[FeelCapture] {prefix}: asked {w}x{h}, screen is {Screen.width}x{Screen.height}");
+                yield return Shot($"{prefix}_{h}p");
+            }
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSeconds(1.0f);
+        }
+
+        // Elevator start: the first seconds of the match, then stepping out. Logs where the player was put.
+        IEnumerator EleShots(Combatant me)
+        {
+            var director = MatchDirector.Instance;
+            Debug.Log($"[FeelCapture] elevator {(director != null && director.ElevatorAssignment.Count > 0 ? director.ElevatorAssignment[0] : -1)} at {me.transform.position}, seed {(director != null ? director.DeploymentSeed : 0)}");
+            var info = WorldInfo.Current;
+            if (info != null && director != null && director.ElevatorAssignment.Count > 0)
+                Debug.Log("[FeelCapture] region of the player's elevator: " + info.Elevators[director.ElevatorAssignment[0]].Region);
+            _watch = Watch.Game;
+            float t0 = Time.time;
+            for (int n = 0; n < 24; n++)
+            {
+                Debug.Log($"[FeelCapture] t={Time.time - t0:F1} blocked={SpawnProtection.InputBlocked} doorLeft={SpawnProtection.DoorSecondsLeft:F1} protect={SpawnProtection.LocalSecondsLeft:F1}");
+                yield return Shot($"e{n:00}");
+                if (!SpawnProtection.InputBlocked && n > 6) _frame.Move = new Vector2(0f, 1f);
+                yield return new WaitForSeconds(0.35f);
+            }
+            _frame.Move = Vector2.zero;
+            Debug.Log("[FeelCapture] after stepping out: " + me.transform.position);
+        }
+
+        // Lying down, empty hands, optics: the wave-3 additions to the script.
+        IEnumerator Wave3Shots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            pc.Teleport(_home);
+            yield return null;
+            pc.LookAt(_home + _homeForward * 10f + Vector3.up * 1.6f);
+            _frame.Move = Vector2.zero;
+            _watch = Watch.Game;
+            yield return new WaitForSeconds(0.6f);
+            float eyeStand = me.EyePosition.y - me.transform.position.y;
+
+            // Prone, from the four views.
+            _frame.Prone = true;
+            yield return new WaitForSeconds(1.2f);
+            float eyeProne = me.EyePosition.y - me.transform.position.y;
+            Debug.Log($"[FeelCapture] eye height standing {eyeStand:F2}, prone {eyeProne:F2}");
+            _watch = Watch.Side; yield return Shot("50_prone_side");
+            _watch = Watch.Behind; yield return Shot("50_prone_behind");
+            _watch = Watch.Front; yield return Shot("50_prone_front");
+            _watch = Watch.Above; yield return Shot("50_prone_above");
+            _watch = Watch.Game; yield return Shot("50_prone_tpp");
+            _frame.AimHeld = true;
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("51_prone_shoulder_tpp");
+            _frame.FireHeld = true;
+            yield return new WaitForSeconds(0.2f);
+            Vector3 originSeen = default;
+            Action<Vector3, Vector3> grab = (o, e2) => originSeen = o;
+            me.ShotFired += grab;
+            yield return Burst("51_prone_fire_tpp", 3, 0.05f);
+            me.ShotFired -= grab;
+            Debug.Log($"[FeelCapture] prone shot origin height above feet {originSeen.y - me.transform.position.y:F2} (eye {eyeProne:F2})");
+            _frame.FireHeld = false;
+            _watch = Watch.Side; yield return Shot("51_prone_fire_side");
+            _watch = Watch.Game;
+            _frame.AimHeld = false;
+            yield return new WaitForSeconds(0.4f);
+            _frame.Move = new Vector2(0f, 1f);
+            yield return new WaitForSeconds(0.6f);
+            Vector3 p0 = me.transform.position;
+            _watch = Watch.Side; yield return Burst("52_prone_crawl_side", 3, 0.12f);
+            yield return new WaitForSeconds(0.5f);
+            Debug.Log($"[FeelCapture] prone crawl speed {(me.transform.position - p0).magnitude / 1.0f:F2} m/s (approx)");
+            _frame.Move = Vector2.zero;
+            _watch = Watch.Game;
+            _frame.Prone = true; // up again
+            yield return new WaitForSeconds(1.0f);
+
+            // Empty hands (X) against armed, running side by side.
+            pc.Teleport(_home);
+            yield return null;
+            pc.LookAt(_home + _homeForward * 10f + Vector3.up * 1.6f);
+            _frame.Look = new Vector2(90f, 0f);
+            yield return null;
+            foreach (var unarmed in new[] { false, true })
+            {
+                if (unarmed != me.Holstered.Value) { _frame.Holster = true; yield return new WaitForSeconds(0.5f); }
+                pc.Teleport(_home); yield return null;
+                _frame.Move = new Vector2(0f, 1f);
+                yield return new WaitForSeconds(0.4f);
+                Vector3 a = me.transform.position;
+                _watch = Watch.Side;
+                yield return Burst(unarmed ? "53_unarmed_run_side" : "53_armed_run_side", 3, 0.1f);
+                float dt = 3 * 0.1f;
+                yield return new WaitForSeconds(0.3f);
+                Debug.Log($"[FeelCapture] {(unarmed ? "unarmed" : "armed")} walking speed ~{(me.transform.position - a).magnitude / (dt + 0.3f + 0.1f):F2} m/s");
+                _frame.Move = Vector2.zero;
+                _watch = Watch.Game;
+                yield return new WaitForSeconds(0.3f);
+            }
+            if (me.Holstered.Value) { _frame.Holster = true; yield return new WaitForSeconds(0.5f); }
+            pc.Teleport(_home); yield return null;
+            pc.LookAt(_home + _homeForward * 10f + Vector3.up * 1.6f);
+            _frame.SelectSlot = 0; yield return null; _frame.SelectSlot = -1;
+            yield return new WaitForSeconds(0.4f);
+
+            // Optics: attach, see through them, change, drop.
+            var optics = me.GetComponent<CombatantOptics>();
+            int slot = me.ActiveSlot.Value;
+            Debug.Log($"[FeelCapture] optics component {(optics != null)}, weapon in hand {me.ActiveWeaponId}, slot {slot}");
+            foreach (var (name, id) in new[] { ("4x", 5), ("reddot", 1), ("2x", 3), ("6x", 6) })
+            {
+                bool ok = optics != null && optics.ServerAttach(slot, id);
+                Debug.Log($"[FeelCapture] attach {name}: {ok}");
+                yield return new WaitForSeconds(0.5f);
+                if (name == "4x")
+                {
+                    _watch = Watch.Side; yield return Shot("60_optic_on_weapon_side");
+                    _watch = Watch.Behind; yield return Shot("60_optic_on_weapon_behind");
+                    _watch = Watch.Game; yield return Shot("60_optic_hip_tpp");
+                }
+                yield return Tap();
+                yield return new WaitForSeconds(1.0f);
+                yield return Shot("61_sights_" + name);
+                Debug.Log($"[FeelCapture] {name}: fov {PlayerController.Local.Camera.fieldOfView:F1}, ScopeView.Active {ScopeView.Active}, sens factor {ScopeView.SensitivityFactor:F2}");
+                yield return Tap();
+                yield return new WaitForSeconds(0.6f);
+            }
+            _frame.AimHeld = true;
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("62_shoulder_with_6x_tpp");
+            _frame.AimHeld = false;
+            yield return new WaitForSeconds(0.4f);
+            int before = LootItem.All.Count;
+            if (optics != null) optics.CmdDropOptic(slot);
+            yield return new WaitForSeconds(0.6f);
+            Debug.Log($"[FeelCapture] after dropping the optic: on weapon {(optics != null ? optics.OpticInSlot(slot) : -1)}, loot {before} -> {LootItem.All.Count}");
+
+            // The inventory with an optic attached and one on the ground.
+            if (optics != null) optics.ServerAttach(slot, 5);
+            var director = MatchDirector.Instance;
+            if (director != null)
+                director.ServerSpawnLoot(Optics.ToLoot(3), me.transform.position + me.transform.forward * 1.6f + Vector3.up * 0.2f);
+            yield return new WaitForSeconds(0.8f);
+            foreach (var (w, h) in new[] { (1280, 720), (1920, 1080) })
+            {
+                Screen.SetResolution(w, h, FullScreenMode.Windowed);
+                yield return new WaitForSeconds(1.0f);
+                UiFocus.Set(UiScreen.Inventory);
+                yield return new WaitForSeconds(0.5f);
+                yield return Shot($"63_inventory_optic_{h}p");
+                UiFocus.Close();
+                yield return new WaitForSeconds(0.3f);
+            }
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSeconds(1.0f);
+            if (optics != null) optics.ServerDetach(slot);
+            yield return new WaitForSeconds(0.3f);
+        }
+
         Combatant[] Dummies()
         {
             var list = new System.Collections.Generic.List<Combatant>();
@@ -550,6 +734,7 @@ namespace Game.Gameplay
             dummies[1].ServerTakeDamage(Lethal(me, HitZone.Body, 4));
             yield return new WaitForSeconds(0.4f);
             yield return Shot("31_killfeed_2");
+            yield return HudResolutions("h_testbox");
 
             // The last dummy gets the player.
             me.ServerDamageFilter = null;
@@ -648,6 +833,69 @@ namespace Game.Gameplay
             cam.position = player.position + Vector3.up * 1.1f + offset;
             cam.rotation = Quaternion.LookRotation(player.position + Vector3.up * 1.0f - cam.position);
             pc.Camera.fieldOfView = 45f;
+        }
+    }
+
+    // `-menushots <folder>`: the main menu, its settings, a match, back to the menu and a second match (ADR-044).
+    public class MenuCapture : MonoBehaviour
+    {
+        string _folder;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void Boot()
+        {
+            var args = Environment.GetCommandLineArgs();
+            int i = Array.IndexOf(args, "-menushots");
+            if (i < 0 || i + 1 >= args.Length) return;
+            var go = new GameObject("MenuCapture");
+            DontDestroyOnLoad(go);
+            go.AddComponent<MenuCapture>()._folder = Path.GetFullPath(args[i + 1]);
+        }
+
+        IEnumerator Start()
+        {
+            Directory.CreateDirectory(_folder);
+            float until = Time.realtimeSinceStartup + 20f;
+            while (MainMenu.Instance == null && Time.realtimeSinceStartup < until) yield return null;
+            yield return new WaitForSeconds(1.5f);
+            yield return Shot("m01_menu");
+            MainMenu.Instance.ShowSettings();
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("m02_settings");
+            foreach (var preset in new[] { GraphicsPreset.Low, GraphicsPreset.High, GraphicsPreset.Medium })
+            {
+                GraphicsOptions.Preset = preset;
+                GraphicsOptions.Apply();
+                Debug.Log($"[MenuCapture] preset {preset}: SSAO feature found {GraphicsOptions.SsaoToggleAvailable}, active {GraphicsOptions.SsaoActive}, shadow {QualitySettings.shadowDistance}");
+            }
+            MainMenu.Instance.Back();
+            for (int round = 1; round <= 2; round++)
+            {
+                MainMenu.Instance.StartGame();
+                until = Time.realtimeSinceStartup + 60f;
+                while ((Combatant.LocalPlayer == null || PlayerController.Local == null) && Time.realtimeSinceStartup < until) yield return null;
+                yield return new WaitForSeconds(5f);
+                int players = 0;
+                foreach (var c in Combatant.All) if (c != null && c.IsPlayer) players++;
+                Debug.Log($"[MenuCapture] match {round}: scene {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}, local player {(Combatant.LocalPlayer != null)}, players {players}, combatants {Combatant.All.Count}");
+                yield return Shot($"m0{2 + round}_match{round}");
+                MainMenu.LeaveMatch();
+                until = Time.realtimeSinceStartup + 20f;
+                yield return null;
+                while (MainMenu.Instance == null && Time.realtimeSinceStartup < until) yield return null;
+                yield return new WaitForSeconds(1.5f);
+                Debug.Log($"[MenuCapture] back in the menu {round}: menu {(MainMenu.Instance != null)}, local player {(Combatant.LocalPlayer != null)}, combatants {Combatant.All.Count}");
+                yield return Shot($"m0{4 + round}_menu_again{round}");
+            }
+            Application.Quit();
+        }
+
+        IEnumerator Shot(string name)
+        {
+            yield return new WaitForEndOfFrame();
+            var texture = ScreenCapture.CaptureScreenshotAsTexture();
+            File.WriteAllBytes(Path.Combine(_folder, name + ".png"), texture.EncodeToPNG());
+            Destroy(texture);
         }
     }
 }

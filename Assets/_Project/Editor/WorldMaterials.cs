@@ -269,6 +269,35 @@ public static class WorldMaterials
 
     // Our own copy of the URP terrain material so the per-pixel normal and mask map keywords are certain to be on
     // (they are shader features: the inspector normally sets them).
+    // The sliding elevator door: plain concrete-grey URP Lit, no texture.
+    public static Material Door()
+    {
+        var mat = Asset("World_ElevatorDoor", "Universal Render Pipeline/Lit");
+        mat.SetColor("_BaseColor", new Color(0.42f, 0.44f, 0.46f));
+        mat.SetFloat("_Metallic", 0.3f);
+        mat.SetFloat("_Smoothness", 0.35f);
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    public static Material DoorStripe()
+    {
+        var mat = Asset("World_ElevatorDoorStripe", "Universal Render Pipeline/Lit");
+        mat.SetColor("_BaseColor", new Color(0.86f, 0.58f, 0.12f));
+        mat.SetFloat("_Smoothness", 0.3f);
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    public static Material DoorSeam()
+    {
+        var mat = Asset("World_ElevatorDoorSeam", "Universal Render Pipeline/Lit");
+        mat.SetColor("_BaseColor", new Color(0.08f, 0.08f, 0.09f));
+        mat.SetFloat("_Smoothness", 0.2f);
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
     public static Material Terrain()
     {
         var mat = Asset("World_Terrain", TerrainShader);

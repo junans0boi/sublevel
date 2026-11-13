@@ -232,6 +232,9 @@ namespace Game.Net
 
         // Server: who else may take loot kinds the loadout does not know (armour, grenades).
         ILootReceiver[] _receivers;
+        CombatantOptics _optics;
+        // Null on a prefab without optics.
+        CombatantOptics OpticsPart => _optics != null ? _optics : (_optics = GetComponent<CombatantOptics>());
 
         public override void OnStartNetwork()
         {
@@ -420,7 +423,9 @@ namespace Game.Net
                 case LootKind.Weapon:
                     // No slot takes it (a weapon this loadout has no category for): it stays on the ground.
                     if (!_loadout.CanAddWeapon(loot.WeaponId)) return false;
+                    int pickupSlot = _loadout.PickupSlotFor(loot.WeaponId);
                     int replaced = _loadout.AddWeapon(loot.WeaponId, loot.Amount, out int replacedMag);
+                    if (replaced != 0) OpticsPart?.ServerOnWeaponRemoved(pickupSlot);
                     // A replaced weapon goes back on the ground instead of vanishing.
                     if (replaced != 0 && MatchDirector.Instance != null)
                         MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
@@ -546,14 +551,18 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSwapWeaponSlots()
         {
-            if (!_health.IsDead && _loadout.SwapSlots()) Push();
+            if (_health.IsDead || !_loadout.SwapSlots()) return;
+            OpticsPart?.ServerOnSlotsSwapped(Loadout.PrimarySlotA, Loadout.PrimarySlotB);
+            Push();
         }
 
         // Any two slots trade places when each takes what the other holds (a pistol only fits the sidearm slot).
         [ServerRpc]
         public void CmdSwapSlots(int a, int b)
         {
-            if (!_health.IsDead && _loadout.SwapSlots(a, b)) Push();
+            if (_health.IsDead || !_loadout.SwapSlots(a, b)) return;
+            OpticsPart?.ServerOnSlotsSwapped(a, b);
+            Push();
         }
 
         // A weapon from the ground into a chosen slot; the weapon that was there lands on the ground.
@@ -568,6 +577,7 @@ namespace Game.Net
             if (!_loadout.CanHold(slot, item.WeaponId.Value)) return;
             int replaced = _loadout.AddWeaponToSlot(slot, item.WeaponId.Value, item.Amount.Value, out int replacedMag);
             item.Despawn();
+            if (replaced != 0) OpticsPart?.ServerOnWeaponRemoved(slot);
             if (replaced != 0 && MatchDirector.Instance != null)
                 MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
             Push();
@@ -590,6 +600,7 @@ namespace Game.Net
             if (_health.IsDead || MatchDirector.Instance == null) return;
             int weaponId = _loadout.RemoveWeapon(slot, out int mag);
             if (weaponId == 0) return;
+            OpticsPart?.ServerOnWeaponRemoved(slot);
             ServerDropLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
         }
 

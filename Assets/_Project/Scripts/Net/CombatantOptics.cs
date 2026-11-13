@@ -50,12 +50,7 @@ namespace Game.Net
         public OpticDef ActiveOpticDef => OpticRules.Current.Find(ActiveOptic);
 
         // Weapon in a slot, as replicated. Wiring: when Combatant gets an accessor for any slot, call it here.
-        int WeaponInSlot(int slot)
-        {
-            if (slot == 0) return _combatant.Slot0.Value;
-            if (slot == 1) return _combatant.Slot1.Value;
-            return 0;
-        }
+        int WeaponInSlot(int slot) => _combatant.WeaponInSlot(slot);
 
         void Awake() => _combatant = GetComponent<Combatant>();
 

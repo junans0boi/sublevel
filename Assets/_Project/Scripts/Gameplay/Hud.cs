@@ -47,6 +47,9 @@ namespace Game.Gameplay
         // Parts.
         CompassStrip _compass;
         RegionCard _region;
+        Text _doorNotice;
+        GameObject _doorNoticeRoot;
+        int _doorShown = -1;
         HudStatus _status;
         WeaponStrip _strip;
         MinimapView _minimap;
@@ -164,6 +167,13 @@ namespace Game.Gameplay
             BuildVignette(root);
             BuildDamageRing(root);
             BuildTop(root);
+            // Shown while the elevator doors are shut (ADR-055): where you are and when it opens.
+            var door = UiKit.Rect("DoorNotice", root, new Vector2(0.5f, 0.72f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(560f, 48f));
+            UiKit.Box(door, UiKit.Panel);
+            UiKit.Frame(door, 1f, UiKit.SteelDim);
+            _doorNotice = UiKit.Label(UiKit.Fill("Text", door), "", 26, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _doorNoticeRoot = door.gameObject;
+            _doorNoticeRoot.SetActive(false);
             BuildHealthAndWeapon(root);
             BuildBottomSides(root);
             BuildCrosshair(root);
@@ -199,6 +209,7 @@ namespace Game.Gameplay
             TickWeapons(me);
             _strip.Tick(me);
             _status.Tick(me);
+            TickDoorNotice();
             TickTopRight();
             TickPrompt(me, player, dead);
             if (player != null)
@@ -410,6 +421,15 @@ namespace Game.Gameplay
             _damageLeft[slot] = DamageSeconds;
             _damageGroup[slot].alpha = 1f;
             _damagePivot[slot].gameObject.SetActive(true);
+        }
+
+        void TickDoorNotice()
+        {
+            int left = HudBackend.DoorsClosed ? Mathf.Max(1, Mathf.CeilToInt(HudBackend.DoorSecondsLeft)) : 0;
+            if (left == _doorShown) return;
+            _doorShown = left;
+            _doorNoticeRoot.SetActive(left > 0);
+            if (left > 0) _doorNotice.text = "엘리베이터 도착 중  ·  문 열림 " + left;
         }
 
         // ---- Construction ----

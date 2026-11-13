@@ -106,7 +106,7 @@ namespace Game.Gameplay
         int _shownStance = -1, _shownProtect = int.MinValue, _shownMedkits = int.MinValue;
 
         public int StanceShown => _shownStance;           // Stance as int
-        public int ProtectionSecondsShown => _shownProtect;
+        public int ProtectionSecondsShown => _shownProtect > 0 ? _shownProtect : 0;
         public int MedkitsShown => _shownMedkits;
         public int ArmourTierShown(int slot) => _shownTier[slot]; // -1 before the first tick, 0 = nothing worn
 
@@ -157,14 +157,17 @@ namespace Game.Gameplay
         {
             ShowStance((int)HudBackend.StanceOf(me));
 
-            float left = HudBackend.SpawnProtectionLeft(me);
+            // In the elevator: a countdown to the doors; after that the protection time.
+            bool doors = HudBackend.DoorsClosed;
+            float left = doors ? HudBackend.DoorSecondsLeft : HudBackend.SpawnProtectionLeft(me);
             int seconds = left > 0f ? Mathf.CeilToInt(left) : 0;
-            if (seconds != _shownProtect)
+            int key = doors ? -1 - seconds : seconds;
+            if (key != _shownProtect)
             {
-                _shownProtect = seconds;
-                bool on = seconds > 0;
+                _shownProtect = key;
+                bool on = doors || seconds > 0;
                 if (_protectLabel.gameObject.activeSelf != on) _protectLabel.gameObject.SetActive(on);
-                if (on) _protectLabel.text = "스폰 보호 " + HudDigits.IntText(seconds) + "초";
+                if (on) _protectLabel.text = doors ? "문 열림 " + HudDigits.IntText(seconds) : "보호 " + HudDigits.IntText(seconds) + "초";
             }
 
             int medkits = me.Medkits.Value;

@@ -10,57 +10,37 @@ namespace Game.Gameplay
     public static class HudBackend
     {
         // Weapon strip order (ADR-058): (1)(2) primary, (3) sidearm = pistol only, (4) melee = empty for now, (5) throwable.
-        public const int SlotCount = 5;            // [MASTER] = Combatant.SlotCount
+        public const int SlotCount = Combatant.SlotCount;
         public const int Sidearm = 2, Melee = 3, Throwable = 4;
 
         // ---- Weapons ----
 
-        // Weapon id in strip slot 0..2 (0 = empty). The melee slot is always empty and the throwable slot holds no weapon id.
-        public static int WeaponInSlot(Combatant me, int slot)
-        {
-            if (me == null) return 0;
-            switch (slot)
-            {
-                case 0: return me.Slot0.Value;   // [MASTER] me.WeaponInSlot(slot) for every slot
-                case 1: return me.Slot1.Value;
-                default: return 0;               // [MASTER] sidearm: me.WeaponInSlot(2)
-            }
-        }
+        // Weapon id in strip slot 0..4 (0 = empty). The melee slot is always empty and the throwable slot holds no weapon id.
+        public static int WeaponInSlot(Combatant me, int slot) => me != null ? me.WeaponInSlot(slot) : 0;
 
-        public static int MagInSlot(Combatant me, int slot)
-        {
-            if (me == null) return 0;
-            switch (slot)
-            {
-                case 0: return me.Mag0.Value;    // [MASTER] me.MagInSlot(slot)
-                case 1: return me.Mag1.Value;
-                default: return 0;               // [MASTER] sidearm: me.MagInSlot(2)
-            }
-        }
+        public static int MagInSlot(Combatant me, int slot) => me != null ? me.MagInSlot(slot) : 0;
 
-        // The slot in hand; anything outside 0..4 (for example -1 once unarmed exists) means empty hands.
-        public static int ActiveSlot(Combatant me) => me != null ? me.ActiveSlot.Value : -1;   // [MASTER] same call, may be -1/unarmed
+        // The slot in hand; -1 while the weapon is put away (X): empty hands.
+        public static int ActiveSlot(Combatant me) => me == null || me.Holstered.Value ? -1 : me.ActiveSlot.Value;
 
         public static int ActiveWeaponId(Combatant me) => WeaponInSlot(me, ActiveSlot(me));
         public static int ActiveMag(Combatant me) => MagInSlot(me, ActiveSlot(me));
 
         // "단발" / "연사" for the weapon in `slot`.
-        public static string FireModeOf(Combatant me, int slot)
-        {
-            // [MASTER] return me.FireModeOf(slot) (the player's selected mode) once it exists.
-            var weapon = GameData.Weapons.Find(WeaponInSlot(me, slot));
-            if (weapon == null) return "";
-            return weapon.Auto ? "연사" : "단발";
-        }
+        public static string FireModeOf(Combatant me, int slot) => me != null && slot >= 0 ? me.FireModeOf(slot) : "";
 
         // Short name of the optic fitted to the weapon in `slot` ("" = none), e.g. "2x", "레드도트".
         public static string OpticOf(Combatant me, int slot)
         {
-            return "";   // [MASTER] CombatantOptics.OpticInSlot(slot) -> AttachmentNames.Of(id) (short form)
+            if (me == null || slot < 0) return "";
+            var optics = me.GetComponent<CombatantOptics>();
+            var def = optics != null ? OpticRules.Current.Find(optics.OpticInSlot(slot)) : null;
+            if (def == null) return "";
+            return def.Zoom > 1f ? def.Zoom.ToString("0.#") + "x" : def.Name;
         }
 
         // True while a magnified scope overlay is up: the HUD then hides its crosshair.
-        public static bool ScopeActive => false;   // [MASTER] ScopeView.Active
+        public static bool ScopeActive => ScopeView.Active;
 
         public static int Reserve(Combatant me, WeaponDef weapon) =>
             weapon == null ? 0 : InventoryBackend.Reserve(me, InventoryBackend.AmmoIndex(weapon));
@@ -78,8 +58,12 @@ namespace Game.Gameplay
         // Seconds of damage immunity left after deployment; 0 when none.
         public static float SpawnProtectionLeft(Combatant me)
         {
-            return 0f;   // [MASTER] SpawnProtection.LocalSecondsLeft (elevator-deployment branch)
+            return SpawnProtection.SecondsLeftOf(me);
         }
+
+        // The elevator doors are still shut: no moving or firing; the HUD counts down to "문 열림".
+        public static bool DoorsClosed => SpawnProtection.InputBlocked;
+        public static float DoorSecondsLeft => SpawnProtection.DoorSecondsLeft;
 
         // ---- Match ----
 
@@ -105,7 +89,7 @@ namespace Game.Gameplay
         // The baked overview picture of the whole island (square, covering 0..WorldInfo.Size on X and Z); null = draw a grid.
         public static Texture2D MapImage()
         {
-            return null;   // [MASTER] MapImage.Get()
+            return Game.Gameplay.MapImage.Get();
         }
     }
 }

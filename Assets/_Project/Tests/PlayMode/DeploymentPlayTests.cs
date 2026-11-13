@@ -152,6 +152,9 @@ namespace Game.Tests
             _input.Frame.FireHeld = true;
             while (SpawnProtection.InputBlocked)
             {
+                // The trigger is let go just before the doors open: a round fired in the very frame they open is
+                // a legitimate first shot (it ends the protection), which is not what this test is about.
+                if (SpawnProtection.DoorSecondsLeft < 0.2f) _input.Frame.FireHeld = false;
                 Assert.Less(Vector3.Dot(player.transform.position - start, outward), Buildings.ElevatorBay / 2f,
                     "the player should not get past the closed door");
                 Assert.AreEqual(mag, player.ActiveMag, "no round should be fired while the doors are closed");

@@ -24,6 +24,7 @@ namespace Game.Net
             CrateRules.Current = rules.Crate;
             ThrowableRules.Current = rules.Throwables;
             BotRules.Current = rules.Bot;
+            OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
         }
 

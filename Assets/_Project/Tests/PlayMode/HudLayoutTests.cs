@@ -160,14 +160,15 @@ namespace Game.Tests
             Assert.IsTrue(hud.Strip.IsHighlighted(0));
 
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 12 });
-            yield return WaitUntil(() => hud.Strip.WeaponShown(1) == 1, 2f, "pistol in cell 2");
-            Assert.AreEqual("weapon_1", hud.Strip.IconKeyShown(1));
+            yield return WaitUntil(() => hud.Strip.WeaponShown(2) == 1, 2f, "pistol in cell 3 (the sidearm slot, ADR-058)");
+            Assert.AreEqual("weapon_1", hud.Strip.IconKeyShown(2));
+            Assert.AreEqual(0, hud.Strip.WeaponShown(1), "the second primary cell stays empty");
 
-            Assert.IsTrue(me.ServerSelectSlot(1));
-            yield return WaitUntil(() => hud.Strip.ActiveShown == 1, 2f, "highlight moved to cell 2");
+            Assert.IsTrue(me.ServerSelectSlot(2));
+            yield return WaitUntil(() => hud.Strip.ActiveShown == 2, 2f, "highlight moved to cell 3");
             Assert.IsFalse(hud.Strip.IsHighlighted(0));
-            Assert.IsTrue(hud.Strip.IsHighlighted(1));
-            Assert.AreEqual(1, hud.ActiveSlotShown);
+            Assert.IsTrue(hud.Strip.IsHighlighted(2));
+            Assert.AreEqual(2, hud.ActiveSlotShown);
             Assert.AreEqual("단발", hud.FireModeText, "the pistol is semi-automatic");
 
             Assert.IsTrue(me.ServerSelectSlot(0));
@@ -215,8 +216,9 @@ namespace Game.Tests
             yield return LoadTestBox();
             var hud = Hud.Instance;
             var player = PlayerController.Local;
-            Assert.IsFalse(hud.Minimap.HasMapImage, "no baked map picture yet");
-            Assert.IsTrue(hud.Minimap.GridShown, "a grid stands in for it");
+            // The overview picture is baked now (Resources/Map); the grid only stands in when it is missing.
+            Assert.AreEqual(HudBackend.MapImage() != null, hud.Minimap.HasMapImage);
+            Assert.AreEqual(!hud.Minimap.HasMapImage, hud.Minimap.GridShown);
 
             _input.Frame.Look = new Vector2(Mathf.DeltaAngle(player.Yaw, 90f), 0f);
             yield return WaitUntil(() => Mathf.Abs(Mathf.DeltaAngle(hud.Minimap.ArrowHeading, 90f)) < 0.5f, 2f, "arrow heading 90");

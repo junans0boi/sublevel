@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Game.Core;
+using Game.Net;
+using static EditorFields;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Rendering;
@@ -149,9 +151,45 @@ public static partial class WorldBuilder
                 placed.SpawnYaw = e.FacingDeg;
             }
             pieces += station.Pieces.Count;
+            AddElevatorDoor(root, i, placed);
             stations.Add(placed);
         }
         Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes combined into {renderers} renderers");
+    }
+
+    // The sliding door across the station's front opening (ElevatorDoors finds it by `Station`): 3.2 x 3.0 x 0.12 m,
+    // not static and no network object, it sinks into the floor when the match opens the doors.
+    static void AddElevatorDoor(Transform parent, int index, Placed station)
+    {
+        var door = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        door.name = $"ElevatorDoor{index:00}";
+        door.transform.SetParent(parent, false);
+        door.transform.SetPositionAndRotation(station.Spawn + station.Rotation * new Vector3(0f, 1.5f, 1.44f), station.Rotation);
+        door.transform.localScale = new Vector3(3.2f, 3.0f, 0.12f);
+        door.isStatic = false;
+        door.GetComponent<MeshRenderer>().sharedMaterial = WorldMaterials.Door();
+        // A centre seam and two amber bands on both faces so the shut door reads as a door, not a wall.
+        var stripe = WorldMaterials.DoorStripe();
+        var seamMaterial = WorldMaterials.DoorSeam();
+        foreach (float face in new[] { -0.5f, 0.5f })
+        {
+            AddDoorDetail(door.transform, "Seam", new Vector3(0f, 0f, face), new Vector3(0.012f, 0.94f, 0.5f), seamMaterial);
+            AddDoorDetail(door.transform, "BandLow", new Vector3(0f, -0.38f, face), new Vector3(0.94f, 0.05f, 0.5f), stripe);
+            AddDoorDetail(door.transform, "BandHigh", new Vector3(0f, 0.38f, face), new Vector3(0.94f, 0.05f, 0.5f), stripe);
+        }
+        var component = door.AddComponent<ElevatorDoor>();
+        Set(component, "_station", p => p.intValue = index);
+    }
+
+    static void AddDoorDetail(Transform door, string name, Vector3 localPosition, Vector3 localScale, Material material)
+    {
+        var part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        part.name = name;
+        UnityEngine.Object.DestroyImmediate(part.GetComponent<Collider>());
+        part.transform.SetParent(door, false);
+        part.transform.localPosition = localPosition;
+        part.transform.localScale = localScale;
+        part.GetComponent<MeshRenderer>().sharedMaterial = material;
     }
 
     // One GameObject per building: the boxes of its plan combined into one mesh per material (inside parts apart

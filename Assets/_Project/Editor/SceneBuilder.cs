@@ -11,6 +11,7 @@ public static class SceneBuilder
     // The outdoor map comes first (ADR-050); until it has been generated the test box is the start scene.
     static readonly string[] BuildOrder =
     {
+        "Assets/_Project/Scenes/MainMenu.unity",
         "Assets/_Project/Scenes/World.unity",
         "Assets/_Project/Scenes/TestBox.unity",
         BootstrapPath,

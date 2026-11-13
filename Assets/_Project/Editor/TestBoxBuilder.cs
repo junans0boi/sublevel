@@ -62,12 +62,12 @@ public static class TestBoxBuilder
         EditorApplication.Exit(0);
     }
 
-    // Loot box materials, indexed by LootKind (Weapon 0, Ammo 1, Medkit 2, Helmet 3, Vest 4, 5-9 unused, Grenade 10).
+    // Loot box materials, indexed by LootKind (Weapon 0, Ammo 1, Medkit 2, Helmet 3, Vest 4, 5-9 unused, Grenade 10, Optic 11).
     // Armour is tinted per tier at run time (LootView), so its material only sets the base look. Muted on purpose.
     static Material[] BuildLootMaterials()
     {
         var other = Lit("LootOther", new Color(0.5f, 0.5f, 0.5f));
-        var mats = new Material[11];
+        var mats = new Material[12];
         for (int i = 0; i < mats.Length; i++) mats[i] = other;
         mats[0] = Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f));
         mats[1] = Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f));
@@ -75,6 +75,7 @@ public static class TestBoxBuilder
         mats[3] = Lit("LootHelmet", new Color(0.35f, 0.5f, 0.7f));
         mats[4] = Lit("LootVest", new Color(0.7f, 0.45f, 0.25f));
         mats[10] = Lit("LootGrenade", new Color(0.33f, 0.4f, 0.2f));
+        mats[11] = Lit("LootOptic", new Color(0.2f, 0.22f, 0.26f));
         return mats;
     }
 
@@ -111,6 +112,7 @@ public static class TestBoxBuilder
     public static void AddGear(GameObject go, GearAssets gear)
     {
         go.AddComponent<CombatantGear>();
+        go.AddComponent<CombatantOptics>();
         var crate = go.AddComponent<DeathCrate>();
         Set(crate, "_markerMaterial", p => p.objectReferenceValue = gear.CrateMarker);
 
@@ -228,6 +230,21 @@ public static class TestBoxBuilder
                 fit.FindPropertyRelative("Size").vector3Value = visual.WeaponFits[i].Size;
             }
         });
+        // Sights and scopes on the held weapon: same models and fits as the weapon, parts in dark grey.
+        var opticVisual = go.AddComponent<OpticVisual>();
+        SetArray(opticVisual, "_modelsByWeaponId", visual.WeaponModels);
+        Set(opticVisual, "_fitByWeaponId", p =>
+        {
+            p.arraySize = visual.WeaponFits.Length;
+            for (int i = 0; i < visual.WeaponFits.Length; i++)
+            {
+                var fit = p.GetArrayElementAtIndex(i);
+                fit.FindPropertyRelative("Rotation").quaternionValue = visual.WeaponFits[i].Rotation;
+                fit.FindPropertyRelative("CenterOffset").vector3Value = visual.WeaponFits[i].CenterOffset;
+                fit.FindPropertyRelative("Size").vector3Value = visual.WeaponFits[i].Size;
+            }
+        });
+        Set(opticVisual, "_material", p => p.objectReferenceValue = Lit("OpticPart", new Color(0.22f, 0.24f, 0.27f)));
 
         var audio = go.AddComponent<CombatantAudio>();
         Set(audio, "_weaponSource", p => p.objectReferenceValue = Source(go.transform, "WeaponAudio", 1.3f, 3f, 70f));

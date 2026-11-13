@@ -15,6 +15,7 @@ namespace Game.Gameplay
         Weapon,
         Helmet,
         Vest,
+        Optic, // the optic on the weapon card of slot Index
     }
 
     public readonly struct InventoryDragSource
@@ -122,6 +123,7 @@ namespace Game.Gameplay
                     return weapon != null ? weapon.Name : "무기";
                 case LootKind.Ammo: return AmmoName(item.Ammo.Value);
                 case LootKind.Medkit: return "구급상자";
+                case LootKind.Optic: return LootNames.OfOptic(item.Optic.Value);
                 default:
                     if (TryArmorSlot(item, out int slot)) return slot == HelmetSlot ? "헬멧" : "조끼";
                     return IsGrenade(item) ? "수류탄" : "아이템";
@@ -142,6 +144,7 @@ namespace Game.Gameplay
                 case LootKind.Weapon: return WeaponKey(item.WeaponId.Value);
                 case LootKind.Ammo: return AmmoKey(item.Ammo.Value);
                 case LootKind.Medkit: return "medkit";
+                case LootKind.Optic: return ItemIcons.OpticKey(item.Optic.Value);
                 default:
                     if (TryArmorSlot(item, out int slot)) return (slot == HelmetSlot ? "helmet_" : "vest_") + item.Tier.Value;
                     return IsGrenade(item) ? "grenade" : "";
@@ -164,6 +167,10 @@ namespace Game.Gameplay
                     int weaponId = WeaponId(combatant, source.Index);
                     var weapon = GameData.Weapons.Find(weaponId);
                     return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + AmmoName(AmmoIndex(weapon));
+                case InventorySourceKind.Optic:
+                    int opticId = OpticOf(combatant, source.Index);
+                    var def = OpticRules.Current.Find(opticId);
+                    return def == null ? "" : def.Name + "\n조준경 · " + (def.Zoom > 1f ? def.Zoom.ToString("0.#") + "배율" : "1배율");
                 case InventorySourceKind.Helmet: return GearDescription(combatant, HelmetSlot, "헬멧");
                 case InventorySourceKind.Vest: return GearDescription(combatant, VestSlot, "조끼");
                 default: return "";
@@ -187,6 +194,9 @@ namespace Game.Gameplay
                            (weapon != null ? AmmoName(AmmoIndex(weapon)) : "구경 미상") + " · 탄창 " + loot.Amount.Value + "발";
                 case LootKind.Ammo: return AmmoName(loot.Ammo.Value) + " 탄약\n탄약 · 수량 " + loot.Amount.Value + "발";
                 case LootKind.Medkit: return "구급상자\n소모품 · 수량 " + loot.Amount.Value + "개";
+                case LootKind.Optic:
+                    var optic = OpticRules.Current.Find(loot.Optic.Value);
+                    return LootNames.OfOptic(loot.Optic.Value) + "\n조준경 · " + (optic != null && optic.Zoom > 1f ? optic.Zoom.ToString("0.#") + "배율" : "1배율");
                 default:
                     if (TryArmorSlot(loot, out int slot)) return (slot == HelmetSlot ? "헬멧" : "조끼") + "\n장구류";
                     return IsGrenade(loot) ? "수류탄\n투척물 · 수량 " + loot.Amount.Value + "개" : "아이템";
@@ -221,6 +231,33 @@ namespace Game.Gameplay
         {
             var weapon = GameData.Weapons.Find(weaponId);
             return weapon != null && Loadout.SlotTakes(slot, weapon.Category);
+        }
+
+        // The optic id on the weapon in the slot (0 = none).
+        public static int OpticOf(Combatant combatant, int slot)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            return optics != null ? optics.OpticInSlot(slot) : 0;
+        }
+
+        public static string OpticName(int opticId) => opticId > 0 ? LootNames.OfOptic(opticId) : "";
+
+        public static bool IsOptic(LootItem loot) => loot != null && (LootKind)loot.Kind.Value == LootKind.Optic;
+
+        // Mirrors the server: the slot holds a weapon that takes this optic.
+        public static bool CanAttachOptic(Combatant combatant, int slot, int opticId) =>
+            combatant != null && Optics.CanAttach(combatant.WeaponInSlot(slot), opticId);
+
+        public static void AttachOpticFromGround(Combatant combatant, LootItem loot, int slot)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            if (optics != null && loot != null && loot.IsSpawned) optics.CmdAttachFromGround(loot.NetworkObject, slot);
+        }
+
+        public static void DropOptic(Combatant combatant, int slot)
+        {
+            var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
+            if (optics != null) optics.CmdDropOptic(slot);
         }
 
         // "단발" / "연사" for the weapon in the slot; empty for an empty slot.
