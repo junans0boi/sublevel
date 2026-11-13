@@ -36,12 +36,13 @@ namespace Game.Gameplay
         // into a texture instead of grabbing the screen.
         IEnumerator VShot(string name)
         {
+            Debug.Log("[FeelCapture] shot " + name);
             if (!Application.isBatchMode)
             {
                 yield return Shot(name);
                 yield break;
             }
-            yield return new WaitForEndOfFrame();
+            yield return null; // not WaitForEndOfFrame: it can stall in a batch mode editor, and Camera.Render needs no frame end
             var pc = PlayerController.Local;
             var cam = pc != null && pc.Camera != null ? pc.Camera : Camera.main;
             if (cam == null) yield break;
@@ -81,6 +82,7 @@ namespace Game.Gameplay
         IEnumerator VehShots(Combatant me)
         {
             var pc = PlayerController.Local;
+            Debug.Log("[FeelCapture] veh shots start, vehicles " + Vehicle.All.Count);
             me.ServerDamageFilter = _ => 0f;
             for (int n = 0; SpawnProtection.InputBlocked && n < 60; n++) yield return new WaitForSeconds(0.25f);
             yield return new WaitForSeconds(1f);
@@ -105,6 +107,7 @@ namespace Game.Gameplay
         {
             var pc = PlayerController.Local;
             var me = Combatant.LocalPlayer;
+            Debug.Log("[FeelCapture] veh " + tag + " begin");
             var bounds = new Bounds(v.transform.position, Vector3.zero);
             foreach (var r in v.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(r.bounds);
             float halfLength = Mathf.Max(1f, bounds.extents.z, bounds.extents.x);
