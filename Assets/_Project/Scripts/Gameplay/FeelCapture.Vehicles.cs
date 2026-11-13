@@ -152,7 +152,14 @@ namespace Game.Gameplay
             yield return null;
             float until;
             // Loot lying beside the door takes the F key (the pickup comes first): out of the way for the shot.
-            if (pc.NearbyLoot != null) { Debug.Log("[FeelCapture] veh " + tag + ": hiding loot at the door " + pc.NearbyLoot.name); pc.NearbyLoot.gameObject.SetActive(false); }
+            for (var loot = pc.NearbyLoot; loot != null; loot = pc.NearbyLoot)
+            {
+                Debug.Log("[FeelCapture] veh " + tag + ": loot at the door taken out of the way");
+                LootItem.All.Remove(loot);
+                loot.gameObject.SetActive(false);
+                yield return null;
+                yield return null;
+            }
             // F may pick up loot lying beside it first: ask again until seated.
             for (int tries = 0; tries < 4 && !VehicleSeat.IsAttached(me); tries++)
             {

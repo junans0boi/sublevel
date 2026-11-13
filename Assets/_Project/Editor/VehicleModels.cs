@@ -609,6 +609,15 @@ public static class VehicleModels
         float barZ = nearTop.Count > 0 ? nearTop.Min(b => b.center.z) : sb.center.z;
         var gripLeft = new Vector3(-half, barTop.y, barZ);
         var gripRight = new Vector3(half, barTop.y, barZ);
+        // The road bike's "Ruchki" (grip) material sits on the whole handlebar piece and a small clamp: the mirrors stand
+        // higher than the bar and pulled the hands up to them, so the hands go at the clamp's height instead.
+        var gripPieces = steerList.Where(p => p.Renderer.sharedMaterials.Any(m => m != null && m.name.StartsWith("Ruchki"))).Select(p => { var b = p.Bounds; b.center += shift; return b; }).ToList();
+        if (grips == null && gripPieces.Count > 0 && spec.Name == "RoadMotorcycle")
+        {
+            float gy = gripPieces.Min(b => b.center.y) + 0.03f, gz = gripPieces.Min(b => b.center.z);
+            gripLeft = new Vector3(-half, gy, gz);
+            gripRight = new Vector3(half, gy, gz);
+        }
         parts.Grips = grips ?? new[] { pivotInverse.MultiplyPoint3x4(gripLeft), pivotInverse.MultiplyPoint3x4(gripRight) };
 
         if (swing != null)
