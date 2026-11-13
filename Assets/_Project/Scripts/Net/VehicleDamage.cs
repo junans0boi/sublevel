@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using Game.Core;
@@ -23,11 +24,13 @@ namespace Game.Net
         public readonly SyncVar<byte> Stage = new SyncVar<byte>(0);       // VehicleDamageStage
         public readonly SyncVar<int> FlatTyres = new SyncVar<int>(0);     // bit i = wheel i flat
         public readonly SyncVar<int> Panes = new SyncVar<int>(0);         // 2 bits per pane: 0 whole, 1 cracked, 2 shattered
+        public readonly SyncVar<int> Parts = new SyncVar<int>(0);         // 2 bits per VehiclePart: PartState
 
         public static readonly List<VehicleDamage> All = new List<VehicleDamage>();
 
-        // Every side: a bullet hole at a point on the body (local position and normal), and the explosion.
-        public event Action<Vector3, Vector3> Holed;
+        // Every side: a bullet hole where a shot struck the body (local point and the normal back toward the shooter),
+        // with its dimple (radius, depth in metres); and the explosion.
+        public event Action<Vector3, Vector3, float, float> Holed;
         public event Action Exploded;
         // Every side: a glass pane hit along a ray (local origin and direction), for the crack's place.
         public event Action<int, Vector3, Vector3> PaneHit;
@@ -41,6 +44,12 @@ namespace Game.Net
         int[] _paneHits;        // server
         float _burning;         // server: seconds on fire
         float[] _grip, _drop;
+        float[] _partHealth;    // server
+        readonly Transform[] _parts = new Transform[VehicleDamageMath.PartCount];
+        // Server: the last holes and dents, sent to a client that joins later (OnSpawnServer).
+        Vector3[] _holeAt, _holeNormal, _dentAt, _dentDir;
+        Vector2[] _holeSize, _dentSize;
+        int _holesPlaced, _dentsPlaced;
 
         public Vehicle Vehicle => _vehicle;
         public VehicleDamageStage CurrentStage => (VehicleDamageStage)Stage.Value;
@@ -51,7 +60,14 @@ namespace Game.Net
             _vehicle = GetComponent<Vehicle>();
             _state = GetComponent<VehicleState>();
             if (_state == null) _state = gameObject.AddComponent<VehicleState>();
+            // Detachable parts: Model/Part_<VehiclePart> (VehicleBuilder), only on models that have them as separate meshes.
+            for (int i = 0; i < _parts.Length; i++) _parts[i] = transform.Find("Model/Part_" + (VehiclePart)i);
         }
+
+        // A detachable part's transform (null: this model has none, or it fell and was let go by the visual).
+        public Transform Part(int part) => part >= 0 && part < _parts.Length ? _parts[part] : null;
+        public void ReleasePart(int part) { if (part >= 0 && part < _parts.Length) _parts[part] = null; }
+        public PartState PartStateOf(int part) => VehicleDamageMath.GetPart(Parts.Value, part);
 
         void OnEnable()
         {
@@ -72,6 +88,39 @@ namespace Game.Net
             _tyreHealth = new float[wheels];
             for (int i = 0; i < wheels; i++) _tyreHealth[i] = Rules.TyreHealth;
             _paneHits = new int[VehicleDamageMath.PaneCount];
+            _partHealth = new float[VehicleDamageMath.PartCount];
+            for (int i = 0; i < _partHealth.Length; i++) _partHealth[i] = Rules.PartHealth;
+            _holeAt = new Vector3[Rules.MaxDecals]; _holeNormal = new Vector3[Rules.MaxDecals]; _holeSize = new Vector2[Rules.MaxDecals];
+            _dentAt = new Vector3[Rules.DentHistory]; _dentDir = new Vector3[Rules.DentHistory]; _dentSize = new Vector2[Rules.DentHistory];
+        }
+
+        // A client joining after the shooting started gets the holes and dents so far (oldest first); glass, tyres,
+        // parts and the stage are SyncVars and arrive by themselves.
+        public override void OnSpawnServer(NetworkConnection connection)
+        {
+            if (connection == null || connection.IsLocalClient || (_holesPlaced == 0 && _dentsPlaced == 0)) return;
+            var r = Rules;
+            int holes = VehicleDamageMath.HistoryCount(_holesPlaced, r.MaxDecals), dents = VehicleDamageMath.HistoryCount(_dentsPlaced, r.DentHistory);
+            var ha = new Vector3[holes]; var hn = new Vector3[holes]; var hs = new Vector2[holes];
+            for (int k = 0; k < holes; k++)
+            {
+                int i = VehicleDamageMath.HistorySlot(_holesPlaced, r.MaxDecals, k);
+                ha[k] = _holeAt[i]; hn[k] = _holeNormal[i]; hs[k] = _holeSize[i];
+            }
+            var da = new Vector3[dents]; var dd = new Vector3[dents]; var ds = new Vector2[dents];
+            for (int k = 0; k < dents; k++)
+            {
+                int i = VehicleDamageMath.HistorySlot(_dentsPlaced, r.DentHistory, k);
+                da[k] = _dentAt[i]; dd[k] = _dentDir[i]; ds[k] = _dentSize[i];
+            }
+            TargetHistory(connection, da, dd, ds, ha, hn, hs);
+        }
+
+        [TargetRpc]
+        void TargetHistory(NetworkConnection connection, Vector3[] dentAt, Vector3[] dentDir, Vector2[] dentSize, Vector3[] holeAt, Vector3[] holeNormal, Vector2[] holeSize)
+        {
+            for (int i = 0; i < dentAt.Length; i++) Dented?.Invoke(dentAt[i], dentDir[i], dentSize[i].x, dentSize[i].y);
+            for (int i = 0; i < holeAt.Length; i++) Holed?.Invoke(holeAt[i], holeNormal[i], holeSize[i].x, holeSize[i].y);
         }
 
         void Update()
@@ -165,8 +214,61 @@ namespace Game.Net
             var b = LocalBounds();
             float y01 = b.size.y > 0f ? (local.y - b.min.y) / b.size.y : 0.5f;
             float z01 = b.size.z > 0f ? (local.z - b.min.z) / b.size.z : 0.5f;
-            ServerHurt(VehicleDamageMath.BulletDamage(weaponDamage, VehicleDamageMath.ZoneAt(y01, z01, r), r));
-            RpcHole(local, transform.InverseTransformDirection(-dir));
+            float amount = VehicleDamageMath.BulletDamage(weaponDamage, VehicleDamageMath.ZoneAt(y01, z01, r), r);
+            ServerHurt(amount);
+            int part = PartNear(local, r.PartReach);
+            if (part >= 0) ServerHitPart(part, amount);
+            VehicleDamageMath.BulletDent(weaponDamage, r, out float radius, out float depth);
+            var normal = transform.InverseTransformDirection(-dir);
+            if (_holeAt != null)
+            {
+                int slot = VehicleDamageMath.DecalSlot(_holesPlaced++, r.MaxDecals);
+                _holeAt[slot] = local; _holeNormal[slot] = normal; _holeSize[slot] = new Vector2(radius, depth);
+            }
+            RpcHole(local, normal, radius, depth);
+        }
+
+        // ---- Detachable parts ----
+
+        // A part's bounds in the vehicle's local space (it hangs off the Model, which leans on a motorcycle).
+        bool PartBounds(int part, out Bounds bounds)
+        {
+            bounds = default;
+            var t = _parts[part];
+            if (t == null || PartStateOf(part) == PartState.Fallen) return false;
+            var mf = t.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return false;
+            var mb = mf.sharedMesh.bounds;
+            bool first = true;
+            for (int c = 0; c < 8; c++)
+            {
+                var corner = mb.center + Vector3.Scale(mb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
+                var p = transform.InverseTransformPoint(t.TransformPoint(corner));
+                if (first) { bounds = new Bounds(p, Vector3.zero); first = false; } else bounds.Encapsulate(p);
+            }
+            return true;
+        }
+
+        // The part nearest a local point, within `reach` of its bounds, or -1.
+        int PartNear(Vector3 local, float reach)
+        {
+            int best = -1;
+            float bestSqr = reach * reach;
+            for (int i = 0; i < _parts.Length; i++)
+            {
+                if (!PartBounds(i, out var b)) continue;
+                float d = b.SqrDistance(local);
+                if (d <= bestSqr) { bestSqr = d; best = i; }
+            }
+            return best;
+        }
+
+        void ServerHitPart(int part, float amount)
+        {
+            if (_partHealth == null || _parts[part] == null) return;
+            var state = VehicleDamageMath.HitPart(ref _partHealth[part], amount, Rules);
+            int packed = VehicleDamageMath.SetPart(Parts.Value, part, state);
+            if (packed != Parts.Value) Parts.Value = packed;
         }
 
         // A blast at `centre` worth `damageAtDistance(metres)` to a combatant; `factor` scales it for the vehicle.
@@ -185,10 +287,18 @@ namespace Game.Net
             {
                 var point = ClosestOnBody(centre);
                 var push = (point - centre).sqrMagnitude > 1e-6f ? (point - centre).normalized : (transform.position - centre).normalized;
-                RpcDent(transform.InverseTransformPoint(point), transform.InverseTransformDirection(push), r.DentBlastRadius, r.DentBlastDepth * r.DeformScale * near01);
+                ServerDent(transform.InverseTransformPoint(point), transform.InverseTransformDirection(push), r.DentBlastRadius, r.DentBlastDepth * r.DeformScale * near01);
             }
             if (distance <= r.GlassBlastRadius)
                 for (int p = 0; p < VehicleDamageMath.PaneCount; p++) ServerHitPane(p, r.GlassHitsToShatter);
+            // Each part by its own distance: a blast at the nose takes the bumper and the hood, not the trunk lid.
+            var localCentre = transform.InverseTransformPoint(centre);
+            for (int i = 0; i < _parts.Length; i++)
+            {
+                if (!PartBounds(i, out var pb)) continue;
+                float d = Mathf.Sqrt(pb.SqrDistance(localCentre));
+                ServerHitPart(i, d <= r.InstantWreckRadius ? r.PartHealth : damageAtDistance(d) * factor * r.PartBlastFactor);
+            }
         }
 
         // Every vehicle near a blast (grenades: ThrownItem.Explode).
@@ -218,6 +328,10 @@ namespace Game.Net
             centre = transform.TransformPoint(centre);
             Stage.Value = (byte)VehicleDamageStage.Wrecked;
             ServerHurt(_health);
+            // Every part still on is blown off (models without parts: nothing to show).
+            int parts = Parts.Value;
+            for (int i = 0; i < _parts.Length; i++) if (_parts[i] != null) parts = VehicleDamageMath.SetPart(parts, i, PartState.Fallen);
+            Parts.Value = parts;
             var blast = new ThrowableRules { BlastDamage = r.ExplosionDamage, BlastInnerRadius = r.ExplosionInnerRadius, BlastOuterRadius = r.ExplosionOuterRadius };
             var victims = new List<Combatant>(Combatant.All);
             foreach (var c in victims)
@@ -252,12 +366,27 @@ namespace Game.Net
             var r = Rules;
             // Capped: a client cannot claim more than MaxReportedImpact, nor a point far off the body.
             speed = Mathf.Clamp(speed, 0f, r.MaxReportedImpact);
-            ServerHurt(VehicleDamageMath.CollisionDamage(speed, r));
-            if (!VehicleDamageMath.ImpactDent(speed, r, out float radius, out float depth)) return;
+            float amount = VehicleDamageMath.CollisionDamage(speed, r);
+            ServerHurt(amount);
             var b = LocalBounds();
             local = b.ClosestPoint(local);
+            int part = PartNear(local, r.PartReach);
+            if (part >= 0) ServerHitPart(part, amount * r.PartCollisionFactor);
+            if (!VehicleDamageMath.ImpactDent(speed, r, out float radius, out float depth)) return;
             var inward = (b.center - local).sqrMagnitude > 1e-6f ? (b.center - local).normalized : Vector3.forward;
-            RpcDent(local, inward, radius, depth);
+            ServerDent(local, inward, radius, depth);
+        }
+
+        // A dent everyone sees, kept for late joiners.
+        void ServerDent(Vector3 local, Vector3 dir, float radius, float depth)
+        {
+            if (_dentAt != null)
+            {
+                var r = Rules;
+                int slot = VehicleDamageMath.DecalSlot(_dentsPlaced++, r.DentHistory);
+                _dentAt[slot] = local; _dentDir[slot] = dir; _dentSize[slot] = new Vector2(radius, depth);
+            }
+            RpcDent(local, dir, radius, depth);
         }
 
         // Tests and captures.
@@ -269,7 +398,7 @@ namespace Game.Net
         }
 
         [ObserversRpc(RunLocally = true)]
-        void RpcHole(Vector3 local, Vector3 localNormal) => Holed?.Invoke(local, localNormal);
+        void RpcHole(Vector3 local, Vector3 localNormal, float radius, float depth) => Holed?.Invoke(local, localNormal, radius, depth);
 
         [ObserversRpc(RunLocally = true)]
         void RpcExploded() => Exploded?.Invoke();

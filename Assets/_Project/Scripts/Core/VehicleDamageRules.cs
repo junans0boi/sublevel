@@ -295,14 +295,6 @@ namespace Game.Core
             return PartStateFor(health, r);
         }
 
-        // Every part in one state, packed.
-        public static int AllParts(PartState state)
-        {
-            int packed = 0;
-            for (int p = 0; p < PartCount; p++) packed = SetPart(packed, p, state);
-            return packed;
-        }
-
         // The ray (unit direction) against a sphere: distance along the ray to where it enters, or -1.
         public static float RaySphere(float ox, float oy, float oz, float dx, float dy, float dz, float cx, float cy, float cz, float radius)
         {

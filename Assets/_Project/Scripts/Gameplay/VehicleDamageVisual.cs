@@ -43,23 +43,25 @@ namespace Game.Gameplay
         AudioSource _audio;
         VehicleDamageStage _shown = (VehicleDamageStage)255;
         int _panesShown;
-        readonly Transform[] _paneDecals = new Transform[VehicleDamageMath.PaneCount];
+        readonly MeshFilter[] _paneDecals = new MeshFilter[VehicleDamageMath.PaneCount];
         readonly int[] _paneDecalState = new int[VehicleDamageMath.PaneCount];
         readonly List<Transform> _holes = new List<Transform>();
         int _holesPlaced;
         MaterialPropertyBlock _block;
         Material _glow, _dust, _softGlow, _softDust, _crackMat, _shatterMat;
-        // The body's mesh (made unique on the first dent), its glass sub-mesh and the push so far per vertex.
+        // The drawn body: the main mesh (with the glass sub-mesh on a car) and the detachable parts' meshes.
         MeshFilter _body;
         int _glassSubmesh = -1;
-        Vector3[] _vertices;
-        float[] _pushed;
-        Mesh _dentedMesh;
+        readonly List<Shell> _shells = new List<Shell>();
+        int _partsShown;
+        float _startTime;
 
         // For tests and captures.
         public int ExplosionsShown { get; private set; }
         public int DentsShown { get; private set; }
         public int PaneDecalsShown { get; private set; }
+        public int HolesShown { get; private set; }
+        public int PartsFallen { get; private set; }
         public AudioSource BangSource => _audio;
 
         void Awake()
@@ -102,6 +104,14 @@ namespace Game.Gameplay
                     if (mats[i] != null && mats[i].name.EndsWith("_Glass")) { _body = mf; _glassSubmesh = i; }
                 if (_body == null && mf.name == "Body") _body = mf;
             }
+            if (_body != null) _shells.Add(new Shell(_body, _glassSubmesh));
+            for (int i = 0; i < VehicleDamageMath.PartCount; i++)
+            {
+                var part = _damage.Part(i);
+                var mf = part != null ? part.GetComponent<MeshFilter>() : null;
+                if (mf != null) _shells.Add(new Shell(mf, -1) { Part = i });
+            }
+            _startTime = Time.time;
         }
 
         void Update()
@@ -110,6 +120,8 @@ namespace Game.Gameplay
             if (stage != _shown) ShowStage(stage);
             int panes = _damage.Panes.Value;
             if (panes != _panesShown) ShowPanes(panes);
+            int parts = _damage.Parts.Value;
+            if (parts != _partsShown) ShowParts(parts);
         }
 
         void LateUpdate()
@@ -143,12 +155,20 @@ namespace Game.Gameplay
             {
                 if (_fire == null)
                 {
-                    _fire = NewEmitter("Fire", _softGlow, EngineSpot(), 0.7f, 1.4f, 0.5f, 1.4f, 120);
+                    // A motorcycle burns all over its small frame (tank, engine, seat): wider, fuller flames than its size alone.
+                    bool bike = _damage.Vehicle.IsMotorcycle;
+                    _fire = bike ? NewEmitter("Fire", _softGlow, EngineSpot(), 0.85f, 1.5f, 0.62f, 1.9f, 160)
+                        : NewEmitter("Fire", _softGlow, EngineSpot(), 0.7f, 1.4f, 0.5f, 1.4f, 120);
+                    if (bike)
+                    {
+                        var shape = _fire.shape;
+                        shape.radius = 0.5f;
+                    }
                     // Yellow at the root, orange, then deep red as it rises and fades (no green: white tint, warm keys).
                     SetColorOverLife(_fire, new[] { (0f, new Color(1f, 0.72f, 0.3f)), (0.35f, new Color(1f, 0.4f, 0.06f)), (1f, new Color(0.6f, 0.08f, 0.02f)) },
                         new[] { (0f, 0f), (0.1f, 0.9f), (0.6f, 0.6f), (1f, 0f) });
                     var emission = _fire.emission;
-                    emission.rateOverTime = 34f;
+                    emission.rateOverTime = bike ? 48f : 34f;
                 }
                 _fire.Play();
             }
@@ -156,20 +176,14 @@ namespace Game.Gameplay
             {
                 if (_fire != null) _fire.Stop();
                 // The burnt-out shell: the body and everything on it darkened.
-                foreach (var r in GetComponentsInChildren<MeshRenderer>())
-                {
-                    if (r.name == "BulletHole" || r.name == "Rim" || r.name == "GlassCrack") continue;
-                    r.GetPropertyBlock(_block);
-                    _block.SetColor(BaseColorId, Charred);
-                    r.SetPropertyBlock(_block);
-                }
+                foreach (var r in GetComponentsInChildren<MeshRenderer>()) Char(r);
             }
         }
 
         Vector3 EngineSpot()
         {
             var b = _damage.LocalBounds();
-            return _damage.Vehicle.IsMotorcycle ? b.center : new Vector3(b.center.x, b.max.y - b.size.y * 0.35f, b.min.z + b.size.z * 0.85f);
+            return _damage.Vehicle.IsMotorcycle ? b.center + Vector3.up * b.extents.y * 0.3f : new Vector3(b.center.x, b.max.y - b.size.y * 0.35f, b.min.z + b.size.z * 0.85f);
         }
 
         // ---- The explosion ----
@@ -321,9 +335,9 @@ namespace Game.Gameplay
                 if (_paneDecals[p] != null && _paneDecalState[p] != state)
                 {
                     _paneDecalState[p] = state;
-                    var r = _paneDecals[p].GetComponent<MeshRenderer>();
-                    r.sharedMaterial = state >= 2 ? _shatterMat : _crackMat;
-                    _paneDecals[p].localScale = Vector3.one * (state >= 2 ? 0.55f : 0.42f);
+                    var mf = _paneDecals[p];
+                    mf.GetComponent<MeshRenderer>().sharedMaterial = state >= 2 ? _shatterMat : _crackMat;
+                    mf.sharedMesh = PaneDecalMesh(mf.sharedMesh, _paneAt[p], _paneNormal[p], state >= 2 ? 0.6f : 0.45f);
                 }
             }
         }
@@ -347,90 +361,108 @@ namespace Game.Gameplay
             return true;
         }
 
+        readonly Vector3[] _paneAt = new Vector3[VehicleDamageMath.PaneCount];     // in the body mesh's space
+        readonly Vector3[] _paneNormal = new Vector3[VehicleDamageMath.PaneCount];
+
         void PlacePaneDecal(int pane, Vector3 localOrigin, Vector3 localDir)
         {
-            if (_crackMat == null || _body == null || _glassSubmesh < 0) return;
-            if (!RayGlass(localOrigin, localDir, out var point, out var normal)) return;
+            if (_crackMat == null || _shells.Count == 0 || _glassSubmesh < 0) return;
+            var body = _shells[0];
+            var o = body.FromVehicle(transform, localOrigin);
+            var d = body.DirFromVehicle(transform, localDir);
+            if (!body.Ray(body.GlassTris, o, d, 10f, out float t, out var normal)) return;
+            _paneAt[pane] = o + d * t;
+            _paneNormal[pane] = normal;
             var go = new GameObject("GlassCrack");
-            go.AddComponent<MeshFilter>().sharedMesh = Quad();
+            var mf = go.AddComponent<MeshFilter>();
             var r = go.AddComponent<MeshRenderer>();
             r.sharedMaterial = _crackMat;
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.receiveShadows = false;
-            var t = go.transform;
-            t.SetParent(transform, false);
-            // On the outside of the glass (the side the shot came from), facing out.
-            t.localPosition = point + normal * 0.006f;
-            t.localRotation = Quaternion.LookRotation(-normal, Vector3.up);
-            t.localScale = Vector3.one * 0.42f;
-            _paneDecals[pane] = t;
+            // In the body mesh's space: the decal is made of the glass's own triangles, so it never leaves the pane.
+            go.transform.SetParent(body.Filter.transform, false);
+            _paneDecals[pane] = mf;
             _paneDecalState[pane] = 0;
             PaneDecalsShown++;
             ShowPanes(_damage.Panes.Value);
         }
 
-        // The ray (vehicle-local) against the body mesh's glass triangles: the nearest hit, with the normal toward the ray.
-        bool RayGlass(Vector3 o, Vector3 d, out Vector3 point, out Vector3 normal)
+        // The glass triangles around the hit facing the same way (this pane, not the next one round the corner), a few
+        // mm out toward the shooter, with the crack texture projected square on them `size` across. Where the pane ends
+        // the decal ends: it cannot stick out over the roof or the pillars.
+        Mesh PaneDecalMesh(Mesh mesh, Vector3 at, Vector3 normal, float size)
         {
-            point = normal = Vector3.zero;
-            var mesh = _body.sharedMesh;
-            if (mesh == null || !mesh.isReadable) return false;
-            var bodyT = _body.transform;
-            var mo = bodyT.InverseTransformPoint(transform.TransformPoint(o));
-            var md = bodyT.InverseTransformDirection(transform.TransformDirection(d)).normalized;
-            var verts = _vertices ?? mesh.vertices;
-            var tris = mesh.GetTriangles(_glassSubmesh);
-            float best = float.PositiveInfinity;
-            Vector3 bestN = Vector3.zero;
+            var body = _shells[0];
+            var rot = Quaternion.LookRotation(-normal, Mathf.Abs(normal.y) > 0.9f ? Vector3.forward : Vector3.up);
+            Vector3 right = rot * Vector3.right, up = rot * Vector3.up;
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = body.GlassTris;
+            var v = body.V;
             for (int i = 0; i + 2 < tris.Length; i += 3)
             {
-                Vector3 a = verts[tris[i]], b = verts[tris[i + 1]], c = verts[tris[i + 2]];
-                // Moller-Trumbore.
-                Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(md, e2);
-                float det = Vector3.Dot(e1, p);
-                if (Mathf.Abs(det) < 1e-9f) continue;
-                float inv = 1f / det;
-                Vector3 s = mo - a;
-                float u = Vector3.Dot(s, p) * inv;
-                if (u < 0f || u > 1f) continue;
-                Vector3 q = Vector3.Cross(s, e1);
-                float v = Vector3.Dot(md, q) * inv;
-                if (v < 0f || u + v > 1f) continue;
-                float t = Vector3.Dot(e2, q) * inv;
-                if (t > 0f && t < best) { best = t; bestN = Vector3.Cross(e1, e2).normalized; }
+                Vector3 a = v[tris[i]], b = v[tris[i + 1]], c = v[tris[i + 2]];
+                var fn = Vector3.Cross(b - a, c - a);
+                if (fn.sqrMagnitude < 1e-12f || Mathf.Abs(Vector3.Dot(fn.normalized, normal)) < 0.5f) continue;
+                // This layer of glass only, and only where the texture lands.
+                if (Mathf.Abs(Vector3.Dot((a + b + c) / 3f - at, normal)) > 0.08f) continue;
+                Vector2 Uv(Vector3 q) => new Vector2(Vector3.Dot(q - at, right) / size + 0.5f, Vector3.Dot(q - at, up) / size + 0.5f);
+                Vector2 ua = Uv(a), ub = Uv(b), uc = Uv(c);
+                if (Mathf.Max(ua.x, ub.x, uc.x) < 0f || Mathf.Min(ua.x, ub.x, uc.x) > 1f || Mathf.Max(ua.y, ub.y, uc.y) < 0f || Mathf.Min(ua.y, ub.y, uc.y) > 1f) continue;
+                var lift = normal * 0.004f;
+                verts.Add(a + lift); verts.Add(b + lift); verts.Add(c + lift);
+                uvs.Add(ua); uvs.Add(ub); uvs.Add(uc);
             }
-            if (float.IsPositiveInfinity(best)) return false;
-            if (Vector3.Dot(bestN, md) > 0f) bestN = -bestN;
-            point = transform.InverseTransformPoint(bodyT.TransformPoint(mo + md * best));
-            normal = transform.InverseTransformDirection(bodyT.TransformDirection(bestN)).normalized;
-            return true;
+            if (mesh == null) mesh = new Mesh { name = "GlassCrackDecal" };
+            mesh.Clear();
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            var colours = new Color32[verts.Count];
+            for (int i = 0; i < colours.Length; i++) colours[i] = new Color32(255, 255, 255, 255);
+            mesh.colors32 = colours;
+            // Both windings: seen from either side.
+            var idx = new int[verts.Count * 2];
+            for (int i = 0; i < verts.Count; i += 3)
+            {
+                idx[i] = i; idx[i + 1] = i + 1; idx[i + 2] = i + 2;
+                idx[verts.Count + i] = i; idx[verts.Count + i + 1] = i + 2; idx[verts.Count + i + 2] = i + 1;
+            }
+            mesh.SetTriangles(idx, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         // ---- Holes and dents ----
 
-        void OnHoled(Vector3 local, Vector3 localNormal)
+        // A hole sits on the drawn surface along the shot (the collider box only roughly wraps the body). Where the
+        // line meets no body mesh (a thin frame, a gap round a rider) there is no hole: nothing floats in the air.
+        void OnHoled(Vector3 local, Vector3 localNormal, float radius, float depth)
         {
-            var rules = VehicleDamageRules.For(_damage.Vehicle.Kind);
             var n = localNormal.sqrMagnitude > 0f ? localNormal.normalized : Vector3.up;
-            // A bullet leaves a small dimple too.
-            OnDented(local, -n, rules.DentBulletRadius, rules.DentBulletDepth * rules.DeformScale);
-            if (_dust == null) return;
+            var from = local + n * 0.5f;
+            if (!RaySurface(from, -n, 1f, out _, out var point, out _)) return;
+            OnDented(point, -n, radius, depth);
+            // Again on the dented surface.
+            if (!RaySurface(from, -n, 1f, out var shell, out point, out var normal) || _dust == null) return;
+            var rules = VehicleDamageRules.For(_damage.Vehicle.Kind);
             int slot = VehicleDamageMath.DecalSlot(_holesPlaced++, rules.MaxDecals);
-            Transform hole;
-            if (slot < _holes.Count) hole = _holes[slot];
-            else
+            var hole = slot < _holes.Count ? _holes[slot] : null;
+            if (hole == null) // new, or it went with a part that fell off and was cleared away
             {
                 // A dark hole on a bare-metal rim, each two-sided (whatever the shader's culling).
                 hole = new GameObject("BulletHole").transform;
-                hole.SetParent(transform, false);
                 Disc(hole, "Rim", RimColor, 1f, 0f);
                 Disc(hole, "BulletHole", HoleColor, 0.55f, 0.002f);
-                _holes.Add(hole);
+                if (slot < _holes.Count) _holes[slot] = hole; else _holes.Add(hole);
             }
-            // The hit is on the collider box, a few cm inside the drawn panel: out onto the paint.
-            hole.localPosition = local + n * 0.04f;
-            hole.localRotation = Quaternion.LookRotation(-n);
+            // On the mesh it struck (a part takes its holes along when it falls).
+            var on = shell.Filter.transform;
+            hole.SetParent(on, false);
+            hole.localPosition = shell.FromVehicle(transform, point + normal * 0.003f);
+            hole.localRotation = Quaternion.LookRotation(-shell.DirFromVehicle(transform, normal));
             hole.localScale = Vector3.one * rules.DecalSize;
+            HolesShown++;
         }
 
         void Disc(Transform parent, string name, Color color, float size, float lift)
@@ -453,42 +485,264 @@ namespace Game.Gameplay
             }
         }
 
-        // Pushes the body's vertices near `local` along `localDir` (vehicle-local), with a smooth falloff to `radius`,
-        // never more than DentMaxDepth in total per vertex. Normals are left as they are: recalculating them would
-        // show the mesh's UV seams across the whole body.
+        // The nearest body surface (not glass) along a vehicle-local ray within `maxT`: the mesh, point and normal
+        // (toward the ray's origin), vehicle-local.
+        bool RaySurface(Vector3 o, Vector3 d, float maxT, out Shell hit, out Vector3 point, out Vector3 normal)
+        {
+            hit = null;
+            point = normal = Vector3.zero;
+            float best = maxT;
+            foreach (var shell in _shells)
+            {
+                if (!shell.Attached) continue;
+                var so = shell.FromVehicle(transform, o);
+                var sd = shell.DirFromVehicle(transform, d);
+                if (!shell.Ray(shell.SolidTris, so, sd, best, out float t, out var n)) continue;
+                best = t;
+                hit = shell;
+                point = transform.InverseTransformPoint(shell.Filter.transform.TransformPoint(so + sd * t));
+                normal = transform.InverseTransformDirection(shell.Filter.transform.TransformDirection(n)).normalized;
+            }
+            return hit != null;
+        }
+
+        // Pushes the body's vertices (and the parts') near `local` along `localDir` (vehicle-local), with a smooth falloff
+        // to `radius`, never more than DentMaxDepth in total per vertex, and bends the normals with the new shape.
         void OnDented(Vector3 local, Vector3 localDir, float radius, float depth)
         {
-            if (_body == null || depth <= 0f || radius <= 0f) return;
-            if (_dentedMesh == null)
-            {
-                var shared = _body.sharedMesh;
-                if (shared == null || !shared.isReadable) return;
-                _dentedMesh = Instantiate(shared);
-                _dentedMesh.name = shared.name + "_Dented";
-                _body.sharedMesh = _dentedMesh;
-                _vertices = _dentedMesh.vertices;
-                _pushed = new float[_vertices.Length];
-            }
+            if (depth <= 0f || radius <= 0f) return;
             var rules = VehicleDamageRules.For(_damage.Vehicle.Kind);
-            var bodyT = _body.transform;
-            var centre = bodyT.InverseTransformPoint(transform.TransformPoint(local));
-            var dir = bodyT.InverseTransformDirection(transform.TransformDirection(localDir)).normalized;
-            float r2 = radius * radius;
-            bool moved = false;
-            for (int i = 0; i < _vertices.Length; i++)
+            bool any = false;
+            foreach (var shell in _shells)
+                if (shell.Attached && shell.Dent(shell.FromVehicle(transform, local), shell.DirFromVehicle(transform, localDir), radius, depth, rules)) any = true;
+            if (any) DentsShown++;
+        }
+
+        // ---- Detachable parts ----
+
+        // Loose: the hood and trunk lid spring open on their hinge, a bumper drops at one end. Fallen: let go with physics,
+        // cleared away after a while. A late joiner (or a part already gone when this vehicle appeared) just has none.
+        void ShowParts(int packed)
+        {
+            int was = _partsShown;
+            _partsShown = packed;
+            var rules = VehicleDamageRules.For(_damage.Vehicle.Kind);
+            foreach (var shell in _shells)
             {
-                float sqr = (_vertices[i] - centre).sqrMagnitude;
-                if (sqr >= r2) continue;
-                float push = VehicleDamageMath.DentPush(_pushed[i], depth, VehicleDamageMath.DentFalloff(Mathf.Sqrt(sqr), radius), rules);
-                if (push <= 0f) continue;
-                _vertices[i] += dir * push;
-                _pushed[i] += push;
-                moved = true;
+                if (shell.Part < 0 || !shell.Attached) continue;
+                var state = VehicleDamageMath.GetPart(packed, shell.Part);
+                if (state == PartState.Dangling && VehicleDamageMath.GetPart(was, shell.Part) == PartState.Fixed) Dangle(shell, rules.PartDangleDeg);
+                else if (state == PartState.Fallen) Fall(shell, rules, Time.time - _startTime > 1f);
             }
-            if (!moved) return;
-            _dentedMesh.vertices = _vertices;
-            _dentedMesh.RecalculateBounds();
-            DentsShown++;
+        }
+
+        static void Dangle(Shell shell, float degrees)
+        {
+            var t = shell.Filter.transform;
+            var b = shell.Filter.sharedMesh.bounds;
+            Vector3 hinge;
+            Quaternion turn;
+            switch ((VehiclePart)shell.Part)
+            {
+                case VehiclePart.Hood: hinge = new Vector3(b.center.x, b.max.y, b.min.z); turn = Quaternion.Euler(-degrees, 0f, 0f); break;
+                case VehiclePart.Trunk: hinge = new Vector3(b.center.x, b.max.y, b.max.z); turn = Quaternion.Euler(degrees, 0f, 0f); break;
+                default: hinge = new Vector3(b.max.x, b.center.y, b.center.z); turn = Quaternion.Euler(0f, 0f, degrees * 0.6f); break;
+            }
+            t.localRotation = turn;
+            t.localPosition = hinge - turn * hinge;
+        }
+
+        void Fall(Shell shell, VehicleDamageRules rules, bool animate)
+        {
+            var go = shell.Filter.gameObject;
+            shell.Attached = false;
+            _damage.ReleasePart(shell.Part);
+            PartsFallen++;
+            go.transform.SetParent(null, true);
+            if (!animate) { Destroy(go); return; }
+            var box = go.AddComponent<BoxCollider>(); // fits the mesh
+            foreach (var c in _damage.Vehicle.Colliders) if (c != null) Physics.IgnoreCollision(box, c);
+            var body = go.AddComponent<Rigidbody>();
+            body.mass = 15f;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            bool blown = _damage.CurrentStage >= VehicleDamageStage.Burning;
+            var centre = transform.TransformPoint(_damage.LocalBounds().center);
+            var outward = go.GetComponent<Renderer>().bounds.center - centre;
+            outward = outward.sqrMagnitude > 1e-4f ? outward.normalized : transform.forward;
+            // Seeded per part so every side throws it the same way (not synced: cosmetic).
+            var rng = new System.Random(shell.Part * 7919 + 90);
+            float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            body.linearVelocity = transform.forward * _damage.Vehicle.Speed + outward * (blown ? Rand(4f, 7f) : Rand(0.5f, 1.5f)) + Vector3.up * (blown ? Rand(4f, 7f) : 0.5f);
+            body.angularVelocity = new Vector3(Rand(-4f, 4f), Rand(-4f, 4f), Rand(-4f, 4f)) * (blown ? 1f : 0.3f);
+            if (_damage.CurrentStage == VehicleDamageStage.Wrecked)
+                foreach (var r in go.GetComponentsInChildren<MeshRenderer>()) Char(r);
+            Destroy(go, rules.PartDespawnSeconds);
+        }
+
+        void Char(MeshRenderer r)
+        {
+            if (r.name == "BulletHole" || r.name == "Rim" || r.name == "GlassCrack") return;
+            r.GetPropertyBlock(_block);
+            _block.SetColor(BaseColorId, Charred);
+            r.SetPropertyBlock(_block);
+        }
+
+        // One drawn mesh of the body (the main shell or a detachable part): its vertices, read on first use and made
+        // unique on the first dent; the normals bend with the dents.
+        public sealed class Shell
+        {
+            public readonly MeshFilter Filter;
+            public int Part = -1;              // VehiclePart, or -1 for the main body
+            public bool Attached = true;
+            readonly int _glassSub;
+            Vector3[] _v, _n;
+            int[] _solid, _glass;
+            float[] _pushed;
+            int[] _group;                      // weld group per vertex (same position = same group: no seams in the normals)
+            List<int>[] _vertTris;             // the solid+glass triangles (first index) at each vertex
+            int[] _all;
+            Mesh _unique;
+
+            public Shell(MeshFilter filter, int glassSub) { Filter = filter; _glassSub = glassSub; }
+
+            public Vector3[] V { get { Read(); return _v; } }
+            public int[] SolidTris { get { Read(); return _solid; } }
+            public int[] GlassTris { get { Read(); return _glass; } }
+
+            void Read()
+            {
+                if (_v != null) return;
+                var mesh = Filter.sharedMesh;
+                if (mesh == null || !mesh.isReadable) { _v = new Vector3[0]; _n = _v; _solid = _glass = _all = new int[0]; return; }
+                _v = mesh.vertices;
+                _n = mesh.normals;
+                var solid = new List<int>();
+                var glass = new List<int>();
+                for (int s = 0; s < mesh.subMeshCount; s++) (s == _glassSub ? glass : solid).AddRange(mesh.GetTriangles(s));
+                _solid = solid.ToArray();
+                _glass = glass.ToArray();
+                var all = new int[_solid.Length + _glass.Length];
+                _solid.CopyTo(all, 0);
+                _glass.CopyTo(all, _solid.Length);
+                _all = all;
+            }
+
+            public Vector3 FromVehicle(Transform vehicle, Vector3 local) => Filter.transform.InverseTransformPoint(vehicle.TransformPoint(local));
+            public Vector3 DirFromVehicle(Transform vehicle, Vector3 dir) => Filter.transform.InverseTransformDirection(vehicle.TransformDirection(dir)).normalized;
+
+            // Moller-Trumbore against `tris` (either winding): the nearest hit before maxT, normal toward the ray.
+            public bool Ray(int[] tris, Vector3 o, Vector3 d, float maxT, out float best, out Vector3 normal)
+            {
+                var v = V;
+                best = maxT;
+                normal = Vector3.zero;
+                bool found = false;
+                for (int i = 0; i + 2 < tris.Length; i += 3)
+                {
+                    Vector3 a = v[tris[i]], b = v[tris[i + 1]], c = v[tris[i + 2]];
+                    Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(d, e2);
+                    float det = Vector3.Dot(e1, p);
+                    if (Mathf.Abs(det) < 1e-9f) continue;
+                    float inv = 1f / det;
+                    Vector3 s = o - a;
+                    float u = Vector3.Dot(s, p) * inv;
+                    if (u < 0f || u > 1f) continue;
+                    Vector3 q = Vector3.Cross(s, e1);
+                    float w = Vector3.Dot(d, q) * inv;
+                    if (w < 0f || u + w > 1f) continue;
+                    float t = Vector3.Dot(e2, q) * inv;
+                    if (t <= 0f || t >= best) continue;
+                    best = t;
+                    normal = Vector3.Cross(e1, e2).normalized;
+                    found = true;
+                }
+                if (found && Vector3.Dot(normal, d) > 0f) normal = -normal;
+                return found;
+            }
+
+            // Mesh-local dent. Normals: each vertex near the dent turns by the rotation its welded neighbourhood's face
+            // normal went through, so the authored normals (hard edges, UV seams) are kept and the dent's slopes shade.
+            public bool Dent(Vector3 centre, Vector3 dir, float radius, float depth, VehicleDamageRules rules)
+            {
+                Read();
+                if (_v.Length == 0) return false;
+                if (_unique == null)
+                {
+                    _unique = Object.Instantiate(Filter.sharedMesh);
+                    _unique.name = Filter.sharedMesh.name + "_Dented";
+                    Filter.sharedMesh = _unique;
+                    _pushed = new float[_v.Length];
+                    Topology();
+                }
+                float r2 = radius * radius;
+                float reach = radius + Mathf.Max(0.15f, radius * 0.5f); // the moved vertices' neighbours turn too
+                var near = new List<int>();
+                for (int i = 0; i < _v.Length; i++) if ((_v[i] - centre).sqrMagnitude < reach * reach) near.Add(i);
+                if (near.Count == 0) return false;
+                var before = GroupNormals(near);
+                bool moved = false;
+                foreach (int i in near)
+                {
+                    float sqr = (_v[i] - centre).sqrMagnitude;
+                    if (sqr >= r2) continue;
+                    float push = VehicleDamageMath.DentPush(_pushed[i], depth, VehicleDamageMath.DentFalloff(Mathf.Sqrt(sqr), radius), rules);
+                    if (push <= 0f) continue;
+                    _v[i] += dir * push;
+                    _pushed[i] += push;
+                    moved = true;
+                }
+                if (!moved) return false;
+                var after = GroupNormals(near);
+                if (_n != null && _n.Length == _v.Length)
+                    foreach (int i in near)
+                    {
+                        int g = _group[i];
+                        if (!before.TryGetValue(g, out var b) || !after.TryGetValue(g, out var a) || b.sqrMagnitude < 1e-12f || a.sqrMagnitude < 1e-12f) continue;
+                        _n[i] = Quaternion.FromToRotation(b, a) * _n[i];
+                    }
+                _unique.vertices = _v;
+                if (_n != null && _n.Length == _v.Length) _unique.normals = _n;
+                _unique.RecalculateBounds();
+                return true;
+            }
+
+            void Topology()
+            {
+                _group = new int[_v.Length];
+                var ids = new Dictionary<Vector3Int, int>();
+                for (int i = 0; i < _v.Length; i++)
+                {
+                    var key = Vector3Int.RoundToInt(_v[i] * 2000f); // half a millimetre
+                    if (!ids.TryGetValue(key, out int g)) { g = ids.Count; ids[key] = g; }
+                    _group[i] = g;
+                }
+                _vertTris = new List<int>[_v.Length];
+                for (int t = 0; t + 2 < _all.Length; t += 3)
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int vi = _all[t + k];
+                        (_vertTris[vi] ?? (_vertTris[vi] = new List<int>(6))).Add(t);
+                    }
+            }
+
+            // Area-weighted face normal sum per weld group of the given vertices.
+            Dictionary<int, Vector3> GroupNormals(List<int> verts)
+            {
+                var sums = new Dictionary<int, Vector3>();
+                foreach (int i in verts)
+                {
+                    sums.TryGetValue(_group[i], out var sum);
+                    var tris = _vertTris[i];
+                    if (tris != null)
+                        foreach (int t in tris)
+                        {
+                            Vector3 a = _v[_all[t]], b = _v[_all[t + 1]], c = _v[_all[t + 2]];
+                            sum += Vector3.Cross(b - a, c - a);
+                        }
+                    sums[_group[i]] = sum;
+                }
+                return sums;
+            }
         }
 
         // ---- Emitters ----
@@ -680,22 +934,6 @@ namespace Game.Gameplay
                         if (px[i].a < alpha) px[i] = new Color32(240, 244, 248, alpha);
                     }
             }
-        }
-
-        static Mesh _quad;
-
-        // A 1 m quad in XY, white vertex colours (the effect shader multiplies them in), UVs 0..1.
-        static Mesh Quad()
-        {
-            if (_quad != null) return _quad;
-            _quad = new Mesh { name = "VehicleDecalQuad" };
-            _quad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f) };
-            _quad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f) };
-            _quad.colors32 = new[] { new Color32(255, 255, 255, 255), new Color32(255, 255, 255, 255), new Color32(255, 255, 255, 255), new Color32(255, 255, 255, 255) };
-            // Both windings: seen from either side.
-            _quad.triangles = new[] { 0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3 };
-            _quad.RecalculateNormals();
-            return _quad;
         }
     }
 }

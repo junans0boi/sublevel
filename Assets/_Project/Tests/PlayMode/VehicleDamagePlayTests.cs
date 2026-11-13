@@ -136,12 +136,14 @@ namespace Game.Tests
 
             // The door below the window.
             int holes = 0;
-            damage.Holed += (_, __) => holes++;
+            damage.Holed += (_, __, ___, ____) => holes++;
             float before = damage.Health.Value;
             Vector3 Door(float z01) => t.TransformPoint(new Vector3(0f, b.min.y + b.size.y * 0.32f, b.min.z + b.size.z * z01));
             yield return ShootAt(me, () => Door(0.5f), () => holes > 0 && damage.Health.Value < before, 6);
             Assert.Less(damage.Health.Value, before, "the body lost health");
             Assert.Greater(holes, 0, "a bullet hole was placed");
+            yield return null;
+            Assert.Greater(visual.HolesShown, 0, "drawn on the body's surface");
             // A spread of holes along the doors, and the windshield from the front, for the picture.
             for (int k = 0; k < 6; k++) { float z01 = 0.3f + 0.07f * k; yield return ShootAt(me, () => Door(z01), () => false, 1); }
             PlayerController.Local.Teleport(t.position + t.forward * 7f + Vector3.up * 0.1f);
@@ -159,6 +161,26 @@ namespace Game.Tests
             Assert.Greater(visual.DentsShown, dentsBefore, "the blast dented the body");
             yield return new WaitForSeconds(0.3f);
             Shot(car, "01d_blast_dent", 4.5f, -2.5f, 0.2f);
+
+            // Crack decals are cut from the glass itself: none reaches above the roof.
+            float roofTop = float.NegativeInfinity;
+            foreach (var c in car.Colliders) if (c.name == "Roof") roofTop = c.bounds.max.y;
+            foreach (var r in car.GetComponentsInChildren<MeshRenderer>())
+                if (r.name == "GlassCrack") Assert.LessOrEqual(r.bounds.max.y, roofTop + 0.02f, "a crack decal sticks out over the roof");
+
+            // A blast ahead of the nose (not close enough to wreck it): the front bumper and the hood come off and fall.
+            int fallen = visual.PartsFallen;
+            var bumper = damage.Part((int)VehiclePart.BumperFront);
+            Assert.IsNotNull(bumper, "the sedan has a separate front bumper (VehicleModels)");
+            damage.ServerBlast(t.TransformPoint(new Vector3(0f, 0.5f, b.max.z + 1.6f)), d => Mathf.Max(0f, 100f - 30f * (d - 1.5f)), 1f);
+            yield return WaitUntil(() => visual.PartsFallen > fallen, 2f, "a part fell off");
+            Assert.AreEqual(PartState.Fallen, damage.PartStateOf((int)VehiclePart.BumperFront), "the front bumper is gone");
+            Assert.AreEqual(PartState.Fixed, damage.PartStateOf((int)VehiclePart.Trunk), "the trunk lid, far from it, stays");
+            Assert.IsNotNull(bumper.GetComponent<Rigidbody>(), "it falls with physics");
+            Assert.IsNull(bumper.parent, "let go of the car");
+            yield return new WaitForSeconds(1.2f);
+            Assert.Less(bumper.position.y, t.position.y + 0.6f, "on the ground");
+            Shot(car, "01e_parts_off", 2.5f, 6.5f, 0.6f);
         }
 
         // Black smoke, fire (disabled), the explosion (hurting who stands beside it, with light and sound), the wreck.
@@ -214,6 +236,26 @@ namespace Game.Tests
             Vehicle bike = null;
             foreach (var v in Vehicle.All) if (v != null && v.IsMotorcycle) { bike = v; break; }
             Assert.IsNotNull(bike, "the test box's motorcycle");
+            // Shots at the frame: holes only where the shot meets the drawn bike, all on its meshes.
+            var me = Combatant.LocalPlayer;
+            me.ServerDamageFilter = _ => 0f;
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 90 });
+            yield return new WaitForSeconds(0.6f);
+            var t = bike.transform;
+            PlayerController.Local.Teleport(t.position - t.right * 4f + Vector3.up * 0.1f);
+            yield return new WaitForSeconds(0.5f);
+            var visual = bike.GetComponent<VehicleDamageVisual>();
+            var b = bike.GetComponent<VehicleDamage>().LocalBounds();
+            for (int k = 0; k < 6; k++)
+            {
+                var at = new Vector3(0f, b.min.y + b.size.y * (0.35f + 0.08f * (k % 3)), b.min.z + b.size.z * (0.3f + 0.1f * k));
+                yield return ShootAt(me, () => t.TransformPoint(at), () => false, 1);
+            }
+            yield return new WaitForSeconds(0.3f);
+            Assert.Greater(visual.HolesShown, 0, "holes on the bike");
+            foreach (Transform hole in bike.GetComponentsInChildren<Transform>())
+                if (hole.name == "BulletHole" && hole.GetComponent<MeshFilter>() == null) Assert.IsTrue(hole.parent.GetComponent<MeshFilter>() != null, "a hole sits on a drawn mesh");
+            Shot(bike, "bike_01_holes", 3f, 0.8f, 0.2f);
             yield return BurnToWreck(bike, "bike_");
         }
     }

@@ -209,14 +209,5 @@ namespace Game.Tests
             Assert.AreEqual(0f, health);
             Assert.AreEqual(PartState.Fallen, VehicleDamageMath.HitPart(ref health, 0f, R));
         }
-
-        [Test]
-        public void Explosion_DropsEveryPart()
-        {
-            int packed = VehicleDamageMath.AllParts(PartState.Fallen);
-            for (int p = 0; p < VehicleDamageMath.PartCount; p++)
-                Assert.AreEqual(PartState.Fallen, VehicleDamageMath.GetPart(packed, p));
-            Assert.AreEqual(0, VehicleDamageMath.AllParts(PartState.Fixed));
-        }
     }
 }

@@ -36,6 +36,8 @@ public static class VehicleModels
         public VehicleKind Kind;
         public Mesh Body;
         public Material[] BodyMaterials;
+        public Mesh[] Detachable;              // per VehiclePart (null = the model has no such separate part), vehicle space
+        public Material[][] DetachableMaterials;
         public Vector3[] WheelCentres;         // FL, FR, RL, RR / front, rear
         public Mesh[] Wheels;                  // spinning part of each wheel, about its centre
         public Material[][] WheelMaterials;
@@ -151,6 +153,8 @@ public static class VehicleModels
         public Vector3 Euler;
         public float Scale = 1f;
         public Regex Drop, Wheel, WheelStatic, Steering, Plate, Glass;
+        // Detachable parts by node name, indexed by VehiclePart (null entry = none); their inner faces go with them.
+        public Regex[] Detachable;
         public Func<string, Role> RoleOf;
         public Dictionary<Role, Material> Materials;
         public Func<Material, Material> Remap;  // instead of RoleOf / Materials: the model's material in, ours out (null drops it)
@@ -205,7 +209,10 @@ public static class VehicleModels
         Name = name, Folder = name, File = file, Euler = new Vector3(0f, 90f, 0f), MassKg = massKg,
         Drop = Badges, Wheel = new Regex("Wheel(Stock|Hubcaps)"), Steering = new Regex("Steering_Wheel"), Plate = new Regex("Numberplate"),
         RoleOf = DanielRole, Materials = materials,
+        Detachable = new[] { Ci("_Hood"), Ci("trunk_?door"), Ci("Bumper_front"), Ci("Bumper_rear") },
     };
+
+    static Regex Ci(string pattern) => new Regex(pattern, RegexOptions.IgnoreCase);
 
     static IEnumerable<Spec> CarSpecs()
     {
@@ -216,6 +223,7 @@ public static class VehicleModels
         yield return lt80;
         var sw84 = Daniel("FairheavenSW84", "FairheavenSW84.fbx", 1350f, DanielMaterials("FairheavenSW84", "FairheavenSW84", new Color(0.66f, 0.6f, 0.47f),
             "Generic_bodymat_dif.png", "Generic_bodymat_NRM.png", "UCB_BOTTOM_GT_Dif.png", "UCB_BOTTOM_GT_NRM.png", "UCB_Lights_and_Glass_Dif.jpg", "UCB_BOTTOM_GT_Dif.png", "RB1c_Tire_1k_Dif.jpg", null));
+        sw84.Detachable[(int)VehiclePart.Trunk] = null; // the tailgate carries the rear window (kept on the body for the glass)
         sw84.FrontBackZ = -0.25f; sw84.FrontCushionY = 0.50f; sw84.RearBackZ = -1.00f; sw84.RearCushionY = 0.50f; // the sedan's interior
         yield return sw84;
         var lifted = Daniel("LightbodyLifted85", "LightbodyLifted85.fbx", 1900f, DanielMaterials("LightbodyLifted85", "LightbodyLifted85", new Color(0.2f, 0.28f, 0.19f),
@@ -318,11 +326,21 @@ public static class VehicleModels
             var steering = new List<Piece>();
             var plates = new List<Piece>();
             var body = new List<Piece>();
+            var detachable = new List<Piece>[VehicleDamageMath.PartCount];
+            for (int i = 0; i < detachable.Length; i++) detachable[i] = new List<Piece>();
+            int PartOf(string name)
+            {
+                for (int i = 0; spec.Detachable != null && i < spec.Detachable.Length; i++)
+                    if (spec.Detachable[i] != null && spec.Detachable[i].IsMatch(name)) return i;
+                return -1;
+            }
             foreach (var p in pieces)
             {
                 if (spec.Plate != null && spec.Plate.IsMatch(p.Name)) { plates.Add(p); continue; }
                 if (spec.Drop != null && spec.Drop.IsMatch(p.Name)) continue;
-                if (spec.Wheel != null && spec.Wheel.IsMatch(p.Name)) wheels.Add(p);
+                int part = PartOf(p.Name);
+                if (part >= 0) detachable[part].Add(p);
+                else if (spec.Wheel != null && spec.Wheel.IsMatch(p.Name)) wheels.Add(p);
                 else if (spec.WheelStatic != null && spec.WheelStatic.IsMatch(p.Name)) wheelStatic.Add(p);
                 else if (spec.Steering != null && spec.Steering.IsMatch(p.Name)) steering.Add(p);
                 else body.Add(p);
@@ -361,11 +379,14 @@ public static class VehicleModels
             var parts = new Parts { Name = spec.Name, Kind = spec.Kind, WheelRadius = radius, WheelRadii = radii, WheelCentres = centres, MassKg = spec.MassKg,
                 CentreOfMassHeight = spec.CentreOfMassHeight, CentreOfMassZ = spec.CentreOfMassZ };
 
-            // Body (with the plates as quads).
+            // Body (with the plates as quads), and each detachable part (hood, trunk lid, bumpers) as its own mesh in the
+            // same space (#90: they fall off; a plate goes with the part it sits on).
             var combiner = new Combiner();
+            var partCombiners = new Combiner[VehicleDamageMath.PartCount];
+            var partBounds = new Bounds?[VehicleDamageMath.PartCount];
             var glassVerts = new List<Vector3>();
             var bodyVerts = new List<Vector3>();
-            foreach (var p in body)
+            void AddInto(Piece p, Combiner into)
             {
                 var m = toVehicle * p.Renderer.localToWorldMatrix;
                 var mats = p.Renderer.sharedMaterials;
@@ -373,11 +394,21 @@ public static class VehicleModels
                 {
                     var mat = Pick(spec, mats[s], out var role);
                     if (mat == null) continue;
-                    combiner.Add(p.Mesh, s, mat, m);
+                    into.Add(p.Mesh, s, mat, m);
                     var verts = p.Mesh.vertices;
-                    var into = role == Role.Glass ? glassVerts : bodyVerts;
-                    foreach (int i in p.Mesh.GetTriangles(s)) into.Add(m.MultiplyPoint3x4(verts[i]));
+                    var list = role == Role.Glass ? glassVerts : bodyVerts;
+                    foreach (int i in p.Mesh.GetTriangles(s)) list.Add(m.MultiplyPoint3x4(verts[i]));
                 }
+            }
+            foreach (var p in body) AddInto(p, combiner);
+            for (int i = 0; i < detachable.Length; i++)
+            {
+                if (detachable[i].Count == 0) continue;
+                partCombiners[i] = new Combiner();
+                foreach (var p in detachable[i]) AddInto(p, partCombiners[i]);
+                var pb = Union(detachable[i]);
+                pb.center += shift;
+                partBounds[i] = pb;
             }
             var plateMat = PlateMaterial();
             foreach (var p in plates)
@@ -385,10 +416,25 @@ public static class VehicleModels
                 var b = p.Bounds;
                 b.center += shift;
                 var normal = b.center.z > 0f ? Vector3.forward : Vector3.back;
-                combiner.AddQuad(b.center + normal * (b.extents.z + 0.004f), Vector3.right * b.size.x, Vector3.up * Mathf.Min(b.size.y, b.size.x * 0.5f), normal, plateMat);
+                var onto = combiner;
+                for (int i = 0; i < partBounds.Length; i++)
+                {
+                    if (partBounds[i] == null) continue;
+                    var grown = partBounds[i].Value;
+                    grown.Expand(0.1f);
+                    if (grown.Contains(b.center)) { onto = partCombiners[i]; break; }
+                }
+                onto.AddQuad(b.center + normal * (b.extents.z + 0.004f), Vector3.right * b.size.x, Vector3.up * Mathf.Min(b.size.y, b.size.x * 0.5f), normal, plateMat);
             }
             parts.Body = combiner.ToMesh(spec.Name + "_Body", out parts.BodyMaterials);
-            parts.BodyBounds = parts.Body.bounds;
+            parts.Detachable = new Mesh[VehicleDamageMath.PartCount];
+            parts.DetachableMaterials = new Material[VehicleDamageMath.PartCount][];
+            for (int i = 0; i < partCombiners.Length; i++)
+                if (partCombiners[i] != null) parts.Detachable[i] = partCombiners[i].ToMesh($"{spec.Name}_{(VehiclePart)i}", out parts.DetachableMaterials[i]);
+            // The body's bounds take the parts in (bumpers are the ends of the car: colliders, seats, doors).
+            var whole = parts.Body.bounds;
+            foreach (var d in parts.Detachable) if (d != null) whole.Encapsulate(d.bounds);
+            parts.BodyBounds = whole;
             // The windows, not the lamp lenses (the same "glass" material): glass above 55% of the body's height;
             // their length from the upper half of that (the side windows and the screens' tops).
             var bb = parts.BodyBounds;

@@ -126,11 +126,15 @@ public static class VehicleBuilder
         var meshes = new List<Mesh> { p.Body, p.Steering, p.Swingarm };
         meshes.AddRange(p.Wheels);
         meshes.AddRange(p.WheelStatic);
+        if (p.Detachable != null) meshes.AddRange(p.Detachable);
         SaveMeshes(p.Name, meshes);
 
         var rules = VehicleFit(p).Apply(VehicleRules.For(p.Kind));
         var root = NewRoot(p.Name, rules, out var vehicle, out var model);
         Drawn("Body", model, Vector3.zero, Quaternion.identity, p.Body, p.BodyMaterials);
+        // Detachable parts (#90, ADR-074): Model/Part_<VehiclePart>, in the body's space (VehicleDamage finds them by name).
+        for (int i = 0; p.Detachable != null && i < p.Detachable.Length; i++)
+            if (p.Detachable[i] != null) Drawn("Part_" + (VehiclePart)i, model, Vector3.zero, Quaternion.identity, p.Detachable[i], p.DetachableMaterials[i]);
 
         // Colliders. Car: the lower body up to the belt line and the roof, the cabin between them open (shots reach
         // the occupants through the windows). Motorcycle: the frame only.
