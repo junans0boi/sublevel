@@ -58,6 +58,19 @@
     "Radius": 0.07, "ArmDistance": 1.0, "Restitution": 0.35, "SurfaceFriction": 0.7, "RestSpeed": 0.8, "FloorNormalY": 0.6,
     "BlastDamage": 100.0, "BlastInnerRadius": 2.0, "BlastOuterRadius": 9.0, "PreviewStepSeconds": 0.06, "PreviewSeconds": 2.6
   },
+  "Heal": {
+    "Bandage":  { "Seconds": 3.0, "Amount": 12.0,  "MaxHp": 75.0 },
+    "FirstAid": { "Seconds": 6.0, "Amount": 40.0,  "MaxHp": 75.0 },
+    "Medkit":   { "Seconds": 8.0, "Amount": 100.0, "MaxHp": 100.0 },
+    "MoveFactor": 0.6
+  },
+  "Carry": {
+    "Capacity": 60.0, "VestBonus1": 10.0, "VestBonus2": 20.0, "VestBonus3": 30.0,
+    "Ammo9mm": 0.2, "Ammo556": 0.3, "Ammo12ga": 0.8, "Ammo762": 0.5,
+    "Bandage": 1.0, "FirstAid": 3.0, "Medkit": 6.0, "Grenade": 3.0, "Smoke": 3.0,
+    "AutoPickupMeters": 1.5, "AutoPickupInterval": 0.25
+  },
+  "Smoke": { "MaxCarried": 3, "FuseSeconds": 2.0, "Radius": 5.0, "Seconds": 25.0, "CentreLiftMeters": 1.0, "MinChordMeters": 1.5 },
   "Bot": {
     "ViewDistance": 70.0, "FieldOfViewDeg": 110.0, "CloseSenseRadius": 3.0, "SenseInterval": 0.15, "TargetsPlayers": true,
     "GunshotHearingRadius": 80.0, "FootstepHearingRadius": 14.0, "FootstepMinSpeed": 2.0,

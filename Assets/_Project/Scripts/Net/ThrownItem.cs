@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using Game.Core;
 using UnityEngine;
 
@@ -9,7 +10,8 @@ namespace Game.Net
     // A grenade in flight. The server alone moves it (free flight in fixed steps, a sphere cast per step, damped
     // bounces) and clients follow through the prefab's NetworkTransform: bounces depend on colliders and frame
     // timing, so replaying the flight on each client from a start state would drift from what the server decides.
-    // When the fuse runs out the server deals the blast and tells everyone to show it.
+    // When the fuse runs out a fragmentation grenade deals its blast and tells everyone to show it; a smoke grenade
+    // opens a cloud that hides lines of sight for a while (SmokeZones) and tells everyone to show that.
     public class ThrownItem : NetworkBehaviour
     {
         const float StepSeconds = 1f / 60f;
@@ -20,14 +22,24 @@ namespace Game.Net
         const float LingerSeconds = 0.3f;
         const float ChestHeight = 1.1f;
 
-        [SerializeField] GameObject _visual; // hidden when it goes off
+        [SerializeField] GameObject _visual;      // the grenade; hidden when it goes off
+        [SerializeField] GameObject _smokeVisual; // the smoke canister (optional); shown instead of _visual for smoke
+
+        // The ThrowableKind; set before spawning so every client knows what it is looking at.
+        public readonly SyncVar<int> Kind = new SyncVar<int>();
 
         // Raised on every client when a grenade goes off: (centre, the thrower's object or null if it is gone).
         // Static, so it outlives scenes: subscribers unsubscribe in OnDestroy. Cleared when a play session starts.
         public static event Action<Vector3, NetworkObject> ClientExploded;
 
+        // Raised on every client when a smoke cloud opens: (centre, radius, seconds it lasts, thrower's object or null).
+        public static event Action<Vector3, float, float, NetworkObject> ClientSmoked;
+
         // Server only: every blast, after its damage was dealt (centre, thrower or null). For tests and score keeping.
         public static event Action<Vector3, Combatant> ServerExploded;
+
+        // Server only: every smoke cloud, once it exists (centre, thrower or null).
+        public static event Action<Vector3, Combatant> ServerSmoked;
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
         static readonly List<Combatant> Victims = new List<Combatant>(16);
@@ -37,6 +49,9 @@ namespace Game.Net
         {
             ClientExploded = null;
             ServerExploded = null;
+            ClientSmoked = null;
+            ServerSmoked = null;
+            SmokeZones.Clear();
         }
 
         ThrowableRules _rules = ThrowableRules.Current;
@@ -44,24 +59,46 @@ namespace Game.Net
         Vector3 _position, _velocity;
         float _fuse, _age, _clock, _flown, _despawnAt;
         bool _resting, _exploded;
+        int _zoneId;
 
+        public ThrowableKind ThrowKind => (ThrowableKind)Kind.Value;
+        // Gone off (a blast, or a smoke cloud opened).
         public bool Exploded => _exploded;
         // Server: lying still on a floor.
         public bool Resting => _resting;
         public Vector3 Velocity => _velocity;
 
         // Server, before spawning.
-        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules)
+        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules) => Init(thrower, velocity, rules, ThrowableKind.Frag);
+
+        public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules, ThrowableKind kind)
         {
             _thrower = thrower;
             _velocity = velocity;
             _rules = rules;
-            _fuse = rules.FuseSeconds;
+            Kind.Value = (int)kind;
+            _fuse = Throwables.FuseOf(kind, rules, SmokeRules.Current);
+        }
+
+        public override void OnStartNetwork()
+        {
+            // The canister of a smoke grenade looks different from a grenade (when the prefab has both).
+            if (Kind.Value == (int)ThrowableKind.Smoke && _smokeVisual != null)
+            {
+                if (_visual != null) _visual.SetActive(false);
+                _smokeVisual.SetActive(true);
+            }
         }
 
         public override void OnStartServer()
         {
             _position = transform.position;
+        }
+
+        public override void OnStopServer()
+        {
+            if (_zoneId != 0) SmokeZones.Remove(_zoneId);
+            _zoneId = 0;
         }
 
         void Update()
@@ -80,7 +117,10 @@ namespace Game.Net
                 // A long frame does not turn into a long burst of physics; the fuse still runs in real time.
                 if (steps++ < MaxStepsPerFrame) Step(StepSeconds);
                 _age += StepSeconds;
-                if (_age >= _fuse) Explode();
+                if (_age >= _fuse)
+                {
+                    if (Kind.Value == (int)ThrowableKind.Smoke) OpenSmoke(); else Explode();
+                }
             }
             transform.position = _position;
         }
@@ -132,6 +172,20 @@ namespace Game.Net
                 found = true;
             }
             return found;
+        }
+
+        // The cloud: registered for line-of-sight checks right away, shown by every client, gone after its time.
+        void OpenSmoke()
+        {
+            var smoke = SmokeRules.Current;
+            _exploded = true;
+            _despawnAt = Time.time + smoke.Seconds + LingerSeconds;
+            var centre = _position;
+            transform.position = centre;
+            var attacker = _thrower != null ? _thrower : null;
+            _zoneId = SmokeZones.Add(centre.x, centre.y + smoke.CentreLiftMeters, centre.z, smoke.Radius);
+            ServerSmoked?.Invoke(centre, attacker);
+            RpcSmoked(centre, smoke.Radius, smoke.Seconds, attacker != null ? attacker.NetworkObject : null);
         }
 
         // Everyone within the blast radius whose chest the centre can see takes damage by distance: walls and
@@ -194,6 +248,18 @@ namespace Game.Net
             return true;
         }
 
+        // Runs locally too, so a host sees the cloud in the frame it opens.
+        [ObserversRpc(RunLocally = true)]
+        void RpcSmoked(Vector3 centre, float radius, float seconds, NetworkObject thrower)
+        {
+            _exploded = true;
+            if (_visual != null) _visual.SetActive(false);
+            if (_smokeVisual != null) _smokeVisual.SetActive(false);
+            // A server without a client has nothing to show.
+            if (!IsClientStarted) return;
+            ClientSmoked?.Invoke(centre, radius, seconds, thrower);
+        }
+
         // Runs locally too, so a host sees the blast in the frame the damage lands.
         [ObserversRpc(RunLocally = true)]
         void RpcExploded(Vector3 centre, NetworkObject thrower)
@@ -204,5 +270,12 @@ namespace Game.Net
             if (!IsClientStarted) return;
             ClientExploded?.Invoke(centre, thrower);
         }
+    }
+
+    // Line of sight through smoke clouds, for AI perception: true when a cloud hides the way from one point to
+    // the other. No allocation; the clouds exist on the server (where the bots run).
+    public static class SmokeSight
+    {
+        public static bool Blocks(Vector3 from, Vector3 to) => SmokeZones.Blocks(from.x, from.y, from.z, to.x, to.y, to.z);
     }
 }

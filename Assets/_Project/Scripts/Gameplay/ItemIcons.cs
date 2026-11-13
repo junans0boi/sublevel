@@ -16,6 +16,7 @@ namespace Game.Gameplay
             "vest_1", "vest_2", "vest_3",
             "grenade",
             "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_16x",
+            "bandage", "firstaid", "smoke",
         };
 
         // Icon key of an optic by its id in OpticRules (1..8); empty for none or unknown.

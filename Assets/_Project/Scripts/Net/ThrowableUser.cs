@@ -5,8 +5,9 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    // The grenades a combatant carries and the throwing of them (PUBG_GAP 4-3 batch I). The server owns the count
-    // and spawns the thrown grenade; the owner only asks, with the direction it is looking in (ADR-029).
+    // The grenades a combatant carries and the throwing of them (PUBG_GAP 4-3 batch I): fragmentation grenades and
+    // smoke grenades, one of them selected at a time (the owner cycles the selection). The server owns the counts
+    // and spawns the thrown item; the owner only asks, with the direction it is looking in (ADR-029).
     [RequireComponent(typeof(Combatant))]
     public class ThrowableUser : NetworkBehaviour, ILootReceiver
     {
@@ -18,6 +19,9 @@ namespace Game.Net
         [SerializeField] NetworkObject _thrownPrefab; // the grenade in flight (a spawnable prefab with a ThrownItem)
 
         public readonly SyncVar<int> Grenades = new SyncVar<int>();
+        public readonly SyncVar<int> Smokes = new SyncVar<int>();
+        // The ThrowableKind the next throw uses.
+        public readonly SyncVar<int> Selected = new SyncVar<int>();
 
         // The local player's own, for the HUD and the inventory. Null when there is none.
         public static ThrowableUser Local { get; private set; }
@@ -26,6 +30,7 @@ namespace Game.Net
         static void ResetStatics() => Local = null;
 
         Combatant _combatant;
+        CombatantCarry _carry;
         double _nextThrowAt;
         bool _missingPrefabLogged;
 
@@ -33,7 +38,18 @@ namespace Game.Net
         public int ServerThrows { get; private set; }
         public ThrownItem LastThrown { get; private set; }
 
-        void Awake() => _combatant = GetComponent<Combatant>();
+        void Awake()
+        {
+            _combatant = GetComponent<Combatant>();
+            _carry = GetComponent<CombatantCarry>();
+        }
+
+        // ---- Read-only, every side (HUD) ----
+
+        public ThrowableKind SelectedKind => (ThrowableKind)Selected.Value;
+        public int CountOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? Smokes.Value : Grenades.Value;
+        public int SelectedCount => CountOf(SelectedKind);
+        public string SelectedName => Throwables.NameOf(SelectedKind);
 
         public override void OnStartClient()
         {
@@ -82,39 +98,73 @@ namespace Game.Net
 
         // ---- Server API ----
 
-        // Returns how many were taken (the carry limit may refuse some or all).
+        // Returns how many were taken (the carry limit and the bag may refuse some or all).
         [Server]
-        public int ServerAdd(int amount)
+        public int ServerAdd(int amount) => ServerAdd(ThrowableKind.Frag, amount);
+
+        [Server]
+        public int ServerAdd(ThrowableKind kind, int amount)
         {
-            int taken = Throwables.Room(Grenades.Value, amount, ThrowableRules.Current);
-            if (taken > 0) Grenades.Value += taken;
+            int max = kind == ThrowableKind.Smoke ? SmokeRules.Current.MaxCarried : ThrowableRules.Current.MaxCarried;
+            int taken = Mathf.Max(0, Mathf.Min(amount, max - CountOf(kind)));
+            if (taken > 0 && _carry != null) taken = _carry.FitCount(Throwables.LootKindOf(kind), AmmoType.Pistol9, taken);
+            if (taken <= 0) return 0;
+            if (kind == ThrowableKind.Smoke) Smokes.Value += taken; else Grenades.Value += taken;
             return taken;
         }
 
-        // Grenade pickups, handed over by Combatant.ServerGive. Whatever does not fit is lost with the pickup;
-        // a pickup is refused (and stays on the ground) only when nothing of it fits.
+        // Grenade and smoke pickups, handed over by Combatant.ServerGive. What does not fit goes back on the ground
+        // at the feet; a pickup is refused (and stays where it lies) only when nothing of it fits.
         public bool ServerTryTake(LootEntry loot)
         {
-            if (!IsServerInitialized || loot == null || loot.Kind != ThrowableRules.GrenadeLootKind) return false;
-            return ServerAdd(Mathf.Max(1, loot.Amount)) > 0;
+            if (!IsServerInitialized || loot == null) return false;
+            ThrowableKind kind;
+            if (loot.Kind == ThrowableRules.GrenadeLootKind) kind = ThrowableKind.Frag;
+            else if (loot.Kind == ThrowableRules.SmokeLootKind) kind = ThrowableKind.Smoke;
+            else return false;
+            int wanted = Mathf.Max(1, loot.Amount);
+            int taken = ServerAdd(kind, wanted);
+            if (taken <= 0) return false;
+            if (taken < wanted && MatchDirector.Instance != null)
+                MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = loot.Kind, Amount = wanted - taken }, transform.position + Vector3.up * 0.3f);
+            return true;
+        }
+
+        // Picks what the next throw uses (a kind there is none of can still be selected: the HUD shows 0).
+        [Server]
+        public void ServerSelect(ThrowableKind kind) => Selected.Value = (int)kind;
+
+        [Server]
+        public void ServerCycle() => ServerSelect(Throwables.Next(SelectedKind));
+
+        // The owner's call (the T key): the host is the server, so it does not wait for the next network tick.
+        public void RequestCycle()
+        {
+            if (IsServerInitialized) ServerCycle(); else CmdCycle();
         }
 
         // A throw the way a player makes it: from the hand, along where they look.
         [Server]
-        public bool ServerThrowAimed(Vector3 direction)
+        public bool ServerThrowAimed(Vector3 direction) => ServerThrowAimed(direction, SelectedKind);
+
+        [Server]
+        public bool ServerThrowAimed(Vector3 direction, ThrowableKind kind)
         {
             float sqr = direction.sqrMagnitude;
             if (float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
             direction.Normalize();
-            return ServerThrow(ThrowOrigin(direction), ThrowVelocity(direction, ThrowableRules.Current));
+            return ServerThrow(ThrowOrigin(direction), ThrowVelocity(direction, ThrowableRules.Current), kind);
         }
 
-        // Throws one grenade from a point with a velocity. Refused when dead, out of grenades, too soon after the
-        // last throw, or when the grenade prefab is not wired. AI and tests call this directly.
+        // Throws one of the selected kind from a point with a velocity. Refused when dead, out of them, too soon after
+        // the last throw, or when the thrown-item prefab is not wired. AI and tests call this directly.
         [Server]
-        public bool ServerThrow(Vector3 origin, Vector3 velocity)
+        public bool ServerThrow(Vector3 origin, Vector3 velocity) => ServerThrow(origin, velocity, SelectedKind);
+
+        [Server]
+        public bool ServerThrow(Vector3 origin, Vector3 velocity, ThrowableKind kind)
         {
-            if (_combatant.Dead.Value || Grenades.Value <= 0) return false;
+            if (_combatant.Dead.Value || CountOf(kind) <= 0) return false;
             if (!IsFinite(origin) || !IsFinite(velocity)) return false;
             double now = Time.timeAsDouble;
             if (now < _nextThrowAt) return false;
@@ -130,10 +180,10 @@ namespace Game.Net
             // Never faster than a throw can be, whoever asks.
             velocity = Vector3.ClampMagnitude(velocity, rules.ThrowSpeed);
             _nextThrowAt = now + rules.MinThrowInterval;
-            Grenades.Value--;
+            if (kind == ThrowableKind.Smoke) Smokes.Value--; else Grenades.Value--;
             var thrown = Instantiate(_thrownPrefab, origin, Quaternion.identity);
             var item = thrown.GetComponent<ThrownItem>();
-            item.Init(_combatant, velocity, rules);
+            item.Init(_combatant, velocity, rules, kind);
             ServerManager.Spawn(thrown);
             LastThrown = item;
             ServerThrows++;
@@ -151,6 +201,9 @@ namespace Game.Net
         [ServerRpc]
         public void CmdThrow(Vector3 direction) => ServerThrowAimed(direction);
 
+        [ServerRpc]
+        public void CmdCycle() => ServerCycle();
+
         // Dropping one from the inventory screen: it lands on the ground in front as a pickup.
         [ServerRpc]
         public void CmdDropGrenade()
@@ -158,6 +211,15 @@ namespace Game.Net
             if (_combatant.Dead.Value || Grenades.Value <= 0 || MatchDirector.Instance == null) return;
             Grenades.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = ThrowableRules.GrenadeLootKind, Amount = 1 },
+                transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
+        }
+
+        [ServerRpc]
+        public void CmdDropSmoke()
+        {
+            if (_combatant.Dead.Value || Smokes.Value <= 0 || MatchDirector.Instance == null) return;
+            Smokes.Value--;
+            MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = ThrowableRules.SmokeLootKind, Amount = 1 },
                 transform.position + transform.forward * 1.0f + Vector3.up * 0.3f);
         }
     }
