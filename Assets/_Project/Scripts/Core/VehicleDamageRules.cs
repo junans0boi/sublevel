@@ -147,6 +147,61 @@ namespace Game.Core
 
         public static bool Disables(VehicleDamageStage stage) => stage >= VehicleDamageStage.Burning;
 
+        // The fire has burned long enough: the vehicle explodes.
+        public static bool BurnedOut(float burningSeconds, VehicleDamageRules r) => burningSeconds >= r.BurnSeconds;
+
+        // A shot on a tyre: true when this one made it flat (it was not flat before).
+        public static bool HitTyre(ref float tyreHealth, float damage)
+        {
+            if (tyreHealth <= 0f) return false;
+            tyreHealth = Math.Max(0f, tyreHealth - Math.Max(0f, damage));
+            return tyreHealth <= 0f;
+        }
+
+        // Per wheel grip multiplier and corner drop from the flat tyres (bit i = wheel i flat).
+        public static void WheelEffects(int flatMask, int wheels, VehicleDamageRules r, float[] grip, float[] drop)
+        {
+            for (int i = 0; i < wheels && i < grip.Length && i < drop.Length; i++)
+            {
+                bool flat = (flatMask & (1 << i)) != 0;
+                grip[i] = flat ? r.FlatGrip : 1f;
+                drop[i] = flat ? r.FlatDropMeters : 0f;
+            }
+        }
+
+        // The pane a shot enters the cabin through, in the vehicle's local space: the face of the box (x, z bounds;
+        // z toward the nose) the ray enters by, if it enters between the belt line and the roof. -1 if none.
+        // Panes: 0 windshield, 1 rear, 2 left front, 3 left rear, 4 right front, 5 right rear.
+        public static int PaneHit(float ox, float oy, float oz, float dx, float dy, float dz,
+            float minX, float maxX, float minZ, float maxZ, float beltY, float roofY)
+        {
+            float tNear = float.NegativeInfinity, tFar = float.PositiveInfinity;
+            int face = -1;
+            if (!Slab(ox, dx, minX, maxX, 0, ref tNear, ref tFar, ref face)) return -1;
+            if (!Slab(oy, dy, beltY, roofY, 1, ref tNear, ref tFar, ref face)) return -1;
+            if (!Slab(oz, dz, minZ, maxZ, 2, ref tNear, ref tFar, ref face)) return -1;
+            if (tNear > tFar || tFar < 0f || tNear < 0f) return -1;
+            float cz = (minZ + maxZ) * 0.5f;
+            float hz = oz + dz * tNear;
+            switch (face)
+            {
+                case 2: return dz < 0f ? 0 : 1;                   // entered by the nose face (moving back) or the tail face
+                case 0: return dx > 0f ? (hz >= cz ? 2 : 3) : (hz >= cz ? 4 : 5);
+                default: return -1;                               // through the roof or the floor of the band
+            }
+        }
+
+        // One axis of a ray against a box: narrows [tNear, tFar]; `face` = the axis the ray entered by last.
+        static bool Slab(float o, float d, float min, float max, int axis, ref float tNear, ref float tFar, ref int face)
+        {
+            if (Math.Abs(d) < 1e-8f) return o >= min && o <= max;
+            float t1 = (min - o) / d, t2 = (max - o) / d;
+            if (t1 > t2) { float t = t1; t1 = t2; t2 = t; }
+            if (t1 > tNear) { tNear = t1; face = axis; }
+            if (t2 < tFar) tFar = t2;
+            return tNear <= tFar;
+        }
+
         public static float TopSpeedFactor(VehicleDamageStage stage, int flatTyres, VehicleDamageRules r)
         {
             float f = stage >= VehicleDamageStage.BlackSmoke ? r.BlackSmokeTopSpeedFactor : 1f;
