@@ -38,6 +38,7 @@ namespace Game.Core
         public float MaxHeight = 120f;
         public float IslandRadius = 420f;     // rounded-square coast, centred on the map
         public float CoastNoise = 14f;
+        public float CoastBays = 45f;         // bays and headlands: how far the outline swings in and out (ADR-070)
         public float RidgeHeight = 34f;       // border ridge crest above sea level
         public float RidgeHalfWidth = 22f;
         public int PassesPerBorder = 2;
@@ -51,7 +52,7 @@ namespace Game.Core
         // Same values as Resources/GameData/world.json (Game.Core cannot read Resources).
         public static WorldSpec CreateDefault() => new WorldSpec
         {
-            Size = 1024f, Seed = 20261113, SeaLevel = 10f, MaxHeight = 120f, IslandRadius = 420f, CoastNoise = 14f,
+            Size = 1024f, Seed = 20261113, SeaLevel = 10f, MaxHeight = 120f, IslandRadius = 420f, CoastNoise = 14f, CoastBays = 45f,
             RidgeHeight = 34f, RidgeHalfWidth = 22f, PassesPerBorder = 2, PassWidth = 18f,
             RoadWidth = 6f, SpurWidth = 4.5f, PathWidth = 2.5f, MaxRoadSlopeDeg = 12f,
             Regions = new[]

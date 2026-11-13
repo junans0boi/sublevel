@@ -15,7 +15,7 @@ using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
 // Generates the outdoor map scene "World" (ADR-050/052, issues #49 and #50) from the world plan: terrain, sea,
-// roads, enterable buildings, elevator stations, rocks, navmesh and a host-run match.
+// roads, enterable buildings, elevator stations, rocks, trees, bushes and grass (#71), navmesh and a host-run match.
 // Run headless: tools/unity.sh run WorldBuilder.Build (or run-gfx; nothing here needs a window).
 // Pictures for review: tools/unity.sh run-gfx WorldBuilder.RenderOverview (needs a graphics device).
 public static partial class WorldBuilder
@@ -119,7 +119,8 @@ public static partial class WorldBuilder
         EditorUtility.SetDirty(terrain.terrainData);
         Debug.Log($"[WorldBuilder] elevator shafts: {stations.Count} shafts and cars, {holes} terrain cells opened over them");
         int rocks = BuildRocks(plan, ground, world.transform, navSources);
-        PlaceTrees(plan, ground, world.transform);
+        BuildOffshore(plan, ground, world.transform);
+        BuildVegetation(plan, ground, terrain, world.transform, store, navSources);
         BuildDressing(plan, ground, world.transform, store, navSources, lots);
         Debug.Log($"[WorldBuilder] structures built at {total.Elapsed.TotalSeconds:F1} s: {store.Count} generated meshes, {store.Triangles} triangles in them");
 
@@ -746,6 +747,7 @@ public static partial class WorldBuilder
                 SceneLook.Shot(cam, OverviewDir + "/world_rocks.png", Eye(rock.position + new Vector3(3.5f, 0f, -4.5f)), rock.position + Vector3.up * 0.5f);
             }
             SceneLook.Shot(cam, OverviewDir + "/world_mountain.png", Eye(mountain.Hub), Eye(mountain.Hub + Vector3.forward * 60f) + Vector3.up * 14f);
+            RenderVegetationViews(cam, info, terrain);
             Debug.Log("[WorldBuilder] overview pictures written to " + OverviewDir);
         }
         catch (Exception e)

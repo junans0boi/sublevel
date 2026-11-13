@@ -29,8 +29,13 @@ namespace Game.Core
         const float TownHills = 17f, FactoryHills = 13f, WetlandHills = 5f, HillsAtRidge = 0.35f;
         const float GridCell = 16f;
 
-        readonly float size, half, sea, seabedFloor, maxHeight, islandRadius, coastNoise, ridgeHeight, ridgeHalf;
+        readonly float size, half, sea, seabedFloor, maxHeight, islandRadius, coastNoise, coastBays, ridgeHeight, ridgeHalf;
         readonly uint seed;
+        // Bays and headlands (ADR-070): waves round the coast with seeded phases; the slow ones bend the whole outline,
+        // the quicker ones break up its long straight sides.
+        static readonly int[] BayWaves = { 2, 3, 4, 5, 7, 9 };
+        static readonly float[] BayShare = { 0.3f, 0.24f, 0.16f, 0.11f, 0.11f, 0.08f };
+        readonly float[] bayPhase = new float[BayShare.Length];
         readonly int regionCount;
         readonly float[] cx, cz, baseH, relief;
         readonly RegionKind[] kind;
@@ -60,9 +65,12 @@ namespace Game.Core
             maxHeight = spec.MaxHeight;
             islandRadius = spec.IslandRadius;
             coastNoise = spec.CoastNoise;
+            coastBays = spec.CoastBays;
             ridgeHeight = spec.RidgeHeight;
             ridgeHalf = Math.Max(1f, spec.RidgeHalfWidth);
             seed = unchecked((uint)spec.Seed);
+            for (int k = 0; k < bayPhase.Length; k++)
+                bayPhase[k] = WorldNoise.Hash01(k, 0, unchecked(seed + 15u)) * 2f * (float)Math.PI;
             var regions = spec.Regions ?? new RegionSpec[0];
             regionCount = regions.Length;
             cx = new float[regionCount];
@@ -209,7 +217,16 @@ namespace Game.Core
             dz *= dz;
             float c = islandRadius - (float)Math.Sqrt(Math.Sqrt(dx * dx + dz * dz));
             // Far offshore everything is flat seabed, so the noise would change nothing.
-            if (coastNoise <= 0f || c < -SeaRamp - coastNoise) return c;
+            if (c < -SeaRamp - coastNoise - coastBays) return c;
+            if (coastBays > 0f)
+            {
+                // The rounded square alone reads as a made thing from above: bays and headlands bend the outline.
+                double angle = Math.Atan2(z - half, x - half);
+                float bays = 0f;
+                for (int k = 0; k < BayShare.Length; k++) bays += BayShare[k] * (float)Math.Cos(BayWaves[k] * angle + bayPhase[k]);
+                c += coastBays * bays;
+            }
+            if (coastNoise <= 0f) return c;
             return c + coastNoise * WorldNoise.Fbm(x / 140f, z / 140f, unchecked(seed + 11u), 2);
         }
 

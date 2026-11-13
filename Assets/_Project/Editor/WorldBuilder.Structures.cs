@@ -9,7 +9,7 @@ using UnityEngine.AI;
 using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
 
-// What stands on the terrain: roads, buildings and elevator stations, rocks (and, later, trees).
+// What stands on the terrain: roads, buildings and elevator stations, rocks (trees: WorldBuilder.Vegetation).
 public static partial class WorldBuilder
 {
     const string LotPrefix = "Lot", StationPrefix = "Station";
@@ -569,17 +569,5 @@ public static partial class WorldBuilder
             }
         }
         return placed;
-    }
-
-    // ---- trees ----
-
-    // HOOK (W2, trees): plan.Trees gives position, scale, yaw and region of every tree. They are not placed yet:
-    // the CC0 semi-realistic trees are too heavy (ADR-052 (7)) and ours (trunk + leaf cards with LODs) are not made.
-    // When they are: one GameObject + LODGroup per tree under "Trees", a CapsuleCollider on the trunk, and a
-    // not-walkable ModifierBox per trunk in `nav` (call this before BakeNavMesh, as now).
-    static void PlaceTrees(WorldPlan plan, WorldMeshes.HeightField ground, Transform parent)
-    {
-        if (plan.Trees.Count > 0)
-            Debug.Log($"[WorldBuilder] trees: {plan.Trees.Count} in the plan, none placed yet (W2)");
     }
 }
