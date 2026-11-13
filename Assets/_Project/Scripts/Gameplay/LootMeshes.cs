@@ -51,6 +51,69 @@ namespace Game.Gameplay
             return mesh;
         }
 
+        // ADR-100: ground model of an attachment (grip or stock) by its id; null for another id.
+        public static Mesh Attachment(int id)
+        {
+            int key = -id;
+            if (Cache.TryGetValue(key, out var mesh) && mesh != null) return mesh;
+            var d = new MeleeMeshes.Draft();
+            switch (id)
+            {
+                case 12: BuildGrip(d, 0f, 1); break;
+                case 13: BuildGrip(d, 38f, 1); break;
+                case 14: BuildGrip(d, 0f, 0); break;
+                case 15: BuildStock(d); break;
+                default: return null;
+            }
+            mesh = d.ToMesh("Attachment" + id);
+            Cache[key] = mesh;
+            return mesh;
+        }
+
+        public static void AttachmentColors(Color[] into)
+        {
+            into[Body] = new Color(0.42f, 0.46f, 0.52f);
+            into[Dark] = new Color(0.16f, 0.17f, 0.19f);
+            into[Accent] = new Color(0.96f, 0.82f, 0.38f);
+        }
+
+        // A grip lying on its side: the rail clamp and a post leaning `leanDeg` off straight; straight = false bends it.
+        static void BuildGrip(MeleeMeshes.Draft d, float leanDeg, int straight)
+        {
+            const float r = 0.026f;
+            d.Box(new Vector3(0f, 0.012f, 0f), new Vector3(0.11f, 0.024f, 0.045f), Dark);
+            if (straight == 1)
+            {
+                var a = new Vector3(0f, r + 0.012f, 0.03f);
+                var b = a + new Vector3(Mathf.Sin(leanDeg * Mathf.Deg2Rad) * 0.14f, 0f, Mathf.Cos(leanDeg * Mathf.Deg2Rad) * 0.14f);
+                d.Tube(a, b, r, Body, 12);
+                d.Disc(b, r + 0.006f, (b - a).normalized, Dark, 12);
+                for (int i = 1; i <= 3; i++) d.Tube(Vector3.Lerp(a, b, 0.2f + i * 0.17f), Vector3.Lerp(a, b, 0.22f + i * 0.17f), r + 0.002f, Dark, 12);
+            }
+            else
+            {
+                // curved: beads along an arc, fatter toward the hand
+                Vector3 prev = new Vector3(0f, r + 0.012f, 0.03f);
+                for (int i = 1; i <= 7; i++)
+                {
+                    float t = i / 7f, ang = t * 1.2f;
+                    var next = new Vector3(0f, r + 0.012f, 0.03f) + new Vector3(Mathf.Sin(ang) * 0.17f, 0f, Mathf.Cos(ang) * 0.17f - 0.17f + 0.13f * t);
+                    d.Tube(prev, next, Mathf.Lerp(r * 0.8f, r * 1.2f, t), Body, 12);
+                    prev = next;
+                }
+            }
+        }
+
+        // A stock lying on its side: tube, butt plate with a pad, cheek riser, the receiver stub.
+        static void BuildStock(MeleeMeshes.Draft d)
+        {
+            d.Box(new Vector3(0f, 0.035f, 0.11f), new Vector3(0.07f, 0.07f, 0.08f), Dark);
+            d.Tube(new Vector3(0f, 0.035f, 0.07f), new Vector3(0f, 0.032f, -0.14f), 0.026f, Body, 12);
+            d.Box(new Vector3(0f, 0.062f, -0.03f), new Vector3(0.044f, 0.018f, 0.14f), Body);
+            d.Box(new Vector3(0f, 0.04f, -0.155f), new Vector3(0.07f, 0.13f, 0.02f), Dark);
+            d.Box(new Vector3(0f, 0.04f, -0.168f), new Vector3(0.06f, 0.11f, 0.008f), Accent);
+        }
+
         // Body, Dark and Accent colours of a pickup.
         public static void Colors(LootKind kind, AmmoType ammo, int tier, Color[] into)
         {

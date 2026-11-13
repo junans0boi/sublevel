@@ -180,7 +180,7 @@ namespace Game.Gameplay
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
             LastInput = f;
             UpdateCursor();
-            _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverRate(_combatant.ActiveWeapon), _rules.Recoil.RecoverDelaySeconds);
+            _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverRate(_combatant.ActiveWeapon) * FittedMods.Recover, _rules.Recoil.RecoverDelaySeconds);
 
             if (_combatant.Dead.Value)
             {
@@ -586,6 +586,10 @@ namespace Game.Gameplay
             else _stance.CmdReportFall(dropped);
         }
 
+        // ADR-100: what the grips and stock on the weapon in hand do to its recoil.
+        AttachMods FittedMods => (_fitted != null ? _fitted : (_fitted = GetComponent<CombatantOptics>()))?.ActiveMods ?? AttachMods.None;
+        CombatantOptics _fitted;
+
         // Our own shots kick the view; the kicked view is what the next shot aims with.
         void OnOwnShot(Vector3 origin, Vector3 end)
         {
@@ -593,7 +597,7 @@ namespace Game.Gameplay
             if (weapon == null || !_ownShots.IsNewShot(Time.timeAsDouble)) return;
             // The weapon's pattern (ADR-089), seeded per match and player so a replayed match kicks the same way.
             float factor = _rules.Aim.For(_aim.Mode).RecoilFactor * _rules.Recoil.StanceFactor(BodyStance);
-            RecoilPattern.Kick(_recoil, weapon, _recoilRng, factor, _rules.Recoil);
+            RecoilPattern.Kick(_recoil, weapon, _recoilRng, factor, _rules.Recoil, FittedMods);
         }
 
         // ADR-090: a hit on this player throws the view; a vest makes it smaller. Called once per shot that lands.

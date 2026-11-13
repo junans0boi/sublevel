@@ -27,6 +27,7 @@ public static partial class ItemIconBuilder
             BuildMelee(); // ItemIconBuilder.Melee.cs (ADR-073)
             BuildOptics();
             BuildGlyphs();
+            DrawAttachments(); // ItemIconBuilder.Attachments.cs (ADR-100)
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             Debug.Log("[ItemIconBuilder] done: " + OutDir);
         }

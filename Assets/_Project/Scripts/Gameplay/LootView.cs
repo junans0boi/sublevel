@@ -127,13 +127,14 @@ namespace Game.Gameplay
             _shownOptic = optic;
 
             var material = kind < _materialsByKind.Length ? _materialsByKind[kind] : _materialsByKind.Length > 0 ? _materialsByKind[0] : _renderer.sharedMaterial;
-            var mesh = LootMeshes.Model(lootKind, ammo, tier);
+            bool attachment = opticKind && Attachments.SlotOf(optic) is AttachSlot place && place != AttachSlot.Optic;
+            var mesh = attachment ? LootMeshes.Attachment(optic) : LootMeshes.Model(lootKind, ammo, tier);
             var box = _renderer.transform;
             if (mesh != null && _boxFilter != null && material != null)
             {
                 _boxFilter.sharedMesh = mesh;
                 box.localScale = Vector3.one;
-                LootMeshes.Colors(lootKind, ammo, tier, _colors);
+                if (attachment) LootMeshes.AttachmentColors(_colors); else LootMeshes.Colors(lootKind, ammo, tier, _colors);
                 _renderer.sharedMaterials = new[] { Tint(material, _colors[0]), Tint(material, _colors[1]), Tint(material, _colors[2]) };
             }
             else
@@ -145,8 +146,8 @@ namespace Game.Gameplay
             }
 
             bool hasModel = weapon > 0 && weapon < _weaponModelsById.Length && _weaponModelsById[weapon] != null;
-            bool opticModel = opticKind && ShowOptic(OpticRules.Current.Find(optic));
-            if (!opticKind && _opticModel != null) _opticModel.SetActive(false);
+            bool opticModel = opticKind && !attachment && ShowOptic(OpticRules.Current.Find(optic));
+            if ((!opticKind || attachment) && _opticModel != null) _opticModel.SetActive(false);
             // forceRenderingOff, not enabled: FishNet switches the renderers' enabled flag itself on a host when the
             // object becomes visible to the local client, which brought the box back over a freshly spawned optic.
             _renderer.forceRenderingOff = hasModel || opticModel;

@@ -82,7 +82,7 @@ namespace Game.Net
         public static string Of(LootKind kind, int weaponId, AmmoType ammo, int tier) => Of(kind, weaponId, ammo, tier, 0);
 
         // "4배율" for an optic; "조준경" when the id is unknown.
-        public static string OfOptic(int opticId) => OpticRules.Current.Find(opticId)?.Name ?? "조준경";
+        public static string OfOptic(int opticId) { string name = Attachments.NameOf(opticId); return name.Length > 0 ? name : "조준경"; }
 
         public static string Of(LootKind kind, int weaponId, AmmoType ammo, int tier, int optic)
         {
@@ -124,7 +124,11 @@ namespace Game.Net
             var kind = (LootKind)item.Kind.Value;
             if (kind == LootKind.Weapon) return GameData.Weapons.Find(item.WeaponId.Value)?.IsMelee == true ? "근접 무기" : "탄창 " + item.Amount.Value + "발";
             if (Armor.IsArmor(kind)) return "내구도 " + Points(item.Durability.Value);
-            if (kind == LootKind.Optic) return Optics.ZoomText(Optics.ZoomOf(item.Optic.Value));
+            if (kind == LootKind.Optic)
+            {
+                var place = Attachments.SlotOf(item.Optic.Value);
+                return place == null || place == AttachSlot.Optic ? Optics.ZoomText(Optics.ZoomOf(item.Optic.Value)) : Attachments.PlaceName(place.Value);
+            }
             return "x" + item.Amount.Value;
         }
 

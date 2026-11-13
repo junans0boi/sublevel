@@ -21,15 +21,17 @@ namespace Game.Gameplay
             "jerrycan", // ADR-075
             "drink", "pill", "syringe", // ADR-099
             "backpack_1", "backpack_2", "backpack_3", // ADR-091
+            "att_grip_v", "att_grip_a", "att_grip_c", "att_stock", // ADR-100
         };
 
         // "backpack_2"; empty for no such tier.
         public static string BackpackKey(int tier) => tier >= 1 && tier <= 3 ? "backpack_" + tier : "";
 
-        // Icon key of an optic by its id in OpticRules (1..8); empty for none or unknown.
+        // Icon key of an optic or attachment by its id (1..8 optics, 9..16 ADR-100); empty for none or unknown.
         static readonly string[] OpticKeys =
         {
             "", "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_15x",
+            "", "", "", "att_grip_v", "att_grip_a", "att_grip_c", "att_stock", "",
         };
 
         public static string OpticKey(int opticId) => opticId > 0 && opticId < OpticKeys.Length ? OpticKeys[opticId] : "";

@@ -227,7 +227,7 @@ namespace Game.Tests
             ulong bag = 0;
             Assert.IsTrue(OpticBag.TryAdd(ref bag, X4));
             Assert.IsTrue(OpticBag.TryAdd(ref bag, X4));
-            Assert.IsTrue(OpticBag.TryAdd(ref bag, X16), "the highest id uses the top byte");
+            Assert.IsTrue(OpticBag.TryAdd(ref bag, X16), "the id of the 15x uses its own nibble");
             Assert.AreEqual(2, OpticBag.Count(bag, X4));
             Assert.AreEqual(1, OpticBag.Count(bag, X16));
             Assert.AreEqual(0, OpticBag.Count(bag, RedDot));
@@ -237,7 +237,8 @@ namespace Game.Tests
             Assert.AreEqual(1, OpticBag.Count(bag, X4));
             Assert.AreEqual(1, OpticBag.Count(bag, X16));
             Assert.IsFalse(OpticBag.TryAdd(ref bag, 0));
-            Assert.IsFalse(OpticBag.TryAdd(ref bag, 9));
+            Assert.IsTrue(OpticBag.TryAdd(ref bag, OpticBag.MaxId), "ADR-100: ids up to 16 (attachments) share the bag");
+            Assert.IsFalse(OpticBag.TryAdd(ref bag, OpticBag.MaxId + 1));
         }
 
         [Test]

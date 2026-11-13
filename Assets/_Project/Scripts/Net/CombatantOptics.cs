@@ -6,7 +6,8 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    // The optic fitted to each weapon slot (ADR-056 / ADR-058). The optic belongs to the weapon in that slot: when
+    // The optic fitted to each weapon slot (ADR-056 / ADR-058), and since ADR-100 the other attachments too (muzzle,
+    // grip, stock, magazine): each weapon slot holds one packed int (Attachments.Get/With). The optic belongs to the weapon in that slot: when
     // the weapon leaves the slot the optic goes with it (Combatant calls ServerOnWeaponRemoved / ServerOnSlotsSwapped;
     // an optic that no longer fits its slot's weapon is also dropped on the ground by a server-side check).
     // The server owns it; clients read the SyncVars. Picked up like any other loot (ILootReceiver).
@@ -16,12 +17,12 @@ namespace Game.Net
         // Storage for this many weapon slots; slots beyond Loadout.SlotCount stay empty.
         public const int MaxSlots = 5;
 
-        // One id per weapon slot (0 = none). Plain SyncVars, like the other per-slot values.
-        public readonly SyncVar<int> Optic0 = new SyncVar<int>();
-        public readonly SyncVar<int> Optic1 = new SyncVar<int>();
-        public readonly SyncVar<int> Optic2 = new SyncVar<int>();
-        public readonly SyncVar<int> Optic3 = new SyncVar<int>();
-        public readonly SyncVar<int> Optic4 = new SyncVar<int>();
+        // Everything fitted to each weapon slot, packed by AttachSlot (0 = none). Plain SyncVars, like the other per-slot values.
+        public readonly SyncVar<int> Gear0 = new SyncVar<int>();
+        public readonly SyncVar<int> Gear1 = new SyncVar<int>();
+        public readonly SyncVar<int> Gear2 = new SyncVar<int>();
+        public readonly SyncVar<int> Gear3 = new SyncVar<int>();
+        public readonly SyncVar<int> Gear4 = new SyncVar<int>();
         // ADR-082: optics loose in the bag, packed by OpticBag (count per optic id).
         public readonly SyncVar<ulong> Bag = new SyncVar<ulong>();
 
@@ -35,18 +36,36 @@ namespace Game.Net
 
         // ---- Read-only, every side (HUD, inventory, visuals) ----
 
-        public int OpticInSlot(int slot)
+        int PackedInSlot(int slot)
         {
             switch (slot)
             {
-                case 0: return Optic0.Value;
-                case 1: return Optic1.Value;
-                case 2: return Optic2.Value;
-                case 3: return Optic3.Value;
-                case 4: return Optic4.Value;
+                case 0: return Gear0.Value;
+                case 1: return Gear1.Value;
+                case 2: return Gear2.Value;
+                case 3: return Gear3.Value;
+                case 4: return Gear4.Value;
                 default: return 0;
             }
         }
+
+        public int OpticInSlot(int slot) => Attachments.Get(PackedInSlot(slot), AttachSlot.Optic);
+        // The id fitted in one place of the weapon in `slot` (0 = none).
+        public int AttachmentInSlot(int slot, AttachSlot place) => Attachments.Get(PackedInSlot(slot), place);
+        // What the grips and stock on the weapon in `slot` do to its recoil.
+        public AttachMods ModsInSlot(int slot) => Attachments.ModsOf(PackedInSlot(slot), OpticRules.Current);
+        // Cached per packed value: read every frame by the view recoil.
+        public AttachMods ActiveMods
+        {
+            get
+            {
+                int packed = PackedInSlot(_combatant.ActiveSlot.Value);
+                if (_modsPacked != packed || _mods == null) { _mods = Attachments.ModsOf(packed, OpticRules.Current); _modsPacked = packed; }
+                return _mods;
+            }
+        }
+        AttachMods _mods;
+        int _modsPacked;
 
         public int ActiveOptic => OpticInSlot(_combatant.ActiveSlot.Value);
         // 1 for no optic and for the dot and holographic sights.
@@ -79,17 +98,21 @@ namespace Game.Net
             for (int i = 0; i < count; i++)
             {
                 if (_server[i] == 0) continue;
-                if (!Optics.CanAttach(WeaponInSlot(i), _server[i])) ServerStash(ServerRemove(i));
+                for (int s = 0; s < Attachments.Slots; s++)
+                {
+                    int id = Attachments.Get(_server[i], (AttachSlot)s);
+                    if (id != 0 && !Optics.CanAttach(WeaponInSlot(i), id)) ServerStash(ServerRemove(Attachments.GearIndex(i, (AttachSlot)s)));
+                }
             }
         }
 
         void Push()
         {
-            Optic0.Value = _server[0];
-            Optic1.Value = _server[1];
-            Optic2.Value = _server[2];
-            Optic3.Value = _server[3];
-            Optic4.Value = _server[4];
+            Gear0.Value = _server[0];
+            Gear1.Value = _server[1];
+            Gear2.Value = _server[2];
+            Gear3.Value = _server[3];
+            Gear4.Value = _server[4];
             Bag.Value = _bag;
         }
 
@@ -101,8 +124,10 @@ namespace Game.Net
         {
             if (!IsServerInitialized || slot < 0 || slot >= SlotCount) return false;
             if (!Optics.CanAttach(WeaponInSlot(slot), opticId)) return false;
-            int before = _server[slot];
-            _server[slot] = opticId;
+            var place = Attachments.SlotOf(opticId);
+            if (place == null) return false;
+            int before = Attachments.Get(_server[slot], place.Value);
+            _server[slot] = Attachments.With(_server[slot], place.Value, opticId);
             Push();
             if (before != 0) ServerStash(before);
             return true;
@@ -139,13 +164,16 @@ namespace Game.Net
             return true;
         }
 
-        // Takes the optic off the weapon in `slot` and returns its id (0 if none); it is not dropped.
-        public int ServerRemove(int slot)
+        // Takes the optic (or, for a gear index from Attachments.GearIndex, the attachment) off the weapon in `slot`
+        // and returns its id (0 if none); it is not dropped.
+        public int ServerRemove(int gearIndex)
         {
-            if (!IsServerInitialized || slot < 0 || slot >= SlotCount) return 0;
-            int id = _server[slot];
+            int slot = Attachments.WeaponSlotOf(gearIndex);
+            var place = Attachments.SlotOfIndex(gearIndex);
+            if (!IsServerInitialized || gearIndex < 0 || slot >= SlotCount) return 0;
+            int id = Attachments.Get(_server[slot], place);
             if (id == 0) return 0;
-            _server[slot] = 0;
+            _server[slot] = Attachments.With(_server[slot], place, 0);
             Push();
             return id;
         }
@@ -180,8 +208,11 @@ namespace Game.Net
             if (!IsServerInitialized) return;
             for (int i = 0; i < MaxSlots; i++)
             {
-                if (_server[i] == 0) continue;
-                into?.Add(Optics.ToLoot(_server[i]));
+                for (int s = 0; s < Attachments.Slots; s++)
+                {
+                    int id = Attachments.Get(_server[i], (AttachSlot)s);
+                    if (id != 0) into?.Add(Optics.ToLoot(id));
+                }
                 _server[i] = 0;
             }
             for (int id = 1; id <= OpticBag.MaxId; id++)
@@ -203,20 +234,23 @@ namespace Game.Net
         public bool ServerTryTake(LootEntry loot)
         {
             if (!IsServerInitialized || loot == null || loot.Kind != LootKind.Optic || _combatant.Dead.Value) return false;
+            var place = Attachments.SlotOf(loot.Optic);
+            if (place == null) return false;
             int count = SlotCount;
             var weapons = new int[count];
-            var optics = new int[count];
-            for (int i = 0; i < count; i++) { weapons[i] = WeaponInSlot(i); optics[i] = _server[i]; }
-            int slot = Optics.PickupSlot(weapons, optics, _combatant.ActiveSlot.Value, loot.Optic);
+            var fitted = new int[count];
+            for (int i = 0; i < count; i++) { weapons[i] = WeaponInSlot(i); fitted[i] = Attachments.Get(_server[i], place.Value); }
+            int slot = Optics.PickupSlot(weapons, fitted, _combatant.ActiveSlot.Value, loot.Optic);
             if (slot >= 0) return ServerAttach(slot, loot.Optic);
-            if (OpticRules.Current.Find(loot.Optic) == null || !BagHasRoom() || !OpticBag.TryAdd(ref _bag, loot.Optic)) return false;
+            if (loot.Optic > OpticBag.MaxId || !BagHasRoom() || !OpticBag.TryAdd(ref _bag, loot.Optic)) return false;
             Push();
             return true;
         }
 
         // ---- Owner requests ----
 
-        // Dropping from the inventory screen: the optic comes off and lands on the ground in front.
+        // Dropping from the inventory screen: the optic comes off and lands on the ground in front. `slot` is a gear
+        // index: a plain weapon slot is its optic, Attachments.GearIndex names the other attachments.
         [ServerRpc]
         public void CmdDropOptic(int slot)
         {

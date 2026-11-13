@@ -69,17 +69,23 @@ namespace Game.Core
     // them up within the vertical cap and the weapon's side cap, so a spray climbs and drifts the weapon's way.
     public static class RecoilPattern
     {
-        public static void Next(WeaponDef weapon, Random rng, float factor, out float pitchDeg, out float yawDeg)
+        public static void Next(WeaponDef weapon, Random rng, float factor, out float pitchDeg, out float yawDeg) =>
+            Next(weapon, rng, factor, null, out pitchDeg, out yawDeg);
+
+        // ADR-100: `mods` are the fitted grips and stock (null = none); they scale the kick the same way every shot.
+        public static void Next(WeaponDef weapon, Random rng, float factor, AttachMods mods, out float pitchDeg, out float yawDeg)
         {
-            pitchDeg = weapon.RecoilPitchDeg * (0.9f + 0.2f * (float)rng.NextDouble()) * factor;
-            yawDeg = (weapon.RecoilYawBias + (float)(rng.NextDouble() * 2.0 - 1.0)) * weapon.RecoilYawDeg * factor;
+            var m = mods ?? AttachMods.None;
+            pitchDeg = weapon.RecoilPitchDeg * (0.9f + 0.2f * (float)rng.NextDouble()) * factor * m.Pitch;
+            yawDeg = (weapon.RecoilYawBias + (float)(rng.NextDouble() * 2.0 - 1.0)) * weapon.RecoilYawDeg * factor * m.Yaw;
         }
 
         // Kicks `recoil` with the next shot of the weapon.
-        public static void Kick(ViewRecoil recoil, WeaponDef weapon, Random rng, float factor, RecoilRules rules)
+        public static void Kick(ViewRecoil recoil, WeaponDef weapon, Random rng, float factor, RecoilRules rules, AttachMods mods = null)
         {
-            Next(weapon, rng, factor, out float pitch, out float yaw);
-            recoil.Kick(pitch, yaw, rules.MaxPitchDeg, weapon.RecoilYawMaxDeg > 0f ? weapon.RecoilYawMaxDeg * factor : float.PositiveInfinity);
+            Next(weapon, rng, factor, mods, out float pitch, out float yaw);
+            float yawMax = weapon.RecoilYawMaxDeg * factor * (mods ?? AttachMods.None).Yaw;
+            recoil.Kick(pitch, yaw, rules.MaxPitchDeg, weapon.RecoilYawMaxDeg > 0f ? yawMax : float.PositiveInfinity);
         }
 
         // ADR-090: being hit throws the view up and to a random side; a vest makes it smaller.

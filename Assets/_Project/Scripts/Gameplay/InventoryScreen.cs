@@ -19,8 +19,9 @@ namespace Game.Gameplay
         const float Pad = 14f, HeaderHeight = 54f;
         const float GroundRowHeight = 54f, GroundRowGap = 6f;
         const float BagRowHeight = 52f, BagRowGap = 4f; // ten rows with the jerrycan (ADR-075), then loose optics (ADR-082)
-        const float BagOpticHeight = 50f, BagOpticGap = 4f, BagOpticLabel = 22f;
-        const int BagOpticColumns = 4;
+        const float BagOpticHeight = 40f, BagOpticGap = 3f, BagOpticLabel = 22f; // ADR-100: 16 ids = 6 columns x 3 rows
+        const int BagOpticColumns = 6, BagOpticRows = 3;
+        const float AttachChip = 46f, AttachGap = 4f;
         const float GearCardHeight = 220f, WeaponCardHeight = 142f, WeaponCardGap = 8f;
 
         static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.62f);
@@ -84,6 +85,10 @@ namespace Game.Gameplay
         readonly Text[] _opticName = new Text[Loadout.SlotCount];
         readonly InventoryItemIcon[] _opticIcon = new InventoryItemIcon[Loadout.SlotCount];
         readonly InventoryDragItem[] _opticDrag = new InventoryDragItem[Loadout.SlotCount];
+        // ADR-100: muzzle, grip, stock and magazine chips of each weapon card, [slot * 4 + (AttachSlot - 1)].
+        readonly GameObject[] _attachChip = new GameObject[Loadout.SlotCount * 4];
+        readonly InventoryItemIcon[] _attachIcon = new InventoryItemIcon[Loadout.SlotCount * 4];
+        readonly InventoryDragItem[] _attachDrag = new InventoryDragItem[Loadout.SlotCount * 4];
 
         InventoryDragSource _dragSource;
         GameObject _dragGhost;
@@ -206,6 +211,7 @@ namespace Game.Gameplay
                     hash = hash * 31 + InventoryBackend.WeaponId(combatant, i);
                     hash = hash * 31 + InventoryBackend.WeaponMag(combatant, i);
                     hash = hash * 31 + InventoryBackend.OpticOf(combatant, i);
+                    for (int s = 1; s < Attachments.Slots; s++) hash = hash * 31 + InventoryBackend.OpticOf(combatant, Attachments.GearIndex(i, (AttachSlot)s));
                     hash = hash * 31 + InventoryBackend.FireMode(combatant, i).Length;
                 }
                 hash = hash * 31 + (combatant.Holstered.Value ? 1 : 0);
@@ -282,13 +288,13 @@ namespace Game.Gameplay
                 if (count <= 0) continue;
                 string name = InventoryBackend.OpticName(id);
                 _bagOpticIcons[cell].Set(ItemIcons.OpticKey(id), name);
-                _bagOpticCounts[cell].text = "x" + count;
+                _bagOpticCounts[cell].text = count > 1 ? "x" + count : "";
                 _bagOpticDrags[cell].Configure(this, BagOpticSource(id));
                 _bagOpticCells[cell].SetActive(true);
                 cell++;
             }
             for (int i = cell; i < OpticBag.MaxId; i++) _bagOpticCells[i].SetActive(false);
-            _bagOpticTitle.text = cell == 0 ? "조준경  ·  없음" : "조준경";
+            _bagOpticTitle.text = cell == 0 ? "조준경·부착물  ·  없음" : "조준경·부착물";
 
             // The bag's load against its size; red when over (the server then refuses what does not fit).
             string carry = InventoryBackend.CarryLabel(me);
@@ -356,6 +362,15 @@ namespace Game.Gameplay
                     _opticName[slot].text = opticName;
                     _opticIcon[slot].Set(ItemIcons.OpticKey(opticId), opticName);
                     _opticDrag[slot].Configure(this, new InventoryDragSource(InventorySourceKind.Optic, null, slot));
+                }
+                for (int s = 1; s < Attachments.Slots; s++)
+                {
+                    int ci = slot * 4 + s - 1;
+                    int fitted = weapon != null ? InventoryBackend.OpticOf(me, Attachments.GearIndex(slot, (AttachSlot)s)) : 0;
+                    _attachChip[ci].SetActive(fitted != 0);
+                    if (fitted == 0) continue;
+                    _attachIcon[ci].Set(ItemIcons.OpticKey(fitted), InventoryBackend.OpticName(fitted));
+                    _attachDrag[ci].Configure(this, new InventoryDragSource(InventorySourceKind.Optic, null, Attachments.GearIndex(slot, (AttachSlot)s)));
                 }
                 if (slot == InventoryBackend.ThrowableSlot)
                 {
@@ -849,7 +864,7 @@ namespace Game.Gameplay
             }
             // Loose optics (ADR-082): a grid of cells, one per optic id held; drag one onto a weapon card to fit it.
             float opticTop = HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap);
-            _bagOpticTitle = UiKit.Label(Row("OpticsTitle", column, width, opticTop, BagOpticLabel), "조준경  ·  없음", 17, UiKit.TextDim);
+            _bagOpticTitle = UiKit.Label(Row("OpticsTitle", column, width, opticTop, BagOpticLabel), "조준경·부착물  ·  없음", 17, UiKit.TextDim);
             float cellWidth = (content - (BagOpticColumns - 1) * BagOpticGap) / BagOpticColumns;
             for (int i = 0; i < OpticBag.MaxId; i++)
             {
@@ -857,14 +872,14 @@ namespace Game.Gameplay
                 float cy = opticTop + BagOpticLabel + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap);
                 var cellRect = UiKit.Rect("Optic" + i, column, TopLeft, TopLeft, new Vector2(cx, -cy), new Vector2(cellWidth, BagOpticHeight));
                 UiKit.Box(cellRect, UiKit.PanelLight, true);
-                _bagOpticIcons[i] = InventoryItemIcon.Build(InRow("Icon", cellRect, 2f, 46f, 40f));
-                _bagOpticCounts[i] = UiKit.Label(InRow("Count", cellRect, cellWidth - 34f, 30f, BagOpticHeight), "x1", 18, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+                _bagOpticIcons[i] = InventoryItemIcon.Build(InRow("Icon", cellRect, 2f, cellWidth - 4f, BagOpticHeight));
+                _bagOpticCounts[i] = UiKit.Label(UiKit.Rect("Count", cellRect, TopLeft, TopLeft, new Vector2(cellWidth - 30f, -BagOpticHeight + 20f), new Vector2(28f, 20f)), "x1", 15, UiKit.Text, TextAnchor.LowerRight, FontStyle.Bold);
                 _bagOpticDrags[i] = cellRect.gameObject.AddComponent<InventoryDragItem>();
                 _bagOpticCells[i] = cellRect.gameObject;
                 cellRect.gameObject.SetActive(false);
             }
             // Under them: the bag's load as text and a bar ("가방 용량 23/60").
-            float carryTop = opticTop + BagOpticLabel + 2f * (BagOpticHeight + BagOpticGap) + 2f;
+            float carryTop = opticTop + BagOpticLabel + BagOpticRows * (BagOpticHeight + BagOpticGap) + 2f;
             var carry = Row("Carry", column, width, carryTop, 52f);
             _carryLabel = UiKit.Label(UiKit.Rect("Label", carry, TopLeft, TopLeft, Vector2.zero, new Vector2(content, 28f)), "가방 용량 —", 19, UiKit.Text);
             var track = UiKit.Rect("Track", carry, TopLeft, TopLeft, new Vector2(0f, -34f), new Vector2(content, 10f));
@@ -917,6 +932,17 @@ namespace Game.Gameplay
                 _opticDrag[slot] = chip.gameObject.AddComponent<InventoryDragItem>();
                 _opticChip[slot] = chip.gameObject;
                 chip.gameObject.SetActive(false);
+                // Muzzle, grip, stock and magazine: small icon chips in the card's top right corner (ADR-100).
+                for (int s = 1; s < Attachments.Slots; s++)
+                {
+                    int ci = slot * 4 + s - 1;
+                    var small = UiKit.Rect("Attach" + s, card, TopLeft, TopLeft, new Vector2(width - Pad - (Attachments.Slots - s) * (AttachChip + AttachGap) + AttachGap, -8f), new Vector2(AttachChip, AttachChip));
+                    UiKit.Box(small, UiKit.Panel, true);
+                    _attachIcon[ci] = InventoryItemIcon.Build(UiKit.Fill("Icon", small, 2f));
+                    _attachDrag[ci] = small.gameObject.AddComponent<InventoryDragItem>();
+                    _attachChip[ci] = small.gameObject;
+                    small.gameObject.SetActive(false);
+                }
                 _weaponDrags[slot] = card.gameObject.AddComponent<InventoryDragItem>();
                 AddDropZone(card, InventoryDropKind.Weapon, slot);
             }

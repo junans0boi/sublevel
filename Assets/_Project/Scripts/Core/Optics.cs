@@ -60,7 +60,30 @@ namespace Game.Core
             new WeaponOptics { WeaponId = 5, Optics = new[] { 1, 2, 3, 4, 5, 6, 7, 8 } },
         };
 
+        // ADR-100: the other attachments (ids 9-16) and which weapon takes which, kept beside the optics so the
+        // optic table above stays as it was. See Attachments.cs.
+        public AttachmentDef[] AttachmentDefs = Attachments.DefaultDefs();
+        public WeaponAttachments[] AttachmentSlots = Attachments.DefaultSlots();
+
         static readonly int[] Empty = new int[0];
+
+        // Null when there is no such attachment (grip, stock, ...; optics are found with Find).
+        public AttachmentDef FindAttachment(int id)
+        {
+            if (AttachmentDefs == null) return null;
+            foreach (var a in AttachmentDefs)
+                if (a != null && a.Id == id) return a;
+            return null;
+        }
+
+        // The attachment ids (not optics) this weapon takes; empty for an unknown weapon.
+        public int[] AttachmentsFor(int weaponId)
+        {
+            if (AttachmentSlots != null)
+                foreach (var w in AttachmentSlots)
+                    if (w != null && w.WeaponId == weaponId && w.Ids != null) return w.Ids;
+            return Empty;
+        }
 
         // Null when there is no such optic (0 = none).
         public OpticDef Find(int id)
@@ -93,8 +116,10 @@ namespace Game.Core
 
         public static bool CanAttach(int weaponId, int opticId, OpticRules rules)
         {
-            if (weaponId == 0 || opticId == None || rules.Find(opticId) == null) return false;
-            foreach (int allowed in rules.AllowedFor(weaponId))
+            if (weaponId == 0 || opticId == None) return false;
+            var list = rules.Find(opticId) != null ? rules.AllowedFor(weaponId) : rules.FindAttachment(opticId) != null ? rules.AttachmentsFor(weaponId) : null;
+            if (list == null) return false;
+            foreach (int allowed in list)
                 if (allowed == opticId) return true;
             return false;
         }
@@ -171,17 +196,17 @@ namespace Game.Core
         }
     }
 
-    // ADR-082: optics carried loose in the bag, counted per optic id (1..MaxId) and packed 8 bits each into one
-    // ulong so a single SyncVar replicates the whole bag.
+    // ADR-082: optics carried loose in the bag, counted per id (1..MaxId) and packed 4 bits each into one ulong so a
+    // single SyncVar replicates the whole bag. ADR-100: ids 9-16 are the other attachments, same bag.
     public static class OpticBag
     {
-        public const int MaxId = 8;
-        public const int MaxCount = 255;
+        public const int MaxId = 16;
+        public const int MaxCount = 15;
 
-        static int Shift(int id) => (id - 1) * 8;
+        static int Shift(int id) => (id - 1) * 4;
         static bool Valid(int id) => id >= 1 && id <= MaxId;
 
-        public static int Count(ulong bag, int id) => Valid(id) ? (int)((bag >> Shift(id)) & 0xFF) : 0;
+        public static int Count(ulong bag, int id) => Valid(id) ? (int)((bag >> Shift(id)) & 0xF) : 0;
 
         public static int Total(ulong bag)
         {

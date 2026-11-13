@@ -289,11 +289,9 @@ namespace Game.Gameplay
                     return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + (weapon.IsMelee ? "근접 무기" : AmmoName(AmmoIndex(weapon)));
                 case InventorySourceKind.Optic:
                     int opticId = OpticOf(combatant, source.Index);
-                    var def = OpticRules.Current.Find(opticId);
-                    return def == null ? "" : def.Name + "\n조준경 · " + (def.Zoom > 1f ? def.Zoom.ToString("0.#") + "배율" : "1배율");
+                    return opticId == 0 ? "" : LootNames.OfOptic(opticId) + "\n" + Attachments.Describe(opticId);
                 case InventorySourceKind.BagOptic:
-                    var loose = OpticRules.Current.Find(source.Index);
-                    return loose == null ? "" : loose.Name + "\n조준경 · 보유 " + BagOpticCount(combatant, source.Index) + "개 · 총기 칸으로 끌어 장착";
+                    return Attachments.NameOf(source.Index).Length == 0 ? "" : LootNames.OfOptic(source.Index) + "\n" + Attachments.Describe(source.Index) + " · 보유 " + BagOpticCount(combatant, source.Index) + "개 · 총기 칸으로 끌어 장착";
                 case InventorySourceKind.Helmet: return GearDescription(combatant, HelmetSlot, "헬멧");
                 case InventorySourceKind.Vest: return GearDescription(combatant, VestSlot, "조끼");
                 default: return "";
@@ -319,8 +317,7 @@ namespace Game.Gameplay
                 case LootKind.Ammo: return AmmoName(loot.Ammo.Value) + " 탄약\n탄약 · 수량 " + loot.Amount.Value + "발";
                 case LootKind.Medkit: return "구급상자\n소모품 · 수량 " + loot.Amount.Value + "개";
                 case LootKind.Optic:
-                    var optic = OpticRules.Current.Find(loot.Optic.Value);
-                    return LootNames.OfOptic(loot.Optic.Value) + "\n조준경 · " + (optic != null && optic.Zoom > 1f ? optic.Zoom.ToString("0.#") + "배율" : "1배율");
+                    return LootNames.OfOptic(loot.Optic.Value) + "\n" + Attachments.Describe(loot.Optic.Value);
                 default:
                     if (TryArmorSlot(loot, out int slot)) return (slot == HelmetSlot ? "헬멧" : "조끼") + "\n장구류";
                     return IsGrenade(loot) ? "수류탄\n투척물 · 수량 " + loot.Amount.Value + "개" : ExtraDescription(loot);
@@ -357,11 +354,12 @@ namespace Game.Gameplay
             return weapon != null && Loadout.SlotTakes(slot, weapon.Category);
         }
 
-        // The optic id on the weapon in the slot (0 = none).
-        public static int OpticOf(Combatant combatant, int slot)
+        // The optic id on the weapon in the slot (0 = none); a gear index (Attachments.GearIndex) names a muzzle, grip,
+        // stock or magazine instead (ADR-100).
+        public static int OpticOf(Combatant combatant, int gearIndex)
         {
             var optics = combatant != null ? combatant.GetComponent<CombatantOptics>() : null;
-            return optics != null ? optics.OpticInSlot(slot) : 0;
+            return optics != null ? optics.AttachmentInSlot(Attachments.WeaponSlotOf(gearIndex), Attachments.SlotOfIndex(gearIndex)) : 0;
         }
 
         public static string OpticName(int opticId) => opticId > 0 ? LootNames.OfOptic(opticId) : "";
