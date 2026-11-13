@@ -50,11 +50,11 @@ namespace Game.Net
         const float ShaftCatch = 0.5f;
         // A bot's brain component lives in Game.AI, above this assembly: paused by name during its ride.
         const string BotBrainComponent = "BotController";
-        // The navmesh does not reach into every car (baked with the doors shut): a bot this close to a station
-        // boards it, the server walking it in while the doors close.
-        // shortcut: a straight line in, fine from the front of the station; bake the cars into the navmesh if bots
-        // ever board through a wall.
+        // A bot this close to a station with nothing solid between it and the car boards it, the server walking it
+        // in while the doors close: the navmesh reaches into the car, but another bot standing in it can hold the
+        // walker off at the entrance (agent avoidance). The clear-line check keeps the walk-in from crossing a wall.
         const float BotStationReach = 8f;
+        const float BotEyeHeight = 1.2f;
 
         public static ElevatorRides Instance { get; private set; }
 
@@ -375,7 +375,20 @@ namespace Game.Net
             if (c.IsPlayer) return StationAt(c.transform.position) == station;
             var p = _doors.Sites[station].Spawn;
             var at = c.transform.position;
-            return new Vector2(at.x - p.x, at.z - p.z).magnitude <= BotStationReach && Mathf.Abs(at.y - p.y) <= StationHeight;
+            if (new Vector2(at.x - p.x, at.z - p.z).magnitude > BotStationReach || Mathf.Abs(at.y - p.y) > StationHeight) return false;
+            return ClearLine(at + Vector3.up * BotEyeHeight, p + Vector3.up * BotEyeHeight);
+        }
+
+        static readonly RaycastHit[] LineHits = new RaycastHit[16];
+
+        // Nothing but combatants between two points (walls, posts and shut doors count).
+        static bool ClearLine(Vector3 a, Vector3 b)
+        {
+            var d = b - a;
+            int n = Physics.RaycastNonAlloc(a, d.normalized, LineHits, d.magnitude, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+                if (LineHits[i].collider.GetComponentInParent<Combatant>() == null) return false;
+            return true;
         }
 
         // Rests (or wakes) a riding bot: its brain stops steering and its navmesh agent lets go of the body.
@@ -389,9 +402,39 @@ namespace Game.Net
             return brain;
         }
 
+        // ---- Bystanders (ADR-080): bots standing in a station whose car runs without them go down and up with it ----
+
+        readonly Dictionary<int, (Combatant bot, Behaviour brain)> _carried = new Dictionary<int, (Combatant, Behaviour)>();
+        readonly List<int> _released = new List<int>();
+
+        void CarryBystanders()
+        {
+            if (_cycles.Count > 0)
+                foreach (var c in Combatant.All)
+                {
+                    if (c == null || c.IsPlayer || c.Dead.Value || _trips.ContainsKey(c.ObjectId)) continue;
+                    var p = c.transform.position;
+                    if (!TryCarFloor(p, out float y)) continue;
+                    if (!_carried.ContainsKey(c.ObjectId)) _carried[c.ObjectId] = (c, ServerPauseBot(c, true));
+                    c.transform.position = new Vector3(p.x, y, p.z);
+                }
+            if (_carried.Count == 0) return;
+            _released.Clear();
+            foreach (var kv in _carried)
+            {
+                var (bot, brain) = kv.Value;
+                if (bot != null && !bot.Dead.Value && TryCarFloor(bot.transform.position, out _)) continue;
+                if (bot != null) ServerPauseBot(bot, false, brain);
+                _released.Add(kv.Key);
+            }
+            foreach (int id in _released) _carried.Remove(id);
+        }
+
         void Update()
         {
-            if (_trips.Count == 0 || !ServerActive) return;
+            if (!ServerActive) return;
+            CarryBystanders();
+            if (_trips.Count == 0) return;
             var rules = DeploymentRules.Current;
             double now = Time.timeAsDouble;
             _due.Clear();

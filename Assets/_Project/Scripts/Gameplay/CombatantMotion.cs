@@ -36,10 +36,13 @@ namespace Game.Gameplay
             }
             // A teleport (spawn, test hook) is not movement.
             if (delta.sqrMagnitude > TeleportDistance * TeleportDistance) delta = Vector3.zero;
+            // On a moving elevator car (ADR-065 (1), ADR-079): standing, not falling or jumping.
+            bool carried = ElevatorCar.Carries(transform.position);
+            if (carried) delta.y = 0f;
             LocalVelocity = transform.InverseTransformDirection(delta / dt);
             VerticalSpeed = delta.y / dt;
             // The cast starts inside this combatant's own collider, which a cast does not report.
-            Airborne = !Physics.SphereCast(transform.position + Vector3.up * ProbeStartHeight, ProbeRadius, Vector3.down, out _,
+            Airborne = !carried && !Physics.SphereCast(transform.position + Vector3.up * ProbeStartHeight, ProbeRadius, Vector3.down, out _,
                 ProbeStartHeight - ProbeRadius + GameData.Rules.Jump.GroundProbeMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
         }
     }

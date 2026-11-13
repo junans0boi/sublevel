@@ -137,6 +137,7 @@ namespace Game.Tests
             yield return WaitUntil(() => ElevatorDoors.Instance.Doors[start].Blocking, 2f, "the station door to shut");
             yield return WaitUntil(() => Pos.y < startTop.y - 8f, 5f, "the car to take the rider down");
             Assert.Less(Mathf.Abs(Pos.y - (startCar.transform.position.y + ElevatorCar.RideLift)), 0.6f, "the rider stands on the car floor");
+            LogPose("descending");
             var audio = startCar.GetComponent<ElevatorAudio>();
             if (audio != null) Assert.Greater(audio.HumsStarted, 0, "the car hums on its way");
 
@@ -146,6 +147,9 @@ namespace Game.Tests
             Assert.Less(Mathf.Abs(Pos.y - (arrivalCar.transform.position.y + ElevatorCar.RideLift)), 0.6f, "on the arrival car floor");
             Assert.IsTrue(ElevatorDoors.Instance.Doors[arrivalCar.Station].Blocking, "the arrival doors are shut while it rises");
             yield return Screenshot();
+            // Standing on the car, not in the jump pose (the probe under the feet sees no ground down a shaft).
+            var motion = Combatant.LocalPlayer.GetComponentInChildren<CombatantMotion>();
+            if (motion != null) Assert.IsFalse(motion.Airborne, "a rider is not in the air");
             yield return WaitUntil(() => !rides.LocalRiding, 10f, "the arrival");
             yield return null;
             yield return null;
@@ -271,12 +275,6 @@ namespace Game.Tests
             var brain = bot.GetComponent("BotController") as Behaviour;
             Assert.IsNotNull(brain);
 
-            // The player rides at the same time, to a third region.
-            yield return null;
-            int playerTo = -1;
-            for (int r = 0; r < zones.RegionCount && playerTo < 0; r++) if (r != playerRegion && r != doomed) playerTo = r;
-            Assert.IsTrue(rides.ServerTryStart(player, playerStation, playerTo));
-
             float until = Time.realtimeSinceStartup + 8f;
             while (!rides.ServerRiding(bot))
             {
@@ -289,14 +287,44 @@ namespace Game.Tests
                         + botStation + " region " + rides.RegionOfStation(botStation) + " at " + botSite + ", flat "
                         + new Vector2(bp.x - botSite.x, bp.z - botSite.z).magnitude + ", exit " + exit + ", brain " + brain.enabled
                         + ", busy " + rides.StationBusy(botStation) + ", cooldown " + rides.ServerCooldownLeft(bot)
-                        + ", goal " + brain.GetType().GetProperty("Goal").GetValue(brain) + ", dead " + bot.Dead.Value);
+                        + ", goal " + brain.GetType().GetProperty("Goal").GetValue(brain) + ", dead " + bot.Dead.Value
+                        + (agent != null ? ", agent on " + agent.enabled + "/" + agent.isOnNavMesh + " stopped " + (agent.isOnNavMesh && agent.isStopped)
+                            + " dest " + agent.destination + " rem " + (agent.isOnNavMesh ? agent.remainingDistance : -1f) + " path " + agent.pathStatus
+                            + " vel " + agent.velocity + " speed " + agent.speed : ", no agent"));
                 }
                 yield return null;
             }
             yield return null; // paused by the rides' own update, not inside the brain's
             yield return null;
             Assert.IsFalse(brain.enabled, "the bot's brain rests during the ride");
-            Assert.IsTrue(rides.ServerRiding(player), "two riders at once");
+            // A bystander bot stands in the player's car (its brain off so it stays for the test): it goes down and
+            // back up with the empty departure car (ADR-080) and is woken afterwards.
+            Combatant bystander = null;
+            foreach (var c in Combatant.All)
+                if (c != null && !c.IsPlayer && !c.Dead.Value && c != bot) { bystander = c; break; }
+            Assert.IsNotNull(bystander);
+            var bystanderBrain = bystander.GetComponent("BotController") as Behaviour;
+            var playerTop = ElevatorDoors.Instance.Sites[playerStation].Spawn;
+            var side = Quaternion.Euler(0f, ElevatorDoors.Instance.Sites[playerStation].YawDeg, 0f) * Vector3.right * 0.8f;
+            var bystanderAgent = bystander.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (bystanderAgent != null) bystanderAgent.enabled = false;
+            bystanderBrain.enabled = false;
+            bystander.transform.position = playerTop + side + Vector3.up * ElevatorCar.RideLift;
+
+            // The player rides while the bot is on its way, to a third region.
+            int playerTo = -1;
+            for (int r = 0; r < zones.RegionCount && playerTo < 0; r++) if (r != playerRegion && r != doomed) playerTo = r;
+            Assert.IsTrue(rides.ServerTryStart(player, playerStation, playerTo));
+            float lowest = float.MaxValue;
+            float watchUntil = Time.realtimeSinceStartup + 10f;
+            while (Time.realtimeSinceStartup < watchUntil && lowest >= playerTop.y - 8f)
+            {
+                lowest = Mathf.Min(lowest, bystander.transform.position.y);
+                yield return null;
+            }
+            Assert.Less(lowest, playerTop.y - 8f, "the bystander goes down with the car");
+
+            Assert.IsTrue(rides.ServerRiding(player) && rides.ServerRiding(bot), "two riders at once");
             yield return WaitUntil(() => !rides.ServerRiding(bot) && !rides.ServerRiding(player), 12f, "both rides to end");
             yield return null;
             yield return null;
@@ -305,14 +333,32 @@ namespace Game.Tests
             Assert.AreNotEqual(doomed, rides.RegionOfStation(botArrived), "out of the announced region");
             Assert.IsTrue(brain.enabled, "the bot is awake again");
             Assert.Greater(rides.ServerCooldownLeft(bot), 0f);
+            yield return WaitUntil(() => !rides.StationBusy(playerStation), 10f, "the departure car back up and open");
+            yield return null;
+            yield return null;
+            Assert.Less(Mathf.Abs(bystander.transform.position.y - playerTop.y), 0.5f, "the bystander is back up at the station floor");
+            Assert.IsTrue(bystanderBrain.enabled, "the bystander is woken when the car stops");
             int playerArrived = rides.StationAt(Pos);
             Assert.GreaterOrEqual(playerArrived, 0);
             Assert.AreEqual(playerTo, rides.RegionOfStation(playerArrived));
         }
 
         // One HUD frame to ELEV_SHOT: the HUD canvas is drawn by the main camera for a moment.
+        static void LogPose(string when)
+        {
+            var me = Combatant.LocalPlayer;
+            var anim = me.GetComponentInChildren<CombatantAnimation>();
+            var motion = me.GetComponentInChildren<CombatantMotion>();
+            var animator = me.GetComponentInChildren<Animator>();
+            Debug.Log("[ElevPose] " + when + " animator " + (animator != null ? animator.isActiveAndEnabled + " state " + animator.GetCurrentAnimatorStateInfo(0).shortNameHash
+                + " air? " + animator.GetCurrentAnimatorStateInfo(0).IsName("Air") + " loco? " + animator.GetCurrentAnimatorStateInfo(0).IsName("Locomotion") : "none")
+                + " seated " + (anim != null ? anim.SeatedPose : -1f) + " tuck " + (anim != null ? anim.JumpTuck : -1f) + " dip " + (anim != null ? anim.LandDip : -1f)
+                + " airborne " + (motion != null && motion.Airborne) + " vy " + (motion != null ? motion.VerticalSpeed : 0f) + " carried " + ElevatorCar.Carries(me.transform.position));
+        }
+
         static IEnumerator Screenshot()
         {
+            LogPose("shot");
             string path = Environment.GetEnvironmentVariable("ELEV_SHOT");
             if (string.IsNullOrEmpty(path)) yield break;
             // No WaitForEndOfFrame: it never comes back in batchmode. The camera renders into a texture right here.

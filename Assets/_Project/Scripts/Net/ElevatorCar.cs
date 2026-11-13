@@ -179,6 +179,25 @@ namespace Game.Net
             foreach (var l in _lights) if (l != null) l.enabled = lit;
         }
 
+        // Someone carried by an elevator: in a car that is not simply parked open (rising, settling, in a ride
+        // cycle), or anywhere down a shaft (a rider waiting at the bottom while the cars change, ADR-079; nobody
+        // gets there any other way). The car's collider lags its transform and the pit has none, so a ground probe
+        // there would see air and show the jump pose: presentation (CombatantMotion) asks this instead.
+        public static bool Carries(Vector3 at)
+        {
+            float depth = Mathf.Max(DeploymentRules.Current.ShaftDepth, DeploymentRules.Current.CarStartDepth) + 1f;
+            foreach (var car in All)
+            {
+                if (car == null) continue;
+                var top = car._top;
+                float dx = at.x - top.x, dz = at.z - top.z;
+                if (dx * dx + dz * dz > RideRadius * RideRadius) continue;
+                if (at.y < top.y - depth || at.y > top.y + 0.6f) continue;
+                if (at.y < top.y - 0.3f || car.Phase != ElevatorPhase.Open) return true;
+            }
+            return false;
+        }
+
         // Where the feet of a combatant standing at `at` go this frame, while the car is still on its way (until the
         // doors open on this peer). False when `at` is in no car's shaft or the ride is over.
         public static bool TryRideFloor(Vector3 at, out float floorY)

@@ -65,7 +65,8 @@ namespace Game.Gameplay
         {
             var rides = ElevatorRides.Instance;
             int station = LocalStation(me);
-            if (station < 0)
+            // Next to a knocked teammate F held revives (ADR-072): that wins over the elevator.
+            if (station < 0 || me.Reviving || TeamHud.ReviveCandidate(me) != null)
             {
                 _heldFor = Hold01 = 0f;
                 _wasHeld = _fired = false;
