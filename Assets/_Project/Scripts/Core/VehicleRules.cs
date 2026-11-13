@@ -106,7 +106,7 @@ namespace Game.Core
         public float AstrideThighDeg = 60f;    // rider's pose: thighs forward,
         public float AstrideApartDeg = 14f;    // apart,
         public float AstrideShinDeg = 10f;     // shins back from vertical,
-        public float AstrideArmDeg = 62f;      // hands forward to the bars
+        public float AstrideArmDeg = 72f;      // hands forward to the bars
 
         // ---- Spawning ----
         public int SpawnCount = 6;

@@ -13,11 +13,11 @@ namespace Game.Gameplay
     // server of its own solo match) can hand itself the weapons. Strip before a multiplayer release (RISKS).
     // Late: the outside views (LateUpdate) replace the camera after the player has placed it.
     [DefaultExecutionOrder(200)]
-    public class FeelCapture : MonoBehaviour, IPlayerInput
+    public class FeelCapture : MonoBehaviour, IPlayerInput, IVehicleInput
     {
         const float SpawnTimeoutSeconds = 30f;
 
-        enum Watch { Game, Front, Side, Behind, Above, Optic }
+        enum Watch { Game, Front, Side, Behind, Above, Optic, Fixed, Vehicle }
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
@@ -25,6 +25,10 @@ namespace Game.Gameplay
         bool _w4Shots; // `-w4shots <folder>` (with -fastzones): scopes, healing, smoke and a region lockdown in the World
         bool _scopeShots; // `-scopeshots <folder>` (World): every optic through the sights, on the weapon, on the ground
         bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
+        bool _integShots; // `-integshots <folder>` (World): elevator rise, ping, slow walk, free look, a vault, car and motorcycle
+        VehicleInputFrame _vehicleFrame = new VehicleInputFrame { Seat = -1 };
+        Vector3 _fixFrom, _fixAt; // Watch.Fixed: a camera standing still
+        Vehicle _watched;         // Watch.Vehicle: a camera riding along, _fixFrom in the vehicle's axes
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
         Watch _watch;
         Vector3 _home, _homeForward; // where the player spawned: out of the dummies' sight
@@ -46,6 +50,8 @@ namespace Game.Gameplay
             if (sc >= 0 && sc + 1 < args.Length) { w = sc; }
             int w5 = Array.IndexOf(args, "-w5shots");
             if (w5 >= 0 && w5 + 1 < args.Length) { w = w5; }
+            int ig = Array.IndexOf(args, "-integshots");
+            if (ig >= 0 && ig + 1 < args.Length) { w = ig; }
             if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
             bool world = i < 0;
             if (world) i = w;
@@ -58,7 +64,9 @@ namespace Game.Gameplay
             capture._w4Shots = w4 >= 0 && w4 + 1 < args.Length;
             capture._w5Shots = w5 >= 0 && w5 + 1 < args.Length;
             capture._scopeShots = sc >= 0 && sc + 1 < args.Length;
+            capture._integShots = ig >= 0 && ig + 1 < args.Length;
             PlayerController.InputOverride = capture;
+            if (capture._integShots) VehicleInput.InputOverride = capture;
         }
 
         public PlayerInputFrame Read()
@@ -67,9 +75,17 @@ namespace Game.Gameplay
             // One-frame presses.
             _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = _frame.Interact = false;
             _frame.ThrowPressed = _frame.ThrowReleased = false;
-            _frame.Prone = _frame.Holster = _frame.FireMode = _frame.Map = false;
+            _frame.Prone = _frame.Holster = _frame.FireMode = _frame.Map = _frame.Ping = _frame.AutoRun = false;
             _frame.ZoomSteps = 0;
             _frame.Look = Vector2.zero;
+            return f;
+        }
+
+        VehicleInputFrame IVehicleInput.Read()
+        {
+            var f = _vehicleFrame;
+            _vehicleFrame.Interact = _vehicleFrame.EngineToggle = _vehicleFrame.ToggleView = false;
+            _vehicleFrame.Seat = -1;
             return f;
         }
 
@@ -88,6 +104,13 @@ namespace Game.Gameplay
                 yield return null;
             }
             var me = Combatant.LocalPlayer;
+            if (_integShots)
+            {
+                yield return IntegShots(me);
+                Debug.Log("[FeelCapture] integration shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
             if (_eleShots)
             {
                 yield return EleShots(me);
@@ -659,6 +682,188 @@ namespace Game.Gameplay
             Debug.Log("[FeelCapture] after stepping out: " + me.transform.position);
         }
 
+        // Integration review in the World (#84-#87): the car rising out of its shaft (through the door window and from
+        // above the slab opening), a ping, slow walk and free look, a vault over a box, then a car and a motorcycle:
+        // outside, driven in third and first person, and the seated poses seen from beside them.
+        IEnumerator IntegShots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            me.ServerDamageFilter = _ => 0f;
+            ElevatorCar ride = null;
+            foreach (var car in ElevatorCar.All)
+                if (car != null && (ride == null || (car.Top - me.transform.position).sqrMagnitude < (ride.Top - me.transform.position).sqrMagnitude)) ride = car;
+            for (int n = 0; SpawnProtection.InputBlocked && n < 40; n++)
+            {
+                bool rising = ride != null && ride.Offset > 0.01f;
+                Debug.Log($"[FeelCapture] rise t{n}: phase {(ride != null ? ride.Phase.ToString() : "-")}, offset {(ride != null ? ride.Offset : 0f):F2}, door {SpawnProtection.DoorSecondsLeft:F1}");
+                if (rising && n % 2 == 0)
+                {
+                    // Looking down into the slab opening while the car is still below it.
+                    _watch = ride.Offset > 2.8f ? Watch.Fixed : Watch.Game;
+                    _fixFrom = ride.Top + Vector3.up * 2.2f - ride.transform.forward * 0.6f;
+                    _fixAt = ride.Top - Vector3.up * 8f + ride.transform.forward * 0.3f;
+                    yield return Shot($"r{n:00}_rise_above");
+                    _watch = Watch.Game;
+                }
+                yield return Shot($"r{n:00}_rise_window");
+                yield return new WaitForSeconds(0.4f);
+            }
+            _watch = Watch.Game;
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 2, Amount = 12 });
+            yield return new WaitForSeconds(0.5f);
+
+            // Out of the station: the first car on the map is the place for the rest; stand 12 m from it.
+            Vehicle carV = null, bike = null;
+            foreach (var v in Vehicle.All)
+            {
+                if (v == null) continue;
+                if (v.IsMotorcycle) { if (bike == null) bike = v; }
+                else if (carV == null) carV = v;
+            }
+            if (carV == null || bike == null) { Debug.LogError("[FeelCapture] integ: no car or motorcycle in the World"); yield break; }
+            Debug.Log($"[FeelCapture] integ: car at {carV.transform.position} up {carV.transform.up}, motorcycle at {bike.transform.position} up {bike.transform.up}");
+            var open = carV.transform.position - carV.transform.right * 12f;
+            if (UnityEngine.AI.NavMesh.SamplePosition(open, out var openHit, 6f, UnityEngine.AI.NavMesh.AllAreas)) open = openHit.position;
+            pc.Teleport(open + Vector3.up * 0.1f);
+            yield return null;
+            pc.LookAt(carV.transform.position + Vector3.up * 0.5f + carV.transform.forward * 20f);
+            yield return new WaitForSeconds(0.8f);
+
+            // Ping: a point on the ground ahead; the compass and the world marker show it.
+            pc.LookAt(me.EyePosition + (carV.transform.position - me.transform.position).normalized * 30f - Vector3.up * 3f);
+            yield return new WaitForSeconds(0.3f);
+            _frame.Ping = true;
+            yield return new WaitForSeconds(0.3f);
+            Debug.Log($"[FeelCapture] integ ping: has {MapMarker.Has} at {MapMarker.Position}");
+            pc.LookAt(me.EyePosition + Quaternion.Euler(0f, 30f, 0f) * (carV.transform.position - me.transform.position).normalized * 30f);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("p01_ping_compass");
+            UiFocus.Set(UiScreen.Map);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("p02_ping_map");
+            UiFocus.Close();
+            yield return new WaitForSeconds(0.3f);
+
+            // Slow walk (Ctrl) from the side, then free look (Alt) turned round to look back at the face.
+            pc.LookAt(me.EyePosition - carV.transform.right * 20f);
+            _frame.SlowWalk = true;
+            _frame.Move = new Vector2(0f, 1f);
+            yield return new WaitForSeconds(0.8f);
+            _watch = Watch.Side;
+            yield return Burst("m01_slowwalk_side", 2, 0.15f);
+            _watch = Watch.Game;
+            _frame.FreeLook = true;
+            for (int n = 0; n < 15; n++) { _frame.Look = new Vector2(10f, 0f); yield return null; }
+            yield return new WaitForSeconds(0.2f);
+            yield return Shot("m02_freelook_150");
+            _frame.Move = Vector2.zero;
+            _frame.SlowWalk = false;
+            yield return new WaitForSeconds(0.2f);
+            _frame.FreeLook = false;
+            yield return new WaitForSeconds(0.5f);
+
+            // A vault over a 0.9 m box placed ahead, seen from the side. The box borrows a world material (the
+            // primitive's default one is not in the build).
+            var feet = me.transform.position;
+            var ahead = Vector3.ProjectOnPlane(me.transform.forward, Vector3.up).normalized;
+            pc.LookAt(feet + ahead * 20f + Vector3.up * 1.6f);
+            yield return new WaitForSeconds(0.3f);
+            feet = me.transform.position;
+            ahead = Vector3.ProjectOnPlane(me.transform.forward, Vector3.up).normalized;
+            var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            box.name = "IntegVaultBox";
+            box.transform.SetPositionAndRotation(feet + ahead * 0.9f + Vector3.up * 0.45f, Quaternion.LookRotation(ahead));
+            box.transform.localScale = new Vector3(3f, 0.9f, 0.5f);
+            var look = carV.GetComponentInChildren<MeshRenderer>();
+            if (look != null) box.GetComponent<Renderer>().sharedMaterial = look.sharedMaterial;
+            Physics.SyncTransforms();
+            yield return new WaitForSeconds(0.2f);
+            _watch = Watch.Side;
+            _frame.Jump = true;
+            for (int n = 0; n < 8; n++)
+            {
+                yield return Shot($"v{n:00}_vault_side");
+                yield return new WaitForSeconds(0.1f);
+            }
+            Debug.Log($"[FeelCapture] integ vault: {pc.LastParkourPlan.Move}, moved {Vector3.Distance(feet, me.transform.position):F2} m");
+            _watch = Watch.Game;
+            Destroy(box);
+            yield return new WaitForSeconds(0.5f);
+
+            yield return VehicleShots(carV, "c");
+            yield return VehicleShots(bike, "b");
+        }
+
+        // One vehicle: outside from the front quarter, then in the driver's seat, driven a little, in third and first
+        // person, and seen from beside the seat; then out again.
+        IEnumerator VehicleShots(Vehicle v, string prefix)
+        {
+            var pc = PlayerController.Local;
+            var me = Combatant.LocalPlayer;
+            pc.Teleport(v.DoorPosition(0) - v.transform.right * 3f + Vector3.up * 0.1f);
+            yield return null;
+            pc.LookAt(v.transform.position + Vector3.up * 0.8f);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot(prefix + "01_outside_tpp");
+            _watched = v;
+            _watch = Watch.Vehicle;
+            float size = v.IsMotorcycle ? 0.6f : 1f;
+            _fixFrom = new Vector3(-3.5f, 1.4f, 4.5f) * size;
+            _fixAt = new Vector3(0f, 0.6f, 0f);
+            yield return Shot(prefix + "02_outside_front");
+            _fixFrom = new Vector3(-4.5f, 0.6f, 0f) * size;
+            _fixAt = new Vector3(0f, 0.5f, 0f);
+            yield return Shot(prefix + "02_outside_side_low");
+            _watch = Watch.Game;
+
+            pc.Teleport(v.DoorPosition(0) + Vector3.up * 0.05f);
+            yield return null;
+            yield return null;
+            _vehicleFrame.Interact = true;
+            float until = Time.realtimeSinceStartup + 3f;
+            while (!VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
+            yield return new WaitForSeconds(v.Rules.EnterSeconds + 0.4f);
+            Debug.Log($"[FeelCapture] integ {v.Kind}: seated {VehicleSeat.SeatedAmount(me):F2}, astride {VehicleSeat.Astride(me)}, engine {v.EngineOn.Value}");
+            pc.LookAt(v.transform.position + v.transform.forward * 30f);
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot(prefix + "03_seated_tpp");
+            _watched = v;
+            _watch = Watch.Vehicle;
+            _fixFrom = new Vector3(-2.6f, 1.5f, 0.6f) * size;
+            _fixAt = v.transform.InverseTransformPoint(me.transform.position + Vector3.up * 0.9f);
+            yield return Shot(prefix + "04_seated_side");
+            _watch = Watch.Game;
+
+            _vehicleFrame.Throttle = 1f;
+            yield return new WaitForSeconds(1.8f);
+            pc.LookAt(v.transform.position + v.transform.forward * 30f);
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot(prefix + "05_driving_tpp");
+            Debug.Log($"[FeelCapture] integ {v.Kind}: {v.SpeedKmh:F0} km/h, lean {v.LeanShown:F1}, up {v.transform.up}");
+            _watched = v;
+            _watch = Watch.Vehicle;
+            _fixFrom = new Vector3(-3.2f, 1.2f, 1.2f) * size;
+            yield return Shot(prefix + "06_driving_side");
+            _watch = Watch.Game;
+            _vehicleFrame.ToggleView = true;
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot(prefix + "07_driving_fpp");
+            pc.LookAt(me.EyePosition - v.transform.right * 10f);
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot(prefix + "08_fpp_look_left");
+            _vehicleFrame.Throttle = -1f;
+            yield return new WaitForSeconds(1.5f);
+            _vehicleFrame.Throttle = 0f;
+            _vehicleFrame.ToggleView = true;
+            yield return new WaitForSeconds(0.5f);
+            _vehicleFrame.Interact = true;
+            until = Time.realtimeSinceStartup + 3f;
+            while (VehicleSeat.IsAttached(me) && Time.realtimeSinceStartup < until) yield return null;
+            yield return new WaitForSeconds(0.6f);
+            Debug.Log($"[FeelCapture] integ {v.Kind}: out {!VehicleSeat.IsAttached(me)}, at {me.transform.position}");
+        }
+
         // Lying down, empty hands, optics: the wave-3 additions to the script.
         IEnumerator Wave3Shots(Combatant me)
         {
@@ -1214,6 +1419,19 @@ namespace Game.Gameplay
             var pc = PlayerController.Local;
             if (_watch == Watch.Game || pc == null || pc.Camera == null) return;
             var player = pc.transform;
+            if (_watch == Watch.Fixed || _watch == Watch.Vehicle)
+            {
+                var from = _fixFrom;
+                var at = _fixAt;
+                if (_watch == Watch.Vehicle && _watched != null)
+                {
+                    from = _watched.transform.TransformPoint(_fixFrom);
+                    at = _watched.transform.TransformPoint(_fixAt);
+                }
+                pc.Camera.transform.SetPositionAndRotation(from, Quaternion.LookRotation(at - from));
+                pc.Camera.fieldOfView = 50f;
+                return;
+            }
             if (_watch == Watch.Optic)
             {
                 // Close on the optic on the weapon in hand, from the weapon's right side (away from the body), a little

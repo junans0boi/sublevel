@@ -530,7 +530,7 @@ public static class VehicleBuilder
     {
         RoundedBox(kit, Interior, new Vector3(0f, 1.04f, 0.86f), new Vector3(1.6f, 0.1f, 0.36f), 0.03f);
         // Steering wheel in front of the driver, tilted toward them: a ring of short beams, a hub and a column.
-        var centre = new Vector3(SeatEyes[0].x, 1.12f, SeatEyes[0].z + 0.47f);
+        var centre = new Vector3(SeatEyes[0].x, 1.06f, SeatEyes[0].z + 0.55f); // its rim well under the driver's eye line
         var tilt = Quaternion.Euler(-62f, 0f, 0f); // the wheel's axis points back and up at the driver
         const int segments = 16;
         const float radius = 0.17f;

@@ -8,7 +8,9 @@ public static class BuildScript
     // The Standalone scripting backend is shared by mac and win, so each build sets it explicitly.
     // win uses Mono until the windows-il2cpp module is installed.
     public static void BuildMac() => Build(BuildTarget.StandaloneOSX, "Build/mac/Sublevel.app", ScriptingImplementation.IL2CPP);
-    public static void BuildWin() => Build(BuildTarget.StandaloneWindows64, "Build/win/Sublevel.exe", ScriptingImplementation.Mono2x);
+    // Review captures only: a quicker Mono build beside the real one, so a running Build/mac copy is left alone.
+    public static void BuildMacReview() => Build(BuildTarget.StandaloneOSX, "Build/review/Sublevel.app", ScriptingImplementation.Mono2x);
+    public static void BuildWin() =>Build(BuildTarget.StandaloneWindows64, "Build/win/Sublevel.exe", ScriptingImplementation.Mono2x);
 
     static void Build(BuildTarget target, string output, ScriptingImplementation backend)
     {
