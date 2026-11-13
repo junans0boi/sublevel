@@ -28,6 +28,7 @@ namespace Game.Gameplay
         DefaultView, CrosshairColor, DamageDirection, KillFeed,
         BotDifficulty, // ADR-117
         DayTime, Weather, // ADR-119
+        NetStats,         // ADR-128
     }
 
     // One row of the settings screen: where it shows, what it says and how its value is stored.
@@ -205,6 +206,9 @@ namespace Game.Gameplay
             Add(Choice(SettingId.KillFeed, SettingsTab.Gameplay, SettingsPage.Basic, "화면 표시", "킬 로그 표시",
                 "누가 누구를 쓰러뜨렸는지 화면 오른쪽 위에 보여줍니다.",
                 "settings.killFeed", OffOn, 1, SettingKind.Toggle));
+            Add(Choice(SettingId.NetStats, SettingsTab.Gameplay, SettingsPage.Basic, "화면 표시", "네트워크 상태 표시",
+                "핑, 패킷 손실, 서버 틱을 화면 오른쪽 위(킬 로그 아래)에 보여줍니다. 멀티플레이에서 끊김의 원인을 볼 때 켜세요. 경기 중에는 키 설정의 '네트워크 상태'(기본 F3)로도 켜고 끌 수 있습니다.",
+                "settings.netStats", OffOn, 0, SettingKind.Toggle));
             Add(Choice(SettingId.BotDifficulty, SettingsTab.Gameplay, SettingsPage.Basic, "봇", "봇 난이도",
                 "봇의 반응 속도, 조준 정확도, 시야와 청력을 정합니다. 쉬움은 늦게 알아채고 자주 빗맞히며, 어려움은 빨리 알아채고 정확하게 쏩니다. 다음 매치부터 적용됩니다.",
                 "settings.botDifficulty", Game.Core.BotLevels.Labels, 1));
@@ -271,6 +275,7 @@ namespace Game.Gameplay
                 K(other, "시점 전환", BindAction.ToggleView, "1인칭과 3인칭을 바꿉니다."),
                 K(other, "인벤토리", BindAction.Inventory, "가방과 주변 물건을 엽니다."),
                 K(other, "지도", BindAction.Map, "전체 지도를 엽니다. 지도를 클릭하면 마커를 찍고, 우클릭하면 지웁니다."),
+                K(other, "네트워크 상태", BindAction.NetStats, "핑, 패킷 손실, 서버 틱 표시를 켜고 끕니다."),
                 K(other, "핑", BindAction.Ping, "조준점이 가리키는 지점(최대 600m)에 마커를 찍습니다. 방위 띠·미니맵·화면에 방향과 거리가 나오고, 10m 안으로 다가가면 사라집니다."),
                 K(other, "메뉴", BindAction.Menu, "일시정지 메뉴를 열고 닫습니다. 설정에서 키를 고르는 중에는 Esc가 취소입니다."),
             };

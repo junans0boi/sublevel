@@ -198,6 +198,7 @@ namespace Game.Net
             if (args.ConnectionState != LocalConnectionState.Started) return;
             _serverStartedAt = Time.time;
             Sessions = SessionKeeper.Attach(_networkManager);
+            NetPulseServer.Attach(_networkManager);
             ServerPlanDeployment();
 
             var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);

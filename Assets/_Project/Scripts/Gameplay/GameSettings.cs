@@ -176,6 +176,7 @@ namespace Game.Gameplay
         public static Color CrosshairColor => CrosshairColors[Mathf.Clamp(GetIndex(SettingId.CrosshairColor), 0, CrosshairColors.Length - 1)];
         public static bool ShowDamageDirection => GetToggle(SettingId.DamageDirection);
         public static bool ShowKillFeed => GetToggle(SettingId.KillFeed);
+        public static bool ShowNetStats => GetToggle(SettingId.NetStats);
         public static Game.Core.DayTimeChoice DayTimeSetting => (Game.Core.DayTimeChoice)GetIndex(SettingId.DayTime);
         public static Game.Core.WeatherChoice WeatherSetting => (Game.Core.WeatherChoice)GetIndex(SettingId.Weather);
 
