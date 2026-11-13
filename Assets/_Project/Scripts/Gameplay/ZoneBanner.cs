@@ -153,7 +153,7 @@ namespace Game.Gameplay
 
         void Play(AudioClip clip)
         {
-            if (clip != null && _audio != null) _audio.PlayOneShot(clip);
+            if (clip != null && _audio != null) _audio.PlayOneShot(clip, GameSettings.UiVolume);
         }
 
         // ---- Per frame ----

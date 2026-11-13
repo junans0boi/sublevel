@@ -307,7 +307,7 @@ public static class ItemIconBuilder
 
     static void DrawMedkit(Painter p)
     {
-        var plate = new Color(0.30f, 0.52f, 0.42f);
+        var plate = new Color(0.30f, 0.33f, 0.35f); // dark grey case (no red/white cross: protected emblem)
         // carry handle: an open rounded bar above the box
         float handleOuter = RRect(p.X, p.Y, 128f, 186f, 46f, 22f, 10f);
         float handleInner = RRect(p.X, p.Y, 128f, 183f, 30f, 10f, 5f);
@@ -316,9 +316,10 @@ public static class ItemIconBuilder
         p.Fill(RRect(p.X, p.Y, 128f, 112f, 100f, 70f, 20f), plate, Shade(p.X - 128f, 100f) * 0.5f + 0.5f);
         // latch strip
         p.Fill(Box(p.X, p.Y, 128f, 160f, 98f, 3f), plate * 0.6f, 1f, false);
-        // white cross
-        float cross = Mathf.Min(Box(p.X, p.Y, 128f, 108f, 46f, 15f), Box(p.X, p.Y, 128f, 108f, 15f, 46f));
-        p.Fill(cross, new Color(0.96f, 0.97f, 0.96f), 1f, false);
+        // olive rounded-square badge with a white plus
+        p.Fill(RRect(p.X, p.Y, 128f, 110f, 40f, 40f, 12f), Olive, 1f, false);
+        float plus = Mathf.Min(Box(p.X, p.Y, 128f, 110f, 26f, 8f), Box(p.X, p.Y, 128f, 110f, 8f, 26f));
+        p.Fill(plus, new Color(0.96f, 0.97f, 0.96f), 1f, false);
     }
 
     static void DrawHelmet(Painter p, int tier)
@@ -437,21 +438,23 @@ public static class ItemIconBuilder
                 if (Mathf.Abs(r - (24f + i * 17f)) < 1.8f) p.Fill(true, new Color(0.62f, 0.58f, 0.5f, 1f));
             p.Fill(Circle(p.X, p.Y, 106f, 112f, 12f), new Color(0.35f, 0.32f, 0.28f), 1f, false);
         }
-        // red stripe across the roll
-        if (roll < -4f) p.Fill(Box(p.X, p.Y, 106f, 112f, 66f, 6f) < 0f && Mathf.Abs(p.Y - 112f) < 6f, new Color(0.82f, 0.2f, 0.18f, 1f));
+        // olive stripe across the roll
+        if (roll < -4f) p.Fill(Box(p.X, p.Y, 106f, 112f, 66f, 6f) < 0f && Mathf.Abs(p.Y - 112f) < 6f, Olive * 0.8f);
     }
 
-    // A small first-aid pouch: a soft red case with a zip line and a white cross.
+    // A small first-aid pouch: a soft olive case with a zip line and a white plus in a dark rounded-square badge.
+    // Deliberately not a red/white cross (protected emblem).
     static void DrawFirstAid(Painter p)
     {
-        var red = new Color(0.78f, 0.22f, 0.20f);
-        p.Fill(RRect(p.X, p.Y, 128f, 112f, 92f, 62f, 26f), red, Shade(p.X - 128f, 92f) * 0.5f + 0.5f);
+        var pouch = new Color(0.40f, 0.47f, 0.32f);
+        p.Fill(RRect(p.X, p.Y, 128f, 112f, 92f, 62f, 26f), pouch, Shade(p.X - 128f, 92f) * 0.5f + 0.5f);
         // zip line along the top
-        p.Fill(Box(p.X, p.Y, 128f, 152f, 80f, 2.5f), red * 0.55f, 1f, false);
+        p.Fill(Box(p.X, p.Y, 128f, 152f, 80f, 2.5f), pouch * 0.55f, 1f, false);
         // pull tab
         p.Fill(RRect(p.X, p.Y, 196f, 152f, 14f, 8f, 4f), Steel, 1f, false);
-        float cross = Mathf.Min(Box(p.X, p.Y, 128f, 104f, 38f, 12f), Box(p.X, p.Y, 128f, 104f, 12f, 38f));
-        p.Fill(cross, new Color(0.96f, 0.97f, 0.96f), 1f, false);
+        p.Fill(RRect(p.X, p.Y, 128f, 104f, 34f, 34f, 10f), new Color(0.20f, 0.22f, 0.20f), 1f, false);
+        float plus = Mathf.Min(Box(p.X, p.Y, 128f, 104f, 22f, 7f), Box(p.X, p.Y, 128f, 104f, 7f, 22f));
+        p.Fill(plus, new Color(0.96f, 0.97f, 0.96f), 1f, false);
     }
 
     // A smoke canister: grey cylinder with a collar, a top lever and a puff of smoke above.

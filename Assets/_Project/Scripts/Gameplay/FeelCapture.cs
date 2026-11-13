@@ -19,6 +19,7 @@ namespace Game.Gameplay
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
+        bool _w5Shots; // `-w5shots <folder>` (TestBox): settings tabs at two sizes, a punch on a dummy, first-aid icon
         bool _w4Shots; // `-w4shots <folder>` (with -fastzones): scopes, healing, smoke and a region lockdown in the World
         bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
@@ -35,6 +36,8 @@ namespace Game.Gameplay
             if (e >= 0 && e + 1 < args.Length) { w = e; }
             int w4 = Array.IndexOf(args, "-w4shots");
             if (w4 >= 0 && w4 + 1 < args.Length) { w = w4; }
+            int w5 = Array.IndexOf(args, "-w5shots");
+            if (w5 >= 0 && w5 + 1 < args.Length) { w = w5; }
             if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
             bool world = i < 0;
             if (world) i = w;
@@ -45,6 +48,7 @@ namespace Game.Gameplay
             capture._worldShots = world;
             capture._eleShots = e >= 0 && e + 1 < args.Length;
             capture._w4Shots = w4 >= 0 && w4 + 1 < args.Length;
+            capture._w5Shots = w5 >= 0 && w5 + 1 < args.Length;
             PlayerController.InputOverride = capture;
         }
 
@@ -81,6 +85,13 @@ namespace Game.Gameplay
                 yield break;
             }
             yield return new WaitForSeconds(1.5f);
+            if (_w5Shots)
+            {
+                yield return Wave5Shots(me);
+                Debug.Log("[FeelCapture] wave 5 shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
             if (_w4Shots)
             {
                 yield return Wave4Shots(me);
@@ -528,6 +539,75 @@ namespace Game.Gameplay
         }
 
         // The HUD at the three resolutions that matter.
+        IEnumerator Wave5Shots(Combatant me)
+        {
+            var pause = PauseMenu.Instance;
+            foreach (var (w, h) in new[] { (1280, 720), (1920, 1080) })
+            {
+                Screen.SetResolution(w, h, FullScreenMode.Windowed);
+                yield return new WaitForSeconds(1.2f);
+                if (pause == null) { Debug.LogError("[FeelCapture] no pause menu"); break; }
+                UiFocus.Set(UiScreen.Menu);
+                yield return null;
+                pause.ShowSettings();
+                foreach (SettingsTab tab in Enum.GetValues(typeof(SettingsTab)))
+                {
+                    pause.Settings.SelectTab(tab);
+                    yield return new WaitForSeconds(0.3f);
+                    yield return Shot($"s_{h}p_{(int)tab}_{tab}");
+                    if (tab == SettingsTab.Graphics)
+                    {
+                        pause.Settings.SelectPage(SettingsPage.Advanced);
+                        yield return new WaitForSeconds(0.3f);
+                        yield return Shot($"s_{h}p_{(int)tab}_{tab}_advanced");
+                        pause.Settings.SelectPage(SettingsPage.Basic);
+                    }
+                }
+                pause.Back();
+                UiFocus.Close();
+                yield return new WaitForSeconds(0.3f);
+            }
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSeconds(1.0f);
+
+            // A punch on the first dummy, unarmed, from a metre away.
+            var pc = PlayerController.Local;
+            var dummies = Dummies();
+            if (dummies.Length > 0)
+            {
+                var target = dummies[0];
+                pc.Teleport(target.transform.position + target.transform.forward * 1.1f + Vector3.up * 0.1f);
+                yield return null;
+                pc.LookAt(target.transform.position + Vector3.up * 1.3f);
+                yield return new WaitForSeconds(0.3f);
+                float hpBefore = target.Hp.Value;
+                _watch = Watch.Side;
+                _frame.FirePressed = _frame.FireHeld = true;
+                yield return null;
+                _frame.FireHeld = false;
+                yield return new WaitForSeconds(0.08f);
+                yield return Shot("p_punch_0");
+                yield return new WaitForSeconds(0.12f);
+                yield return Shot("p_punch_1");
+                _watch = Watch.Game;
+                yield return new WaitForSeconds(0.4f);
+                Debug.Log($"[FeelCapture] punch: dummy hp {hpBefore} -> {target.Hp.Value}");
+            }
+
+            // The first-aid kit, medkit and bandage icons in the inventory.
+            if (me.IsServerInitialized)
+            {
+                me.ServerGive(new LootEntry { Kind = LootKind.FirstAidKit, Amount = 1 });
+                me.ServerGive(new LootEntry { Kind = LootKind.Bandage, Amount = 3 });
+                me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });
+            }
+            yield return new WaitForSeconds(0.5f);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("i_inventory_firstaid");
+            UiFocus.Close();
+        }
+
         IEnumerator HudResolutions(string prefix)
         {
             foreach (var (w, h) in new[] { (1280, 720), (1920, 1080), (2560, 1440) })

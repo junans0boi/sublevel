@@ -187,10 +187,25 @@ namespace Game.Gameplay
             BuildCrosshair(root);
             BuildDeath(root);
             _canvas.enabled = false;
+            foreach (var image in _crosshair.GetComponentsInChildren<Image>(true))
+                if (image.name == "Core") _crosshairCores.Add(image);
+            ApplyCrosshairColor();
+            GameSettings.Changed += ApplyCrosshairColor;
+        }
+
+        readonly List<Image> _crosshairCores = new List<Image>();
+
+        // The crosshair's light core takes the colour picked in the settings (the dark rim stays).
+        void ApplyCrosshairColor()
+        {
+            var c = GameSettings.CrosshairColor;
+            c.a = 0.92f;
+            foreach (var image in _crosshairCores) image.color = c;
         }
 
         void OnDestroy()
         {
+            GameSettings.Changed -= ApplyCrosshairColor;
             if (Instance == this) Instance = null;
             if (_fadeUp != null) Destroy(_fadeUp);
             if (_fadeRight != null) Destroy(_fadeRight);
@@ -442,6 +457,7 @@ namespace Game.Gameplay
 
         void ShowDamageFrom(Vector3 worldPosition)
         {
+            if (!GameSettings.ShowDamageDirection) return;
             // A free slot, else the one that has faded the most.
             int slot = 0;
             for (int i = 1; i < DamageSlots; i++)

@@ -131,6 +131,7 @@ namespace Game.Gameplay
         {
             // The inventory and the map are full screens of their own; the feed would sit on top of them.
             bool wanted = UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map;
+            wanted &= GameSettings.ShowKillFeed;
             if (_canvas.enabled != wanted) _canvas.enabled = wanted;
             if (_shown > 0) Tick();
         }

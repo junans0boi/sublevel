@@ -15,6 +15,7 @@ namespace Game.Gameplay
     {
         const int BlastPool = 2;  // a combatant's own blasts never overlap more than this (one throw a second, short effect)
         const int PuffsPerBlast = 5;
+        const int LowEffectsPuffs = 2;  // blast puffs shown with the effects setting on low
         const float FlashSeconds = 0.12f;
         const float LightSeconds = 0.25f;
         const float SmokeSeconds = 1.6f;
@@ -302,7 +303,7 @@ namespace Game.Gameplay
             {
                 _blastSource.transform.position = centre;
                 _blastSource.pitch = _blastPitch;
-                _blastSource.PlayOneShot(_blastClip, _blastVolume);
+                _blastSource.PlayOneShot(_blastClip, _blastVolume * GameSettings.EffectsVolume);
                 BlastSoundsPlayed++;
             }
             if (!_built) return;
@@ -320,7 +321,7 @@ namespace Game.Gameplay
                 var offset = Random.insideUnitSphere * PuffSpread;
                 offset.y = Mathf.Abs(offset.y);
                 _puffOffset[index] = offset;
-                _puffs[index].enabled = true;
+                _puffs[index].enabled = GameSettings.HighEffects || p < LowEffectsPuffs;
             }
             PlaceBlast(i, ViewCamera());
         }

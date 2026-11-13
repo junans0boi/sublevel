@@ -496,10 +496,13 @@ namespace Game.Gameplay
                 const float pipWidth = 14f, pipGap = 4f;
                 float total = count * pipWidth + (count - 1) * pipGap;
                 row.Pips = new Image[count];
+                // Lift the text clear of the pips (it touched them at 720p).
+                var text = row.Value.rectTransform;
+                text.offsetMin = new Vector2(text.offsetMin.x, 5f);
                 for (int i = 0; i < count; i++)
                 {
                     var pip = UiKit.Rect("Pip" + i, box, new Vector2(0.5f, 0f), new Vector2(0f, 0f),
-                        new Vector2(-total * 0.5f + i * (pipWidth + pipGap), 4f), new Vector2(pipWidth, 2f));
+                        new Vector2(-total * 0.5f + i * (pipWidth + pipGap), 2f), new Vector2(pipWidth, 2f));
                     row.Pips[i] = UiKit.Box(pip, UiKit.SteelDim);
                 }
             }

@@ -125,7 +125,7 @@ namespace Game.Gameplay
         {
             if (source == null || clip == null) return false;
             source.pitch = pitch + Random.Range(-PitchJitter, PitchJitter);
-            source.PlayOneShot(clip, volume);
+            source.PlayOneShot(clip, volume * GameSettings.EffectsVolume);
             return true;
         }
     }

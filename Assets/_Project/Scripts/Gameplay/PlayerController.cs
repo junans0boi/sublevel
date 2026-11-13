@@ -140,10 +140,8 @@ namespace Game.Gameplay
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
             if (SpawnProtection.InputBlocked)
                 f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook };
-            // Scopes slow the mouse by their zoom; the settings add a factor of their own while aiming.
-            float lookFactor = ScopeView.SensitivityFactor;
-            if (_aim.Mode != AimMode.Hip) lookFactor *= GameSettings.AimSensitivityFactor;
-            f.Look *= lookFactor;
+            // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
+            f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor);
             LastInput = f;
             UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverDegPerSecond);
@@ -355,7 +353,9 @@ namespace Game.Gameplay
             };
             Rig.Place(Camera.transform, transform, _combatant.EyePosition, ViewYaw, ViewPitch, view, Time.deltaTime);
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
-            float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride : aimRules.For(_aim.Mode).Fov;
+            float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
+                : _aim.Mode == AimMode.Hip && Rig.Mode == ViewMode.FirstPerson ? GameSettings.FirstPersonFov
+                : aimRules.For(_aim.Mode).Fov;
             Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget, ease);
 
             // Hide our own body whenever the camera sits at the eyes so it does not block the view; the weapon

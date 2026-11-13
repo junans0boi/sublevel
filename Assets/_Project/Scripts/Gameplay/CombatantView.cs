@@ -199,7 +199,7 @@ namespace Game.Gameplay
             var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
             if (_confirmSource == null || clip == null) return;
             _confirmSource.pitch = kill ? _fx.KillConfirmPitch : punch.Head ? _fx.HeadConfirmPitch : _fx.HitConfirmPitch;
-            _confirmSource.PlayOneShot(clip, kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume);
+            _confirmSource.PlayOneShot(clip, (kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume) * GameSettings.UiVolume);
         }
 
         // Shots are traced from the eyes; the flash and the tracer start where the weapon is held instead.
@@ -276,7 +276,7 @@ namespace Game.Gameplay
             _impactStart[i] = Time.time;
             _impactOn[i] = true;
             _impactFlashRenderer[i].enabled = true;
-            _impactDustRenderer[i].enabled = true;
+            _impactDustRenderer[i].enabled = GameSettings.HighEffects; // low effects: the flash only
             PlaceImpact(i, ViewCamera());
             ImpactsShown++;
         }
@@ -330,7 +330,7 @@ namespace Game.Gameplay
             var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
             if (_confirmSource == null || clip == null) return;
             _confirmSource.pitch = kill ? _fx.KillConfirmPitch : shot.Head ? _fx.HeadConfirmPitch : _fx.HitConfirmPitch;
-            _confirmSource.PlayOneShot(clip, kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume);
+            _confirmSource.PlayOneShot(clip, (kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume) * GameSettings.UiVolume);
         }
 
         static Transform ViewCamera()

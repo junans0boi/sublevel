@@ -57,7 +57,7 @@ namespace Game.Gameplay
             if (key.StartsWith("ammo_")) return new Color(0.35f, 0.29f, 0.17f, 1f);
             if (key.StartsWith("helmet_")) return new Color(0.22f, 0.31f, 0.29f, 1f);
             if (key.StartsWith("vest_")) return new Color(0.24f, 0.27f, 0.33f, 1f);
-            if (key == "medkit") return new Color(0.42f, 0.20f, 0.20f, 1f);
+            if (key == "medkit") return new Color(0.24f, 0.32f, 0.26f, 1f);
             if (key == "grenade") return new Color(0.24f, 0.31f, 0.20f, 1f);
             return new Color(0.28f, 0.28f, 0.30f, 1f);
         }

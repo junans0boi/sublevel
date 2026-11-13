@@ -73,14 +73,14 @@ public static class TestBoxBuilder
         for (int i = 0; i < mats.Length; i++) mats[i] = other;
         mats[0] = Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f));
         mats[1] = Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f));
-        mats[2] = Lit("LootMedkit", new Color(0.92f, 0.92f, 0.92f));
+        mats[2] = Lit("LootMedkit", new Color(0.62f, 0.70f, 0.66f));
         mats[3] = Lit("LootHelmet", new Color(0.35f, 0.5f, 0.7f));
         mats[4] = Lit("LootVest", new Color(0.7f, 0.45f, 0.25f));
         mats[10] = Lit("LootGrenade", new Color(0.33f, 0.4f, 0.2f));
         mats[11] = Lit("LootOptic", new Color(0.2f, 0.22f, 0.26f));
         mats[12] = Lit("LootKey", new Color(0.72f, 0.6f, 0.28f));
         mats[13] = Lit("LootBandage", new Color(0.82f, 0.78f, 0.68f));
-        mats[14] = Lit("LootFirstAid", new Color(0.62f, 0.24f, 0.22f));
+        mats[14] = Lit("LootFirstAid", new Color(0.22f, 0.42f, 0.38f));
         mats[15] = Lit("LootSmoke", new Color(0.46f, 0.49f, 0.52f));
         return mats;
     }
