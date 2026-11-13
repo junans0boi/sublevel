@@ -169,7 +169,6 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        [Ignore("needs master server contract")]
         public IEnumerator WeaponSlot_DroppedOnOtherSlot_SwapsWeapons()
         {
             yield return LoadTestBox();

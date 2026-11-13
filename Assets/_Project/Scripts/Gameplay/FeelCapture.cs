@@ -40,6 +40,7 @@ namespace Game.Gameplay
             var f = _frame;
             // One-frame presses.
             _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = false;
+            _frame.ThrowPressed = _frame.ThrowReleased = false;
             _frame.Look = Vector2.zero;
             return f;
         }
@@ -83,7 +84,7 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.4f);
 
             // The screens.
-            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Medium, Amount = 60 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = GameData.Weapons.Find(3).Ammo, Amount = 60 });
             me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 });
             me.ServerTakeDamage(35f);
             yield return new WaitForSeconds(0.4f);
@@ -197,6 +198,7 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.5f);
 
             yield return CrouchShots();
+            yield return GearShots(me);
             yield return MatchShots(me);
 
             Debug.Log("[FeelCapture] done: " + _folder);
@@ -246,6 +248,48 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.3f);
             _frame.Crouch = true;
             yield return new WaitForSeconds(0.6f);
+        }
+
+        // Armour on the HUD and a grenade thrown and going off, from the spawn corner where nothing else is in sight.
+        // The player is immune by now (see the damage filter above), so the blast only has to be seen.
+        IEnumerator GearShots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            if (pc != null)
+            {
+                pc.Teleport(_home);
+                yield return null;
+                pc.LookAt(_home + _homeForward * 10f + Vector3.up * 1.6f);
+            }
+            _watch = Watch.Game;
+            var gear = me.GetComponent<CombatantGear>();
+            if (gear != null)
+            {
+                gear.ServerEquip(ArmorSlot.Vest, 2);
+                gear.ServerEquip(ArmorSlot.Helmet, 1);
+            }
+            else Debug.LogWarning("[FeelCapture] the player has no CombatantGear");
+            var thrower = me.GetComponent<ThrowableUser>();
+            if (thrower != null) thrower.ServerAdd(3);
+            else Debug.LogWarning("[FeelCapture] the player has no ThrowableUser");
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("40_armor_hud");
+
+            // Aiming (the preview arc), then let go.
+            _frame.ThrowPressed = true;
+            _frame.ThrowHeld = true;
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("41_grenade_aim");
+            _frame.ThrowHeld = false;
+            _frame.ThrowReleased = true;
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot("41_grenade_thrown");
+            // The fuse is counted from the throw: catch the flash, the light and the smoke over three frames.
+            float fuse = ThrowableRules.Current.FuseSeconds;
+            yield return new WaitForSeconds(Mathf.Max(0f, fuse - 0.4f));
+            yield return Burst("42_grenade_blast", 3, 0.08f);
+            yield return new WaitForSeconds(1.2f);
+            yield return Shot("42_grenade_smoke");
         }
 
         Combatant[] Dummies()

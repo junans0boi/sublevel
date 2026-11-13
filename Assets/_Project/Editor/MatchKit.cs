@@ -20,7 +20,8 @@ public static class MatchKit
 
     public static Spawn At(float x, float y, float z, float yaw = 0f) => new Spawn { Position = new Vector3(x, y, z), Yaw = yaw };
 
-    public static MatchDirector AddMatch(Spawn[] players, Spawn[] loot, Spawn[] dummies)
+    // `bots`: where bots start (needs the Bot prefab from TestBoxBuilder). Null or empty = no bots, the scene is as before.
+    public static MatchDirector AddMatch(Spawn[] players, Spawn[] loot, Spawn[] dummies, Spawn[] bots = null)
     {
         var go = new GameObject("Match");
         var nm = go.AddComponent<NetworkManager>();
@@ -38,6 +39,11 @@ public static class MatchKit
         SetArray(director, "_playerSpawns", Points(go.transform, "PlayerSpawn", players));
         SetArray(director, "_lootSpawns", Points(go.transform, "LootSpawn", loot));
         SetArray(director, "_dummySpawns", Points(go.transform, "DummySpawn", dummies));
+        if (bots != null && bots.Length > 0)
+        {
+            Set(director, "_botPrefab", p => p.objectReferenceValue = Prefab("Bot"));
+            SetArray(director, "_botSpawns", Points(go.transform, "BotSpawn", bots));
+        }
 
         new GameObject("HUD").AddComponent<Hud>();
         return director;

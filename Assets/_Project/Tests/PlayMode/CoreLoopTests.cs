@@ -117,14 +117,14 @@ namespace Game.Tests
             // Host shortcut: hand the items over on the server instead of walking to them.
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 2 });
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 4, Amount = 6 });
-            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Light, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Pistol9, Amount = 30 });
             me.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });
             yield return null;
 
             _input.Frame.Reload = true;
             yield return WaitUntil(() => me.Reloading.Value, 2f, "reload started");
             yield return WaitUntil(() => !me.Reloading.Value && me.Mag0.Value == 12, 5f, "magazine refilled");
-            Assert.AreEqual(20, me.ReserveLight.Value);
+            Assert.AreEqual(20, me.ReservePistol9.Value);
 
             _input.Frame.SelectSlot = 1;
             yield return WaitUntil(() => me.ActiveSlot.Value == 1, 2f, "second slot active");

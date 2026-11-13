@@ -75,6 +75,8 @@ namespace Game.Gameplay
         CombatantStance _stance;  // missing on a prefab built before stances existed: never crouches
         float _legLength = FallbackLegLength;
         float _crouch;            // 0..1: how much of the crouch is shown
+        float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
+        const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
         // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
         readonly Transform[] _bones = new Transform[TurnedBones];
@@ -169,7 +171,11 @@ namespace Game.Gameplay
             _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
-            _animator.SetFloat(_pace, Game.Core.Locomotion.LegPace(speed, _legs.Backward ? _backClipSpeed : _forwardClipSpeed, GameData.Rules.Gait));
+            float clipSpeed = _legs.Backward ? _backClipSpeed : _forwardClipSpeed;
+            float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
+            // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
+            if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
+            _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir();
             if (dead) SetBase(Death);
             else
@@ -247,8 +253,14 @@ namespace Game.Gameplay
             // The crouch follows the replicated stance, eased in and out; in the air the tuck takes over from it.
             float crouch = dead || _stance == null ? 0f : _stance.CrouchAmount;
             _crouch = crouch * crouch * (3f - 2f * crouch) * (1f - _tuck);
+            // Walking, the clip already swings the legs, so the crouch bends them less on top of it.
+            var rules = StanceRules.Current;
+            var v = dead ? Vector3.zero : _motion.LocalVelocity;
+            float walk = rules.CrouchWalkFullSpeed <= 0f ? 0f : Mathf.Clamp01(new Vector2(v.x, v.z).magnitude / rules.CrouchWalkFullSpeed);
+            _crouchWalk = Mathf.MoveTowards(_crouchWalk, walk, CrouchWalkBlendPerSecond * Time.deltaTime);
+            float scale = _crouch * Stances.CrouchBendScale(_crouchWalk, rules.CrouchWalkBend);
             // Lowered by exactly what the bent knees take off the legs, so the feet stay on the ground.
-            _drop = _dip * jump.LandDropMeters + Stances.KneeBendDrop(_legLength, StanceRules.Current.CrouchKneeDeg * _crouch);
+            _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
             _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop;
         }
 
@@ -335,17 +347,21 @@ namespace Game.Gameplay
             // limb backward and points the toes down.
             var jump = GameData.Rules.Jump;
             var stanceRules = StanceRules.Current;
-            float crouchKnee = stanceRules.CrouchKneeDeg * _crouch;
+            // Thigh forward and shin back, each measured from vertical; the same scale as the model drop uses.
+            float crouchScale = _crouch * Stances.CrouchBendScale(_crouchWalk, stanceRules.CrouchWalkBend);
+            float crouchThigh = stanceRules.CrouchThighDeg * crouchScale;
+            float crouchShin = stanceRules.CrouchShinDeg * crouchScale;
             // A weapon pose keeps the weapon level, so only empty hands hunch forward in a crouch.
             float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _upperWeight);
             Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch, transform.right);
             // The legs face where the model is turned, not where the combatant looks.
             var legRight = Quaternion.AngleAxis(_legs.TurnDeg, transform.up) * transform.right;
-            // Knees up in front, shins folded back under them. Landing and crouching: the shin folds twice the
-            // thigh's angle so the feet stay under the hips, and the feet are levelled again.
-            float thigh = -(jump.TuckThighDeg * _tuck + jump.LandBendDeg * _dip + crouchKnee);
-            float shin = jump.TuckShinDeg * _tuck + 2f * (jump.LandBendDeg * _dip + crouchKnee);
-            float foot = jump.TakeoffToeDeg * _push - jump.LandBendDeg * _dip - crouchKnee;
+            // Knees up in front, shins folded back under them. The shin turns relative to the thigh, which already
+            // leans forward by t, so to point back by s from vertical it turns t + s (a landing uses s = t, i.e.
+            // twice the thigh angle). The shin's net swing from vertical is then s, so the foot turns -s to be flat.
+            float thigh = -(jump.TuckThighDeg * _tuck + jump.LandBendDeg * _dip + crouchThigh);
+            float shin = jump.TuckShinDeg * _tuck + 2f * jump.LandBendDeg * _dip + crouchThigh + crouchShin;
+            float foot = jump.TakeoffToeDeg * _push - jump.LandBendDeg * _dip - crouchShin;
             PoseLeg(0, ThighLeft, ShinLeft, FootLeft, thigh, shin, legRight);
             PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, legRight);
             Turn(FootLeft, foot, legRight);

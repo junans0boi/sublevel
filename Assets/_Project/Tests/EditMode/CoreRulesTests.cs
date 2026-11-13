@@ -10,9 +10,9 @@ namespace Game.Tests
         {
             Weapons = new[]
             {
-                new WeaponDef { Id = 1, Name = "P", Ammo = AmmoType.Light, Damage = 20, FireInterval = 0.5f, MagSize = 3, ReloadTime = 1f,
+                new WeaponDef { Id = 1, Name = "P", Ammo = AmmoType.Pistol9, Damage = 20, FireInterval = 0.5f, MagSize = 3, ReloadTime = 1f,
                     SpreadDeg = 2, Pellets = 1, Range = 100, FalloffStart = 10, FalloffEnd = 30, MinDamageFactor = 0.5f },
-                new WeaponDef { Id = 2, Name = "S", Ammo = AmmoType.Shell, Damage = 10, FireInterval = 1f, MagSize = 2, ReloadTime = 2f,
+                new WeaponDef { Id = 2, Name = "S", Ammo = AmmoType.Shotgun12, Damage = 10, FireInterval = 1f, MagSize = 2, ReloadTime = 2f,
                     SpreadDeg = 8, Pellets = 8, Range = 40 },
             }
         };
@@ -81,13 +81,13 @@ namespace Game.Tests
         {
             var l = new Loadout(Table());
             l.AddWeapon(1, 1);
-            l.AddAmmo(AmmoType.Light, 5);
+            l.AddAmmo(AmmoType.Pistol9, 5);
             Assert.IsTrue(l.TryStartReload(10));
             Assert.IsFalse(l.TryFire(10.5), "cannot fire while reloading");
             Assert.IsFalse(l.Tick(10.5));
             Assert.IsTrue(l.Tick(11));
             Assert.AreEqual(3, l.MagInSlot(0));
-            Assert.AreEqual(3, l.Reserve(AmmoType.Light));
+            Assert.AreEqual(3, l.Reserve(AmmoType.Pistol9));
         }
 
         [Test]
@@ -95,11 +95,11 @@ namespace Game.Tests
         {
             var l = new Loadout(Table());
             l.AddWeapon(1, 3);
-            l.AddAmmo(AmmoType.Light, 5);
+            l.AddAmmo(AmmoType.Pistol9, 5);
             Assert.IsFalse(l.TryStartReload(0), "full magazine");
             var l2 = new Loadout(Table());
             l2.AddWeapon(1, 0);
-            l2.AddAmmo(AmmoType.Shell, 5);
+            l2.AddAmmo(AmmoType.Shotgun12, 5);
             Assert.IsFalse(l2.TryStartReload(0), "wrong ammo type only");
         }
 
@@ -122,7 +122,7 @@ namespace Game.Tests
             var l = new Loadout(Table());
             l.AddWeapon(1, 0);
             l.AddWeapon(2, 2);
-            l.AddAmmo(AmmoType.Light, 3);
+            l.AddAmmo(AmmoType.Pistol9, 3);
             l.TryStartReload(0);
             Assert.IsTrue(l.SelectSlot(1));
             Assert.IsFalse(l.IsReloading);
@@ -152,7 +152,7 @@ namespace Game.Tests
             {
                 Entries = new[]
                 {
-                    new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Light, Amount = 20, Weight = 50 },
+                    new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Pistol9, Amount = 20, Weight = 50 },
                     new LootEntry { Kind = LootKind.Medkit, Amount = 1, Weight = 30 },
                     new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 3, Weight = 1 },
                 }

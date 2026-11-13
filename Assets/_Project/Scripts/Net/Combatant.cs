@@ -35,9 +35,11 @@ namespace Game.Net
         public readonly SyncVar<int> Slot1 = new SyncVar<int>();
         public readonly SyncVar<int> Mag0 = new SyncVar<int>();
         public readonly SyncVar<int> Mag1 = new SyncVar<int>();
-        public readonly SyncVar<int> ReserveLight = new SyncVar<int>();
-        public readonly SyncVar<int> ReserveMedium = new SyncVar<int>();
-        public readonly SyncVar<int> ReserveShell = new SyncVar<int>();
+        // Reserve rounds per calibre (ADR-054), in AmmoType order. Four plain SyncVars: the simplest robust pattern.
+        public readonly SyncVar<int> ReservePistol9 = new SyncVar<int>();
+        public readonly SyncVar<int> ReserveRifle556 = new SyncVar<int>();
+        public readonly SyncVar<int> ReserveShotgun12 = new SyncVar<int>();
+        public readonly SyncVar<int> ReserveRifle762 = new SyncVar<int>();
         public readonly SyncVar<int> Medkits = new SyncVar<int>();
         // Stance, requested by the owner (ADR-045): how the weapon is aimed and which way the body leans.
         public readonly SyncVar<int> Aim = new SyncVar<int>();   // AimMode
@@ -138,8 +140,23 @@ namespace Game.Net
         public int ActiveMag => ActiveSlot.Value == 0 ? Mag0.Value : Mag1.Value;
         public WeaponDef ActiveWeapon => GameData.Weapons.Find(ActiveWeaponId);
 
-        public int ReserveFor(AmmoType type) =>
-            type == AmmoType.Light ? ReserveLight.Value : type == AmmoType.Medium ? ReserveMedium.Value : ReserveShell.Value;
+        public int ReserveFor(AmmoType type)
+        {
+            switch (type)
+            {
+                case AmmoType.Pistol9: return ReservePistol9.Value;
+                case AmmoType.Rifle556: return ReserveRifle556.Value;
+                case AmmoType.Shotgun12: return ReserveShotgun12.Value;
+                case AmmoType.Rifle762: return ReserveRifle762.Value;
+                default: return 0;
+            }
+        }
+
+        // What a non-player leaves of each calibre when it dies; a training dummy carries 9999 rounds.
+        public const int DroppedReserveCap = 60;
+
+        // Server: who else may take loot kinds the loadout does not know (armour, grenades).
+        ILootReceiver[] _receivers;
 
         public override void OnStartNetwork()
         {
@@ -163,6 +180,7 @@ namespace Game.Net
             // Derived from the match seed so a match can be replayed.
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
+            _receivers = GetComponents<ILootReceiver>();
             Push();
         }
 
@@ -225,9 +243,10 @@ namespace Game.Net
             Slot1.Value = _loadout.WeaponInSlot(1);
             Mag0.Value = _loadout.MagInSlot(0);
             Mag1.Value = _loadout.MagInSlot(1);
-            ReserveLight.Value = _loadout.Reserve(AmmoType.Light);
-            ReserveMedium.Value = _loadout.Reserve(AmmoType.Medium);
-            ReserveShell.Value = _loadout.Reserve(AmmoType.Shell);
+            ReservePistol9.Value = _loadout.Reserve(AmmoType.Pistol9);
+            ReserveRifle556.Value = _loadout.Reserve(AmmoType.Rifle556);
+            ReserveShotgun12.Value = _loadout.Reserve(AmmoType.Shotgun12);
+            ReserveRifle762.Value = _loadout.Reserve(AmmoType.Rifle762);
             Medkits.Value = _loadout.Medkits;
         }
 
@@ -283,6 +302,8 @@ namespace Game.Net
                 }
                 RpcShotFx(origin, end, normal, (byte)((int)result | ((int)zone << ShotZoneShift)), victim);
             }
+            // Bots hear the shot where it was fired, whoever fired it.
+            BotNoise.Emit(origin.x, origin.y, origin.z, BotRules.Current.GunshotHearingRadius, ObjectId);
             Push();
             return true;
         }
@@ -320,8 +341,12 @@ namespace Game.Net
                 case LootKind.Medkit: _loadout.AddMedkits(loot.Amount); break;
                 default:
                     // Kinds the loadout does not know (armour, throwables, ...) belong to another component.
-                    var receiver = GetComponent<ILootReceiver>();
-                    if (receiver == null || !receiver.ServerTryTake(loot)) return false;
+                    // Every receiver is asked; the first to accept wins.
+                    if (_receivers == null) _receivers = GetComponents<ILootReceiver>();
+                    bool taken = false;
+                    for (int i = 0; i < _receivers.Length && !taken; i++)
+                        taken = _receivers[i].ServerTryTake(loot);
+                    if (!taken) return false;
                     break;
             }
             Push();
@@ -354,16 +379,72 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSetStance(int aim, int lean) => ServerSetStance((AimMode)aim, lean);
 
-        [ServerRpc]
-        public void CmdSelectSlot(int slot)
+        // Same effect as CmdSelectSlot, for the server's own callers (bots).
+        public bool ServerSelectSlot(int slot)
         {
-            if (!_health.IsDead && _loadout.SelectSlot(slot)) Push();
+            if (!IsServerInitialized || _loadout == null || _health.IsDead || !_loadout.SelectSlot(slot)) return false;
+            Push();
+            return true;
+        }
+
+        // Same effect as CmdUseMedkit, for the server's own callers (bots).
+        public bool ServerUseMedkit()
+        {
+            if (!IsServerInitialized || _loadout == null || !_loadout.TryUseMedkit(_health)) return false;
+            Push();
+            return true;
+        }
+
+        // Empties weapons, ammo and medkits. Non-players keep at most DroppedReserveCap rounds per calibre in what
+        // they hand back (the rest is gone), so a dummy's 9999 rounds do not litter the ground. `into` (may be null)
+        // receives the contents as loot entries; the replicated values are cleared either way.
+        public void ServerStripLoadout(List<LootEntry> into = null)
+        {
+            if (!IsServerInitialized || _loadout == null) return;
+            for (int slot = 0; slot < Loadout.SlotCount; slot++)
+            {
+                int weaponId = _loadout.RemoveWeapon(slot, out int mag);
+                if (weaponId != 0) into?.Add(new LootEntry { Kind = LootKind.Weapon, WeaponId = weaponId, Amount = mag });
+            }
+            for (int type = 0; type < AmmoNames.Count; type++)
+            {
+                int rounds = _loadout.RemoveAmmo((AmmoType)type);
+                if (!_isPlayer && rounds > DroppedReserveCap) rounds = DroppedReserveCap;
+                if (rounds > 0) into?.Add(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)type, Amount = rounds });
+            }
+            int kits = 0;
+            while (_loadout.RemoveMedkit()) kits++;
+            if (kits > 0) into?.Add(new LootEntry { Kind = LootKind.Medkit, Amount = kits });
+            Push();
         }
 
         [ServerRpc]
-        public void CmdUseMedkit()
+        public void CmdSelectSlot(int slot) => ServerSelectSlot(slot);
+
+        [ServerRpc]
+        public void CmdUseMedkit() => ServerUseMedkit();
+
+        // The weapons trade places; the one in hand stays in hand.
+        [ServerRpc]
+        public void CmdSwapWeaponSlots()
         {
-            if (_loadout.TryUseMedkit(_health)) Push();
+            if (!_health.IsDead && _loadout.SwapSlots()) Push();
+        }
+
+        // A weapon from the ground into a chosen slot; the weapon that was there lands on the ground.
+        [ServerRpc]
+        public void CmdPickupToSlot(NetworkObject lootObject, int slot)
+        {
+            if (_health.IsDead || lootObject == null || slot < 0 || slot >= Loadout.SlotCount) return;
+            var item = lootObject.GetComponent<LootItem>();
+            if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
+            if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
+            if (GameData.Weapons.Find(item.WeaponId.Value) == null) return;
+            int replaced = _loadout.AddWeaponToSlot(slot, item.WeaponId.Value, item.Amount.Value, out int replacedMag);
+            item.Despawn();
+            if (replaced != 0 && MatchDirector.Instance != null)
+                MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Weapon, WeaponId = replaced, Amount = replacedMag }, transform.position + Vector3.up * 0.3f);
+            Push();
         }
 
         [ServerRpc]
@@ -390,7 +471,7 @@ namespace Game.Net
         public void CmdDropAmmo(int ammoType)
         {
             if (_health.IsDead || MatchDirector.Instance == null) return;
-            if (ammoType < (int)AmmoType.Light || ammoType > (int)AmmoType.Shell) return;
+            if (!AmmoNames.IsValid((AmmoType)ammoType)) return;
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType);
             if (amount <= 0) return;
             ServerDropLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)ammoType, Amount = amount });

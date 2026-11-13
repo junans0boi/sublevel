@@ -83,8 +83,70 @@ namespace Game.Tests
             Assert.AreEqual(0f, Stances.KneeBendDrop(0.9f, 0f), 1e-5f);
             Assert.AreEqual(0.45f, Stances.KneeBendDrop(0.9f, 60f), 1e-4f);
             Assert.AreEqual(0.9f, Stances.KneeBendDrop(0.9f, 90f), 1e-4f);
-            // The default crouch: hips down about as far as the eyes.
-            Assert.AreEqual(0.6219f, Stances.KneeBendDrop(0.9f, Rules.CrouchKneeDeg), 1e-3f);
+            // The default crouch: thigh 58 and shin 50 degrees from vertical on a 0.9 m leg.
+            Assert.AreEqual(0.3723f, Stances.CrouchHipDrop(0.9f, Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-3f);
+        }
+
+        [Test]
+        public void CrouchKnee_FoldsToAboutAQuarterTurnNeverPast110()
+        {
+            Assert.AreEqual(108f, Stances.KneeFlexion(Rules.CrouchThighDeg, Rules.CrouchShinDeg), 1e-4f);
+            Assert.That(Stances.KneeFlexion(Rules.CrouchThighDeg, Rules.CrouchShinDeg), Is.InRange(80f, 110f));
+            Assert.That(Rules.CrouchThighDeg, Is.InRange(55f, 65f));
+            Assert.That(Rules.CrouchTorsoPitchDeg, Is.InRange(8f, 12f));
+            // Landing bend (thigh 28, shin 28 from vertical) stays far from the limit too.
+            Assert.AreEqual(56f, Stances.KneeFlexion(28f, 28f), 1e-4f);
+        }
+
+        [Test]
+        public void CrouchBend_ShrinksWithWalkingSpeed()
+        {
+            // Blend 0 = standing crouch: full 58 / 50. Blend 1 = walking: 0.65 of that. Half way in between.
+            foreach (var c in new[] { (0f, 1f, 58f, 50f), (0.5f, 0.825f, 47.85f, 41.25f), (1f, 0.65f, 37.7f, 32.5f), (2f, 0.65f, 37.7f, 32.5f), (-1f, 1f, 58f, 50f) })
+            {
+                float scale = Stances.CrouchBendScale(c.Item1, Rules.CrouchWalkBend);
+                Assert.AreEqual(c.Item2, scale, 1e-4f, "scale at blend " + c.Item1);
+                Assert.AreEqual(c.Item3, Rules.CrouchThighDeg * scale, 1e-2f, "thigh");
+                Assert.AreEqual(c.Item4, Rules.CrouchShinDeg * scale, 1e-2f, "shin");
+            }
+            // Walking bend: hips 0.9 * 0.5 * (2 - cos 37.7 - cos 32.5) = 0.1644 m down; still well above the full bend.
+            Assert.AreEqual(0.1644f, Stances.CrouchHipDrop(0.9f, 37.7f, 32.5f), 1e-3f);
+        }
+
+        [Test]
+        public void CrouchFeet_StayOnTheGround_ForEveryBlend()
+        {
+            const float thighLength = 0.45f, shinLength = 0.45f, hipHeight = 0.9f;
+            foreach (float blend in new[] { 0f, 0.5f, 1f })
+            {
+                float scale = Stances.CrouchBendScale(blend, Rules.CrouchWalkBend);
+                float thighDeg = Rules.CrouchThighDeg * scale, shinDeg = Rules.CrouchShinDeg * scale;
+                float drop = Stances.CrouchHipDrop(thighLength + shinLength, thighDeg, shinDeg);
+                // x forward, y up. The thigh points down and forward, the shin down and back.
+                var hip = new UnityLikeVector(0f, hipHeight - drop);
+                var knee = hip.Plus(thighLength * (float)System.Math.Sin(thighDeg * System.Math.PI / 180.0), -thighLength * (float)System.Math.Cos(thighDeg * System.Math.PI / 180.0));
+                var foot = knee.Plus(-shinLength * (float)System.Math.Sin(shinDeg * System.Math.PI / 180.0), -shinLength * (float)System.Math.Cos(shinDeg * System.Math.PI / 180.0));
+                Assert.AreEqual(0f, foot.Y, 0.03f, "foot height at blend " + blend);
+                Assert.Less(System.Math.Abs(foot.X), 0.06f, "foot under the hips at blend " + blend);
+                Assert.Greater(knee.X, 0f, "the knee is in front");
+            }
+        }
+
+        [Test]
+        public void CrouchWalk_PlaysTheLegsInProportionToTheSpeed()
+        {
+            Assert.AreEqual(0.495f, Stances.CrouchLegPace(2.475f, 5f, 0.4f), 1e-4f);
+            Assert.AreEqual(0.865f, Stances.CrouchLegPace(2.475f, 2.86f, 0.4f), 1e-3f);
+            Assert.AreEqual(0.4f, Stances.CrouchLegPace(0.2f, 5f, 0.4f), 1e-4f, "never frozen");
+            Assert.AreEqual(1f, Stances.CrouchLegPace(9f, 5f, 0.4f), 1e-4f, "never faster than the clip");
+            Assert.AreEqual(1f, Stances.CrouchLegPace(2f, 0f, 0.4f), 1e-4f);
+        }
+
+        struct UnityLikeVector
+        {
+            public readonly float X, Y;
+            public UnityLikeVector(float x, float y) { X = x; Y = y; }
+            public UnityLikeVector Plus(float dx, float dy) => new UnityLikeVector(X + dx, Y + dy);
         }
 
         [Test]

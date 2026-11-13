@@ -31,9 +31,18 @@ namespace Game.Core
         public float HeadClearanceMeters = 0.05f; // free space needed above the raised head before standing up
 
         // There is no crouch clip: the knees are bent in code and the model is lowered by what that takes off
-        // the legs, so the feet stay on the ground.
-        public float CrouchKneeDeg = 72f;       // thigh forward; the shin folds back twice this
-        public float CrouchTorsoPitchDeg = 6f;  // forward, empty hands only (a weapon pose keeps the weapon level)
+        // the legs, so the feet stay on the ground. Angles are measured from vertical: the thigh points down and
+        // forward, the shin down and back, so the knee flexes by their sum. 58 + 50 = 108 degrees of flexion is
+        // an interior knee angle of 72 and never beyond the 110 a real knee folds to; both thighs and shins have
+        // about the same length, so the feet land 4 cm ahead of the hips and the hips come down about 0.37 m.
+        public float CrouchThighDeg = 58f;
+        public float CrouchShinDeg = 50f;
+        public float CrouchTorsoPitchDeg = 10f; // forward, empty hands only (a weapon pose keeps the weapon level)
+        // Crouch-walking keeps the walk clip's leg swing and bends the knees by this share of the standing crouch
+        // (a full bend plus a stride would fold the legs), reached at CrouchWalkFullSpeed m/s.
+        public float CrouchWalkBend = 0.65f;
+        public float CrouchWalkFullSpeed = 1.5f;
+        public float CrouchMinLegPace = 0.4f;   // slowest the walk clip is played while crouch-walking
 
         public StancePose For(Stance stance) => stance == Stance.Crouch ? Crouch : stance == Stance.Prone ? Prone : Stand;
     }
@@ -62,6 +71,28 @@ namespace Game.Core
         // How far the hips come down when both knees bend by `kneeDeg` (thigh forward, shin back by the same
         // angle from upright) on legs `legLength` long.
         public static float KneeBendDrop(float legLength, float kneeDeg) =>
-            legLength * (1f - (float)Math.Cos(kneeDeg * Math.PI / 180.0));
+            CrouchHipDrop(legLength, kneeDeg, kneeDeg);
+
+        // Hips lowered when the thigh points `thighDeg` forward and the shin `shinBackDeg` back of vertical, with
+        // the thigh and the shin each half of `legLength`: the ankle sat legLength/2 * (cos t + cos s) under the hip.
+        public static float CrouchHipDrop(float legLength, float thighDeg, float shinBackDeg) =>
+            legLength * 0.5f * (2f - Cos(thighDeg) - Cos(shinBackDeg));
+
+        // How much the knee folds: the angle between the shin's line and the thigh's line continued through the knee.
+        public static float KneeFlexion(float thighDeg, float shinBackDeg) => thighDeg + shinBackDeg;
+
+        // Share of the standing crouch bend shown at `walkBlend` (0 = still, 1 = walking fast): from 1 down to `walkBend`.
+        public static float CrouchBendScale(float walkBlend, float walkBend) =>
+            1f + (walkBend - 1f) * Math.Min(1f, Math.Max(0f, walkBlend));
+
+        // Playback speed of the walk clip while crouched: in proportion to how much slower than the clip the body
+        // moves (so the feet do not skate), never below `minPace`, never above 1.
+        public static float CrouchLegPace(float speed, float clipSpeed, float minPace)
+        {
+            if (clipSpeed <= 0f) return 1f;
+            return Math.Min(1f, Math.Max(minPace, speed / clipSpeed));
+        }
+
+        static float Cos(float deg) => (float)Math.Cos(deg * Math.PI / 180.0);
     }
 }

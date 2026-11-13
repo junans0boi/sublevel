@@ -18,5 +18,9 @@ namespace Game.Core
         public StanceRules Stance = new StanceRules();
         public FallRules Fall = new FallRules();
         public FreeLookRules FreeLook = new FreeLookRules();
+        public ArmorRules Armor = new ArmorRules();
+        public CrateRules Crate = new CrateRules();
+        public ThrowableRules Throwables = new ThrowableRules();
+        public BotRules Bot = new BotRules();
     }
 }

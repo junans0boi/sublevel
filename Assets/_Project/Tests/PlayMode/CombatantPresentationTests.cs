@@ -97,7 +97,7 @@ namespace Game.Tests
 
             // One shotgun shot is nine pellets but must sound once.
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 4, Amount = 2 });
-            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Shell, Amount = 8 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Shotgun12, Amount = 8 });
             yield return null;
             _input.Frame.FirePressed = true;
             yield return WaitUntil(() => me.Mag0.Value == 1, 2f, "shot fired");

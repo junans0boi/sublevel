@@ -33,8 +33,38 @@
     "Crouch": { "EyeDropMeters": 0.65, "CapsuleHeight": 1.0, "MoveFactor": 0.55, "SpreadFactor": 0.7,  "FootstepVolumeFactor": 0.4 },
     "Prone":  { "EyeDropMeters": 1.3,  "CapsuleHeight": 0.7, "MoveFactor": 0.25, "SpreadFactor": 0.45, "FootstepVolumeFactor": 0.2 },
     "ProneEnabled": false, "ChangePerSecond": 5.0, "HeadClearanceMeters": 0.05,
-    "CrouchKneeDeg": 72.0, "CrouchTorsoPitchDeg": 6.0
+    "CrouchThighDeg": 58.0, "CrouchShinDeg": 50.0, "CrouchTorsoPitchDeg": 10.0,
+    "CrouchWalkBend": 0.65, "CrouchWalkFullSpeed": 1.5, "CrouchMinLegPace": 0.4
   },
   "Fall": { "SafeMeters": 3.0, "LethalMeters": 12.0, "LethalDamage": 100.0, "ReportToleranceMeters": 1.0, "ReportWindowSeconds": 1.0 },
-  "FreeLook": { "MaxYawDeg": 120.0, "ReturnDegPerSecond": 540.0 }
+  "FreeLook": { "MaxYawDeg": 120.0, "ReturnDegPerSecond": 540.0 },
+  "Armor": {
+    "Helmets": [
+      { "Reduction": 0.25, "Durability": 60.0 },
+      { "Reduction": 0.40, "Durability": 110.0 },
+      { "Reduction": 0.50, "Durability": 170.0 }
+    ],
+    "Vests": [
+      { "Reduction": 0.25, "Durability": 120.0 },
+      { "Reduction": 0.35, "Durability": 180.0 },
+      { "Reduction": 0.45, "Durability": 250.0 }
+    ]
+  },
+  "Crate": { "RingRadius": 0.9, "LiftMeters": 0.3, "WallClearance": 0.25, "MarkerSeconds": 90.0 },
+  "Throwables": {
+    "MaxCarried": 3, "FuseSeconds": 4.0, "ThrowSpeed": 18.0, "LoftDeg": 10.0, "MinThrowInterval": 1.0, "Gravity": 9.81,
+    "Radius": 0.07, "ArmDistance": 1.0, "Restitution": 0.35, "SurfaceFriction": 0.7, "RestSpeed": 0.8, "FloorNormalY": 0.6,
+    "BlastDamage": 100.0, "BlastInnerRadius": 2.0, "BlastOuterRadius": 9.0, "PreviewStepSeconds": 0.06, "PreviewSeconds": 2.6
+  },
+  "Bot": {
+    "ViewDistance": 70.0, "FieldOfViewDeg": 110.0, "CloseSenseRadius": 3.0, "SenseInterval": 0.15, "TargetsPlayers": true,
+    "GunshotHearingRadius": 80.0, "FootstepHearingRadius": 14.0, "FootstepMinSpeed": 2.0,
+    "ReactionSeconds": 0.45, "ReacquireSeconds": 1.5, "TurnDegPerSecond": 240.0, "FireConeDeg": 12.0,
+    "AimErrorNearDeg": 1.2, "AimErrorFarDeg": 2.6, "AimNearMeters": 10.0, "AimFarMeters": 60.0, "FirstShotErrorFactor": 2.0, "AimSettleSeconds": 1.5,
+    "BurstMin": 2, "BurstMax": 5, "BurstPauseMin": 0.3, "BurstPauseMax": 0.8, "SemiAutoInterval": 0.25,
+    "EngageRangeFactor": 0.8, "PreferredMeters": 25.0, "HoldInnerFactor": 0.8, "ReloadBelowFraction": 0.5,
+    "RetreatHealthFraction": 0.35, "HealBelowFraction": 0.6, "HealSeconds": 1.5, "RetreatMeters": 20.0, "RetreatMaxSeconds": 6.0, "StandSeconds": 10.0,
+    "MemorySeconds": 8.0, "InvestigateSeconds": 12.0, "ArriveMeters": 2.5, "RoamMinMeters": 20.0, "RoamRadius": 35.0, "RoamTimeoutSeconds": 45.0,
+    "LootRadius": 25.0, "PickupMeters": 2.2, "AmmoWanted": 120, "MedkitsWanted": 3
+  }
 }

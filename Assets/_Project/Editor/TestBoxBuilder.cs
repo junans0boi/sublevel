@@ -30,13 +30,17 @@ public static class TestBoxBuilder
         SceneLook.PrepareTextures();
         var postProfile = RenderSetup.Apply();
         CharacterKit.Prepare();
-        var lootMats = new[] { Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f)), Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f)), Lit("LootMedkit", new Color(0.92f, 0.92f, 0.92f)) };
+        var lootMats = BuildLootMaterials();
         // Brighter than white so the bloom picks the flashes and tracers up.
         var glowMat = FxMaterial("ShotGlow", new Color(2f, 1.6f, 0.9f), true);
         var dustMat = FxMaterial("ShotDust", Color.white, false);
 
-        var player = BuildPlayerPrefab(glowMat, dustMat);
-        var dummy = BuildDummyPrefab(glowMat, dustMat);
+        // The thrown grenade has to exist before the combatants that reference it, and be saved before the
+        // spawnable prefab list is rebuilt below.
+        var gear = BuildGearAssets(glowMat, dustMat);
+        var player = BuildPlayerPrefab(gear);
+        var dummy = BuildDummyPrefab(gear);
+        var bot = BuildBotPrefab(gear);
         var loot = BuildLootPrefab(lootMats);
         AssetDatabase.SaveAssets();
         RebuildSpawnablePrefabs();
@@ -56,6 +60,70 @@ public static class TestBoxBuilder
         AssetDatabase.SaveAssets();
         Debug.Log("[TestBoxBuilder] Saved " + ScenePath);
         EditorApplication.Exit(0);
+    }
+
+    // Loot box materials, indexed by LootKind (Weapon 0, Ammo 1, Medkit 2, Helmet 3, Vest 4, 5-9 unused, Grenade 10).
+    // Armour is tinted per tier at run time (LootView), so its material only sets the base look. Muted on purpose.
+    static Material[] BuildLootMaterials()
+    {
+        var other = Lit("LootOther", new Color(0.5f, 0.5f, 0.5f));
+        var mats = new Material[11];
+        for (int i = 0; i < mats.Length; i++) mats[i] = other;
+        mats[0] = Lit("LootWeapon", new Color(0.9f, 0.75f, 0.1f));
+        mats[1] = Lit("LootAmmo", new Color(0.2f, 0.7f, 0.3f));
+        mats[2] = Lit("LootMedkit", new Color(0.92f, 0.92f, 0.92f));
+        mats[3] = Lit("LootHelmet", new Color(0.35f, 0.5f, 0.7f));
+        mats[4] = Lit("LootVest", new Color(0.7f, 0.45f, 0.25f));
+        mats[10] = Lit("LootGrenade", new Color(0.33f, 0.4f, 0.2f));
+        return mats;
+    }
+
+    // What the armour, death crate and grenade components of a combatant need. Built once and shared by every
+    // combatant prefab; the outdoor world builder can use the same (BuildGearAssets + AddGear).
+    public struct GearAssets
+    {
+        public Material Glow, Dust, CrateMarker;
+        public NetworkObject ThrownGrenade;
+    }
+
+    // Saves the ThrownGrenade prefab (a spawnable network object) and makes the crate marker material.
+    // Call before RebuildSpawnablePrefabs so the grenade is in the spawnable list.
+    public static GearAssets BuildGearAssets(Material glow, Material dust)
+    {
+        Directory.CreateDirectory(MaterialDir);
+        var go = new GameObject("ThrownGrenade");
+        go.AddComponent<NetworkObject>();
+        go.AddComponent<NetworkTransform>();
+        var thrown = go.AddComponent<ThrownItem>();
+        // A visual only: no collider (the server casts its own spheres), 14 cm across.
+        var body = Shape(PrimitiveType.Sphere, "Visual", go.transform, Vector3.zero, Vector3.one * 0.14f, Lit("ThrownGrenade", new Color(0.25f, 0.3f, 0.17f)), false);
+        Set(thrown, "_visual", p => p.objectReferenceValue = body);
+        return new GearAssets
+        {
+            Glow = glow,
+            Dust = dust,
+            CrateMarker = Lit("DeathCrateMarker", new Color(0.32f, 0.27f, 0.2f)),
+            ThrownGrenade = SavePrefab(go, "ThrownGrenade"),
+        };
+    }
+
+    // Armour, death crate and grenade throwing for a combatant prefab root (which already has NetworkObject and Combatant).
+    public static void AddGear(GameObject go, GearAssets gear)
+    {
+        go.AddComponent<CombatantGear>();
+        var crate = go.AddComponent<DeathCrate>();
+        Set(crate, "_markerMaterial", p => p.objectReferenceValue = gear.CrateMarker);
+
+        var user = go.AddComponent<ThrowableUser>();
+        Set(user, "_thrownPrefab", p => p.objectReferenceValue = gear.ThrownGrenade);
+        var view = go.AddComponent<ThrowableView>();
+        Set(view, "_glowMaterial", p => p.objectReferenceValue = gear.Glow);
+        Set(view, "_dustMaterial", p => p.objectReferenceValue = gear.Dust);
+        // Placeholder: the shotgun shot, pitched down, until the explosion sound is licensed (ASSETS).
+        var blast = Source(go.transform, "BlastAudio", 1f, 5f, 120f);
+        Set(view, "_blastSource", p => p.objectReferenceValue = blast);
+        Set(view, "_blastClip", p => p.objectReferenceValue = SceneLook.Load<AudioClip>(WeaponAudioDir + "FreeFirearmLibrary/shot_shotgun.wav"));
+        Set(view, "_blastPitch", p => p.floatValue = 0.55f);
     }
 
     // Fish-Net's prefab collection generator is internal; ask it to rebuild so the new prefabs are spawnable right away.
@@ -200,7 +268,7 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    static NetworkObject BuildPlayerPrefab(Material glow, Material dust)
+    static NetworkObject BuildPlayerPrefab(GearAssets gear)
     {
         var go = new GameObject("Player");
         var cc = go.AddComponent<CharacterController>();
@@ -214,11 +282,12 @@ public static class TestBoxBuilder
         var renderers = AddCharacter(go);
         Set(combatant, "_isPlayer", p => p.boolValue = true);
         SetArray(controller, "_bodyRenderers", renderers);
-        WireShotFx(view, go, glow, dust);
+        WireShotFx(view, go, gear.Glow, gear.Dust);
+        AddGear(go, gear);
         return SavePrefab(go, "Player");
     }
 
-    static NetworkObject BuildDummyPrefab(Material glow, Material dust)
+    static NetworkObject BuildDummyPrefab(GearAssets gear)
     {
         var go = new GameObject("TrainingDummy");
         var capsule = go.AddComponent<CapsuleCollider>();
@@ -229,8 +298,28 @@ public static class TestBoxBuilder
         go.AddComponent<TrainingDummy>();
         var view = go.AddComponent<CombatantView>();
         AddCharacter(go);
-        WireShotFx(view, go, glow, dust);
+        WireShotFx(view, go, gear.Glow, gear.Dust);
+        AddGear(go, gear);
         return SavePrefab(go, "TrainingDummy");
+    }
+
+    // The dummy's body with a BotController instead of the dummy behaviour. No NavMeshAgent: the controller adds
+    // one on the server when there is a navmesh. NetworkTransform so clients see it walk.
+    static NetworkObject BuildBotPrefab(GearAssets gear)
+    {
+        var go = new GameObject("Bot");
+        var capsule = go.AddComponent<CapsuleCollider>();
+        capsule.height = 1.8f; capsule.radius = 0.35f; capsule.center = new Vector3(0, 0.9f, 0);
+        go.AddComponent<NetworkObject>();
+        go.AddComponent<NetworkTransform>();
+        go.AddComponent<Combatant>();
+        go.AddComponent<CombatantStance>();
+        go.AddComponent<BotController>();
+        var view = go.AddComponent<CombatantView>();
+        AddCharacter(go);
+        WireShotFx(view, go, gear.Glow, gear.Dust);
+        AddGear(go, gear);
+        return SavePrefab(go, "Bot");
     }
 
     static NetworkObject BuildLootPrefab(Material[] mats)
