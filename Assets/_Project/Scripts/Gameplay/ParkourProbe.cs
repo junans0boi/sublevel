@@ -13,6 +13,8 @@ namespace Game.Gameplay
         public float TopY;           // world height of the top (the sill, for a window)
         public float Seconds;
         public GlassPane Glass;      // an unbroken pane in the window, broken by going through
+        public float Face;           // how far ahead of the body the obstacle's face is; 0 when its top was not measured
+        public Vector3 ClimbTo;      // hanging (#115): where the feet stand after pulling up onto the top
     }
 
     // Measures the obstacle in front of a body with ray casts and plans the move Space makes over it (ADR-065 (4)).
@@ -105,6 +107,7 @@ namespace Game.Gameplay
             profile.Clearance = clearance;
             plan.Profile = profile;
             plan.TopY = feet.y + top;
+            plan.Face = face;
             var move = Parkour.Classify(profile, crouched, rules);
             plan.Move = move;
             if (!Parkour.IsMotion(move)) return plan;
@@ -133,6 +136,38 @@ namespace Game.Gameplay
                 var pane = glass.collider.GetComponentInParent<GlassPane>();
                 if (pane != null && !pane.Broken) plan.Glass = pane;
             }
+            return plan;
+        }
+
+        // In the air (#115, ADR-087): the high edge ahead the hands can catch, if any. Measured like a parkour from where
+        // the feet are now; Move is Hang with End the feet hanging against the wall under the edge and ClimbTo the
+        // feet standing on top, or None.
+        public static ParkourPlan PlanLedge(Transform body, float radius, float height, float yawDeg, ParkourRules rules)
+        {
+            var none = new ParkourPlan { Move = ParkourMove.None, Start = body.position };
+            var plan = Plan(body, radius, height, yawDeg, false, rules);
+            if (plan.Face <= 0f) return none;
+            var feet = body.position;
+            float below = rules.LedgeMaxHeight + 0.5f;
+            if (!Cast(feet + Vector3.up * 0.05f, Vector3.down, below, body, out float down)) return none; // no ground in range: too high
+            float groundY = feet.y + 0.05f - down;
+            var profile = plan.Profile;
+            profile.TopHeight = plan.TopY - feet.y;
+            plan.Profile = profile;
+            if (!Parkour.CanGrab(profile, plan.TopY - groundY, rules)) return none;
+
+            var forward = Quaternion.Euler(0f, yawDeg, 0f) * Vector3.forward;
+            var hang = feet + forward * (plan.Face - radius - rules.HangGap);
+            hang.y = Mathf.Max(plan.TopY - rules.HangDrop, groundY + 0.05f);
+            var onTop = feet + forward * (plan.Face + radius + 0.15f);
+            onTop.y = plan.TopY + 0.02f;
+            if (!Free(hang, radius, height, body) || !Free(onTop, radius, height, body)) return none;
+            plan.Move = ParkourMove.Hang;
+            plan.Start = body.position;
+            plan.End = hang;
+            plan.ClimbTo = onTop;
+            plan.Seconds = Parkour.Duration(ParkourMove.LedgeClimb, profile.TopHeight, rules);
+            plan.Glass = null;
             return plan;
         }
 

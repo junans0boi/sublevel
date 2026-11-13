@@ -4,7 +4,8 @@ namespace Game.Core
 {
     // What Space does in front of an obstacle (ADR-065 (4)). None = an ordinary jump (nothing to get over, or too
     // low to bother); Refuse = there is something but it cannot be got over (also an ordinary jump).
-    public enum ParkourMove { None = 0, Vault = 1, Climb = 2, Window = 3, Refuse = 4 }
+    // Hang = holding on to a high edge caught in the air; LedgeClimb = the pull-up from there onto it (#115, ADR-087).
+    public enum ParkourMove { None = 0, Vault = 1, Climb = 2, Window = 3, Refuse = 4, Hang = 5, LedgeClimb = 6 }
 
     // Parkour tuning, loaded from data (rules.json "Parkour").
     [Serializable]
@@ -34,6 +35,19 @@ namespace Game.Core
         public float ClimbHighSeconds = 0.9f;
         public float LiftMeters = 0.15f;           // the feet pass this far over the top
         public float CancelShare = 0.6f;           // S in this first share of the motion goes back to the start
+        // Ledge (#115, ADR-087): in the air, facing a wall whose top is this high over the ground below (above what a
+        // climb from the ground takes, up to about a one-storey roof) and within the hands' reach of the feet, with room
+        // to stand on top, the hands catch it. Hanging, the feet are HangDrop under the edge and the body HangGap off
+        // the wall; Space pulls up onto the top in LedgeClimbSeconds, S lets go.
+        public float LedgeMinHeight = 2.0f;
+        public float LedgeMaxHeight = 2.5f;
+        public float LedgeReachMin = 1.4f;
+        public float LedgeReachMax = 1.95f;         // caught as the hands get there: the body moves at most this minus HangDrop
+        public float LedgeFallSpeed = 4.0f;        // without a jump, only a body falling faster than this (m/s) catches an edge (standing sticks at 2)
+        public float HangDrop = 1.8f;               // the arms of the character model reach about this far, held a little bent
+        public float HangGap = 0.05f;
+        public float HangLookDeg = 70f;            // the view turns at most this far from the wall while hanging
+        public float LedgeClimbSeconds = 0.8f;
         // Server sanity check (movement is the owner's, ADR-029): how far a parkour may carry a body.
         public float MaxHorizontalMeters = 3.2f;
         public float MaxRiseMeters = 2.3f;
@@ -81,7 +95,18 @@ namespace Game.Core
             return room ? ParkourMove.Climb : ParkourMove.Refuse;
         }
 
-        public static bool IsMotion(ParkourMove move) => move == ParkourMove.Vault || move == ParkourMove.Climb || move == ParkourMove.Window;
+        public static bool IsMotion(ParkourMove move) => move == ParkourMove.Vault || move == ParkourMove.Climb || move == ParkourMove.Window
+            || move == ParkourMove.LedgeClimb;
+
+        // Hanging from an edge or pulling up from it.
+        public static bool IsLedge(ParkourMove move) => move == ParkourMove.Hang || move == ParkourMove.LedgeClimb;
+
+        // Can a body in the air catch this edge (#115)? `p.TopHeight` is the edge over the feet now, `edgeOverGround`
+        // over the ground below. Depth and clearance: the same room to stand on top as a climb needs.
+        public static bool CanGrab(in ObstacleProfile p, float edgeOverGround, ParkourRules r) =>
+            p.Blocked && edgeOverGround >= r.LedgeMinHeight && edgeOverGround <= r.LedgeMaxHeight
+            && p.TopHeight >= r.LedgeReachMin && p.TopHeight <= r.LedgeReachMax
+            && p.Depth >= r.ClimbMinDepth && p.Clearance >= r.ClimbClearance;
 
         // Seconds the move takes; a climb takes longer the higher it goes.
         public static float Duration(ParkourMove move, float topHeight, ParkourRules r)
@@ -90,6 +115,7 @@ namespace Game.Core
             {
                 case ParkourMove.Vault: return r.VaultSeconds;
                 case ParkourMove.Window: return r.WindowSeconds;
+                case ParkourMove.LedgeClimb: return r.LedgeClimbSeconds;
                 case ParkourMove.Climb:
                     float span = r.ClimbMaxHeight - r.VaultMaxHeight;
                     float k = span <= 0f ? 1f : Clamp01((topHeight - r.VaultMaxHeight) / span);
@@ -105,6 +131,13 @@ namespace Game.Core
         public static void PathPoint(ParkourMove move, float t, float startY, float endY, float topY, float lift, out float along, out float height)
         {
             t = Clamp01(t);
+            if (move == ParkourMove.LedgeClimb)
+            {
+                // From hanging: a slower pull-up (most of the rise), then over the edge onto the top.
+                height = startY + (endY - startY) * Smooth(Clamp01(t / 0.75f));
+                along = Smooth(Clamp01((t - 0.5f) / 0.5f));
+                return;
+            }
             if (move == ParkourMove.Climb)
             {
                 height = startY + (endY - startY) * Smooth(Clamp01(t / 0.65f));

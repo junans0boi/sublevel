@@ -229,7 +229,7 @@ namespace Game.Gameplay
             _legs.Tick(v.x, v.z, Time.deltaTime, GameData.Rules.Gait);
             float proneAmount = dead || _stance == null ? 0f : _stance.ProneAmount;
             // Vaulting or climbing, replicated so everyone sees it: eased in and out.
-            bool parkour = !dead && _stance != null && _stance.Parkour.Value != 0;
+            bool parkour = !dead && _stance != null && _stance.Parkour.Value != 0 && !OnLedge; // the ledge has its own pose (.Ledge.cs)
             _parkour = Mathf.MoveTowards(_parkour, parkour ? 1f : 0f, ParkourRules.Current.PosePerSecond * Time.deltaTime);
             _prone = proneAmount * proneAmount * (3f - 2f * proneAmount);
             // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
@@ -299,7 +299,8 @@ namespace Game.Gameplay
                 }
                 _inAir = true;
                 _landUntil = -1f;
-                _airPhase = Mathf.MoveTowards(_airPhase, Game.Core.Locomotion.AirPhase(_motion.VerticalSpeed, jump), AirPhasePerSecond * Time.deltaTime);
+                // On a ledge the body is lifted, not jumping: hold the still pose (the clip's rise lifts the hips off the path).
+                _airPhase = Mathf.MoveTowards(_airPhase, Game.Core.Locomotion.AirPhase(OnLedge ? 0f : _motion.VerticalSpeed, jump), AirPhasePerSecond * Time.deltaTime);
                 return true;
             }
             if (_inAir)
@@ -330,6 +331,7 @@ namespace Game.Gameplay
             _push = push;
             // A vault or climb tucks the knees like the top of a jump, on the ground too.
             tuck = Mathf.Max(tuck, _parkour * ParkourRules.Current.PoseTuck);
+            tuck *= 1f - LedgePose; // hanging or pulling up the legs are posed in .Ledge.cs, not tucked like a jump
             _tuck = Mathf.MoveTowards(_tuck, tuck, jump.TuckPerSecond * Time.deltaTime);
             // The ground probe reports the landing a little above the floor, so the dip is deepest about as the feet arrive.
             _dip = dead ? 0f : Game.Core.Locomotion.Pulse(Time.time - _landedAt, jump.LandAttackSeconds, jump.LandAbsorbSeconds);
@@ -484,6 +486,7 @@ namespace Game.Gameplay
             Turn(ArmRight, reach, transform.right);
             PoseRifle();
             PoseMelee();
+            PoseLedge();
             if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)

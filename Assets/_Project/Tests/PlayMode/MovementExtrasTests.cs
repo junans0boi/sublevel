@@ -397,6 +397,88 @@ namespace Game.Tests
             Assert.AreEqual(2, stance.ParkoursAccepted);
         }
 
+        // #115 (ADR-087): Space at a 2.3 m block jumps (too high to climb from the ground), the hands catch its edge
+        // in the air and the body hangs against it; Space again pulls up onto the top.
+        [UnityTest]
+        public IEnumerator A2_3mBlock_IsCaughtInAJump_HungFrom_AndClimbedOnto()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var pc = PlayerController.Local;
+            var stance = me.GetComponent<CombatantStance>();
+            var animation = me.GetComponent<CombatantAnimation>();
+            yield return HangFrom(pc, 2.3f);
+            var hang = pc.transform.position;
+            Assert.AreEqual(0.5f, hang.y, 0.1f, "the feet 1.8 m under the edge");
+            Assert.AreEqual(-22f - 0.35f - 0.05f, hang.z, 0.05f, "against the wall");
+            yield return new WaitForSeconds(0.6f);
+            Assert.IsTrue(pc.OnLedge && pc.ParkourUnderWay == ParkourMove.Hang, "still hanging");
+            Assert.Less(Vector3.Distance(hang, pc.transform.position), 0.01f, "held still");
+            Assert.AreEqual(ParkourMove.Hang, stance.ParkourMove, "the server shows the hang");
+            Assert.Greater(animation.LedgePose, 0.9f, "the hang pose");
+            Assert.AreEqual(0, stance.ParkoursRejected);
+
+            _input.Frame.Jump = true;
+            yield return WaitUntil(() => pc.ParkourUnderWay == ParkourMove.LedgeClimb, 1f, "the pull-up starts");
+            float started = Time.time;
+            yield return WaitUntil(() => !pc.InParkour, 2f, "the pull-up ends");
+            Assert.That(Time.time - started, Is.InRange(0.5f, 1.1f), "about 0.8 s");
+            yield return new WaitForSeconds(0.4f);
+            Assert.AreEqual(2.3f, pc.transform.position.y, 0.1f, "standing on top");
+            Assert.Greater(pc.transform.position.z, -21.8f, "on the block");
+            Assert.AreEqual(1, stance.ParkoursAccepted, "the server believed it");
+            Assert.AreEqual(0, stance.ParkoursRejected);
+            Assert.AreEqual(ParkourMove.None, stance.ParkourMove);
+        }
+
+        // S while hanging lets go: the body drops to the floor in front of the block and does not catch it again.
+        [UnityTest]
+        public IEnumerator S_WhileHanging_LetsGo_AndDrops()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            var stance = Combatant.LocalPlayer.GetComponent<CombatantStance>();
+            yield return HangFrom(pc, 2.3f);
+            yield return new WaitForSeconds(0.2f);
+            _input.Frame.Move = new Vector2(0f, -1f);
+            yield return WaitUntil(() => !pc.InParkour, 1f, "let go");
+            yield return new WaitForSeconds(0.15f);
+            _input.Frame.Move = Vector2.zero;
+            yield return new WaitForSeconds(0.6f);
+            Assert.IsFalse(pc.OnLedge, "not caught again");
+            Assert.Less(pc.transform.position.y, 0.15f, "down on the floor");
+            Assert.Less(pc.transform.position.z, -22.1f, "in front of the block");
+            Assert.AreEqual(ParkourMove.None, stance.ParkourMove);
+        }
+
+        // A 3 m block is out of reach: Space is a plain jump and the body comes back down in front of it.
+        [UnityTest]
+        public IEnumerator A3mBlock_IsNotCaught()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            Box("Block", new Vector3(0f, 1.5f, -21f), new Vector3(3f, 3f, 2f));
+            yield return StandAt(pc, new Vector3(0f, 0.1f, -22.6f));
+            _input.Frame.Jump = true;
+            bool caught = false;
+            float end = Time.time + 1.5f;
+            while (Time.time < end) { caught |= pc.OnLedge; yield return null; }
+            Assert.IsFalse(caught, "no hang");
+            Assert.Less(pc.transform.position.y, 0.15f, "on the floor");
+            Assert.Less(pc.transform.position.z, -22.1f, "in front of it");
+        }
+
+        // A block `height` high, 2 m deep, its near face at z = -22; Space from 0.6 m in front of it until hanging.
+        IEnumerator HangFrom(PlayerController pc, float height)
+        {
+            Box("Block", new Vector3(0f, height / 2f, -21f), new Vector3(3f, height, 2f));
+            yield return StandAt(pc, new Vector3(0f, 0.1f, -22.6f));
+            _input.Frame.Jump = true;
+            yield return WaitUntil(() => pc.OnLedge, 1.5f, "the edge is caught");
+            Assert.AreEqual(ParkourMove.Hang, pc.ParkourUnderWay);
+            Assert.AreEqual(height, pc.LastParkourPlan.TopY, 0.05f, "the edge");
+        }
+
         IEnumerator Over(PlayerController pc, ParkourMove move, string way)
         {
             _input.Frame.Jump = true;

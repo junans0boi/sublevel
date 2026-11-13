@@ -144,6 +144,58 @@ namespace Game.Tests
             Assert.IsTrue(Parkour.IsMotion(ParkourMove.Window));
         }
 
+        // #115 (ADR-087): an edge caught in the air. `overFeet`: the edge over the feet now; `overGround`: over the ground below.
+        static bool Grabs(float overFeet, float overGround, float depth = 1.0f, float clearance = 3f) =>
+            Parkour.CanGrab(new ObstacleProfile { Blocked = true, TopHeight = overFeet, Depth = depth, Clearance = clearance }, overGround, Rules);
+
+        [Test]
+        public void AHighEdge_IsCaughtInTheAir_From2To2_5mOverTheGround()
+        {
+            Assert.IsTrue(Grabs(1.9f, 2.3f), "a 2.3 m container, the feet 0.4 m up in a jump");
+            Assert.IsTrue(Grabs(1.7f, 2.5f), "a 2.5 m roof edge at the top of a jump");
+            Assert.IsTrue(Grabs(1.9f, 2.0f), "the lowest: what a climb from the ground does not take");
+            Assert.IsFalse(Grabs(1.7f, 1.8f), "lower edges are climbed or vaulted from the ground");
+            Assert.IsFalse(Grabs(1.9f, 2.6f), "over 2.5 m: too high");
+            Assert.IsFalse(Grabs(1.9f, 3.0f), "a 3 m wall");
+        }
+
+        [Test]
+        public void TheEdge_MustBeWithinTheHandsReach()
+        {
+            Assert.IsTrue(Grabs(1.95f, 2.3f), "just within reach over the head");
+            Assert.IsFalse(Grabs(2.1f, 2.4f), "still above the hands");
+            Assert.IsTrue(Grabs(1.4f, 2.4f), "at the chest, falling past it");
+            Assert.IsFalse(Grabs(1.2f, 2.4f), "already below the chest");
+        }
+
+        [Test]
+        public void AnEdge_WithNoRoomToStandOnTop_IsNotCaught()
+        {
+            Assert.IsFalse(Grabs(1.9f, 2.3f, depth: 0.4f), "a thin wall top");
+            Assert.IsFalse(Grabs(1.9f, 2.3f, clearance: 1.2f), "a low ceiling over it");
+            Assert.IsFalse(Parkour.CanGrab(new ObstacleProfile(), 2.3f, Rules), "nothing there");
+        }
+
+        [Test]
+        public void ThePullUp_IsAMove_HangingIsNot_AndTakes0_6To0_9Seconds()
+        {
+            Assert.IsTrue(Parkour.IsMotion(ParkourMove.LedgeClimb));
+            Assert.IsFalse(Parkour.IsMotion(ParkourMove.Hang));
+            Assert.IsTrue(Parkour.IsLedge(ParkourMove.Hang) && Parkour.IsLedge(ParkourMove.LedgeClimb));
+            Assert.IsFalse(Parkour.IsLedge(ParkourMove.Climb));
+            float s = Parkour.Duration(ParkourMove.LedgeClimb, 2.0f, Rules);
+            Assert.That(s, Is.InRange(0.6f, 0.9f));
+            // The pull-up: up along the wall first (the feet still under the edge at half way), then over onto the top.
+            Parkour.PathPoint(ParkourMove.LedgeClimb, 0.5f, 0.5f, 2.32f, 2.3f, 0.15f, out float along, out float y);
+            Assert.Less(y, 2.3f);
+            Assert.AreEqual(0f, along, 1e-4f);
+            Parkour.PathPoint(ParkourMove.LedgeClimb, 1f, 0.5f, 2.32f, 2.3f, 0.15f, out along, out y);
+            Assert.AreEqual(1f, along, 1e-4f);
+            Assert.AreEqual(2.32f, y, 1e-4f);
+            // From hanging (feet 1.8 m under the edge) onto the top: within what the server believes.
+            Assert.IsTrue(Parkour.Plausible(0f, Rules.HangDrop + 0.02f, 0.8f, Rules));
+        }
+
         [Test]
         public void SlowWalk_Is2MetresASecond_WhateverIsInTheHands()
         {

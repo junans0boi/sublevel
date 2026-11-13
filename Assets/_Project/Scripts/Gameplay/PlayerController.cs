@@ -46,6 +46,8 @@ namespace Game.Gameplay
         public bool ParkourGoingBack => _parkourBack;
         // The last move that finished was run back to its start (S early in it).
         public bool LastParkourTakenBack { get; private set; }
+        // Hanging from a high edge caught in the air, or pulling up from it (#115, ADR-087).
+        public bool OnLedge => Parkour.IsLedge(_parkour.Move);
         public float ViewYaw => Yaw + _freeYaw;
         public float ViewPitch => Pitch + _freePitch;
         // This frame's input as the character got it (empty while a screen is open), for other owner-side
@@ -69,6 +71,9 @@ namespace Game.Gameplay
         ParkourPlan _parkour;
         float _parkourT;
         bool _parkourBack;
+        float _hangYaw;          // the body faces the wall while on a ledge
+        bool _jumpedThisAir;     // a jump (not just walking off something) put the body in the air
+        bool _ledgeLetGo;        // S let go of an edge: no catching another until the feet are down
         int _sentAim, _sentLean;
         float _stanceSentAt;
         int _sentBodyStance;
@@ -229,8 +234,10 @@ namespace Game.Gameplay
                 Yaw += f.Look.x;
                 Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
             }
+            // On a ledge the body keeps facing the wall and the view turns only so far from it.
+            if (OnLedge) Yaw = _hangYaw + Mathf.Clamp(Mathf.DeltaAngle(_hangYaw, Yaw), -ParkourRules.Current.HangLookDeg, ParkourRules.Current.HangLookDeg);
             // Seated, the vehicle sets the body's rotation (tilted with it): the eyes and shots go by that.
-            if (!VehicleSeat.IsAttached(_combatant)) transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
+            if (!VehicleSeat.IsAttached(_combatant)) transform.rotation = Quaternion.Euler(0f, OnLedge ? _hangYaw : Yaw, 0f);
 
             // Auto-run: = toggles it; a fresh W or S, aiming, a screen or anything else taking the body ends it.
             if (f.AutoRun) _autoRun = !_autoRun;
@@ -328,8 +335,15 @@ namespace Game.Gameplay
                 vx = _moveX;
                 vz = _moveZ;
                 _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
+                _jumpedThisAir |= jump;
                 _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
                 ReportFall();
+                if (_controller.isGrounded) _jumpedThisAir = _ledgeLetGo = false;
+                else if (!knocked && TryGrabLedge())
+                {
+                    PlaceCamera();
+                    return;
+                }
             }
 
             if (f.ToggleView) Rig.ToggleMode();
@@ -373,11 +387,63 @@ namespace Game.Gameplay
             return true;
         }
 
+        // In the air facing a high edge the hands can reach (#115): catch it and hang. After a jump, or when falling
+        // past it; standing only (no weapon fire, no stance change while hanging).
+        bool TryGrabLedge()
+        {
+            var rules = ParkourRules.Current;
+            if (_stance == null || _ledgeLetGo || _combatant.Reviving || BodyStance != Stance.Stand
+                || !(_jumpedThisAir || _verticalVelocity < -rules.LedgeFallSpeed)) return false;
+            var plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
+            if (plan.Move != ParkourMove.Hang) return false;
+            LastParkourPlan = plan;
+            _parkour = plan;
+            _parkourT = 0f;
+            _parkourBack = false;
+            _autoRun = false;
+            _hangYaw = Yaw;
+            _controller.enabled = false;
+            _verticalVelocity = 0f;
+            transform.position = plan.End;
+            if (IsServerInitialized) _stance.ServerStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
+            else _stance.CmdStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
+            return true;
+        }
+
+        // Hanging: Space pulls up onto the top, S lets go and drops.
+        void TickHang(in PlayerInputFrame f)
+        {
+            transform.position = _parkour.End;
+            if (f.Jump)
+            {
+                var hang = _parkour;
+                _parkour = new ParkourPlan
+                {
+                    Move = ParkourMove.LedgeClimb, Profile = hang.Profile, Start = hang.End, End = hang.ClimbTo, TopY = hang.TopY,
+                    Seconds = hang.Seconds, ClimbTo = hang.ClimbTo, Face = hang.Face,
+                };
+                _parkourT = 0f;
+                if (IsServerInitialized) _stance.ServerStartParkour((int)ParkourMove.LedgeClimb, _parkour.Start, _parkour.End, -1);
+                else _stance.CmdStartParkour((int)ParkourMove.LedgeClimb, _parkour.Start, _parkour.End, -1);
+            }
+            else if (f.Move.y < -0.5f)
+            {
+                _ledgeLetGo = true;
+                AbortParkour();
+            }
+        }
+
         // One frame along the path. S in the first part of the move runs it back to the start.
         void TickParkour(in PlayerInputFrame f)
         {
+            if (_parkour.Move == ParkourMove.Hang)
+            {
+                TickHang(f);
+                return;
+            }
             var rules = ParkourRules.Current;
-            if (!_parkourBack && f.Move.y < -0.5f && Parkour.CanCancel(_parkourT, rules)) _parkourBack = true;
+            // A pull-up from a ledge is not taken back: back at the start is hanging in the air.
+            if (_parkour.Move != ParkourMove.LedgeClimb && !_parkourBack && f.Move.y < -0.5f && Parkour.CanCancel(_parkourT, rules)) _parkourBack = true;
             float step = Time.deltaTime / Mathf.Max(0.05f, _parkour.Seconds);
             _parkourT += _parkourBack ? -step : step;
             bool done = _parkourBack ? _parkourT <= 0f : _parkourT >= 1f;

@@ -244,7 +244,8 @@ namespace Game.Net
             var rules = ParkourRules.Current;
             var kind = (ParkourMove)move;
             var d = end - start;
-            bool ok = !_combatant.Dead.Value && Game.Core.Parkour.IsMotion(kind)
+            // Catching an edge (#115) is a short move too: from the air to hanging under it.
+            bool ok = !_combatant.Dead.Value && (Game.Core.Parkour.IsMotion(kind) || kind == Game.Core.ParkourMove.Hang)
                 && (start - transform.position).sqrMagnitude <= rules.StartToleranceMeters * rules.StartToleranceMeters
                 && Game.Core.Parkour.Plausible(d.x, d.y, d.z, rules);
             if (!ok)
