@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using FishNet.Connection;
@@ -6,11 +7,13 @@ using FishNet.Object;
 using FishNet.Transporting;
 using Game.Core;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace Game.Net
 {
-    // Boots the match as a host and populates it on the server: players, loot (seeded), training dummies.
+    // Boots the match as a host and populates it on the server: players, loot (seeded), training dummies, bots.
+    // On a map with elevators everyone (players and bots) starts in one, assigned by Deployment (ADR-055).
     public class MatchDirector : MonoBehaviour
     {
         [SerializeField] NetworkManager _networkManager;
@@ -20,18 +23,48 @@ namespace Game.Net
         [SerializeField] Transform[] _playerSpawns = new Transform[0];
         [SerializeField] Transform[] _lootSpawns = new Transform[0];
         [SerializeField] Transform[] _dummySpawns = new Transform[0];
+        // Bots (M2-2): one per spawn point, started with the match. Both empty = a match without bots.
+        [SerializeField] NetworkObject _botPrefab;
+        [SerializeField] Transform[] _botSpawns = new Transform[0];
         [SerializeField] int _seed = 12345;
         [SerializeField] bool _startAsHost = true;
+        // Elevator start (ADR-055): players expected at the start, counted into the assignment ahead of the bots
+        // (more may join; they take elevators nobody holds). A fresh deployment every match unless switched off.
+        [SerializeField] int _expectedPlayers = 1;
+        [SerializeField] bool _randomDeployment = true;
 
         public static MatchDirector Instance { get; private set; }
+        // Tests: forces the deployment seed of the next matches (null = as configured).
+        public static int? DeploymentSeedOverride;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => DeploymentSeedOverride = null;
+
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
+        public Transform[] BotSpawns => _botSpawns;
         public int Seed => _seed;
         public ushort Port { get; private set; }
         // Score keeping for this match: alive count, kills, placement, winner.
         public MatchState State { get; private set; }
+        // The elevators and their doors; null in scenes without elevators (players then use the spawn points in turn).
+        public ElevatorDoors Elevators { get; private set; }
+        public int DeploymentSeed { get; private set; }
+        // Server: the elevator index each participant was given (players first, then bots); empty without elevators.
+        public IReadOnlyList<int> ElevatorAssignment => _deployment;
+
+        const float BotSnapMeters = 2f;
+        // Feet a little above the station floor, as the builders place spawn points.
+        const float ElevatorSpawnLift = 0.1f;
+        // The doors open on their own this long after the server started if no player ever arrives.
+        const float PlayerWaitSeconds = 15f;
 
         int _nextPlayerSpawn;
+        int _playersPlaced;
+        int _expectedPlayersCounted;
+        int[] _deployment = new int[0];
+        int[] _elevatorLoad = new int[0];
+        float _serverStartedAt = -1f;
 
         void Awake()
         {
@@ -44,6 +77,9 @@ namespace Game.Net
         void Start()
         {
             State.Bind(_networkManager);
+            // Every peer builds the same doors from the scene's elevators; scenes without elevators get none.
+            Elevators = ElevatorDoors.TryCreate(gameObject);
+            if (Elevators != null) Elevators.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost)
@@ -105,6 +141,8 @@ namespace Game.Net
         void OnServerState(ServerConnectionStateArgs args)
         {
             if (args.ConnectionState != LocalConnectionState.Started) return;
+            _serverStartedAt = Time.time;
+            ServerPlanDeployment();
 
             var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);
             for (int i = 0; i < plan.Length; i++)
@@ -117,6 +155,111 @@ namespace Game.Net
                 var dummy = Instantiate(_dummyPrefab, point.position, point.rotation);
                 _networkManager.ServerManager.Spawn(dummy);
             }
+
+            ServerSpawnBots();
+        }
+
+        // One bot per spawn point, put on the navmesh when there is one within reach. Bots are ordinary combatants:
+        // MatchState counts them as they spawn (it recounts whenever the combatant list changes).
+        void ServerSpawnBots()
+        {
+            if (_botPrefab == null || _botSpawns == null || _botSpawns.Length == 0) return;
+            ServerGiveBotsPlacesToGo();
+            int number = 0;
+            foreach (var point in _botSpawns)
+            {
+                if (point == null) continue;
+                // With elevators a bot starts in the one the deployment gave it (bots follow the players in the
+                // assignment), otherwise at its spawn point.
+                bool inElevator = TryElevatorFor(_expectedPlayersCounted + number, out var position, out var rotation);
+                if (!inElevator)
+                {
+                    position = point.position;
+                    rotation = point.rotation;
+                }
+                if (NavMesh.SamplePosition(position, out var hit, BotSnapMeters, NavMesh.AllAreas)) position = hit.position;
+                var bot = Instantiate(_botPrefab, position, rotation);
+                _networkManager.ServerManager.Spawn(bot);
+                number++;
+                var combatant = bot.GetComponent<Combatant>();
+                if (combatant != null && State != null) State.ServerSetName(combatant, "봇 " + number);
+                if (inElevator) ServerProtect(combatant);
+            }
+        }
+
+        int BotCount
+        {
+            get
+            {
+                if (_botPrefab == null || _botSpawns == null) return 0;
+                int count = 0;
+                foreach (var point in _botSpawns) if (point != null) count++;
+                return count;
+            }
+        }
+
+        // ADR-055 (1)(4): one assignment for everyone who starts the match, players first, then bots.
+        void ServerPlanDeployment()
+        {
+            if (Elevators == null || Elevators.Sites.Count == 0) return;
+            DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(_seed * 397 ^ System.Environment.TickCount) : _seed);
+            _expectedPlayersCounted = _playerPrefab != null ? Mathf.Max(0, _expectedPlayers) : 0;
+            var slots = new ElevatorSlot[Elevators.Sites.Count];
+            for (int i = 0; i < slots.Length; i++) slots[i] = new ElevatorSlot(Elevators.Sites[i].Region);
+            _deployment = Game.Core.Deployment.Assign(_expectedPlayersCounted + BotCount, slots, DeploymentSeed);
+            _elevatorLoad = new int[slots.Length];
+            Debug.Log($"[MatchDirector] elevator start: {_deployment.Length} participants over {slots.Length} elevators, seed {DeploymentSeed}");
+        }
+
+        // Where participant `index` starts: its assigned elevator, or (a player beyond the expected ones) the least
+        // occupied elevator. False when the scene has no elevators.
+        bool TryElevatorFor(int index, out Vector3 position, out Quaternion rotation)
+        {
+            position = default;
+            rotation = Quaternion.identity;
+            if (Elevators == null || Elevators.Sites.Count == 0 || _elevatorLoad.Length != Elevators.Sites.Count) return false;
+            int elevator;
+            if (index >= 0 && index < _deployment.Length) elevator = _deployment[index];
+            else
+            {
+                elevator = 0;
+                for (int i = 1; i < _elevatorLoad.Length; i++) if (_elevatorLoad[i] < _elevatorLoad[elevator]) elevator = i;
+            }
+            _elevatorLoad[elevator]++;
+            var site = Elevators.Sites[elevator];
+            position = site.Spawn + Vector3.up * ElevatorSpawnLift;
+            rotation = Quaternion.Euler(0f, site.YawDeg, 0f);
+            return true;
+        }
+
+        void ServerProtect(Combatant combatant)
+        {
+            if (combatant == null || Elevators == null) return;
+            var protection = combatant.GetComponent<SpawnProtection>();
+            if (protection == null) protection = combatant.gameObject.AddComponent<SpawnProtection>();
+            protection.ServerBegin(Elevators);
+        }
+
+        void Update()
+        {
+            // Nobody came to play (a server without its own client): the bots are not kept in the dark for ever.
+            if (Elevators != null && _serverStartedAt >= 0f && !Elevators.ServerScheduled && Time.time - _serverStartedAt > PlayerWaitSeconds)
+                Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
+        }
+
+        // The places bots wander between: loot, dummies and where bots start. Game.AI sits above this assembly, so
+        // its entry point is called by name; a build without it just leaves bots on their own defaults.
+        void ServerGiveBotsPlacesToGo()
+        {
+            var method = System.Type.GetType("Game.AI.BotController, Game.AI")?.GetMethod("SetPointsOfInterest",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (method == null) return;
+            var points = new List<Vector3>();
+            foreach (var group in new[] { _lootSpawns, _dummySpawns, _botSpawns })
+                if (group != null)
+                    foreach (var t in group)
+                        if (t != null) points.Add(t.position);
+            method.Invoke(null, new object[] { points });
         }
 
         public void ServerSpawnLoot(LootEntry entry, Vector3 position)
@@ -129,6 +272,19 @@ namespace Game.Net
         void OnClientLoaded(NetworkConnection connection, bool asServer)
         {
             if (!asServer) return;
+            // Scenes with elevators: the deployment decides (ADR-055). Others: the spawn points in turn.
+            // Players beyond the expected ones (-1) take the least occupied elevator instead of a bot's place.
+            int index = _playersPlaced < _expectedPlayersCounted ? _playersPlaced : -1;
+            if (TryElevatorFor(index, out var position, out var rotation))
+            {
+                _playersPlaced++;
+                var deployed = Instantiate(_playerPrefab, position, rotation);
+                _networkManager.ServerManager.Spawn(deployed, connection);
+                ServerProtect(deployed.GetComponent<Combatant>());
+                // The match starts with its first player: the doors open DoorDelaySeconds later, for everyone.
+                Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
+                return;
+            }
             var point = _playerSpawns[_nextPlayerSpawn++ % _playerSpawns.Length];
             var player = Instantiate(_playerPrefab, point.position, point.rotation);
             _networkManager.ServerManager.Spawn(player, connection);
