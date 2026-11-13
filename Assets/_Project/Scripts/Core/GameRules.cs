@@ -26,5 +26,6 @@ namespace Game.Core
         public CarryRules Carry = new CarryRules();
         public SmokeRules Smoke = new SmokeRules();
         public BotRules Bot = new BotRules();
+        public MeleeRules Melee = new MeleeRules();
     }
 }

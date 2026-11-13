@@ -102,9 +102,26 @@ namespace Game.Net
         public delegate void ShotResolvedHandler(in ShotResult shot);
         public event ShotResolvedHandler ShotResolved;
 
+        // One punch (ADR-059 (1)), raised on every client: which hand, and what it landed on.
+        public struct PunchResult
+        {
+            public bool Right;       // left and right take turns
+            public ShotHit Hit;      // None (a swing at the air), Combatant or Kill
+            public Combatant Victim; // null unless a combatant was hit
+            public HitZone Zone;     // where on the victim; Body when nothing was hit
+
+            public readonly bool Head => Victim != null && Zone == HitZone.Head;
+        }
+
+        public delegate void PunchedHandler(in PunchResult punch);
+        public event PunchedHandler Punched;
+
         static readonly float[] YawBuf = new float[32];
         static readonly float[] PitchBuf = new float[32];
         static readonly RaycastHit[] LeanHits = new RaycastHit[8];
+        static readonly RaycastHit[] PunchHits = new RaycastHit[8];
+        // The punch event byte: the hand in bit 0, the hit kind in bits 1-2, the zone from bit 4.
+        const int PunchRightBit = 1, PunchHitShift = 1, PunchHitMask = 3, PunchZoneShift = 4;
 
         const float LeanProbeRadius = 0.15f;
         // Kept between the leaned eye and a wall; larger than the camera's own collision radius so the
@@ -127,6 +144,9 @@ namespace Game.Net
         float _leanOffset;
         Vector3 _speedFrom;
         float _speedClock;
+        // Server: punch timing and which hand goes next.
+        readonly FireCadence _punchCadence = new FireCadence();
+        int _punches;
 
         public bool IsPlayer => _isPlayer;
         // Where this combatant sees and shoots from. Leaning moves it sideways (never through a wall).
@@ -400,6 +420,111 @@ namespace Game.Net
             return true;
         }
 
+        // Bare hands (ADR-059 (1)): with nothing in hand the fire button punches. The punch goes where the body
+        // faces, raised or lowered by the pitch of `direction` (the client chooses only the height, never the side),
+        // and lands on the nearest living combatant whose chest (or head) is within reach inside the cone with
+        // nothing in between. False when no punch was thrown (dead, armed, too soon); a swing at the air is true.
+        [Server]
+        public bool ServerPunch(Vector3 direction)
+        {
+            float sqr = direction.sqrMagnitude;
+            if (_health == null || _health.IsDead || ActiveWeaponId != 0 || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
+            var rules = MeleeRules.Current;
+            if (!_punchCadence.TryFire(Time.timeAsDouble, rules.PunchInterval, GameData.Rules.Fire.ServerEarly(rules.PunchInterval))) return false;
+
+            var eye = EyePosition;
+            var axis = PunchAxis(direction);
+            var zones = GameData.Rules.Fire.Zones;
+            var target = FindPunchTarget(eye, axis, rules, zones);
+            var result = ShotHit.None;
+            var zone = HitZone.Body;
+            NetworkObject victim = null;
+            if (target != null)
+            {
+                var feet = target.transform.position;
+                float flat = new Vector2(feet.x - eye.x, feet.z - eye.z).magnitude;
+                float height = Melee.HitHeight(eye.y - feet.y, flat, axis.y, new Vector2(axis.x, axis.z).magnitude, zones.Height(target.EyeHeightOffset));
+                zone = HitZones.At(height, target.EyeHeightOffset, zones);
+                target.ServerTakeDamage(new DamageInfo
+                {
+                    Amount = Melee.Damage(zone, rules),
+                    Attacker = this,
+                    Zone = zone,
+                    WeaponId = 0,
+                    Cause = DamageCause.Melee,
+                });
+                result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
+                victim = target.NetworkObject;
+            }
+            bool right = (_punches & 1) == 1;
+            _punches++;
+            int info = (right ? PunchRightBit : 0) | ((int)result << PunchHitShift) | ((int)zone << PunchZoneShift);
+            RpcPunch((byte)info, victim);
+            return true;
+        }
+
+        // Where the body faces, tilted up or down by the pitch of the requested direction. Unit length.
+        Vector3 PunchAxis(Vector3 direction)
+        {
+            var forward = transform.forward;
+            forward.y = 0f;
+            forward = forward.sqrMagnitude > 1e-6f ? forward.normalized : Vector3.forward;
+            if (direction.sqrMagnitude < 1e-6f) return forward;
+            var d = direction.normalized;
+            return (forward * new Vector2(d.x, d.z).magnitude + Vector3.up * d.y).normalized;
+        }
+
+        // A point this high above the combatant's feet.
+        Vector3 PointAt(float heightAboveFeet) => transform.position + Vector3.up * heightAboveFeet;
+
+        Combatant FindPunchTarget(Vector3 eye, Vector3 axis, MeleeRules rules, HitZoneRules zones)
+        {
+            Combatant best = null;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < All.Count; i++)
+            {
+                var c = All[i];
+                if (c == null || c == this || c._health == null || c._health.IsDead) continue;
+                float top = zones.Height(c.EyeHeightOffset);
+                var chest = c.PointAt(top * rules.ChestFraction);
+                float sqr = (chest - eye).sqrMagnitude;
+                if (sqr >= bestSqr) continue;
+                // The chest, or the head when standing close with the fist held high.
+                var head = c.PointAt(top - zones.HeadMeters * 0.5f);
+                bool reach = InPunchReach(eye, chest, axis, rules) && ClearPunchLine(eye, chest, c);
+                if (!reach) reach = InPunchReach(eye, head, axis, rules) && ClearPunchLine(eye, head, c);
+                if (!reach) continue;
+                best = c;
+                bestSqr = sqr;
+            }
+            return best;
+        }
+
+        static bool InPunchReach(Vector3 eye, Vector3 point, Vector3 axis, MeleeRules rules)
+        {
+            var to = point - eye;
+            return Melee.InReach(to.x, to.y, to.z, axis.x, axis.y, axis.z, rules.PunchRange, rules.PunchConeDeg);
+        }
+
+        // Nothing but the target (or this combatant's own body) between the eyes and the point.
+        bool ClearPunchLine(Vector3 eye, Vector3 point, Combatant target)
+        {
+            var to = point - eye;
+            float distance = to.magnitude;
+            if (distance < 1e-3f) return true;
+            int count = Physics.RaycastNonAlloc(eye, to / distance, PunchHits, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            bool clear = true;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = PunchHits[i];
+                if (hit.collider.transform.IsChildOf(transform) || hit.distance >= nearest) continue;
+                nearest = hit.distance;
+                clear = hit.collider.GetComponentInParent<Combatant>() == target;
+            }
+            return clear;
+        }
+
         // Damage with nothing known about it (tests, scripted events).
         [Server]
         public void ServerTakeDamage(float amount) => ServerTakeDamage(new DamageInfo { Amount = amount });
@@ -494,6 +619,9 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdFire(Vector3 direction) => ServerFire(direction);
+
+        [ServerRpc]
+        public void CmdPunch(Vector3 direction) => ServerPunch(direction);
 
         [ServerRpc]
         public void CmdReload() => ServerReload();
@@ -692,6 +820,21 @@ namespace Game.Net
                 Victim = victim != null ? victim.GetComponent<Combatant>() : null,
             };
             ShotResolved.Invoke(in shot);
+        }
+
+        // Every client sees and hears the punch; runs locally so a host shows it in the frame it was thrown.
+        [ObserversRpc(RunLocally = true)]
+        void RpcPunch(byte info, NetworkObject victim)
+        {
+            if (!IsClientStarted || Punched == null) return;
+            var punch = new PunchResult
+            {
+                Right = (info & PunchRightBit) != 0,
+                Hit = (ShotHit)((info >> PunchHitShift) & PunchHitMask),
+                Zone = (HitZone)(info >> PunchZoneShift),
+                Victim = victim != null ? victim.GetComponent<Combatant>() : null,
+            };
+            Punched.Invoke(in punch);
         }
     }
 }

@@ -79,6 +79,7 @@ namespace Game.Gameplay
             _fx = GameData.Rules.CombatFx;
             _block = new MaterialPropertyBlock();
             _combatant.ShotResolved += OnShot;
+            _combatant.Punched += OnPunch;
             _fxRoot = new GameObject("ShotFx").transform;
 
             _flashRenderer = NewRenderer("MuzzleFlash", transform, CombatFxMeshes.MuzzleFlash, _glowMaterial);
@@ -154,6 +155,7 @@ namespace Game.Gameplay
         void OnDestroy()
         {
             _combatant.ShotResolved -= OnShot;
+            _combatant.Punched -= OnPunch;
             if (_fxRoot != null) Destroy(_fxRoot.gameObject);
         }
 
@@ -174,6 +176,30 @@ namespace Game.Gameplay
             ShowTracer(_muzzle, shot.End);
             if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal);
             Confirm(shot);
+        }
+
+        // A punch that landed: the same hit marker and confirmation sound as a shot, and the hit direction for
+        // the one punched (ADR-059). No flash, tracer or impact.
+        void OnPunch(in Combatant.PunchResult punch)
+        {
+            var local = Combatant.LocalPlayer;
+            if (local == null || punch.Victim == null) return;
+            bool kill = punch.Hit == ShotHit.Kill;
+            if (punch.Victim == local)
+            {
+                DamageDirectionsShown++;
+                Hud.DamageFrom(transform.position);
+            }
+            if (_combatant != local) return;
+            HitConfirms++;
+            if (kill) KillConfirms++;
+            if (punch.Head) HeadshotConfirms++;
+            Hud.HitMarker(kill, punch.Head);
+            if (punch.Head) HeadshotConfirmed?.Invoke(kill);
+            var clip = kill && _killConfirmClip != null ? _killConfirmClip : _hitConfirmClip;
+            if (_confirmSource == null || clip == null) return;
+            _confirmSource.pitch = kill ? _fx.KillConfirmPitch : punch.Head ? _fx.HeadConfirmPitch : _fx.HitConfirmPitch;
+            _confirmSource.PlayOneShot(clip, kill ? _fx.KillConfirmVolume : _fx.HitConfirmVolume);
         }
 
         // Shots are traced from the eyes; the flash and the tracer start where the weapon is held instead.

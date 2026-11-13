@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // Sounds a combatant makes: gunshots, reloads, footsteps and being hit. Clip arrays for weapons are indexed by weapon id.
+    // Sounds a combatant makes: gunshots, reloads, footsteps, punches and being hit. Clip arrays for weapons are indexed by weapon id.
     // Footsteps sound when the animation puts a foot down, so they always match what the legs are doing.
     [RequireComponent(typeof(Combatant), typeof(CombatantAnimation))]
     public class CombatantAudio : MonoBehaviour
@@ -25,6 +25,11 @@ namespace Game.Gameplay
         [SerializeField] float _footstepVolume = 0.35f;
         [SerializeField] float _landingVolume = 0.6f;
         [SerializeField] float _hitVolume = 0.7f;
+        // Punches reuse the hit clips (ADR-059: no new asset): a landed punch is a full impact, a miss a quick,
+        // quiet, higher swish.
+        [SerializeField] float _punchImpactVolume = 0.8f;
+        [SerializeField] float _punchSwingVolume = 0.25f;
+        [SerializeField] float _punchSwingPitch = 1.6f;
 
         readonly ShotGrouper _shots = new ShotGrouper(PelletWindow);
         Combatant _combatant;
@@ -40,6 +45,7 @@ namespace Game.Gameplay
         public int FootstepsPlayed { get; private set; }
         public int LandingsPlayed { get; private set; }
         public int HitsPlayed { get; private set; }
+        public int PunchesPlayed { get; private set; }
 
         void Awake()
         {
@@ -47,6 +53,7 @@ namespace Game.Gameplay
             _animation = GetComponent<CombatantAnimation>();
             _stance = GetComponent<CombatantStance>();
             _combatant.ShotFired += OnShot;
+            _combatant.Punched += OnPunch;
             _animation.FootDown += OnFootDown;
             _animation.Landed += OnLanded;
         }
@@ -54,6 +61,7 @@ namespace Game.Gameplay
         void OnDestroy()
         {
             _combatant.ShotFired -= OnShot;
+            _combatant.Punched -= OnPunch;
             _animation.FootDown -= OnFootDown;
             _animation.Landed -= OnLanded;
         }
@@ -85,6 +93,14 @@ namespace Game.Gameplay
             if (!_shots.IsNewShot(Time.timeAsDouble)) return;
             if (Play(_weaponSource, ClipFor(_shotByWeapon, _combatant.ActiveWeaponId), _shotVolume,
                     PitchFor(_shotPitchByWeapon, _combatant.ActiveWeaponId))) ShotsPlayed++;
+        }
+
+        void OnPunch(in Combatant.PunchResult punch)
+        {
+            if (_hits.Length == 0) return;
+            var clip = _hits[Random.Range(0, _hits.Length)];
+            bool landed = punch.Victim != null;
+            if (Play(_bodySource, clip, landed ? _punchImpactVolume : _punchSwingVolume, landed ? 1f : _punchSwingPitch)) PunchesPlayed++;
         }
 
         void Update()

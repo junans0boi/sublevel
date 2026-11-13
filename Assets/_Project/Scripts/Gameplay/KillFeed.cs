@@ -75,6 +75,7 @@ namespace Game.Gameplay
                 case DamageCause.Fall: return "낙하";
                 case DamageCause.Blast: return "폭발";
                 case DamageCause.Zone: return "방사능";
+                case DamageCause.Melee: return "주먹";
             }
             if (!hasKiller) return "탈락";
             var weapon = GameData.Weapons.Find(entry.WeaponId);

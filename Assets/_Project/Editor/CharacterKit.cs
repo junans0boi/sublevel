@@ -45,6 +45,8 @@ public static class CharacterKit
     const string IdleClip = "Idle", WalkClip = "Walk", RunClip = "Run", BackClip = "Run_Back";
     const string HitClip = "HitRecieve", DeathClip = "Death";
     const string LoweredClip = "Idle_Gun", AimClip = ReferencePose, ShootClip = "Idle_Gun_Shoot";
+    // Bare-handed punches (ADR-059), upper layer too. Played once each: not in LoopingClips.
+    const string PunchLeftClip = "Punch_Left", PunchRightClip = "Punch_Right";
     static readonly string[] LoopingClips = { IdleClip, WalkClip, RunClip, BackClip, LoweredClip, AimClip };
 
     // What the clips themselves say about pace and foot height, measured once per build from the model.
@@ -340,7 +342,7 @@ public static class CharacterKit
         baseMachine.AddState(CombatantAnimation.Hit).motion = Clip(HitClip);
         baseMachine.AddState(CombatantAnimation.Death).motion = Clip(DeathClip);
 
-        // Upper layer: off by default; CombatantAnimation raises its weight while a weapon is held.
+        // Upper layer: off by default; CombatantAnimation raises its weight while a weapon is held or a punch plays.
         controller.AddLayer("Upper");
         var layers = controller.layers;
         layers[1].avatarMask = upperBody;
@@ -352,6 +354,8 @@ public static class CharacterKit
         upperMachine.defaultState = lowered;
         upperMachine.AddState(CombatantAnimation.Aim).motion = Clip(AimClip);
         upperMachine.AddState(CombatantAnimation.Shoot).motion = Clip(ShootClip);
+        upperMachine.AddState(CombatantAnimation.PunchLeft).motion = Clip(PunchLeftClip);
+        upperMachine.AddState(CombatantAnimation.PunchRight).motion = Clip(PunchRightClip);
 
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
