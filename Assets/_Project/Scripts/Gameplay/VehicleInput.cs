@@ -148,8 +148,8 @@ namespace Game.Gameplay
                 Steer = f.Steer,
                 Handbrake = f.Handbrake,
                 Boost = f.Boost,
-                // Holding a pistol the driver aims with the mouse: the wheels go back to straight.
-                SteerLocked = _combatant.ActiveWeaponId != 0,
+                // A pistol in hand does not lock the wheel; reloading it takes a hand off (ADR-111).
+                Reloading = _combatant.ActiveWeaponId != 0 && _combatant.Reloading.Value,
                 Pitch = f.Pitch,
                 Roll = f.Roll,
             });

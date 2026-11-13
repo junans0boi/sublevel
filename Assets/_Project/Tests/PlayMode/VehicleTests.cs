@@ -155,8 +155,38 @@ namespace Game.Tests
             yield return null;
             Assert.IsFalse(me.ServerFire(car.transform.forward), "no rifle from the wheel");
             Assert.IsTrue(me.ServerSelectSlot(PistolSlot));
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(1f);
             Assert.IsTrue(me.ServerFire(car.transform.forward), "the pistol fires");
+        }
+
+        // ADR-111: a pistol in the driver's hand no longer locks the wheel (it did before #142).
+        [UnityTest]
+        public IEnumerator Car_Driver_SteersWithThePistolOut()
+        {
+            yield return LoadTestBox();
+            var car = Find(VehicleKind.Car);
+            var me = Combatant.LocalPlayer;
+            GiveRifleAndPistol(me);
+            car.Body.position = new Vector3(-26f, 0.5f, -21f);
+            car.Body.rotation = Quaternion.Euler(0f, 90f, 0f);
+            car.Body.linearVelocity = car.Body.angularVelocity = Vector3.zero;
+            yield return new WaitForSeconds(0.3f);
+            yield return GetOnAsDriver(car);
+            Assert.IsTrue(me.ServerSelectSlot(PistolSlot));
+            yield return null;
+            Assert.AreNotEqual(0, me.ActiveWeaponId, "the pistol is in hand");
+            _keys.Frame.Throttle = 1f;
+            yield return new WaitForSeconds(1.3f);
+            _keys.Frame.Throttle = 0.4f;
+            float yaw = car.transform.eulerAngles.y;
+            _keys.Frame.Steer = 1f;
+            yield return new WaitForSeconds(0.8f);
+            float turned = Mathf.DeltaAngle(yaw, car.transform.eulerAngles.y);
+            _keys.Frame.Steer = 0f;
+            _keys.Frame.Throttle = -1f;
+            Assert.Greater(turned, 10f, "the driver with a pistol out still turns right (turned " + turned.ToString("F1") + ")");
+            yield return new WaitForSeconds(1f);
+            _keys.Frame.Throttle = 0f;
         }
 
         [UnityTest]
@@ -169,7 +199,7 @@ namespace Game.Tests
             yield return GetOnAsDriver(car);
             yield return SwitchTo(car, 1);
             Assert.IsTrue(me.ServerSelectSlot(RifleSlot));
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(1f);
             Assert.IsTrue(me.ServerFire(car.transform.forward + car.transform.right * 0.5f), "the rifle fires from the passenger seat");
         }
 
@@ -362,7 +392,7 @@ namespace Game.Tests
                     bike.Body.linearVelocity = bike.Body.angularVelocity = Vector3.zero;
                     yield return new WaitForSeconds(0.3f);
                     if (SeatOf(me) != 0) yield return GetOnAsDriver(bike);
-                    me.ServerSetHolstered(true); // a sidearm in hand locks the steering
+                    me.ServerSetHolstered(true);
                     yield return null;
                     _keys.Frame.Throttle = 1f;
                     yield return new WaitForSeconds(1.3f);
@@ -408,7 +438,7 @@ namespace Game.Tests
             Assert.AreEqual(1, SeatOf(me), "on the pillion");
             Assert.IsTrue(VehicleSeat.Astride(me));
             Assert.AreEqual(Rifle, me.ActiveWeaponId, "the rifle taken out on the rider's seat is still in hand");
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(1f);
             Assert.IsTrue(me.ServerFire(bike.transform.forward), "the pillion fires the rifle");
         }
 

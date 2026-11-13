@@ -14,7 +14,7 @@ namespace Game.Net
         public float Steer;       // D +1 / A -1
         public bool Handbrake;    // Space held (on the ground)
         public bool Boost;        // Left Shift held
-        public bool SteerLocked;  // the driver holds a pistol: the wheels go back to straight, A/D do nothing
+        public bool Reloading;    // the driver is reloading the pistol: one hand off the wheel, steering is slower (ADR-111)
         public float Pitch;       // motorcycle in the air: Space +1 nose up, Ctrl -1 nose down
         public float Roll;        // motorcycle in the air: E +1 right, Q -1 left
     }
@@ -444,11 +444,11 @@ namespace Game.Net
             float top = Vehicles.TopSpeed(_offRoad, boost, r) * topFactor;
             float reverseTop = Vehicles.ReverseTopSpeed(_offRoad, r) * topFactor;
 
-            float limit = Vehicles.SteerLimit(forwardSpeed, Vehicles.TopSpeed(false, r), r);
-            float steerInput = input.SteerLocked ? 0f : input.Steer;
-            float target = steerInput * limit + (_state != null ? _state.SteerPullDeg : 0f);
+            float handsOn = Vehicles.SteerHandsFactor(input.Reloading, r);
+            float limit = Vehicles.SteerLimit(forwardSpeed, Vehicles.TopSpeed(false, r), r) * handsOn;
+            float target = input.Steer * limit + (_state != null ? _state.SteerPullDeg : 0f);
             bool returning = Mathf.Abs(target) < Mathf.Abs(_steerDeg) || target * _steerDeg < 0f;
-            _steerDeg = Mathf.MoveTowards(_steerDeg, target, (returning ? r.SteerReturnDegPerSecond : r.SteerDegPerSecond) * dt);
+            _steerDeg = Mathf.MoveTowards(_steerDeg, target, (returning ? r.SteerReturnDegPerSecond : r.SteerDegPerSecond) * handsOn * dt);
 
             float accel;
             if (driver && !_drowned) accel = Vehicles.DriveAccel(forwardSpeed, throttle, top, reverseTop, dt, r, boost ? r.BoostAccelFactor : 1f);

@@ -65,6 +65,7 @@ namespace Game.Core
         public float SteerAtTopSpeedDeg = 6f;  // at the top speed
         public float SteerDegPerSecond = 110f;
         public float SteerReturnDegPerSecond = 160f;
+        public float ReloadSteerFactor = 0.7f; // the driver reloads a pistol: steering reach and speed times this (ADR-111)
         public float InputStaleSeconds = 0.5f; // driver input older than this counts as nothing pressed
 
         // ---- Suspension and tyres ----
@@ -241,6 +242,9 @@ namespace Game.Core
             float f = topSpeed <= 0f ? 0f : Math.Min(1f, Math.Abs(speed) / topSpeed);
             return r.SteerMaxDeg + (r.SteerAtTopSpeedDeg - r.SteerMaxDeg) * f;
         }
+
+        // 1 normally; ReloadSteerFactor while the driver has one hand off the wheel reloading.
+        public static float SteerHandsFactor(bool reloading, VehicleRules r) => reloading ? r.ReloadSteerFactor : 1f;
 
         // Spring and damper push of one wheel (N), never pulling the car down.
         public static float SuspensionForce(float compression, float compressionSpeed, VehicleRules r) =>

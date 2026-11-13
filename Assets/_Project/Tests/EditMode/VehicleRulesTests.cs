@@ -13,6 +13,16 @@ namespace Game.Tests
         static readonly WeaponDef Rifle = new WeaponDef { Id = 3, Category = WeaponCategory.Primary };
         const float Dt = 0.02f;
 
+        [Test]
+        public void ReloadingDriver_SteersLessFarAndSlower_ButStillSteers()
+        {
+            Assert.AreEqual(1f, Vehicles.SteerHandsFactor(false, Car));
+            float slowed = Vehicles.SteerHandsFactor(true, Car);
+            Assert.That(slowed, Is.InRange(0.5f, 0.9f), "a slight slow-down, not a lock");
+            Assert.Greater(slowed, 0f);
+            Assert.AreEqual(slowed, Vehicles.SteerHandsFactor(true, Bike), 1e-6f);
+        }
+
         // ---- Seats ----
 
         [Test]
