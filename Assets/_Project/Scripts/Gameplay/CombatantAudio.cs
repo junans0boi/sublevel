@@ -199,7 +199,8 @@ namespace Game.Gameplay
             return clips;
         }
 
-        // What the ground under `feet` sounds like: the terrain layer there (or water below the sea surface), a
+        // What the ground under `feet` sounds like: asphalt (road strips have no collider, see PavedRoads), the
+        // terrain layer there (or water below the sea surface), a
         // building's floor by its kind (WorldBuilder names buildings "Lot03_House", "Station01"; their boxes sit on
         // a "Colliders" child), an elevator car or vehicle (metal); concrete otherwise.
         public static FootSurface SurfaceAt(Vector3 feet)
@@ -208,7 +209,8 @@ namespace Game.Gameplay
                 return FootSurface.Concrete;
             var world = WorldInfo.Current;
             bool underWater = world != null && hit.point.y < world.SeaLevel;
-            if (hit.collider is TerrainCollider terrain) return SoundRules.TerrainSurface(LayerAt(terrain, hit.point), underWater);
+            if (hit.collider is TerrainCollider terrain)
+                return !underWater && PavedRoads.Contains(hit.point) ? FootSurface.Concrete : SoundRules.TerrainSurface(LayerAt(terrain, hit.point), underWater);
             if (underWater) return FootSurface.Water;
             if (hit.collider.GetComponentInParent<Vehicle>() != null) return FootSurface.Metal;
             var root = hit.collider.transform.parent;

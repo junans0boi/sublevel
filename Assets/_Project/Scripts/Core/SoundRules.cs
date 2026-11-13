@@ -60,16 +60,16 @@ namespace Game.Core
             }
         }
 
-        // The terrain layer under the foot (WorldMaterials: World_Grass, World_Dirt (roads), World_Rock, World_Mud),
-        // or water when the ground is below the sea surface.
+        // The terrain layer under the foot (WorldMaterials: World_Grass, World_Dirt, World_Rock, World_Mud). Water
+        // only when the ground is below the sea surface: "Mud" is also the shore and every damp hollow of the
+        // plains, not a pool. An unknown or missing layer is the neutral concrete set, never water.
         public static FootSurface TerrainSurface(string layerName, bool underWater)
         {
             if (underWater) return FootSurface.Water;
             var name = layerName ?? "";
             if (name.IndexOf("Grass", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Grass;
-            if (name.IndexOf("Mud", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Water; // wetland pools
-            if (name.IndexOf("Rock", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Concrete;
-            return FootSurface.Dirt;
+            if (name.IndexOf("Dirt", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Mud", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Dirt;
+            return FootSurface.Concrete; // rock and anything unmapped
         }
 
         // ---- Gunshots ----

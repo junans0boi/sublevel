@@ -37,10 +37,40 @@ namespace Game.Tests
             Assert.AreEqual(FootSurface.Metal, SoundRules.BuildingSurface(BuildingKind.FactoryHall, SurfaceKind.Stairs));
             Assert.AreEqual(FootSurface.Concrete, SoundRules.BuildingSurface(BuildingKind.ElevatorStation, SurfaceKind.Stairs));
             Assert.AreEqual(FootSurface.Grass, SoundRules.TerrainSurface("World_Grass", false));
-            Assert.AreEqual(FootSurface.Dirt, SoundRules.TerrainSurface("World_Dirt", false), "roads are packed dirt");
+            Assert.AreEqual(FootSurface.Dirt, SoundRules.TerrainSurface("World_Dirt", false), "bare ground");
             Assert.AreEqual(FootSurface.Concrete, SoundRules.TerrainSurface("World_Rock", false));
-            Assert.AreEqual(FootSurface.Water, SoundRules.TerrainSurface("World_Mud", false), "wetland pools");
+            Assert.AreEqual(FootSurface.Dirt, SoundRules.TerrainSurface("World_Mud", false), "damp ground and shore are not water");
             Assert.AreEqual(FootSurface.Water, SoundRules.TerrainSurface("World_Grass", true), "below the sea surface");
+        }
+
+        // The asphalt bug: nothing but real water (ground below the sea surface) may sound like water.
+        [TestCase("World_Grass", FootSurface.Grass)]
+        [TestCase("World_Dirt", FootSurface.Dirt)]
+        [TestCase("World_Rock", FootSurface.Concrete)]
+        [TestCase("World_Mud", FootSurface.Dirt)]
+        [TestCase(null, FootSurface.Concrete)]
+        [TestCase("", FootSurface.Concrete)]
+        [TestCase("World_Asphalt", FootSurface.Concrete)]
+        [TestCase("SomethingNew", FootSurface.Concrete)]
+        public void Terrain_layers_map_to_a_step_set_and_unknown_is_neutral(string layer, FootSurface expected)
+        {
+            Assert.AreEqual(expected, SoundRules.TerrainSurface(layer, false));
+            Assert.AreEqual(FootSurface.Water, SoundRules.TerrainSurface(layer, true), "water only below the sea surface");
+        }
+
+        [Test]
+        public void Every_building_piece_maps_to_a_dry_step_set()
+        {
+            foreach (BuildingKind building in Enum.GetValues(typeof(BuildingKind)))
+                foreach (SurfaceKind piece in Enum.GetValues(typeof(SurfaceKind)))
+                {
+                    var surface = SoundRules.BuildingSurface(building, piece);
+                    Assert.AreNotEqual(FootSurface.Water, surface, $"{building}/{piece}");
+                    Assert.AreNotEqual(FootSurface.Grass, surface, $"{building}/{piece}");
+                    Assert.AreNotEqual(FootSurface.Dirt, surface, $"{building}/{piece}");
+                }
+            Assert.AreEqual(FootSurface.Metal, SoundRules.BuildingSurface(BuildingKind.FactoryHall, SurfaceKind.Roof));
+            Assert.AreEqual(FootSurface.Concrete, SoundRules.BuildingSurface(BuildingKind.ElevatorStation, SurfaceKind.Floor));
         }
 
         // ---- Stance and gait -> loudness and range ----
