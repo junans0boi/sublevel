@@ -27,6 +27,12 @@ namespace Game.Core
         public float RiseAccelFraction = 0.25f; // share of the travel spent speeding up (and again slowing down)
         public float BounceMeters = 0.03f;      // the overshoot when the car stops
         public float ShakeMeters = 0.006f;      // vertical judder at full speed
+
+        // Riding to another region during the match (ADR-076, #76).
+        public float TravelSeconds = 8f;          // request accepted -> standing in the arrival station
+        public float TravelCooldownSeconds = 60f; // per combatant, from its arrival
+        public float TravelHoldSeconds = 0.8f;    // F held this long in a station starts the ride (a tap changes the destination)
+        public float StationRadius = 1.6f;        // flat metres from a station's spawn point that count as inside it
     }
 
     public enum ElevatorPhase { Waiting, Rising, Settling, Open }
