@@ -1,3 +1,5 @@
+using System;
+using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using Game.Core;
@@ -14,8 +16,21 @@ namespace Game.Net
     public class CombatantStance : NetworkBehaviour
     {
         public readonly SyncVar<int> State = new SyncVar<int>(); // Stance
+        // Slow walk (Ctrl, ADR-065 (3)): quieter footsteps, heard less far by bots. The owner says; every side reads.
+        public readonly SyncVar<bool> SlowWalk = new SyncVar<bool>();
+        // The parkour move under way (ParkourMove; 0 = none), so every side shows the pose (ADR-065 (4)).
+        public readonly SyncVar<int> Parkour = new SyncVar<int>();
 
         static readonly RaycastHit[] HeadHits = new RaycastHit[8];
+        static readonly Collider[] Overlaps = new Collider[16];
+
+        // Owner: the server turned a parkour down; the owner goes back to where it started.
+        public event Action<Vector3> ParkourRejected;
+        // Server: parkours accepted and turned down, for tests.
+        public int ParkoursAccepted { get; private set; }
+        public int ParkoursRejected { get; private set; }
+        Vector3 _parkourStart, _parkourEnd;
+        bool _parkourOpen;
 
         Combatant _combatant;
         CharacterController _controller;
@@ -38,8 +53,10 @@ namespace Game.Net
         // 0 = not lying down, 1 = fully prone; eased, the same on every side.
         public float ProneAmount => _prone;
         public float MoveFactor => Blend(1f, StanceRules.Current.Crouch.MoveFactor, StanceRules.Current.Prone.MoveFactor);
-        // Footsteps are this much quieter in the current stance (1 = full volume).
-        public float FootstepVolumeFactor => Blend(1f, StanceRules.Current.Crouch.FootstepVolumeFactor, StanceRules.Current.Prone.FootstepVolumeFactor);
+        // Footsteps are this much quieter in the current stance and gait (1 = full volume).
+        public float FootstepVolumeFactor => Blend(1f, StanceRules.Current.Crouch.FootstepVolumeFactor, StanceRules.Current.Prone.FootstepVolumeFactor)
+            * (SlowWalk.Value ? GameData.Rules.Locomotion.SlowWalkFootstepVolume : 1f);
+        public ParkourMove ParkourMove => (ParkourMove)Parkour.Value;
 
         // A per-stance value at the current (eased) mix of standing, crouching and lying down.
         float Blend(float stand, float crouch, float prone) => stand + (crouch - stand) * _crouch + (prone - stand) * _prone;
@@ -82,6 +99,8 @@ namespace Game.Net
             {
                 // The dead hold no stance.
                 if (State.Value != 0 && _combatant.Dead.Value) State.Value = 0;
+                if (SlowWalk.Value && _combatant.Dead.Value) SlowWalk.Value = false;
+                if (Parkour.Value != 0 && _combatant.Dead.Value) Parkour.Value = 0;
                 // Only owner-moved characters report falls; whatever moves a bot calls ServerApplyFall itself.
                 if (_combatant.IsPlayer) ServerTickFall();
             }
@@ -205,10 +224,109 @@ namespace Game.Net
             ServerApplyFall(accepted);
         }
 
+        [Server]
+        public void ServerSetSlowWalk(bool on)
+        {
+            if (_combatant.Dead.Value) on = false;
+            if (SlowWalk.Value != on) SlowWalk.Value = on;
+        }
+
+        // Parkour (ADR-065 (4)). Movement is the owner's (ADR-029), so the owner moves the body and the server only
+        // checks the claim: the start must be about where the server sees the body, and the move no longer or
+        // higher than a parkour can carry it. A parkour through a glazed window breaks the pane (glassId >= 0).
+        // False (and the owner sent back to the start) when the claim does not hold up.
+        [Server]
+        public bool ServerStartParkour(int move, Vector3 start, Vector3 end, int glassId)
+        {
+            var rules = ParkourRules.Current;
+            var kind = (ParkourMove)move;
+            var d = end - start;
+            bool ok = !_combatant.Dead.Value && Game.Core.Parkour.IsMotion(kind)
+                && (start - transform.position).sqrMagnitude <= rules.StartToleranceMeters * rules.StartToleranceMeters
+                && Game.Core.Parkour.Plausible(d.x, d.y, d.z, rules);
+            if (!ok)
+            {
+                Reject(start);
+                return false;
+            }
+            Parkour.Value = move;
+            _parkourStart = start;
+            _parkourEnd = end;
+            _parkourOpen = true;
+            if (glassId >= 0) GlassPanes.ServerBreakNear(glassId, start, rules.MaxHorizontalMeters, _combatant.ObjectId);
+            return true;
+        }
+
+        // The owner finished (or took back) its parkour at `at`: it must be where the move said it would end (or
+        // back at the start) and not inside anything.
+        [Server]
+        public bool ServerEndParkour(Vector3 at, bool cancelled)
+        {
+            if (!_parkourOpen) return false;
+            _parkourOpen = false;
+            Parkour.Value = 0;
+            var rules = ParkourRules.Current;
+            var expected = cancelled ? _parkourStart : _parkourEnd;
+            bool ok = (at - expected).sqrMagnitude <= rules.EndToleranceMeters * rules.EndToleranceMeters && !InsideGeometry(at);
+            if (!ok)
+            {
+                Reject(_parkourStart);
+                return false;
+            }
+            ParkoursAccepted++;
+            return true;
+        }
+
+        // The owner stopped a move part way because something else took the body (a teleport, death, a vehicle):
+        // the pose ends; where the body went is whatever moved it.
+        [Server]
+        public void ServerStopParkour()
+        {
+            _parkourOpen = false;
+            if (Parkour.Value != 0) Parkour.Value = 0;
+        }
+
+        void Reject(Vector3 back)
+        {
+            ParkoursRejected++;
+            _parkourOpen = false;
+            Parkour.Value = 0;
+            if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) ParkourRejected?.Invoke(back);
+            else TargetParkourRejected(Owner, back);
+        }
+
+        // A body standing with its feet at `feet` overlaps something other than itself.
+        bool InsideGeometry(Vector3 feet)
+        {
+            float height = Mathf.Max(CapsuleHeight, 2f * _radius);
+            float r = Mathf.Max(0.05f, _radius - 0.05f);
+            var bottom = feet + Vector3.up * (_feetY + _radius + 0.05f);
+            var top = feet + Vector3.up * (_feetY + Mathf.Max(height - _radius, _radius + 0.06f));
+            int n = Physics.OverlapCapsuleNonAlloc(bottom, top, r, Overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+                if (!Overlaps[i].transform.IsChildOf(transform) && Overlaps[i].GetComponentInParent<Combatant>() == null) return true;
+            return false;
+        }
+
         // ---- Owner requests ----
 
         [ServerRpc]
         public void CmdSetStance(int stance) => ServerSetStance((Stance)stance);
+
+        [ServerRpc]
+        public void CmdSetSlowWalk(bool on) => ServerSetSlowWalk(on);
+
+        [ServerRpc]
+        public void CmdStartParkour(int move, Vector3 start, Vector3 end, int glassId) => ServerStartParkour(move, start, end, glassId);
+
+        [ServerRpc]
+        public void CmdEndParkour(Vector3 at, bool cancelled) => ServerEndParkour(at, cancelled);
+
+        [ServerRpc]
+        public void CmdStopParkour() => ServerStopParkour();
+
+        [TargetRpc]
+        void TargetParkourRejected(NetworkConnection connection, Vector3 back) => ParkourRejected?.Invoke(back);
 
         [ServerRpc]
         public void CmdReportFall(float meters) => ServerReportFall(meters);

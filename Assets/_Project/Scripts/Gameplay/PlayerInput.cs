@@ -25,7 +25,9 @@ namespace Game.Gameplay
         public int SelectSlot;     // -1 = none; keys 1-5 give 0-4: primary, primary, sidearm, melee, throwable (ADR-058)
         public bool Crouch;        // C: pressed this frame, toggles crouching
         public bool Prone;         // Z: pressed this frame, toggles lying down
-        public bool FreeLook;      // Alt held: the mouse turns the view, not the character
+        public bool FreeLook;      // Alt held: the mouse orbits the view all the way round, not the character
+        public bool SlowWalk;      // Ctrl held: walk slowly and quietly (ADR-065 (3)); Ctrl does nothing else on foot
+        public bool AutoRun;       // =: pressed this frame, toggles walking forward on its own (ADR-065 (1))
         public bool FireMode;      // B: pressed this frame, switches single shots / automatic
         public bool ThrowHeld;     // G held: a throw is being aimed
         public bool ThrowPressed;  // G: pressed this frame
@@ -70,6 +72,8 @@ namespace Game.Gameplay
                 f.Crouch = k.cKey.wasPressedThisFrame;
                 f.Prone = k.zKey.wasPressedThisFrame;
                 f.FreeLook = k.leftAltKey.isPressed;
+                f.SlowWalk = k.ctrlKey.isPressed;
+                f.AutoRun = k.equalsKey.wasPressedThisFrame;
                 f.FireMode = k.bKey.wasPressedThisFrame;
                 f.ThrowHeld = k.gKey.isPressed;
                 f.ThrowPressed = k.gKey.wasPressedThisFrame;
@@ -77,7 +81,9 @@ namespace Game.Gameplay
                 f.Map = k.mKey.wasPressedThisFrame;
                 f.Holster = k.xKey.wasPressedThisFrame;
                 f.CycleThrowable = k.tKey.wasPressedThisFrame;
-                if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
+                // Ctrl + a number is kept for vehicle seats; on foot it selects nothing.
+                if (f.SlowWalk) { }
+                else if (k.digit1Key.wasPressedThisFrame) f.SelectSlot = 0;
                 else if (k.digit2Key.wasPressedThisFrame) f.SelectSlot = 1;
                 else if (k.digit3Key.wasPressedThisFrame) f.SelectSlot = 2;
                 else if (k.digit4Key.wasPressedThisFrame) f.SelectSlot = 3;

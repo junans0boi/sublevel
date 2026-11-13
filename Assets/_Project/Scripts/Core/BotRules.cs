@@ -22,6 +22,8 @@ namespace Game.Core
         public float GunshotHearingRadius = 80f;
         public float FootstepHearingRadius = 14f; // at full volume; a crouched walker is quieter by the stance's factor
         public float FootstepMinSpeed = 2f;       // slower than this makes no sound
+        public float SlowWalkHearingFactor = 0.3f; // a slow walker (Ctrl, ADR-065 (3)) is heard only this share as far
+        public float GlassHearingRadius = 40f;    // a window pane shattering
 
         // ---- Reacting and aiming ----
         public float ReactionSeconds = 0.45f;     // from first seeing a target to the first shot
@@ -70,6 +72,18 @@ namespace Game.Core
     }
 
     public enum NoiseKind : byte { Gunshot = 0, Footstep = 1, Other = 2 }
+
+    public static class BotHearing
+    {
+        // How far a walker's footsteps carry: the full radius, cut by the crouch (`crouchedShare` 0..1 of the way
+        // down) and again by slow walking.
+        public static float FootstepRadius(float crouchedShare, bool slowWalk, BotRules rules, StanceRules stances)
+        {
+            float share = crouchedShare < 0f ? 0f : crouchedShare > 1f ? 1f : crouchedShare;
+            float radius = rules.FootstepHearingRadius * (1f + (stances.Crouch.FootstepVolumeFactor - 1f) * share);
+            return slowWalk ? radius * rules.SlowWalkHearingFactor : radius;
+        }
+    }
 
     // Sounds bots can hear: "a noise at a position that carries this far". Whoever makes a noise on the server
     // calls Emit; bots read what is new since they last listened. A fixed ring, so neither side allocates and

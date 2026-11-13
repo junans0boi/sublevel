@@ -29,8 +29,20 @@ namespace Game.Gameplay
         // The stance this player has asked for; the replicated one is on CombatantStance.
         public Stance BodyStance { get; private set; }
         public bool Sprinting { get; private set; }
-        // Free look: the view is turned away from where the character faces by these angles.
+        // Free look (Alt held): the view orbits away from where the character faces by these angles (ADR-065 (2)).
         public bool FreeLooking { get; private set; }
+        // Auto-run (=): walking forward on its own until W or S is pressed, aiming starts or a screen opens (ADR-065 (1)).
+        public bool AutoRunning => _autoRun;
+        // Slow walk (Ctrl held, ADR-065 (3)).
+        public bool SlowWalking { get; private set; }
+        // A vehicle (or anything else) moves the body: no walking, jumping or parkour of our own; the view still
+        // turns. Firing is left to whoever set it.
+        public bool ExternalControl;
+        // Parkour (Space at an obstacle, ADR-065 (4)): the move under way, and what the last Space at an obstacle decided.
+        public bool InParkour => _parkour.Move != ParkourMove.None;
+        public ParkourMove ParkourUnderWay => _parkour.Move;
+        public ParkourPlan LastParkourPlan { get; private set; }
+        public bool ParkourGoingBack => _parkourBack;
         public float ViewYaw => Yaw + _freeYaw;
         public float ViewPitch => Pitch + _freePitch;
         // This frame's input as the character got it (empty while a screen is open), for other owner-side
@@ -45,6 +57,13 @@ namespace Game.Gameplay
         const float StanceResendSeconds = 0.3f;
         const float MaxViewPitch = 89f;
 
+        bool _autoRun;
+        float _lastMoveY;
+        bool _sentSlowWalk;
+        float _slowWalkSentAt;
+        ParkourPlan _parkour;
+        float _parkourT;
+        bool _parkourBack;
         int _sentAim, _sentLean;
         float _stanceSentAt;
         int _sentBodyStance;
@@ -87,6 +106,7 @@ namespace Game.Gameplay
             Camera = Camera.main;
             if (Camera != null) Camera.fieldOfView = _rules.Aim.Hip.Fov;
             _combatant.ShotFired += OnOwnShot;
+            if (_stance != null) _stance.ParkourRejected += OnParkourRejected;
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
             Yaw = transform.eulerAngles.y;
@@ -119,6 +139,7 @@ namespace Game.Gameplay
             if (!_owner) return;
             _owner = false;
             _combatant.ShotFired -= OnOwnShot;
+            if (_stance != null) _stance.ParkourRejected -= OnParkourRejected;
             if (Local == this) Local = null;
             UiFocus.Close();
             if (_weaponVisual != null) _weaponVisual.ShowInHand();
@@ -148,14 +169,18 @@ namespace Game.Gameplay
 
             if (_combatant.Dead.Value)
             {
+                if (InParkour) AbortParkour();
                 _aim.Update(false, Time.timeAsDouble, false);
                 Lean = 0;
                 BodyStance = Stance.Stand;
                 Sprinting = false;
                 FreeLooking = false;
+                _autoRun = false;
+                SlowWalking = false;
                 _freeYaw = _freePitch = 0f;
                 SendStance();
                 SendBodyStance();
+                SendSlowWalk();
                 if (f.Restart) _combatant.CmdRequestRestart();
                 PlaceCamera();
                 return;
@@ -165,57 +190,103 @@ namespace Game.Gameplay
             bool armed = _combatant.ActiveWeapon != null;
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
 
-            // Free look turns only the view, and only from the hip: the character keeps facing (and shooting)
-            // where it did. Letting go swings the view back.
+            // Free look turns only the view, and only from the hip: the character keeps facing and moving where it
+            // did while the camera orbits all the way round. Letting go swings the view back the short way.
             FreeLooking = f.FreeLook && aim == AimMode.Hip;
             if (FreeLooking)
             {
-                var freeLook = FreeLookRules.Current;
-                _freeYaw = Mathf.Clamp(_freeYaw + f.Look.x, -freeLook.MaxYawDeg, freeLook.MaxYawDeg);
+                _freeYaw = Locomotion.WrapFreeYaw(_freeYaw, f.Look.x);
                 _freePitch = Mathf.Clamp(_freePitch + f.Look.y, -PitchLimit - Pitch, PitchLimit - Pitch);
             }
             else
             {
-                float back = FreeLookRules.Current.ReturnDegPerSecond * Time.deltaTime;
-                _freeYaw = Mathf.MoveTowards(_freeYaw, 0f, back);
-                _freePitch = Mathf.MoveTowards(_freePitch, 0f, back);
+                var freeLook = FreeLookRules.Current;
+                _freeYaw = Locomotion.FreeLookReturn(_freeYaw, Time.deltaTime, freeLook);
+                _freePitch = Locomotion.FreeLookReturn(_freePitch, Time.deltaTime, freeLook);
                 Yaw += f.Look.x;
                 Pitch = Mathf.Clamp(Pitch + f.Look.y, -PitchLimit, PitchLimit);
             }
             transform.rotation = Quaternion.Euler(0f, Yaw, 0f);
 
+            // Auto-run: = toggles it; a fresh W or S, aiming, a screen or anything else taking the body ends it.
+            if (f.AutoRun) _autoRun = !_autoRun;
+            bool freshForwardBack = Mathf.Abs(f.Move.y) > 0.1f && Mathf.Abs(_lastMoveY) <= 0.1f;
+            _lastMoveY = f.Move.y;
+            if (freshForwardBack || aim != AimMode.Hip || UiFocus.Current != UiScreen.None || SpawnProtection.InputBlocked
+                || ExternalControl || ResultScreen.BlocksGameplay) _autoRun = false;
+            if (_autoRun) f.Move.y = 1f;
+
+            if (InParkour)
+            {
+                if (ExternalControl) AbortParkour();
+                else
+                {
+                    // The body is on its scripted path: no walking, jumping, stance changes or firing meanwhile.
+                    TickParkour(f);
+                    Sprinting = false;
+                    SendStance();
+                    SendBodyStance();
+                    SendSlowWalk();
+                    if (f.ToggleView) Rig.ToggleMode();
+                    PlaceCamera();
+                    NearbyLoot = FindNearbyLoot();
+                    return;
+                }
+            }
+
             // Sprinting is forward only, and neither aiming nor firing goes with it: pulling the trigger or
-            // raising the weapon drops back to a walk, so no shot ever leaves a sprint.
+            // raising the weapon drops back to a walk, so no shot ever leaves a sprint. Slow walking never sprints.
             bool firing = armed && (f.FireHeld || f.FirePressed);
-            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !firing;
+            SlowWalking = f.SlowWalk && !ExternalControl;
+            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !firing && !SlowWalking && !ExternalControl;
+
+            // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
+            if (f.Jump && !ExternalControl && _stance != null && _controller.isGrounded && BodyStance != Stance.Prone && TryStartParkour())
+            {
+                Sprinting = false;
+                SendSlowWalk();
+                PlaceCamera();
+                return;
+            }
 
             // C toggles the crouch and Z lying down; jumping or sprinting gets up instead. Rising (lying to crouching,
             // anything to standing) needs room overhead for the taller capsule.
             bool wasStanding = BodyStance == Stance.Stand;
             var stanceRules = StanceRules.Current;
             if (_stance == null) BodyStance = Stance.Stand;
-            else
+            else if (!ExternalControl)
             {
                 var next = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint, true, stanceRules);
                 if (Stances.Rises(BodyStance, next, stanceRules) && !_stance.CanReach(stanceRules.For(next).CapsuleHeight)) next = BodyStance;
                 BodyStance = next;
             }
-            bool jump = f.Jump && wasStanding; // out of a crouch the key only stands up
+            bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up
             sprint &= BodyStance == Stance.Stand;
             Sprinting = sprint;
             Lean = sprint ? 0 : (f.LeanRight ? 1 : 0) - (f.LeanLeft ? 1 : 0);
             SendStance();
             SendBodyStance();
+            SendSlowWalk();
 
-            // Empty hands (nothing held, or put away with X) are faster; the other factors slow the weapon down.
-            float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
-                stanceRules.For(BodyStance).MoveFactor, armed, _locomotion);
-            // Slower while a bandage or kit is being used.
-            speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
-            Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
-            _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
-            _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
-            ReportFall();
+            if (ExternalControl)
+            {
+                // Whatever carries the body moves it; ours stays put and nothing it does is a fall.
+                _verticalVelocity = 0f;
+                _fall.Reset();
+            }
+            else
+            {
+                // Empty hands (nothing held, or put away with X) are faster; the other factors slow the weapon down.
+                // Slow walking replaces the empty-hands bonus with its own share of the walking speed.
+                float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
+                    stanceRules.For(BodyStance).MoveFactor, armed, _locomotion, SlowWalking);
+                // Slower while a bandage or kit is being used.
+                speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
+                Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
+                _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
+                _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
+                ReportFall();
+            }
 
             if (f.ToggleView) Rig.ToggleMode();
             PlaceCamera();
@@ -228,7 +299,109 @@ namespace Game.Gameplay
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
             if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
-            TryFire(f);
+            // No shooting (or punching) while free looking: the camera is not where the weapon points (PUBG-like).
+            if (!FreeLooking) TryFire(f);
+        }
+
+        // ---- Parkour (ADR-065 (4)) ----
+
+        // Measures what is ahead and, when it is something to get over, starts the move. False: Space jumps (or
+        // stands up) as usual.
+        bool TryStartParkour()
+        {
+            var plan = ParkourProbe.Plan(transform, _controller.radius, _controller.height, Yaw, BodyStance == Stance.Crouch, ParkourRules.Current);
+            LastParkourPlan = plan;
+            if (!Parkour.IsMotion(plan.Move)) return false;
+            _parkour = plan;
+            _parkourT = 0f;
+            _parkourBack = false;
+            _autoRun = false;
+            // The body goes up and over on its path, through the edge of the obstacle: no collisions meanwhile.
+            _controller.enabled = false;
+            _verticalVelocity = 0f;
+            int glass = plan.Glass != null ? plan.Glass.Id : -1;
+            if (IsServerInitialized) _stance.ServerStartParkour((int)plan.Move, plan.Start, plan.End, glass);
+            else _stance.CmdStartParkour((int)plan.Move, plan.Start, plan.End, glass);
+            return true;
+        }
+
+        // One frame along the path. S in the first part of the move runs it back to the start.
+        void TickParkour(in PlayerInputFrame f)
+        {
+            var rules = ParkourRules.Current;
+            if (!_parkourBack && f.Move.y < -0.5f && Parkour.CanCancel(_parkourT, rules)) _parkourBack = true;
+            float step = Time.deltaTime / Mathf.Max(0.05f, _parkour.Seconds);
+            _parkourT += _parkourBack ? -step : step;
+            bool done = _parkourBack ? _parkourT <= 0f : _parkourT >= 1f;
+            _parkourT = Mathf.Clamp01(_parkourT);
+            transform.position = ParkourPosition(_parkourT);
+            if (done) FinishParkour();
+        }
+
+        Vector3 ParkourPosition(float t)
+        {
+            var p = _parkour;
+            Parkour.PathPoint(p.Move, t, p.Start.y, p.End.y, p.TopY, ParkourRules.Current.LiftMeters, out float along, out float height);
+            var flat = Vector3.Lerp(p.Start, p.End, along);
+            return new Vector3(flat.x, height, flat.z);
+        }
+
+        // Going through a window the head ducks under the lintel: the eyes drop by what the body would otherwise
+        // poke above the opening, most at the middle of the move.
+        float ParkourEyeDrop()
+        {
+            if (_parkour.Move != ParkourMove.Window) return 0f;
+            var profile = _parkour.Profile;
+            float eyeOverFeet = _combatant.EyePosition.y - transform.position.y;
+            float poke = profile.TopHeight + ParkourRules.Current.LiftMeters + eyeOverFeet + 0.15f - (profile.TopHeight + profile.OpeningHeight);
+            return Mathf.Max(0f, poke) * Mathf.Sin(Mathf.PI * _parkourT);
+        }
+
+        void FinishParkour()
+        {
+            bool cancelled = _parkourBack;
+            transform.position = cancelled ? _parkour.Start : _parkour.End;
+            EndParkourLocally();
+            if (IsServerInitialized) _stance.ServerEndParkour(transform.position, cancelled);
+            else _stance.CmdEndParkour(transform.position, cancelled);
+        }
+
+        // Something else takes over in the middle of a move (death, a vehicle, a teleport): stop where the body is.
+        void AbortParkour()
+        {
+            EndParkourLocally();
+            if (IsServerInitialized) _stance.ServerStopParkour();
+            else _stance.CmdStopParkour();
+        }
+
+        void EndParkourLocally()
+        {
+            _parkour = default;
+            _parkourT = 0f;
+            _parkourBack = false;
+            _controller.enabled = true;
+            _verticalVelocity = 0f;
+            _fall.Reset(); // the path is not a fall; dropping off the far side afterwards is measured from here
+        }
+
+        // The server did not believe the move: back to where it started.
+        void OnParkourRejected(Vector3 back)
+        {
+            if (InParkour) EndParkourLocally();
+            Teleport(back);
+        }
+
+        // Tells the server about slow walking when it changes, and again if its copy still disagrees a moment later.
+        void SendSlowWalk()
+        {
+            if (_stance == null) return;
+            bool changed = SlowWalking != _sentSlowWalk;
+            bool stale = SlowWalking != _stance.SlowWalk.Value && Time.time - _slowWalkSentAt > StanceResendSeconds;
+            if (!changed && !stale) return;
+            _sentSlowWalk = SlowWalking;
+            _slowWalkSentAt = Time.time;
+            if (IsServerInitialized) _stance.ServerSetSlowWalk(SlowWalking);
+            else _stance.CmdSetSlowWalk(SlowWalking);
         }
 
         // The host is the server and acts at once; a client asks.
@@ -351,7 +524,8 @@ namespace Game.Gameplay
                 RecoilYaw = _recoil.Yaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
             };
-            Rig.Place(Camera.transform, transform, _combatant.EyePosition, ViewYaw, ViewPitch, view, Time.deltaTime);
+            var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();
+            Rig.Place(Camera.transform, transform, eye, ViewYaw, ViewPitch, view, Time.deltaTime);
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
             float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
                 : _aim.Mode == AimMode.Hip && Rig.Mode == ViewMode.FirstPerson ? GameSettings.FirstPersonFov
@@ -388,6 +562,8 @@ namespace Game.Gameplay
 
         public void Teleport(Vector3 position)
         {
+            // Being moved ends a move under way.
+            if (InParkour) AbortParkour();
             _controller.enabled = false;
             transform.position = position;
             _controller.enabled = true;

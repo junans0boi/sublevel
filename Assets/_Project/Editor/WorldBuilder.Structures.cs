@@ -122,6 +122,7 @@ public static partial class WorldBuilder
     {
         var root = Child(parent, "Buildings");
         int pieces = 0, renderers = 0;
+        ResetGlass();
         for (int i = 0; i < plan.Lots.Count; i++)
         {
             var lot = plan.Lots[i];
@@ -284,6 +285,8 @@ public static partial class WorldBuilder
                 : new[] { new LOD(ShellLodHeight, all.ToArray()) });
             group.RecalculateBounds();
         }
+
+        AddWindowGlass(go.transform, plan, seed);
 
         foreach (var point in plan.LootPoints)
             placed.Loot.Add(origin + rotation * new Vector3(point.X, point.Y, point.Z) + Vector3.up * LootLift);

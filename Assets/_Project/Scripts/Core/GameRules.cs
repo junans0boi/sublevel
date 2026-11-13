@@ -27,5 +27,6 @@ namespace Game.Core
         public SmokeRules Smoke = new SmokeRules();
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
+        public ParkourRules Parkour = new ParkourRules();
     }
 }
