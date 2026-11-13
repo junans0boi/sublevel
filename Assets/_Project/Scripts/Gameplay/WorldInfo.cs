@@ -55,6 +55,7 @@ namespace Game.Gameplay
         [SerializeField] float _size;
         [SerializeField] float _seaLevel;
         [SerializeField] int _seed;
+        [SerializeField] int _rendererIndex;
         [SerializeField] Region[] _regions = new Region[0];
         [SerializeField] Elevator[] _elevators = new Elevator[0];
         [SerializeField] Pass[] _passes = new Pass[0];
@@ -66,6 +67,11 @@ namespace Game.Gameplay
         public float Size => _size;                 // the map is the square 0..Size on X and Z
         public float SeaLevel => _seaLevel;
         public int Seed => _seed;
+        // The URP renderer this map's cameras draw with (the outdoor one, without SSAO).
+        public int RendererIndex => _rendererIndex;
+
+        // Editor builder only.
+        public void SetRenderer(int index) => _rendererIndex = index;
         public IReadOnlyList<Region> Regions => _regions;
         public IReadOnlyList<Elevator> Elevators => _elevators;
         public IReadOnlyList<Pass> Passes => _passes;

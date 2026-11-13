@@ -8,8 +8,10 @@ public static class SceneBuilder
     public const string BootstrapPath = "Assets/_Project/Scenes/Bootstrap.unity";
 
     // Build order: the first scene is what a player build starts in (`-scene <name>` picks another, see StartScene).
+    // The outdoor map comes first (ADR-050); until it has been generated the test box is the start scene.
     static readonly string[] BuildOrder =
     {
+        "Assets/_Project/Scenes/World.unity",
         "Assets/_Project/Scenes/TestBox.unity",
         BootstrapPath,
         "Assets/_Project/Scenes/ZoneD.unity",

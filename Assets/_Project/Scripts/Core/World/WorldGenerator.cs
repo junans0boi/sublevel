@@ -276,6 +276,39 @@ namespace Game.Core
             return plan.Roads.Count - 1;
         }
 
+        // Bends a straight two-point road into a winding one: points every 22 m pushed sideways by a smooth
+        // wave that is nothing at either end. A point is left on the straight line where the bend would take it
+        // out of the region or toward a ridge.
+        static void Wind(WorldTerrain terrain, int region, List<float> px, List<float> pz, uint seed, float amplitude)
+        {
+            if (px.Count != 2) return;
+            float ax = px[0], az = pz[0], bx = px[1], bz = pz[1];
+            float dx = bx - ax, dz = bz - az;
+            float length = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (length < 70f) return;
+            float nx = -dz / length, nz = dx / length;
+            float reach = Math.Min(amplitude, length * 0.09f);
+            float phase1 = WorldNoise.Hash01(1, 0, seed) * 6.2832f, phase2 = WorldNoise.Hash01(2, 0, seed) * 6.2832f;
+            float waves = Math.Max(1f, (float)Math.Round(length / 150f));
+            int steps = (int)Math.Ceiling(length / 22f);
+            px.RemoveAt(1);
+            pz.RemoveAt(1);
+            for (int i = 1; i < steps; i++)
+            {
+                float t = (float)i / steps;
+                float taper = (float)Math.Sin(Math.PI * t);
+                float wave = (float)(Math.Sin(2 * Math.PI * waves * t + phase1) * 0.7 + Math.Sin(2 * Math.PI * (waves + 1f) * t + phase2) * 0.3);
+                float off = reach * taper * wave;
+                float x = ax + dx * t + nx * off, z = az + dz * t + nz * off;
+                terrain.Locate(x, z, out int at, out float border);
+                if (at != region || border < 64f || terrain.Coast(x, z) < 30f) { x = ax + dx * t; z = az + dz * t; }
+                px.Add(x);
+                pz.Add(z);
+            }
+            px.Add(bx);
+            pz.Add(bz);
+        }
+
         static void AddValleys(WorldTerrain terrain, List<float> px, List<float> pz, List<float> valleys, List<int> valleyRegions)
         {
             for (int s = 1; s < px.Count; s++)
@@ -360,6 +393,7 @@ namespace Game.Core
                     network.Add(from);
                     var px = new List<float> { ex, tx };
                     var pz = new List<float> { ez, tz };
+                    Wind(terrain, k, px, pz, unchecked((uint)plan.Seed + 53u + (uint)plan.Roads.Count * 7u), 13f);
                     int added = AddRoad(plan, name, RoadKind.Trunk, spec.RoadWidth, k, -1, px, pz);
                     if (added < 0) continue;
                     links.Add(link);
@@ -385,6 +419,7 @@ namespace Game.Core
             }
             var px = new List<float> { fromX, x };
             var pz = new List<float> { fromZ, z };
+            Wind(terrain, region, px, pz, unchecked((uint)plan.Seed + 57u + (uint)plan.Roads.Count * 7u), 8f);
             if (AddRoad(plan, name, RoadKind.Spur, spec.SpurWidth, region, -1, px, pz) < 0) return;
             links.Add(link);
             AddValleys(terrain, px, pz, valleys, valleyRegions);

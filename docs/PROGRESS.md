@@ -7,7 +7,7 @@
 - 조작: WASD 이동, Shift 달리기, Space 점프, 마우스 조준, 좌클릭 사격, 우클릭 꾹 = 견착 / 우클릭 탭 = 조준 켜고 끄기, Q/E 누르는 동안 기울이기, F 줍기, R 재장전, 1/2 무기 전환, H 회복, V 시점 전환, 사망 후 Enter 재시작, Esc 게임 종료(메뉴는 M1.6c).
 - 빌드: `Build/mac/Sublevel.app`, `Build/win/`(압축본 `Build/Sublevel-win64.zip`). 구역 D에서 시작하려면 `-scene ZoneD`.
 - 수치 조정: `Assets/_Project/Data/Resources/GameData/rules.json` — `Aim`, `Lean`(기울이기), `Recoil`, `Gait`(다리 배율·다리 돌림), `Jump`(점프 포즈). 무기별 반동은 `weapons.json`.
-- 화면 검수: `Build/mac/Sublevel.app/Contents/MacOS/Sublevel -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -feelcapture <폴더>` → 대본 입력으로 53장 저장(조준·기울이기·점프·이동, 옆/뒤/위 시점 포함). 포즈 고르기: `tools/unity.sh run-gfx CharacterKit.RenderClipSheet`.
+- 화면 검수: `Build/mac/Sublevel.app/Contents/MacOS/Sublevel -screen-width 1280 -screen-height 720 -screen-fullscreen 0 -scene TestBox -feelcapture <폴더>`(빌드의 첫 씬이 야외 맵 World가 되었으므로 `-scene TestBox` 필수) → 대본 입력으로 53장 저장(조준·기울이기·점프·이동, 옆/뒤/위 시점 포함). 포즈 고르기: `tools/unity.sh run-gfx CharacterKit.RenderClipSheet`.
 - 주의: Unity 실행·빌드 후 `ProjectSettings/{ProjectSettings,GraphicsSettings,QualitySettings}.asset`이 저절로 바뀜 → 커밋하지 않고 되돌린다. 원본 다운로드는 `AssetStaging/`(gitignore). batchmode 테스트에서 `WaitForEndOfFrame`을 쓰면 끝나지 않는다(`yield return null` 사용).
 
 ## 사람이 직접 확인할 항목 (M1.6a-fix, Windows 빌드로)

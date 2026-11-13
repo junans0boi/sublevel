@@ -11,20 +11,20 @@ Shader "Game/WorldWater"
         [NoScaleOffset] _DepthMap("Water depth (R)", 2D) = "white" {}
         _MapSize("Map size (m)", Float) = 1024
         _DepthRange("Depth at R = 1 (m)", Float) = 4
-        _ShallowColor("Shallow colour", Color) = (0.21, 0.30, 0.26, 1)
-        _DeepColor("Deep colour", Color) = (0.05, 0.13, 0.17, 1)
+        _ShallowColor("Shallow colour", Color) = (0.48, 0.60, 0.54, 1)
+        _DeepColor("Deep colour", Color) = (0.27, 0.39, 0.43, 1)
         _DeepDepth("Depth of the deep colour (m)", Float) = 3
-        _FadeDepth("Shore fade depth (m)", Float) = 0.3
-        _ShallowAlpha("Opacity in the shallows", Range(0, 1)) = 0.5
+        _FadeDepth("Shore fade depth (m)", Float) = 0.12
+        _ShallowAlpha("Opacity in the shallows", Range(0, 1)) = 0.72
         _DeepAlpha("Opacity when deep", Range(0, 1)) = 0.95
         _WaveA("Layer A: tile (m), speed x, speed z (m/s)", Vector) = (7, 0.30, 0.18, 0)
         _WaveB("Layer B: tile (m), speed x, speed z (m/s)", Vector) = (19, -0.16, 0.24, 0)
-        _NormalStrength("Wave strength", Range(0, 2)) = 0.55
-        _Reflection("Sky reflection", Range(0, 2)) = 0.9
-        _SpecPower("Highlight sharpness", Float) = 220
-        _SpecStrength("Highlight strength", Float) = 1.1
-        _FoamColor("Shore foam (a = strength)", Color) = (0.80, 0.84, 0.82, 0.3)
-        _FoamDepth("Shore foam depth (m)", Float) = 0.12
+        _NormalStrength("Wave strength", Range(0, 2)) = 0.9
+        _Reflection("Sky reflection", Range(0, 4)) = 2.0
+        _SpecPower("Highlight sharpness", Float) = 70
+        _SpecStrength("Highlight strength", Float) = 0.6
+        _FoamColor("Shore foam (a = strength)", Color) = (0.80, 0.84, 0.82, 0.45)
+        _FoamDepth("Shore foam depth (m)", Float) = 0.22
     }
 
     SubShader
@@ -44,7 +44,7 @@ Shader "Game/WorldWater"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -82,7 +82,6 @@ Shader "Game/WorldWater"
             {
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
-                half fogFactor : TEXCOORD1;
             };
 
             Varyings vert(Attributes input)
@@ -91,7 +90,6 @@ Shader "Game/WorldWater"
                 float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.positionWS = positionWS;
                 output.positionCS = TransformWorldToHClip(positionWS);
-                output.fogFactor = ComputeFogFactor(output.positionCS.z);
                 return output;
             }
 
@@ -136,7 +134,12 @@ Shader "Game/WorldWater"
                 color = lerp(color, _FoamColor.rgb * lighting, foam);
                 alpha = max(alpha, foam);
 
-                color = MixFog(color, input.fogFactor);
+                // Fog per pixel: the plane is one huge quad, so a per-vertex factor would be meaningless. Far water
+                // also goes fully opaque, so the sea meets the sky in the fog colour instead of at a dark edge.
+                float viewZ = -mul(UNITY_MATRIX_V, float4(input.positionWS, 1.0)).z;
+                half fogFactor = ComputeFogFactorZ0ToFar(max(viewZ - _ProjectionParams.y, 0.0));
+                color = MixFog(color, fogFactor);
+                alpha = max(alpha, 1.0h - saturate(ComputeFogIntensity(fogFactor)));
                 return half4(color, alpha);
             }
             ENDHLSL

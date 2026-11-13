@@ -22,12 +22,12 @@ public static partial class WorldBuilder
     const float InteriorLodHeight = 0.25f, ShellLodHeight = 0.02f;
 
     // Rocks: ScatterPoint.Scale 1 is a rock this wide; the models are scaled to it whatever their own size.
-    const float RockWidth = 1.6f, RockSink = 0.12f;
+    const float RockWidth = 2.4f, RockSink = 0.22f;
     // Triangle budget: rocks with LODs cost little far away, so the cap is on the count; the moss set has no LODs
     // (5k-16.5k triangles each), so few of them are placed and they are culled early.
     const int MaxRocks = 900, MaxSingleLodRocks = 80;
     const int SingleLodPercent = 12;
-    const float FirstLodHeight = 0.30f, LastLodHeight = 0.012f, SingleLodCullHeight = 0.035f;
+    const float FirstLodHeight = 0.8f, LastLodHeight = 0.035f, SingleLodCullHeight = 0.045f;
 
     // A building as it stands in the world.
     sealed class Placed
@@ -192,6 +192,11 @@ public static partial class WorldBuilder
             var size = new Vector3(piece.SizeX, piece.SizeY, piece.SizeZ);
             bool interior = piece.Kind == SurfaceKind.WallInner || piece.Kind == SurfaceKind.Prop || piece.Kind == SurfaceKind.Stairs;
             Batch(SurfaceFor(kind, piece, style), interior).Add(center, size, skipBottom: piece.MinY <= 0.001f);
+            // A house's rooms get a plastered ceiling: without it the underside of the roof shows roof tiles and
+            // the underside of an upper floor shows floor boards.
+            if (kind == BuildingKind.House && piece.MinY > 1.5f && (piece.Kind == SurfaceKind.Roof || piece.Kind == SurfaceKind.Floor)
+                && size.x > 0.7f && size.z > 0.7f)
+                Batch(WorldMaterials.PlasterInner, true).Add(new Vector3(piece.X, piece.MinY, piece.Z), new Vector3(size.x - 0.5f, 0.03f, size.z - 0.5f));
 
             var box = colliders.AddComponent<BoxCollider>();
             box.center = center;
@@ -277,12 +282,12 @@ public static partial class WorldBuilder
         {
             switch (piece.Prop)
             {
-                case PropKind.Crate:
+                case PropKind.Crate: return WorldMaterials.Crate;
                 case PropKind.Table:
-                case PropKind.Counter:
-                case PropKind.Bed: return WorldMaterials.PlanksDark;
+                case PropKind.Counter: return WorldMaterials.PlanksDark;
+                case PropKind.Bed: return WorldMaterials.Bedding;
                 case PropKind.Machine: return WorldMaterials.RustyMetal;
-                default: return WorldMaterials.PaintedMetal; // shelves and anything new
+                default: return WorldMaterials.Shelving; // shelves and anything new
             }
         }
 
@@ -316,7 +321,7 @@ public static partial class WorldBuilder
                     case SurfaceKind.Floor:
                     case SurfaceKind.Roof:
                     case SurfaceKind.Stairs: return WorldMaterials.Concrete;
-                    case SurfaceKind.Trim: return WorldMaterials.PaintedMetal;
+                    case SurfaceKind.Trim: return WorldMaterials.Concrete;
                     default: return WorldMaterials.ConcreteDark;
                 }
         }
@@ -414,22 +419,24 @@ public static partial class WorldBuilder
             var variant = useSingle ? single[(int)((h >> 8) % (uint)single.Count)] : withLods[(int)((h >> 8) % (uint)withLods.Count)];
             if (useSingle) singles++;
             PlaceRock(root, variant, placed, new Vector3(rock.X, ground.Height(rock.X, rock.Z), rock.Z), rock.YawDeg,
-                RockWidth * Mathf.Max(rock.Scale, 0.1f), nav);
+                RockWidth * Mathf.Max(rock.Scale, 0.1f), RockSink, nav);
             nearTriangles += variant.Triangles;
             placed++;
         }
-        Debug.Log($"[WorldBuilder] rocks: placed {placed} of {count} in the plan (cap {MaxRocks}); {singles} are from the set without LODs " +
+        int outcrops = PlaceOutcrops(plan, ground, root, withLods, placed, nav);
+        placed += outcrops;
+        Debug.Log($"[WorldBuilder] rocks: {outcrops} outcrops on the ridges; placed {placed} of {count} in the plan (cap {MaxRocks}); {singles} are from the set without LODs " +
             $"(cap {MaxSingleLodRocks}, culled below {SingleLodCullHeight:P1} of the screen height); {withLods.Count} shapes with LODs, {single.Count} without; " +
             $"{nearTriangles} triangles if every rock were drawn at full detail");
         return placed;
     }
 
-    static void PlaceRock(Transform parent, RockVariant variant, int index, Vector3 position, float yawDeg, float width, List<NavMeshBuildSource> nav)
+    static void PlaceRock(Transform parent, RockVariant variant, int index, Vector3 position, float yawDeg, float width, float sink, List<NavMeshBuildSource> nav)
     {
         float scale = width / Mathf.Max(variant.Size.x, variant.Size.z, 0.01f);
         var size = variant.Size * scale;
         var rotation = Quaternion.Euler(0f, yawDeg, 0f);
-        var foot = position - Vector3.up * (size.y * RockSink); // set into the ground a little
+        var foot = position - Vector3.up * (size.y * sink); // set into the ground a little
 
         var go = new GameObject($"Rock{index:000}_{variant.Name}");
         go.transform.SetParent(parent, false);
@@ -450,6 +457,9 @@ public static partial class WorldBuilder
             child.AddComponent<MeshFilter>().sharedMesh = variant.Lods[i];
             var renderer = child.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = variant.Material;
+            // Only the nearest, most detailed meshes cast shadows: a thousand rocks in the shadow pass cost more
+            // than their small shadows are worth under an overcast sky.
+            renderer.shadowCastingMode = i == 0 ? ShadowCastingMode.On : ShadowCastingMode.Off;
             child.isStatic = true;
             float height = n == 1 ? SingleLodCullHeight : FirstLodHeight * Mathf.Pow(LastLodHeight / FirstLodHeight, (float)i / (n - 1));
             lods[i] = new LOD(height, new Renderer[] { renderer });
@@ -474,6 +484,37 @@ public static partial class WorldBuilder
             transform = Matrix4x4.TRS(foot + Vector3.up * (size.y * 0.5f), rotation, Vector3.one),
             area = NotWalkableArea,
         });
+    }
+
+    // Outcrops: big rocks set deep into the flanks of the border ridges and the mountain slopes, where the plan
+    // scatters none (it keeps to ground a player can stand on). They break the smooth profile of the ridges.
+    const float OutcropCell = 13f, OutcropChance = 0.34f, OutcropSink = 0.38f;
+
+    static int PlaceOutcrops(WorldPlan plan, WorldMeshes.HeightField ground, Transform root, List<RockVariant> variants, int firstIndex, List<NavMeshBuildSource> nav)
+    {
+        if (variants.Count == 0) return 0;
+        int cells = Mathf.FloorToInt(plan.Size / OutcropCell), placed = 0;
+        for (int cz = 0; cz < cells; cz++)
+        {
+            for (int cx = 0; cx < cells; cx++)
+            {
+                uint h = Hash(plan.Seed, 900000 + cz * cells + cx);
+                if ((h & 1023u) / 1023f > OutcropChance) continue;
+                float x = (cx + ((h >> 10) & 255u) / 255f) * OutcropCell, z = (cz + ((h >> 18) & 255u) / 255f) * OutcropCell;
+                ground.Sample(x, z, out float height, out float slopeTan);
+                if (height < plan.SeaLevel + 1.5f || slopeTan < 0.5f || slopeTan > 1.9f) continue;
+                int region = plan.RegionAt(x, z);
+                bool mountain = region >= 0 && plan.Regions[region].Kind == RegionKind.Mountain;
+                if (plan.BorderDistance(x, z) > 42f && !mountain) continue;
+                if (plan.RoadDistance(x, z) < 6f) continue;
+                if (plan.Passes.Any(p => (p.X - x) * (p.X - x) + (p.Z - z) * (p.Z - z) < 34f * 34f)) continue;
+                var variant = variants[(int)((h >> 26) % (uint)variants.Count)];
+                float width = 3.2f + 5.5f * (((h >> 4) & 63u) / 63f) * (((h >> 12) & 63u) / 63f);
+                PlaceRock(root, variant, firstIndex + placed, new Vector3(x, height, z), (h >> 7) % 360u, width, OutcropSink, nav);
+                placed++;
+            }
+        }
+        return placed;
     }
 
     // ---- trees ----

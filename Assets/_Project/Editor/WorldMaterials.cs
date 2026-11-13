@@ -14,7 +14,7 @@ public static class WorldMaterials
     const string ArtMaterials = "Assets/_Project/Art/Materials";
     const string ArtModels = "Assets/_Project/Art/Models";
     const string WaterShader = "Game/WorldWater";
-    const string TerrainShader = "Universal Render Pipeline/Terrain/Lit";
+    const string TerrainShader = "Game/WorldTerrain"; // URP Terrain/Lit with a side-projected rock layer
 
     // A material and the size in metres one repeat of its texture covers (some sets are twice as wide as high).
     public struct Surface
@@ -31,6 +31,11 @@ public static class WorldMaterials
         "CorrugatedSteel005", "RoofingTiles014B", "Planks039", "Concrete047A", "Metal022", "PaintedMetal014",
     };
 
+    static readonly Dictionary<string, float> MetalScale = new Dictionary<string, float>
+    {
+        { "CorrugatedSteel005", 0.15f }, { "Metal022", 0.35f }, { "PaintedMetal014", 0.35f },
+    };
+
     // (folder, file prefix) of the rock models.
     public static readonly (string Folder, string File)[] RockSets =
     {
@@ -39,8 +44,11 @@ public static class WorldMaterials
 
     static readonly Color[] BrickTints = { Color.white, new Color(0.84f, 0.80f, 0.78f), new Color(1f, 0.90f, 0.82f) };
     static readonly Color[] PlasterTints = { new Color(0.90f, 0.88f, 0.82f), new Color(0.76f, 0.81f, 0.84f), new Color(0.88f, 0.79f, 0.66f) };
-    static readonly Color[] SteelTints = { new Color(0.74f, 0.77f, 0.80f), new Color(0.52f, 0.60f, 0.56f), new Color(0.68f, 0.52f, 0.46f) };
+    static readonly Color[] SteelTints = { new Color(1.0f, 1.0f, 1.0f), new Color(0.84f, 0.89f, 0.85f), new Color(0.95f, 0.85f, 0.78f) };
     static readonly Color[] RoofTints = { Color.white, new Color(0.80f, 0.74f, 0.70f), new Color(0.70f, 0.72f, 0.76f) };
+
+    // The scanned rocks are warm brown; pulled toward the grey of the cliffs they lie under.
+    static readonly Color RockTint = new Color(0.82f, 0.88f, 0.92f);
 
     public const int Variants = 3;
 
@@ -73,9 +81,11 @@ public static class WorldMaterials
         var r = rough.GetPixels32();
         var a = SameSize(ao, rough) ? ao.GetPixels32() : null;
         var m = SameSize(metal, rough) ? metal.GetPixels32() : null;
+        // Bare metal mirrors the dim overcast sky and comes out nearly black; cladding here is treated as coated sheet.
+        float metalScale = MetalScale.TryGetValue(id, out float scale) ? scale : 1f;
         var packed = new Color32[r.Length];
         for (int i = 0; i < r.Length; i++)
-            packed[i] = new Color32(m != null ? m[i].r : (byte)0, a != null ? a[i].r : (byte)255, 128, (byte)(255 - r[i].r));
+            packed[i] = new Color32(m != null ? (byte)(m[i].r * metalScale) : (byte)0, a != null ? a[i].r : (byte)255, 128, (byte)(255 - r[i].r));
         WritePng(outPath, rough.width, rough.height, packed);
         Destroy(rough, ao, metal);
     }
@@ -192,15 +202,18 @@ public static class WorldMaterials
     public static Surface Brick(int variant) => Set("Brick" + Wrap(variant), "Bricks097", BrickTints[Wrap(variant)], 2.4f, 1.2f);
     public static Surface Plaster(int variant) => Set("Plaster" + Wrap(variant), "PaintedPlaster017", PlasterTints[Wrap(variant)], 3f, 1.5f);
     public static Surface PlasterInner => Set("PlasterInner", "PaintedPlaster017", new Color(0.80f, 0.79f, 0.75f), 3f, 1.5f);
-    public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.8f);
-    public static Surface SteelRoof => Set("SteelRoof", "CorrugatedSteel005", new Color(0.58f, 0.60f, 0.62f), 2f, 2f, smoothness: 0.8f);
+    public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.5f);
+    public static Surface SteelRoof => Set("SteelRoof", "CorrugatedSteel005", new Color(0.80f, 0.82f, 0.84f), 2f, 2f, smoothness: 0.5f);
     public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), "RoofingTiles014B", RoofTints[Wrap(variant)], 2f, 2f);
     public static Surface Planks => Set("Planks", "Planks039", Color.white, 2.4f, 1.2f);
     public static Surface PlanksDark => Set("PlanksDark", "Planks039", new Color(0.72f, 0.64f, 0.55f), 1.6f, 0.8f);
+    public static Surface Shelving => Set("Shelving", "Planks039", new Color(0.62f, 0.60f, 0.56f), 1.2f, 0.6f);
+    public static Surface Crate => Set("Crate", "Planks039", new Color(0.92f, 0.86f, 0.74f), 1.2f, 0.6f);
+    public static Surface Bedding => Set("Bedding", "PaintedPlaster017", new Color(0.50f, 0.56f, 0.62f), 3f, 1.5f, smoothness: 0.4f, bumpScale: 0.5f);
     public static Surface Concrete => Set("Concrete", "Concrete047A", Color.white, 3f, 3f);
     public static Surface ConcreteDark => Set("ConcreteDark", "Concrete047A", new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
-    public static Surface PaintedMetal => Set("PaintedMetal", "PaintedMetal014", new Color(0.85f, 0.85f, 0.85f), 1.5f, 1.5f);
-    public static Surface RustyMetal => Set("RustyMetal", "Metal022", new Color(0.80f, 0.78f, 0.76f), 1.5f, 1.5f, smoothness: 0.8f);
+    public static Surface PaintedMetal => Set("PaintedMetal", "PaintedMetal014", new Color(0.60f, 0.66f, 0.68f), 1.5f, 1.5f);
+    public static Surface RustyMetal => Set("RustyMetal", "Metal022", new Color(0.55f, 0.60f, 0.62f), 1.5f, 1.5f, smoothness: 0.8f);
     public static Surface Asphalt => Set("Asphalt", "Asphalt015", new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
     public static Surface DirtRoad => Set("DirtRoad", "Ground081", new Color(0.88f, 0.86f, 0.82f), 5f, 2.5f);
 
@@ -208,7 +221,7 @@ public static class WorldMaterials
     {
         var (folder, file) = RockSets[set];
         var dir = $"{ArtModels}/{folder}/{file}";
-        return Lit("World_" + folder, dir + "_color.jpg", dir + "_normal.jpg", MaskPath(file), Color.white, 1f, 1f);
+        return Lit("World_" + folder, dir + "_color.jpg", dir + "_normal.jpg", MaskPath(file), RockTint, 0.5f, 1f);
     }
 
     public static string RockModelPath(int set) => $"{ArtModels}/{RockSets[set].Folder}/{RockSets[set].File}.fbx";
@@ -217,15 +230,17 @@ public static class WorldMaterials
 
     // Order matches WorldPlan.Splat: grass, dirt/gravel, rock, sand/mud. Tile sizes are large enough that the
     // repeat does not show from eye height (Ground081 is a 2:1 set).
+    const float RockTile = 6f; // the same as ROCK_TILE in WorldTerrainPasses.hlsl
+
     public static TerrainLayer[] TerrainLayers() => new[]
     {
-        Layer("Grass", "Ground037", new Vector2(7f, 7f), 0.12f),
-        Layer("Dirt", "Ground081", new Vector2(9f, 4.5f), 0.15f),
-        Layer("Rock", "Rock051", new Vector2(10f, 10f), 0.2f),
-        Layer("Mud", "Ground054", new Vector2(6f, 6f), 0.3f),
+        Layer("Grass", "Ground037", new Vector2(11f, 11f), 0.12f, new Color(0.38f, 0.52f, 0.31f)),
+        Layer("Dirt", "Ground081", new Vector2(6.4f, 3.2f), 0.15f, new Color(0.46f, 0.43f, 0.38f)),
+        Layer("Rock", "Rock051", new Vector2(RockTile, RockTile), 0.2f, new Color(0.50f, 0.50f, 0.49f)),
+        Layer("Mud", "Ground054", new Vector2(8.6f, 8.6f), 0.3f, new Color(0.30f, 0.30f, 0.26f)),
     };
 
-    static TerrainLayer Layer(string name, string id, Vector2 tileSize, float fallbackSmoothness)
+    static TerrainLayer Layer(string name, string id, Vector2 tileSize, float fallbackSmoothness, Color tint)
     {
         var path = $"{LayerDir}/World_{name}.terrainlayer";
         var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(path);
@@ -236,13 +251,18 @@ public static class WorldMaterials
         }
         layer.diffuseTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg");
         layer.normalMapTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg");
-        layer.maskMapTexture = SceneLook.Load<Texture2D>(MaskPath(id));
+        layer.maskMapTexture = null;
         layer.tileSize = tileSize;
         layer.tileOffset = Vector2.zero;
         layer.normalScale = 1f;
+        layer.diffuseRemapMin = new Vector4(0f, 0f, 0f, 0f);
+        layer.diffuseRemapMax = new Vector4(tint.r, tint.g, tint.b, 1f);
+        // Ground is never glossy: the scanned roughness reads as wet under the fill light.
+        layer.maskMapRemapMin = new Vector4(0f, 0f, 0f, 0f);
+        layer.maskMapRemapMax = new Vector4(0f, 1f, 1f, 0.45f);
         // Used only if the mask map is not read (the shader's _MASKMAP keyword off).
         layer.metallic = 0f;
-        layer.smoothness = fallbackSmoothness;
+        layer.smoothness = fallbackSmoothness * 0.5f;
         EditorUtility.SetDirty(layer);
         return layer;
     }
@@ -254,7 +274,9 @@ public static class WorldMaterials
         var mat = Asset("World_Terrain", TerrainShader);
         mat.SetFloat("_EnableInstancedPerPixelNormal", 1f);
         mat.EnableKeyword("_TERRAIN_INSTANCED_PERPIXEL_NORMAL");
-        mat.EnableKeyword("_MASKMAP");
+        // No mask maps: four more samples on every pixel of ground for occlusion nobody sees (the layers' own
+        // smoothness and metallic values are used instead).
+        mat.DisableKeyword("_MASKMAP");
         mat.SetFloat("_EnableHeightBlend", 0f);
         mat.DisableKeyword("_TERRAIN_BLEND_HEIGHT");
         EditorUtility.SetDirty(mat);
@@ -265,6 +287,8 @@ public static class WorldMaterials
 
     public static Material Water(Texture2D normals, Texture2D depth, float mapSize, float depthRange)
     {
+        // A saved material keeps its own copy of every value; made afresh so the shader's defaults are the look.
+        AssetDatabase.DeleteAsset($"{MaterialDir}/World_Water.mat");
         var mat = Asset("World_Water", WaterShader);
         mat.SetTexture("_NormalMap", normals);
         mat.SetTexture("_DepthMap", depth);

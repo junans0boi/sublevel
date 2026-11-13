@@ -60,24 +60,24 @@ namespace Game.Core
                 {
                     Id = "A", Name = "산악", Kind = "Mountain", CentreX = 520f, CentreZ = 800f, Radius = 320f,
                     BaseHeight = 18f, Relief = 84f, Elevators = 3, Lots = 8, CompoundLots = 3, Hamlets = 0, HamletLots = 0, ConvergencePoints = 3, CompoundRadius = 40f,
-                    RocksPerHectare = 45f, TreesPerHectare = 40f,
+                    RocksPerHectare = 60f, TreesPerHectare = 40f,
                 },
                 new RegionSpec
                 {
                     Id = "B", Name = "습지", Kind = "Wetland", CentreX = 200f, CentreZ = 400f, Radius = 300f,
-                    BaseHeight = 0.15f, Relief = 0.55f, Elevators = 3, Lots = 8, CompoundLots = 3, Hamlets = 2, HamletLots = 2, ConvergencePoints = 3, CompoundRadius = 40f,
+                    BaseHeight = 0.05f, Relief = 0.6f, Elevators = 3, Lots = 8, CompoundLots = 3, Hamlets = 2, HamletLots = 2, ConvergencePoints = 3, CompoundRadius = 40f,
                     RocksPerHectare = 5f, TreesPerHectare = 30f,
                 },
                 new RegionSpec
                 {
                     Id = "C", Name = "마을", Kind = "Town", CentreX = 500f, CentreZ = 400f, Radius = 280f,
-                    BaseHeight = 8f, Relief = 2.5f, Elevators = 4, Lots = 30, CompoundLots = 7, Hamlets = 3, HamletLots = 3, ConvergencePoints = 3, CompoundRadius = 50f,
+                    BaseHeight = 8f, Relief = 4.5f, Elevators = 4, Lots = 30, CompoundLots = 7, Hamlets = 3, HamletLots = 3, ConvergencePoints = 3, CompoundRadius = 50f,
                     RocksPerHectare = 8f, TreesPerHectare = 25f,
                 },
                 new RegionSpec
                 {
                     Id = "D", Name = "공장", Kind = "Factory", CentreX = 824f, CentreZ = 400f, Radius = 300f,
-                    BaseHeight = 9f, Relief = 1.5f, Elevators = 3, Lots = 14, CompoundLots = 5, Hamlets = 2, HamletLots = 2, ConvergencePoints = 3, CompoundRadius = 60f,
+                    BaseHeight = 9f, Relief = 3.2f, Elevators = 3, Lots = 14, CompoundLots = 5, Hamlets = 2, HamletLots = 2, ConvergencePoints = 3, CompoundRadius = 60f,
                     RocksPerHectare = 6f, TreesPerHectare = 8f,
                 },
             },

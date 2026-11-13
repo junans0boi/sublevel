@@ -17,7 +17,16 @@ namespace Game.Core
         public const float PadBlend = 3f;
         public const float MaxPoolDepth = 0.55f;  // wetland pools stay wadeable (rule: 0.6 m)
         public const float SeaDepth = 8f;
-        const float CrestNoise = 8f;
+        // Border ridges (see Natural): the centre line wanders, the crest and the width change along it.
+        const float CrestNoise = 8f;              // crest variation of the straight ridge beside a pass
+        const float RidgeMeander = 11f;           // the centre line strays this far from the straight border
+        const float RidgeCrestRange = 20f;        // crest height varies by this much along the ridge
+        const float RidgeMinRise = 15f;           // the lowest crest above the highest region floor beside it
+        const float RidgeMaxHalfWidth = 40f;
+        const float RidgeRough = 3.5f;            // broken profile: ribs and notches on the flanks
+        const float PassCalm = 45f;               // within this distance of a pass the ridge is the plain straight one
+        const float MountainRise = 100f, Foothills = 5f;
+        const float TownHills = 17f, FactoryHills = 13f, WetlandHills = 5f, HillsAtRidge = 0.35f;
         const float GridCell = 16f;
 
         readonly float size, half, sea, seabedFloor, maxHeight, islandRadius, coastNoise, ridgeHeight, ridgeHalf;
@@ -252,19 +261,38 @@ namespace Game.Core
                 case RegionKind.Mountain:
                 {
                     float foot = baseH[k] + 4f * WorldNoise.Fbm(x / 120f, z / 120f, unchecked(seed + 25u), 2);
-                    float rise = Smooth01((ValleyDistance(k, x, z) - 10f) / 50f); // level along roads and yards, full relief 60 m away
+                    // Level along roads and yards; the ground then climbs over 100 m: foothills first, the massif behind.
+                    float away = ValleyDistance(k, x, z);
+                    float rise = Smooth01((away - 8f) / MountainRise);
                     if (rise <= 0f) return foot;
                     // The ridged sum seldom gets past 0.65, so stretch it: the best crests come close to MaxHeight.
                     float crests = Smooth01(1.5f * WorldNoise.Ridged(x / 170f, z / 170f, unchecked(seed + 27u), 3));
-                    return foot + rise * relief[k] * (0.2f + 0.8f * crests);
+                    // A broad swell joins the crests into massifs instead of leaving each one a cone on a plate,
+                    // and small hills roll over the lower slopes.
+                    float broad = 0.5f + 0.5f * WorldNoise.Fbm(x / 260f, z / 260f, unchecked(seed + 26u), 2);
+                    float hills = Foothills * Smooth01((away - 8f) / 40f) * WorldNoise.Fbm(x / 42f, z / 42f, unchecked(seed + 28u), 2);
+                    return foot + hills + rise * relief[k] * (0.22f + 0.23f * broad + 0.55f * crests * (0.6f + 0.4f * broad));
                 }
                 case RegionKind.Wetland:
-                    return Math.Max(-MaxPoolDepth, baseH[k] + relief[k] * WorldNoise.Fbm(x / 38f, z / 38f, unchecked(seed + 23u), 2));
+                    return Math.Max(-MaxPoolDepth, baseH[k] + relief[k] * WorldNoise.Fbm(x / 38f, z / 38f, unchecked(seed + 23u), 2)) + Hills(k, x, z, WetlandHills);
                 case RegionKind.Factory:
-                    return baseH[k] + relief[k] * WorldNoise.Fbm(x / 90f, z / 90f, unchecked(seed + 29u), 2);
+                    return baseH[k] + relief[k] * WorldNoise.Fbm(x / 90f, z / 90f, unchecked(seed + 29u), 2) + Hills(k, x, z, FactoryHills);
                 default:
-                    return baseH[k] + relief[k] * WorldNoise.Fbm(x / 70f, z / 70f, unchecked(seed + 21u), 3);
+                    return baseH[k] + relief[k] * WorldNoise.Fbm(x / 70f, z / 70f, unchecked(seed + 21u), 3) + Hills(k, x, z, TownHills);
             }
+        }
+
+        // Rolling hills over the plains: none along the roads and yards (those are the valley floors), rising
+        // away from them, so every road runs through a valley and no region is a flat table.
+        float Hills(int k, float x, float z, float amplitude)
+        {
+            float rise = Smooth01((ValleyDistance(k, x, z) - 12f) / 70f);
+            if (rise <= 0f) return 0f;
+            // Lower beside a border, or the hills would bury the ridge that has to stay a wall (see FloorNear).
+            Locate(x, z, out _, out float border);
+            float nearRidge = HillsAtRidge + (1f - HillsAtRidge) * Smooth01((border - 40f) / 50f);
+            float n = 0.5f + 0.5f * WorldNoise.Fbm(x / 135f, z / 135f, unchecked(seed + 41u), 3);
+            return amplitude * rise * nearRidge * Smooth01(1.3f * n - 0.12f);
         }
 
         // Distance to the nearest valley floor or compound yard of a region.
@@ -313,25 +341,103 @@ namespace Game.Core
             return best;
         }
 
+        // 0 at a pass, 1 where the ridge is free to wander. Roads are laid out against the straight ridge, so the
+        // ridge keeps that shape wherever a road goes through it.
+        float RidgeFreedom(float x, float z)
+        {
+            float free = 1f;
+            for (int i = 0; i < passX.Length; i++)
+            {
+                float dx = x - passX[i], dz = z - passZ[i];
+                float reach = passHalf[i] + WorldPass.Shoulder + PassCalm;
+                float d2 = dx * dx + dz * dz;
+                if (d2 >= reach * reach) continue;
+                float f = Smooth01(((float)Math.Sqrt(d2) - passHalf[i] - WorldPass.Shoulder) / PassCalm);
+                if (f < free) free = f;
+            }
+            return free;
+        }
+
+        // The highest floor (metres above the sea) among the regions whose cells are near: a ridge beside the
+        // mountain region has to stand higher than one between the plains to stay a wall.
+        float FloorNear(float x, float z)
+        {
+            float high = 0f;
+            for (int i = 0; i < regionCount; i++)
+            {
+                // Signed distance to region i's cell (negative inside).
+                float dix = x - cx[i], diz = z - cz[i];
+                float di = dix * dix + diz * diz, outside = float.MinValue;
+                for (int j = 0; j < regionCount; j++)
+                {
+                    if (j == i) continue;
+                    float dx = x - cx[j], dz = z - cz[j];
+                    float b = (di - (dx * dx + dz * dz)) / (2f * centreDist[i, j]);
+                    if (b > outside) outside = b;
+                }
+                float floor = baseH[i] + (kind[i] == RegionKind.Mountain ? 9f
+                    : kind[i] == RegionKind.Wetland ? WetlandHills * HillsAtRidge
+                    : 2f + (kind[i] == RegionKind.Factory ? FactoryHills : TownHills) * HillsAtRidge);
+                float v = floor * (1f - Smooth01((outside - 30f) / 60f));
+                if (v > high) high = v;
+            }
+            return high;
+        }
+
+        // Cross-section of a ridge, 0 on the crest and 1 where it has met the ground: a steep core and a long foot.
+        static float RidgeProfile(float t)
+        {
+            return 0.82f * Smooth01(t / 0.55f) + 0.18f * Smooth01((t - 0.3f) / 0.7f);
+        }
+
         // Ground before anything is built on it.
         public float Natural(float x, float z)
         {
             float c = Coast(x, z);
             if (c <= -SeaRamp) return seabedFloor;
             float seabed = c < 0f ? sea - (sea - seabedFloor) * Smooth01(-c / SeaRamp) : sea;
-            Locate(x, z, out int k, out float bd);
+
+            // The ridge follows the border between two regions, but not in a straight line: the border is looked up
+            // at a displaced position, so the ridge (and the ground of the regions with it) wanders either side.
+            float free = RidgeFreedom(x, z);
+            float wx = x, wz = z;
+            if (free > 0f)
+            {
+                float m = RidgeMeander * free;
+                wx += m * (WorldNoise.Fbm(x / 95f, z / 95f, unchecked(seed + 33u), 2) + 0.35f * WorldNoise.Value(x / 31f, z / 31f, unchecked(seed + 34u)));
+                wz += m * (WorldNoise.Fbm(x / 95f, z / 95f, unchecked(seed + 35u), 2) + 0.35f * WorldNoise.Value(x / 31f, z / 31f, unchecked(seed + 36u)));
+            }
+            Locate(wx, wz, out int k, out float bd);
             if (k < 0) return seabed;
-            float s = Smooth01(bd / ridgeHalf);
+
             float land = seabed;
-            if (s > 0f && c > 0f) land = sea + RegionHeight(k, x, z) * Smooth01(c / ShoreRamp);
-            if (s >= 1f) return land;
-            // On a border the height is the ridge crest whatever the regions on either side are doing,
-            // which keeps the ground continuous where the nearest region changes.
-            float crest = sea + ridgeHeight + CrestNoise * (0.5f + 0.5f * WorldNoise.Value(x / 90f, z / 90f, unchecked(seed + 31u)));
+            if (c > 0f) land = sea + RegionHeight(k, x, z) * Smooth01(c / ShoreRamp);
+            if (bd >= RidgeMaxHalfWidth * 1.2f) return land;
+
+            // Crest height and width change along the ridge; a low crest is a narrow ridge, so its flanks stay
+            // too steep to climb whatever its height.
+            float vary = 0.5f + 0.5f * WorldNoise.Fbm(x / 150f, z / 150f, unchecked(seed + 32u), 2);
+            float rise = RidgeMinRise + RidgeCrestRange * vary;
+            float wander = sea + FloorNear(x, z) + rise;
+            float plain = sea + ridgeHeight + CrestNoise * (0.5f + 0.5f * WorldNoise.Value(x / 90f, z / 90f, unchecked(seed + 31u)));
+            float crest = plain + (wander - plain) * free;
+            float wide = Math.Min(RidgeMaxHalfWidth, (1.25f * rise + 4f) * (0.85f + 0.3f * (0.5f + 0.5f * WorldNoise.Value(x / 70f, z / 70f, unchecked(seed + 37u)))));
+            float halfWidth = ridgeHalf + (wide - ridgeHalf) * free;
+            float t = bd / halfWidth;
+            if (t >= 1f) return land;
+
+            float s = RidgeProfile(t);
             float mask = PassMask(x, z, out float saddle);
             float top = crest + (saddle - crest) * mask;
             if (c < 0f) top = seabed + (top - seabed) * Smooth01((c + SeaRamp) / (SeaRamp - RidgeSeaReach));
-            return top + (land - top) * s;
+            float h = top + (land - top) * s;
+            // Ribs and notches, strongest on the upper flanks, none at the foot, in a pass or under water.
+            if (free > 0f && c > 0f)
+            {
+                float rough = WorldNoise.Ridged(x / 38f, z / 38f, unchecked(seed + 39u), 2) - 0.45f;
+                h += RidgeRough * 2f * rough * (1f - s) * (1f - mask) * free * Smooth01(c / 20f);
+            }
+            return h;
         }
 
         // Natural ground with the compound yards flattened.

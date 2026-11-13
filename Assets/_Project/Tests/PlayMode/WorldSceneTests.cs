@@ -175,6 +175,8 @@ namespace Game.Tests
             cam.farClipPlane = 700f;
             cam.fieldOfView = 60f;
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            // The map's own renderer, as the player's camera uses (no SSAO on the outdoor map).
+            cam.GetUniversalAdditionalCameraData().SetRenderer(world.RendererIndex);
 
             var ids = new List<string>();
             var results = new List<RenderProbe.Result>();

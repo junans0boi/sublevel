@@ -126,6 +126,62 @@ public static class WorldMeshes
             Boxes++;
         }
 
+        // A box turned about its own centre (set dressing placed in world space). The pattern follows the box.
+        public void Add(Vector3 center, Vector3 size, Quaternion rotation, bool skipBottom = false)
+        {
+            int from = _vertices.Count;
+            Add(Vector3.zero, size, skipBottom);
+            for (int i = from; i < _vertices.Count; i++)
+            {
+                _vertices[i] = center + rotation * _vertices[i];
+                _normals[i] = rotation * _normals[i];
+                _uvs[i] += new Vector2(center.x + center.z, center.y) / _tile.x; // neighbours do not share a pattern
+            }
+        }
+
+        // An upright cylinder standing on `foot` (barrels, poles); the texture wraps once around.
+        public void AddCylinder(Vector3 foot, float radius, float height, int sides = 10)
+        {
+            int first = _vertices.Count;
+            float around = 2f * Mathf.PI * radius;
+            for (int i = 0; i <= sides; i++)
+            {
+                float a = 2f * Mathf.PI * i / sides;
+                var n = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                for (int k = 0; k < 2; k++)
+                {
+                    _vertices.Add(foot + n * radius + Vector3.up * (k * height));
+                    _normals.Add(n);
+                    _uvs.Add(new Vector2(k * height / _tile.x, around * i / sides / _tile.y)); // the grain runs up the cylinder
+                }
+            }
+            for (int i = 0; i < sides; i++)
+            {
+                int a = first + i * 2, b = a + 1, c = a + 2, d = a + 3;
+                _triangles.Add(a); _triangles.Add(b); _triangles.Add(c);
+                _triangles.Add(c); _triangles.Add(b); _triangles.Add(d);
+            }
+            int cap = _vertices.Count;
+            _vertices.Add(foot + Vector3.up * height);
+            _normals.Add(Vector3.up);
+            _uvs.Add(Vector2.zero);
+            for (int i = 0; i < sides; i++)
+            {
+                float a = 2f * Mathf.PI * i / sides;
+                var n = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                _vertices.Add(foot + n * radius + Vector3.up * height);
+                _normals.Add(Vector3.up);
+                _uvs.Add(new Vector2(n.x, n.z) * radius / _tile.x);
+            }
+            for (int i = 0; i < sides; i++)
+            {
+                _triangles.Add(cap); _triangles.Add(cap + 1 + (i + 1) % sides); _triangles.Add(cap + 1 + i);
+            }
+            Boxes++;
+        }
+
+        public bool Empty => _triangles.Count == 0;
+
         public Mesh ToMesh(string name)
         {
             var mesh = new Mesh { name = name };

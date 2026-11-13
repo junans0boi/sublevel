@@ -30,9 +30,9 @@ public static partial class WorldBuilder
     // distance trade distant detail for draw cost.
     const int HeightmapResolution = 1025;
     const int AlphamapResolution = 1024;
-    const int BaseMapResolution = 1024;
-    const float TerrainPixelError = 5f;
-    const float TerrainBaseMapDistance = 180f;
+    const int BaseMapResolution = 2048;
+    const float TerrainPixelError = 8f;
+    const float TerrainBaseMapDistance = 110f;
 
     const int WaterDepthResolution = 1024;
     const float WaterDepthRange = 4f;       // metres of depth the water shader can tell apart
@@ -44,7 +44,9 @@ public static partial class WorldBuilder
 
     const float FarClip = 700f;
     const float FogStart = 90f, FogEnd = 640f;
-    static readonly Color FogColor = new Color(0.56f, 0.60f, 0.64f); // the overcast HDRI's horizon
+    static readonly Color FogColor = new Color(0.60f, 0.62f, 0.64f); // the overcast HDRI's horizon
+
+    const float OutdoorAmbient = 0.8f, SunIntensity = 1.25f, SunShadowStrength = 0.8f;
 
     // The player's CharacterController (radius, height, step); the slope is WorldRules.WalkSlopeDeg.
     const float AgentRadius = 0.35f, AgentHeight = 1.8f, AgentStepHeight = 0.3f;
@@ -115,15 +117,27 @@ public static partial class WorldBuilder
         BuildBuildings(plan, ground, world.transform, store, navSources, lots, stations);
         int rocks = BuildRocks(plan, ground, world.transform, navSources);
         PlaceTrees(plan, ground, world.transform);
+        BuildDressing(plan, ground, world.transform, store, navSources, lots);
         Debug.Log($"[WorldBuilder] structures built at {total.Elapsed.TotalSeconds:F1} s: {store.Count} generated meshes, {store.Triangles} triangles in them");
 
         var navMesh = BakeNavMesh(plan, terrain, navSources);
         Set(world.AddComponent<ZoneNavMesh>(), "_data", p => p.objectReferenceValue = navMesh);
 
         var info = FillInfo(world, plan, ground, stations);
+        int rendererIndex = OutdoorRenderer();
+        info.SetRenderer(rendererIndex);
         var loot = PickLoot(lots, MaxLootSpawns);
         AddMatch(plan, ground, info, loot);
-        AddCamera(plan);
+        AddCamera(plan, rendererIndex);
+
+        // No static batching: it would copy every rock's mesh into the build once per rock (a first build came to
+        // 500 MB of combined meshes). The building and road meshes are already one mesh per material.
+        foreach (var t in world.GetComponentsInChildren<Transform>(true))
+        {
+            var flags = GameObjectUtility.GetStaticEditorFlags(t.gameObject);
+            if ((flags & StaticEditorFlags.BatchingStatic) != 0)
+                GameObjectUtility.SetStaticEditorFlags(t.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
+        }
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         RegisterScene();
@@ -171,6 +185,15 @@ public static partial class WorldBuilder
         SceneLook.SetupSky();
         SceneLook.AddLights();
         SceneLook.AddPostVolume(postProfile);
+        // Outdoors under an overcast sky: more sky light and softer sun shadows than the indoor test scenes.
+        RenderSettings.ambientIntensity = OutdoorAmbient;
+        var sun = GameObject.Find("Sun");
+        if (sun != null)
+        {
+            var light = sun.GetComponent<Light>();
+            light.intensity = SunIntensity;
+            light.shadowStrength = SunShadowStrength;
+        }
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogColor = FogColor;
@@ -207,6 +230,22 @@ public static partial class WorldBuilder
                 float wx = (x + 0.5f) * cell, wz = (z + 0.5f) * cell;
                 ground.Sample(wx, wz, out float height, out float slopeTan);
                 plan.Splat(wx, wz, height, slopeTan, out float grass, out float dirt, out float rock, out float sand);
+                // Broad patches so the plains are not one colour: dry, worn ground and darker damp ground take
+                // over some of the grass (the plan only knows roads, yards, slopes and the shore).
+                float fine = Mathf.PerlinNoise(wx / 23f + 5.1f, wz / 23f + 9.4f);
+                float dry = Mathf.SmoothStep(0.5f, 0.78f, Mathf.PerlinNoise(wx / 85f + 13.7f, wz / 85f + 71.3f) * 0.72f + fine * 0.28f) * 0.5f;
+                float damp = Mathf.SmoothStep(0.52f, 0.8f, Mathf.PerlinNoise(wx / 120f + 31.9f, wz / 120f + 47.2f) * 0.75f + (1f - fine) * 0.25f) * 0.4f;
+                // Hollows are damp and dark, crowns are dry: the hills then read from above.
+                const float around = 32f;
+                float mean = (ground.Height(wx + around, wz) + ground.Height(wx - around, wz) + ground.Height(wx, wz + around) + ground.Height(wx, wz - around)
+                    + ground.Height(wx + around * 0.7f, wz + around * 0.7f) + ground.Height(wx - around * 0.7f, wz + around * 0.7f)
+                    + ground.Height(wx + around * 0.7f, wz - around * 0.7f) + ground.Height(wx - around * 0.7f, wz - around * 0.7f)) / 8f;
+                float hollow = Mathf.Clamp((mean - height) / 3f, -1f, 1f);
+                damp = Mathf.Clamp01(damp + 0.45f * Mathf.Max(0f, hollow));
+                dry = Mathf.Clamp01(dry + 0.3f * Mathf.Max(0f, -hollow));
+                dirt += grass * dry;
+                sand += grass * (1f - dry) * damp;
+                grass *= (1f - dry) * (1f - damp);
                 float sum = grass + dirt + rock + sand;
                 if (sum < 1e-4f) { grass = 1f; sum = 1f; }
                 alpha[z, x, 0] = grass / sum;
@@ -448,7 +487,11 @@ public static partial class WorldBuilder
         var dummies = new List<MatchKit.Spawn>();
         for (int r = 0; r < plan.Regions.Count; r++)
         {
-            var point = plan.ConvergencePoints.FirstOrDefault(p => p.Region == r);
+            // The point farthest from the region's elevators: the dummies shoot, and nobody should be shot at
+            // while still standing in the elevator.
+            var point = plan.ConvergencePoints.Where(p => p.Region == r)
+                .OrderByDescending(p => plan.Elevators.Where(e => e.Region == r).Select(e => (e.X - p.X) * (e.X - p.X) + (e.Z - p.Z) * (e.Z - p.Z)).DefaultIfEmpty(0f).Min())
+                .FirstOrDefault();
             if (point == null) continue;
             var at = OnGround(ground, point.X, point.Z);
             dummies.Add(MatchKit.At(at.x, at.y + 0.05f, at.z));
@@ -456,13 +499,53 @@ public static partial class WorldBuilder
         MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), dummies.ToArray());
     }
 
-    static void AddCamera(WorldPlan plan)
+    // The outdoor map draws with its own URP renderer: the project's, without the SSAO pass. On this map SSAO and the
+    // depth pre-pass it needs cost more than the frame can spare (PERF_BUDGET: "SSAO is the first thing to go").
+    // Returns its index in the pipeline asset's renderer list.
+    static int OutdoorRenderer()
+    {
+        const string source = "Assets/_Project/Settings/Game_URP_Renderer.asset";
+        const string path = "Assets/_Project/Settings/Game_URP_Renderer_Outdoor.asset";
+        const string pipelinePath = "Assets/_Project/Settings/Game_URP.asset";
+        if (AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRendererData>(path) == null && !AssetDatabase.CopyAsset(source, path))
+            throw new Exception("could not copy the renderer to " + path);
+        var data = SceneLook.Load<UnityEngine.Rendering.Universal.UniversalRendererData>(path);
+        foreach (var feature in data.rendererFeatures.ToList())
+        {
+            if (!(feature is UnityEngine.Rendering.Universal.ScreenSpaceAmbientOcclusion)) continue;
+            data.rendererFeatures.Remove(feature);
+            AssetDatabase.RemoveObjectFromAsset(feature);
+            Object.DestroyImmediate(feature, true);
+        }
+        var so = new SerializedObject(data);
+        var map = so.FindProperty("m_RendererFeatureMap");
+        map.arraySize = data.rendererFeatures.Count;
+        for (int i = 0; i < data.rendererFeatures.Count; i++)
+            if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(data.rendererFeatures[i], out _, out long id)) map.GetArrayElementAtIndex(i).longValue = id;
+        so.ApplyModifiedPropertiesWithoutUndo();
+        EditorUtility.SetDirty(data);
+
+        var pipeline = SceneLook.Load<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>(pipelinePath);
+        var list = new SerializedObject(pipeline);
+        var renderers = list.FindProperty("m_RendererDataList");
+        for (int i = 0; i < renderers.arraySize; i++)
+            if (renderers.GetArrayElementAtIndex(i).objectReferenceValue == data) return i;
+        renderers.arraySize++;
+        renderers.GetArrayElementAtIndex(renderers.arraySize - 1).objectReferenceValue = data;
+        list.ApplyModifiedPropertiesWithoutUndo();
+        EditorUtility.SetDirty(pipeline);
+        AssetDatabase.SaveAssets();
+        return renderers.arraySize - 1;
+    }
+
+    static void AddCamera(WorldPlan plan, int rendererIndex)
     {
         var cam = new GameObject("Main Camera") { tag = "MainCamera" };
         var camera = cam.AddComponent<Camera>();
         camera.nearClipPlane = 0.05f;
         camera.farClipPlane = FarClip;
         SceneLook.EnablePost(camera);
+        UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera).SetRenderer(rendererIndex);
         cam.AddComponent<AudioListener>();
         cam.transform.position = new Vector3(plan.Size * 0.5f, plan.SeaLevel + 140f, plan.Size * 0.5f - 260f);
         cam.transform.LookAt(new Vector3(plan.Size * 0.5f, plan.SeaLevel, plan.Size * 0.5f));
@@ -470,8 +553,9 @@ public static partial class WorldBuilder
 
     // ---- pictures for review ----
 
-    // Five PNGs in Logs/world: the whole island from above and one view per region from an elevator toward its
-    // nearest buildings. Does not change the scene on disk.
+    // PNGs in Logs/world: the whole island from above and at an angle, one view per region from an elevator toward
+    // its nearest buildings, and close views a player would have (street, inside a house, yard, pass, shore, rocks).
+    // Does not change the scene on disk.
     public static void RenderOverview()
     {
         try
@@ -480,10 +564,17 @@ public static partial class WorldBuilder
             var info = Object.FindFirstObjectByType<WorldInfo>();
             if (info == null) throw new Exception("the World scene has no WorldInfo (run WorldBuilder.Build first)");
             Directory.CreateDirectory(OverviewDir);
+            // The ambient probe is not saved with an unbaked scene (SkyAmbient does this when the game starts).
+            DynamicGI.UpdateEnvironment();
+            var terrain = Object.FindFirstObjectByType<Terrain>();
+            Vector3 Ground(float x, float z) => new Vector3(x, terrain.SampleHeight(new Vector3(x, 0f, z)), z);
+            Vector3 Eye(Vector3 at) => Ground(at.x, at.z) + Vector3.up * 1.7f;
+            Vector3 Flat(Vector3 v) { v.y = 0f; return v.sqrMagnitude > 0.01f ? v.normalized : Vector3.forward; }
 
             var cam = new GameObject("OverviewCamera").AddComponent<Camera>();
             cam.nearClipPlane = 0.3f;
             SceneLook.EnablePost(cam);
+            UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(cam).SetRenderer(info.RendererIndex);
 
             // From above: orthographic, no fog, and a LOD bias high enough that nothing is culled for being small.
             float size = info.Size;
@@ -496,10 +587,13 @@ public static partial class WorldBuilder
             var centre = new Vector3(size * 0.5f, info.SeaLevel, size * 0.5f);
             // Not exactly overhead: LookAt needs a direction that is not straight down.
             SceneLook.Shot(cam, OverviewDir + "/world_top.png", centre + new Vector3(0f, 900f, -1f), centre);
+            cam.orthographic = false;
+            cam.fieldOfView = 50f;
+            cam.farClipPlane = 3000f;
+            SceneLook.Shot(cam, OverviewDir + "/world_aerial.png", centre + new Vector3(-260f, 420f, -820f), centre + new Vector3(0f, 0f, 40f));
             QualitySettings.lodBias = lodBias;
             RenderSettings.fog = true;
 
-            cam.orthographic = false;
             cam.fieldOfView = 60f;
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = FarClip;
@@ -510,13 +604,130 @@ public static partial class WorldBuilder
                 if (elevators.Count == 0) continue;
                 var station = elevators[0].Position;
                 var target = NearestBuildings(buildings, station, region.Hub);
-                var toward = target - station;
-                toward.y = 0f;
-                toward = toward.sqrMagnitude > 0.01f ? toward.normalized : Vector3.forward;
+                var toward = Flat(target - station);
                 // Beside the station on the side of the buildings, at eye height.
                 var eye = station + toward * 8f + Vector3.up * 1.7f;
                 SceneLook.Shot(cam, $"{OverviewDir}/world_region_{region.Id}.png", eye, target + Vector3.up * 2.5f);
+                // From the region's hub toward the middle of the island.
+                SceneLook.Shot(cam, $"{OverviewDir}/world_hub_{region.Id}.png", Eye(region.Hub), Eye(region.Hub + Flat(centre - region.Hub) * 50f));
             }
+
+            Transform Nearest(string contains, Vector3 from)
+            {
+                Transform best = null;
+                if (buildings == null) return null;
+                foreach (Transform b in buildings.transform)
+                    if (b.name.Contains(contains) && (best == null || (b.position - from).sqrMagnitude < (best.position - from).sqrMagnitude)) best = b;
+                return best;
+            }
+            var town = info.Regions.First(r => r.Kind == RegionKind.Town);
+            var factory = info.Regions.First(r => r.Kind == RegionKind.Factory);
+            var mountain = info.Regions.First(r => r.Kind == RegionKind.Mountain);
+            var wetland = info.Regions.First(r => r.Kind == RegionKind.Wetland);
+
+            // Houses: the plan is generated again to know where the doors, rooms and stairs of a building are.
+            var plan = WorldGenerator.Generate(LoadSpec());
+            BuildingPlan PlanOf(Transform building)
+            {
+                int index = int.Parse(building.name.Substring(LotPrefix.Length, 2));
+                var lot = plan.Lots[index];
+                return Buildings.Generate(lot.Kind, lot.SizeX, lot.SizeZ, unchecked((int)Hash(plan.Seed, index)));
+            }
+            // A stand-in for a 1.8 m player, for scale.
+            GameObject Figure(Vector3 feet)
+            {
+                var figure = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                figure.transform.position = feet + Vector3.up * 0.9f;
+                figure.transform.localScale = new Vector3(0.7f, 0.9f, 0.7f);
+                return figure;
+            }
+            var house = Nearest("House", town.Hub);
+            if (house != null)
+            {
+                Vector3 At(float x, float y, float z) => house.position + house.rotation * new Vector3(x, y, z);
+                var building = PlanOf(house);
+                var corner = house.position + house.rotation * new Vector3(11f, 0f, 13f);
+                SceneLook.Shot(cam, OverviewDir + "/world_house_outside.png", Eye(corner), house.position + Vector3.up * 2.5f);
+                var door = building.Doors.First(o => o.Exterior);
+                var outward = new Vector3(door.ForwardX, 0f, door.ForwardZ);
+                var figure = Figure(At(door.X + outward.x * 1.2f + outward.z * 1.4f, door.Y, door.Z + outward.z * 1.2f - outward.x * 1.4f));
+                SceneLook.Shot(cam, OverviewDir + "/world_house_door.png", At(door.X + outward.x * 5f + outward.z * 0.8f, door.Y + 1.65f, door.Z + outward.z * 5f - outward.x * 0.8f),
+                    At(door.X - outward.x * 2f, door.Y + 1.3f, door.Z - outward.z * 2f));
+                SceneLook.Shot(cam, OverviewDir + "/world_town_street.png", Eye(house.position + Flat(town.Hub - house.position) * 16f + Vector3.right * 3f), house.position + Vector3.up * 1.6f);
+                Object.DestroyImmediate(figure);
+                int shots = 0;
+                foreach (var room in building.Rooms.OrderByDescending(r => r.Area))
+                {
+                    if (shots >= 3) break;
+                    // From one corner of the room toward the opposite one, at eye height.
+                    SceneLook.Shot(cam, $"{OverviewDir}/world_house_room{shots}.png", At(room.MinX + 0.45f, room.FloorY + 1.65f, room.MinZ + 0.45f),
+                        At(room.MaxX - 0.6f, room.FloorY + 1.0f, room.MaxZ - 0.6f));
+                    shots++;
+                }
+            }
+            // A house with stairs: looking up the flight from the ground floor, and the landing upstairs.
+            if (buildings != null)
+            {
+                foreach (Transform candidate in buildings.transform)
+                {
+                    if (!candidate.name.Contains("House")) continue;
+                    var building = PlanOf(candidate);
+                    if (building.Stairs.Count == 0) continue;
+                    var stair = building.Stairs[0];
+                    var climb = Quaternion.Euler(0f, stair.FacingDeg, 0f) * Vector3.forward;
+                    Vector3 At(Vector3 local) => candidate.position + candidate.rotation * local;
+                    var foot = new Vector3(stair.X, stair.BaseY, stair.Z);
+                    SceneLook.Shot(cam, OverviewDir + "/world_house_stairs.png", At(foot - climb * 2.2f + Vector3.up * 1.65f + Vector3.Cross(Vector3.up, climb) * 0.9f),
+                        At(foot + climb * stair.Length * 0.6f + Vector3.up * (stair.TopY - stair.BaseY) * 0.6f));
+                    var upper = building.Rooms.Where(r => r.Storey > 0).OrderByDescending(r => r.Area).FirstOrDefault();
+                    if (upper.Area > 0f)
+                        SceneLook.Shot(cam, OverviewDir + "/world_house_upstairs.png", At(new Vector3(upper.MaxX - 0.45f, upper.FloorY + 1.65f, upper.MaxZ - 0.45f)),
+                            At(new Vector3(upper.MinX + 0.6f, upper.FloorY + 1.0f, upper.MinZ + 0.6f)));
+                    break;
+                }
+            }
+            foreach (var kind in new[] { "FactoryHall", "Warehouse" })
+            {
+                var hall = Nearest(kind, factory.Hub);
+                if (hall == null) continue;
+                var corner = hall.position + hall.rotation * new Vector3(22f, 0f, 26f);
+                SceneLook.Shot(cam, $"{OverviewDir}/world_{kind}_outside.png", Eye(corner), hall.position + Vector3.up * 3f);
+                var inside = hall.position + Vector3.up * 1.75f;
+                SceneLook.Shot(cam, $"{OverviewDir}/world_{kind}_inside.png", inside + hall.rotation * new Vector3(-3f, 0f, -4f), inside + hall.rotation * new Vector3(4f, 0.3f, 5f));
+            }
+            if (info.Elevators.Count > 0)
+            {
+                var e = info.Elevators[0];
+                var outward = Quaternion.Euler(0f, e.SpawnYawDeg, 0f) * Vector3.forward;
+                SceneLook.Shot(cam, OverviewDir + "/world_station_inside.png", e.Spawn + Vector3.up * 1.7f, e.Spawn + Vector3.up * 1.6f + outward * 10f);
+                SceneLook.Shot(cam, OverviewDir + "/world_station_outside.png", Eye(e.Position + outward * 12f + Vector3.Cross(Vector3.up, outward) * 5f), e.Position + Vector3.up * 1.5f);
+            }
+            if (info.Passes.Count > 0)
+            {
+                var pass = info.Passes[0];
+                var along = Quaternion.Euler(0f, pass.YawDeg, 0f) * Vector3.forward;
+                SceneLook.Shot(cam, OverviewDir + "/world_pass.png", Eye(pass.Position - along * 45f + Vector3.Cross(Vector3.up, along) * 2f), Eye(pass.Position));
+            }
+            // Shore: walk out from the wetland hub away from the island's centre until the ground is at the waterline.
+            {
+                var outward = Flat(wetland.Hub - centre);
+                var p = wetland.Hub;
+                for (int i = 0; i < 600 && Ground(p.x, p.z).y > info.SeaLevel + 0.4f; i++) p += outward;
+                var side = Vector3.Cross(Vector3.up, outward);
+                SceneLook.Shot(cam, OverviewDir + "/world_shore.png", Eye(p - outward * 4f), Eye(p + outward * 12f + side * 30f) - Vector3.up * 1.2f);
+                SceneLook.Shot(cam, OverviewDir + "/world_shore_inland.png", Eye(p + outward * 3f), Eye(wetland.Hub));
+            }
+            var pool = info.ConvergencePointsIn(wetland.Index);
+            if (pool.Count > 0) SceneLook.Shot(cam, OverviewDir + "/world_wetland.png", Eye(pool[0].Position), Eye(pool[0].Position + Flat(wetland.Centre - pool[0].Position) * 40f) - Vector3.up * 1f);
+            var rocks = GameObject.Find("World/Rocks");
+            if (rocks != null && rocks.transform.childCount > 0)
+            {
+                Transform rock = null;
+                foreach (Transform r in rocks.transform)
+                    if (rock == null || (r.position - mountain.Hub).sqrMagnitude < (rock.position - mountain.Hub).sqrMagnitude) rock = r;
+                SceneLook.Shot(cam, OverviewDir + "/world_rocks.png", Eye(rock.position + new Vector3(3.5f, 0f, -4.5f)), rock.position + Vector3.up * 0.5f);
+            }
+            SceneLook.Shot(cam, OverviewDir + "/world_mountain.png", Eye(mountain.Hub), Eye(mountain.Hub + Vector3.forward * 60f) + Vector3.up * 14f);
             Debug.Log("[WorldBuilder] overview pictures written to " + OverviewDir);
         }
         catch (Exception e)
