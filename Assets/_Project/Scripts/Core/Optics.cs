@@ -16,7 +16,8 @@ namespace Game.Core
         public int Id;
         public string Name;               // Korean, generic (no product names)
         public OpticKind Kind;
-        public float Zoom = 1f;           // 1 for the dot and holographic sights
+        public float Zoom = 1f;           // 1 for the dot and holographic sights; the highest zoom of a variable scope
+        public float MinZoom;             // variable scopes (ADR-063): lowest zoom reached with the mouse wheel; 0 = fixed
         public float SensitivityFactor = 1f; // mouse sensitivity while looking through it (about 1 / zoom^0.8)
         public ReticleStyle Reticle;
     }
@@ -30,7 +31,8 @@ namespace Game.Core
     }
 
     // The optic table and the per-weapon lists. Defaults until the data loader replaces `Current`, so everything
-    // runs without a data file. 8x and 16x are taken only by the sniper rifle (Sentinel, id 5).
+    // runs without a data file. 8x and 15x are taken only by the sniper rifle (Sentinel, id 5).
+    // From 6x up the zoom is variable (ADR-063): 6x 3-6, 8x 4-8, 15x 8-15 (id 8 was the 16x until ADR-063).
     [Serializable]
     public class OpticRules
     {
@@ -43,9 +45,9 @@ namespace Game.Core
             new OpticDef { Id = 3, Name = "2배율", Kind = OpticKind.Scope, Zoom = 2f, SensitivityFactor = 0.574f, Reticle = ReticleStyle.Crosshair },
             new OpticDef { Id = 4, Name = "3배율", Kind = OpticKind.Scope, Zoom = 3f, SensitivityFactor = 0.415f, Reticle = ReticleStyle.Crosshair },
             new OpticDef { Id = 5, Name = "4배율", Kind = OpticKind.Scope, Zoom = 4f, SensitivityFactor = 0.330f, Reticle = ReticleStyle.Crosshair },
-            new OpticDef { Id = 6, Name = "6배율", Kind = OpticKind.Scope, Zoom = 6f, SensitivityFactor = 0.238f, Reticle = ReticleStyle.Crosshair },
-            new OpticDef { Id = 7, Name = "8배율", Kind = OpticKind.Scope, Zoom = 8f, SensitivityFactor = 0.189f, Reticle = ReticleStyle.Crosshair },
-            new OpticDef { Id = 8, Name = "16배율", Kind = OpticKind.Scope, Zoom = 16f, SensitivityFactor = 0.109f, Reticle = ReticleStyle.Crosshair },
+            new OpticDef { Id = 6, Name = "6배율", Kind = OpticKind.Scope, Zoom = 6f, MinZoom = 3f, SensitivityFactor = 0.238f, Reticle = ReticleStyle.Crosshair },
+            new OpticDef { Id = 7, Name = "8배율", Kind = OpticKind.Scope, Zoom = 8f, MinZoom = 4f, SensitivityFactor = 0.189f, Reticle = ReticleStyle.Crosshair },
+            new OpticDef { Id = 8, Name = "15배율", Kind = OpticKind.Scope, Zoom = 15f, MinZoom = 8f, SensitivityFactor = 0.115f, Reticle = ReticleStyle.Crosshair },
         };
 
         // Weapon ids as in weapons.json: 1 VK-9, 2 Ordo, 3 Warden, 4 Breacher, 5 Sentinel.
@@ -102,6 +104,37 @@ namespace Game.Core
         {
             var def = OpticRules.Current.Find(opticId);
             return def != null && def.Zoom > 1f ? def.Zoom : 1f;
+        }
+
+        // Lowest zoom of the optic: MinZoom for a variable scope, else its one zoom (1 when none).
+        public static float MinZoomOf(OpticDef def)
+        {
+            if (def == null) return 1f;
+            float max = def.Zoom > 1f ? def.Zoom : 1f;
+            return def.Kind == OpticKind.Scope && def.MinZoom > 1f && def.MinZoom < max ? def.MinZoom : max;
+        }
+
+        // True for a scope whose zoom the mouse wheel changes (ADR-063).
+        public static bool IsVariable(OpticDef def) => def != null && def.Kind == OpticKind.Scope && MinZoomOf(def) < def.Zoom;
+
+        // The zoom after `notches` wheel notches from `current` (+ = in, one notch = 1x), kept between the optic's
+        // lowest and highest zoom. Fixed optics always give their own zoom.
+        public static float StepZoom(OpticDef def, float current, int notches)
+        {
+            if (def == null) return 1f;
+            float max = def.Zoom > 1f ? def.Zoom : 1f;
+            if (!IsVariable(def)) return max;
+            float min = MinZoomOf(def);
+            float z = (float)Math.Round(current) + notches;
+            return z < min ? min : z > max ? max : z;
+        }
+
+        // Mouse sensitivity multiplier through `def` at `zoom`: the optic's own factor at its full zoom, else the
+        // zoom rule (variable scopes zoomed out).
+        public static float SensitivityAt(OpticDef def, float zoom)
+        {
+            if (def == null) return 1f;
+            return Math.Abs(zoom - def.Zoom) < 0.01f ? def.SensitivityFactor : SensitivityFor(zoom);
         }
 
         // Vertical field of view in degrees at `zoom`: the image is `zoom` times larger, so tan(fov / 2) is divided

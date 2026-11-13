@@ -46,7 +46,6 @@ namespace Game.Gameplay
             var root = UiKit.Rect("WeaponStrip", parent, anchor, pivot, position, new Vector2(Width, CellHeight));
             s.Root = root;
             var topLeft = new Vector2(0f, 1f);
-            var topRight = new Vector2(1f, 1f);
             var bottomLeft = new Vector2(0f, 0f);
             var centre = new Vector2(0.5f, 0.5f);
             for (int i = 0; i < Cells; i++)
@@ -55,14 +54,17 @@ namespace Game.Gameplay
                 UiKit.Box(cell, UiKit.Panel);
                 s._frame[i] = UiKit.Frame(cell, 1f, UiKit.SteelDim);
 
-                var iconRect = UiKit.Rect("Icon", cell, centre, centre, new Vector2(0f, 2f), new Vector2(CellWidth - 10f, CellHeight - 22f));
+                // Rows: key number on top, the weapon icon under it, the optic chip under the icon (bottom left), so
+                // the chip never sits on the icon.
+                var top = new Vector2(0.5f, 1f);
+                var iconRect = UiKit.Rect("Icon", cell, top, top, new Vector2(0f, -19f), new Vector2(CellWidth - 10f, CellHeight - 42f));
                 s._icon[i] = InventoryItemIcon.Build(iconRect);
                 s._iconRoot[i] = iconRect.gameObject;
                 s._iconRoot[i].SetActive(false);
                 s._empty[i] = UiKit.Label(UiKit.Rect("Empty", cell, centre, centre, new Vector2(0f, 2f), new Vector2(CellWidth, 30f)), "—", 22, UiKit.SteelDim, TextAnchor.MiddleCenter);
 
                 s._key[i] = UiKit.Label(UiKit.Rect("Key", cell, topLeft, topLeft, new Vector2(5f, -1f), new Vector2(24f, 22f)), Keys[i], 18, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-                s._optic[i] = UiKit.Label(UiKit.Rect("Optic", cell, topRight, topRight, new Vector2(-4f, -1f), new Vector2(46f, 22f)), "", 18, UiKit.Text, TextAnchor.MiddleRight);
+                s._optic[i] = UiKit.Label(UiKit.Rect("Optic", cell, bottomLeft, bottomLeft, new Vector2(5f, 4f), new Vector2(46f, 19f)), "", 16, UiKit.Text, TextAnchor.MiddleLeft);
                 s._count[i] = UiKit.Label(UiKit.Rect("Count", cell, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-5f, 5f), new Vector2(40f, 22f)), "", 20, UiKit.Text,
                     TextAnchor.MiddleRight, FontStyle.Bold);
                 s._bar[i] = UiKit.Box(UiKit.Rect("Active", cell, bottomLeft, bottomLeft, Vector2.zero, new Vector2(CellWidth, 3f)), UiKit.Accent);

@@ -6,7 +6,7 @@ namespace Game.Core
     //  Arc      = lit arc + dot + black ranging ticks (3x; 2x uses it too)
     //  Post     = black crosshair + thick lower post + lit dot (4x)
     //  Fine     = thin black crosshair (6x)
-    //  Holdover = thin crosshair + short horizontal holdover lines below the centre (8x; 16x uses it too)
+    //  Holdover = thin crosshair + short horizontal holdover lines below the centre (8x; 15x uses it too)
     public enum ScopeReticle { Arc = 0, Post = 1, Fine = 2, Holdover = 3 }
 
     // What the eyepiece around the lens looks like from the eye, per magnification (ADR-060 (2)(7)).
@@ -21,8 +21,8 @@ namespace Game.Core
         public bool FlipCap;       // 2x, 3x: an open flip cap at the side of the eye ring
         public bool BoxBody;       // 4x: a wide rounded-square body face around the eye ring
         public bool DoubleBand;    // 6x: a thick eye ring in two bands (the zoom ring look)
-        public bool Knurled;       // 8x, 16x: thick knurled eye ring
-        public bool SideTurret;    // 8x, 16x: a turret showing at the right
+        public bool Knurled;       // 8x, 15x: thick knurled eye ring
+        public bool SideTurret;    // 8x, 15x: a turret showing at the right
     }
 
     // The shape of a magnified scope as a 3D model on the weapon / on the ground / in an icon (metres).
@@ -45,7 +45,7 @@ namespace Game.Core
         // Distance from that camera to the eye ring face.
         public const float RimDistance = 0.07f;
 
-        static readonly float[] Zooms = { 2f, 3f, 4f, 6f, 8f, 16f };
+        static readonly float[] Zooms = { 2f, 3f, 4f, 6f, 8f, 15f };
         // Lens radius falls from 3x to 4x (small window, body covers much) and grows again for 6x and 8x (large lens).
         static readonly float[] Lens = { 0.30f, 0.28f, 0.21f, 0.34f, 0.38f, 0.40f };
         static readonly float[] Rim = { 0.38f, 0.37f, 0.30f, 0.43f, 0.47f, 0.49f };

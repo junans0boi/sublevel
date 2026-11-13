@@ -123,19 +123,20 @@ public static class SceneLook
         return mat;
     }
 
-    // Dark matte metal: the CC0 PaintedMetal014 set (colour for a little variation, normal for wear) tinted near-black.
+    // Dark matte metal: plain near-black colour (the PaintedMetal014 colour map read as chipped stone on the large
+    // eyepiece housing), with that CC0 set's normal map, kept faint, for a little wear.
     public static Material OpticMetal
     {
         get
         {
             const string id = "PaintedMetal014";
             var mat = LitAsset("Optic_Metal");
-            mat.SetTexture("_BaseMap", Load<Texture2D>($"{TextureDir}/{id}/{id}_color.jpg"));
+            mat.SetTexture("_BaseMap", null);
             mat.SetTexture("_BumpMap", Load<Texture2D>($"{TextureDir}/{id}/{id}_normal.jpg"));
             mat.EnableKeyword("_NORMALMAP");
             mat.SetTexture("_MetallicGlossMap", null);
             mat.DisableKeyword("_METALLICSPECGLOSSMAP");
-            mat.SetFloat("_BumpScale", 0.5f);
+            mat.SetFloat("_BumpScale", 0.3f);
             mat.SetFloat("_Metallic", 0.55f);
             mat.SetFloat("_Smoothness", 0.3f);
             mat.SetColor("_BaseColor", new Color(0.12f, 0.12f, 0.13f));

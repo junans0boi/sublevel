@@ -70,13 +70,17 @@ namespace Game.Gameplay
         static void Reflex(Draft d)
         {
             var id = Frame.Identity;
-            d.Box(Frame.At(new Vector3(0f, 0.003f, 0f)), new Vector3(0.024f, 0.006f, 0.036f), Metal);              // clamp base
-            d.Box(Frame.At(new Vector3(0.0135f, 0.0005f, 0f)), new Vector3(0.005f, 0.009f, 0.022f), Metal);        // clamp jaw
-            HexBolt(d, new Vector3(0.016f, 0.001f, 0.004f), Vector3.right, 0.0032f, 0.0035f);
-            HexBolt(d, new Vector3(0.016f, 0.001f, -0.006f), Vector3.right, 0.0032f, 0.0035f);
-            d.Box(Frame.At(new Vector3(-0.001f, 0.0085f, -0.002f)), new Vector3(0.022f, 0.005f, 0.030f), Metal);   // deck
-            d.Box(Frame.At(new Vector3(0f, 0.0135f, -0.0125f)), new Vector3(0.009f, 0.005f, 0.008f), Metal);       // emitter hump
-            d.Box(Frame.At(new Vector3(-0.0125f, 0.0095f, -0.007f)), new Vector3(0.002f, 0.003f, 0.006f), Metal);   // left button
+            // Base and deck as one low prism with chamfered top edges (not stacked blocks), a clamp jaw on the right.
+            d.Prism(new[]
+            {
+                new Vector2(-0.0100f, 0f), new Vector2(0.0100f, 0f), new Vector2(0.0100f, 0.0040f),
+                new Vector2(0.0070f, 0.0100f), new Vector2(-0.0070f, 0.0100f), new Vector2(-0.0100f, 0.0040f),
+            }, -0.017f, 0.017f, Metal, id);
+            d.Box(Frame.At(new Vector3(0.0115f, 0.0010f, 0f)), new Vector3(0.003f, 0.006f, 0.018f), Metal);        // clamp jaw
+            HexBolt(d, new Vector3(0.0130f, 0.0010f, 0.004f), Vector3.right, 0.0024f, 0.0025f);
+            HexBolt(d, new Vector3(0.0130f, 0.0010f, -0.006f), Vector3.right, 0.0024f, 0.0025f);
+            d.Box(Frame.At(new Vector3(0f, 0.0110f, -0.0125f)), new Vector3(0.007f, 0.0015f, 0.007f), Metal);      // emitter, below the window line
+            d.Box(Frame.At(new Vector3(-0.0085f, 0.0075f, -0.007f)), new Vector3(0.002f, 0.0025f, 0.006f), Metal); // left button
 
             // The window: inner trapezoid; the frame is thicker on the left than on the right.
             var inner = new[]
@@ -85,15 +89,15 @@ namespace Game.Gameplay
             };
             var outer = new[]
             {
-                new Vector2(-0.0140f, 0.0098f), new Vector2(0.0123f, 0.0098f), new Vector2(0.0093f, 0.0375f), new Vector2(-0.0110f, 0.0375f),
+                new Vector2(-0.0128f, 0.0098f), new Vector2(0.0116f, 0.0098f), new Vector2(0.0086f, 0.0366f), new Vector2(-0.0097f, 0.0366f),
             };
             d.PolyRing(outer, inner, 0.0055f, 0.0105f, Metal, id);
             // A short visor over the top bar toward the front.
-            d.Box(Frame.At(new Vector3(-0.0008f, 0.0372f, 0.0105f)), new Vector3(0.019f, 0.0016f, 0.006f), Metal);
+            d.Box(Frame.At(new Vector3(-0.0005f, 0.0372f, 0.0105f)), new Vector3(0.0175f, 0.0012f, 0.006f), Metal);
             d.Polygon(inner, ReflexWindowZ, Window, id, true);
 
             // Adjuster knob on the right of the deck, turning about x: knurled side and a flat cap.
-            var knob = Frame.Along(new Vector3(0.0105f, 0.0095f, -0.008f), Vector3.right);
+            var knob = Frame.Along(new Vector3(0.0085f, 0.0065f, -0.008f), Vector3.right);
             d.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.0040f, 0f), new Vector2(0.0040f, 0.0055f), new Vector2(0.0034f, 0.0062f), new Vector2(0f, 0.0062f) }, 20, Metal, knob);
             d.KnurlBand(0.0040f, 0.0005f, 0.0008f, 0.0050f, 12, Metal, knob);
         }
@@ -230,6 +234,10 @@ namespace Game.Gameplay
             else BlockMount(d, b, h, t);
         }
 
+        // Distance from the centre to the edge of a superellipse |x/a|^p + |y/b|^p = 1 along the unit direction `dir`.
+        static float Superellipse(Vector2 dir, float a, float b, float p) =>
+            Mathf.Pow(Mathf.Pow(Mathf.Abs(dir.x) / a, p) + Mathf.Pow(Mathf.Abs(dir.y) / b, p), -1f / p);
+
         static void Turret(Draft d, Vector3 at, Vector3 axis, float radius)
         {
             var f = Frame.Along(at, axis);
@@ -251,7 +259,7 @@ namespace Game.Gameplay
             d.Box(new Frame(hinge, Quaternion.FromToRotation(Vector3.up, hingeAxis)), new Vector3(0.004f, 0.007f, 0.004f), Metal);
         }
 
-        // 6x, 8x, 16x: two rings round the tube, each on a leg with a clamp base; two bolts on every ring cap and a
+        // 6x, 8x, 15x: two rings round the tube, each on a leg with a clamp base; two bolts on every ring cap and a
         // clamp bolt on the right of every base.
         static void RingMounts(Draft d, ScopeBody b, float h, float t)
         {
@@ -313,9 +321,11 @@ namespace Game.Gameplay
                 // Plain lip, then the knurled face as its own piece, then the outer chamfer.
                 bore.Add(new Vector2(OpticLook.HousingRadius(rim * 1.10f, zR), zR));
                 d.Lathe(bore.ToArray(), 64, Metal, axis);
-                d.KnurlFace(OpticLook.HousingRadius(rim * 1.10f, zR), OpticLook.HousingRadius(outer * 0.95f, zR), zR, 0.0022f, 44, Metal, axis);
+                // Fine, shallow ridges that stop short of the outer edge, so the ring reads as a knurled rubber grip and
+                // not as a cog wheel.
+                d.KnurlFace(OpticLook.HousingRadius(rim * 1.10f, zR), OpticLook.HousingRadius(outer * 0.90f, zR), zR, 0.0016f, 56, Metal, axis);
                 bore.Clear();
-                bore.Add(new Vector2(OpticLook.HousingRadius(outer * 0.95f, zR), zR));
+                bore.Add(new Vector2(OpticLook.HousingRadius(outer * 0.90f, zR), zR));
             }
             else if (look.DoubleBand)
             {
@@ -346,27 +356,42 @@ namespace Game.Gameplay
 
             if (look.BoxBody)
             {
-                // 4x: a wide rounded-square body face behind the eye ring that covers much of the screen, with four bolts.
+                // 4x: a rounded-square body behind the eye ring (a superellipse, so the screen corners stay open on the
+                // zoomed scene) with a bevelled front edge that catches the light (ADR-060 (1)(2)).
                 float zb = zR + 0.012f;
                 float hb = OpticLook.ViewHeightAt(zb, OpticLook.HousingFovDeg);
-                float hw = 0.86f * hb, hh = 0.62f * hb, c = 0.16f * hb;
-                var outerBox = new[]
+                float hw = 0.54f * hb, hh = 0.46f * hb, bevel = 0.045f * hb, bevelDepth = 0.003f;
+                const int n = 48;
+                float hole = rOuter / Mathf.Cos(Mathf.PI / n);
+                var full = new Vector2[n];
+                var inset = new Vector2[n];
+                var holeRing = new Vector2[n];
+                for (int i = 0; i < n; i++)
                 {
-                    new Vector2(-hw + c, -hh), new Vector2(hw - c, -hh), new Vector2(hw, -hh + c), new Vector2(hw, hh - c),
-                    new Vector2(hw - c, hh), new Vector2(-hw + c, hh), new Vector2(-hw, hh - c), new Vector2(-hw, -hh + c),
-                };
-                // The hole: an octagon round the eye ring, rotated to line up with the corners of the box.
-                float hole = rOuter * 0.995f / Mathf.Cos(Mathf.PI / 8f);
-                var holeBox = new Vector2[8];
-                for (int i = 0; i < 8; i++)
-                {
-                    float a = -Mathf.PI * 0.5f - Mathf.PI / 8f + i * Mathf.PI / 4f;
-                    holeBox[i] = new Vector2(Mathf.Cos(a) * hole, Mathf.Sin(a) * hole);
+                    float ang = i * Mathf.PI * 2f / n;
+                    var dir = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang));
+                    full[i] = dir * Superellipse(dir, hw, hh, 3.2f);
+                    inset[i] = dir * Superellipse(dir, hw - bevel, hh - bevel, 3.2f);
+                    holeRing[i] = dir * hole;
                 }
-                d.PolyRing(outerBox, holeBox, zb, zb + 0.05f, Metal, axis);
-                for (int sx = -1; sx <= 1; sx += 2)
-                    for (int sy = -1; sy <= 1; sy += 2)
-                        HexBolt(d, new Vector3(sx * hw * 0.72f, sy * hh * 0.55f, zb), Vector3.back, 0.03f * hb, 0.012f * hb);
+                d.PolyRing(inset, holeRing, zb, zb + 0.05f, Metal, axis);
+                d.PolyRing(full, inset, zb + bevelDepth, zb + 0.05f, Metal, axis);
+                for (int i = 0; i < n; i++)
+                {
+                    int j = (i + 1) % n;
+                    var mid = (full[i] + full[j]) * 0.5f;
+                    var facing = new Vector3(mid.x, mid.y, 0f).normalized - Vector3.forward;
+                    d.Quad(new Vector3(inset[i].x, inset[i].y, zb), new Vector3(inset[j].x, inset[j].y, zb),
+                        new Vector3(full[j].x, full[j].y, zb + bevelDepth), new Vector3(full[i].x, full[i].y, zb + bevelDepth), facing, Metal);
+                }
+                // The top dial standing on the body, seen from behind: a knurled drum with a flat cap.
+                // It stands on the top face of the body, behind the front edge, so only its upper part shows.
+                float zd = zb + 0.015f;
+                float hd = OpticLook.ViewHeightAt(zd, OpticLook.HousingFovDeg);
+                var dial = Frame.Along(new Vector3(0f, hh - 0.01f * hd, zd), Vector3.up);
+                float dr = 0.10f * hd, dh = 0.11f * hd;
+                d.Lathe(new[] { new Vector2(0f, 0f), new Vector2(dr, 0f), new Vector2(dr, dh), new Vector2(dr * 0.88f, dh * 1.08f), new Vector2(0f, dh * 1.08f) }, 32, Metal, dial);
+                d.KnurlBand(dr, dr * 0.05f, dh * 0.15f, dh * 0.9f, 24, Metal, dial);
             }
 
             if (look.FlipCap)
@@ -385,7 +410,7 @@ namespace Game.Gameplay
 
             if (look.SideTurret)
             {
-                // 8x, 16x: the side turret shows at the right edge; a smaller knob at the left.
+                // 8x, 15x: the side turret shows at the right edge; a smaller knob at the left.
                 float zt = zR + 0.035f;
                 float ht = OpticLook.ViewHeightAt(zt, OpticLook.HousingFovDeg);
                 float start = OpticLook.HousingRadius(outer * 0.9f, zR);
@@ -620,6 +645,26 @@ namespace Game.Gameplay
                     Quad(c, pa, pb, c, f.Dir(Vector3.back), sub);
                     if (twoSided) Quad(c, pa, pb, c, f.Dir(Vector3.forward), sub);
                 }
+            }
+
+            // A straight prism: the convex `profile` in the frame's xy plane, extruded along z from z0 to z1, capped.
+            public void Prism(Vector2[] profile, float z0, float z1, int sub, in Frame f)
+            {
+                var centre = Vector2.zero;
+                foreach (var p in profile) centre += p;
+                centre /= profile.Length;
+                for (int i = 0; i < profile.Length; i++)
+                {
+                    var a = profile[i];
+                    var b = profile[(i + 1) % profile.Length];
+                    var outward = (a + b) * 0.5f - centre;
+                    Quad(f.Point(new Vector3(a.x, a.y, z0)), f.Point(new Vector3(b.x, b.y, z0)), f.Point(new Vector3(b.x, b.y, z1)), f.Point(new Vector3(a.x, a.y, z1)), f.Dir(new Vector3(outward.x, outward.y, 0f)), sub);
+                }
+                Polygon(profile, z0, sub, f, false);
+                var back = new Frame(f.Point(new Vector3(0f, 0f, z1)), f.Rotation * Quaternion.AngleAxis(180f, Vector3.up));
+                var mirrored = new Vector2[profile.Length];
+                for (int i = 0; i < profile.Length; i++) mirrored[i] = new Vector2(-profile[i].x, profile[i].y);
+                Polygon(mirrored, 0f, sub, back, false);
             }
 
             public void Offset(Vector3 by)

@@ -11,20 +11,26 @@ namespace Game.Gameplay
     // jump, move) and saves what the screen shows at each step, so the result can be checked by eye without a
     // person at the keyboard. Development aid only; it does nothing without the argument, and only the host (the
     // server of its own solo match) can hand itself the weapons. Strip before a multiplayer release (RISKS).
+    // Late: the outside views (LateUpdate) replace the camera after the player has placed it.
+    [DefaultExecutionOrder(200)]
     public class FeelCapture : MonoBehaviour, IPlayerInput
     {
         const float SpawnTimeoutSeconds = 30f;
 
-        enum Watch { Game, Front, Side, Behind, Above }
+        enum Watch { Game, Front, Side, Behind, Above, Optic }
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
         bool _w5Shots; // `-w5shots <folder>` (TestBox): settings tabs at two sizes, a punch on a dummy, first-aid icon
         bool _w4Shots; // `-w4shots <folder>` (with -fastzones): scopes, healing, smoke and a region lockdown in the World
+        bool _scopeShots; // `-scopeshots <folder>` (World): every optic through the sights, on the weapon, on the ground
         bool _worldShots; // `-worldshots <folder>`: a short tour of the outdoor map instead of the TestBox script
         PlayerInputFrame _frame = new PlayerInputFrame { SelectSlot = -1 };
         Watch _watch;
         Vector3 _home, _homeForward; // where the player spawned: out of the dummies' sight
+        Combatant _pinned; // scope shots: a bot held at _pinAt every frame
+        Vector3 _pinAt;
+        Quaternion _pinRotation;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
@@ -36,6 +42,8 @@ namespace Game.Gameplay
             if (e >= 0 && e + 1 < args.Length) { w = e; }
             int w4 = Array.IndexOf(args, "-w4shots");
             if (w4 >= 0 && w4 + 1 < args.Length) { w = w4; }
+            int sc = Array.IndexOf(args, "-scopeshots");
+            if (sc >= 0 && sc + 1 < args.Length) { w = sc; }
             int w5 = Array.IndexOf(args, "-w5shots");
             if (w5 >= 0 && w5 + 1 < args.Length) { w = w5; }
             if ((i < 0 || i + 1 >= args.Length) && (w < 0 || w + 1 >= args.Length)) return;
@@ -49,6 +57,7 @@ namespace Game.Gameplay
             capture._eleShots = e >= 0 && e + 1 < args.Length;
             capture._w4Shots = w4 >= 0 && w4 + 1 < args.Length;
             capture._w5Shots = w5 >= 0 && w5 + 1 < args.Length;
+            capture._scopeShots = sc >= 0 && sc + 1 < args.Length;
             PlayerController.InputOverride = capture;
         }
 
@@ -59,6 +68,7 @@ namespace Game.Gameplay
             _frame.Jump = _frame.FirePressed = _frame.ToggleView = _frame.Crouch = _frame.Heal = _frame.Interact = false;
             _frame.ThrowPressed = _frame.ThrowReleased = false;
             _frame.Prone = _frame.Holster = _frame.FireMode = _frame.Map = false;
+            _frame.ZoomSteps = 0;
             _frame.Look = Vector2.zero;
             return f;
         }
@@ -89,6 +99,13 @@ namespace Game.Gameplay
             {
                 yield return Wave5Shots(me);
                 Debug.Log("[FeelCapture] wave 5 shots done: " + _folder);
+                Application.Quit();
+                yield break;
+            }
+            if (_scopeShots)
+            {
+                yield return ScopeShots(me);
+                Debug.Log("[FeelCapture] scope shots done: " + _folder);
                 Application.Quit();
                 yield break;
             }
@@ -975,6 +992,183 @@ namespace Game.Gameplay
             Debug.Log($"[FeelCapture] w4 then {zones.StateOf(region)}, markers {zones.Markers.Count}, hp {me.Hp.Value:F0}");
         }
 
+        // Every optic (ADR-060, ADR-062) at 1920x1080 in the World: through the sights at a still bot ~40 m away with
+        // a building near it, then each optic on the weapon from the side in third person, then all of them on the
+        // ground and in the inventory's ground list.
+        IEnumerator ScopeShots(Combatant me)
+        {
+            var pc = PlayerController.Local;
+            me.ServerDamageFilter = _ => 0f;
+            Screen.SetResolution(1920, 1080, FullScreenMode.Windowed);
+            // The bots stand still for the pictures.
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer) continue;
+                if (c.GetComponent("BotController") is Behaviour brain) brain.enabled = false;
+                var agent = c.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (agent != null) agent.enabled = false;
+            }
+            yield return new WaitForSeconds(4f); // the elevator door
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 5, Amount = 5 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 90 });
+            yield return new WaitForSeconds(0.5f);
+
+            // A spot ~40 m from a bot with a clear line to it, preferring one where something solid stands behind it.
+            Combatant bot = null;
+            Vector3 spot = me.transform.position;
+            float bestScore = float.MinValue;
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer || c.Dead.Value) continue;
+                var target = c.transform.position + Vector3.up * 1.3f;
+                for (int a = 0; a < 36; a++)
+                {
+                    float ang = a * 10f * Mathf.Deg2Rad;
+                    var dir = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang));
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(c.transform.position + dir * 40f, out var hit, 4f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    var from = hit.position + Vector3.up * 1.6f;
+                    if (Physics.Linecast(from, target, out var block) && block.collider.GetComponentInParent<Combatant>() != c) continue;
+                    // Something 5-40 m behind the bot, and to its sides, makes the view less bare.
+                    float score = 0f;
+                    var look = (target - from).normalized;
+                    var side = Vector3.Cross(Vector3.up, look).normalized;
+                    foreach (float off in new[] { -6f, -2f, 0f, 2f, 6f })
+                        if (Physics.Raycast(target + side * off + look * 1f, look, out var behind, 40f) && behind.distance > 4f) score += 1f;
+                    if (score > bestScore) { bestScore = score; bot = c; spot = hit.position; }
+                }
+            }
+            if (bot == null) Debug.LogWarning("[FeelCapture] scopes: no bot in sight; shooting from the elevator");
+            pc.Teleport(spot + Vector3.up * 0.1f);
+            yield return null;
+            var eye = spot + Vector3.up * 1.6f;
+            var ahead = bot != null ? bot.transform.position - spot : me.transform.forward;
+            ahead.y = 0f;
+            ahead.Normalize();
+            // The bot itself may stand behind cover: bring it out into the open, 35-50 m ahead, in clear view.
+            Vector3 aimAt = eye + ahead * 40f;
+            if (bot != null)
+            {
+                var across = Vector3.Cross(Vector3.up, ahead);
+                bool placed = false;
+                foreach (float dist in new[] { 40f, 36f, 45f, 50f, 32f })
+                {
+                    foreach (float off in new[] { 0f, -3f, 3f, -6f, 6f, -10f, 10f })
+                    {
+                        if (!UnityEngine.AI.NavMesh.SamplePosition(spot + ahead * dist + across * off, out var hit, 3f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                        var chest = hit.position + Vector3.up * 1.2f;
+                        var feet = hit.position + Vector3.up * 0.3f;
+                        if (Physics.Linecast(eye, chest, out var b1) && b1.collider.GetComponentInParent<Combatant>() == null) continue;
+                        if (Physics.Linecast(eye, feet, out var b2) && b2.collider.GetComponentInParent<Combatant>() == null) continue;
+                        var controller = bot.GetComponent<CharacterController>();
+                        if (controller != null) controller.enabled = false;
+                        bot.transform.SetPositionAndRotation(hit.position, Quaternion.LookRotation(-ahead));
+                        if (controller != null) controller.enabled = true;
+                        aimAt = hit.position + Vector3.up * 1.3f;
+                        _pinned = bot;
+                        _pinAt = hit.position;
+                        _pinRotation = Quaternion.LookRotation(-ahead);
+                        placed = true;
+                        Debug.Log($"[FeelCapture] scopes: bot placed {Vector3.Distance(spot, hit.position):F0} m ahead, {off} m aside");
+                        break;
+                    }
+                    if (placed) break;
+                }
+                if (!placed) Debug.LogWarning("[FeelCapture] scopes: no clear spot for the bot");
+            }
+            yield return new WaitForSeconds(0.5f);
+
+            var optics = me.GetComponent<CombatantOptics>();
+            var visual = me.GetComponent<OpticVisual>();
+            var plan = new[] { (0, 1, "w_reflex"), (0, 2, "w_projector"), (0, 3, "w_2x"), (0, 4, "w_3x"), (0, 5, "w_4x"), (0, 6, "w_6x"), (1, 7, "s_8x"), (1, 8, "s_15x") };
+            int selected = -1;
+            foreach (var (slotIndex, id, name) in plan)
+            {
+                if (selected != slotIndex)
+                {
+                    _frame.SelectSlot = slotIndex; yield return null; _frame.SelectSlot = -1;
+                    yield return new WaitForSeconds(0.8f);
+                    selected = slotIndex;
+                }
+                int slot = me.ActiveSlot.Value;
+                optics?.ServerRemove(slot);
+                bool ok = optics != null && optics.ServerAttach(slot, id);
+                yield return new WaitForSeconds(0.5f);
+                pc.LookAt(aimAt);
+                yield return new WaitForSeconds(0.3f);
+                yield return Tap();
+                yield return new WaitForSeconds(1.2f);
+                pc.LookAt(aimAt);
+                yield return new WaitForSeconds(0.2f);
+                yield return Shot("o_" + name);
+                var sv = ScopeView.Instance;
+                if (_pinned != null)
+                {
+                    int shown = 0;
+                    foreach (var r in _pinned.GetComponentsInChildren<Renderer>()) if (r.enabled && r.gameObject.activeInHierarchy && !r.forceRenderingOff) shown++;
+                    Debug.Log($"[FeelCapture] bot at {_pinned.transform.position} (pinned {_pinAt}), dead {_pinned.Dead.Value}, renderers shown {shown}");
+                }
+                Debug.Log($"[FeelCapture] scopes {name} (weapon {me.ActiveWeaponId}, optic {id}, attached {ok}): fov {pc.Camera.fieldOfView:F1}, hides weapon {ScopeView.HidesWeapon}, hides hud weapon {ScopeView.HidesHudWeapon}, housing {(sv != null && sv.Housing != null && sv.Housing.activeInHierarchy)}, stacked {(sv != null && sv.HousingCamera != null)}");
+                // Variable scopes (ADR-063): wheel down to the lowest zoom and look again.
+                int down = id == 6 ? 3 : id == 8 ? 7 : 0;
+                if (down > 0)
+                {
+                    for (int n = 0; n < down; n++)
+                    {
+                        _frame.ZoomSteps = -1;
+                        yield return null;
+                        yield return null;
+                    }
+                    yield return new WaitForSeconds(1.0f);
+                    yield return Shot($"o_{name}_at{Mathf.RoundToInt(ScopeView.CurrentZoom)}");
+                    Debug.Log($"[FeelCapture] scopes {name} wheeled down {down}: zoom {ScopeView.CurrentZoom}, fov {pc.Camera.fieldOfView:F2}");
+                }
+                yield return Tap();
+                yield return new WaitForSeconds(0.6f);
+
+                // The same optic on the weapon from the side, third person (the body and the weapon in the hand).
+                bool wasFirst = pc.Rig.Mode == ViewMode.FirstPerson;
+                if (wasFirst) pc.Rig.ToggleMode();
+                pc.LookAt(aimAt);
+                yield return new WaitForSeconds(0.6f);
+                _watch = Watch.Optic;
+                yield return new WaitForSeconds(0.3f);
+                yield return Shot("t_" + name);
+                _watch = Watch.Game;
+                if (wasFirst) pc.Rig.ToggleMode();
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            // All optics on the ground in front, then in the inventory's ground list.
+            var director = MatchDirector.Instance;
+            if (director != null)
+            {
+                var at = me.transform.position;
+                var fwd = me.transform.forward;
+                var right = me.transform.right;
+                for (int id = 1; id <= 8; id++)
+                {
+                    int i = id - 1;
+                    director.ServerSpawnLoot(Optics.ToLoot(id), at + fwd * (2.6f + (i / 4) * 0.6f) + right * ((i % 4) - 1.5f) * 0.5f + Vector3.up * 0.15f);
+                }
+            }
+            yield return new WaitForSeconds(1.2f);
+            foreach (var item in LootItem.All)
+            {
+                if (item == null || item.Kind.Value != (int)LootKind.Optic) continue;
+                var view = item.GetComponent<LootView>();
+                var box = item.transform.Find("Cube")?.GetComponent<Renderer>();
+                Debug.Log($"[FeelCapture] loot optic {item.Optic.Value}: model {(view != null && view.OpticModel != null)}, box drawn {(box != null && box.enabled && !box.forceRenderingOff)}");
+            }
+            pc.LookAt(me.transform.position + me.transform.forward * 2.9f);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("g_loot_ground");
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("i_inventory_optics");
+            UiFocus.Close();
+        }
+
         IEnumerator Tap()
         {
             _frame.AimHeld = true;
@@ -1015,9 +1209,28 @@ namespace Game.Gameplay
         // Runs after the player has placed the camera: the outside views replace it for this frame.
         void LateUpdate()
         {
+            if (_pinned != null && (_pinned.transform.position - _pinAt).sqrMagnitude > 0.01f)
+                _pinned.transform.SetPositionAndRotation(_pinAt, _pinRotation);
             var pc = PlayerController.Local;
             if (_watch == Watch.Game || pc == null || pc.Camera == null) return;
             var player = pc.transform;
+            if (_watch == Watch.Optic)
+            {
+                // Close on the optic on the weapon in hand, from the weapon's right side (away from the body), a little
+                // above and behind, in the optic's own axes (+z toward the muzzle, +y up).
+                var optic = pc.GetComponent<OpticVisual>();
+                var parts = optic != null ? optic.Parts : null;
+                var window = optic != null ? optic.Window : null;
+                var focus = window != null ? Vector3.Lerp(window.position, parts.transform.position, 0.5f) : player.position + Vector3.up * 1.4f;
+                var right = parts != null ? parts.transform.right.normalized : player.right;
+                var up = parts != null ? parts.transform.up.normalized : Vector3.up;
+                var fwd = parts != null ? parts.transform.forward.normalized : player.forward;
+                var camT = pc.Camera.transform;
+                camT.position = focus + right * 0.30f + up * 0.10f - fwd * 0.06f;
+                camT.rotation = Quaternion.LookRotation(focus - camT.position, Vector3.up);
+                pc.Camera.fieldOfView = 40f;
+                return;
+            }
             var offset = _watch == Watch.Front ? player.forward * 3.2f
                 : _watch == Watch.Side ? player.right * 3.6f
                 : -player.forward * 3.2f + Vector3.up * 0.6f;

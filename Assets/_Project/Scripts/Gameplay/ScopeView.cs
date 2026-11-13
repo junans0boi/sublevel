@@ -39,6 +39,10 @@ namespace Game.Gameplay
         // True while a magnified scope is up: the HUD hides its bottom weapon panel (ammo shows under the lens).
         public static bool HidesHudWeapon { get; private set; }
         public static ScopeView Instance { get; private set; }
+        // The zoom of the optic on the weapon in hand right now (variable scopes: set with the mouse wheel while in
+        // sights, ADR-063); 1 when there is no magnified optic. Kept while leaving and re-entering sights; back to the
+        // optic's highest zoom when the weapon in hand or its optic changes.
+        public static float CurrentZoom { get; private set; } = 1f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -48,6 +52,7 @@ namespace Game.Gameplay
             FovOverride = 0f;
             HidesWeapon = false;
             HidesHudWeapon = false;
+            CurrentZoom = 1f;
         }
 
         // Unnamed layer (ProjectSettings/TagManager has no free named one) that only the housing camera draws.
@@ -61,10 +66,12 @@ namespace Game.Gameplay
         // The shade picture is a square this many reference pixels from its centre to each side (covers 21:9).
         const float ShadeRadius = 1.7f * ReferenceHeight;
         const float LensEdgeOverscan = 1.06f;
+        // Canvas units at the bottom of the screen kept for the HUD's health bar.
+        const float BottomHudReserve = 95f;
         const int ReticleTextureSize = 512, ShadeTextureSize = 256, EdgeTextureSize = 256;
 
-        static readonly Color SightRed = new Color(1f, 0.34f, 0.14f, 1f);
-        static readonly Color ProjectorRed = new Color(1f, 0.44f, 0.16f, 1f);
+        static readonly Color SightRed = new Color(1f, 0.30f, 0.12f, 1f);
+        static readonly Color ProjectorRed = new Color(1f, 0.42f, 0.14f, 1f);
         static readonly Color LitAmber = new Color(1f, 0.64f, 0.16f, 1f);
         static readonly Color Ink = new Color(0.02f, 0.02f, 0.02f, 0.95f);
         static readonly Color ShadeColor = new Color(0.015f, 0.017f, 0.02f, 1f);
@@ -94,7 +101,9 @@ namespace Game.Gameplay
         Combatant _combatantOf;
         CombatantOptics _optics;
         int _shownOptic = -1;
-        float _shownZoom;
+        float _shownZoom, _labelZoom;
+        // What the zoom belongs to: the weapon in hand, its slot and its optic. A change resets the zoom.
+        int _zoomWeapon = -1, _zoomSlot = -1, _zoomOptic = -1;
         float _lastFactor = 1f;
         int _shownMag = int.MinValue, _shownReserve = int.MinValue;
 
@@ -125,14 +134,29 @@ namespace Game.Gameplay
 
         void Update()
         {
+            TrackZoomOwner();
             var def = CurrentOptic();
             bool scoped = def != null && def.Kind == OpticKind.Scope && def.Zoom > 1f;
             bool reticle = def != null && !scoped;
 
+            // The mouse wheel turns a variable scope while looking through it (read from the player's last input:
+            // this runs before PlayerController, so every frame's wheel is seen exactly once).
+            if (scoped && Optics.IsVariable(def))
+            {
+                var pc = PlayerController.Local;
+                int notches = pc != null ? pc.LastInput.ZoomSteps : 0;
+                if (notches != 0) CurrentZoom = Optics.StepZoom(def, CurrentZoom, notches);
+            }
+
             if (def != null)
             {
-                _lastFactor = def.SensitivityFactor;
+                _lastFactor = Optics.SensitivityAt(def, scoped ? CurrentZoom : def.Zoom);
                 if (def.Id != _shownOptic) ShowOptic(def);
+                if (scoped && CurrentZoom != _labelZoom)
+                {
+                    _labelZoom = CurrentZoom;
+                    _zoomLabel.text = Optics.ZoomText(CurrentZoom);
+                }
             }
 
             float step = FadePerSecond * Time.unscaledDeltaTime;
@@ -141,7 +165,7 @@ namespace Game.Gameplay
             if (ScopeBlend <= 0f && !scoped) _lastFactor = 1f;
 
             // The view follows the target at once: the camera eases its own field of view.
-            FovOverride = scoped ? Optics.FovFor(GameData.Rules.Aim.Sights.Fov, def.Zoom) : 0f;
+            FovOverride = scoped ? Optics.FovFor(GameData.Rules.Aim.Sights.Fov, CurrentZoom) : 0f;
             SensitivityFactor = Mathf.Lerp(1f, _lastFactor, ScopeBlend);
             Active = def != null || ScopeBlend > 0f || ReticleBlend > 0f;
             HidesWeapon = ScopeBlend >= 0.5f;
@@ -155,6 +179,25 @@ namespace Game.Gameplay
             if (_scopeGroup.alpha != ScopeBlend) _scopeGroup.alpha = ScopeBlend;
             if (_reticleGroup.alpha != ReticleBlend) _reticleGroup.alpha = ReticleBlend;
             if (ScopeBlend > 0f) TickAmmo();
+        }
+
+        // Resets the zoom to the optic's highest whenever the weapon in hand, its slot or its optic changes.
+        void TrackZoomOwner()
+        {
+            var me = Combatant.LocalPlayer;
+            int weapon = me != null ? me.ActiveWeaponId : 0;
+            int slot = me != null ? me.ActiveSlot.Value : -1;
+            if (me != null && _combatantOf != me)
+            {
+                _combatantOf = me;
+                _optics = me.GetComponent<CombatantOptics>();
+            }
+            int optic = me != null && _optics != null && weapon != 0 ? _optics.ActiveOptic : 0;
+            if (weapon == _zoomWeapon && slot == _zoomSlot && optic == _zoomOptic) return;
+            _zoomWeapon = weapon;
+            _zoomSlot = slot;
+            _zoomOptic = optic;
+            CurrentZoom = optic != 0 ? Optics.ZoomOf(optic) : 1f;
         }
 
         // The optic on the weapon in hand while the local player looks down the sights; null otherwise.
@@ -199,10 +242,14 @@ namespace Game.Gameplay
             _lit.gameObject.SetActive(lit);
             _lit.sizeDelta = Vector2.one * (2f * r);
             // The magnification sits inside the lens rim, lower right; zero and ammo hang under the lens.
-            _zoomLabel.text = Optics.ZoomText(def.Zoom);
+            _labelZoom = CurrentZoom;
+            _zoomLabel.text = Optics.ZoomText(CurrentZoom);
             _zoomRect.anchoredPosition = new Vector2(r * 0.66f, -r * 0.66f);
-            _zeroRect.anchoredPosition = new Vector2(0f, -r - 30f);
-            _ammoRect.anchoredPosition = new Vector2(0f, -r - 60f);
+            // Under the lens while there is room above the HUD's health bar; inside the lens bottom (on its dark edge)
+            // for the big lenses (8x, 15x), so they never sit on the bar.
+            bool below = r + 60f + 15f <= ReferenceHeight * 0.5f - BottomHudReserve;
+            _zeroRect.anchoredPosition = new Vector2(0f, below ? -r - 30f : -r + 66f);
+            _ammoRect.anchoredPosition = new Vector2(0f, below ? -r - 60f : -r + 38f);
             if (_housingFilter != null) _housingFilter.sharedMesh = OpticMeshes.Eyepiece(def.Zoom);
         }
 
@@ -364,14 +411,15 @@ namespace Game.Gameplay
             _reticleGroup.interactable = false;
             _reticleGroup.alpha = 0f;
 
-            // Reflex sight: a small dot with a short vertical tick under it. 64 units across, 2 pixels per unit.
+            // Reflex sight: a small bright dot with a short vertical tick under it and a faint glow. 64 units across,
+            // 2 pixels per unit.
             var reflex = Centred("Reflex", group, 64f);
-            Picture(reflex, Own(MakeSprite(Own(Paint(128, 32f, ReflexShape, 1.2f, 0.35f)))), SightRed);
+            Picture(reflex, Own(MakeSprite(Own(Paint(128, 32f, ReflexShape, 1.2f, 0.6f)))), SightRed);
             _reflexReticle = reflex.gameObject;
 
             // Projector sight: four broken arc pieces round a centre dot. 96 units across.
             var projector = Centred("Projector", group, 96f);
-            Picture(projector, Own(MakeSprite(Own(Paint(192, 48f, ProjectorShape, 1.5f, 0.3f)))), ProjectorRed);
+            Picture(projector, Own(MakeSprite(Own(Paint(192, 48f, ProjectorShape, 1.5f, 0.5f)))), ProjectorRed);
             _projectorReticle = projector.gameObject;
             _projectorReticle.SetActive(false);
         }
@@ -457,16 +505,16 @@ namespace Game.Gameplay
         }
 
         // Units: reference pixels from the centre.
-        static float ReflexShape(float x, float y) => Mathf.Min(Circle(x, y, 2.6f), Box(x, y, 0f, -12.5f, 0.9f, 3.5f));
+        static float ReflexShape(float x, float y) => Mathf.Min(Circle(x, y, 3.6f), Box(x, y, 0f, -13f, 1.1f, 3.8f));
 
         static float ProjectorShape(float x, float y)
         {
             float r = Mathf.Sqrt(x * x + y * y);
-            float ring = Mathf.Abs(r - 30f) - 1.1f;
+            float ring = Mathf.Abs(r - 33f) - 1.7f;
             // Gaps 30 degrees wide round each of the four directions: keep the ring only near the diagonals.
             float angle = Mathf.Atan2(Mathf.Abs(y), Mathf.Abs(x)) * Mathf.Rad2Deg; // 0..90 in the quadrant
             float gap = (15f - Mathf.Min(angle, 90f - angle)) * Mathf.Deg2Rad * 30f;    // > 0 inside a gap
-            return Mathf.Min(Mathf.Max(ring, gap), Circle(x, y, 2.2f));
+            return Mathf.Min(Mathf.Max(ring, gap), Circle(x, y, 3.2f));
         }
 
         // Units: lens radii from the centre (the lens edge is at 1).

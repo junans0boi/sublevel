@@ -104,7 +104,9 @@ namespace Game.Gameplay
             bool hasModel = weapon > 0 && weapon < _weaponModelsById.Length && _weaponModelsById[weapon] != null;
             bool opticModel = opticKind && ShowOptic(OpticRules.Current.Find(optic));
             if (!opticKind && _opticModel != null) _opticModel.SetActive(false);
-            _renderer.enabled = !hasModel && !opticModel;
+            // forceRenderingOff, not enabled: FishNet switches the renderers' enabled flag itself on a host when the
+            // object becomes visible to the local client, which brought the box back over a freshly spawned optic.
+            _renderer.forceRenderingOff = hasModel || opticModel;
             for (int i = 0; i < _weaponModelsById.Length; i++)
                 if (_weaponModelsById[i] != null) _weaponModelsById[i].SetActive(hasModel && i == weapon);
         }

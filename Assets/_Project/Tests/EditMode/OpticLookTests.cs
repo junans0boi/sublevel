@@ -29,7 +29,7 @@ namespace Game.Tests
         [Test]
         public void EveryMagnification_HasLensInsideRimInsideOuter_AndTheLensFitsTheScreen()
         {
-            foreach (float zoom in new[] { 2f, 2.5f, 3f, 4f, 5f, 6f, 8f, 12f, 16f })
+            foreach (float zoom in new[] { 2f, 2.5f, 3f, 4f, 5f, 6f, 8f, 12f, 15f })
             {
                 var look = OpticLook.For(zoom);
                 Assert.Less(look.LensRadius, look.RimRadius, zoom + "x");
@@ -37,9 +37,9 @@ namespace Game.Tests
                 Assert.Less(look.LensRadius, 0.5f, zoom + "x: the whole lens is on screen");
                 Assert.Greater(look.Depth, 0f, zoom + "x");
             }
-            // 2x and 16x follow the same rule as their neighbours.
+            // 2x and 15x follow the same rule as their neighbours.
             Assert.AreEqual(ScopeReticle.Arc, OpticLook.For(2f).Reticle);
-            Assert.AreEqual(ScopeReticle.Holdover, OpticLook.For(16f).Reticle);
+            Assert.AreEqual(ScopeReticle.Holdover, OpticLook.For(15f).Reticle);
         }
 
         [Test]
@@ -129,7 +129,7 @@ namespace Game.Tests
             }
             float dot = loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == 1).Weight;
             Assert.Less(loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == 7).Weight, dot, "8x is rare");
-            Assert.Less(loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == 8).Weight, dot, "16x is rare");
+            Assert.Less(loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == 8).Weight, dot, "15x is rare");
         }
     }
 }

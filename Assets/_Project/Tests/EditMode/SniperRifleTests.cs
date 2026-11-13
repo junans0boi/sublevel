@@ -85,7 +85,7 @@ namespace Game.Tests
                 Assert.IsTrue(Optics.CanAttach(Sentinel, X8, rules));
                 Assert.IsFalse(Optics.CanAttach(3, X8, rules), "the Warden still stops at 6x");
             }
-            Assert.AreEqual(16f, new OpticRules().Find(X16).Zoom);
+            Assert.AreEqual(15f, new OpticRules().Find(X16).Zoom);
         }
 
         [Test]
