@@ -24,9 +24,10 @@ namespace Game.Gameplay
         const float FootOutDeg = 4f;            // astride, the feet stay this little turned out
         const float PalmShare = 0.8f;           // of wrist -> middle knuckle: where the bar sits in the closed hand
         const float PalmDepth = 0.03f;          // the bar's centre this far off the hand's bone line, on the palm side
-        const float ReachShare = 0.94f;         // of the full arm length: the elbows stay a little bent
-        const float CarMaxLeanDeg = 15f, BikeMaxLeanDeg = 40f;
-        const float BikeBaseLeanDeg = 8f;       // a rider leans a little even with the bars in reach
+        const float ReachShare = 0.94f;         // of the full arm length: the elbows stay a little bent (car)
+        const float BikeReachShare = 0.99f;     // a rider's arms are near straight before the body leans
+        const float CarMaxLeanDeg = 15f, BikeMaxLeanDeg = 20f;
+        const float BikeBaseLeanDeg = 0f;       // only what the reach needs
         public const float HandFollowDeg = 90f; // U5
         const float ThighHandShare = 0.6f;      // hip -> knee: where a resting hand lies
         const float ThighTop = 0.08f;           // the hand lies this far over the thigh bone
@@ -132,7 +133,14 @@ namespace Game.Gameplay
             Transform upL = _bones[ArmLeft], upR = _bones[ArmRight];
             if (torso != null && upL != null && upR != null && _forearm[0] != null && _wrist[0] != null)
             {
-                float arm = (Vector3.Distance(upL.position, _forearm[0].position) + Vector3.Distance(_forearm[0].position, _wrist[0].position)) * ReachShare;
+                // A rider starts from upright (the clip's own forward hunch taken out), so the lean is only what the
+                // reach needs: a sport / dirt bike more, a cruiser less.
+                if (astride)
+                {
+                    var torsoUp = Vector3.ProjectOnPlane(torso.up, transform.right);
+                    if (torsoUp.sqrMagnitude > 1e-6f) Turn(Torso, -Vector3.SignedAngle(transform.up, torsoUp, transform.right) * free, transform.right);
+                }
+                float arm = (Vector3.Distance(upL.position, _forearm[0].position) + Vector3.Distance(_forearm[0].position, _wrist[0].position)) * (astride ? BikeReachShare : ReachShare);
                 float palm = PalmLength(0);
                 float lean = LeanToReach(torso.position, transform.right, upL.position, left, upR.position, right, arm + palm,
                     astride ? BikeMaxLeanDeg : CarMaxLeanDeg);
@@ -336,6 +344,8 @@ namespace Game.Gameplay
             if (seat == _anchorsOf) return;
             _anchorsOf = seat;
             _cushion = seat != null ? seat.transform.Find("Cushion") : null;
+            var r = VehicleSeat.RulesOf(_combatant);
+            _cushionShift = Vector3.down * r.SeatedHipDrop + Vector3.back * r.SeatedHipBack;
             for (int side = 0; side < 2; side++)
             {
                 _pegs[side] = seat != null ? seat.transform.Find(side == 0 ? "PegLeft" : "PegRight") : null;
@@ -343,13 +353,22 @@ namespace Game.Gameplay
             }
         }
 
-        // Before the limbs are posed: the whole model moves so the hips rest on the cushion point.
+        // The model's offset (in the body's space) that rests the hips on the cushion point. Measured here after the
+        // pose and applied in Update with the rest of the model's placement, not moved in LateUpdate: the model's
+        // place is reset every Update, and anything that looks before LateUpdate (a capture) would see it jump back.
+        Vector3 _cushionShift;
+        const float CushionShiftMax = 0.6f;
+
+        Vector3 SeatedShift(Vector3 fromRules) => _cushion != null ? _cushionShift : fromRules;
+
         void SitOnCushion(float seated)
         {
             if (!_gripBonesLooked) FindGripBones();
             FindSeatAnchors(VehicleSeat.SeatOf(_combatant));
-            if (_cushion == null || _hips == null || _animator == null) return;
-            _animator.transform.position += (_cushion.position - _hips.position) * seated;
+            if (_cushion == null || _hips == null || _animator == null || seated < 0.99f) return;
+            var parent = _animator.transform.parent;
+            var error = _cushion.position - _hips.position;
+            _cushionShift = Vector3.ClampMagnitude(_cushionShift + (parent != null ? parent.InverseTransformVector(error) : error), CushionShiftMax);
         }
 
         // U4: the feet on the pegs the model marks, knees forward and in towards the knee points. False when unmarked.

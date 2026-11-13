@@ -344,7 +344,7 @@ namespace Game.Gameplay
             var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * _prone;
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
-            var sitting = (Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
+            var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
             _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop + lying + sitting;
         }
 

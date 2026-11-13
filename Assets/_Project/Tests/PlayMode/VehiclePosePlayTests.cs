@@ -187,7 +187,9 @@ namespace Game.Tests
             var bike = Vehicle.All.First(x => x != null && x.IsMotorcycle);
             yield return Enter(bike);
             bike.Body.isKinematic = true;
-            bike.transform.rotation = Quaternion.AngleAxis(30f, bike.transform.forward) * bike.transform.rotation;
+            var tilted = Quaternion.AngleAxis(30f, bike.transform.forward) * bike.transform.rotation;
+            bike.Body.rotation = tilted;
+            bike.transform.rotation = tilted;
             yield return null;
             yield return null;
             var marker = bike.Seat(0).transform.position;
