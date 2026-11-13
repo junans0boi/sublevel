@@ -1,14 +1,33 @@
+using System;
+
 namespace Game.Core
 {
-    // What one combatant carries: two weapon slots, reserve ammo per type, medkits. Owns fire-rate and reload timing.
+    // Tuning for the weapon slots and fire modes. Loaded from data.
+    [Serializable]
+    public class SlotRules
+    {
+        // Single-shot mode on an automatic weapon fires no faster than this, whatever the weapon's own interval:
+        // the server cannot tell clicks from a held button, so it holds the rate to what a finger can do.
+        public float SingleModeMinInterval = 0.12f;
+    }
+
+    // What one combatant carries: five weapon slots (ADR-058), reserve ammo per type, medkits. Owns fire-rate and
+    // reload timing. Slots 0 and 1 take primary weapons, slot 2 a sidearm (pistols), slot 3 is the melee slot (it
+    // exists but takes nothing until there are melee weapons) and slot 4 is the throwable slot (grenades are
+    // counted by the throwing component, never held here).
     public class Loadout
     {
-        public const int SlotCount = 2;
+        public const int SlotCount = 5;
+        public const int PrimarySlotA = 0, PrimarySlotB = 1, SidearmSlot = 2, MeleeSlot = 3, ThrowableSlot = 4;
+        // Weapons that may be carried: every slot that takes a weapon.
+        public const int WeaponSlotCount = 3;
 
         readonly WeaponTable _table;
         readonly float _medkitHeal;
         readonly int[] _slotWeapon = new int[SlotCount];
         readonly int[] _slotMag = new int[SlotCount];
+        // An automatic weapon the shooter set to single shots. Cleared whenever the slot gets another weapon.
+        readonly bool[] _slotSingle = new bool[SlotCount];
         readonly int[] _reserve = new int[AmmoNames.Count];
         readonly FireCadence _cadence = new FireCadence();
         double _reloadEndTime = -1;
@@ -23,57 +42,118 @@ namespace Game.Core
             _medkitHeal = medkitHeal;
         }
 
-        public int WeaponInSlot(int slot) => _slotWeapon[slot];
-        public int MagInSlot(int slot) => _slotMag[slot];
+        // Does this slot take weapons of this category?
+        public static bool SlotTakes(int slot, WeaponCategory category)
+        {
+            switch (slot)
+            {
+                case PrimarySlotA:
+                case PrimarySlotB: return category == WeaponCategory.Primary;
+                case SidearmSlot: return category == WeaponCategory.Sidearm;
+                default: return false; // melee: no weapons yet; throwable: grenades are not weapons
+            }
+        }
+
+        public static string FireModeName(bool auto) => auto ? "연사" : "단발";
+
+        public int WeaponInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotWeapon[slot] : 0;
+        public int MagInSlot(int slot) => slot >= 0 && slot < SlotCount ? _slotMag[slot] : 0;
         public int Reserve(AmmoType type) => (int)type >= 0 && (int)type < _reserve.Length ? _reserve[(int)type] : 0;
         public WeaponDef ActiveWeapon => _table.Find(_slotWeapon[ActiveSlot]);
+        public bool HasAnyWeapon
+        {
+            get
+            {
+                for (int i = 0; i < SlotCount; i++) if (_slotWeapon[i] != 0) return true;
+                return false;
+            }
+        }
 
-        // Puts the weapon in the first empty slot, or replaces the active one.
-        // Returns the replaced weapon id (0 if none) and what was left in its magazine.
+        // Some weapon slot (primary or sidearm) is empty.
+        public bool HasFreeWeaponSlot
+        {
+            get
+            {
+                for (int i = 0; i < WeaponSlotCount; i++) if (_slotWeapon[i] == 0) return true;
+                return false;
+            }
+        }
+
+        // ---- Which slot a weapon may go in ----
+
+        // Is this weapon known and allowed in this slot?
+        public bool CanHold(int slot, int weaponId)
+        {
+            if (slot < 0 || slot >= SlotCount || weaponId == 0) return false;
+            var def = _table.Find(weaponId);
+            return def != null && SlotTakes(slot, def.Category);
+        }
+
+        // Where a picked-up weapon goes: the first free slot that takes it; else the slot in hand when that takes
+        // it; else the first slot that takes it. -1 when no slot does.
+        public int PickupSlotFor(int weaponId)
+        {
+            for (int i = 0; i < SlotCount; i++)
+                if (_slotWeapon[i] == 0 && CanHold(i, weaponId)) return i;
+            if (CanHold(ActiveSlot, weaponId)) return ActiveSlot;
+            for (int i = 0; i < SlotCount; i++)
+                if (CanHold(i, weaponId)) return i;
+            return -1;
+        }
+
+        public bool CanAddWeapon(int weaponId) => PickupSlotFor(weaponId) >= 0;
+
+        // Puts the weapon where PickupSlotFor says. Returns the replaced weapon id (0 if none) and what was left in
+        // its magazine. Changes nothing when no slot takes the weapon (check CanAddWeapon first to tell that apart
+        // from "nothing was replaced").
         public int AddWeapon(int weaponId, int ammoInMag, out int replacedMag)
         {
             replacedMag = 0;
-            int slot = -1;
-            for (int i = 0; i < SlotCount; i++)
-                if (_slotWeapon[i] == 0) { slot = i; break; }
-            int replaced = 0;
-            if (slot < 0)
-            {
-                slot = ActiveSlot;
-                replaced = _slotWeapon[slot];
-                replacedMag = _slotMag[slot];
-                _reloadEndTime = -1;
-            }
-            _slotWeapon[slot] = weaponId;
-            _slotMag[slot] = ammoInMag;
-            if (ActiveWeapon == null) ActiveSlot = slot;
-            return replaced;
+            int slot = PickupSlotFor(weaponId);
+            if (slot < 0) return 0;
+            return Place(slot, weaponId, ammoInMag, out replacedMag);
         }
 
         public int AddWeapon(int weaponId, int ammoInMag) => AddWeapon(weaponId, ammoInMag, out _);
 
         // Puts the weapon in a chosen slot. Returns the weapon that was there (0 if none) and its magazine.
+        // Changes nothing (and returns 0) when the slot does not take this weapon: CanHold says so beforehand.
         // The new weapon is taken in hand when the slot was the active one or nothing was held.
         public int AddWeaponToSlot(int slot, int weaponId, int ammoInMag, out int replacedMag)
         {
             replacedMag = 0;
-            if (slot < 0 || slot >= SlotCount || weaponId == 0) return 0;
+            if (!CanHold(slot, weaponId)) return 0;
+            return Place(slot, weaponId, ammoInMag, out replacedMag);
+        }
+
+        int Place(int slot, int weaponId, int ammoInMag, out int replacedMag)
+        {
             int replaced = _slotWeapon[slot];
             replacedMag = _slotMag[slot];
             _slotWeapon[slot] = weaponId;
             _slotMag[slot] = ammoInMag;
+            _slotSingle[slot] = false;
             if (slot == ActiveSlot) _reloadEndTime = -1;
             if (ActiveWeapon == null) ActiveSlot = slot;
             return replaced;
         }
 
-        // Trades the two slots; the weapon in hand stays in hand (the active slot follows it).
-        public bool SwapSlots()
+        // The two primary weapons trade places; the weapon in hand stays in hand.
+        public bool SwapSlots() => SwapSlots(PrimarySlotA, PrimarySlotB);
+
+        // Two slots trade contents when each can take what the other holds (an empty slot takes anything it could
+        // hold anyway); the weapon in hand stays in hand (the active slot follows it).
+        public bool SwapSlots(int a, int b)
         {
-            if (_slotWeapon[0] == 0 && _slotWeapon[1] == 0) return false;
-            int weapon = _slotWeapon[0]; _slotWeapon[0] = _slotWeapon[1]; _slotWeapon[1] = weapon;
-            int mag = _slotMag[0]; _slotMag[0] = _slotMag[1]; _slotMag[1] = mag;
-            ActiveSlot = 1 - ActiveSlot;
+            if (a < 0 || b < 0 || a >= SlotCount || b >= SlotCount || a == b) return false;
+            if (_slotWeapon[a] == 0 && _slotWeapon[b] == 0) return false;
+            if (_slotWeapon[b] != 0 && !CanHold(a, _slotWeapon[b])) return false;
+            if (_slotWeapon[a] != 0 && !CanHold(b, _slotWeapon[a])) return false;
+            int weapon = _slotWeapon[a]; _slotWeapon[a] = _slotWeapon[b]; _slotWeapon[b] = weapon;
+            int mag = _slotMag[a]; _slotMag[a] = _slotMag[b]; _slotMag[b] = mag;
+            bool single = _slotSingle[a]; _slotSingle[a] = _slotSingle[b]; _slotSingle[b] = single;
+            if (ActiveSlot == a) ActiveSlot = b;
+            else if (ActiveSlot == b) ActiveSlot = a;
             return true;
         }
 
@@ -83,7 +163,8 @@ namespace Game.Core
         }
         public void AddMedkits(int amount) => Medkits += amount;
 
-        // Switching slots cancels a reload in progress.
+        // Switching slots cancels a reload in progress. Any of the five slots can be taken in hand; the melee and
+        // throwable slots hold no weapon, so selecting one leaves the hands empty.
         public bool SelectSlot(int slot)
         {
             if (slot < 0 || slot >= SlotCount || slot == ActiveSlot) return false;
@@ -92,16 +173,47 @@ namespace Game.Core
             return true;
         }
 
+        public void CancelReload() => _reloadEndTime = -1;
+
+        // ---- Fire mode ----
+
+        // Only automatic weapons have a choice.
+        public bool CanSwitchFireMode(int slot)
+        {
+            var def = _table.Find(WeaponInSlot(slot));
+            return def != null && def.Auto;
+        }
+
+        // Does the weapon in this slot fire while the button is held?
+        public bool IsAutoFire(int slot)
+        {
+            var def = _table.Find(WeaponInSlot(slot));
+            return def != null && def.Auto && !_slotSingle[slot];
+        }
+
+        // Switches an automatic weapon between single shots and automatic. False for any other slot.
+        public bool ToggleFireMode(int slot)
+        {
+            if (!CanSwitchFireMode(slot)) return false;
+            _slotSingle[slot] = !_slotSingle[slot];
+            return true;
+        }
+
         // `earlySeconds`: how far ahead of the weapon's schedule a shot is still accepted. The schedule itself does
-        // not move for an early shot, so the average rate never exceeds the weapon's.
-        public bool TryFire(double now, double earlySeconds = 0)
+        // not move for an early shot, so the average rate never exceeds the weapon's. `singleModeInterval`: an
+        // automatic weapon set to single shots waits at least this long between shots.
+        public bool TryFire(double now, double earlySeconds = 0, double singleModeInterval = 0)
         {
             var w = ActiveWeapon;
             if (w == null || IsReloading || _slotMag[ActiveSlot] <= 0) return false;
-            if (!_cadence.TryFire(now, w.FireInterval, earlySeconds)) return false;
+            if (!_cadence.TryFire(now, EffectiveInterval(w, ActiveSlot, singleModeInterval), earlySeconds)) return false;
             _slotMag[ActiveSlot]--;
             return true;
         }
+
+        // The time between shots in this slot's current mode.
+        public double EffectiveInterval(WeaponDef weapon, int slot, double singleModeInterval) =>
+            weapon.Auto && slot >= 0 && slot < SlotCount && _slotSingle[slot] ? Math.Max(weapon.FireInterval, singleModeInterval) : weapon.FireInterval;
 
         public bool TryStartReload(double now)
         {
@@ -136,7 +248,7 @@ namespace Game.Core
         // ---- Dropping (inventory screen) ----
 
         // Empties the slot and returns the weapon that was in it (0 if none or no such slot) with its magazine.
-        // Dropping the weapon in hand cancels its reload and switches to the other slot when that holds a weapon.
+        // Dropping the weapon in hand cancels its reload and switches to another slot that holds a weapon.
         public int RemoveWeapon(int slot, out int mag)
         {
             mag = 0;
@@ -145,6 +257,7 @@ namespace Game.Core
             mag = _slotMag[slot];
             _slotWeapon[slot] = 0;
             _slotMag[slot] = 0;
+            _slotSingle[slot] = false;
             if (slot == ActiveSlot)
             {
                 _reloadEndTime = -1;

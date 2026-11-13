@@ -227,9 +227,9 @@ namespace Game.Tests
             Assert.IsTrue(dummy.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 }));
             gear.ServerEquip(ArmorSlot.Helmet, 1);
             gear.ServerEquip(ArmorSlot.Vest, 2, 100f);
-            Assert.AreEqual(Pistol, dummy.Slot0.Value);
-            Assert.AreEqual(Rifle, dummy.Slot1.Value);
-            int pistolMag = dummy.Mag0.Value;
+            Assert.AreEqual(Pistol, dummy.Slot2.Value, "the pistol sits in the sidearm slot");
+            Assert.AreEqual(Rifle, dummy.Slot0.Value, "the rifle in the first primary slot");
+            int pistolMag = dummy.Mag2.Value;
             int lightRounds = dummy.ReservePistol9.Value;
             Assert.Greater(lightRounds, Combatant.DroppedReserveCap, "the dummy carries far more than it will drop");
             Assert.IsFalse(crate.ServerOpened);
@@ -282,10 +282,11 @@ namespace Game.Tests
             }
 
             // Nothing is duplicated: the dead dummy holds nothing any more.
-            Assert.AreEqual(0, dummy.Slot0.Value);
-            Assert.AreEqual(0, dummy.Slot1.Value);
-            Assert.AreEqual(0, dummy.Mag0.Value);
-            Assert.AreEqual(0, dummy.Mag1.Value);
+            for (int slot = 0; slot < Combatant.SlotCount; slot++)
+            {
+                Assert.AreEqual(0, dummy.WeaponInSlot(slot), "slot " + slot);
+                Assert.AreEqual(0, dummy.MagInSlot(slot), "magazine " + slot);
+            }
             Assert.AreEqual(0, dummy.ActiveWeaponId);
             Assert.AreEqual(0, dummy.ReservePistol9.Value);
             Assert.AreEqual(0, dummy.ReserveRifle556.Value);
@@ -303,6 +304,7 @@ namespace Game.Tests
             dummy.ServerTakeDamage(50);
             yield return new WaitForSeconds(0.3f);
             Assert.AreEqual(0, dummy.Slot1.Value);
+            Assert.AreEqual(0, dummy.Slot2.Value);
             Assert.AreEqual(lootBefore + 7, LootItem.All.Count);
 
             // The winner takes the rifle and its ammo like any other loot.

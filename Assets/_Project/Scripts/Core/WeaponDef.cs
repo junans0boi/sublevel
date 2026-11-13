@@ -16,6 +16,10 @@ namespace Game.Core
         public static bool IsValid(AmmoType type) => (int)type >= 0 && (int)type < Count;
     }
 
+    // Which slots a weapon may sit in (ADR-058). Never reorder: stored in data. Melee has no member until there are
+    // melee weapons; the melee slot takes nothing for now.
+    public enum WeaponCategory { Primary = 0, Sidearm = 1 }
+
     // One weapon's tuning values. Loaded from data (ADR-032); Id 0 means "no weapon".
     [Serializable]
     public class WeaponDef
@@ -23,7 +27,8 @@ namespace Game.Core
         public int Id;
         public string Name;
         public AmmoType Ammo;
-        public bool Auto;
+        public WeaponCategory Category;   // Primary (slots 1-2) or Sidearm (slot 3, pistols)
+        public bool Auto;                 // can fire in bursts when the shooter picks automatic (semi-auto weapons never)
         public float Damage;
         public float FireInterval;
         public int MagSize;

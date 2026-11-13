@@ -180,10 +180,17 @@ namespace Game.Gameplay
             bool firing = armed && (f.FireHeld || f.FirePressed);
             bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !firing;
 
-            // C toggles the crouch; jumping or sprinting gets up instead, when there is room overhead.
+            // C toggles the crouch and Z lying down; jumping or sprinting gets up instead. Rising (lying to crouching,
+            // anything to standing) needs room overhead for the taller capsule.
             bool wasStanding = BodyStance == Stance.Stand;
+            var stanceRules = StanceRules.Current;
             if (_stance == null) BodyStance = Stance.Stand;
-            else BodyStance = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint, wasStanding || _stance.CanStand(), StanceRules.Current);
+            else
+            {
+                var next = Stances.Next(BodyStance, f.Crouch, f.Prone, f.Jump, sprint, true, stanceRules);
+                if (Stances.Rises(BodyStance, next, stanceRules) && !_stance.CanReach(stanceRules.For(next).CapsuleHeight)) next = BodyStance;
+                BodyStance = next;
+            }
             bool jump = f.Jump && wasStanding; // out of a crouch the key only stands up
             sprint &= BodyStance == Stance.Stand;
             Sprinting = sprint;
@@ -191,7 +198,9 @@ namespace Game.Gameplay
             SendStance();
             SendBodyStance();
 
-            float speedFactor = _rules.Aim.For(aim).MoveFactor * (Lean != 0 ? _rules.Lean.MoveFactor : 1f) * StanceRules.Current.For(BodyStance).MoveFactor;
+            // Empty hands (nothing held, or put away with X) are faster; the other factors slow the weapon down.
+            float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
+                stanceRules.For(BodyStance).MoveFactor, armed, _locomotion);
             Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
             _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
             _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
@@ -204,8 +213,17 @@ namespace Game.Gameplay
             if (f.Interact && NearbyLoot != null) _combatant.CmdPickup(NearbyLoot.NetworkObject);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload) _combatant.CmdReload();
+            if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
+            if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
             TryFire(f);
+        }
+
+        // The host is the server and acts at once; a client asks.
+        void SetHolstered(bool holstered)
+        {
+            if (IsServerInitialized) _combatant.ServerSetHolstered(holstered);
+            else _combatant.CmdSetHolstered(holstered);
         }
 
         // Tells the server when the stance changes, and again if the server's copy still disagrees a moment later
@@ -265,11 +283,13 @@ namespace Game.Gameplay
             if (f.FirePressed) _clickUntil = now + fire.ClickBufferSeconds;
             var weapon = _combatant.ActiveWeapon;
             if (weapon == null || _combatant.Reloading.Value || _combatant.ActiveMag <= 0) return;
-            if (!(weapon.Auto ? f.FireHeld : now <= _clickUntil) || !_fireCadence.Ready(now)) return;
+            // Automatic weapons set to single shots (B) fire once per click, and no faster than the server allows.
+            if (!(_combatant.ActiveAutoFire ? f.FireHeld : now <= _clickUntil) || !_fireCadence.Ready(now)) return;
             _clickUntil = -1;
+            double interval = _combatant.FireInterval(weapon);
             // Scheduled from when the shot was due, not from this frame: a frame always lands a little late, and
             // adding the interval to that would make the rhythm follow the frame times and run slow.
-            _fireCadence.Fired(now, weapon.FireInterval, fire.ClientCatchUp(weapon.FireInterval, Time.deltaTime));
+            _fireCadence.Fired(now, interval, fire.ClientCatchUp(interval, Time.deltaTime));
             var eye = _combatant.EyePosition;
             // While the view is turned away in free look the shot goes where the character faces, not where the camera does.
             bool viewTurned = _freeYaw != 0f || _freePitch != 0f;

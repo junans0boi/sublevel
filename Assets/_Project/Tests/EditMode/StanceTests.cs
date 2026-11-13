@@ -14,7 +14,7 @@ namespace Game.Tests
         {
             Assert.AreEqual(4.5f, Stances.MoveSpeed(4.5f, Stance.Stand, Rules), 1e-4f);
             Assert.AreEqual(2.475f, Stances.MoveSpeed(4.5f, Stance.Crouch, Rules), 1e-4f);
-            Assert.AreEqual(1.125f, Stances.MoveSpeed(4.5f, Stance.Prone, Rules), 1e-4f);
+            Assert.AreEqual(0.81f, Stances.MoveSpeed(4.5f, Stance.Prone, Rules), 1e-4f, "crawling: about 0.8 m/s");
         }
 
         [Test]
@@ -22,7 +22,7 @@ namespace Game.Tests
         {
             Assert.AreEqual(1.6f, Stances.EyeHeight(1.6f, Stance.Stand, Rules), 1e-4f);
             Assert.AreEqual(0.95f, Stances.EyeHeight(1.6f, Stance.Crouch, Rules), 1e-4f);
-            Assert.AreEqual(0.3f, Stances.EyeHeight(1.6f, Stance.Prone, Rules), 1e-4f);
+            Assert.AreEqual(0.4f, Stances.EyeHeight(1.6f, Stance.Prone, Rules), 1e-4f);
         }
 
         [Test]
@@ -64,17 +64,81 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Prone_IsOnlyAnInput_UntilItIsSwitchedOn()
+        public void Prone_IsEnabled_ZToggles_CCrouches_AndJumpOrSprintStandsUp()
         {
-            Assert.IsFalse(Rules.ProneEnabled);
-            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Stand, false, true, false, false, true, Rules));
-            Assert.AreEqual(Stance.Crouch, Stances.Next(Stance.Crouch, false, true, false, false, true, Rules));
+            Assert.IsTrue(Rules.ProneEnabled);
+            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Stand, false, true, false, false, true, Rules));
+            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Crouch, false, true, false, false, true, Rules), "Z from a crouch goes down");
+            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Prone, false, true, false, false, true, Rules), "Z again gets up");
+            Assert.AreEqual(Stance.Crouch, Stances.Next(Stance.Prone, true, false, false, false, true, Rules), "C from prone: crouch");
+            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Prone, false, false, true, false, true, Rules), "Space stands up");
+            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Prone, false, false, false, true, true, Rules), "sprint stands up");
+            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Prone, true, false, false, false, false, Rules), "no room to rise");
+            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Prone, false, false, true, false, false, Rules), "jump without room");
+            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Stand, false, true, false, false, false, Rules), "getting down never needs room");
+        }
 
-            var withProne = new StanceRules { ProneEnabled = true };
-            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Stand, false, true, false, false, true, withProne));
-            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Prone, false, true, false, false, true, withProne));
-            Assert.AreEqual(Stance.Crouch, Stances.Next(Stance.Prone, true, false, false, false, true, withProne));
-            Assert.AreEqual(Stance.Prone, Stances.Next(Stance.Prone, true, false, false, false, false, withProne), "no room to rise");
+        [Test]
+        public void Prone_CanBeSwitchedOffByData()
+        {
+            var off = new StanceRules { ProneEnabled = false };
+            Assert.AreEqual(Stance.Stand, Stances.Next(Stance.Stand, false, true, false, false, true, off));
+            Assert.AreEqual(Stance.Crouch, Stances.Next(Stance.Crouch, false, true, false, false, true, off));
+        }
+
+        [Test]
+        public void Prone_Constants_MatchTheAgreedValues()
+        {
+            var prone = Rules.Prone;
+            Assert.AreEqual(1.2f, prone.EyeDropMeters, 1e-5f);
+            Assert.AreEqual(0.4f, Stances.EyeHeight(1.6f, Stance.Prone, Rules), 1e-5f, "eyes 0.4 m over the ground");
+            Assert.AreEqual(0.18f, prone.MoveFactor, 1e-5f);
+            Assert.AreEqual(0.81f, 4.5f * prone.MoveFactor, 1e-4f, "about 0.8 m/s");
+            Assert.AreEqual(0.35f, prone.SpreadFactor, 1e-5f);
+            Assert.Less(prone.SpreadFactor, Rules.Crouch.SpreadFactor, "the steadiest stance");
+            Assert.AreEqual(0.1f, prone.FootstepVolumeFactor, 1e-5f);
+            Assert.Less(prone.FootstepVolumeFactor, Rules.Crouch.FootstepVolumeFactor, "near silent");
+        }
+
+        [Test]
+        public void Prone_Capsule_StaysAtLeastAsTallAsItIsWide_AndTheEyesStayInsideIt()
+        {
+            const float radius = 0.35f; // the character controller's radius
+            Assert.AreEqual(0.7f, Rules.Prone.CapsuleHeight, 1e-5f);
+            Assert.GreaterOrEqual(Rules.Prone.CapsuleHeight, 2f * radius, "a controller capsule cannot be lower than two radii");
+            Assert.GreaterOrEqual(Rules.Prone.CapsuleHeight, 0.6f);
+            Assert.Less(Rules.Prone.CapsuleHeight, Rules.Crouch.CapsuleHeight);
+            Assert.Less(Stances.EyeHeight(1.6f, Stance.Prone, Rules), Rules.Prone.CapsuleHeight, "the eyes are inside the lowered capsule");
+            Assert.Greater(Stances.EyeHeight(1.6f, Stance.Prone, Rules), 0.3f, "and not on the ground");
+        }
+
+        [Test]
+        public void Prone_EyeDrop_IsLargerThanTheCrouchDrop_AndLeavesTheCapsuleTopAboveTheEyes()
+        {
+            Assert.Greater(Rules.Prone.EyeDropMeters, Rules.Crouch.EyeDropMeters);
+            float eyeOverCapsule = Stances.EyeHeight(1.6f, Stance.Prone, Rules) - Rules.Prone.CapsuleHeight;
+            Assert.Less(eyeOverCapsule, 0f);
+            Assert.IsTrue(Stances.Rises(Stance.Prone, Stance.Crouch, Rules));
+            Assert.IsTrue(Stances.Rises(Stance.Crouch, Stance.Stand, Rules));
+            Assert.IsFalse(Stances.Rises(Stance.Stand, Stance.Prone, Rules));
+        }
+
+        [Test]
+        public void ProneBodyPose_Angles_AreConsistent()
+        {
+            // The body lies down by 85 degrees; lifting the chest 40 leaves the arms 45 to turn back up.
+            Assert.AreEqual(85f, Rules.ProneModelPitchDeg, 1e-5f);
+            Assert.AreEqual(40f, Rules.ProneHeadLiftDeg, 1e-5f);
+            Assert.AreEqual(45f, Stances.ProneArmCounterDeg(Rules), 1e-5f);
+            // Pitching by a: the body's up (0,1,0) goes to (0,cos a,sin a), its facing (0,0,1) to (0,-sin a,cos a).
+            double a = Rules.ProneModelPitchDeg * System.Math.PI / 180.0;
+            Assert.AreEqual(0.087, System.Math.Cos(a), 1e-3, "the spine is almost horizontal");
+            Assert.AreEqual(0.996, System.Math.Sin(a), 1e-3, "and points forward");
+            // The spine line lies at the body height, the head at the eyes: the model is moved back by the stature minus its reach.
+            double reach = 1.8 * System.Math.Sin(a);
+            Assert.AreEqual(1.79, reach, 0.01);
+            Assert.AreEqual(0.45, reach - Rules.ProneModelBackShift, 0.02, "the crown ends up 0.45 m ahead of the capsule, the eyes about under the face");
+            Assert.AreEqual(0.15f, Rules.ProneBodyHeight, 1e-5f);
         }
 
         [Test]

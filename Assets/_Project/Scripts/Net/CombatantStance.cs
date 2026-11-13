@@ -23,6 +23,7 @@ namespace Game.Net
         float _standHeight, _radius, _feetY;
         float _appliedHeight = -1f;
         float _crouch; // 0..1, eased
+        float _prone;  // 0..1, eased
 
         // Server: its own view of this combatant's falls, and the owner's report waiting to be checked against it.
         readonly FallTracker _watched = new FallTracker();
@@ -34,9 +35,14 @@ namespace Game.Net
         public Stance Current => (Stance)State.Value;
         // 0 = upright, 1 = fully crouched; eased, the same on every side.
         public float CrouchAmount => _crouch;
-        public float MoveFactor => Mathf.Lerp(1f, StanceRules.Current.Crouch.MoveFactor, _crouch);
+        // 0 = not lying down, 1 = fully prone; eased, the same on every side.
+        public float ProneAmount => _prone;
+        public float MoveFactor => Blend(1f, StanceRules.Current.Crouch.MoveFactor, StanceRules.Current.Prone.MoveFactor);
         // Footsteps are this much quieter in the current stance (1 = full volume).
-        public float FootstepVolumeFactor => Mathf.Lerp(1f, StanceRules.Current.Crouch.FootstepVolumeFactor, _crouch);
+        public float FootstepVolumeFactor => Blend(1f, StanceRules.Current.Crouch.FootstepVolumeFactor, StanceRules.Current.Prone.FootstepVolumeFactor);
+
+        // A per-stance value at the current (eased) mix of standing, crouching and lying down.
+        float Blend(float stand, float crouch, float prone) => stand + (crouch - stand) * _crouch + (prone - stand) * _prone;
         // Height of the collision capsule right now.
         public float CapsuleHeight => _controller != null ? _controller.height : _capsule != null ? _capsule.height : _standHeight;
 
@@ -80,13 +86,15 @@ namespace Game.Net
                 if (_combatant.IsPlayer) ServerTickFall();
             }
 
-            bool crouched = Current == Stance.Crouch;
-            _crouch = Mathf.MoveTowards(_crouch, crouched ? 1f : 0f, rules.ChangePerSecond * Time.deltaTime);
-            _combatant.EyeHeightOffset = -rules.Crouch.EyeDropMeters * _crouch;
-            _combatant.StanceSpreadFactor = Mathf.Lerp(1f, rules.Crouch.SpreadFactor, _crouch);
-            // The capsule changes at once with the stance: head room was checked for the full standing height,
-            // so there is no moment in which a half-risen capsule can walk under something lower.
-            SetCapsuleHeight(crouched ? Mathf.Min(_standHeight, rules.Crouch.CapsuleHeight) : _standHeight);
+            var current = Current;
+            _crouch = Mathf.MoveTowards(_crouch, current == Stance.Crouch ? 1f : 0f, rules.ChangePerSecond * Time.deltaTime);
+            _prone = Mathf.MoveTowards(_prone, current == Stance.Prone ? 1f : 0f, rules.ChangePerSecond * Time.deltaTime);
+            // Going from crouching to lying (or back) the two weights cross over; the mix stays between the two stances.
+            _combatant.EyeHeightOffset = -(rules.Crouch.EyeDropMeters * _crouch + rules.Prone.EyeDropMeters * _prone);
+            _combatant.StanceSpreadFactor = Blend(1f, rules.Crouch.SpreadFactor, rules.Prone.SpreadFactor);
+            // The capsule changes at once with the stance: head room was checked for the target height, so there is
+            // no moment in which a half-risen capsule can walk under something lower. Never shorter than it is wide.
+            SetCapsuleHeight(Mathf.Max(Mathf.Min(_standHeight, rules.For(current).CapsuleHeight), 2f * _radius));
         }
 
         void SetCapsuleHeight(float height)
@@ -109,10 +117,13 @@ namespace Game.Net
         }
 
         // Is there room above the head to stand up? Sweeps the top of the capsule up to the standing height.
-        public bool CanStand()
+        public bool CanStand() => CanReach(_standHeight);
+
+        // The same for any taller capsule: is there room to raise the top of the capsule to `targetHeight`?
+        public bool CanReach(float targetHeight)
         {
             float height = CapsuleHeight;
-            float rise = _standHeight - height;
+            float rise = Mathf.Min(targetHeight, _standHeight) - height;
             if (rise <= 1e-3f) return true;
             var top = transform.position + Vector3.up * (_feetY + height - _radius); // centre of the capsule's top end
             int hits = Physics.SphereCastNonAlloc(top, _radius, Vector3.up, HeadHits,
@@ -135,8 +146,8 @@ namespace Game.Net
             if (_combatant.Dead.Value || stance == Current) return;
             var rules = StanceRules.Current;
             if (stance != Stance.Stand && stance != Stance.Crouch && !(stance == Stance.Prone && rules.ProneEnabled)) return;
-            // Getting up needs head room, whatever the owner believes.
-            if (rules.For(stance).CapsuleHeight > rules.For(Current).CapsuleHeight && !CanStand()) return;
+            // Getting up needs head room for the taller capsule, whatever the owner believes.
+            if (Stances.Rises(Current, stance, rules) && !CanReach(rules.For(stance).CapsuleHeight)) return;
             State.Value = (int)stance;
         }
 

@@ -15,6 +15,13 @@ namespace Game.Gameplay
     // The jump has no clip: the air state holds a standing pose and the push, tuck and landing are bone turns
     // made here on top of it (ADR-048). Crouching has no clip either: the same bone turns bend the knees and the
     // model is lowered by what the bend takes off the legs, on top of whatever the base layer plays (ADR-053).
+// Lying down (ADR-058) is made the same way: the whole model is pitched forward about the character's right axis
+// with its feet as the pivot and moved back so the head sits under the eyes, the chest and head are turned back
+// up, and the arms are turned back by the rest so a held weapon stays level and points where the player aims.
+// Worked out with Unity's turn direction (a positive turn about the right axis tips the top of a body forward and
+// down): the body's up (0,1,0) goes to (0,cos a,sin a) and its facing (0,0,1) to (0,-sin a,cos a), so at 85 degrees
+// the body lies along +Z, belly down. The chest then turns -40 about the same axis: its facing is 45 degrees below
+// level, which is the head lifted; the arms turn -45 more and are level again.
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public class CombatantAnimation : MonoBehaviour
     {
@@ -76,6 +83,8 @@ namespace Game.Gameplay
         float _legLength = FallbackLegLength;
         float _crouch;            // 0..1: how much of the crouch is shown
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
+        float _prone;             // 0..1: how much of the lying pose is shown
+        float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
         // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
@@ -106,6 +115,8 @@ namespace Game.Gameplay
         public float LandDip => _dip;
         // How much of the crouch pose is shown, 0..1, and how far the model is lowered for it and for landings (m).
         public float CrouchPose => _crouch;
+        // How much of the lying pose is shown, 0..1.
+        public float PronePose => _prone;
         public float ModelDrop => _drop;
 
         void Awake()
@@ -167,7 +178,13 @@ namespace Game.Gameplay
             var v = dead ? Vector3.zero : _motion.LocalVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
             _legs.Tick(v.x, v.z, Time.deltaTime, GameData.Rules.Gait);
-            _animator.transform.localRotation = Quaternion.AngleAxis(_legs.TurnDeg, Vector3.up) * _modelRest;
+            float proneAmount = dead || _stance == null ? 0f : _stance.ProneAmount;
+            _prone = proneAmount * proneAmount * (3f - 2f * proneAmount);
+            // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
+            _legTurnShown = _legs.TurnDeg * (1f - _prone);
+            var proneRules = StanceRules.Current;
+            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * _prone, Vector3.right)
+                * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
@@ -175,6 +192,8 @@ namespace Game.Gameplay
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
+            // Crawling is the walk clip at a slow pace; at the crawl's low speed the blend also shows only a part of the stride.
+            if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir();
             if (dead) SetBase(Death);
@@ -197,8 +216,8 @@ namespace Game.Gameplay
             _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, UpperWeightPerSecond * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
             if (armed && Time.time >= _upperHoldUntil)
-                // Crouched, the weapon stays up: hanging down from hips this low it would go through the floor.
-                SetUpper(_combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil || _crouch > 0.5f ? Aim : Lowered);
+                // Crouched or lying, the weapon stays up: hanging down from hips this low it would go through the floor.
+                SetUpper(_combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil || _crouch > 0.5f || _prone > 0.5f ? Aim : Lowered);
         }
 
         // Follows take-off and touch-down, picks the jump pose, and says whether the base layer should show it: all
@@ -261,7 +280,10 @@ namespace Game.Gameplay
             float scale = _crouch * Stances.CrouchBendScale(_crouchWalk, rules.CrouchWalkBend);
             // Lowered by exactly what the bent knees take off the legs, so the feet stay on the ground.
             _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop;
+            // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
+            // so the head (which the pitch swung forward to the end of the body) ends up under the eyes.
+            var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * _prone;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * _drop + lying;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -269,6 +291,13 @@ namespace Game.Gameplay
         {
             if (_hips == null) return 0f;
             var fromRest = _hips.rotation * Quaternion.Inverse(_animator.transform.rotation * _hipsRest);
+            if (_prone > 0.001f)
+            {
+                // Lying, the model's up is along the ground: measure the twist in the model's own frame (about its up).
+                var own = Quaternion.Inverse(_animator.transform.rotation) * fromRest * _animator.transform.rotation;
+                var ownFacing = Vector3.ProjectOnPlane(own * Vector3.forward, Vector3.up);
+                return ownFacing.sqrMagnitude < 1e-6f ? 0f : Vector3.SignedAngle(Vector3.forward, ownFacing, Vector3.up);
+            }
             var facing = Vector3.ProjectOnPlane(fromRest * transform.forward, transform.up);
             return facing.sqrMagnitude < 1e-6f ? 0f : Vector3.SignedAngle(transform.forward, facing, transform.up);
         }
@@ -311,7 +340,7 @@ namespace Game.Gameplay
                 bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
-                bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding
+                bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f
                     && new Vector2(v.x, v.z).sqrMagnitude > StepMinSpeed * StepMinSpeed;
                 if ((left || right) && walking) FootDown?.Invoke();
             }
@@ -338,10 +367,11 @@ namespace Game.Gameplay
             // The weapon poses were made for hips that face forward, but a running clip swings and turns the hips;
             // while a weapon pose is on, take that out too or the weapon points off to the side when moving.
             // (Not for the dead: the death clip turns the hips on purpose.)
-            float turnBack = -_legs.TurnDeg - (_combatant.Dead.Value ? 0f : HipsYaw() * _upperWeight);
-            Turn(Torso, turnBack, transform.up);
+            float turnBack = -_legTurnShown - (_combatant.Dead.Value ? 0f : HipsYaw() * _upperWeight);
+            // About the model's own up: the character's up while standing, along the ground while lying.
+            Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
             // Leaning right tips the torso clockwise seen from behind: a negative turn about the forward axis.
-            Turn(Torso, -_combatant.LeanAmount * GameData.Rules.Lean.BodyRollDeg, transform.forward);
+            Turn(Torso, -_combatant.LeanAmount * GameData.Rules.Lean.BodyRollDeg * (1f - _prone), transform.forward);
 
             // The jump. A positive turn about the right axis tips the top of the body forward, swings a hanging
             // limb backward and points the toes down.
@@ -354,8 +384,10 @@ namespace Game.Gameplay
             // A weapon pose keeps the weapon level, so only empty hands hunch forward in a crouch.
             float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _upperWeight);
             Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch, transform.right);
+            // Lying: the chest and head come back up (a negative turn about the right axis undoes the forward tip).
+            Turn(Torso, -stanceRules.ProneHeadLiftDeg * _prone, transform.right);
             // The legs face where the model is turned, not where the combatant looks.
-            var legRight = Quaternion.AngleAxis(_legs.TurnDeg, transform.up) * transform.right;
+            var legRight = Quaternion.AngleAxis(_legTurnShown, transform.up) * transform.right;
             // Knees up in front, shins folded back under them. The shin turns relative to the thigh, which already
             // leans forward by t, so to point back by s from vertical it turns t + s (a landing uses s = t, i.e.
             // twice the thigh angle). The shin's net swing from vertical is then s, so the foot turns -s to be flat.
@@ -371,6 +403,11 @@ namespace Game.Gameplay
             float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - _upperWeight);
             Turn(ArmLeft, -armLift, transform.forward);
             Turn(ArmRight, armLift, transform.forward);
+            // Lying with a weapon: the arms (and the weapon in the hand) turn back up by what the pitch minus the head
+            // lift left them tipped down, so the weapon is level again and points the way the player looks.
+            float armUp = -Stances.ProneArmCounterDeg(stanceRules) * _prone * _upperWeight;
+            Turn(ArmLeft, armUp, transform.right);
+            Turn(ArmRight, armUp, transform.right);
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;

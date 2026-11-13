@@ -129,7 +129,7 @@ namespace Game.Tests
             l.Tick(5);
             Assert.AreEqual(0, l.MagInSlot(0));
             Assert.IsFalse(l.SelectSlot(1), "already active");
-            Assert.IsFalse(l.SelectSlot(2), "out of range");
+            Assert.IsFalse(l.SelectSlot(5), "out of range (five slots)");
         }
 
         [Test]

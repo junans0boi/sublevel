@@ -10,6 +10,8 @@ namespace Game.Core
         public float JumpSpeed = 4.8f;
         public float Gravity = -14f;
         public float GroundedStick = -2f;
+        // Empty hands (nothing held, or the weapon put away with X) move this much faster, walking and sprinting (ADR-058).
+        public float UnarmedMoveFactor = 1.12f;
     }
 
     // How the legs keep up when the character moves faster than its clips were animated for (ADR-048).
@@ -189,6 +191,11 @@ namespace Game.Core
             float back = (total - t) / (total - attack);
             return back * back * (3f - 2f * back);
         }
+
+        // The share of the full walking or sprinting speed allowed by the aim state, leaning, stance and what is in
+        // the hands. The owner moves with it; anything checking the owner's speed must use the same product.
+        public static float MoveSpeedFactor(float aimFactor, float leanFactor, float stanceFactor, bool armed, LocomotionParams p) =>
+            aimFactor * leanFactor * stanceFactor * (armed ? 1f : p.UnarmedMoveFactor);
 
         // World-space planar velocity from stick input (x = right, y = forward) relative to a yaw heading.
         public static void PlanarVelocity(float moveX, float moveY, float yawDeg, bool sprint, LocomotionParams p, out float vx, out float vz, float speedFactor = 1f)

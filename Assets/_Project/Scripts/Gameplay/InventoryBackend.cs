@@ -193,8 +193,41 @@ namespace Game.Gameplay
             }
         }
 
-        public static int WeaponId(Combatant combatant, int slot) => combatant == null ? 0 : slot == 0 ? combatant.Slot0.Value : combatant.Slot1.Value;
-        public static int WeaponMag(Combatant combatant, int slot) => combatant == null ? 0 : slot == 0 ? combatant.Mag0.Value : combatant.Mag1.Value;
+        // Five weapon slots (ADR-058): 0-1 primary, 2 sidearm, 3 melee (always empty for now), 4 throwable.
+        public const int WeaponSlotCount = Loadout.SlotCount;
+        public const int SidearmSlot = Loadout.SidearmSlot;
+        public const int MeleeSlot = Loadout.MeleeSlot;
+        public const int ThrowableSlot = Loadout.ThrowableSlot;
+
+        public static int WeaponId(Combatant combatant, int slot) => combatant == null ? 0 : combatant.WeaponInSlot(slot);
+        public static int WeaponMag(Combatant combatant, int slot) => combatant == null ? 0 : combatant.MagInSlot(slot);
+
+        // Korean label of a weapon slot for the cards: 주무기 1, 주무기 2, 보조무기, 근접, 투척.
+        public static string SlotLabel(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return "주무기 1";
+                case 1: return "주무기 2";
+                case Loadout.SidearmSlot: return "보조무기";
+                case Loadout.MeleeSlot: return "근접";
+                case Loadout.ThrowableSlot: return "투척";
+                default: return "";
+            }
+        }
+
+        // Does the slot take this weapon (mirrors the server's rule: a pistol only goes in the sidearm slot)?
+        public static bool SlotAccepts(int slot, int weaponId)
+        {
+            var weapon = GameData.Weapons.Find(weaponId);
+            return weapon != null && Loadout.SlotTakes(slot, weapon.Category);
+        }
+
+        // "단발" / "연사" for the weapon in the slot; empty for an empty slot.
+        public static string FireMode(Combatant combatant, int slot) => combatant == null ? "" : combatant.FireModeOf(slot);
+
+        // The weapon in hand is put away (X).
+        public static bool IsHolstered(Combatant combatant) => combatant != null && combatant.Holstered.Value;
 
         public static void Pickup(Combatant combatant, LootItem loot)
         {
@@ -211,9 +244,16 @@ namespace Game.Gameplay
             if (combatant != null) combatant.CmdSelectSlot(slot);
         }
 
+        // The two primary weapons trade places.
         public static void SwapWeaponSlots(Combatant combatant)
         {
             if (combatant != null) combatant.CmdSwapWeaponSlots();
+        }
+
+        // Any two slots; the server refuses a swap that puts a weapon in a slot that does not take it.
+        public static void SwapWeaponSlots(Combatant combatant, int a, int b)
+        {
+            if (combatant != null) combatant.CmdSwapSlots(a, b);
         }
 
         public static void UseMedkit(Combatant combatant)

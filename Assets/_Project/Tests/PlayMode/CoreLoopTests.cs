@@ -114,7 +114,8 @@ namespace Game.Tests
         public IEnumerator Reload_SwitchWeapon_AndHeal_AreAppliedByTheServer()
         {
             var me = Combatant.LocalPlayer;
-            // Host shortcut: hand the items over on the server instead of walking to them.
+            // Host shortcut: hand the items over on the server instead of walking to them. The pistol goes to the
+            // sidearm slot (3rd) and is the first weapon, so it is in hand; the shotgun takes the first primary slot.
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 2 });
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 4, Amount = 6 });
             me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Pistol9, Amount = 30 });
@@ -123,11 +124,12 @@ namespace Game.Tests
 
             _input.Frame.Reload = true;
             yield return WaitUntil(() => me.Reloading.Value, 2f, "reload started");
-            yield return WaitUntil(() => !me.Reloading.Value && me.Mag0.Value == 12, 5f, "magazine refilled");
+            yield return WaitUntil(() => !me.Reloading.Value && me.Mag2.Value == 12, 5f, "magazine refilled");
+            Assert.AreEqual(Loadout.SidearmSlot, me.ActiveSlot.Value);
             Assert.AreEqual(20, me.ReservePistol9.Value);
 
-            _input.Frame.SelectSlot = 1;
-            yield return WaitUntil(() => me.ActiveSlot.Value == 1, 2f, "second slot active");
+            _input.Frame.SelectSlot = 0;
+            yield return WaitUntil(() => me.ActiveSlot.Value == 0, 2f, "first slot active");
             Assert.AreEqual(4, me.ActiveWeaponId);
 
             me.ServerTakeDamage(70);

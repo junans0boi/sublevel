@@ -31,10 +31,23 @@ namespace Game.Net
         public readonly SyncVar<bool> Dead = new SyncVar<bool>();
         public readonly SyncVar<bool> Reloading = new SyncVar<bool>();
         public readonly SyncVar<int> ActiveSlot = new SyncVar<int>();
+        // The five weapon slots (ADR-058): 0-1 primary, 2 sidearm, 3 melee, 4 throwable. Weapon id and magazine of
+        // each; use WeaponInSlot / MagInSlot to read by index. 3 and 4 stay empty for now.
+        public const int SlotCount = Loadout.SlotCount;
         public readonly SyncVar<int> Slot0 = new SyncVar<int>();
         public readonly SyncVar<int> Slot1 = new SyncVar<int>();
+        public readonly SyncVar<int> Slot2 = new SyncVar<int>();
+        public readonly SyncVar<int> Slot3 = new SyncVar<int>();
+        public readonly SyncVar<int> Slot4 = new SyncVar<int>();
         public readonly SyncVar<int> Mag0 = new SyncVar<int>();
         public readonly SyncVar<int> Mag1 = new SyncVar<int>();
+        public readonly SyncVar<int> Mag2 = new SyncVar<int>();
+        public readonly SyncVar<int> Mag3 = new SyncVar<int>();
+        public readonly SyncVar<int> Mag4 = new SyncVar<int>();
+        // Bit i set: the automatic weapon in slot i is set to single shots (ADR-058).
+        public readonly SyncVar<int> SingleFireSlots = new SyncVar<int>();
+        // The weapon is put away with X: the hands count as empty (ActiveWeaponId is 0) until a slot is chosen.
+        public readonly SyncVar<bool> Holstered = new SyncVar<bool>();
         // Reserve rounds per calibre (ADR-054), in AmmoType order. Four plain SyncVars: the simplest robust pattern.
         public readonly SyncVar<int> ReservePistol9 = new SyncVar<int>();
         public readonly SyncVar<int> ReserveRifle556 = new SyncVar<int>();
@@ -136,9 +149,71 @@ namespace Game.Net
             float factor = GameData.Rules.Aim.For(AimMode).SpreadFactor * StanceSpreadFactor;
             return weapon == null ? factor : factor * DamageRules.MovementSpread(weapon, PlanarSpeed, Airborne, GameData.Rules.Fire);
         }
-        public int ActiveWeaponId => ActiveSlot.Value == 0 ? Slot0.Value : Slot1.Value;
-        public int ActiveMag => ActiveSlot.Value == 0 ? Mag0.Value : Mag1.Value;
+        // What is in the hands: 0 when the slot in hand is empty or the weapon is put away (Holstered). Everything
+        // that shows or lets the weapon be used reads this, so a put-away weapon cannot be fired, aimed or drawn.
+        public int ActiveWeaponId => Holstered.Value ? 0 : WeaponInSlot(ActiveSlot.Value);
+        public int ActiveMag => Holstered.Value ? 0 : MagInSlot(ActiveSlot.Value);
         public WeaponDef ActiveWeapon => GameData.Weapons.Find(ActiveWeaponId);
+        // The weapon and magazine in a slot, whether or not it is in hand.
+        public int WeaponInSlot(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return Slot0.Value;
+                case 1: return Slot1.Value;
+                case 2: return Slot2.Value;
+                case 3: return Slot3.Value;
+                case 4: return Slot4.Value;
+                default: return 0;
+            }
+        }
+        public int MagInSlot(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return Mag0.Value;
+                case 1: return Mag1.Value;
+                case 2: return Mag2.Value;
+                case 3: return Mag3.Value;
+                case 4: return Mag4.Value;
+                default: return 0;
+            }
+        }
+        // Does the weapon in this slot fire while the button is held? Single-shot weapons never do.
+        public bool IsAutoFire(int slot)
+        {
+            var weapon = GameData.Weapons.Find(WeaponInSlot(slot));
+            return weapon != null && weapon.Auto && (SingleFireSlots.Value & (1 << slot)) == 0;
+        }
+        public bool ActiveAutoFire => !Holstered.Value && IsAutoFire(ActiveSlot.Value);
+        // The fire mode shown for a slot: "연사" or "단발"; empty for an empty slot.
+        public string FireModeOf(int slot)
+        {
+            var weapon = GameData.Weapons.Find(WeaponInSlot(slot));
+            return weapon == null ? "" : Loadout.FireModeName(IsAutoFire(slot));
+        }
+        // Seconds between shots of the weapon in hand in its current mode (single shots on an automatic weapon are slower).
+        public double FireInterval(WeaponDef weapon) =>
+            weapon.Auto && !ActiveAutoFire ? Math.Max(weapon.FireInterval, GameData.Rules.Slots.SingleModeMinInterval) : weapon.FireInterval;
+        // Loadout questions for the bots.
+        public bool HasFreeWeaponSlot => WeaponInSlot(0) == 0 || WeaponInSlot(1) == 0 || WeaponInSlot(2) == 0;
+        public bool HasAnyWeapon => WeaponInSlot(0) != 0 || WeaponInSlot(1) != 0 || WeaponInSlot(2) != 0;
+        public bool CarriesWeaponFor(AmmoType ammo)
+        {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                var weapon = GameData.Weapons.Find(WeaponInSlot(i));
+                if (weapon != null && weapon.Ammo == ammo) return true;
+            }
+            return false;
+        }
+        // Another slot holding a weapon to switch to (the first), or -1.
+        public int OtherWeaponSlot()
+        {
+            for (int i = 0; i < SlotCount; i++)
+                if (i != ActiveSlot.Value && WeaponInSlot(i) != 0) return i;
+            return -1;
+        }
 
         public int ReserveFor(AmmoType type)
         {
@@ -196,6 +271,7 @@ namespace Game.Net
                 if (_loadout.Tick(Time.timeAsDouble)) Push();
                 // Nothing to aim with empty hands, and the dead neither aim nor lean.
                 if (Aim.Value != 0 && (_health.IsDead || ActiveWeaponId == 0)) Aim.Value = 0;
+                if (Holstered.Value && _health.IsDead) Holstered.Value = false;
                 if (Lean.Value != 0 && _health.IsDead) Lean.Value = 0;
             }
             TickLean();
@@ -241,8 +317,18 @@ namespace Game.Net
             ActiveSlot.Value = _loadout.ActiveSlot;
             Slot0.Value = _loadout.WeaponInSlot(0);
             Slot1.Value = _loadout.WeaponInSlot(1);
+            Slot2.Value = _loadout.WeaponInSlot(2);
+            Slot3.Value = _loadout.WeaponInSlot(3);
+            Slot4.Value = _loadout.WeaponInSlot(4);
             Mag0.Value = _loadout.MagInSlot(0);
             Mag1.Value = _loadout.MagInSlot(1);
+            Mag2.Value = _loadout.MagInSlot(2);
+            Mag3.Value = _loadout.MagInSlot(3);
+            Mag4.Value = _loadout.MagInSlot(4);
+            int single = 0;
+            for (int i = 0; i < Loadout.SlotCount; i++)
+                if (_loadout.CanSwitchFireMode(i) && !_loadout.IsAutoFire(i)) single |= 1 << i;
+            SingleFireSlots.Value = single;
             ReservePistol9.Value = _loadout.Reserve(AmmoType.Pistol9);
             ReserveRifle556.Value = _loadout.Reserve(AmmoType.Rifle556);
             ReserveShotgun12.Value = _loadout.Reserve(AmmoType.Shotgun12);
@@ -256,13 +342,13 @@ namespace Game.Net
         public bool ServerFire(Vector3 direction)
         {
             float sqr = direction.sqrMagnitude;
-            if (_health.IsDead || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
+            if (_health.IsDead || Holstered.Value || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
             // A request may arrive a little ahead of the weapon's schedule (frames and network ticks never line up
             // with the fire interval); it is accepted without moving the schedule instead of leaving a gap in a burst.
-            if (weapon == null || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval))) return false;
+            if (weapon == null || !_loadout.TryFire(Time.timeAsDouble, GameData.Rules.Fire.ServerEarly(weapon.FireInterval), GameData.Rules.Slots.SingleModeMinInterval)) return false;
 
             var aim = Quaternion.LookRotation(direction.normalized);
             // Aim mode and stance narrow the cone; moving or being off the ground widens it.
@@ -332,6 +418,8 @@ namespace Game.Net
             switch (loot.Kind)
             {
                 case LootKind.Weapon:
+                    // No slot takes it (a weapon this loadout has no category for): it stays on the ground.
+                    if (!_loadout.CanAddWeapon(loot.WeaponId)) return false;
                     int replaced = _loadout.AddWeapon(loot.WeaponId, loot.Amount, out int replacedMag);
                     // A replaced weapon goes back on the ground instead of vanishing.
                     if (replaced != 0 && MatchDirector.Instance != null)
@@ -365,7 +453,27 @@ namespace Game.Net
         [Server]
         public void ServerReload()
         {
-            if (!_health.IsDead && _loadout.TryStartReload(Time.timeAsDouble)) Push();
+            if (!_health.IsDead && !Holstered.Value && _loadout.TryStartReload(Time.timeAsDouble)) Push();
+        }
+
+        // X: puts the weapon away or takes it out again (the same slot as before). The server refuses firing,
+        // reloading and aiming while it is put away.
+        [Server]
+        public void ServerSetHolstered(bool holstered)
+        {
+            if (_health.IsDead || Holstered.Value == holstered) return;
+            if (holstered) _loadout.CancelReload();
+            Holstered.Value = holstered;
+            Push();
+        }
+
+        // B: single shots or automatic for the weapon in hand. False when it has no choice (or nothing in hand).
+        [Server]
+        public bool ServerToggleFireMode()
+        {
+            if (_health.IsDead || Holstered.Value || !_loadout.ToggleFireMode(_loadout.ActiveSlot)) return false;
+            Push();
+            return true;
         }
 
         // ---- Owner requests ----
@@ -379,10 +487,20 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSetStance(int aim, int lean) => ServerSetStance((AimMode)aim, lean);
 
+        [ServerRpc]
+        public void CmdSetHolstered(bool holstered) => ServerSetHolstered(holstered);
+
+        [ServerRpc]
+        public void CmdToggleFireMode() => ServerToggleFireMode();
+
         // Same effect as CmdSelectSlot, for the server's own callers (bots).
         public bool ServerSelectSlot(int slot)
         {
-            if (!IsServerInitialized || _loadout == null || _health.IsDead || !_loadout.SelectSlot(slot)) return false;
+            if (!IsServerInitialized || _loadout == null || _health.IsDead) return false;
+            // Choosing a slot, even the one already in hand, takes a put-away weapon out again.
+            bool drawn = Holstered.Value;
+            if (drawn) Holstered.Value = false;
+            if (!_loadout.SelectSlot(slot) && !drawn) return false;
             Push();
             return true;
         }
@@ -424,11 +542,18 @@ namespace Game.Net
         [ServerRpc]
         public void CmdUseMedkit() => ServerUseMedkit();
 
-        // The weapons trade places; the one in hand stays in hand.
+        // The two primary weapons trade places; the one in hand stays in hand.
         [ServerRpc]
         public void CmdSwapWeaponSlots()
         {
             if (!_health.IsDead && _loadout.SwapSlots()) Push();
+        }
+
+        // Any two slots trade places when each takes what the other holds (a pistol only fits the sidearm slot).
+        [ServerRpc]
+        public void CmdSwapSlots(int a, int b)
+        {
+            if (!_health.IsDead && _loadout.SwapSlots(a, b)) Push();
         }
 
         // A weapon from the ground into a chosen slot; the weapon that was there lands on the ground.
@@ -439,7 +564,8 @@ namespace Game.Net
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
-            if (GameData.Weapons.Find(item.WeaponId.Value) == null) return;
+            // The slot must take this kind of weapon (a pistol only goes in the sidearm slot); also false for an unknown weapon.
+            if (!_loadout.CanHold(slot, item.WeaponId.Value)) return;
             int replaced = _loadout.AddWeaponToSlot(slot, item.WeaponId.Value, item.Amount.Value, out int replacedMag);
             item.Despawn();
             if (replaced != 0 && MatchDirector.Instance != null)

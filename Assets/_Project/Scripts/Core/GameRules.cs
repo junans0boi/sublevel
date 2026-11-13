@@ -7,6 +7,7 @@ namespace Game.Core
     public class GameRules
     {
         public float MedkitHeal = 50f;
+        public SlotRules Slots = new SlotRules();
         public LocomotionParams Locomotion = new LocomotionParams();
         public AimRules Aim = new AimRules();
         public LeanRules Lean = new LeanRules();

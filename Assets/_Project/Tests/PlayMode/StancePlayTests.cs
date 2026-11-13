@@ -136,7 +136,7 @@ namespace Game.Tests
             _input.Frame.Move = Vector2.zero;
             Assert.Less(walkDrop, crouchDrop - 0.05f, "walking crouched bends the knees less so the legs can still swing");
             Assert.Greater(walkDrop, 0.1f, "but the body stays low");
-            Assert.AreEqual(2.475f, speed, 0.3f, "walking 4.5 m/s times the crouch factor 0.55");
+            Assert.AreEqual(2.772f, speed, 0.3f, "walking 4.5 m/s times the crouch factor 0.55, times 1.12 for the empty hands");
 
             _input.Frame.Crouch = true;
             yield return WaitUntil(() => stance.Current == Stance.Stand && stance.CrouchAmount <= 0.001f, 2f, "standing again");

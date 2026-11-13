@@ -294,10 +294,8 @@ namespace Game.AI
             _loot = null;
             _percept.LootVisible = false;
             if (rules.LootRadius <= 0f) return;
-            bool emptySlot = _self.Slot0.Value == 0 || _self.Slot1.Value == 0;
-            bool unarmed = _self.Slot0.Value == 0 && _self.Slot1.Value == 0;
-            var weapon0 = GameData.Weapons.Find(_self.Slot0.Value);
-            var weapon1 = GameData.Weapons.Find(_self.Slot1.Value);
+            bool emptySlot = _self.HasFreeWeaponSlot;
+            bool unarmed = !_self.HasAnyWeapon;
             int medkits = _self.Medkits.Value;
             float now = Time.time;
             float bestSqr = rules.LootRadius * rules.LootRadius;
@@ -318,7 +316,7 @@ namespace Game.AI
                 if (kind == LootKind.Ammo)
                 {
                     var ammo = (AmmoType)item.Ammo.Value;
-                    usesAmmo = (weapon0 != null && weapon0.Ammo == ammo) || (weapon1 != null && weapon1.Ammo == ammo);
+                    usesAmmo = _self.CarriesWeaponFor(ammo);
                     reserve = _self.ReserveFor(ammo);
                 }
                 if (!BotBrain.WantsLoot(kind, emptySlot, usesAmmo, reserve, medkits, rules)) continue;
@@ -362,10 +360,9 @@ namespace Game.AI
             _percept.Reloading = _self.Reloading.Value;
             _percept.Medkits = _self.Medkits.Value;
 
-            bool firstActive = _self.ActiveSlot.Value == 0;
-            var other = GameData.Weapons.Find(firstActive ? _self.Slot1.Value : _self.Slot0.Value);
-            int otherMag = firstActive ? _self.Mag1.Value : _self.Mag0.Value;
-            _percept.OtherSlotUsable = other != null && (otherMag > 0 || _self.ReserveFor(other.Ammo) > 0);
+            int otherSlot = _self.OtherWeaponSlot();
+            var other = GameData.Weapons.Find(otherSlot >= 0 ? _self.WeaponInSlot(otherSlot) : 0);
+            _percept.OtherSlotUsable = other != null && (_self.MagInSlot(otherSlot) > 0 || _self.ReserveFor(other.Ammo) > 0);
 
             // Between two looks the target is followed without a new ray, as long as it is still there.
             if (_percept.EnemyVisible)
@@ -405,7 +402,8 @@ namespace Game.AI
                 if (intent.SwitchWeapon)
                 {
                     _nextAction = now + ActionRetrySeconds;
-                    BotServerActions.SelectSlot(_self, 1 - _self.ActiveSlot.Value);
+                    int otherSlot = _self.OtherWeaponSlot();
+                    if (otherSlot >= 0) BotServerActions.SelectSlot(_self, otherSlot);
                 }
                 else if (intent.Heal)
                 {

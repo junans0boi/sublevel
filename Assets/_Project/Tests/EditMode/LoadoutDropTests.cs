@@ -78,7 +78,8 @@ namespace Game.Tests
             Assert.AreEqual(0, l.RemoveWeapon(1, out int mag), "empty slot");
             Assert.AreEqual(0, mag);
             Assert.AreEqual(0, l.RemoveWeapon(-1, out _), "below range");
-            Assert.AreEqual(0, l.RemoveWeapon(2, out _), "above range");
+            Assert.AreEqual(0, l.RemoveWeapon(2, out _), "an empty sidearm slot");
+            Assert.AreEqual(0, l.RemoveWeapon(5, out _), "above range");
             Assert.AreEqual(1, l.WeaponInSlot(0), "nothing else changed");
         }
 
