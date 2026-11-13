@@ -319,6 +319,9 @@ namespace Game.Net
             if (_isPlayer && IsOwner) LocalPlayer = this;
         }
 
+        // An owner that returns after a reconnect (#166) gets the object after it already started as an observer.
+        public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prev) => OnStartClient();
+
         void Update()
         {
             if (IsServerInitialized && _loadout != null)

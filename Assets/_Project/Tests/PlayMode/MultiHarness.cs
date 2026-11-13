@@ -32,6 +32,8 @@ namespace Game.Tests
     public sealed class RemoteClient
     {
         public NetworkManager Manager;
+        // Names this player's session for a reconnect (#166).
+        public string Token = Guid.NewGuid().ToString("N");
         public Combatant Player;
         public HarnessInput Input;
         public PlayerController Controller => Player != null ? Player.GetComponent<PlayerController>() : null;
@@ -80,11 +82,13 @@ namespace Game.Tests
         }
 
         // Connects one more client to the host and waits until its player exists on its side.
-        public IEnumerator AddClient(Action<RemoteClient> done = null)
+        public IEnumerator AddClient(Action<RemoteClient> done = null, string token = null)
         {
             var client = new RemoteClient { Input = new HarnessInput() };
+            if (token != null) client.Token = token;
             ushort port = MatchDirector.Instance.Port;
             client.Manager = NetHarness.Build("NM_Remote" + Clients.Count, Host.SpawnablePrefabs, port);
+            SessionHelloSender.Attach(client.Manager, client.Token);
             if (!client.Manager.ClientManager.StartConnection("127.0.0.1", port)) throw new Exception("remote client failed to start");
             yield return NetHarness.WaitUntil(() => client.Manager.IsClientStarted, "remote client connected+authenticated", Log);
             yield return NetHarness.WaitUntil(() => client.Manager.ClientManager.Connection.FirstObject != null, "remote client got its player", Log);
@@ -94,6 +98,16 @@ namespace Game.Tests
             client.Controller.UseInput(client.Input);
             Clients.Add(client);
             done?.Invoke(client);
+        }
+
+        // The client's line drops (its process gone): the manager is stopped and removed, the player object is not touched here.
+        public IEnumerator DropClient(RemoteClient client)
+        {
+            client.Manager.ClientManager.StopConnection();
+            yield return NetHarness.WaitUntil(() => !client.Manager.ClientManager.Started, "dropped client stopped", Log);
+            UnityEngine.Object.Destroy(client.Manager.gameObject);
+            client.Manager = null;
+            Clients.Remove(client);
         }
 
         // Every player combatant `manager` has spawned on its own side (replicas included).

@@ -16,6 +16,9 @@ namespace Game.Net
         public static int Players = 1;
         public static int Bots = -1;
 
+        // Names this player across reconnects to a match (#166): the server hands the same combatant back to the same token.
+        public static readonly string Token = System.Guid.NewGuid().ToString("N");
+
         public static bool IsMultiplayer => Role != RoleKind.Single;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

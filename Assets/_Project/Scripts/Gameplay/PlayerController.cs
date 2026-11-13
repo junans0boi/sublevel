@@ -154,6 +154,9 @@ namespace Game.Gameplay
         // Tests: a second local player in the same process (remote client harness) takes its own input, not the shared override.
         public void UseInput(IPlayerInput input) => _input = input;
 
+        // An owner that returns after a reconnect (#166) gets the object after it already started as an observer.
+        public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prev) { if (!_owner) OnStartClient(); }
+
         public override void OnStopClient() => ReleaseOwnership();
 
         // Scene unloads destroy objects without the network callbacks.

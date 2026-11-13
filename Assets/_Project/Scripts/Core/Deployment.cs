@@ -122,6 +122,8 @@ namespace Game.Core
         public int MaxBots = MaxBotsLimit;
         // People in one room (#160, ADR-124); bots fill the rest of the match.
         public int MaxPlayers = 16;
+        // A dropped player's combatant waits this many seconds for the same session to return, then a bot takes over (#166, ADR-125).
+        public float ReconnectSeconds = 60f;
 
         // BotCount within 0..MaxBots (and never above MaxBotsLimit).
         public int ClampedBotCount => Math.Max(0, Math.Min(BotCount, Math.Min(Math.Max(0, MaxBots), MaxBotsLimit)));

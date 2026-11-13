@@ -58,6 +58,9 @@ namespace Game.Net
             if (IsOwner && _combatant.IsPlayer) Local = this;
         }
 
+        // An owner that returns after a reconnect (#166) gets the object after it already started as an observer.
+        public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prev) => OnStartClient();
+
         public override void OnStopClient()
         {
             if (Local == this) Local = null;

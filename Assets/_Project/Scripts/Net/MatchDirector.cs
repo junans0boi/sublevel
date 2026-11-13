@@ -83,6 +83,9 @@ namespace Game.Net
         float _serverStartedAt = -1f;
         float _guestGiveUpAt = -1f;
         float _guestRetryAt = -1f;
+        bool _guestWasUp;
+        // Server: holds a dropped player's combatant for a reconnect, then hands it to a bot (#166).
+        public SessionKeeper Sessions { get; private set; }
 
         void Awake()
         {
@@ -115,6 +118,7 @@ namespace Game.Net
             {
                 // A guest of a lobby's match (#160): no server here, only the connection to the host.
                 _guestGiveUpAt = Time.time + GuestConnectSeconds;
+                SessionHelloSender.Attach(_networkManager, NetSession.Token);
                 _networkManager.ClientManager.OnClientConnectionState += OnGuestState;
                 _networkManager.ClientManager.StartConnection(NetSession.Address, NetSession.Port);
             }
@@ -179,14 +183,21 @@ namespace Game.Net
         // The guest's first attempt may come before the host listens: try again until it is up or the time is over.
         void OnGuestState(ClientConnectionStateArgs args)
         {
+            if (args.ConnectionState == LocalConnectionState.Stopped && _guestWasUp)
+            {
+                // The line dropped mid-match: keep knocking for as long as the server holds our combatant (#166).
+                _guestWasUp = false;
+                _guestGiveUpAt = Time.time + (MatchRules.Current ?? new MatchRules()).ReconnectSeconds;
+            }
             if (args.ConnectionState == LocalConnectionState.Stopped && Time.time < _guestGiveUpAt) _guestRetryAt = Time.time + 1f;
-            else if (args.ConnectionState == LocalConnectionState.Started) _guestGiveUpAt = -1f;
+            else if (args.ConnectionState == LocalConnectionState.Started) { _guestGiveUpAt = -1f; _guestWasUp = true; }
         }
 
         void OnServerState(ServerConnectionStateArgs args)
         {
             if (args.ConnectionState != LocalConnectionState.Started) return;
             _serverStartedAt = Time.time;
+            Sessions = SessionKeeper.Attach(_networkManager);
             ServerPlanDeployment();
 
             var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);
@@ -360,6 +371,13 @@ namespace Game.Net
         void OnClientLoaded(NetworkConnection connection, bool asServer)
         {
             if (!asServer) return;
+            // A returning player gets its held combatant back instead of a new one (#166).
+            if (Sessions != null && Sessions.Intercept(connection, () => ServerSpawnPlayer(connection))) return;
+            ServerSpawnPlayer(connection);
+        }
+
+        void ServerSpawnPlayer(NetworkConnection connection)
+        {
             // Scenes with elevators: the deployment decides (ADR-055). Others: the spawn points in turn.
             // Players beyond the expected ones (-1) take the least occupied elevator instead of a bot's place.
             int index = _playersPlaced < _expectedPlayersCounted ? _playersPlaced : -1;
