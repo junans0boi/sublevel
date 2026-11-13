@@ -8,11 +8,11 @@ namespace Game.Tests
     public class VehiclePoseTests
     {
         [Test]
-        public void Hands_FollowTheWheel_OnlyToNinetyDegrees()
+        public void Hands_FollowTheWheel_OnlyToThirtyDegrees()
         {
-            Assert.AreEqual(45f, CombatantAnimation.HandWheelDeg(45f), 1e-4f);
-            Assert.AreEqual(90f, CombatantAnimation.HandWheelDeg(150f), 1e-4f);
-            Assert.AreEqual(-90f, CombatantAnimation.HandWheelDeg(-150f), 1e-4f);
+            Assert.AreEqual(20f, CombatantAnimation.HandWheelDeg(20f), 1e-4f);
+            Assert.AreEqual(30f, CombatantAnimation.HandWheelDeg(150f), 1e-4f);
+            Assert.AreEqual(-30f, CombatantAnimation.HandWheelDeg(-150f), 1e-4f);
         }
 
         [Test]

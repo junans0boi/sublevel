@@ -7,8 +7,8 @@ namespace Game.Gameplay
     // - Driver, empty hands: the palm (not the wrist bone) goes onto the model's grips (steering wheel rim, handlebar
     //   ends), the knuckle line along the rim's tangent or the bar, the fingers closed round it. When the grips are
     //   out of reach the torso leans forward until they are not (a rider leans much further than a driver).
-    //   A steering wheel turns up to 150 degrees, the hands follow it only to ±HandFollowDeg, then the rim slides
-    //   through them (the arms never cross).
+    //   A steering wheel turns up to 150 degrees, the hands follow it only to ±HandFollowDeg (they stay about a quarter
+    //   to three), then the rim slides through them (the arms never cross).
     // - Passengers, empty hands: palms down on the thighs, so the arms stay inside the cabin.
     // - Hips onto the seat's measured cushion point (SeatN/Cushion, ADR-077) when the model has one.
     // - Astride: the feet onto the pegs (Seat0/PegLeft, PegRight), the knees towards the knee points on the tank
@@ -28,7 +28,7 @@ namespace Game.Gameplay
         const float BikeReachShare = 0.99f;     // a rider's arms are near straight before the body leans
         const float CarMaxLeanDeg = 15f, BikeMaxLeanDeg = 20f;
         const float BikeBaseLeanDeg = 0f;       // only what the reach needs
-        public const float HandFollowDeg = 90f; // U5
+        public const float HandFollowDeg = 30f; // U5: the hands stay about a quarter to three, the rim slides past
         const float ThighHandShare = 0.6f;      // hip -> knee: where a resting hand lies
         const float ThighTop = 0.08f;           // the hand lies this far over the thigh bone
         const float AnkleOverSole = 0.08f, AnkleBehindBall = 0.08f;

@@ -65,7 +65,8 @@ namespace Game.Gameplay
             float yaw = _player.ViewYaw, pitch = _player.ViewPitch;
             var look = Quaternion.Euler(-pitch, yaw, 0f);
             bool eyes = (_input != null ? _input.EyeView : _player.Rig.Mode == ViewMode.FirstPerson) || _combatant.AimMode == AimMode.Sights;
-            CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
+            // Also in third person: the close views of the hands in the cabin are lit too.
+            CabinLight(vehicle, !vehicle.IsMotorcycle);
             if (eyes)
             {
                 // The view goes forward / sideways with the posed head (hips on the cushion, a rider's forward lean), so
@@ -73,6 +74,7 @@ namespace Game.Gameplay
                 // wheel and the hands on it are in the lower frame. View only: the shot origin stays at the seat's eye.
                 var eye = _combatant.EyePosition;
                 if (_animation != null && _animation.HeadEye(out var head)) eye += Vector3.ProjectOnPlane(head - eye, vehicle.transform.up);
+                eye += GripsInView(vehicle, eye);
                 cam.transform.SetPositionAndRotation(eye, look);
                 _distance = 0f;
                 return;
@@ -88,6 +90,24 @@ namespace Game.Gameplay
             if (Mathf.Abs(at.x - _local.center.x) < _local.extents.x && Mathf.Abs(at.z - _local.center.z) < _local.extents.z && at.y < _local.max.y + RoofClearance)
                 at.y = _local.max.y + RoofClearance;
             cam.transform.SetPositionAndRotation(vehicle.transform.TransformPoint(at), look);
+        }
+
+        // At the controls, the eye view moves (view only) so the grips sit low in the frame, not under it: a car's
+        // view goes down until the wheel's grips are GripsCarDeg below level (wheel top about the lower third), a
+        // motorcycle's goes back until the bars are GripsBikeDeg below. Within limits; zero when they already are.
+        const float GripsCarDeg = 24f, GripsBikeDeg = 34f, MaxCarDrop = 0.12f, MaxBikeBack = 0.3f;
+
+        Vector3 GripsInView(Vehicle vehicle, Vector3 eye)
+        {
+            var seat = VehicleSeat.SeatOf(_combatant);
+            if (seat == null || !seat.HasGrips || !VehicleSeat.InDriverSeat(_combatant)) return Vector3.zero;
+            var t = vehicle.transform;
+            var to = (seat.GripLeft.position + seat.GripRight.position) * 0.5f - eye;
+            float ahead = Vector3.Dot(to, t.forward), down = -Vector3.Dot(to, t.up);
+            if (ahead <= 0.01f || down <= 0f) return Vector3.zero;
+            if (vehicle.IsMotorcycle)
+                return -t.forward * Mathf.Clamp(down / Mathf.Tan(GripsBikeDeg * Mathf.Deg2Rad) - ahead, 0f, MaxBikeBack);
+            return -t.up * Mathf.Clamp(down - ahead * Mathf.Tan(GripsCarDeg * Mathf.Deg2Rad), 0f, MaxCarDrop);
         }
 
         // The model's bounds in the vehicle's own space (renderers only: the occupants are not children).

@@ -597,7 +597,7 @@ namespace Game.Gameplay
         // faces the view the vehicle's way: the third-person camera starts behind it and stays there through turns.
         bool _inVehicle;
         float _vehicleHeading;
-        const float EnterPitchCarDeg = 5f, EnterPitchBikeDeg = 15f;
+        const float EnterPitchCarDeg = 8f, EnterPitchBikeDeg = 12f;
 
         void FollowVehicleHeading()
         {
