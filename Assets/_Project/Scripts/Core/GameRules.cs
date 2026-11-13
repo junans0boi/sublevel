@@ -29,6 +29,7 @@ namespace Game.Core
         public CarryRules Carry = new CarryRules();
         public SmokeRules Smoke = new SmokeRules();
         public FlashRules Flash = new FlashRules();
+        public MolotovRules Molotov = new MolotovRules();
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();

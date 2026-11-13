@@ -85,5 +85,31 @@ namespace Game.Tests
             Debug.Log($"[HealThrowCapture] flash fading whiteness {overlay.Whiteness:F2} volume x{AudioListener.volume:F2}");
             yield return Shot("flash_3_fade");
         }
+
+        [UnityTest, Timeout(180000)]
+        public IEnumerator FireShots()
+        {
+            yield return Load();
+            QuietDummies();
+            var me = Combatant.LocalPlayer;
+            var user = me.GetComponent<ThrowableUser>();
+            var fwd = PlayerController.Local.Camera.transform.forward;
+            fwd.y = 0f;
+            fwd.Normalize();
+            user.ServerAdd(ThrowableKind.Molotov, 1);
+            bool lit = false;
+            ThrownItem.ServerFired += (c, t) => lit = true;
+            // Dropped 5 m ahead so the fire is in view.
+            Assert.IsTrue(user.ServerThrow(me.transform.position + fwd * 5f + Vector3.up * 0.4f, Vector3.zero, ThrowableKind.Molotov));
+            float end = Time.realtimeSinceStartup + 6f;
+            while (!lit && Time.realtimeSinceStartup < end) yield return null;
+            yield return new WaitForSeconds(1.5f);
+            yield return Shot("fire_1_ahead");
+            // Step in: burning HUD label, damage numbers.
+            PlayerController.Local.Teleport(me.transform.position + fwd * 5f);
+            yield return new WaitForSeconds(2.0f);
+            yield return Shot("fire_2_inside");
+            Debug.Log($"[HealThrowCapture] fire inside: hp {me.Hp.Value:F0} burning {me.Burning.Value}");
+        }
     }
 }

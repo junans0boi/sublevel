@@ -21,7 +21,7 @@ namespace Game.Net
         public readonly SyncVar<int> Grenades = new SyncVar<int>();
         public readonly SyncVar<int> Smokes = new SyncVar<int>();
         public readonly SyncVar<int> Flashes = new SyncVar<int>();  // ADR-105
-        public readonly SyncVar<int> Molotovs = new SyncVar<int>(); // ADR-106
+        public readonly SyncVar<int> Molotovs = new SyncVar<int>(); // ADR-110
         // The ThrowableKind the next throw uses.
         public readonly SyncVar<int> Selected = new SyncVar<int>();
         // A fragmentation grenade with its pin out, burning its fuse in the hand (ADR-101).
@@ -62,7 +62,7 @@ namespace Game.Net
 
         // ---- Read-only, every side (HUD) ----
 
-        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-105/106).
+        // Bag room of the throwables that have no count of their own yet (flash, molotov: ADR-105/110).
         public int ExtraTenths => Flashes.Value * Carry.Tenths(CarryRules.Current.Flash) + Molotovs.Value * Carry.Tenths(CarryRules.Current.Molotov);
 
         public ThrowableKind SelectedKind => (ThrowableKind)Selected.Value;

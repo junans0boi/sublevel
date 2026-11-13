@@ -594,7 +594,7 @@ namespace Game.Net
             if (_health.IsDead || Knocked.Value) return;
             // Only a gun is aimed (a melee weapon swings from the hip, ADR-073).
             bool validAim = aim == AimMode.Hip || ((aim == AimMode.Shoulder || aim == AimMode.Sights) && !Melee.CanStrike(ActiveWeapon));
-            Aim.Value = validAim ? (int)aim : 0;
+            Aim.Value = validAim ? (int)Molotov.LimitAim(aim, Burning.Value) : 0; // burning: no steady aim (ADR-110)
             Lean.Value = lean < 0 ? -1 : lean > 0 ? 1 : 0;
         }
 

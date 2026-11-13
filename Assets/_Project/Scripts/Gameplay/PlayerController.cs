@@ -224,7 +224,7 @@ namespace Game.Gameplay
             bool armed = !Melee.CanStrike(_combatant.ActiveWeapon);
             _aim.SightsHold = GameSettings.SightsHold;
             _aim.ShoulderToggle = GameSettings.ShoulderToggle;
-            var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
+            var aim = Molotov.LimitAim(_aim.Update(f.AimHeld, Time.timeAsDouble, armed), _combatant.Burning.Value); // burning: no steady aim (ADR-110)
             // The aim key raises the weapon on the press, before the tap/hold decision (#121): no sprint under it either.
             AimKeyDown = armed && f.AimHeld;
             SendLookPitch();

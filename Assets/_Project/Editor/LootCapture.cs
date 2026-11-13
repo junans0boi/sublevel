@@ -34,7 +34,7 @@ public static class LootCapture
                 new[] { A(AmmoType.Pistol9), A(AmmoType.Rifle556), A(AmmoType.Rifle762), A(AmmoType.Shotgun12), K(LootKind.Medkit), K(LootKind.FirstAidKit), K(LootKind.Bandage), K(LootKind.Grenade), K(LootKind.Smoke) },
                 new[] { T(LootKind.Helmet, 1), T(LootKind.Helmet, 2), T(LootKind.Helmet, 3), T(LootKind.Vest, 1), T(LootKind.Vest, 2), T(LootKind.Vest, 3), K(LootKind.Key), K(LootKind.Jerrycan), O(1), O(3), O(6) },
                 new[] { T(LootKind.Backpack, 1), T(LootKind.Backpack, 2), T(LootKind.Backpack, 3), T(LootKind.Vest, 2), T(LootKind.Helmet, 2) }, // ADR-091
-                new[] { K(LootKind.Drink), K(LootKind.Pill), K(LootKind.Syringe), K(LootKind.Flash), K(LootKind.Molotov) }, // ADR-099/105/106
+                new[] { K(LootKind.Drink), K(LootKind.Pill), K(LootKind.Syringe), K(LootKind.Flash), K(LootKind.Molotov) }, // ADR-099/105/110
             };
             const float spacing = 0.75f;
             for (int r = 0; r < rows.Length; r++)

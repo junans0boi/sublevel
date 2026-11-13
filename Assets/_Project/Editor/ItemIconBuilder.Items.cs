@@ -2,7 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-// Icons of the boost items and the extra throwables (ADR-099/105/106): flat glyphs from signed-distance shapes, like the
+// Icons of the boost items and the extra throwables (ADR-099/105/110): flat glyphs from signed-distance shapes, like the
 // other items, no markings. tools/unity.sh run ItemIconBuilder.BuildItemsOnly -> Resources/Icons/{drink,pill,syringe,...}.png
 public static partial class ItemIconBuilder
 {
@@ -29,6 +29,7 @@ public static partial class ItemIconBuilder
         DrawIcon("pill", DrawPill);
         DrawIcon("syringe", DrawSyringe);
         DrawIcon("flash", DrawFlash);
+        DrawIcon("molotov", DrawMolotov);
     }
 
     // A drink can: teal body, a yellow band, steel rims and a pull tab.
@@ -72,6 +73,22 @@ public static partial class ItemIconBuilder
         float ray = Mathf.Min(Box(p.X, p.Y, 112f, 206f, 6f, 26f), Box(p.X, p.Y, 112f, 206f, 26f, 6f));
         p.Fill(ray, new Color(1f, 0.97f, 0.7f), 1f, false);
         p.Fill(Circle(p.X, p.Y, 112f, 206f, 11f), Color.white, 1f, false);
+    }
+
+    // A fire bottle: green glass with a pale label, a long neck, a rag in the mouth and a flame above it.
+    static void DrawMolotov(Painter p)
+    {
+        var glass = new Color(0.22f, 0.44f, 0.26f);
+        float dx = p.X - 128f;
+        float body = RRect(p.X, p.Y, 128f, 82f, 42f, 58f, 16f);
+        float neck = Box(p.X, p.Y, 128f, 148f, 14f, 30f);
+        p.Fill(Mathf.Min(body, neck), glass, Shade(dx, 42f));
+        p.Fill(Box(p.X, p.Y, 128f, 84f, 42f, 20f), new Color(0.88f, 0.84f, 0.68f), 1f, false); // label
+        p.Fill(RRect(p.X, p.Y, 128f, 184f, 11f, 9f, 3f), new Color(0.82f, 0.74f, 0.55f), 1f);   // rag
+        // flame: an orange drop with a yellow core
+        float drop = Mathf.Min(Circle(p.X, p.Y, 128f, 212f, 17f), RRect(p.X, p.Y, 128f, 226f, 8f, 20f, 8f));
+        p.Fill(drop, new Color(0.96f, 0.45f, 0.10f), 1f);
+        p.Fill(Circle(p.X, p.Y, 128f, 210f, 8f), new Color(1f, 0.88f, 0.35f), 1f, false);
     }
 
     // An injector: a clear barrel with a red fill, plunger with a thumb rest and finger flange, hub and needle.

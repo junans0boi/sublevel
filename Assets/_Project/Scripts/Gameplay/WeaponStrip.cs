@@ -143,7 +143,7 @@ namespace Game.Gameplay
             _count[cell].text = !has ? "" : cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count);
             _count[cell].color = cooking ? UiKit.Danger : count > 0 ? UiKit.Text : UiKit.TextDim;
             _shownThrowName = has ? Throwables.NameOf(kind) : "";
-            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : "grenade", _shownThrowName);
+            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : kind == ThrowableKind.Molotov ? "molotov" : "grenade", _shownThrowName);
         }
     }
 }

@@ -79,7 +79,8 @@ namespace Game.Tests
         public void TheKind_IsPickedUpCarriedAndCycled()
         {
             Assert.AreEqual(ThrowableKind.Flash, Throwables.Next(ThrowableKind.Smoke));
-            Assert.AreEqual(ThrowableKind.Frag, Throwables.Next(ThrowableKind.Flash));
+            Assert.AreEqual(ThrowableKind.Molotov, Throwables.Next(ThrowableKind.Flash));
+            Assert.AreEqual(ThrowableKind.Frag, Throwables.Next(ThrowableKind.Molotov));
             Assert.IsTrue(Throwables.TryKindOfLoot(LootKind.Flash, out var kind));
             Assert.AreEqual(ThrowableKind.Flash, kind);
             Assert.IsFalse(Throwables.TryKindOfLoot(LootKind.Ammo, out _));

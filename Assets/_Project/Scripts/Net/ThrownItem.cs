@@ -45,6 +45,11 @@ namespace Game.Net
         public static event Action<Vector3, NetworkObject> ClientFlashed;
         public static event Action<Vector3, Combatant> ServerFlashed;
 
+        // A fire bottle broke and a fire started: raised on every client (centre, radius, seconds, thrower or null)
+        // and on the server (centre, thrower).
+        public static event Action<Vector3, float, float, NetworkObject> ClientFired;
+        public static event Action<Vector3, Combatant> ServerFired;
+
         static readonly RaycastHit[] Hits = new RaycastHit[16];
         static readonly List<Combatant> Victims = new List<Combatant>(16);
 
@@ -57,6 +62,8 @@ namespace Game.Net
             ServerSmoked = null;
             ClientFlashed = null;
             ServerFlashed = null;
+            ClientFired = null;
+            ServerFired = null;
             SmokeZones.Clear();
         }
 
@@ -64,7 +71,8 @@ namespace Game.Net
         Combatant _thrower;
         Vector3 _position, _velocity;
         float _fuse, _age, _clock, _flown, _despawnAt;
-        bool _resting, _exploded;
+        bool _resting, _exploded, _burning;
+        Vector3 _fireCentre;
         int _zoneId;
 
         public ThrowableKind ThrowKind => (ThrowableKind)Kind.Value;
@@ -93,11 +101,11 @@ namespace Game.Net
 
         public override void OnStartNetwork()
         {
-            // A flash grenade is the same body in pale steel (the prefab has one grenade shape).
-            if (Kind.Value == (int)ThrowableKind.Flash && _visual != null)
+            // A flash grenade is the same body in pale steel, a fire bottle in green glass (the prefab has one grenade shape).
+            if ((Kind.Value == (int)ThrowableKind.Flash || Kind.Value == (int)ThrowableKind.Molotov) && _visual != null)
             {
                 var block = new MaterialPropertyBlock();
-                block.SetColor(BaseColorId, new Color(0.80f, 0.82f, 0.86f));
+                block.SetColor(BaseColorId, Kind.Value == (int)ThrowableKind.Flash ? new Color(0.80f, 0.82f, 0.86f) : new Color(0.22f, 0.40f, 0.24f));
                 foreach (var r in _visual.GetComponentsInChildren<Renderer>()) r.SetPropertyBlock(block);
             }
             // The canister of a smoke grenade looks different from a grenade (when the prefab has both).
@@ -122,6 +130,12 @@ namespace Game.Net
         void Update()
         {
             if (!IsServerInitialized) return;
+            if (_burning)
+            {
+                FireTick();
+                if (Time.time >= _despawnAt) Despawn();
+                return;
+            }
             if (_exploded)
             {
                 if (Time.time >= _despawnAt) Despawn();
@@ -139,6 +153,7 @@ namespace Game.Net
                 {
                     if (Kind.Value == (int)ThrowableKind.Smoke) OpenSmoke();
                     else if (Kind.Value == (int)ThrowableKind.Flash) FlashBang();
+                    else if (Kind.Value == (int)ThrowableKind.Molotov) Ignite();
                     else Explode();
                 }
             }
@@ -163,6 +178,8 @@ namespace Game.Net
             float travelled = Mathf.Max(0f, hit.distance - Skin);
             _position += direction * travelled;
             _flown += travelled;
+            // A fire bottle breaks on whatever it hits first.
+            if (Kind.Value == (int)ThrowableKind.Molotov) { Ignite(); return; }
             var n = hit.normal;
             Throwables.Bounce(ref _velocity.x, ref _velocity.y, ref _velocity.z, n.x, n.y, n.z, _rules);
             if (Throwables.ComesToRest(_velocity.x, _velocity.y, _velocity.z, n.y, _rules))
@@ -206,6 +223,49 @@ namespace Game.Net
             _zoneId = SmokeZones.Add(centre.x, centre.y + smoke.CentreLiftMeters, centre.z, smoke.Radius);
             ServerSmoked?.Invoke(centre, attacker);
             RpcSmoked(centre, smoke.Radius, smoke.Seconds, attacker != null ? attacker.NetworkObject : null);
+        }
+
+        // The bottle breaks: a fire on the ground where it did (or just below, when it broke against a wall or in the
+        // air), burning for FireSeconds. This object stays as the fire and lights whoever stands in it.
+        void Ignite()
+        {
+            if (_burning) return;
+            var rules = MolotovRules.Current;
+            _burning = true;
+            _exploded = true;
+            _velocity = Vector3.zero;
+            var centre = _position;
+            if (Physics.Raycast(_position + Vector3.up * 0.3f, Vector3.down, out var ground, 4f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                centre = ground.point;
+            _fireCentre = centre;
+            transform.position = centre;
+            _despawnAt = Time.time + rules.FireSeconds + LingerSeconds;
+            var attacker = _thrower != null ? _thrower : null;
+            ServerFired?.Invoke(centre, attacker);
+            RpcFired(centre, rules.Radius, rules.FireSeconds, attacker != null ? attacker.NetworkObject : null);
+        }
+
+        // Every frame of the fire: everyone standing in it is lit (Combatant.ServerIgnite does the burning).
+        void FireTick()
+        {
+            var rules = MolotovRules.Current;
+            var attacker = _thrower != null ? _thrower : null;
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.Dead.Value) continue;
+                var p = c.transform.position;
+                if (Molotov.InFire(p.x, p.y, p.z, _fireCentre.x, _fireCentre.y, _fireCentre.z, rules)) c.ServerIgnite(attacker);
+            }
+        }
+
+        // Runs locally too, so a host sees the fire in the frame it starts.
+        [ObserversRpc(RunLocally = true)]
+        void RpcFired(Vector3 centre, float radius, float seconds, NetworkObject thrower)
+        {
+            _exploded = true;
+            if (_visual != null) _visual.SetActive(false);
+            if (!IsClientStarted) return;
+            ClientFired?.Invoke(centre, radius, seconds, thrower);
         }
 
         // The flash: no damage; every client works out its own player's blindness (FlashOverlay).

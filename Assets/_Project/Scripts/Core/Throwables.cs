@@ -166,11 +166,13 @@ namespace Game.Core
 
         // Seconds from the throw to the effect.
         public static float FuseOf(ThrowableKind kind, ThrowableRules rules, SmokeRules smoke) =>
-            kind == ThrowableKind.Smoke ? smoke.FuseSeconds : kind == ThrowableKind.Flash ? FlashRules.Current.FuseSeconds : rules.FuseSeconds;
+            kind == ThrowableKind.Smoke ? smoke.FuseSeconds : kind == ThrowableKind.Flash ? FlashRules.Current.FuseSeconds
+            : kind == ThrowableKind.Molotov ? MolotovRules.Current.FuseSeconds : rules.FuseSeconds;
 
         // How many of a kind may be carried.
         public static int MaxCarriedOf(ThrowableKind kind) =>
-            kind == ThrowableKind.Smoke ? SmokeRules.Current.MaxCarried : kind == ThrowableKind.Flash ? FlashRules.Current.MaxCarried : ThrowableRules.Current.MaxCarried;
+            kind == ThrowableKind.Smoke ? SmokeRules.Current.MaxCarried : kind == ThrowableKind.Flash ? FlashRules.Current.MaxCarried
+            : kind == ThrowableKind.Molotov ? MolotovRules.Current.MaxCarried : ThrowableRules.Current.MaxCarried;
 
         // The next kind when cycling the selection (the T key).
         public static ThrowableKind Next(ThrowableKind kind)
@@ -179,6 +181,7 @@ namespace Game.Core
             {
                 case ThrowableKind.Frag: return ThrowableKind.Smoke;
                 case ThrowableKind.Smoke: return ThrowableKind.Flash;
+                case ThrowableKind.Flash: return ThrowableKind.Molotov;
                 default: return ThrowableKind.Frag;
             }
         }

@@ -35,7 +35,7 @@ namespace Game.Core
         public float Drink = 1f;    // ADR-099 boost items
         public float Pill = 2f;
         public float Syringe = 2f;
-        public float Flash = 2f;    // ADR-105/106 throwables
+        public float Flash = 2f;    // ADR-105/110 throwables
         public float Molotov = 3f;
         public float Jerrycan = 20f; // ADR-075
         public float Optic = 2f;     // ADR-082: an optic loose in the bag (one fitted to a weapon takes no room)

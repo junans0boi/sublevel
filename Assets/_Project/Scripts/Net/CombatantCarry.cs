@@ -76,7 +76,7 @@ namespace Game.Net
             _healing != null ? _healing.Bandages.Value : 0, _healing != null ? _healing.FirstAids.Value : 0, _combatant.Medkits.Value,
             _throwables != null ? _throwables.Grenades.Value : 0, _throwables != null ? _throwables.Smokes.Value : 0)
             + (_healing != null ? _healing.BoostTenths : 0) // ADR-099
-            + (_throwables != null ? _throwables.ExtraTenths : 0) // ADR-105/106
+            + (_throwables != null ? _throwables.ExtraTenths : 0) // ADR-105/110
             + (_jerrycans != null ? _jerrycans.Count.Value * Carry.Tenths(CarryRules.Current.Jerrycan) : 0) // ADR-075
             + (_optics != null ? OpticBag.Total(_optics.Bag.Value) * Carry.Tenths(CarryRules.Current.Optic) : 0); // ADR-082
 

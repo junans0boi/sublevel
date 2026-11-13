@@ -28,6 +28,7 @@ namespace Game.Net
             CarryRules.Current = rules.Carry;
             SmokeRules.Current = rules.Smoke;
             FlashRules.Current = rules.Flash ?? new FlashRules();
+            MolotovRules.Current = rules.Molotov ?? new MolotovRules();
             BotRules.Current = rules.Bot;
             MeleeRules.Current = rules.Melee;
             MatchRules.Current = rules.Match ?? new MatchRules();

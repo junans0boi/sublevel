@@ -36,6 +36,15 @@ namespace Game.Gameplay
         const float CloudPuffMin = 0.55f; // puff size as a share of the radius
         const float CloudPuffMax = 0.8f;
 
+        // Fire on the ground (ADR-110): flames are pooled additive discs rising and shrinking, over a dark scorch disc,
+        // with a flickering light and a crackle made in code.
+        const int FirePool = 3;
+        const int FlamePuffs = 44;
+        const float FireRise = 1.9f;
+        const float FireFadeSeconds = 1.5f;
+        static readonly Color FlameHot = new Color(1f, 0.8f, 0.3f, 1f);
+        static readonly Color FlameCool = new Color(0.9f, 0.18f, 0.04f, 0f);
+
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         // Materials are assets made by the builder: shaders cannot be looked up in a player build.
@@ -84,6 +93,29 @@ namespace Game.Gameplay
         bool[] _cloudOn;
         int _nextCloud;
 
+        MeshRenderer[] _flames;      // FirePool x FlamePuffs
+        Vector3[] _flameSpot;        // offset on the ground from the centre
+        float[] _flamePhase, _flameSize;
+        MeshRenderer[] _scorch;
+        Light[] _fireLight;
+        AudioSource[] _fireAudio;
+        Vector3[] _fireCentre;
+        float[] _fireStart, _fireSeconds, _fireRadius;
+        bool[] _fireOn;
+        int _nextFire;
+        static AudioClip _crackle;
+        public int FiresShown { get; private set; }
+        public Vector3 LastFireCentre { get; private set; }
+        public int ActiveFires
+        {
+            get
+            {
+                int n = 0;
+                if (_fireOn != null) foreach (bool on in _fireOn) if (on) n++;
+                return n;
+            }
+        }
+
         // Counters and state so tests can tell what was shown without looking.
         public int BlastsShown { get; private set; }
         public int BlastSoundsPlayed { get; private set; }
@@ -114,6 +146,7 @@ namespace Game.Gameplay
             ThrownItem.ClientExploded += OnExploded;
             ThrownItem.ClientSmoked += OnSmoked;
             ThrownItem.ClientFlashed += OnFlashedBurst;
+            ThrownItem.ClientFired += OnFired;
             Build();
         }
 
@@ -178,6 +211,41 @@ namespace Game.Gameplay
             _cloudOn = new bool[CloudPool];
             for (int i = 0; i < _cloudPuffs.Length; i++) _cloudPuffs[i] = NewRenderer("CloudPuff", _fxRoot, cloudMaterial);
 
+            _flames = new MeshRenderer[FirePool * FlamePuffs];
+            _flameSpot = new Vector3[_flames.Length];
+            _flamePhase = new float[_flames.Length];
+            _flameSize = new float[_flames.Length];
+            _scorch = new MeshRenderer[FirePool];
+            _fireLight = new Light[FirePool];
+            _fireAudio = new AudioSource[FirePool];
+            _fireCentre = new Vector3[FirePool];
+            _fireStart = new float[FirePool];
+            _fireSeconds = new float[FirePool];
+            _fireRadius = new float[FirePool];
+            _fireOn = new bool[FirePool];
+            for (int i = 0; i < FirePool; i++)
+            {
+                _scorch[i] = NewRenderer("Scorch", _fxRoot, _dustMaterial);
+                for (int p = 0; p < FlamePuffs; p++) _flames[i * FlamePuffs + p] = NewRenderer("Flame", _fxRoot, _glowMaterial);
+                var lightGo = new GameObject("FireLight");
+                lightGo.transform.SetParent(_fxRoot, false);
+                var light = lightGo.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = new Color(1f, 0.55f, 0.18f);
+                light.range = 9f;
+                light.shadows = LightShadows.None;
+                light.enabled = false;
+                _fireLight[i] = light;
+                var audio = lightGo.AddComponent<AudioSource>();
+                audio.playOnAwake = false;
+                audio.loop = true;
+                audio.spatialBlend = 1f;
+                audio.minDistance = 3f;
+                audio.maxDistance = 40f;
+                audio.rolloffMode = AudioRolloffMode.Linear;
+                _fireAudio[i] = audio;
+            }
+
             // The sound plays where the blast is, not where the thrower stands.
             if (_blastSource != null) _blastSource.transform.SetParent(_fxRoot, true);
             _built = true;
@@ -203,6 +271,7 @@ namespace Game.Gameplay
             ThrownItem.ClientExploded -= OnExploded;
             ThrownItem.ClientSmoked -= OnSmoked;
             ThrownItem.ClientFlashed -= OnFlashedBurst;
+            ThrownItem.ClientFired -= OnFired;
             if (_fxRoot != null) Destroy(_fxRoot.gameObject);
         }
 
@@ -212,6 +281,13 @@ namespace Game.Gameplay
         {
             bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
             if (mine) ShowBlast(centre);
+        }
+
+        // Each view shows its own combatant's fires, like the clouds.
+        void OnFired(Vector3 centre, float radius, float seconds, NetworkObject thrower)
+        {
+            bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
+            if (mine) ShowFire(centre, radius, seconds);
         }
 
         // The burst of a flash grenade: a white flash and a light, no smoke, a high short bang.
@@ -350,6 +426,106 @@ namespace Game.Gameplay
             PlaceBlast(i, ViewCamera());
         }
 
+        // ---- Everyone: the fire ----
+
+        void ShowFire(Vector3 centre, float radius, float seconds)
+        {
+            LastFireCentre = centre;
+            FiresShown++;
+            if (!_built) return;
+            int i = _nextFire;
+            _nextFire = (_nextFire + 1) % FirePool;
+            _fireCentre[i] = centre;
+            _fireStart[i] = Time.time;
+            _fireSeconds[i] = seconds;
+            _fireRadius[i] = radius;
+            _fireOn[i] = true;
+            _scorch[i].enabled = true;
+            _scorch[i].transform.SetPositionAndRotation(centre + Vector3.up * 0.04f, Quaternion.Euler(90f, 0f, 0f));
+            _scorch[i].transform.localScale = Vector3.one * (radius * 2.1f);
+            _block.SetColor(BaseColorId, new Color(0.04f, 0.03f, 0.02f, 0.55f));
+            _scorch[i].SetPropertyBlock(_block);
+            int puffs = GameSettings.HighEffects ? FlamePuffs : FlamePuffs / 2;
+            for (int p = 0; p < FlamePuffs; p++)
+            {
+                int index = i * FlamePuffs + p;
+                var spot = Random.insideUnitCircle * radius * 0.92f;
+                _flameSpot[index] = new Vector3(spot.x, 0f, spot.y);
+                _flamePhase[index] = Random.value;
+                _flameSize[index] = radius * Random.Range(0.13f, 0.26f);
+                _flames[index].enabled = p < puffs;
+            }
+            _fireLight[i].enabled = true;
+            var audio = _fireAudio[i];
+            audio.transform.position = centre + Vector3.up * 0.5f;
+            audio.clip = Crackle();
+            audio.volume = 0.5f * GameSettings.EffectsVolume;
+            audio.Play();
+            PlaceFire(i, ViewCamera());
+        }
+
+        // Returns false when the fire has burned out.
+        bool PlaceFire(int i, Transform camera)
+        {
+            float age = Time.time - _fireStart[i];
+            float seconds = _fireSeconds[i];
+            if (age >= seconds) return false;
+            var rotation = camera != null ? camera.rotation : Quaternion.identity;
+            float grow = Mathf.Clamp01(age / 0.6f);
+            float fade = Mathf.Clamp01((seconds - age) / FireFadeSeconds);
+            for (int p = 0; p < FlamePuffs; p++)
+            {
+                int index = i * FlamePuffs + p;
+                var flame = _flames[index];
+                if (!flame.enabled) continue;
+                // Each flame rises, shrinks and cools over about a second, then starts again at its spot.
+                float cycle = Mathf.Repeat(age * 1.1f + _flamePhase[index], 1f);
+                float size = _flameSize[index] * Mathf.Lerp(1f, 0.25f, cycle) * Mathf.Lerp(0.4f, 1f, grow) * Mathf.Lerp(0.5f, 1f, fade);
+                var at = _fireCentre[i] + _flameSpot[index] * Mathf.Lerp(0.5f, 1f, grow) + Vector3.up * (0.1f + cycle * FireRise * fade);
+                flame.transform.SetPositionAndRotation(at, rotation);
+                flame.transform.localScale = Vector3.one * size;
+                var color = Color.Lerp(FlameHot, FlameCool, cycle);
+                color.a *= fade;
+                _block.SetColor(BaseColorId, color);
+                flame.SetPropertyBlock(_block);
+            }
+            _fireLight[i].transform.position = _fireCentre[i] + Vector3.up * 1.2f;
+            _fireLight[i].intensity = (3.2f + Mathf.PerlinNoise(Time.time * 9f, i * 7.1f) * 2.6f) * fade;
+            _fireAudio[i].volume = 0.5f * GameSettings.EffectsVolume * fade;
+            return true;
+        }
+
+        // A looping crackle: sparse short noise ticks over a soft low rumble, no recorded sound.
+        static AudioClip Crackle()
+        {
+            if (_crackle != null) return _crackle;
+            const int rate = 22050;
+            int n = rate * 2;
+            var data = new float[n];
+            var rng = new System.Random(106);
+            float rumble = 0f;
+            float tick = 0f;
+            for (int k = 0; k < n; k++)
+            {
+                rumble += (((float)rng.NextDouble() * 2f - 1f) - rumble) * 0.015f;
+                if (rng.NextDouble() < 0.0009) tick = (float)rng.NextDouble() * 0.8f + 0.2f;
+                float noise = (float)rng.NextDouble() * 2f - 1f;
+                data[k] = Mathf.Clamp(rumble * 1.6f + noise * tick * 0.5f, -1f, 1f);
+                tick *= 0.985f;
+            }
+            // Fade the seam so the loop does not click.
+            int seam = rate / 40;
+            for (int k = 0; k < seam; k++)
+            {
+                float t = k / (float)seam;
+                data[k] *= t;
+                data[n - 1 - k] *= t;
+            }
+            _crackle = AudioClip.Create("FireCrackle", n, 1, rate, false);
+            _crackle.SetData(data, 0);
+            return _crackle;
+        }
+
         // ---- Everyone: the smoke cloud ----
 
         void ShowCloud(Vector3 centre, float radius, float seconds)
@@ -451,6 +627,15 @@ namespace Game.Gameplay
                 if (!_cloudOn[i] || PlaceCloud(i, camera)) continue;
                 _cloudOn[i] = false;
                 for (int p = 0; p < CloudPuffs; p++) _cloudPuffs[i * CloudPuffs + p].enabled = false;
+            }
+            for (int i = 0; i < FirePool; i++)
+            {
+                if (!_fireOn[i] || PlaceFire(i, camera)) continue;
+                _fireOn[i] = false;
+                _scorch[i].enabled = false;
+                _fireLight[i].enabled = false;
+                _fireAudio[i].Stop();
+                for (int p = 0; p < FlamePuffs; p++) _flames[i * FlamePuffs + p].enabled = false;
             }
             for (int i = 0; i < BlastPool; i++)
             {

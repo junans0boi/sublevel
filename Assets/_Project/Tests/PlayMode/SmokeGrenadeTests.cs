@@ -129,6 +129,8 @@ namespace Game.Tests
             user.ServerCycle();
             Assert.AreEqual(ThrowableKind.Flash, user.SelectedKind, "then the flash (ADR-105)");
             user.ServerCycle();
+            Assert.AreEqual(ThrowableKind.Molotov, user.SelectedKind, "then the fire bottle (ADR-110)");
+            user.ServerCycle();
             Assert.AreEqual(ThrowableKind.Frag, user.SelectedKind);
             Assert.AreEqual(0, user.SelectedCount);
 

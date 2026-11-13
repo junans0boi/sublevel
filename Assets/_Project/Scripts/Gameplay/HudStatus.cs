@@ -118,6 +118,7 @@ namespace Game.Gameplay
 
         public int StanceShown => _shownStance;           // Stance as int
         public int ProtectionSecondsShown => _shownProtect > 0 ? _shownProtect : 0;
+        public bool BurningShown => _shownProtect == int.MinValue + 1;
         public int MedkitsShown => _shownMedkits;
         public int ArmourTierShown(int slot) => _shownTier[slot]; // -1 before the first tick, 0 = nothing worn
 
@@ -207,13 +208,16 @@ namespace Game.Gameplay
             bool doors = HudBackend.DoorsClosed;
             float left = doors ? HudBackend.DoorSecondsLeft : HudBackend.SpawnProtectionLeft(me);
             int seconds = left > 0f ? Mathf.CeilToInt(left) : 0;
-            int key = doors ? -1 - seconds : seconds;
+            // On fire (ADR-110) the label says so, in red, ahead of the other messages.
+            bool burning = me.Burning.Value;
+            int key = burning ? int.MinValue + 1 : doors ? -1 - seconds : seconds;
             if (key != _shownProtect)
             {
                 _shownProtect = key;
-                bool on = doors || seconds > 0;
+                bool on = burning || doors || seconds > 0;
                 if (_protectLabel.gameObject.activeSelf != on) _protectLabel.gameObject.SetActive(on);
-                if (on) _protectLabel.text = doors ? "문 열림 " + HudDigits.IntText(seconds) : "보호 " + HudDigits.IntText(seconds) + "초";
+                if (on) _protectLabel.text = burning ? "화상" : doors ? "문 열림 " + HudDigits.IntText(seconds) : "보호 " + HudDigits.IntText(seconds) + "초";
+                _protectLabel.color = burning ? UiKit.Danger : UiKit.Accent;
             }
 
             ShowBoost(me);
