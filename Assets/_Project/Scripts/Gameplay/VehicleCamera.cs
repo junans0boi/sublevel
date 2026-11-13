@@ -68,10 +68,11 @@ namespace Game.Gameplay
             CabinLight(vehicle, eyes && !vehicle.IsMotorcycle);
             if (eyes)
             {
-                // The view goes with the posed head (hips on the cushion, a rider's forward lean), so the own body is
-                // below and behind it, never round the camera. View only: the shot origin stays at the seat's eye.
+                // The view goes forward / sideways with the posed head (hips on the cushion, a rider's forward lean), so
+                // the own shoulders are behind it, never round the camera; the height stays the seat's eye, so the
+                // wheel and the hands on it are in the lower frame. View only: the shot origin stays at the seat's eye.
                 var eye = _combatant.EyePosition;
-                if (_animation != null && _animation.HeadEye(out var head)) eye = head;
+                if (_animation != null && _animation.HeadEye(out var head)) eye += Vector3.ProjectOnPlane(head - eye, vehicle.transform.up);
                 cam.transform.SetPositionAndRotation(eye, look);
                 _distance = 0f;
                 return;
