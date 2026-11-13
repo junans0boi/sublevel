@@ -13,6 +13,8 @@ namespace Game.Tests
 {
     // ADR-055 (M2-3, #57) in the World scene as a host: everyone starts in an elevator station behind a closed door,
     // nobody leaves or fires before it opens, and spawn protection holds until it runs out or the player fires.
+    // ADR-065 (1) (#84): the start is in a car at the bottom of a shaft under the station, which comes up to the
+    // station floor by the time the doors open.
     // The input hold needs PlayerController to read SpawnProtection.InputBlocked (one line, see the issue).
     public class DeploymentPlayTests
     {
@@ -114,7 +116,9 @@ namespace Game.Tests
             var outward = Quaternion.Euler(0f, s.YawDeg, 0f) * Vector3.forward;
             var first = FirstHit(eye, outward, player.transform);
             Assert.IsNotNull(first, "something should close the station's front");
-            Assert.AreEqual(door, first.GetComponentInParent<ElevatorDoor>(), "the station's front should be its door, not " + first.name);
+            // The car's own door (ADR-065 (1)) may stand in front of the station door once the car is up.
+            bool carDoor = first.GetComponentInParent<ElevatorCar>() != null;
+            Assert.IsTrue(carDoor || first.GetComponentInParent<ElevatorDoor>() == door, "the station's front should be its door, not " + first.name);
 
             // Then it opens on its own, sinks away and stops blocking.
             yield return WaitUntil(() => !SpawnProtection.InputBlocked, DeploymentRules.Current.DoorDelaySeconds + 2f, "the doors to open");
@@ -135,6 +139,64 @@ namespace Game.Tests
                 bestDistance = hit.distance;
             }
             return best;
+        }
+
+        // How far below its station floor the car is at this moment, by the same function every peer uses.
+        static float CarDepthNow() => ElevatorRise.Offset(ElevatorDoors.Instance.LocalSecondsToOpen, DeploymentRules.Current);
+
+        [UnityTest]
+        public IEnumerator Player_RidesTheCarUp_FromUnderground_AndCannotMoveOnTheWay()
+        {
+            var rules = DeploymentRules.Current;
+            var player = Combatant.LocalPlayer;
+            int site = NearestSite(player.transform.position, out float flat);
+            Assert.Less(flat, SiteTolerance, "the player should start under an elevator station");
+            var car = ElevatorDoors.Instance.CarOf(site);
+            Assert.IsNotNull(car, "every station should have a car in a shaft under it");
+            float floor = ElevatorDoors.Instance.Sites[site].Spawn.y;
+
+            // The very start: deep underground (the test may only begin once the car has set off; then it is
+            // enough that the player is where the car is).
+            float depth = floor - player.transform.position.y;
+            if (CarDepthNow() >= 10f) Assert.GreaterOrEqual(depth, 10f - 0.05f, "the player should start at least 10 m below the station floor");
+            else Assert.Inconclusive("the car had already risen past 10 m when the test began");
+
+            // Try to walk, jump and sprint all the way up: only the car moves the player.
+            var start = player.transform.position;
+            _input.Frame.Move = new Vector2(0.6f, 1f);
+            _input.Frame.Sprint = true;
+            float lowest = start.y, highest = start.y, previous = start.y;
+            while (SpawnProtection.InputBlocked)
+            {
+                _input.Frame.Jump = true;
+                var p = player.transform.position;
+                Assert.Less(Flat(p, start), 0.05f, "the player should not move sideways in the car");
+                Assert.GreaterOrEqual(p.y, previous - 0.06f, "the player should only go up (but for the stop's bounce)");
+                Assert.AreEqual(car.transform.position.y + ElevatorCar.RideLift, p.y, 0.1f, "the player should ride on the car floor");
+                lowest = Mathf.Min(lowest, p.y);
+                highest = Mathf.Max(highest, p.y);
+                previous = p.y;
+                yield return null;
+            }
+            _input.Frame = new PlayerInputFrame { SelectSlot = -1 };
+            Assert.Less(Mathf.Abs(player.transform.position.y - floor), 0.1f, "the car should stop level with the station floor as the doors open");
+            Assert.Less(Mathf.Abs(car.transform.position.y - floor), 0.02f);
+            Assert.Greater(highest - lowest, 9.5f, "the ride should come up from deep below");
+
+            // The sounds: hum on the way, clunk at the stop, chime with the doors.
+            var audio = car.GetComponent<ElevatorAudio>();
+            Assert.IsNotNull(audio, "the car should have its sounds");
+            yield return null;
+            yield return null;
+            Assert.GreaterOrEqual(audio.HumsStarted, 1, "the hum should play while rising");
+            Assert.GreaterOrEqual(audio.ClunksPlayed, 1, "a clunk when the car stops");
+            Assert.GreaterOrEqual(audio.ChimesPlayed, 1, "a chime when the doors open");
+            Assert.IsFalse(audio.HumPlaying, "the hum stops with the car");
+
+            // Both doors sink away; the player stays on the floor (the car floor is solid).
+            yield return WaitUntil(() => !car.DoorBlocking, rules.DoorSlideSeconds + 2f, "the car door to sink away");
+            yield return new WaitForSeconds(0.3f);
+            Assert.Less(Mathf.Abs(player.transform.position.y - floor), 0.15f, "standing on the car floor at station level");
         }
 
         [UnityTest]
@@ -213,6 +275,12 @@ namespace Game.Tests
             }
         }
 
+        static bool AnyHeld(List<Combatant> bots)
+        {
+            foreach (var bot in bots) if (bot != null && ServerProtection(bot).IsHeld) return true;
+            return false;
+        }
+
         [UnityTest]
         public IEnumerator Bots_StartInStationsToo_OnePerElevator()
         {
@@ -234,15 +302,33 @@ namespace Game.Tests
                 Assert.IsTrue(protection.IsProtected);
             }
 
-            // Held bots stay put until the doors open.
+            // They start underground in their cars (ADR-065 (1)) and ride up; held bots do not move sideways.
             var before = new Vector3[bots.Count];
-            for (int i = 0; i < bots.Count; i++) before[i] = bots[i].transform.position;
-            yield return new WaitForSeconds(1f);
-            if (SpawnProtection.InputBlocked)
+            var floors = new float[bots.Count];
+            var lastHeld = new float[bots.Count];
+            bool early = CarDepthNow() >= 10f;
+            for (int i = 0; i < bots.Count; i++)
+            {
+                before[i] = bots[i].transform.position;
+                floors[i] = ElevatorDoors.Instance.Sites[NearestSite(before[i], out _)].Spawn.y;
+                lastHeld[i] = before[i].y;
+                if (early) Assert.GreaterOrEqual(floors[i] - before[i].y, 10f - 0.05f, bots[i].name + " should start at least 10 m below its station floor");
+            }
+            float deadline = Time.realtimeSinceStartup + DeploymentRules.Current.DoorDelaySeconds + 3f;
+            while (SpawnProtection.InputBlocked || AnyHeld(bots))
+            {
+                Assert.Less(Time.realtimeSinceStartup, deadline, "the doors should open");
                 for (int i = 0; i < bots.Count; i++)
+                {
+                    if (!ServerProtection(bots[i]).IsHeld) continue;
                     Assert.Less(Flat(bots[i].transform.position, before[i]), 0.3f, bots[i].name + " moved while its door was closed");
+                    lastHeld[i] = bots[i].transform.position.y;
+                }
+                yield return null;
+            }
+            for (int i = 0; i < bots.Count; i++)
+                Assert.Less(Mathf.Abs(lastHeld[i] - floors[i]), 0.1f, bots[i].name + " should arrive level with its station floor");
 
-            yield return WaitUntil(() => !SpawnProtection.InputBlocked, DeploymentRules.Current.DoorDelaySeconds + 2f, "the doors to open");
             yield return null;
             foreach (var bot in bots) Assert.IsFalse(ServerProtection(bot).IsHeld, bot.name + " should be released with the doors");
         }

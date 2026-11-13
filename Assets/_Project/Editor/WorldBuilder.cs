@@ -115,6 +115,9 @@ public static partial class WorldBuilder
         var lots = new List<Placed>();
         var stations = new List<Placed>();
         BuildBuildings(plan, ground, world.transform, store, navSources, lots, stations);
+        int holes = CutShaftHoles(terrain.terrainData, plan, stations);
+        EditorUtility.SetDirty(terrain.terrainData);
+        Debug.Log($"[WorldBuilder] elevator shafts: {stations.Count} shafts and cars, {holes} terrain cells opened over them");
         int rocks = BuildRocks(plan, ground, world.transform, navSources);
         PlaceTrees(plan, ground, world.transform);
         BuildDressing(plan, ground, world.transform, store, navSources, lots);

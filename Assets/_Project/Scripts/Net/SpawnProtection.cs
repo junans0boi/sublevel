@@ -6,8 +6,9 @@ namespace Game.Net
 {
     // Spawn protection after the elevator start (ADR-055 (2)(3)). MatchDirector adds it on the server to every
     // combatant it puts in an elevator. Until the doors open and for ProtectionSeconds after, damage is ignored;
-    // the combatant's first shot or throw ends it at once. While the doors are closed a bot's brain is paused (a
-    // player is held by its own controller through InputBlocked, and by the door itself).
+    // the combatant's first shot or throw ends it at once. While the doors are closed a bot's brain is paused and
+    // the bot rides its elevator car up (a player is held by its own controller through InputBlocked, which also
+    // moves it with the car, and by the door itself).
     // What clients know (HUD) comes from ElevatorDoors' broadcasts: use the static helpers, which work on every side.
     [RequireComponent(typeof(Combatant))]
     public class SpawnProtection : MonoBehaviour
@@ -93,6 +94,13 @@ namespace Game.Net
             // Someone set a filter after us (equipment added later): keep it, in front of it.
             if (_combatant.ServerDamageFilter != _filter) Chain();
             Hold(IsHeld && !_combatant.Dead.Value);
+            // A held bot rides its elevator car up (ADR-065 (1)); the server moves it and NetworkTransform shows it.
+            // Players are moved by their owner (PlayerController), so the server leaves them alone.
+            if (IsHeld && !_combatant.IsPlayer && ElevatorCar.TryRideFloor(transform.position, out float feet))
+            {
+                var p = transform.position;
+                transform.position = new Vector3(p.x, feet, p.z);
+            }
             // Only once the doors are open: nothing fired from inside a shut station (it only hits the door) counts.
             if (!_ended && !IsHeld && Attacked()) ServerEnd();
             Snapshot();

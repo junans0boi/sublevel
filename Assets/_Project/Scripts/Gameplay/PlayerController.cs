@@ -213,9 +213,15 @@ namespace Game.Gameplay
             // Slower while a bandage or kit is being used.
             speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
             Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
-            _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
-            _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
-            ReportFall();
+            // Riding the elevator car up (ADR-065 (1)): the car carries the feet, nothing else moves the body.
+            if (SpawnProtection.InputBlocked && ElevatorCar.TryRideFloor(transform.position, out float rideFeet))
+                Teleport(new Vector3(transform.position.x, rideFeet, transform.position.z));
+            else
+            {
+                _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
+                _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
+                ReportFall();
+            }
 
             if (f.ToggleView) Rig.ToggleMode();
             PlaceCamera();

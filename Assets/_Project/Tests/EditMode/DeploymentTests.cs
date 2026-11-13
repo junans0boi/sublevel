@@ -126,5 +126,79 @@ namespace Game.Tests
             Assert.AreEqual(3, assigned.Distinct().Count());
             Assert.AreEqual(3, assigned.Select(e => odd[e].Region).Distinct().Count());
         }
+
+        // ---- ADR-065 (1): the car comes up from underground ----
+
+        [Test]
+        public void Rise_Defaults_TakeTheWholeDoorDelay_FromWellBelowGround()
+        {
+            var r = new DeploymentRules();
+            Assert.AreEqual(r.DoorDelaySeconds, r.RiseSeconds, 1e-4f);
+            Assert.GreaterOrEqual(r.CarStartDepth, 10f);
+            Assert.Greater(r.ShaftDepth, r.CarStartDepth, "the pit is below the car's start");
+            Assert.AreEqual(r.RiseSeconds, ElevatorRise.TravelSeconds(r) + ElevatorRise.SettleSeconds(r), 1e-4f);
+        }
+
+        [Test]
+        public void Rise_WaitsAtTheBottom_ThenEndsAtTheFloorWhenTheDoorsOpen()
+        {
+            var r = new DeploymentRules();
+            Assert.AreEqual(r.CarStartDepth, ElevatorRise.Offset(double.PositiveInfinity, r), 1e-4f, "not scheduled: at the bottom");
+            Assert.AreEqual(ElevatorPhase.Waiting, ElevatorRise.Phase(double.PositiveInfinity, r));
+            Assert.AreEqual(r.CarStartDepth, ElevatorRise.Offset(r.RiseSeconds + 1.0, r), 1e-4f);
+            Assert.AreEqual(r.CarStartDepth, ElevatorRise.Offset(r.RiseSeconds, r), 0.01f, "the rise starts at the bottom");
+            Assert.AreEqual(0f, ElevatorRise.Offset(0.0, r), 1e-5f);
+            Assert.AreEqual(0f, ElevatorRise.Offset(-5.0, r), 1e-5f);
+            Assert.AreEqual(ElevatorPhase.Open, ElevatorRise.Phase(0.0, r));
+            Assert.AreEqual(0f, ElevatorRise.Offset(ElevatorRise.SettleSeconds(r), r), 1e-4f, "stopped at the floor before settling");
+        }
+
+        [Test]
+        public void Rise_GoesUpSmoothly_AndOnlyBouncesALittle()
+        {
+            var r = new DeploymentRules();
+            float previous = ElevatorRise.Offset(r.RiseSeconds, r);
+            float settle = ElevatorRise.SettleSeconds(r);
+            const double step = 1.0 / 120.0;
+            float fastest = 0f;
+            for (double s = r.RiseSeconds; s > 0.0; s -= step)
+            {
+                float offset = ElevatorRise.Offset(s, r);
+                Assert.LessOrEqual(offset, r.CarStartDepth + r.ShakeMeters + 1e-4f);
+                if (s > settle)
+                {
+                    // Up all the way except the judder; never a jump.
+                    Assert.LessOrEqual(offset, previous + 2f * r.ShakeMeters + 1e-4f, $"at {s:F3} s");
+                    fastest = System.Math.Max(fastest, (previous - offset) / (float)step);
+                }
+                else Assert.LessOrEqual(System.Math.Abs(offset), r.BounceMeters + 1e-4f, $"bounce at {s:F3} s");
+                previous = offset;
+            }
+            Assert.Less(fastest, 2.2f * r.CarStartDepth / ElevatorRise.TravelSeconds(r), "no sudden jump");
+            Assert.AreEqual(1f, ElevatorRise.Speed01(settle + ElevatorRise.TravelSeconds(r) * 0.5, r), 1e-4f, "full speed midway");
+            Assert.AreEqual(0f, ElevatorRise.Speed01(settle * 0.5, r), 1e-4f);
+        }
+
+        [Test]
+        public void Rise_ShorterDoorDelay_ShortensTheRide_InsteadOfJumping()
+        {
+            var r = new DeploymentRules { DoorDelaySeconds = 1.5f, RiseSeconds = 3f };
+            Assert.AreEqual(1.5f, ElevatorRise.TravelSeconds(r) + ElevatorRise.SettleSeconds(r), 1e-4f);
+            Assert.AreEqual(r.CarStartDepth, ElevatorRise.Offset(1.5, r), 0.01f);
+        }
+
+        [Test]
+        public void Travel_IsMonotonic_FromZeroToOne()
+        {
+            Assert.AreEqual(0f, ElevatorRise.Travel(0f, 0.25f), 1e-6f);
+            Assert.AreEqual(1f, ElevatorRise.Travel(1f, 0.25f), 1e-5f);
+            float last = 0f;
+            for (int i = 1; i <= 100; i++)
+            {
+                float p = ElevatorRise.Travel(i / 100f, 0.25f);
+                Assert.GreaterOrEqual(p, last);
+                last = p;
+            }
+        }
     }
 }

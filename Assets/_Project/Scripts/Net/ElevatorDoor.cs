@@ -26,7 +26,8 @@ namespace Game.Net
         public int ObjectId;
     }
 
-    // The front of one elevator station (ADR-055 (2)): a box that fills the opening and, once told when, sinks into
+    // The front of one elevator station (ADR-055 (2)); the car behind it comes up from underground (ElevatorCar,
+    // ADR-065 (1)). A box that fills the opening and, once told when, sinks into
     // the floor. Not a network object: every peer has its own, driven by ElevatorDoors from one replicated time, so
     // 13 stations cost no network objects. While it stands, its collider stops movement and shots like a wall.
     // WorldBuilder may place it (any GameObject with a collider and renderers; set Station); otherwise
@@ -138,6 +139,22 @@ namespace Game.Net
         public float DoorSecondsLeft => !_clientScheduled
             ? DeploymentRules.Current.DoorDelaySeconds
             : Mathf.Max(0f, (float)(_clientOpenAt - Time.timeAsDouble));
+
+        // This peer's own clock for the cars (ADR-065 (1)): the server's opening where this peer is the server (so
+        // the server moves its bots with the doors it holds them by), otherwise the one the broadcast told it.
+        public double LocalOpenAt => ServerScheduled ? _serverOpenAt : _clientScheduled ? _clientOpenAt : double.PositiveInfinity;
+        // PositiveInfinity while the opening is not scheduled on this peer.
+        public double LocalSecondsToOpen => double.IsInfinity(LocalOpenAt) ? double.PositiveInfinity : LocalOpenAt - Time.timeAsDouble;
+        // Metres a car is below its station floor right now on this peer.
+        public float CarOffsetNow => ElevatorRise.Offset(LocalSecondsToOpen, DeploymentRules.Current);
+
+        // The car under station `station`, or null (a scene built before the cars, or a plain code-made door).
+        public ElevatorCar CarOf(int station)
+        {
+            foreach (var car in ElevatorCar.All)
+                if (car != null && car.Station == station) return car;
+            return null;
+        }
 
         // Client: protection left for a combatant (every combatant came up in an elevator when this exists).
         public float ProtectionSecondsLeftOf(int objectId)

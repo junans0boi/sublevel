@@ -16,6 +16,90 @@ namespace Game.Core
         public float DoorSlideSeconds = 1.2f; // how long the door takes to sink into the floor
         public float DoorThickness = 0.12f;   // metres; the door fills the station's front opening
         public float DoorWallOverlap = 0.1f;  // metres the door reaches into the side walls on each side
+
+        // The car comes up from underground (ADR-065 (1)). It rises during the last RiseSeconds before the doors
+        // open (never longer than DoorDelaySeconds, so it never jumps), stops ArriveSettleSeconds before they open
+        // and bounces once while it settles. Riders stand in it and cannot move.
+        public float RiseSeconds = 3f;          // the same as DoorDelaySeconds by default: the whole wait is the ride
+        public float CarStartDepth = 12f;       // metres the car floor starts below the station floor
+        public float ShaftDepth = 13f;          // metres from the station floor to the shaft's pit floor
+        public float ArriveSettleSeconds = 0.4f;
+        public float RiseAccelFraction = 0.25f; // share of the travel spent speeding up (and again slowing down)
+        public float BounceMeters = 0.03f;      // the overshoot when the car stops
+        public float ShakeMeters = 0.006f;      // vertical judder at full speed
+    }
+
+    public enum ElevatorPhase { Waiting, Rising, Settling, Open }
+
+    // Where the elevator car is, as a pure function of the time left until the doors open (ADR-065 (1)), so every
+    // peer moves its cars and riders the same way from the one replicated opening time. `secondsToOpen` is
+    // PositiveInfinity while the opening is not scheduled yet (the car waits at the bottom).
+    public static class ElevatorRise
+    {
+        // Seconds of actual travel (the settle comes after it).
+        public static float TravelSeconds(DeploymentRules r) =>
+            Math.Max(0.05f, Math.Min(r.RiseSeconds, r.DoorDelaySeconds) - SettleSeconds(r));
+
+        public static float SettleSeconds(DeploymentRules r) =>
+            Math.Max(0f, Math.Min(r.ArriveSettleSeconds, Math.Min(r.RiseSeconds, r.DoorDelaySeconds) * 0.5f));
+
+        public static ElevatorPhase Phase(double secondsToOpen, DeploymentRules r)
+        {
+            if (double.IsNaN(secondsToOpen) || secondsToOpen <= 0.0) return ElevatorPhase.Open;
+            float settle = SettleSeconds(r);
+            if (secondsToOpen <= settle) return ElevatorPhase.Settling;
+            return secondsToOpen < settle + TravelSeconds(r) ? ElevatorPhase.Rising : ElevatorPhase.Waiting;
+        }
+
+        // Metres the car floor is below the station floor: CarStartDepth while waiting, 0 once the doors open,
+        // briefly negative (a little above) in the arrival bounce.
+        public static float Offset(double secondsToOpen, DeploymentRules r)
+        {
+            float depth = Math.Max(0f, r.CarStartDepth);
+            float settle = SettleSeconds(r), travel = TravelSeconds(r);
+            switch (Phase(secondsToOpen, r))
+            {
+                case ElevatorPhase.Waiting: return depth;
+                case ElevatorPhase.Rising:
+                {
+                    float u = 1f - (float)((secondsToOpen - settle) / travel);
+                    float envelope = (float)Math.Sin(Math.PI * Clamp01(u));
+                    float judder = (float)(Math.Sin(secondsToOpen * 47.0) + 0.6 * Math.Sin(secondsToOpen * 83.0 + 1.3)) / 1.6f;
+                    return depth * (1f - Travel(u, r.RiseAccelFraction)) + r.ShakeMeters * envelope * judder;
+                }
+                case ElevatorPhase.Settling:
+                {
+                    float k = settle <= 0f ? 1f : 1f - (float)(secondsToOpen / settle); // 0 at the stop, 1 at the opening
+                    return -r.BounceMeters * (float)Math.Sin(2.0 * Math.PI * k) * (1f - k);
+                }
+                default: return 0f;
+            }
+        }
+
+        // 0..1 of the top speed (for the hum); 0 outside the travel.
+        public static float Speed01(double secondsToOpen, DeploymentRules r)
+        {
+            if (Phase(secondsToOpen, r) != ElevatorPhase.Rising) return 0f;
+            float u = 1f - (float)((secondsToOpen - SettleSeconds(r)) / TravelSeconds(r));
+            float a = AccelFraction(r.RiseAccelFraction);
+            return u < a ? u / a : u > 1f - a ? (1f - u) / a : 1f;
+        }
+
+        // Share of the way done at `u` (0..1 of the travel time): constant acceleration for the first `accel` share,
+        // full speed, then the mirror image to a stop.
+        public static float Travel(float u, float accel)
+        {
+            u = Clamp01(u);
+            float a = AccelFraction(accel);
+            float top = 1f / (1f - a);
+            if (u < a) return top * u * u / (2f * a);
+            if (u <= 1f - a) return top * (a * 0.5f + (u - a));
+            float rest = 1f - u;
+            return 1f - top * rest * rest / (2f * a);
+        }
+
+        static float AccelFraction(float a) => a < 0.01f ? 0.01f : a > 0.5f ? 0.5f : a;
+        static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
     }
 
     // One elevator as the assignment sees it: the region it stands in (any id; equal ids = same region).

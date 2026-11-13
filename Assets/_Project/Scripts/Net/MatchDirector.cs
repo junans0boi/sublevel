@@ -171,13 +171,15 @@ namespace Game.Net
                 if (point == null) continue;
                 // With elevators a bot starts in the one the deployment gave it (bots follow the players in the
                 // assignment), otherwise at its spawn point.
-                bool inElevator = TryElevatorFor(_expectedPlayersCounted + number, out var position, out var rotation);
+                bool inElevator = TryElevatorFor(_expectedPlayersCounted + number, out var position, out var rotation, out bool riding);
                 if (!inElevator)
                 {
                     position = point.position;
                     rotation = point.rotation;
                 }
-                if (NavMesh.SamplePosition(position, out var hit, BotSnapMeters, NavMesh.AllAreas)) position = hit.position;
+                // A bot in an elevator rides the car (the shaft has no navmesh); BotController finds the navmesh
+                // once the doors open.
+                if (!(inElevator && riding) && NavMesh.SamplePosition(position, out var hit, BotSnapMeters, NavMesh.AllAreas)) position = hit.position;
                 var bot = Instantiate(_botPrefab, position, rotation);
                 _networkManager.ServerManager.Spawn(bot);
                 number++;
@@ -212,11 +214,12 @@ namespace Game.Net
         }
 
         // Where participant `index` starts: its assigned elevator, or (a player beyond the expected ones) the least
-        // occupied elevator. False when the scene has no elevators.
-        bool TryElevatorFor(int index, out Vector3 position, out Quaternion rotation)
+        // occupied elevator. False when the scene has no elevators. `riding`: in the car under the station.
+        bool TryElevatorFor(int index, out Vector3 position, out Quaternion rotation, out bool riding)
         {
             position = default;
             rotation = Quaternion.identity;
+            riding = false;
             if (Elevators == null || Elevators.Sites.Count == 0 || _elevatorLoad.Length != Elevators.Sites.Count) return false;
             int elevator;
             if (index >= 0 && index < _deployment.Length) elevator = _deployment[index];
@@ -227,7 +230,12 @@ namespace Game.Net
             }
             _elevatorLoad[elevator]++;
             var site = Elevators.Sites[elevator];
-            position = site.Spawn + Vector3.up * ElevatorSpawnLift;
+            // With a car under the station (ADR-065 (1)) the start is in the car, wherever it is right now: at the
+            // bottom of the shaft before the doors are scheduled, at the floor for a late joiner.
+            riding = Elevators.CarOf(elevator) != null;
+            position = riding
+                ? site.Spawn + Vector3.up * (ElevatorCar.RideLift - Elevators.CarOffsetNow)
+                : site.Spawn + Vector3.up * ElevatorSpawnLift;
             rotation = Quaternion.Euler(0f, site.YawDeg, 0f);
             return true;
         }
@@ -275,7 +283,7 @@ namespace Game.Net
             // Scenes with elevators: the deployment decides (ADR-055). Others: the spawn points in turn.
             // Players beyond the expected ones (-1) take the least occupied elevator instead of a bot's place.
             int index = _playersPlaced < _expectedPlayersCounted ? _playersPlaced : -1;
-            if (TryElevatorFor(index, out var position, out var rotation))
+            if (TryElevatorFor(index, out var position, out var rotation, out _))
             {
                 _playersPlaced++;
                 var deployed = Instantiate(_playerPrefab, position, rotation);
