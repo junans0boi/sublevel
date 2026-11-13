@@ -54,6 +54,9 @@ namespace Game.Gameplay
         readonly GameObject[] _packRows = new GameObject[InventoryBackend.BackpackRows];
         readonly InventoryItemIcon[] _packIcons = new InventoryItemIcon[InventoryBackend.BackpackRows];
         readonly InventoryDragItem[] _packDrags = new InventoryDragItem[InventoryBackend.BackpackRows];
+        Text _carryLabel;
+        RectTransform _carryFill;
+        Image _carryFillImage;
 
         readonly Text[] _gearNames = new Text[2];
         readonly Text[] _gearDetails = new Text[2];
@@ -148,7 +151,7 @@ namespace Game.Gameplay
         void Refresh(Combatant me)
         {
             CollectVicinity(me.transform.position);
-            int hash = Hash(me);
+            int hash = unchecked(Hash(me) * 31 + ExtraHash(me));
             if (!_dirty && hash == _hash) return;
             _dirty = false;
             _hash = hash;
@@ -239,6 +242,33 @@ namespace Game.Gameplay
             int grenades = InventoryBackend.Grenades(me);
             ShowPackRow(InventoryBackend.GrenadeRow, grenades);
             _packDrags[InventoryBackend.GrenadeRow].Configure(this, GrenadeSource());
+            ShowPackRow(InventoryBackend.BandageRow, InventoryBackend.Bandages(me));
+            _packDrags[InventoryBackend.BandageRow].Configure(this, BandageSource());
+            ShowPackRow(InventoryBackend.FirstAidRow, InventoryBackend.FirstAids(me));
+            _packDrags[InventoryBackend.FirstAidRow].Configure(this, FirstAidSource());
+            ShowPackRow(InventoryBackend.SmokeRow, InventoryBackend.Smokes(me));
+            _packDrags[InventoryBackend.SmokeRow].Configure(this, SmokeSource());
+
+            // The bag's load against its size; red when over (the server then refuses what does not fit).
+            string carry = InventoryBackend.CarryLabel(me);
+            float fraction = InventoryBackend.CarryFraction(me);
+            _carryLabel.text = carry.Length > 0 ? carry : "가방 용량 —";
+            _carryFill.anchorMax = new Vector2(Mathf.Clamp01(fraction), 1f);
+            _carryFillImage.color = fraction > 0.999f ? UiKit.Danger : fraction > 0.85f ? UiKit.Accent : Durability;
+        }
+
+        // What the rows added after the first inventory show (bandages, kits, smokes, keys, bag load).
+        static int ExtraHash(Combatant me)
+        {
+            unchecked
+            {
+                int hash = InventoryBackend.Bandages(me);
+                hash = hash * 31 + InventoryBackend.FirstAids(me);
+                hash = hash * 31 + InventoryBackend.Smokes(me);
+                hash = hash * 31 + InventoryBackend.Keys(me);
+                hash = hash * 31 + InventoryBackend.CarryHash(me);
+                return hash;
+            }
         }
 
         void ShowPackRow(int row, int count)
@@ -325,6 +355,9 @@ namespace Game.Gameplay
             ? new InventoryDragSource(InventorySourceKind.Ammo, null, ammoIndex) : default;
         public InventoryDragSource MedkitSource() => new InventoryDragSource(InventorySourceKind.Medkit, null, 0);
         public InventoryDragSource GrenadeSource() => new InventoryDragSource(InventorySourceKind.Grenade, null, 0);
+        public InventoryDragSource BandageSource() => new InventoryDragSource(InventorySourceKind.Bandage, null, 0);
+        public InventoryDragSource FirstAidSource() => new InventoryDragSource(InventorySourceKind.FirstAid, null, 0);
+        public InventoryDragSource SmokeSource() => new InventoryDragSource(InventorySourceKind.Smoke, null, 0);
         public InventoryDragSource WeaponSource(int slot) => slot >= 0 && slot < Loadout.SlotCount
             ? new InventoryDragSource(InventorySourceKind.Weapon, null, slot) : default;
         public InventoryDragSource GearSource(int slot) => slot == InventoryBackend.HelmetSlot
@@ -343,6 +376,11 @@ namespace Game.Gameplay
         {
             if (!CanDropOnGround(source)) return false;
             var me = Combatant.LocalPlayer;
+            if (DropExtra(source, me))
+            {
+                _dirty = true;
+                return true;
+            }
             switch (source.Kind)
             {
                 case InventorySourceKind.Ammo: InventoryBackend.DropAmmo(me, source.Index); break;
@@ -356,6 +394,30 @@ namespace Game.Gameplay
             }
             _dirty = true;
             return true;
+        }
+
+        // Bandages, kits and smokes go one at a time.
+        static bool DropExtra(InventoryDragSource source, Combatant me)
+        {
+            switch (source.Kind)
+            {
+                case InventorySourceKind.Bandage: InventoryBackend.DropHealing(me, HealKind.Bandage); return true;
+                case InventorySourceKind.FirstAid: InventoryBackend.DropHealing(me, HealKind.FirstAid); return true;
+                case InventorySourceKind.Smoke: InventoryBackend.DropSmoke(me); return true;
+                default: return false;
+            }
+        }
+
+        // How many the bag holds of a row added after the first inventory; false for every other source.
+        static bool TryExtraCount(InventoryDragSource source, Combatant me, out int count)
+        {
+            switch (source.Kind)
+            {
+                case InventorySourceKind.Bandage: count = InventoryBackend.Bandages(me); return true;
+                case InventorySourceKind.FirstAid: count = InventoryBackend.FirstAids(me); return true;
+                case InventorySourceKind.Smoke: count = InventoryBackend.Smokes(me); return true;
+                default: count = 0; return false;
+            }
         }
 
         public bool DropOutside(InventoryDragSource source) => DropOnGround(source);
@@ -422,6 +484,8 @@ namespace Game.Gameplay
             if (me == null) return;
             if (source.Kind == InventorySourceKind.Vicinity && clickCount >= 2) InventoryBackend.Pickup(me, source.Loot);
             else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
+            else if (source.Kind == InventorySourceKind.Bandage && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.Bandage);
+            else if (source.Kind == InventorySourceKind.FirstAid && clickCount >= 2) InventoryBackend.UseHealing(me, HealKind.FirstAid);
             else if (source.Kind == InventorySourceKind.Weapon && InventoryBackend.WeaponId(me, source.Index) != 0)
                 InventoryBackend.SelectSlot(me, source.Index);
         }
@@ -461,6 +525,7 @@ namespace Game.Gameplay
         {
             var me = Combatant.LocalPlayer;
             if (me == null || !source.IsValid) return false;
+            if (TryExtraCount(source, me, out int extra)) return extra > 0;
             switch (source.Kind)
             {
                 case InventorySourceKind.Vicinity: return source.Loot != null && source.Loot.IsSpawned;
@@ -567,6 +632,9 @@ namespace Game.Gameplay
                     key = vest.Has ? "vest_" + vest.Tier : "";
                     name = "조끼";
                     break;
+                case InventorySourceKind.Bandage: key = "bandage"; name = HealRules.BandageName; break;
+                case InventorySourceKind.FirstAid: key = "firstaid"; name = HealRules.FirstAidName; break;
+                case InventorySourceKind.Smoke: key = "smoke"; name = ThrowableRules.SmokeName; break;
             }
         }
 
@@ -604,6 +672,7 @@ namespace Game.Gameplay
         public LootItem VicinityItem(int index) => index >= 0 && index < _vicinity.Count ? _vicinity[index] : null;
         public string VicinityText(int index) => _vicinityNames[index].text + " " + _vicinityAmounts[index].text;
         public string BackpackText(int row) => _packNames[row].text + " " + _packCounts[row].text;
+        public string CarryText => _carryLabel != null ? _carryLabel.text : "";
         public string GearCardText(int slot) => _gearNames[slot].text + "\n" + _gearDetails[slot].text;
         public string WeaponCardText(int slot) => _weaponNames[slot].text + "\n" + _weaponAmmo[slot].text + " " + _weaponBadge[slot].text;
 
@@ -682,6 +751,9 @@ namespace Game.Gameplay
                 string key;
                 if (i < InventoryBackend.AmmoTypeCount) { name = InventoryBackend.AmmoName(i) + " 탄약"; key = InventoryBackend.AmmoKey(i); }
                 else if (i == InventoryBackend.MedkitRow) { name = "구급상자"; key = "medkit"; }
+                else if (i == InventoryBackend.BandageRow) { name = HealRules.BandageName; key = "bandage"; }
+                else if (i == InventoryBackend.FirstAidRow) { name = HealRules.FirstAidName; key = "firstaid"; }
+                else if (i == InventoryBackend.SmokeRow) { name = ThrowableRules.SmokeName; key = "smoke"; }
                 else { name = "수류탄"; key = "grenade"; }
                 _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, 50f, 50f));
                 _packIcons[i].Set(key, name);
@@ -690,8 +762,14 @@ namespace Game.Gameplay
                 _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
                 _packRows[i] = row.gameObject;
             }
-            UiKit.Label(Row("BagHint", column, width, HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap) + 8f, 44f),
-                "소모품 확장 자리", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
+            // Under the rows: the bag's load as text and a bar ("가방 용량 23/60").
+            var carry = Row("Carry", column, width, HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap) + 2f, 52f);
+            _carryLabel = UiKit.Label(UiKit.Rect("Label", carry, TopLeft, TopLeft, Vector2.zero, new Vector2(content, 28f)), "가방 용량 —", 19, UiKit.Text);
+            var track = UiKit.Rect("Track", carry, TopLeft, TopLeft, new Vector2(0f, -34f), new Vector2(content, 10f));
+            UiKit.Box(track, UiKit.PanelLight);
+            _carryFill = UiKit.Fill("Fill", track);
+            _carryFill.anchorMax = new Vector2(0f, 1f);
+            _carryFillImage = UiKit.Box(_carryFill, Durability);
         }
 
         void BuildGear(RectTransform column, float width)

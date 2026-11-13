@@ -16,6 +16,8 @@ namespace Game.Gameplay
         [SerializeField] AudioSource _bodySource;
         [SerializeField] AudioClip[] _shotByWeapon = new AudioClip[0];
         [SerializeField] AudioClip[] _reloadByWeapon = new AudioClip[0];
+        // Playback pitch per weapon id (missing entries play at 1). The Sentinel reuses the rifle shot, pitched lower for a heavier crack.
+        [SerializeField] float[] _shotPitchByWeapon = { 1f, 1f, 1f, 1f, 1f, 0.72f };
         [SerializeField] AudioClip[] _footsteps = new AudioClip[0];
         [SerializeField] AudioClip[] _hits = new AudioClip[0];
         [SerializeField] float _shotVolume = 0.8f;
@@ -81,7 +83,8 @@ namespace Game.Gameplay
         void OnShot(Vector3 origin, Vector3 end)
         {
             if (!_shots.IsNewShot(Time.timeAsDouble)) return;
-            if (Play(_weaponSource, ClipFor(_shotByWeapon, _combatant.ActiveWeaponId), _shotVolume)) ShotsPlayed++;
+            if (Play(_weaponSource, ClipFor(_shotByWeapon, _combatant.ActiveWeaponId), _shotVolume,
+                    PitchFor(_shotPitchByWeapon, _combatant.ActiveWeaponId))) ShotsPlayed++;
         }
 
         void Update()
@@ -99,10 +102,13 @@ namespace Game.Gameplay
         static AudioClip ClipFor(AudioClip[] byWeapon, int weaponId) =>
             weaponId >= 0 && weaponId < byWeapon.Length ? byWeapon[weaponId] : null;
 
-        static bool Play(AudioSource source, AudioClip clip, float volume)
+        static float PitchFor(float[] byWeapon, int weaponId) =>
+            byWeapon != null && weaponId >= 0 && weaponId < byWeapon.Length && byWeapon[weaponId] > 0f ? byWeapon[weaponId] : 1f;
+
+        static bool Play(AudioSource source, AudioClip clip, float volume, float pitch = 1f)
         {
             if (source == null || clip == null) return false;
-            source.pitch = 1f + Random.Range(-PitchJitter, PitchJitter);
+            source.pitch = pitch + Random.Range(-PitchJitter, PitchJitter);
             source.PlayOneShot(clip, volume);
             return true;
         }

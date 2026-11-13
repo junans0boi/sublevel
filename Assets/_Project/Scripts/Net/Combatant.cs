@@ -235,6 +235,8 @@ namespace Game.Net
         CombatantOptics _optics;
         // Null on a prefab without optics.
         CombatantOptics OpticsPart => _optics != null ? _optics : (_optics = GetComponent<CombatantOptics>());
+        // Server: the bag limit (null on a prefab without one: no limit).
+        CombatantCarry _carry;
 
         public override void OnStartNetwork()
         {
@@ -259,6 +261,7 @@ namespace Game.Net
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
             _receivers = GetComponents<ILootReceiver>();
+            _carry = GetComponent<CombatantCarry>();
             Push();
         }
 
@@ -415,9 +418,15 @@ namespace Game.Net
         }
 
         // Returns false when nothing on this combatant takes that kind of loot (it then stays where it was).
-        [Server]
-        public bool ServerGive(LootEntry loot)
+        public bool ServerGive(LootEntry loot) => ServerGive(loot, out _);
+
+        // Same, and asks the bag first: `loot.Amount` is cut down to what fits and `leftover` is what stays on the
+        // ground. False when none of it fits. Checked by hand instead of [Server]: this overload has an out parameter.
+        public bool ServerGive(LootEntry loot, out int leftover)
         {
+            leftover = 0;
+            if (!IsServerInitialized || loot == null || _loadout == null) return false;
+            if (_carry != null && !_carry.ServerFit(loot, out leftover)) return false;
             switch (loot.Kind)
             {
                 case LootKind.Weapon:
@@ -518,6 +527,23 @@ namespace Game.Net
             return true;
         }
 
+        // Timed healing (CombatantHealing) gives health and uses up a medkit itself when a use finishes.
+        // Returns the health actually given.
+        public float ServerHeal(float amount)
+        {
+            if (!IsServerInitialized || _health == null || _health.IsDead) return 0f;
+            float healed = _health.Heal(amount);
+            if (healed > 0f) Push();
+            return healed;
+        }
+
+        public bool ServerConsumeMedkit()
+        {
+            if (!IsServerInitialized || _loadout == null || !_loadout.RemoveMedkit()) return false;
+            Push();
+            return true;
+        }
+
         // Empties weapons, ammo and medkits. Non-players keep at most DroppedReserveCap rounds per calibre in what
         // they hand back (the rest is gone), so a dummy's 9999 rounds do not litter the ground. `into` (may be null)
         // receives the contents as loot entries; the replicated values are cleared either way.
@@ -544,8 +570,14 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSelectSlot(int slot) => ServerSelectSlot(slot);
 
+        // H: timed healing when this combatant has it (the player); otherwise the instant medkit (bots use ServerUseMedkit).
         [ServerRpc]
-        public void CmdUseMedkit() => ServerUseMedkit();
+        public void CmdUseMedkit()
+        {
+            var h = GetComponent<CombatantHealing>();
+            if (h != null) { h.ServerUse(); return; }
+            ServerUseMedkit();
+        }
 
         // The two primary weapons trade places; the one in hand stays in hand.
         [ServerRpc]
@@ -590,7 +622,12 @@ namespace Game.Net
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
             if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
-            if (ServerGive(item.ToEntry())) item.Despawn();
+            var e = item.ToEntry();
+            if (ServerGive(e, out int left))
+            {
+                if (left > 0) item.Amount.Value = left;
+                else item.Despawn();
+            }
         }
 
         // Dropping from the inventory screen: the item leaves the loadout and lands on the ground in front.

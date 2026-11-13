@@ -60,6 +60,10 @@ namespace Game.Gameplay
         Image[] _healthFrame;
         HudDigits _healthDigits;
         GameObject _healing, _reload, _prompt;
+        Text _healingLabel;
+        GameObject _healProgress;
+        RectTransform _healProgressFill;
+        string _shownHealName;
         Text _promptLabel;
         GameObject _promptIconRoot;
         InventoryItemIcon _promptIcon;
@@ -123,6 +127,10 @@ namespace Game.Gameplay
         public int AliveShown => _shownAlive;
         public int KillsShown => _shownKills;
         public bool HealingShown => _healing.activeSelf;
+        // A timed heal is under way: the thin bar under the health track fills toward done (0..1).
+        public bool HealProgressShown => _healProgress != null && _healProgress.activeSelf;
+        public float HealProgress { get; private set; }
+        public string HealingText => _healingLabel != null ? _healingLabel.text : "";
         public CompassStrip Compass => _compass;
         public RegionCard Region => _region;
         public HudStatus Status => _status;
@@ -252,7 +260,28 @@ namespace Game.Gameplay
                     _healthDigits.SetColor(low ? UiKit.Danger : UiKit.Text);
                 }
             }
-            Show(_healing, Time.unscaledTime < _healingUntil && !dead);
+            // A timed heal (bandage, kit, medkit) under way: its name and a bar that fills until it is done.
+            var heal = CombatantHealing.Local;
+            bool healing = !dead && heal != null && heal.Using;
+            if (healing)
+            {
+                HealProgress = heal.Progress01;
+                _healProgressFill.anchorMax = new Vector2(HealProgress, 1f);
+                string name = heal.ItemName;
+                if (name != _shownHealName)
+                {
+                    _shownHealName = name;
+                    _healingLabel.text = name; // fits the label; the bar says it is under way
+                }
+            }
+            else if (_shownHealName != null)
+            {
+                _shownHealName = null;
+                HealProgress = 0f;
+                _healingLabel.text = "회복 중";
+            }
+            Show(_healProgress, healing);
+            Show(_healing, healing || (Time.unscaledTime < _healingUntil && !dead));
 
             // Stronger the closer to zero, with a slow pulse; a canvas group fades it without rebuilding meshes.
             float vignette = 0f;
@@ -487,8 +516,17 @@ namespace Game.Gameplay
             _healthFill = UiKit.Fill("Fill", track);
             _healthFillImage = UiKit.Box(_healthFill, UiKit.Health);
             var healing = Label("Healing", health, MidRight, new Vector2(-12f, 0f), new Vector2(110f, 36f), "회복 중", 18, UiKit.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            _healingLabel = healing;
             _healing = healing.gameObject;
             _healing.SetActive(false);
+            // Timed healing: a thin accent bar under the health track.
+            var healTrack = UiKit.Rect("HealProgress", health, MidLeft, MidLeft, new Vector2(84f, -12f), new Vector2(330f, 4f));
+            UiKit.Box(healTrack, UiKit.SteelDim);
+            _healProgressFill = UiKit.Fill("Fill", healTrack);
+            _healProgressFill.anchorMax = new Vector2(0f, 1f);
+            UiKit.Box(_healProgressFill, UiKit.Accent);
+            _healProgress = healTrack.gameObject;
+            _healProgress.SetActive(false);
             _areas.Add(health);
 
             // The weapon in hand: name, fire mode, calibre badge and the magazine / reserve digits.

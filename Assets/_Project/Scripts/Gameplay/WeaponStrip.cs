@@ -27,14 +27,16 @@ namespace Game.Gameplay
         readonly InventoryItemIcon[] _icon = new InventoryItemIcon[Cells];
         readonly int[] _shownWeapon = new int[Cells];
         readonly string[] _shownOptic = new string[Cells];
-        int _shownActive = int.MinValue, _shownGrenades = int.MinValue;
+        int _shownActive = int.MinValue, _shownGrenades = int.MinValue, _shownThrowKey = int.MinValue;
+        string _shownThrowName = "";
 
         // ---- Read-only state for tests ----
 
         public int ActiveShown => _shownActive;                                  // the highlighted cell, -1 for none
         public int WeaponShown(int cell) => _shownWeapon[cell];                  // weapon id drawn in the cell, 0 = empty
         public string IconKeyShown(int cell) => _icon[cell].Key;
-        public int GrenadesShown => _shownGrenades;
+        public int GrenadesShown => _shownGrenades;                              // count of the selected throwable
+        public string ThrowableNameShown => _shownThrowName;                     // "파편 수류탄" / "연막탄", "" when empty
         public string OpticShown(int cell) => _shownOptic[cell] ?? "";
         public bool IsHighlighted(int cell) => _bar[cell] != null && _bar[cell].enabled;
 
@@ -126,17 +128,27 @@ namespace Game.Gameplay
             _empty[cell].enabled = false;
         }
 
+        // The throwable cell shows the selected kind (T switches) and how many of it are left. With none of the
+        // selected kind but some of the other, the selected one shows with x0; with none at all the cell is empty.
         void ShowGrenades(int grenades)
         {
-            if (grenades == _shownGrenades) return;
-            _shownGrenades = grenades;
+            var user = ThrowableUser.Local;
+            var kind = user != null ? user.SelectedKind : ThrowableKind.Frag;
+            int count = user != null ? user.SelectedCount : grenades;
+            int total = user != null ? user.Grenades.Value + user.Smokes.Value : grenades;
+            bool has = total > 0;
+            int key = has ? count * 2 + (int)kind : -1;
+            if (key == _shownThrowKey) return;
+            _shownThrowKey = key;
+            _shownGrenades = has ? count : 0;
             const int cell = HudBackend.Throwable;
-            bool has = grenades > 0;
             _shownWeapon[cell] = has ? 1 : 0;
             _iconRoot[cell].SetActive(has);
             _empty[cell].enabled = !has;
-            _count[cell].text = has ? "x" + HudDigits.IntText(grenades) : "";
-            if (has) _icon[cell].Set("grenade", "수류탄");
+            _count[cell].text = has ? "x" + HudDigits.IntText(count) : "";
+            _count[cell].color = count > 0 ? UiKit.Text : UiKit.TextDim;
+            _shownThrowName = has ? Throwables.NameOf(kind) : "";
+            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : "grenade", _shownThrowName);
         }
     }
 }

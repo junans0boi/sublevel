@@ -2,20 +2,25 @@ using System;
 
 namespace Game.Core
 {
-    // Tuning of thrown items (PUBG_GAP 4-3 batch I). Only the fragmentation grenade exists for now; smoke is
-    // meant to reuse the same flight.
+    // The kinds of thrown item. The flight is shared; what happens when the fuse runs out differs.
+    public enum ThrowableKind { Frag = 0, Smoke = 1 }
+
+    // Tuning of thrown items (PUBG_GAP 4-3 batch I). The fragmentation grenade's numbers; the smoke grenade
+    // reuses the same flight (its own numbers are SmokeRules).
     [Serializable]
     public class ThrowableRules
     {
         // The rules in use. Defaults until the data loader replaces them, so everything runs without a data file.
         public static ThrowableRules Current = new ThrowableRules();
 
-        // The loot kind of a grenade pickup. Core/Loot.cs belongs to another batch, so the value is fixed here
-        // and kept well away from the kinds being added there; the enum gets the matching name on integration
-        // (`Grenade = 10`).
-        public const LootKind GrenadeLootKind = (LootKind)10;
+        // The loot kind of a grenade pickup.
+        public const LootKind GrenadeLootKind = LootKind.Grenade;
         // Shown in the inventory and on pickups.
         public const string GrenadeName = "파편 수류탄";
+        // The smoke grenade's loot kind.
+        // Its own numbers (fuse, cloud) are SmokeRules.
+        public const LootKind SmokeLootKind = LootKind.Smoke;
+        public const string SmokeName = "연막탄";
 
         public int MaxCarried = 3;
         public float FuseSeconds = 4f;          // counted from the throw; there is no cooking yet
@@ -91,6 +96,16 @@ namespace Game.Core
             if (distance >= rules.BlastOuterRadius || rules.BlastOuterRadius <= rules.BlastInnerRadius) return 0f;
             return rules.BlastDamage * (rules.BlastOuterRadius - distance) / (rules.BlastOuterRadius - rules.BlastInnerRadius);
         }
+
+        public static string NameOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? ThrowableRules.SmokeName : ThrowableRules.GrenadeName;
+
+        public static LootKind LootKindOf(ThrowableKind kind) => kind == ThrowableKind.Smoke ? ThrowableRules.SmokeLootKind : ThrowableRules.GrenadeLootKind;
+
+        // Seconds from the throw to the effect.
+        public static float FuseOf(ThrowableKind kind, ThrowableRules rules, SmokeRules smoke) => kind == ThrowableKind.Smoke ? smoke.FuseSeconds : rules.FuseSeconds;
+
+        // The next kind when cycling the selection (the T key).
+        public static ThrowableKind Next(ThrowableKind kind) => kind == ThrowableKind.Frag ? ThrowableKind.Smoke : ThrowableKind.Frag;
 
         // How many of `offered` grenades fit next to the `carried` ones.
         public static int Room(int carried, int offered, ThrowableRules rules) =>

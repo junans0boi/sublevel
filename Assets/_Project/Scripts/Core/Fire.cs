@@ -60,7 +60,7 @@ namespace Game.Core
         public float MuzzleForward = 0.6f;
         public float MuzzleDrop = 0.22f;
         // Indexed by weapon id (0 = none).
-        public float[] MuzzleFlashSize = { 0f, 0.28f, 0.32f, 0.4f, 0.6f };
+        public float[] MuzzleFlashSize = { 0f, 0.28f, 0.32f, 0.4f, 0.6f, 0.7f };
         public float MuzzleFlashSeconds = 0.05f;
         public float EyeViewFlashFactor = 0.45f; // the flash is right in front of the camera there
         public float MuzzleLightIntensity = 6f;  // at flash size 1

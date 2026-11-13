@@ -8,6 +8,8 @@ namespace Game.Gameplay
 {
     // The owner's side of throwing (hold G: preview arc, let go: throw) and everyone's view of this combatant's
     // grenades going off: a flash, a short light and a puff of dust and smoke, all pooled. No debris, no gore.
+    // The selected throwable (frag or smoke) is thrown the same way; a smoke grenade leaves a cloud of pooled
+    // camera-facing discs that lasts as long as the server's cloud does.
     [RequireComponent(typeof(Combatant), typeof(ThrowableUser))]
     public class ThrowableView : MonoBehaviour
     {
@@ -25,11 +27,21 @@ namespace Game.Gameplay
         const float LandingMarkSize = 0.5f;
         const float SurfaceOffset = 0.03f;
 
+        const int CloudPool = 3;          // clouds shown at once per thrower (carry limit 3; the oldest makes room)
+        const int CloudPuffs = 12;
+        const float CloudGrowSeconds = 1.5f;
+        const float CloudFadeSeconds = 3f;
+        const float CloudSpread = 0.6f;   // of the radius: how far from the centre the puffs sit
+        const float CloudPuffMin = 0.55f; // puff size as a share of the radius
+        const float CloudPuffMax = 0.8f;
+
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         // Materials are assets made by the builder: shaders cannot be looked up in a player build.
         [SerializeField] Material _glowMaterial; // additive: blast flash, preview arc, landing mark
         [SerializeField] Material _dustMaterial; // alpha blended: smoke puffs
+        [SerializeField] Material _smokeMaterial; // alpha blended: smoke cloud puffs; falls back to _dustMaterial
+        [SerializeField] Color _cloudColor = new Color(0.8f, 0.81f, 0.82f, 0.32f);
         [SerializeField] Color _smokeColor = new Color(0.42f, 0.4f, 0.37f, 0.7f);
         [SerializeField] Color _lightColor = new Color(1f, 0.75f, 0.45f);
         [SerializeField] float _lightRange = 14f;
@@ -61,6 +73,14 @@ namespace Game.Gameplay
         bool[] _blastOn;
         int _nextBlast;
 
+        MeshRenderer[] _cloudPuffs; // CloudPool x CloudPuffs
+        Vector3[] _cloudOffset;
+        float[] _cloudSize;
+        Vector3[] _cloudCentre;
+        float[] _cloudStart, _cloudSeconds;
+        bool[] _cloudOn;
+        int _nextCloud;
+
         // Counters and state so tests can tell what was shown without looking.
         public int BlastsShown { get; private set; }
         public int BlastSoundsPlayed { get; private set; }
@@ -68,6 +88,17 @@ namespace Game.Gameplay
         public bool PreviewVisible => _arc != null && _arc.enabled;
         public int PreviewPointCount => PreviewVisible ? _arc.positionCount : 0;
         public Vector3 LastBlastCentre { get; private set; }
+        public int SmokesShown { get; private set; }
+        public Vector3 LastSmokeCentre { get; private set; }
+        public int ActiveClouds
+        {
+            get
+            {
+                int n = 0;
+                if (_cloudOn != null) foreach (bool on in _cloudOn) if (on) n++;
+                return n;
+            }
+        }
 
         void Awake()
         {
@@ -75,6 +106,7 @@ namespace Game.Gameplay
             _user = GetComponent<ThrowableUser>();
             _block = new MaterialPropertyBlock();
             ThrownItem.ClientExploded += OnExploded;
+            ThrownItem.ClientSmoked += OnSmoked;
             Build();
         }
 
@@ -129,6 +161,16 @@ namespace Game.Gameplay
                 _light[i] = light;
             }
 
+            var cloudMaterial = _smokeMaterial != null ? _smokeMaterial : _dustMaterial;
+            _cloudPuffs = new MeshRenderer[CloudPool * CloudPuffs];
+            _cloudOffset = new Vector3[CloudPool * CloudPuffs];
+            _cloudSize = new float[CloudPool * CloudPuffs];
+            _cloudCentre = new Vector3[CloudPool];
+            _cloudStart = new float[CloudPool];
+            _cloudSeconds = new float[CloudPool];
+            _cloudOn = new bool[CloudPool];
+            for (int i = 0; i < _cloudPuffs.Length; i++) _cloudPuffs[i] = NewRenderer("CloudPuff", _fxRoot, cloudMaterial);
+
             // The sound plays where the blast is, not where the thrower stands.
             if (_blastSource != null) _blastSource.transform.SetParent(_fxRoot, true);
             _built = true;
@@ -152,6 +194,7 @@ namespace Game.Gameplay
         void OnDestroy()
         {
             ThrownItem.ClientExploded -= OnExploded;
+            ThrownItem.ClientSmoked -= OnSmoked;
             if (_fxRoot != null) Destroy(_fxRoot.gameObject);
         }
 
@@ -161,6 +204,13 @@ namespace Game.Gameplay
         {
             bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
             if (mine) ShowBlast(centre);
+        }
+
+        // Same rule as for blasts: each view shows its own combatant's clouds.
+        void OnSmoked(Vector3 centre, float radius, float seconds, NetworkObject thrower)
+        {
+            bool mine = thrower != null ? thrower.gameObject == gameObject : _combatant == Combatant.LocalPlayer;
+            if (mine) ShowCloud(centre, radius, seconds);
         }
 
         // ---- Owner: aiming and throwing ----
@@ -174,7 +224,7 @@ namespace Game.Gameplay
                 return;
             }
             var input = player.LastInput;
-            bool able = !_combatant.Dead.Value && _user.Grenades.Value > 0;
+            bool able = !_combatant.Dead.Value && _user.SelectedCount > 0;
             if (input.ThrowPressed && able) _aiming = true;
             if (!_aiming) return;
             // Dead, nothing left to throw, or a screen took the keys (the input is then empty): the throw is off.
@@ -275,6 +325,55 @@ namespace Game.Gameplay
             PlaceBlast(i, ViewCamera());
         }
 
+        // ---- Everyone: the smoke cloud ----
+
+        void ShowCloud(Vector3 centre, float radius, float seconds)
+        {
+            LastSmokeCentre = centre;
+            SmokesShown++;
+            if (!_built) return;
+            int i = _nextCloud;
+            _nextCloud = (_nextCloud + 1) % CloudPool;
+            _cloudCentre[i] = centre + Vector3.up * SmokeRules.Current.CentreLiftMeters;
+            _cloudStart[i] = Time.time;
+            _cloudSeconds[i] = seconds;
+            _cloudOn[i] = true;
+            for (int p = 0; p < CloudPuffs; p++)
+            {
+                int index = i * CloudPuffs + p;
+                // A different cloud every time; the lower half is flattened where the floor is.
+                var offset = Random.insideUnitSphere * (radius * CloudSpread);
+                offset.y *= offset.y < 0f ? 0.4f : 0.8f;
+                _cloudOffset[index] = offset;
+                _cloudSize[index] = radius * Random.Range(CloudPuffMin, CloudPuffMax);
+                _cloudPuffs[index].enabled = true;
+            }
+            PlaceCloud(i, ViewCamera());
+        }
+
+        // Returns false when the cloud has run its course.
+        bool PlaceCloud(int i, Transform camera)
+        {
+            float age = Time.time - _cloudStart[i];
+            float seconds = _cloudSeconds[i];
+            if (age >= seconds) return false;
+            var rotation = camera != null ? camera.rotation : Quaternion.identity;
+            float grow = Mathf.Clamp01(age / CloudGrowSeconds);
+            grow = 1f - (1f - grow) * (1f - grow);
+            var color = _cloudColor;
+            color.a *= Mathf.Clamp01((seconds - age) / CloudFadeSeconds);
+            _block.SetColor(BaseColorId, color);
+            for (int p = 0; p < CloudPuffs; p++)
+            {
+                int index = i * CloudPuffs + p;
+                var puff = _cloudPuffs[index];
+                puff.transform.SetPositionAndRotation(_cloudCentre[i] + _cloudOffset[index] * grow, rotation);
+                puff.transform.localScale = Vector3.one * (_cloudSize[index] * Mathf.Lerp(0.5f, 1f, grow));
+                puff.SetPropertyBlock(_block);
+            }
+            return true;
+        }
+
         // Returns false when the blast has run its course.
         bool PlaceBlast(int i, Transform camera)
         {
@@ -322,6 +421,12 @@ namespace Game.Gameplay
         {
             if (!_built) return;
             var camera = ViewCamera();
+            for (int i = 0; i < CloudPool; i++)
+            {
+                if (!_cloudOn[i] || PlaceCloud(i, camera)) continue;
+                _cloudOn[i] = false;
+                for (int p = 0; p < CloudPuffs; p++) _cloudPuffs[i * CloudPuffs + p].enabled = false;
+            }
             for (int i = 0; i < BlastPool; i++)
             {
                 if (!_blastOn[i] || PlaceBlast(i, camera)) continue;

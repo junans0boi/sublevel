@@ -211,6 +211,8 @@ namespace Game.Gameplay
             // Empty hands (nothing held, or put away with X) are faster; the other factors slow the weapon down.
             float speedFactor = Locomotion.MoveSpeedFactor(_rules.Aim.For(aim).MoveFactor, Lean != 0 ? _rules.Lean.MoveFactor : 1f,
                 stanceRules.For(BodyStance).MoveFactor, armed, _locomotion);
+            // Slower while a bandage or kit is being used.
+            speedFactor *= CombatantHealing.MoveFactorOf(_combatant);
             Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
             _verticalVelocity = Locomotion.VerticalVelocity(_verticalVelocity, _controller.isGrounded, jump, Time.deltaTime, _locomotion);
             _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
@@ -226,6 +228,7 @@ namespace Game.Gameplay
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
+            if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
             TryFire(f);
         }
 

@@ -23,6 +23,9 @@ namespace Game.Net
             ArmorRules.Current = rules.Armor;
             CrateRules.Current = rules.Crate;
             ThrowableRules.Current = rules.Throwables;
+            HealRules.Current = rules.Heal;
+            CarryRules.Current = rules.Carry;
+            SmokeRules.Current = rules.Smoke;
             BotRules.Current = rules.Bot;
             OpticRules.Current = Load<OpticRules>("GameData/optics");
             return rules;
