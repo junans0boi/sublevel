@@ -122,6 +122,9 @@ namespace Game.Tests
             var state = car.GetComponent<VehicleState>();
             Assert.Less(state.GripOf(wheel), 1f, "less grip on the flat tyre");
             Assert.Greater(state.DropOf(wheel), 0f, "that corner sits lower");
+            var visual = car.GetComponent<VehicleDamageVisual>();
+            yield return null;
+            Assert.Less(car.WheelPivot(wheel).localScale.y, 1f, "the flat tyre is squashed");
 
             // The side window (between the belt line and the roof, at the cabin's middle).
             var b = damage.LocalBounds();
@@ -129,63 +132,89 @@ namespace Game.Tests
             yield return ShootAt(me, Window, () => damage.Panes.Value != 0, 4);
             Assert.AreNotEqual(0, damage.Panes.Value, "a pane cracked");
             yield return null;
-            bool crackedShown = false;
-            foreach (var r in car.GetComponentsInChildren<Renderer>())
-                foreach (var m in r.sharedMaterials) if (m != null && m.name.StartsWith("VehicleGlass_")) crackedShown = true;
-            Assert.IsTrue(crackedShown, "the glass shows the crack (VehicleDamageVisual)");
+            Assert.Greater(visual.PaneDecalsShown, 0, "the crack is drawn on the pane");
 
             // The door below the window.
             int holes = 0;
             damage.Holed += (_, __) => holes++;
             float before = damage.Health.Value;
-            Vector3 Door() => t.TransformPoint(new Vector3(0f, b.min.y + b.size.y * 0.3f, b.center.z));
-            yield return ShootAt(me, Door, () => holes > 0 && damage.Health.Value < before, 6);
+            Vector3 Door(float z01) => t.TransformPoint(new Vector3(0f, b.min.y + b.size.y * 0.32f, b.min.z + b.size.z * z01));
+            yield return ShootAt(me, () => Door(0.5f), () => holes > 0 && damage.Health.Value < before, 6);
             Assert.Less(damage.Health.Value, before, "the body lost health");
             Assert.Greater(holes, 0, "a bullet hole was placed");
-            // More holes and the windshield for the picture.
-            yield return ShootAt(me, Door, () => false, 8);
+            // A spread of holes along the doors, and the windshield from the front, for the picture.
+            for (int k = 0; k < 6; k++) { float z01 = 0.3f + 0.07f * k; yield return ShootAt(me, () => Door(z01), () => false, 1); }
             PlayerController.Local.Teleport(t.position + t.forward * 7f + Vector3.up * 0.1f);
             yield return new WaitForSeconds(0.4f);
-            yield return ShootAt(me, () => t.TransformPoint(new Vector3(0f, b.min.y + b.size.y * 0.75f, b.max.z - 0.6f)), () => false, 3);
+            yield return ShootAt(me, () => t.TransformPoint(new Vector3(-0.3f, b.min.y + b.size.y * 0.78f, b.max.z - 0.9f)), () => false, 2);
             yield return new WaitForSeconds(0.5f);
-            Shot(car, "01_holes_glass_flat");
+            Shot(car, "01_holes_glass_flat", 6f, 2.5f, 0.6f);
             Shot(car, "01b_door_close", 2.6f, 0.3f, 0.2f);
+            Shot(car, "01c_front", 0.8f, 6.5f, 0.5f);
+
+            // A blast at the right rear: that side caves in, the glass near it shatters.
+            int dentsBefore = visual.DentsShown;
+            damage.ServerBlast(t.position + t.right * 2.6f - t.forward * 1.2f + Vector3.up * 0.6f, d => 40f, 1f);
+            yield return null;
+            Assert.Greater(visual.DentsShown, dentsBefore, "the blast dented the body");
+            yield return new WaitForSeconds(0.3f);
+            Shot(car, "01d_blast_dent", -5.5f, -3.5f, 0.8f);
+        }
+
+        // Black smoke, fire (disabled), the explosion (hurting who stands beside it, with light and sound), the wreck.
+        IEnumerator BurnToWreck(Vehicle v, string prefix)
+        {
+            var damage = v.GetComponent<VehicleDamage>();
+            var visual = v.GetComponent<VehicleDamageVisual>();
+            var state = v.GetComponent<VehicleState>();
+            var me = Combatant.LocalPlayer;
+
+            damage.ServerSetHealth01(0.2f);
+            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.BlackSmoke, 2f, "black smoke");
+            Assert.IsFalse(state.Disabled, "smoking vehicles still drive");
+            Assert.AreEqual(0.2f, state.Health01, 1e-3f, "the HUD reads the condition");
+            yield return new WaitForSeconds(2f);
+            Shot(v, prefix + "02_black_smoke");
+
+            // Standing beside it when it goes up.
+            PlayerController.Local.Teleport(v.transform.position - v.transform.right * 3f + Vector3.up * 0.1f);
+            yield return new WaitForSeconds(0.4f);
+            float hp = me.Hp.Value;
+            damage.ServerSetHealth01(0f);
+            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.Burning, 2f, "burning");
+            Assert.IsTrue(state.Disabled, "a burning vehicle cannot be driven or entered");
+            Assert.AreNotEqual(v, Vehicle.NearestEnterable(v.DoorPosition(0), 3f, out _), "not enterable");
+            yield return new WaitForSeconds(1.5f);
+            Shot(v, prefix + "03_burning");
+            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.Wrecked, VehicleDamageRules.For(v.Kind).BurnSeconds + 3f, "the explosion");
+            yield return null;
+            Shot(v, prefix + "04a_explosion_flash");
+            Assert.Greater(visual.ExplosionsShown, 0, "the explosion was shown");
+            Assert.IsNotNull(visual.BangSource, "and heard");
+            Assert.IsTrue(visual.BangSource.isPlaying, "the bang plays");
+            yield return new WaitForSeconds(0.3f);
+            Shot(v, prefix + "04b_explosion_fireball");
+            Assert.Less(me.Hp.Value, hp, "the blast hurt the player beside it");
+            Assert.IsTrue(state.Disabled, "the wreck stays disabled");
+            yield return new WaitForSeconds(2.5f);
+            Shot(v, prefix + "05_wreck");
         }
 
         [UnityTest]
         public IEnumerator NoHealth_Burns_Disables_ThenExplodesIntoAWreck()
         {
             yield return Load();
-            var car = Car;
-            var damage = car.GetComponent<VehicleDamage>();
-            var state = car.GetComponent<VehicleState>();
-            var me = Combatant.LocalPlayer;
+            yield return BurnToWreck(Car, "");
+        }
 
-            damage.ServerSetHealth01(0.2f);
-            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.BlackSmoke, 2f, "black smoke");
-            Assert.IsFalse(state.Disabled, "smoking cars still drive");
-            yield return new WaitForSeconds(2f);
-            Shot(car, "02_black_smoke");
-            Assert.AreEqual(0.2f, state.Health01, 1e-3f, "the HUD reads the condition");
-
-            // Standing beside it when it goes up.
-            PlayerController.Local.Teleport(car.transform.position - car.transform.right * 3f + Vector3.up * 0.1f);
-            yield return new WaitForSeconds(0.4f);
-            float hp = me.Hp.Value;
-            damage.ServerSetHealth01(0f);
-            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.Burning, 2f, "burning");
-            Assert.IsTrue(state.Disabled, "a burning car cannot be driven or entered");
-            yield return new WaitForSeconds(1.5f);
-            Shot(car, "03_burning");
-            Assert.AreNotEqual(car, Vehicle.NearestEnterable(car.DoorPosition(0), 3f, out _), "not enterable");
-            yield return WaitUntil(() => damage.CurrentStage == VehicleDamageStage.Wrecked, VehicleDamageRules.Current.BurnSeconds + 3f, "the explosion");
-            yield return null;
-            Shot(car, "04_explosion");
-            yield return new WaitForSeconds(0.3f);
-            Assert.Less(me.Hp.Value, hp, "the blast hurt the player beside it");
-            Assert.IsTrue(state.Disabled, "the wreck stays disabled");
-            yield return new WaitForSeconds(2f);
-            Shot(car, "05_wreck");
+        [UnityTest]
+        public IEnumerator Motorcycle_Smokes_Burns_ExplodesIntoAWreck()
+        {
+            yield return Load();
+            Vehicle bike = null;
+            foreach (var v in Vehicle.All) if (v != null && v.IsMotorcycle) { bike = v; break; }
+            Assert.IsNotNull(bike, "the test box's motorcycle");
+            yield return BurnToWreck(bike, "bike_");
         }
     }
 }

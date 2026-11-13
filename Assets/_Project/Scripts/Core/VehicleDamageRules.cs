@@ -85,7 +85,7 @@ namespace Game.Core
 
         // Cosmetic (every side alike, driven by the replicated hit events).
         public int MaxDecals = 30;
-        public float DecalSize = 0.07f;
+        public float DecalSize = 0.11f;         // a hole with its bare-metal rim, readable at 5-8 m
         public float DeformScale = 1f;
         public float DentBulletRadius = 0.14f;
         public float DentBulletDepth = 0.008f;
@@ -252,6 +252,20 @@ namespace Game.Core
             float t = 1f - distance / radius;
             return t * t * (3f - 2f * t);
         }
+
+        // A collision dent: none at or below CollisionDamageMinSpeed, then radius and depth growing with the speed.
+        public static bool ImpactDent(float speed, VehicleDamageRules r, out float radius, out float depth)
+        {
+            radius = depth = 0f;
+            if (speed <= r.CollisionDamageMinSpeed) return false;
+            radius = Math.Min(speed * r.DentImpactRadiusPerMps, r.DentImpactMaxRadius);
+            depth = speed * r.DentImpactDepthPerMps * r.DeformScale;
+            return depth > 0f;
+        }
+
+        // How far one dent moves a vertex already pushed in by `pushedSoFar`: never past DentMaxDepth in total.
+        public static float DentPush(float pushedSoFar, float depth, float falloff, VehicleDamageRules r) =>
+            Math.Max(0f, Math.Min(depth * falloff, r.DentMaxDepth - pushedSoFar));
 
         // Slot of the oldest decal to reuse once the cap is reached (a ring).
         public static int DecalSlot(int placedSoFar, int cap) => cap <= 0 ? 0 : placedSoFar % cap;

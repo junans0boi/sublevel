@@ -135,6 +135,29 @@ namespace Game.Tests
             Assert.AreEqual(-1, Pane(-10f, 1.1f, 0f, -1f, 0f, 0f)); // pointing away
         }
 
+        // ---- Dents ----
+
+        [Test]
+        public void ImpactDent_NoneUpToTheMinimum_ThenGrowsWithSpeed_RadiusCapped()
+        {
+            Assert.IsFalse(VehicleDamageMath.ImpactDent(R.CollisionDamageMinSpeed, R, out _, out _));
+            Assert.IsTrue(VehicleDamageMath.ImpactDent(10f, R, out float r10, out float d10));
+            Assert.IsTrue(VehicleDamageMath.ImpactDent(20f, R, out float r20, out float d20));
+            Assert.Greater(d20, d10);
+            Assert.GreaterOrEqual(r20, r10);
+            VehicleDamageMath.ImpactDent(1000f, R, out float rMax, out _);
+            Assert.AreEqual(R.DentImpactMaxRadius, rMax, 1e-5f);
+        }
+
+        [Test]
+        public void DentPush_FallsOffWithDistance_AndNeverPassesTheMaximumDepth()
+        {
+            Assert.AreEqual(0.05f, VehicleDamageMath.DentPush(0f, 0.05f, VehicleDamageMath.DentFalloff(0f, 1f), R), 1e-5f);
+            Assert.AreEqual(0f, VehicleDamageMath.DentPush(0f, 0.05f, VehicleDamageMath.DentFalloff(1f, 1f), R));
+            Assert.AreEqual(R.DentMaxDepth - 0.18f, VehicleDamageMath.DentPush(0.18f, 0.05f, 1f, R), 1e-5f);
+            Assert.AreEqual(0f, VehicleDamageMath.DentPush(R.DentMaxDepth, 0.05f, 1f, R));
+        }
+
         // ---- Bullet holes ----
 
         [Test]

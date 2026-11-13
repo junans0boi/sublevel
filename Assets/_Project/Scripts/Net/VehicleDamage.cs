@@ -29,6 +29,10 @@ namespace Game.Net
         // Every side: a bullet hole at a point on the body (local position and normal), and the explosion.
         public event Action<Vector3, Vector3> Holed;
         public event Action Exploded;
+        // Every side: a glass pane hit along a ray (local origin and direction), for the crack's place.
+        public event Action<int, Vector3, Vector3> PaneHit;
+        // Every side: a dent at a local point, pushed along a local direction (radius, depth in metres).
+        public event Action<Vector3, Vector3, float, float> Dented;
 
         Vehicle _vehicle;
         VehicleState _state;
@@ -144,7 +148,10 @@ namespace Game.Net
                 int pane = VehicleDamageMath.PaneHit(o.x, o.y, o.z, d.x, d.y, d.z, box.min.x, box.max.x, box.min.z, box.max.z, belt, roof);
                 // Only if the shot got as far as this vehicle.
                 if (pane >= 0 && DistanceToBody(origin) <= length + 0.05f)
+                {
                     ServerHitPane(pane, 1);
+                    RpcPane((byte)pane, o, d);
+                }
             }
             // Tyres have no collider (ray cast wheels): the shot's line against each wheel.
             int tyre = TyreAlong(origin, dir, length);
@@ -172,6 +179,14 @@ namespace Game.Net
             float distance = DistanceToBody(centre);
             if (distance <= r.InstantWreckRadius) ServerHurt(_health);
             else ServerHurt(damageAtDistance(distance) * factor);
+            // The side facing the blast caves in, less with distance.
+            float near01 = Mathf.Clamp01(1f - distance / Mathf.Max(0.1f, r.GlassBlastRadius));
+            if (near01 > 0f)
+            {
+                var point = ClosestOnBody(centre);
+                var push = (point - centre).sqrMagnitude > 1e-6f ? (point - centre).normalized : (transform.position - centre).normalized;
+                RpcDent(transform.InverseTransformPoint(point), transform.InverseTransformDirection(push), r.DentBlastRadius, r.DentBlastDepth * r.DeformScale * near01);
+            }
             if (distance <= r.GlassBlastRadius)
                 for (int p = 0; p < VehicleDamageMath.PaneCount; p++) ServerHitPane(p, r.GlassHitsToShatter);
         }
@@ -220,18 +235,29 @@ namespace Game.Net
         // Collisions: the simulating side (the driver's client, or the server) reports them.
         void OnImpact(float speed, Collider other)
         {
-            if (IsServerInitialized) ServerImpact(speed);
-            else if (IsOwner) CmdImpact(speed);
+            // Where it struck: the other's surface nearest the vehicle, pushed toward the vehicle's middle.
+            var centre = transform.TransformPoint(LocalBounds().center);
+            var point = other != null ? ClosestOnBody(other.ClosestPoint(centre)) : centre;
+            var local = transform.InverseTransformPoint(point);
+            if (IsServerInitialized) ServerImpact(speed, local);
+            else if (IsOwner) CmdImpact(speed, local);
         }
 
         [ServerRpc]
-        void CmdImpact(float speed) => ServerImpact(speed);
+        void CmdImpact(float speed, Vector3 local) => ServerImpact(speed, local);
 
-        void ServerImpact(float speed)
+        void ServerImpact(float speed, Vector3 local)
         {
             if (CurrentStage == VehicleDamageStage.Wrecked) return;
-            // Capped: a client cannot claim more than MaxReportedImpact.
-            ServerHurt(VehicleDamageMath.CollisionDamage(Mathf.Clamp(speed, 0f, Rules.MaxReportedImpact), Rules));
+            var r = Rules;
+            // Capped: a client cannot claim more than MaxReportedImpact, nor a point far off the body.
+            speed = Mathf.Clamp(speed, 0f, r.MaxReportedImpact);
+            ServerHurt(VehicleDamageMath.CollisionDamage(speed, r));
+            if (!VehicleDamageMath.ImpactDent(speed, r, out float radius, out float depth)) return;
+            var b = LocalBounds();
+            local = b.ClosestPoint(local);
+            var inward = (b.center - local).sqrMagnitude > 1e-6f ? (b.center - local).normalized : Vector3.forward;
+            RpcDent(local, inward, radius, depth);
         }
 
         // Tests and captures.
@@ -247,6 +273,29 @@ namespace Game.Net
 
         [ObserversRpc(RunLocally = true)]
         void RpcExploded() => Exploded?.Invoke();
+
+        [ObserversRpc(RunLocally = true)]
+        void RpcPane(byte pane, Vector3 localOrigin, Vector3 localDir) => PaneHit?.Invoke(pane, localOrigin, localDir);
+
+        [ObserversRpc(RunLocally = true)]
+        void RpcDent(Vector3 local, Vector3 localDir, float radius, float depth) => Dented?.Invoke(local, localDir, radius, depth);
+
+        // The point of the body's colliders nearest `point`.
+        Vector3 ClosestOnBody(Vector3 point)
+        {
+            float best = float.PositiveInfinity;
+            var at = point;
+            var colliders = _vehicle.Colliders;
+            for (int i = 0; i < colliders.Count; i++)
+            {
+                var c = colliders[i];
+                if (c == null || !c.enabled) continue;
+                var p = c.ClosestPoint(point);
+                float d = (p - point).sqrMagnitude;
+                if (d < best) { best = d; at = p; }
+            }
+            return at;
+        }
 
         // ---- Geometry ----
 
@@ -308,7 +357,7 @@ namespace Game.Net
         }
 
         // The cabin's glass band: from the top of the chassis box to the bottom of the roof box (cars only).
-        bool TryGlassBand(out Bounds box, out float belt, out float roof)
+        public bool TryGlassBand(out Bounds box, out float belt, out float roof)
         {
             box = LocalBounds();
             belt = roof = 0f;
