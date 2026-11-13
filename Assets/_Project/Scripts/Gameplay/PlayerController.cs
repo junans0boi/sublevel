@@ -204,8 +204,8 @@ namespace Game.Gameplay
                 LastInput = f;
             }
 
-            // Aiming needs a weapon and wins over sprinting; leaning is for standing and walking only.
-            bool armed = _combatant.ActiveWeapon != null;
+            // Aiming needs a gun (not a melee weapon, ADR-073) and wins over sprinting; leaning is for standing and walking only.
+            bool armed = !Melee.CanStrike(_combatant.ActiveWeapon);
             var aim = _aim.Update(f.AimHeld, Time.timeAsDouble, armed);
 
             // Free look turns only the view, and only from the hip: the character keeps facing and moving where it
@@ -492,8 +492,9 @@ namespace Game.Gameplay
             var fire = _rules.Fire;
             // A click that comes a moment too soon is remembered, so quick semi-automatic fire does not swallow clicks.
             if (f.FirePressed) _clickUntil = now + fire.ClickBufferSeconds;
-            // Nothing in hand (none carried, or put away with X): the button punches instead (ADR-059 (1)).
-            if (_combatant.ActiveWeaponId == 0)
+            // Nothing in hand (none carried, or put away with X): the button punches instead (ADR-059 (1)); a melee
+            // weapon in hand swings the same way (ADR-073).
+            if (Melee.CanStrike(_combatant.ActiveWeapon))
             {
                 TryPunch(f, now);
                 return;
@@ -525,12 +526,12 @@ namespace Game.Gameplay
             return (aim - eye).normalized;
         }
 
-        // Held or clicked, at most one punch per PunchInterval; the server keeps the same limit.
+        // Held or clicked, at most one punch (or swing) per interval; the server keeps the same limit.
         void TryPunch(in PlayerInputFrame f, double now)
         {
             if (!(f.FireHeld || now <= _clickUntil) || !_punchCadence.Ready(now)) return;
             _clickUntil = -1;
-            double interval = MeleeRules.Current.PunchInterval;
+            double interval = Melee.StrikeOf(_combatant.ActiveWeapon, MeleeRules.Current).Interval;
             _punchCadence.Fired(now, interval, _rules.Fire.ClientCatchUp(interval, Time.deltaTime));
             var direction = AimDirection();
             if (IsServerInitialized) _combatant.ServerPunch(direction);

@@ -76,11 +76,9 @@ namespace Game.Gameplay
 
         public void Tick(Combatant me)
         {
+            // The melee cell shows its weapon like the others (ADR-073).
             for (int i = 0; i < HudBackend.Throwable; i++)
-            {
-                if (i == HudBackend.Melee) { ShowEmpty(i); continue; }
                 ShowWeapon(i, HudBackend.WeaponInSlot(me, i), me);
-            }
             ShowGrenades(HudBackend.Grenades(me));
 
             int active = HudBackend.ActiveSlot(me);
@@ -98,14 +96,6 @@ namespace Game.Gameplay
                     for (int l = 0; l < 4; l++) _frame[i][l].color = line;
                 }
             }
-        }
-
-        void ShowEmpty(int cell)
-        {
-            if (_shownWeapon[cell] == 0) return;
-            _shownWeapon[cell] = 0;
-            _iconRoot[cell].SetActive(false);
-            _empty[cell].enabled = true;
         }
 
         void ShowWeapon(int cell, int weaponId, Combatant me)

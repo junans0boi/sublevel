@@ -102,10 +102,11 @@ namespace Game.Net
         public delegate void ShotResolvedHandler(in ShotResult shot);
         public event ShotResolvedHandler ShotResolved;
 
-        // One punch (ADR-059 (1)), raised on every client: which hand, and what it landed on.
+        // One punch (ADR-059 (1)) or melee weapon swing (ADR-073), raised on every client: which hand, and what it landed on.
         public struct PunchResult
         {
-            public bool Right;       // left and right take turns
+            public int WeaponId;     // 0 for a fist, else the melee weapon swung
+            public bool Right;       // left and right take turns (fists only)
             public ShotHit Hit;      // None (a swing at the air), Combatant or Kill
             public Combatant Victim; // null unless a combatant was hit
             public HitZone Zone;     // where on the victim; Body when nothing was hit
@@ -225,7 +226,7 @@ namespace Game.Net
             for (int i = 0; i < SlotCount; i++)
             {
                 var weapon = GameData.Weapons.Find(WeaponInSlot(i));
-                if (weapon != null && weapon.Ammo == ammo) return true;
+                if (weapon != null && !weapon.IsMelee && weapon.Ammo == ammo) return true;
             }
             return false;
         }
@@ -297,8 +298,8 @@ namespace Game.Net
             if (IsServerInitialized && _loadout != null)
             {
                 if (_loadout.Tick(Time.timeAsDouble)) Push();
-                // Nothing to aim with empty hands, and the dead neither aim nor lean.
-                if (Aim.Value != 0 && (_health.IsDead || ActiveWeaponId == 0)) Aim.Value = 0;
+                // Nothing to aim with empty hands or a melee weapon, and the dead neither aim nor lean.
+                if (Aim.Value != 0 && (_health.IsDead || Melee.CanStrike(ActiveWeapon))) Aim.Value = 0;
                 if (Holstered.Value && _health.IsDead) Holstered.Value = false;
                 if (Lean.Value != 0 && _health.IsDead) Lean.Value = 0;
             }
@@ -375,6 +376,8 @@ namespace Game.Net
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
+            // A melee weapon in hand swings instead (ADR-073).
+            if (weapon != null && weapon.IsMelee) return ServerPunch(direction);
             // A request may arrive a little ahead of the weapon's schedule (frames and network ticks never line up
             // with the fire interval); it is accepted without moving the schedule instead of leaving a gap in a burst.
             // [VEHICLE HOOK] ADR-065 (5): the driver fires only a sidearm; nobody fires while getting in, out or across.
@@ -430,21 +433,23 @@ namespace Game.Net
         // Bare hands (ADR-059 (1)): with nothing in hand the fire button punches. The punch goes where the body
         // faces, raised or lowered by the pitch of `direction` (the client chooses only the height, never the side),
         // and lands on the nearest living combatant whose chest (or head) is within reach inside the cone with
-        // nothing in between. False when no punch was thrown (dead, armed, too soon); a swing at the air is true.
+        // nothing in between. False when no punch was thrown (dead, a gun in hand, too soon); a swing at the air is true.
+        // A melee weapon in hand (ADR-073) swings the same way with the weapon's damage, reach, cone and rate.
         [Server]
         public bool ServerPunch(Vector3 direction)
         {
             float sqr = direction.sqrMagnitude;
-            if (_health == null || _health.IsDead || TeamBlocksAction || ActiveWeaponId != 0 || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
+            if (_health == null || _health.IsDead || TeamBlocksAction || !Melee.CanStrike(ActiveWeapon) || float.IsNaN(sqr) || float.IsInfinity(sqr)) return false;
             // [VEHICLE HOOK] ADR-065 (5): no punching from a seat.
             if (!VehicleSeat.CanPunch(this)) return false;
             var rules = MeleeRules.Current;
-            if (!_punchCadence.TryFire(Time.timeAsDouble, rules.PunchInterval, GameData.Rules.Fire.ServerEarly(rules.PunchInterval))) return false;
+            var strike = Melee.StrikeOf(ActiveWeapon, rules);
+            if (!_punchCadence.TryFire(Time.timeAsDouble, strike.Interval, GameData.Rules.Fire.ServerEarly(strike.Interval))) return false;
 
             var eye = EyePosition;
             var axis = PunchAxis(direction);
             var zones = GameData.Rules.Fire.Zones;
-            var target = FindPunchTarget(eye, axis, rules, zones);
+            var target = FindPunchTarget(eye, axis, rules, strike, zones);
             var result = ShotHit.None;
             var zone = HitZone.Body;
             NetworkObject victim = null;
@@ -456,10 +461,10 @@ namespace Game.Net
                 zone = HitZones.At(height, target.EyeHeightOffset, zones);
                 target.ServerTakeDamage(new DamageInfo
                 {
-                    Amount = Melee.Damage(zone, rules),
+                    Amount = Melee.Damage(zone, in strike),
                     Attacker = this,
                     Zone = zone,
-                    WeaponId = 0,
+                    WeaponId = strike.WeaponId,
                     Cause = DamageCause.Melee,
                 });
                 result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
@@ -468,7 +473,7 @@ namespace Game.Net
             bool right = (_punches & 1) == 1;
             _punches++;
             int info = (right ? PunchRightBit : 0) | ((int)result << PunchHitShift) | ((int)zone << PunchZoneShift);
-            RpcPunch((byte)info, victim);
+            RpcPunch((byte)info, victim, strike.WeaponId);
             return true;
         }
 
@@ -486,7 +491,7 @@ namespace Game.Net
         // A point this high above the combatant's feet.
         Vector3 PointAt(float heightAboveFeet) => transform.position + Vector3.up * heightAboveFeet;
 
-        Combatant FindPunchTarget(Vector3 eye, Vector3 axis, MeleeRules rules, HitZoneRules zones)
+        Combatant FindPunchTarget(Vector3 eye, Vector3 axis, MeleeRules rules, in MeleeStrike strike, HitZoneRules zones)
         {
             Combatant best = null;
             float bestSqr = float.MaxValue;
@@ -500,8 +505,8 @@ namespace Game.Net
                 if (sqr >= bestSqr) continue;
                 // The chest, or the head when standing close with the fist held high.
                 var head = c.PointAt(top - zones.HeadMeters * 0.5f);
-                bool reach = InPunchReach(eye, chest, axis, rules) && ClearPunchLine(eye, chest, c);
-                if (!reach) reach = InPunchReach(eye, head, axis, rules) && ClearPunchLine(eye, head, c);
+                bool reach = InPunchReach(eye, chest, axis, strike) && ClearPunchLine(eye, chest, c);
+                if (!reach) reach = InPunchReach(eye, head, axis, strike) && ClearPunchLine(eye, head, c);
                 if (!reach) continue;
                 best = c;
                 bestSqr = sqr;
@@ -509,10 +514,10 @@ namespace Game.Net
             return best;
         }
 
-        static bool InPunchReach(Vector3 eye, Vector3 point, Vector3 axis, MeleeRules rules)
+        static bool InPunchReach(Vector3 eye, Vector3 point, Vector3 axis, in MeleeStrike strike)
         {
             var to = point - eye;
-            return Melee.InReach(to.x, to.y, to.z, axis.x, axis.y, axis.z, rules.PunchRange, rules.PunchConeDeg);
+            return Melee.InReach(to.x, to.y, to.z, axis.x, axis.y, axis.z, strike.Range, strike.ConeDeg);
         }
 
         // Nothing but the target (or this combatant's own body) between the eyes and the point.
@@ -597,7 +602,8 @@ namespace Game.Net
         public void ServerSetStance(AimMode aim, int lean)
         {
             if (_health.IsDead || Knocked.Value) return;
-            bool validAim = aim == AimMode.Hip || ((aim == AimMode.Shoulder || aim == AimMode.Sights) && ActiveWeaponId != 0);
+            // Only a gun is aimed (a melee weapon swings from the hip, ADR-073).
+            bool validAim = aim == AimMode.Hip || ((aim == AimMode.Shoulder || aim == AimMode.Sights) && !Melee.CanStrike(ActiveWeapon));
             Aim.Value = validAim ? (int)aim : 0;
             Lean.Value = lean < 0 ? -1 : lean > 0 ? 1 : 0;
         }
@@ -838,11 +844,12 @@ namespace Game.Net
 
         // Every client sees and hears the punch; runs locally so a host shows it in the frame it was thrown.
         [ObserversRpc(RunLocally = true)]
-        void RpcPunch(byte info, NetworkObject victim)
+        void RpcPunch(byte info, NetworkObject victim, int weaponId)
         {
             if (!IsClientStarted || Punched == null) return;
             var punch = new PunchResult
             {
+                WeaponId = weaponId,
                 Right = (info & PunchRightBit) != 0,
                 Hit = (ShotHit)((info >> PunchHitShift) & PunchHitMask),
                 Zone = (HitZone)(info >> PunchZoneShift),

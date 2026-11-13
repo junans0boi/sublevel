@@ -168,9 +168,9 @@ namespace Game.Core
             return true;
         }
 
-        // The same for a weapon; no weapon (empty hands) is a punch.
+        // The same for a weapon; no weapon (empty hands) is a punch, and so is a melee weapon (ADR-073).
         public static bool CanUseWeapon(int seat, WeaponDef weapon) =>
-            weapon == null ? CanUse(seat, HandUse.Punch) : CanUse(seat, HandUse.Weapon, weapon.Category);
+            weapon == null || weapon.IsMelee ? CanUse(seat, HandUse.Punch) : CanUse(seat, HandUse.Weapon, weapon.Category);
 
         public static float Kmh(float kmh) => kmh / 3.6f;
         public static float ToKmh(float metersPerSecond) => metersPerSecond * 3.6f;

@@ -43,6 +43,10 @@ namespace Game.Gameplay
 
         public int ShownWeaponId => _shown;
         public bool AtEye => _atEye != 0;
+        // The camera the weapon is drawn in front of this frame, or null while it is in the hand (MeleeVisual).
+        public Transform EyeCamera => _atEye != 0 ? _eyeCamera : null;
+        // The model shown for a weapon id, or null.
+        public GameObject ModelFor(int weaponId) => weaponId > 0 && weaponId < _modelsByWeaponId.Length ? _modelsByWeaponId[weaponId] : null;
         // True while the weapon at the eye (and the optic on it) is not drawn because a magnified scope fills the view.
         public bool HiddenForScope => _hiddenModel != 0;
 

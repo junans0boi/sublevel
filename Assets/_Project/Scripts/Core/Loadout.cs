@@ -12,8 +12,8 @@ namespace Game.Core
     }
 
     // What one combatant carries: five weapon slots (ADR-058), reserve ammo per type, medkits. Owns fire-rate and
-    // reload timing. Slots 0 and 1 take primary weapons, slot 2 a sidearm (pistols), slot 3 is the melee slot (it
-    // exists but takes nothing until there are melee weapons) and slot 4 is the throwable slot (grenades are
+    // reload timing. Slots 0 and 1 take primary weapons, slot 2 a sidearm (pistols), slot 3 a melee weapon (no
+    // magazine: it never fires or reloads, ADR-073) and slot 4 is the throwable slot (grenades are
     // counted by the throwing component, never held here).
     public class Loadout
     {
@@ -50,7 +50,8 @@ namespace Game.Core
                 case PrimarySlotA:
                 case PrimarySlotB: return category == WeaponCategory.Primary;
                 case SidearmSlot: return category == WeaponCategory.Sidearm;
-                default: return false; // melee: no weapons yet; throwable: grenades are not weapons
+                case MeleeSlot: return category == WeaponCategory.Melee; // ADR-073
+                default: return false; // throwable: grenades are not weapons
             }
         }
 

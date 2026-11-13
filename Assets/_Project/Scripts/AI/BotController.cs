@@ -382,10 +382,13 @@ namespace Game.AI
                     usesAmmo = _self.CarriesWeaponFor(ammo);
                     reserve = _self.ReserveFor(ammo);
                 }
+                // A melee weapon only fills an empty melee slot (ADR-073); guns want a free gun slot.
+                bool slotFree = isWeapon && GameData.Weapons.Find(item.WeaponId.Value)?.IsMelee == true
+                    ? _self.WeaponInSlot(Loadout.MeleeSlot) == 0 : emptySlot;
                 // A key (ADR-058 (7)) gets it through a locked pass; one is enough.
                 bool wanted = kind == LootKind.Key
                     ? _keys != null && _keys.Keys.Value < KeysWanted
-                    : BotBrain.WantsLoot(kind, emptySlot, usesAmmo, reserve, medkits, rules);
+                    : BotBrain.WantsLoot(kind, slotFree, usesAmmo, reserve, medkits, rules);
                 if (!wanted) continue;
                 var at = item.transform.position;
                 float sqr = (at - feet).sqrMagnitude;
@@ -417,7 +420,9 @@ namespace Game.AI
             _maxHp = Mathf.Max(_maxHp, _self.Hp.Value);
             _percept.HealthFraction = _self.Hp.Value / _maxHp;
 
+            // A melee weapon is not a gun to the brain: it fights with it like with fists (ADR-073, see Punch).
             var weapon = _self.ActiveWeapon;
+            if (weapon != null && weapon.IsMelee) weapon = null;
             _percept.HasWeapon = weapon != null;
             _percept.WeaponId = weapon != null ? weapon.Id : 0;
             _percept.Mag = weapon != null ? _self.ActiveMag : 0;
@@ -429,7 +434,8 @@ namespace Game.AI
 
             int otherSlot = _self.OtherWeaponSlot();
             var other = GameData.Weapons.Find(otherSlot >= 0 ? _self.WeaponInSlot(otherSlot) : 0);
-            _percept.OtherSlotUsable = other != null && (_self.MagInSlot(otherSlot) > 0 || _self.ReserveFor(other.Ammo) > 0);
+            // A gun out of rounds is put away for a melee weapon in another slot (it never runs dry); never the reverse.
+            _percept.OtherSlotUsable = other != null && (other.IsMelee ? weapon != null : _self.MagInSlot(otherSlot) > 0 || _self.ReserveFor(other.Ammo) > 0);
 
             // Between two looks the target is followed without a new ray, as long as it is still there.
             if (_percept.EnemyVisible)
@@ -460,7 +466,7 @@ namespace Game.AI
                 var wanted = intent.Crouch ? Stance.Crouch : Stance.Stand;
                 if (_stance.Current != wanted) _stance.ServerSetStance(wanted);
             }
-            var aim = intent.Aim && weapon != null ? AimMode.Shoulder : AimMode.Hip;
+            var aim = intent.Aim && !Melee.CanStrike(weapon) ? AimMode.Shoulder : AimMode.Hip;
             if (_self.AimMode != aim || _self.Lean.Value != 0) _self.ServerSetStance(aim, 0);
 
             if (intent.Reload && !_self.Reloading.Value) _self.ServerReload();
@@ -491,9 +497,10 @@ namespace Game.AI
 
             Move(intent, now);
             Turn(intent);
-            if (intent.Fire && weapon != null) Fire(intent, weapon, now);
-            // Empty hands with the enemy in sight (the brain backs off then, still facing it): punch when it is that close.
-            else if (weapon == null && _percept.EnemyVisible) Punch();
+            if (intent.Fire && weapon != null && !weapon.IsMelee) Fire(intent, weapon, now);
+            // Empty hands or a melee weapon with the enemy in sight (the brain backs off then, still facing it):
+            // punch or swing when it is that close.
+            else if (Melee.CanStrike(weapon) && _percept.EnemyVisible) Punch();
         }
 
         void EnsureAgent()
@@ -541,7 +548,16 @@ namespace Game.AI
             // The very end with nothing to shoot with: running away would never end the match. Fists out, go at it.
             if (_percept.EnemyVisible && _enemy != null && !CanFight && zones != null && zones.OnlyFinalRegionLeft)
             {
-                if (_self.ActiveWeaponId != 0) _self.ServerSetHolstered(true);
+                if (!Melee.CanStrike(_self.ActiveWeapon)) _self.ServerSetHolstered(true); // a melee weapon stays in hand
+                _goal = ZoneGoal.Hunt;
+                goalTarget = _enemy.transform.position;
+                urgent = true;
+            }
+            // A melee weapon in hand and no gun to use (ADR-073): run at an enemy that close instead of backing off.
+            var inHand = _self.ActiveWeapon;
+            if (_percept.EnemyVisible && _enemy != null && !CanFight && inHand != null && inHand.IsMelee
+                && Flat(_enemy.transform.position - at) <= MeleeRules.Current.BotChargeMeters)
+            {
                 _goal = ZoneGoal.Hunt;
                 goalTarget = _enemy.transform.position;
                 urgent = true;
@@ -910,14 +926,18 @@ namespace Game.AI
 
         // An enemy right in front gets punched (ADR-059), through the same server method as a player's punch;
         // the server keeps the rate and checks reach and the line.
+        // A melee weapon in hand swings the same way with its own reach and cone (ADR-073).
         void Punch()
         {
-            if (_enemy == null || _self.ActiveWeaponId != 0) return;
+            var inHand = _self.ActiveWeapon;
+            if (_enemy == null || !Melee.CanStrike(inHand)) return;
             var melee = MeleeRules.Current;
+            var strike = Melee.StrikeOf(inHand, melee);
+            float reach = Melee.BotReach(inHand, melee);
             var flat = _enemy.transform.position - transform.position;
             flat.y = 0f;
-            if (flat.sqrMagnitude > melee.BotPunchMeters * melee.BotPunchMeters) return;
-            if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > melee.PunchConeDeg * 0.5f) return;
+            if (flat.sqrMagnitude > reach * reach) return;
+            if (flat.sqrMagnitude > 1e-4f && Vector3.Angle(transform.forward, flat) > strike.ConeDeg * 0.5f) return;
             if (_self.ServerPunch(ChestOf(_enemy) - _self.EyePosition)) _lastAttackAt = Time.time;
         }
 

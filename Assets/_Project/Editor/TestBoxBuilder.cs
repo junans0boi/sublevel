@@ -292,6 +292,7 @@ public static class TestBoxBuilder
         SetArray(audio, "_reloadByWeapon", Clips(WeaponAudioDir + "OgaGunReload/", null, "reload_pistol.wav", "reload_rifle.wav", "reload_rifle.wav", "reload_shotgun.wav", "reload_shotgun.wav"));
         SetArray(audio, "_footsteps", Clips(FoleyDir, "footstep_concrete_000.ogg", "footstep_concrete_001.ogg", "footstep_concrete_002.ogg", "footstep_concrete_003.ogg", "footstep_concrete_004.ogg"));
         SetArray(audio, "_hits", Clips(FoleyDir, "impactPunch_medium_000.ogg", "impactPunch_medium_001.ogg", "impactPunch_medium_002.ogg"));
+        MeleeKit.Wire(go); // melee weapons: first-person swing and swing sounds (ADR-073)
         return visual.BodyRenderers;
     }
 
@@ -410,6 +411,7 @@ public static class TestBoxBuilder
             model.SetActive(false);
             models[weapon.Id] = model;
         }
+        MeleeKit.AddLootModels(go.transform, models);
         SetArray(view, "_weaponModelsById", models);
         // Optic pickups show the code-built optic model in the same materials as on the weapon.
         Set(view, "_opticMetal", p => p.objectReferenceValue = SceneLook.OpticMetal);

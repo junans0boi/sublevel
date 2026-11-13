@@ -260,7 +260,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Weapon:
                     int weaponId = WeaponId(combatant, source.Index);
                     var weapon = GameData.Weapons.Find(weaponId);
-                    return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + AmmoName(AmmoIndex(weapon));
+                    return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + (weapon.IsMelee ? "근접 무기" : AmmoName(AmmoIndex(weapon)));
                 case InventorySourceKind.Optic:
                     int opticId = OpticOf(combatant, source.Index);
                     var def = OpticRules.Current.Find(opticId);
@@ -284,6 +284,7 @@ namespace Game.Gameplay
             {
                 case LootKind.Weapon:
                     var weapon = GameData.Weapons.Find(loot.WeaponId.Value);
+                    if (weapon != null && weapon.IsMelee) return weapon.Name + "\n근접 무기 · 피해 " + weapon.Damage.ToString("0"); // ADR-073
                     return (weapon != null ? weapon.Name : "무기") + "\n무기 · " +
                            (weapon != null ? AmmoName(AmmoIndex(weapon)) : "구경 미상") + " · 탄창 " + loot.Amount.Value + "발";
                 case LootKind.Ammo: return AmmoName(loot.Ammo.Value) + " 탄약\n탄약 · 수량 " + loot.Amount.Value + "발";
@@ -297,7 +298,7 @@ namespace Game.Gameplay
             }
         }
 
-        // Five weapon slots (ADR-058): 0-1 primary, 2 sidearm, 3 melee (always empty for now), 4 throwable.
+        // Five weapon slots (ADR-058): 0-1 primary, 2 sidearm, 3 melee (ADR-073), 4 throwable.
         public const int WeaponSlotCount = Loadout.SlotCount;
         public const int SidearmSlot = Loadout.SidearmSlot;
         public const int MeleeSlot = Loadout.MeleeSlot;

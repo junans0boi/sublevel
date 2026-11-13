@@ -16,9 +16,11 @@ namespace Game.Core
         public static bool IsValid(AmmoType type) => (int)type >= 0 && (int)type < Count;
     }
 
-    // Which slots a weapon may sit in (ADR-058). Never reorder: stored in data. Melee has no member until there are
-    // melee weapons; the melee slot takes nothing for now.
-    public enum WeaponCategory { Primary = 0, Sidearm = 1 }
+    // Which slots a weapon may sit in (ADR-058). Never reorder: stored in data. Melee weapons go in slot 4 (ADR-073).
+    public enum WeaponCategory { Primary = 0, Sidearm = 1, Melee = 2 }
+
+    // How a melee weapon is swung (ADR-073): a sideways slash or an overhead chop. Picks the swing pose only.
+    public enum MeleeSwingStyle { Slash = 0, Chop = 1 }
 
     // One weapon's tuning values. Loaded from data (ADR-032); Id 0 means "no weapon".
     [Serializable]
@@ -48,6 +50,12 @@ namespace Game.Core
         // Spread multipliers for a shooter moving at full walking speed or more, and for one off the ground.
         public float MoveSpreadFactor = 1.5f;
         public float AirSpreadFactor = 2.5f;
+        // Melee weapons (ADR-073) use Damage, Range (reach from the eyes), FireInterval (seconds between swings) and
+        // HeadFactor from above, plus these two. They have no magazine, calibre or spread.
+        public float ConeDeg = 60f;       // full opening angle of the swing's cone
+        public MeleeSwingStyle Swing;
+
+        public bool IsMelee => Category == WeaponCategory.Melee;
     }
 
     [Serializable]

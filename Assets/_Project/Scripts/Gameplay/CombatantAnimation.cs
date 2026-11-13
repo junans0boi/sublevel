@@ -24,7 +24,7 @@ namespace Game.Gameplay
 // the body lies along +Z, belly down. The chest then turns -40 about the same axis: its facing is 45 degrees below
 // level, which is the head lifted; the arms turn -45 more and are level again.
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
-    public class CombatantAnimation : MonoBehaviour
+    public partial class CombatantAnimation : MonoBehaviour
     {
         public const string Locomotion = "Locomotion", Air = "Air", Hit = "Hit", Death = "Death";
         public const string Lowered = "Lowered", Aim = "Aim", Shoot = "Shoot";
@@ -182,6 +182,12 @@ namespace Game.Gameplay
         void OnPunch(in Combatant.PunchResult punch)
         {
             if (_animator == null) return;
+            // A melee weapon swings with bone turns, not the punch clips (CombatantAnimation.Melee.cs).
+            if (punch.WeaponId != 0)
+            {
+                StartSwing(punch.WeaponId);
+                return;
+            }
             // Non-looping clips: restarting from the beginning lets the same hand punch twice in a row if it ever has to.
             var state = punch.Right ? PunchRight : PunchLeft;
             _animator.CrossFadeInFixedTime(state, 0.05f, UpperLayer, 0f);
@@ -256,7 +262,8 @@ namespace Game.Gameplay
             _animator.SetFloat(_airPhaseId, _airPhase);
             TrackJumpPose(dead);
 
-            bool armed = !dead && _combatant.ActiveWeaponId != 0;
+            // A melee weapon keeps the upper layer off: its ready pose and swings are bone turns (ADR-073).
+            bool armed = !dead && _combatant.ActiveWeaponId != 0 && !HoldsMelee;
             bool punching = !dead && Time.time < _punchUntil;
             // The flinch is a whole-body clip: let it through the weapon pose while it plays.
             bool showUpper = (armed || punching) && _base != Hit;
@@ -468,6 +475,7 @@ namespace Game.Gameplay
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);
             Turn(ArmRight, reach, transform.right);
+            PoseMelee();
             if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)

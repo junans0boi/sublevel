@@ -69,8 +69,13 @@ namespace Game.Tests
                 Assert.IsTrue(Vehicles.CanUseWeapon(seat, Pistol), "pistol from seat " + seat);
                 Assert.IsTrue(Vehicles.CanUse(seat, HandUse.Throwable), "throw from seat " + seat);
                 Assert.IsFalse(Vehicles.CanUse(seat, HandUse.Punch), "punch from seat " + seat);
+                Assert.IsFalse(Vehicles.CanUseWeapon(seat, Machete), "no melee swing from seat " + seat + " (ADR-073)");
             }
+            Assert.IsFalse(Vehicles.CanUseWeapon(0, Machete), "nor from the wheel");
+            Assert.IsTrue(Vehicles.CanUseWeapon(Vehicles.NoSeat, Machete), "on foot");
         }
+
+        static readonly WeaponDef Machete = new WeaponDef { Id = 21, Category = WeaponCategory.Melee };
 
         [Test]
         public void OnFoot_EverythingIsAllowed()

@@ -114,7 +114,7 @@ namespace Game.Net
         {
             if (item == null) return "";
             var kind = (LootKind)item.Kind.Value;
-            if (kind == LootKind.Weapon) return "탄창 " + item.Amount.Value + "발";
+            if (kind == LootKind.Weapon) return GameData.Weapons.Find(item.WeaponId.Value)?.IsMelee == true ? "근접 무기" : "탄창 " + item.Amount.Value + "발";
             if (Armor.IsArmor(kind)) return "내구도 " + Points(item.Durability.Value);
             if (kind == LootKind.Optic) return Optics.ZoomText(Optics.ZoomOf(item.Optic.Value));
             return "x" + item.Amount.Value;

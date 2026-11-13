@@ -11,7 +11,7 @@ using UnityEngine;
 //  - optics: the code-built optic models (OpticMeshes, ADR-060) in a three-quarter side view, transparent background
 //  - ammo, medkit, bandage, first-aid kit, armour, grenade, smoke, key: flat glyphs drawn from signed-distance shapes, supersampled
 // Run: tools/unity.sh run-gfx ItemIconBuilder.Build   (exits the editor with 0 on success, 1 on failure)
-public static class ItemIconBuilder
+public static partial class ItemIconBuilder
 {
     public const string OutDir = "Assets/_Project/Resources/Icons";
     const int WeaponW = 256, WeaponH = 128, WeaponSuper = 2;
@@ -24,6 +24,7 @@ public static class ItemIconBuilder
         {
             Directory.CreateDirectory(OutDir);
             BuildWeapons();
+            BuildMelee(); // ItemIconBuilder.Melee.cs (ADR-073)
             BuildOptics();
             BuildGlyphs();
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);

@@ -347,6 +347,23 @@ namespace Game.Gameplay
                 _activeWeaponIconRoot.SetActive(false);
                 return;
             }
+            if (weapon.IsMelee)
+            {
+                // A melee weapon (ADR-073): its name and icon, no rounds.
+                AmmoText = Dash;
+                AmmoTypeText = "근접";
+                _weaponName.text = weapon.Name;
+                _weaponName.color = UiKit.Text;
+                _fireMode.text = "";
+                _caliberBox.SetActive(false);
+                _magDigits.Set(-1);
+                _magDigits.SetColor(UiKit.TextDim);
+                _reserveDigits.Set(-1);
+                _slash.enabled = false;
+                _activeWeaponIcon.Set(InventoryBackend.WeaponKey(id), weapon.Name);
+                _activeWeaponIconRoot.SetActive(true);
+                return;
+            }
             int ammoIndex = InventoryBackend.AmmoIndex(weapon);
             AmmoText = IntText(mag) + " / " + IntText(reserve);
             AmmoTypeText = InventoryBackend.AmmoName(ammoIndex);
@@ -411,7 +428,7 @@ namespace Game.Gameplay
             WeaponDef weapon = me.ActiveWeapon;
             AimMode aim = me.AimMode;
             Camera cam = player != null ? player.Camera : null;
-            bool dot = weapon == null || aim == AimMode.Sights || cam == null;
+            bool dot = weapon == null || weapon.IsMelee || aim == AimMode.Sights || cam == null;
             Show(_dot, dot);
             Show(_bars, !dot);
             if (dot)

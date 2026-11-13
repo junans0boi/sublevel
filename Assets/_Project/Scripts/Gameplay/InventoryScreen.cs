@@ -327,11 +327,20 @@ namespace Game.Gameplay
                 }
                 if (weapon == null)
                 {
-                    _weaponNames[slot].text = slot == InventoryBackend.MeleeSlot ? "근접 — 준비 중" : "비어 있음";
+                    _weaponNames[slot].text = "비어 있음";
                     _weaponNames[slot].color = UiKit.TextDim;
-                    _weaponAmmo[slot].text = slot == InventoryBackend.MeleeSlot ? "" : "총기를 이곳에 놓으세요";
+                    _weaponAmmo[slot].text = slot == InventoryBackend.MeleeSlot ? "근접 무기를 이곳에 놓으세요" : "총기를 이곳에 놓으세요";
                     _weaponBadge[slot].text = "구경 —";
                     _weaponIcons[slot].Set("", "총");
+                }
+                else if (weapon.IsMelee)
+                {
+                    // ADR-073: no rounds or calibre.
+                    _weaponNames[slot].text = weapon.Name;
+                    _weaponNames[slot].color = active ? UiKit.Accent : UiKit.Text;
+                    _weaponAmmo[slot].text = "피해 " + weapon.Damage.ToString("0") + "  ·  사거리 " + weapon.Range.ToString("0.0") + "m";
+                    _weaponBadge[slot].text = "근접";
+                    _weaponIcons[slot].Set(InventoryBackend.WeaponKey(id), weapon.Name);
                 }
                 else
                 {

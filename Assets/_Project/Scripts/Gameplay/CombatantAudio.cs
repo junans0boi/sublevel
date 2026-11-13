@@ -100,7 +100,8 @@ namespace Game.Gameplay
 
         void OnPunch(in Combatant.PunchResult punch)
         {
-            if (_hits.Length == 0) return;
+            // Melee weapon swings have their own sounds (MeleeAudio, ADR-073).
+            if (_hits.Length == 0 || punch.WeaponId != 0) return;
             var clip = _hits[Random.Range(0, _hits.Length)];
             bool landed = punch.Victim != null;
             if (Play(_bodySource, clip, landed ? _punchImpactVolume : _punchSwingVolume, landed ? 1f : _punchSwingPitch)) PunchesPlayed++;

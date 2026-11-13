@@ -15,6 +15,7 @@ namespace Game.Tests
         static readonly string[] Expected =
         {
             "weapon_1", "weapon_2", "weapon_3", "weapon_4", "weapon_5",
+            "weapon_21", "weapon_22", "weapon_23", "weapon_24",
             "ammo_9mm", "ammo_556", "ammo_762", "ammo_12ga",
             "medkit",
             "helmet_1", "helmet_2", "helmet_3",

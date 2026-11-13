@@ -58,8 +58,8 @@ public static class CharacterKit
 
     static GaitProfile _gait;
 
-    // Length of arrays indexed by weapon id.
-    public static int WeaponSlots => Weapons.Max(w => w.Id) + 1;
+    // Length of arrays indexed by weapon id (guns and the code-built melee weapons, ADR-073).
+    public static int WeaponSlots => Mathf.Max(Weapons.Max(w => w.Id) + 1, MeleeKit.Slots);
 
     public struct Visual
     {
@@ -392,6 +392,7 @@ public static class CharacterKit
             model.transform.SetParent(hand, true);
             models[weapon.Id] = model;
         }
+        MeleeKit.AttachToHand(hand, models, fits);
         foreach (var model in models)
             if (model != null) model.SetActive(false);
 
