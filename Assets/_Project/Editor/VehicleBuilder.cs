@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FishNet.Component.Transforming;
 using FishNet.Managing;
 using FishNet.Object;
@@ -149,9 +150,17 @@ public static class VehicleBuilder
             AddBox(colliders, "Chassis", new Vector3(b.center.x, (bottom + belt) * 0.5f, b.center.z), new Vector3(b.size.x - 0.06f, belt - bottom, b.size.z - 0.04f), physics);
             if (p.HasGlass)
             {
+                // The roof over the whole glasshouse (the windows' length, not the lamps').
                 var g = p.GlassBounds;
                 float roofTop = Mathf.Max(g.max.y, b.max.y - 0.02f);
-                AddBox(colliders, "Roof", new Vector3(g.center.x, roofTop - 0.05f, g.center.z), new Vector3(g.size.x * 0.92f, 0.1f, g.size.z * 0.7f), physics);
+                if (p.RearTop > 0f) roofTop = Mathf.Min(roofTop, g.max.y + 0.06f);
+                AddBox(colliders, "Roof", new Vector3(g.center.x, roofTop - 0.05f, g.center.z), new Vector3(g.size.x * 0.92f, 0.1f, g.size.z), physics);
+                // A van's cargo box behind the cab: solid from the belt line up to its roof.
+                if (p.RearTop > 0f)
+                {
+                    float z0 = b.min.z + 0.02f, z1 = g.min.z;
+                    AddBox(colliders, "Cargo", new Vector3(b.center.x, (belt + p.RearTop) * 0.5f, (z0 + z1) * 0.5f), new Vector3(b.size.x - 0.06f, p.RearTop - belt, z1 - z0), physics);
+                }
             }
         }
 
@@ -167,8 +176,11 @@ public static class VehicleBuilder
             var pivot = new GameObject(names[i]).transform;
             pivot.SetParent(wheelParent, false);
             pivot.localPosition = p.WheelCentres[i];
-            var spin = Drawn("Spin", pivot, Vector3.zero, Quaternion.identity, p.Wheels[i], p.WheelMaterials[i]).transform;
-            if (p.WheelStatic[i] != null) Drawn("Brake", pivot, Vector3.zero, Quaternion.identity, p.WheelStatic[i], p.WheelStaticMaterials[i]);
+            // The physics rides every wheel on the mean radius; a bigger or smaller tyre sits that much higher or lower
+            // on its pivot so it still touches the ground.
+            var own = Vector3.up * ((p.WheelRadii != null ? p.WheelRadii[i] : p.WheelRadius) - p.WheelRadius);
+            var spin = Drawn("Spin", pivot, own, Quaternion.identity, p.Wheels[i], p.WheelMaterials[i]).transform;
+            if (p.WheelStatic[i] != null) Drawn("Brake", pivot, own, Quaternion.identity, p.WheelStatic[i], p.WheelStaticMaterials[i]);
             pivots[i] = pivot;
             spins[i] = spin;
             front[i] = bike ? i == 0 : i < 2;
@@ -197,6 +209,25 @@ public static class VehicleBuilder
             seats[i] = SeatAt(seatParent, i, eye, new Vector3(side * p.DoorOut, 0f, eye.z + (bike ? 0f : 0.1f)));
         }
         seats[0].ConfigureGrips(gripLeft, gripRight);
+        // Anchors for the occupants' pose (CombatantAnimation): each seat's cushion (where the hips rest); on a
+        // motorcycle the foot pegs and the knee points on the tank; in a car the cabin's inside as a box (position =
+        // centre, scale = size, in the root's space).
+        for (int i = 0; i < seats.Length && p.SeatCushions != null && i < p.SeatCushions.Length; i++)
+            Anchor("Cushion", seats[i].transform, p.SeatCushions[i]);
+        if (bike && p.Pegs != null)
+        {
+            Anchor("PegLeft", seats[0].transform, p.Pegs[0]);
+            Anchor("PegRight", seats[0].transform, p.Pegs[1]);
+            Anchor("KneeLeft", seats[0].transform, p.Knees[0]);
+            Anchor("KneeRight", seats[0].transform, p.Knees[1]);
+        }
+        if (!bike)
+        {
+            var cabin = new GameObject("Cabin").transform;
+            cabin.SetParent(root.transform, false);
+            cabin.localPosition = p.Cabin.center;
+            cabin.localScale = p.Cabin.size;
+        }
 
         float wheelbase = Mathf.Abs(p.WheelCentres[0].z - p.WheelCentres[n - 1].z);
         vehicle.Configure(p.Kind, model, seats, pivots, spins, front, wheelbase, Mathf.Max(-b.min.z, b.max.z));
@@ -206,11 +237,19 @@ public static class VehicleBuilder
         PrefabUtility.SaveAsPrefabAsset(root, PrefabPath(p.Name));
         Object.DestroyImmediate(root);
         Debug.Log($"[VehicleBuilder] saved {PrefabPath(p.Name)}: {p.Body.triangles.Length / 3} body tris, wheel r {p.WheelRadius:F3}, wheelbase {wheelbase:F2}, " +
-            $"body {b.size}, seats {string.Join(" ", p.SeatEyes.Select(e => e.ToString("F2")))}");
+            $"body {b.size}, seats {string.Join(" ", p.SeatEyes.Select(e => e.ToString("F2")))}, glass {p.GlassBounds.min:F2}..{p.GlassBounds.max:F2}, rear top {p.RearTop:F2}");
     }
 
     static VehicleFit VehicleFit(VehicleModels.Parts p) =>
-        new VehicleFit { MassKg = p.MassKg, WheelRadius = p.WheelRadius, CentreOfMassHeight = p.CentreOfMassHeight };
+        new VehicleFit { MassKg = p.MassKg, WheelRadius = p.WheelRadius, CentreOfMassHeight = p.CentreOfMassHeight, SeatCount = p.SeatEyes.Length };
+
+    // An empty marker at `local` (in the vehicle's space of the seat's parent) under a seat.
+    static void Anchor(string name, Transform seat, Vector3 local)
+    {
+        var t = new GameObject(name).transform;
+        t.SetParent(seat, false);
+        t.position = seat.parent.TransformPoint(local);
+    }
 
     static void AddBox(Transform parent, string name, Vector3 centre, Vector3 size, PhysicsMaterial material)
     {
@@ -427,6 +466,23 @@ public static class VehicleBuilder
                 && (plan.Regions[lot.Region].Kind == RegionKind.Town || plan.Regions[lot.Region].Kind == RegionKind.Factory))
                 return true;
         return false;
+    }
+
+    // Diagnostics (#102 audit): tools/unity.sh run VehicleBuilder.Measure -> Logs/run-VehicleBuilder_Measure.log
+    public static void Measure()
+    {
+        try
+        {
+            var player = AssetDatabase.LoadAssetAtPath<GameObject>(TestBoxBuilder.PrefabDir + "/Player.prefab");
+            var inst = (GameObject)Object.Instantiate(player);
+            foreach (var t in inst.GetComponentsInChildren<Transform>(true))
+                if (Regex.IsMatch(t.name, "Arm|Head|Neck|Shoulder|Spine|Hips|Wrist|Middle1|Chest|Upper|Clav"))
+                    Debug.Log($"[Measure] bone {t.name} {t.position.ToString("F3")}");
+            Object.DestroyImmediate(inst);
+            VehicleModels.Measure();
+        }
+        catch (Exception e) { Debug.LogException(e); EditorApplication.Exit(1); return; }
+        EditorApplication.Exit(0);
     }
 
     // ---- Rebuilding just the vehicles in the saved scenes ----

@@ -14,7 +14,7 @@ namespace Game.Tests
         static readonly Dictionary<string, int> Expected = new Dictionary<string, int>
         {
             ["GoblinV12"] = 2, ["DirtBike"] = 2, ["RoadMotorcycle"] = 2,
-            ["FairheavenLT80"] = 4, ["FairheavenSW84"] = 4, ["LightbodyLifted85"] = 4, ["Shvan92"] = 4,
+            ["FairheavenLT80"] = 4, ["FairheavenSW84"] = 4, ["LightbodyLifted85"] = 2, ["Shvan92"] = 2, // ADR-077
         };
 
         [Test]

@@ -54,6 +54,11 @@ public static class VehicleModels
         public Bounds BodyBounds, GlassBounds;
         public bool HasGlass;
         public Vector3[] SeatEyes;
+        public Vector3[] SeatCushions;         // per seat: where the hips rest (top of the cushion)
+        public Vector3[] Pegs, Knees;          // motorcycle: left, right foot peg / knee point on the tank
+        public Bounds Cabin;                   // car: the inside of the cabin (occupants' arms stay in it)
+        public float[] WheelRadii;             // each wheel's own radius (WheelRadius is their mean, for the physics)
+        public float RearTop;                  // car: top of the solid body behind the glass (a van's cargo box), 0 = none
         public float DoorOut;
         public float MassKg, CentreOfMassHeight, CentreOfMassZ;
     }
@@ -123,6 +128,18 @@ public static class VehicleModels
         return mat;
     }
 
+    // The Goblin's single glass shell is seen through twice (both sides drawn): darker and less mirror-like, or the
+    // sky's reflection on both layers washed it milky white.
+    static Material GoblinGlass()
+    {
+        var mat = Glass("GoblinV12_Glass", new Color(0.03f, 0.035f, 0.04f, 0.62f));
+        mat.SetFloat("_Smoothness", 0.7f);
+        mat.SetFloat("_EnvironmentReflections", 0f);
+        mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
     static Material PlateMaterial() => Lit("Vehicle_Plate_KR", Color.white, 0f, 0.45f, VehicleArt.Plate());
 
     // ---- Model specs ----
@@ -139,12 +156,19 @@ public static class VehicleModels
         public Func<Material, Material> Remap;  // instead of RoleOf / Materials: the model's material in, ours out (null drops it)
         public float MassKg, CentreOfMassHeight, CentreOfMassZ;
         public int Seats = 4;
-        public float EyeUp = 0.36f, EyeBack = 0.56f, RearBack = 0.85f, RearUp = 0.03f;
-        public Vector3 FrontNudge, RearNudge;
         public Vector3 SteeringGuess;          // no steering mesh: where its centre is
         public float SteeringGuessRadius = 0.18f;
         public float SteeringTiltDeg = -1f;    // < 0: from the steering mesh's bounds
+        // Seats, measured from the interior mesh in the model's turned frame (VehicleBuilder.Measure prints the
+        // profiles): z of the front face of the seat back at head height, y of the cushion top. Rear < -50 = no row.
+        public float FrontBackZ, FrontCushionY, RearBackZ = -99f, RearCushionY;
     }
+
+    // The character (Player.prefab, measured with VehicleBuilder.Measure): shoulder joint below and beside the eye,
+    // the arm's reach (upper arm 0.165 + forearm 0.225 + to the palm), and the seated hip below the eye.
+    public const float ShoulderDown = 0.24f, ShoulderSide = 0.15f, ArmReach = 0.42f, GripReach = 0.40f;
+    public const float SeatedEyeUp = 0.76f;   // eye above the cushion top, sitting upright
+    const float HipUp = 0.1f, HipToEye = 0.73f, HipToShoulder = 0.50f;
 
     static readonly Regex Badges = new Regex("Badges|Numberplate|clearcoat|car_shadow|^Object0", RegexOptions.IgnoreCase);
 
@@ -187,20 +211,25 @@ public static class VehicleModels
     {
         var lt80 = Daniel("FairheavenLT80", "FairheavenLT80.fbx", 1250f, DanielMaterials("FairheavenLT80", "FairheavenLT80", new Color(0.46f, 0.1f, 0.08f),
             "Generic_bodymat_dif.jpg", null, "UCB_BOTTOM_GT_Dif.png", "UCB_BOTTOM_GT_NRM.png", "UCB_Lights_and_Glass_Dif.jpg", "UCB_BOTTOM_GT_Dif.png", "RB1c_Tire_1k_Dif.jpg", null));
+        // Sedan: front buckets (back face -0.25, cushion 0.50), rear bench (back face -1.00, cushion 0.50).
+        lt80.FrontBackZ = -0.25f; lt80.FrontCushionY = 0.50f; lt80.RearBackZ = -1.00f; lt80.RearCushionY = 0.50f;
         yield return lt80;
         var sw84 = Daniel("FairheavenSW84", "FairheavenSW84.fbx", 1350f, DanielMaterials("FairheavenSW84", "FairheavenSW84", new Color(0.66f, 0.6f, 0.47f),
             "Generic_bodymat_dif.png", "Generic_bodymat_NRM.png", "UCB_BOTTOM_GT_Dif.png", "UCB_BOTTOM_GT_NRM.png", "UCB_Lights_and_Glass_Dif.jpg", "UCB_BOTTOM_GT_Dif.png", "RB1c_Tire_1k_Dif.jpg", null));
+        sw84.FrontBackZ = -0.25f; sw84.FrontCushionY = 0.50f; sw84.RearBackZ = -1.00f; sw84.RearCushionY = 0.50f; // the sedan's interior
         yield return sw84;
         var lifted = Daniel("LightbodyLifted85", "LightbodyLifted85.fbx", 1900f, DanielMaterials("LightbodyLifted85", "LightbodyLifted85", new Color(0.2f, 0.28f, 0.19f),
             "Generic_bodymat_dif.jpg", null, "UCB_BOTTOM_DIF.jpg", null, "UCB_Lights_and_Glass_Dif.jpg", "UCB_Interiors_1_Dif.jpg", "RO1a_Tire_dif.jpg", "RO1a_Tire_nrm.jpg"));
         lifted.CentreOfMassHeight = 0.62f;
-        lifted.RearBack = 1.65f; // the two rear places are in the bed
-        lifted.RearUp = 0.05f;
+        // Regular cab: the bench back at 0.00, cushion 0.79, and only 0.3 m to the cab's back wall (-0.45): no rear
+        // seats, and nobody rides in the bed (ADR-077).
+        lifted.Seats = 2; lifted.FrontBackZ = 0.00f; lifted.FrontCushionY = 0.79f;
         yield return lifted;
         var shvan = Daniel("Shvan92", "Shvan92.fbx", 1750f, DanielMaterials("Shvan92", "Shvan92", new Color(0.78f, 0.78f, 0.75f),
             "Generic_bodymat_dif.jpg", null, "UCB_BOTTOM_DIF.jpg", null, "UCB_Lights_and_Glass_Dif.jpg", "UCB_Interiors_1_Dif.jpg", "RB1c_Tire_1k_Dif.jpg", null));
         shvan.CentreOfMassHeight = 0.6f;
-        shvan.RearBack = 1.05f;
+        // Panel van: two front seats (back 0.85, cushion 0.84); behind them a bare cargo floor (0.56) to the doors.
+        shvan.Seats = 2; shvan.FrontBackZ = 0.85f; shvan.FrontCushionY = 0.84f;
         yield return shvan;
 
         var goblinFolder = "GoblinV12";
@@ -214,10 +243,13 @@ public static class VehicleModels
             Materials = new Dictionary<Role, Material>
             {
                 [Role.Body] = Cutout(Lit("GoblinV12_Body", Color.white, 0.45f, 0.7f, albedo), 0.4f),
-                [Role.Glass] = Glass("GoblinV12_Glass", new Color(0.05f, 0.06f, 0.07f, 0.5f)),
+                [Role.Glass] = GoblinGlass(),
                 [Role.Tyre] = Lit("GoblinV12_Tyre", new Color(0.09f, 0.09f, 0.09f), 0f, 0.3f, null, Tex(goblinFolder, "tire_normal.png")),
             },
-            SteeringGuess = new Vector3(-0.38f, 0.72f, 0.18f), SteeringTiltDeg = 22f,
+            // No steering wheel in the model (the dash is bare, 0.76-0.80 high from z 0.65): one is made here, in front
+            // of the driver's seat (back face -0.22, cushion 0.45) and under the dash.
+            SteeringGuess = new Vector3(-0.38f, 0.66f, 0.33f), SteeringGuessRadius = 0.16f, SteeringTiltDeg = 24f,
+            FrontBackZ = -0.22f, FrontCushionY = 0.45f,
         };
     }
 
@@ -307,15 +339,17 @@ public static class VehicleModels
             for (int i = 0; i < 4; i++) staticGroups[i] = new List<Piece>();
             foreach (var w in wheelStatic) staticGroups[Quadrant(w.Bounds.center)].Add(w);
             var centres = new Vector3[4];
-            float radius = 0f;
+            var radii = new float[4];
             for (int i = 0; i < 4; i++)
             {
                 if (groups[i].Count == 0) throw new Exception($"{spec.Name}: wheel {i} missing");
                 var b = Union(groups[i]);
                 centres[i] = b.center;
-                radius += Mathf.Max(b.size.y, b.size.z) * 0.5f / 4f;
+                radii[i] = Mathf.Max(b.size.y, b.size.z) * 0.5f;
             }
-            float groundY = centres.Average(c => c.y) - radius;
+            float radius = radii.Average();
+            // Every tyre on the ground: the ground is under the lowest tyre bottoms (their mean).
+            float groundY = Enumerable.Range(0, 4).Average(i => centres[i].y - radii[i]);
             var shift = new Vector3(-(centres.Average(c => c.x)), -groundY, -(centres.Average(c => c.z)));
             for (int i = 0; i < 4; i++)
             {
@@ -324,13 +358,13 @@ public static class VehicleModels
             }
             var toVehicle = Matrix4x4.Translate(shift);
 
-            var parts = new Parts { Name = spec.Name, Kind = spec.Kind, WheelRadius = radius, WheelCentres = centres, MassKg = spec.MassKg,
+            var parts = new Parts { Name = spec.Name, Kind = spec.Kind, WheelRadius = radius, WheelRadii = radii, WheelCentres = centres, MassKg = spec.MassKg,
                 CentreOfMassHeight = spec.CentreOfMassHeight, CentreOfMassZ = spec.CentreOfMassZ };
 
             // Body (with the plates as quads).
             var combiner = new Combiner();
-            var glass = new Bounds();
-            bool hasGlass = false;
+            var glassVerts = new List<Vector3>();
+            var bodyVerts = new List<Vector3>();
             foreach (var p in body)
             {
                 var m = toVehicle * p.Renderer.localToWorldMatrix;
@@ -340,12 +374,9 @@ public static class VehicleModels
                     var mat = Pick(spec, mats[s], out var role);
                     if (mat == null) continue;
                     combiner.Add(p.Mesh, s, mat, m);
-                    if (role == Role.Glass && !(spec.Plate != null && spec.Plate.IsMatch(p.Name)))
-                    {
-                        var gb = p.Bounds;
-                        gb.center += shift;
-                        if (!hasGlass) { glass = gb; hasGlass = true; } else glass.Encapsulate(gb);
-                    }
+                    var verts = p.Mesh.vertices;
+                    var into = role == Role.Glass ? glassVerts : bodyVerts;
+                    foreach (int i in p.Mesh.GetTriangles(s)) into.Add(m.MultiplyPoint3x4(verts[i]));
                 }
             }
             var plateMat = PlateMaterial();
@@ -358,8 +389,26 @@ public static class VehicleModels
             }
             parts.Body = combiner.ToMesh(spec.Name + "_Body", out parts.BodyMaterials);
             parts.BodyBounds = parts.Body.bounds;
-            parts.GlassBounds = glass;
-            parts.HasGlass = hasGlass;
+            // The windows, not the lamp lenses (the same "glass" material): glass above 55% of the body's height;
+            // their length from the upper half of that (the side windows and the screens' tops).
+            var bb = parts.BodyBounds;
+            float lampTop = bb.min.y + bb.size.y * 0.55f;
+            var windows = glassVerts.Where(v => v.y >= lampTop).ToList();
+            parts.HasGlass = windows.Count > 0;
+            if (parts.HasGlass)
+            {
+                float top = windows.Max(v => v.y);
+                var upper = windows.Where(v => v.y >= (lampTop + top) * 0.5f).ToList();
+                var min = new Vector3(windows.Min(v => v.x), windows.Min(v => v.y), upper.Min(v => v.z));
+                var max = new Vector3(windows.Max(v => v.x), top, upper.Max(v => v.z));
+                parts.GlassBounds = new Bounds((min + max) * 0.5f, max - min);
+                // A van's cargo box: behind the windows the body stands well above the belt line all along (the median of
+                // the 10 cm slices' tops), not just a roll bar or a spoiler.
+                var tops = bodyVerts.Where(v => v.z < min.z - 0.1f && Mathf.Abs(v.x) < bb.extents.x * 0.8f)
+                    .GroupBy(v => Mathf.FloorToInt(v.z * 10f)).Select(g => g.Max(v => v.y)).OrderBy(y => y).ToList();
+                float rearTop = tops.Count > 0 ? tops[tops.Count / 2] : 0f;
+                parts.RearTop = rearTop > min.y + 0.3f ? rearTop : 0f;
+            }
 
             // Wheels, each about its own centre.
             parts.Wheels = new Mesh[4];
@@ -389,7 +438,7 @@ public static class VehicleModels
             }
             else
             {
-                centre = spec.SteeringGuess;
+                centre = spec.SteeringGuess + shift;
                 wheelR = spec.SteeringGuessRadius;
                 tilt = spec.SteeringTiltDeg;
             }
@@ -404,21 +453,51 @@ public static class VehicleModels
                 var about = Matrix4x4.TRS(centre, parts.SteeringRotation, Vector3.one).inverse * toVehicle;
                 parts.Steering = CombineGroup(steering, about, spec, spec.Name + "_Steering", out parts.SteeringMaterials);
             }
+            else
+            {
+                parts.Steering = SteeringWheelMesh(spec.Name + "_Steering", wheelR);
+                var wheelMat = Lit(spec.Name + "_SteeringWheel", new Color(0.07f, 0.07f, 0.075f), 0.1f, 0.35f);
+                wheelMat.SetFloat("_Cull", (float)CullMode.Off); // made here: either winding shows
+                parts.SteeringMaterials = new[] { wheelMat };
+            }
             // Hands at a quarter to three, on the rim's near face.
             parts.Grips = new[] { new Vector3(-wheelR * 0.93f, wheelR * 0.3f, -0.015f), new Vector3(wheelR * 0.93f, wheelR * 0.3f, -0.015f) };
 
-            // Seats: the driver's eyes above and behind the wheel, the passenger beside, the rear row behind.
-            var eye = new Vector3(centre.x, centre.y + spec.EyeUp, centre.z - spec.EyeBack) + spec.FrontNudge;
-            float roof = parts.BodyBounds.max.y;
-            eye.y = Mathf.Min(eye.y, roof - 0.12f);
-            var eyes = new List<Vector3> { eye, new Vector3(-eye.x, eye.y, eye.z) };
+            // Seats on the measured cushions: the hips on the cushion a quarter metre ahead of the seat back, the eyes
+            // upright above (under the roof). The driver sits as far forward as the arms need to hold the rim at a
+            // quarter to three with the elbows a little bent (GripReach); the others sit back.
+            float roofInside = (parts.HasGlass ? parts.GlassBounds.max.y : bb.max.y) - 0.04f;
+            float seatX = Mathf.Abs(centre.x);
+            Vector3 Cushion(float x, float backZ, float cushionY) => new Vector3(x, cushionY + shift.y, backZ + shift.z + 0.25f);
+            Vector3 Eye(Vector3 cushion) => new Vector3(cushion.x, Mathf.Min(cushion.y + SeatedEyeUp, roofInside - 0.10f), cushion.z - 0.15f);
+            var cushions = new List<Vector3> { Cushion(centre.x, spec.FrontBackZ, spec.FrontCushionY), Cushion(-centre.x, spec.FrontBackZ, spec.FrontCushionY) };
             if (spec.Seats > 2)
             {
-                var rear = new Vector3(eye.x, Mathf.Min(eye.y + spec.RearUp, roof - 0.1f), eye.z - spec.RearBack) + spec.RearNudge;
-                eyes.Add(rear);
-                eyes.Add(new Vector3(-rear.x, rear.y, rear.z));
+                cushions.Add(Cushion(centre.x, spec.RearBackZ, spec.RearCushionY));
+                cushions.Add(Cushion(-centre.x, spec.RearBackZ, spec.RearCushionY));
             }
+            var eyes = cushions.Select(Eye).ToList();
+            var steerTo = Matrix4x4.TRS(centre, parts.SteeringRotation, Vector3.one);
+            var driver = eyes[0];
+            foreach (int g in new[] { 0, 1 })
+            {
+                var grip = steerTo.MultiplyPoint3x4(parts.Grips[g]);
+                var shoulder = driver + new Vector3(g == 0 ? -ShoulderSide : ShoulderSide, -ShoulderDown, 0f);
+                float dx = grip.x - shoulder.x, dy = grip.y - shoulder.y;
+                float along = Mathf.Sqrt(Mathf.Max(0.01f, GripReach * GripReach - dx * dx - dy * dy));
+                driver.z = Mathf.Max(driver.z, grip.z - along);
+            }
+            driver.z = Mathf.Min(driver.z, centre.z - 0.25f); // never through the wheel
+            eyes[0] = driver;
             parts.SeatEyes = eyes.ToArray();
+            parts.SeatCushions = cushions.ToArray();
+            // The cabin: between the windows' sides, from below the cushions to the roof, from behind the rearmost
+            // seat back to the dash.
+            float backMost = (spec.Seats > 2 ? spec.RearBackZ : spec.FrontBackZ) + shift.z - 0.15f;
+            float cabinHalf = parts.HasGlass ? parts.GlassBounds.extents.x : bb.extents.x - 0.1f;
+            var cabinMin = new Vector3(-cabinHalf, cushions.Min(c => c.y) - 0.35f, backMost);
+            var cabinMax = new Vector3(cabinHalf, roofInside, centre.z + 0.35f);
+            parts.Cabin = new Bounds((cabinMin + cabinMax) * 0.5f, cabinMax - cabinMin);
             parts.DoorOut = parts.BodyBounds.extents.x + 0.65f;
             return parts;
         }
@@ -426,6 +505,59 @@ public static class VehicleModels
         {
             Object.DestroyImmediate(root);
         }
+    }
+
+    // A plain steering wheel in its pivot's space (the rim in the XY plane, the column along -Z behind it): a round
+    // rim, three spokes and a hub. For a model without one (GoblinV12).
+    static Mesh SteeringWheelMesh(string name, float radius)
+    {
+        const int Around = 32, Tube = 8;
+        float tube = radius * 0.11f;
+        var v = new List<Vector3>();
+        var n = new List<Vector3>();
+        var tris = new List<int>();
+        void Ring(Func<float, float, Vector3> at, Func<float, float, Vector3> normal, int rows, int cols, bool closeRows)
+        {
+            int start = v.Count;
+            for (int i = 0; i <= rows; i++)
+                for (int j = 0; j <= cols; j++)
+                {
+                    float a = i / (float)rows, b = j / (float)cols;
+                    v.Add(at(a, b));
+                    n.Add(normal(a, b));
+                }
+            for (int i = 0; i < rows; i++)
+                for (int j = 0; j < cols; j++)
+                {
+                    int k = start + i * (cols + 1) + j;
+                    tris.AddRange(new[] { k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2 });
+                }
+        }
+        Vector3 Round(float a) => new Vector3(Mathf.Cos(a * Mathf.PI * 2f), Mathf.Sin(a * Mathf.PI * 2f), 0f);
+        Vector3 TubeDir(Vector3 radial, float b) => radial * Mathf.Cos(b * Mathf.PI * 2f) + Vector3.forward * Mathf.Sin(b * Mathf.PI * 2f);
+        Ring((a, b) => Round(a) * radius + TubeDir(Round(a), b) * tube, (a, b) => TubeDir(Round(a), b), Around, Tube, true);
+        // Spokes: left, right and down, from the hub to the rim.
+        foreach (float deg in new[] { 0f, 180f, 270f })
+        {
+            var dir = new Vector3(Mathf.Cos(deg * Mathf.Deg2Rad), Mathf.Sin(deg * Mathf.Deg2Rad), 0f);
+            var side = Vector3.Cross(dir, Vector3.forward);
+            float r0 = radius * 0.22f, r1 = radius;
+            Ring((a, b) => dir * Mathf.Lerp(r0, r1, a) + (side * Mathf.Cos(b * Mathf.PI * 2f) * 2.2f + Vector3.forward * Mathf.Sin(b * Mathf.PI * 2f)) * tube * 0.55f,
+                (a, b) => side * Mathf.Cos(b * Mathf.PI * 2f) + Vector3.forward * Mathf.Sin(b * Mathf.PI * 2f), 1, Tube, true);
+        }
+        // Hub: a short cylinder along the column, capped toward the driver.
+        float hub = radius * 0.24f;
+        Ring((a, b) => Round(b) * hub + Vector3.forward * Mathf.Lerp(-tube * 1.4f, tube * 2.5f, a), (a, b) => Round(b), 1, 16, true);
+        int centreIndex = v.Count;
+        v.Add(new Vector3(0f, 0f, -tube * 1.4f)); n.Add(Vector3.back);
+        for (int j = 0; j <= 16; j++) { v.Add(Round(j / 16f) * hub + Vector3.forward * -tube * 1.4f); n.Add(Vector3.back); }
+        for (int j = 0; j < 16; j++) tris.AddRange(new[] { centreIndex, centreIndex + 1 + j, centreIndex + 2 + j });
+        var mesh = new Mesh { name = name };
+        mesh.SetVertices(v);
+        mesh.SetNormals(n);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateBounds();
+        return mesh;
     }
 
     static Material Pick(Spec spec, Material source, out Role role)
@@ -481,8 +613,17 @@ public static class VehicleModels
             var bar = Named("throttle");
             var swing = Named("swingarm");
             var bodyParts = new[] { Named("dirt_bike red"), Named("motor") };
-            return BuildBike(spec, root, bodyParts, new[] { front }, new[] { rear }, new[] { bar, fork }, swing, 27f,
-                grips: null, saddle: bodyParts[0].Bounds, eyeUp: 0.78f, eyeForward: 0.12f);
+            // Measured from the mesh (model frame; VehicleBuilder.Measure): the bar ends' grips, the saddle's top where
+            // the rider sits (forward, just behind the tank), the foot pegs (the lowest parts standing out sideways) and
+            // the tank's sides at knee height.
+            var bodyVerts = bodyParts.SelectMany(Verts).ToList();
+            var grips = BarGrips(Verts(bar));
+            const float seatZ = -0.15f;
+            var saddleTop = bodyVerts.Where(v => Mathf.Abs(v.x - CentreX(front, rear)) < 0.08f && Mathf.Abs(v.z - seatZ) < 0.06f).Max(v => v.y);
+            var cushion = new Vector3(CentreX(front, rear), saddleTop, seatZ);
+            var pegs = Sides(bodyVerts.Where(v => Mathf.Abs(v.x - cushion.x) > 0.13f && v.y < Ground(front, rear) + 0.55f), cushion.x);
+            var knees = Sides(bodyVerts.Where(v => v.y > saddleTop - 0.2f && v.y < saddleTop - 0.05f && v.z > seatZ + 0.25f && v.z < seatZ + 0.45f), cushion.x, outermost: true);
+            return BuildBike(spec, root, bodyParts, new[] { front }, new[] { rear }, new[] { bar, fork }, swing, 27f, grips, cushion, pegs, knees, leanMinDeg: 25f);
         }
         finally
         {
@@ -549,8 +690,19 @@ public static class VehicleModels
             }
             var steer = pieces.Where(Steers).ToList();
             var body = pieces.Where(p => !frontWheel.Contains(p) && !rearWheel.Contains(p) && !steer.Contains(p)).ToList();
-            var saddle = pieces.Where(p => p.Renderer.sharedMaterials.Any(m => m != null && m.name.StartsWith("Leather"))).Select(p => p.Bounds).FirstOrDefault();
-            return BuildBike(spec, root, body, frontWheel, rearWheel, steer, null, 25f, grips: null, saddle: saddle, eyeUp: 0.74f, eyeForward: 0.1f);
+            // Measured from the mesh (VehicleBuilder.Measure): the solo saddle ("Leather"), the handlebar (the widest
+            // "Ruchki" part), the floorboards (the low "Ruchki" part: a cruiser's feet go forward onto them) and the
+            // tank ("Moto 2.002").
+            bool Mat(Piece p, string prefix) => p.Renderer.sharedMaterials.Any(m => m != null && m.name.StartsWith(prefix));
+            var saddle = pieces.First(p => Mat(p, "Leather")).Bounds;
+            var cushion = new Vector3(saddle.center.x, saddle.max.y, saddle.center.z + 0.05f);
+            var handlebar = pieces.Where(p => Mat(p, "Ruchki")).OrderByDescending(p => p.Bounds.size.x).First();
+            var grips = BarGrips(Verts(handlebar));
+            var boards = pieces.Where(p => Mat(p, "Ruchki") && p.Bounds.center.y < frontAxle.y).OrderBy(p => p.Bounds.center.y).First().Bounds;
+            var pegs = new[] { new Vector3(boards.center.x - boards.extents.x * 0.6f, boards.max.y, boards.center.z), new Vector3(boards.center.x + boards.extents.x * 0.6f, boards.max.y, boards.center.z) };
+            var tank = pieces.First(p => Mat(p, "Moto 2.002")).Bounds;
+            var knees = new[] { new Vector3(tank.min.x, tank.center.y, tank.min.z + 0.12f), new Vector3(tank.max.x, tank.center.y, tank.min.z + 0.12f) };
+            return BuildBike(spec, root, body, frontWheel, rearWheel, steer, null, 25f, grips, cushion, pegs, knees, leanMinDeg: 8f);
         }
         finally
         {
@@ -558,21 +710,65 @@ public static class VehicleModels
         }
     }
 
+    static List<Vector3> Verts(Piece p)
+    {
+        var m = p.Renderer.localToWorldMatrix;
+        return p.Mesh.vertices.Select(v => m.MultiplyPoint3x4(v)).ToList();
+    }
+
+    static float CentreX(Piece front, Piece rear) => (front.Bounds.center.x + rear.Bounds.center.x) * 0.5f;
+    static float Ground(Piece front, Piece rear) => Mathf.Min(front.Bounds.min.y, rear.Bounds.min.y);
+
+    // Where the hands go on a handlebar: on the bar a little inboard of its ends (|x| 0.26..0.34 from its middle,
+    // or the outer quarter of a narrower bar), left then right; the mean of the bar's own vertices there.
+    static Vector3[] BarGrips(List<Vector3> bar)
+    {
+        float mid = (bar.Min(v => v.x) + bar.Max(v => v.x)) * 0.5f;
+        float half = (bar.Max(v => v.x) - bar.Min(v => v.x)) * 0.5f;
+        float lo = Mathf.Min(0.26f, half * 0.7f), hi = Mathf.Min(0.34f, half);
+        Vector3 Mean(float side)
+        {
+            var at = bar.Where(v => (v.x - mid) * side >= lo && (v.x - mid) * side <= hi).ToList();
+            return new Vector3(at.Average(v => v.x), at.Average(v => v.y), at.Average(v => v.z));
+        }
+        return new[] { Mean(-1f), Mean(1f) };
+    }
+
+    // Left and right points of a set (their mean on each side of `x`; or the outermost points' height and length).
+    static Vector3[] Sides(IEnumerable<Vector3> points, float x, bool outermost = false)
+    {
+        var list = points.ToList();
+        Vector3 One(float side)
+        {
+            var at = list.Where(v => (v.x - x) * side > 0f).ToList();
+            if (at.Count == 0) return new Vector3(x + side * 0.2f, 0f, 0f);
+            if (!outermost) return new Vector3(at.Average(v => v.x), at.Average(v => v.y), at.Average(v => v.z));
+            float far = at.Max(v => (v.x - x) * side);
+            return new Vector3(x + side * far, at.Average(v => v.y), at.Average(v => v.z));
+        }
+        return new[] { One(-1f), One(1f) };
+    }
+
     // Shared by both motorcycles: wheels resting on y = 0 with the axles' midpoint at the origin; the steering part
     // turns about the rake axis through the front axle; the swingarm (if any) about its front end.
+    // `grips`, `cushion`, `pegs` and `knees` are measured points in the model frame (left, right).
     static Parts BuildBike(Spec spec, GameObject root, IEnumerable<Piece> body, IList<Piece> frontWheel, IList<Piece> rearWheel, IEnumerable<Piece> steer,
-        Piece swing, float rakeDeg, Vector3[] grips, Bounds saddle, float eyeUp, float eyeForward)
+        Piece swing, float rakeDeg, Vector3[] grips, Vector3 cushion, Vector3[] pegs, Vector3[] knees, float leanMinDeg)
     {
-        // Axle centres from the tyres (the widest wheel part).
+        // Axle centres from the tyres (the widest wheel part); each wheel's own radius, both on the ground.
         var fb = Union(frontWheel);
         var rb = Union(rearWheel);
-        float radius = (Mathf.Max(fb.size.y, fb.size.z) + Mathf.Max(rb.size.y, rb.size.z)) * 0.25f;
-        var shift = new Vector3(-(fb.center.x + rb.center.x) * 0.5f, -((fb.center.y + rb.center.y) * 0.5f - radius), -(fb.center.z + rb.center.z) * 0.5f);
+        float rf = Mathf.Max(fb.size.y, fb.size.z) * 0.5f, rr = Mathf.Max(rb.size.y, rb.size.z) * 0.5f;
+        float radius = (rf + rr) * 0.5f;
+        float ground = ((fb.center.y - rf) + (rb.center.y - rr)) * 0.5f;
+        var shift = new Vector3(-(fb.center.x + rb.center.x) * 0.5f, -ground, -(fb.center.z + rb.center.z) * 0.5f);
         var toVehicle = Matrix4x4.Translate(shift);
         var front = fb.center + shift;
         var rear = rb.center + shift;
+        // Both axles on the centre line (the model's are a few millimetres apart: the steering axis leaned sideways).
+        front.x = rear.x = 0f;
         front.y = rear.y = radius;
-        var parts = new Parts { Name = spec.Name, Kind = VehicleKind.Motorcycle, WheelRadius = radius, WheelCentres = new[] { front, rear },
+        var parts = new Parts { Name = spec.Name, Kind = VehicleKind.Motorcycle, WheelRadius = radius, WheelRadii = new[] { rf, rr }, WheelCentres = new[] { front, rear },
             MassKg = spec.MassKg, CentreOfMassHeight = spec.CentreOfMassHeight };
 
         var c = new Combiner();
@@ -599,26 +795,13 @@ public static class VehicleModels
         var steerList = steer.ToList();
         parts.Steering = CombineGroup(steerList, pivotInverse * toVehicle, spec, spec.Name + "_Steering", out parts.SteeringMaterials);
 
-        // Grips: the outer ends of the bar, at the top of the steering parts, a hand's width in from the ends.
-        var sb = Union(steerList);
-        sb.center += shift;
-        float half = Mathf.Min(0.36f, sb.extents.x - 0.05f);
-        var barTop = new Vector3(0f, sb.max.y - 0.07f, 0f);
-        // Of the steering parts near the top, the rearmost: the bar sits behind the head.
-        var nearTop = steerList.Select(p => { var b = p.Bounds; b.center += shift; return b; }).Where(b => b.max.y > sb.max.y - 0.2f).ToList();
-        float barZ = nearTop.Count > 0 ? nearTop.Min(b => b.center.z) : sb.center.z;
-        var gripLeft = new Vector3(-half, barTop.y, barZ);
-        var gripRight = new Vector3(half, barTop.y, barZ);
-        // The road bike's "Ruchki" (grip) material sits on the whole handlebar piece and a small clamp: the mirrors stand
-        // higher than the bar and pulled the hands up to them, so the hands go at the clamp's height instead.
-        var gripPieces = steerList.Where(p => p.Renderer.sharedMaterials.Any(m => m != null && m.name.StartsWith("Ruchki"))).Select(p => { var b = p.Bounds; b.center += shift; return b; }).ToList();
-        if (grips == null && gripPieces.Count > 0 && spec.Name == "RoadMotorcycle")
-        {
-            float gy = gripPieces.Min(b => b.center.y) + 0.03f, gz = gripPieces.Min(b => b.center.z);
-            gripLeft = new Vector3(-half, gy, gz);
-            gripRight = new Vector3(half, gy, gz);
-        }
-        parts.Grips = grips ?? new[] { pivotInverse.MultiplyPoint3x4(gripLeft), pivotInverse.MultiplyPoint3x4(gripRight) };
+        // Grips: measured on the bar, made symmetric about the centre line (the hands mirror each other).
+        var gl = grips[0] + shift;
+        var gr = grips[1] + shift;
+        float gx = (gr.x - gl.x) * 0.5f, gy = (gl.y + gr.y) * 0.5f, gz = (gl.z + gr.z) * 0.5f;
+        var gripLeft = new Vector3(-gx, gy, gz);
+        var gripRight = new Vector3(gx, gy, gz);
+        parts.Grips = new[] { pivotInverse.MultiplyPoint3x4(gripLeft), pivotInverse.MultiplyPoint3x4(gripRight) };
 
         if (swing != null)
         {
@@ -628,16 +811,32 @@ public static class VehicleModels
             parts.Swingarm = CombineGroup(new[] { swing }, Matrix4x4.Translate(-parts.SwingPivot) * toVehicle, spec, spec.Name + "_Swingarm", out parts.SwingarmMaterials);
         }
 
-        // Rider's eyes above the saddle's front half; the pillion behind and a little higher.
-        var seat = saddle;
-        seat.center += shift;
-        float seatTop = seat.size.sqrMagnitude > 0f ? seat.max.y : 0.9f;
-        float seatZ = seat.size.sqrMagnitude > 0f ? seat.center.z : -0.2f;
-        parts.SeatEyes = new[]
+        // The rider on the measured saddle point, leaning forward from the hips (at least `leanMinDeg`) until the
+        // shoulders are within GripReach of the grips; the head up. The pillion behind on the same saddle.
+        var seat = cushion + shift;
+        seat.x = 0f;
+        var hip = seat + Vector3.up * HipUp;
+        float lean = leanMinDeg;
+        for (; lean < 55f; lean += 1f)
         {
-            new Vector3(0f, seatTop + eyeUp, seatZ + eyeForward),
-            new Vector3(0f, seatTop + eyeUp + 0.08f, seatZ + eyeForward - 0.42f),
-        };
+            var up = new Vector3(0f, Mathf.Cos(lean * Mathf.Deg2Rad), Mathf.Sin(lean * Mathf.Deg2Rad));
+            var shoulder = hip + up * HipToShoulder;
+            float far = Mathf.Max(Vector3.Distance(shoulder + Vector3.left * ShoulderSide, gripLeft), Vector3.Distance(shoulder + Vector3.right * ShoulderSide, gripRight));
+            if (far <= GripReach) break;
+        }
+        var lift = new Vector3(0f, Mathf.Cos(lean * Mathf.Deg2Rad), Mathf.Sin(lean * Mathf.Deg2Rad));
+        var pillionSeat = seat + new Vector3(0f, 0.03f, -0.42f);
+        parts.SeatEyes = new[] { hip + lift * HipToEye, pillionSeat + Vector3.up * (HipUp + HipToEye) };
+        parts.SeatCushions = new[] { seat, pillionSeat };
+        Vector3[] Mirror(Vector3[] pair)
+        {
+            var l = pair[0] + shift; var r = pair[1] + shift;
+            float x = (Mathf.Abs(l.x) + Mathf.Abs(r.x)) * 0.5f, y = (l.y + r.y) * 0.5f, z = (l.z + r.z) * 0.5f;
+            return new[] { new Vector3(-x, y, z), new Vector3(x, y, z) };
+        }
+        parts.Pegs = Mirror(pegs);
+        parts.Knees = Mirror(knees);
+        Debug.Log($"[VehicleModels] {spec.Name}: lean {lean:F0} deg, cushion {seat:F2}, grips {gripLeft:F2} {gripRight:F2}, pegs {parts.Pegs[0]:F2} {parts.Pegs[1]:F2}, knees {parts.Knees[0]:F2}");
         parts.DoorOut = 0.9f;
         return parts;
     }
@@ -652,6 +851,96 @@ public static class VehicleModels
             if (mat == null) continue;
             c.Add(p.Mesh, s, mat, m);
         }
+    }
+
+    // Diagnostics: seat profiles (highest interior point per 5 cm along z in each seat column), steering and bike
+    // bars / pegs, in the model's turned frame. tools/unity.sh run VehicleBuilder.Measure
+    public static void Measure()
+    {
+        foreach (var spec in CarSpecs())
+        {
+            var pieces = Instantiate(spec, out var root);
+            try
+            {
+                var inside = pieces.Where(p => p.Name.Contains("Interior") || p.Name == "car_body").ToList();
+                var steer = pieces.Where(p => spec.Steering != null && spec.Steering.IsMatch(p.Name)).ToList();
+                float sx = steer.Count > 0 ? Union(steer).center.x : spec.SteeringGuess.x;
+                var vs = new List<Vector3>();
+                foreach (var p in inside) { var m = p.Renderer.localToWorldMatrix; vs.AddRange(p.Mesh.vertices.Select(v => m.MultiplyPoint3x4(v))); }
+                var wheels = pieces.Where(p => spec.Wheel.IsMatch(p.Name)).ToList();
+                float ground = wheels.Min(w => w.Bounds.min.y);
+                Debug.Log($"[Measure] {spec.Name} steering x {sx:F2} {(steer.Count > 0 ? Union(steer).center.ToString("F2") : "guess")} ground {ground:F2} interior {Union(inside).min.ToString("F2")}..{Union(inside).max.ToString("F2")}");
+                foreach (float col in new[] { sx, -sx })
+                foreach (float cap in new[] { 1.25f, 1.0f })
+                {
+                    var sb = new System.Text.StringBuilder();
+                    for (float z = -2.4f; z < 2.4f; z += 0.05f)
+                    {
+                        var band = vs.Where(v => Mathf.Abs(v.x - col) < 0.12f && v.z >= z && v.z < z + 0.05f && v.y < ground + cap).ToList();
+                        if (band.Count == 0) continue;
+                        sb.Append($" {z:F2}:{band.Max(v => v.y) - ground:F2}");
+                    }
+                    Debug.Log($"[Measure] {spec.Name} col {col:F2} cap {cap} top(z:y) {sb}");
+                }
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+        MeasureDirtBike();
+        MeasureRoadBike();
+    }
+
+    static void MeasureRoadBike()
+    {
+        var spec = new Spec { Name = "RoadMotorcycle", Folder = "RoadMotorcycle", File = "RoadMotorcycle.fbx", Kind = VehicleKind.Motorcycle, Scale = 12.5f, Remap = m => m };
+        var pieces = Instantiate(spec, out var root);
+        try
+        {
+            var tyres = pieces.Where(p => p.Renderer.sharedMaterials.Any(m => m != null && m.name.StartsWith("Mishelin")) && p.Bounds.size.y > 0.4f).OrderByDescending(p => p.Bounds.center.z).ToList();
+            float ground = tyres.Min(t => t.Bounds.min.y), cx = tyres.Average(t => t.Bounds.center.x);
+            Debug.Log($"[Measure] Road tyres " + string.Join(" ", tyres.Select(t => t.Bounds.center.ToString("F3") + " r" + t.Bounds.extents.y.ToString("F3"))) + $" ground {ground:F3}");
+            foreach (var p in pieces)
+            {
+                var b = p.Bounds;
+                Debug.Log($"[Measure] Road piece {p.Name} [{string.Join(",", p.Renderer.sharedMaterials.Select(m => m != null ? m.name : "-"))}] c {(b.center - new Vector3(cx, ground, 0f)).ToString("F2")} s {b.size.ToString("F2")}");
+            }
+        }
+        finally { Object.DestroyImmediate(root); }
+    }
+
+    static void MeasureDirtBike()
+    {
+        var spec = new Spec { Name = "DirtBike", Folder = "DirtBike", File = "DirtBike.fbx", Kind = VehicleKind.Motorcycle, Euler = new Vector3(0f, 180f, 0f),
+            RoleOf = _ => Role.Body, Materials = new Dictionary<Role, Material>() };
+        var pieces = Instantiate(spec, out var root, "dirt_bike red");
+        try
+        {
+            Piece Named(string n) => pieces.First(q => q.Name == n || q.Name.StartsWith(n + ".", StringComparison.Ordinal));
+            var frame = Named("dirt_bike red");
+            float cx = (Named("front_wheel").Bounds.center.x + Named("rear_wheel").Bounds.center.x) * 0.5f;
+            float ground = Mathf.Min(Named("front_wheel").Bounds.min.y, Named("rear_wheel").Bounds.min.y);
+            Debug.Log($"[Measure] DirtBike cx {cx:F3} ground {ground:F3} front {Named("front_wheel").Bounds.center.ToString("F3")} r {Named("front_wheel").Bounds.extents.y:F3} rear {Named("rear_wheel").Bounds.center.ToString("F3")} r {Named("rear_wheel").Bounds.extents.y:F3}");
+            List<Vector3> Verts(Piece p) { var m = p.Renderer.localToWorldMatrix; return p.Mesh.vertices.Select(v => m.MultiplyPoint3x4(v) - new Vector3(cx, ground, 0f)).ToList(); }
+            var bar = Verts(Named("throttle"));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                var end = bar.Where(v => v.x * side > 0.25f).ToList();
+                if (end.Count > 0) Debug.Log($"[Measure] DirtBike bar end {side}: c {new Vector3(end.Average(v => v.x), end.Average(v => v.y), end.Average(v => v.z)).ToString("F3")} |x|max {end.Max(v => Mathf.Abs(v.x)):F3}");
+            }
+            var body = Verts(frame).Concat(Verts(Named("motor"))).ToList();
+            var sb = new System.Text.StringBuilder();
+            for (float z = -1f; z < 1f; z += 0.05f)
+            {
+                var band = body.Where(v => Mathf.Abs(v.x) < 0.08f && v.z >= z && v.z < z + 0.05f).ToList();
+                if (band.Count > 0) sb.Append($" {z:F2}:{band.Max(v => v.y):F2}");
+            }
+            Debug.Log($"[Measure] DirtBike top(z:y){sb}");
+            var wide = body.Where(v => Mathf.Abs(v.x) > 0.13f && v.y < 0.55f).ToList();
+            foreach (var g in wide.GroupBy(v => Mathf.RoundToInt(v.z * 10f)).OrderBy(g => g.Key))
+                Debug.Log($"[Measure] DirtBike wide z {g.Key / 10f:F1}: n {g.Count()} y {g.Min(v => v.y):F2}..{g.Max(v => v.y):F2} |x| {g.Max(v => Mathf.Abs(v.x)):F2}");
+            var tank = body.Where(v => v.y > 0.7f).ToList();
+            if (tank.Count > 0) Debug.Log($"[Measure] DirtBike upper |x| by z: " + string.Join(" ", tank.GroupBy(v => Mathf.RoundToInt(v.z * 10f)).OrderBy(g => g.Key).Select(g => $"{g.Key / 10f:F1}:{g.Max(v => Mathf.Abs(v.x)):F2}")));
+        }
+        finally { Object.DestroyImmediate(root); }
     }
 
     // ---- Parked and wrecked cars (comrade1280's generic pack: bodies only, static props) ----

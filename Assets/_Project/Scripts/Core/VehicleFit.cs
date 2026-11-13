@@ -12,8 +12,9 @@ namespace Game.Core
         public float MassKg;
         public float WheelRadius;
         public float CentreOfMassHeight;
+        public int SeatCount;   // the model's seats (the prefab's seat list); 0 keeps the type's
 
-        public bool Any => MassKg > 0f || WheelRadius > 0f || CentreOfMassHeight > 0f;
+        public bool Any => MassKg > 0f || WheelRadius > 0f || CentreOfMassHeight > 0f || SeatCount > 0;
 
         // A copy of `rules` with this model's numbers. The springs and dampers scale with the mass so every model
         // sits as deep on its suspension at rest as the type's numbers were tuned for.
@@ -30,6 +31,7 @@ namespace Game.Core
             }
             if (WheelRadius > 0f) tuned.WheelRadius = WheelRadius;
             if (CentreOfMassHeight > 0f) tuned.CentreOfMassHeight = CentreOfMassHeight;
+            if (SeatCount > 0) tuned.SeatCount = SeatCount;
             return tuned;
         }
 
