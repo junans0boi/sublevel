@@ -927,7 +927,7 @@ namespace Game.AI
             double angle = _rng.NextDouble() * System.Math.PI * 2;
             float radius = Mathf.Sqrt((float)_rng.NextDouble()) * error;
             var off = Quaternion.Euler(Mathf.Sin((float)angle) * radius, Mathf.Cos((float)angle) * radius, 0f);
-            if (!_self.ServerFire(Quaternion.LookRotation(to / distance) * off * Vector3.forward)) return;
+            if (!_self.ServerFire(Quaternion.LookRotation(to / distance) * off * Vector3.forward, distance)) return;
             _lastAttackAt = now;
             if (!weapon.Auto) _nextTrigger = now + Mathf.Max(weapon.FireInterval, _rules.SemiAutoInterval);
             BotNoise.Emit(eye.x, eye.y, eye.z, _rules.GunshotHearingRadius, _self.ObjectId, NoiseKind.Gunshot);

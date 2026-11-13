@@ -168,12 +168,20 @@ namespace Game.Gameplay
             if (distance < 1e-3f) return;
             var dir = to / distance;
 
+            // A bullet still flying shows its muzzle now and its impact when it lands (ADR-098).
+            if (shot.Phase == Combatant.ShotPhase.Impact)
+            {
+                if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal);
+                Confirm(shot);
+                return;
+            }
             if (_shots.IsNewShot(Time.timeAsDouble))
             {
                 _hitShown = _killShown = _headShown = _damageShown = false;
                 _muzzle = MuzzlePoint(shot.Origin, dir, out float sizeFactor);
                 ShowMuzzleFlash(dir, sizeFactor);
             }
+            if (shot.Phase == Combatant.ShotPhase.Launch) return;
             ShowTracer(_muzzle, shot.End);
             if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal);
             Confirm(shot);

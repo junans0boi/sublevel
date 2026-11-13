@@ -99,8 +99,12 @@ namespace Game.Net
             public Combatant Victim; // null unless a combatant was hit
             public HitZone Zone;     // where on the victim; Body when no combatant was hit
 
+            public ShotPhase Phase;  // Whole unless the bullet was still flying (ADR-098)
+
             public readonly bool Head => Victim != null && Zone == HitZone.Head;
         }
+
+        public enum ShotPhase : byte { Whole = 0, Launch = 1, Impact = 2 }
 
         public delegate void ShotResolvedHandler(in ShotResult shot);
         public event ShotResolvedHandler ShotResolved;
@@ -132,8 +136,10 @@ namespace Game.Net
         // third-person camera cast never starts inside the wall.
         const float LeanWallClearance = 0.1f;
         // The hit kind and the hit zone travel in one byte of the shot effect: kind in the low half, zone above.
+        // Bit 6: only the muzzle part of a bullet still in flight; bit 7: only its impact (ADR-098).
         const int ShotZoneShift = 4;
         const int ShotHitMask = (1 << ShotZoneShift) - 1;
+        const int ShotZoneMask = 3, ShotLaunchBit = 0x40, ShotImpactBit = 0x80;
         // Planar speed is measured over a short window: on the server a remote owner's position arrives in steps.
         const float SpeedWindowSeconds = 0.1f;
         const float TeleportDistance = 5f;
@@ -372,7 +378,8 @@ namespace Game.Net
         // ---- Server API (players reach it through the Cmd* requests below; AI calls it directly) ----
 
         [Server]
-        public bool ServerFire(Vector3 direction)
+        // `aimMeters` >= 0: the shooter (a bot) aims straight at a target that far away, so the bullet crosses the line there.
+        public bool ServerFire(Vector3 direction, float aimMeters = -1f)
         {
             float sqr = direction.sqrMagnitude;
             // Knocked down or reviving (ADR-072): no shooting.
@@ -395,42 +402,7 @@ namespace Game.Net
             for (int i = 0; i < pellets; i++)
             {
                 var dir = aim * Quaternion.Euler(PitchBuf[i], YawBuf[i], 0f) * Vector3.forward;
-                var end = origin + dir * weapon.Range;
-                var normal = -dir;
-                var result = ShotHit.None;
-                var zone = HitZone.Body;
-                NetworkObject victim = null;
-                Collider stoppedBy = null;
-                // [VEHICLE HOOK] same as Physics.Raycast on foot; from a seat it passes the shooter's own car and its occupants.
-                if (VehicleSeat.Raycast(this, origin, dir, weapon.Range, out var hit))
-                {
-                    end = hit.point;
-                    normal = hit.normal;
-                    stoppedBy = hit.collider;
-                    result = ShotHit.World;
-                    var target = hit.collider.GetComponentInParent<Combatant>();
-                    // A body that is already dead stops the shot like any other obstacle.
-                    if (target != null && target != this && !target._health.IsDead)
-                    {
-                        // The zone comes from how high on the victim the shot landed, in the victim's current stance.
-                        zone = HitZones.At(hit.point.y - target.transform.position.y, target.EyeHeightOffset, zones);
-                        target.ServerTakeDamage(new DamageInfo
-                        {
-                            Amount = DamageRules.ForZone(weapon, hit.distance, zone),
-                            Attacker = this,
-                            Zone = zone,
-                            WeaponId = weapon.Id,
-                            Cause = DamageCause.Shot,
-                        });
-                        result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
-                        victim = target.NetworkObject;
-                    }
-                }
-                // Window glass on the way breaks; the shot goes on through it (ADR-065 (4)).
-                GlassPanes.ServerBreakAlong(origin, dir, (end - origin).magnitude, ObjectId);
-                // [VEHICLE HOOK] #90: vehicle glass, tyres and body on the shot's line.
-                VehicleDamage.ServerShotAll(origin, dir, (end - origin).magnitude, stoppedBy, end, DamageRules.ForZone(weapon, (end - origin).magnitude, HitZone.Body));
-                RpcShotFx(origin, end, normal, (byte)((int)result | ((int)zone << ShotZoneShift)), victim);
+                ServerLaunch(origin, dir, weapon, aimMeters >= 0f ? aimMeters : EffectiveZero);
             }
             // Bots hear the shot where it was fired, whoever fired it.
             BotNoise.Emit(origin.x, origin.y, origin.z, BotRules.Current.GunshotHearingRadius, ObjectId);
@@ -852,7 +824,8 @@ namespace Game.Net
         {
             // A server without a client has nothing to show.
             if (!IsClientStarted) return;
-            ShotFired?.Invoke(origin, end);
+            bool impact = (hit & ShotImpactBit) != 0;
+            if (!impact) ShotFired?.Invoke(origin, end);
             if (ShotResolved == null) return;
             var shot = new ShotResult
             {
@@ -860,8 +833,9 @@ namespace Game.Net
                 End = end,
                 Normal = normal,
                 Hit = (ShotHit)(hit & ShotHitMask),
-                Zone = (HitZone)(hit >> ShotZoneShift),
+                Zone = (HitZone)((hit >> ShotZoneShift) & ShotZoneMask),
                 Victim = victim != null ? victim.GetComponent<Combatant>() : null,
+                Phase = impact ? ShotPhase.Impact : (hit & ShotLaunchBit) != 0 ? ShotPhase.Launch : ShotPhase.Whole,
             };
             ShotResolved.Invoke(in shot);
         }

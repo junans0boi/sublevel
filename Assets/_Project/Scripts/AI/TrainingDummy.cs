@@ -44,7 +44,7 @@ namespace Game.AI
             var eye = _self.EyePosition;
             var toChest = ChestOf(target) - eye;
             var error = Quaternion.Euler(AimError(), AimError(), 0f);
-            _self.ServerFire(Quaternion.LookRotation(toChest) * error * Vector3.forward);
+            _self.ServerFire(Quaternion.LookRotation(toChest) * error * Vector3.forward, toChest.magnitude);
         }
 
         // The chest sits lower when the target's stance is lower (crouching), so the dummy neither sees nor aims

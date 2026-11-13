@@ -38,6 +38,7 @@ namespace Game.Core
         public float SpreadDeg;
         public int Pellets = 1;
         public float Range = 100f;
+        public float MuzzleSpeed;         // m/s (ADR-098); 0 = BallisticsRules.DefaultMuzzleSpeed
         public float FalloffStart;
         public float FalloffEnd;
         public float MinDamageFactor = 1f;
