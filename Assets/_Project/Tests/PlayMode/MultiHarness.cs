@@ -5,6 +5,7 @@ using System.Reflection;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Object;
+using Game.Core;
 using Game.Gameplay;
 using Game.Net;
 using UnityEngine;
@@ -56,6 +57,7 @@ namespace Game.Tests
         public readonly List<RemoteClient> Clients = new List<RemoteClient>();
         public Action<string> Log;
         ReplicaLayers _hider;
+        InterestRules _interestBefore;
 
         // Loads `scene` (it hosts its own match) and waits for the host's own player.
         public IEnumerator StartHost(string scene)
@@ -68,6 +70,10 @@ namespace Game.Tests
         // Must come before the host's player spawns.
         public void PrepareHostInput()
         {
+            // The replication audits teleport players far apart and still expect every client to hold everyone: interest
+            // management (#167) is off unless a test turns it on after this.
+            _interestBefore = InterestRules.Current;
+            InterestRules.Current = new InterestRules { Enabled = false };
             HostInput = new HarnessInput();
             PlayerController.InputOverride = HostInput;
         }
@@ -160,6 +166,7 @@ namespace Game.Tests
         {
             PlayerController.InputOverride = null;
             ReplicaLayers.SeparateVehicles = false;
+            if (_interestBefore != null) InterestRules.Current = _interestBefore;
             foreach (var c in Clients)
             {
                 if (c.Manager == null) continue;

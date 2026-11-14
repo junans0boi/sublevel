@@ -133,6 +133,8 @@ namespace Game.Net
                 // A lobby's host keeps the port it told the guests.
                 Port = FreePort(NetSession.Role == NetSession.RoleKind.Host && NetSession.Port != 0 ? NetSession.Port : transport.GetPort());
                 transport.SetPort(Port);
+                // Far combatants, loot, vehicles and thrown items are not sent (#167, ADR-135).
+                InterestCondition.Install(_networkManager);
                 _networkManager.ServerManager.StartConnection();
                 if (!NetSession.Dedicated) _networkManager.ClientManager.StartConnection();
             }
@@ -377,8 +379,9 @@ namespace Game.Net
         {
             if (!asServer) return;
             // A returning player gets its held combatant back instead of a new one (#166).
-            if (Sessions != null && Sessions.Intercept(connection, () => ServerSpawnPlayer(connection))) return;
-            ServerSpawnPlayer(connection);
+            if (Sessions == null || !Sessions.Intercept(connection, () => ServerSpawnPlayer(connection))) ServerSpawnPlayer(connection);
+            // Interest management (#167): the client sees nothing until its body exists, so give it its view now, not at the next timed check.
+            _networkManager.ServerManager.Objects.RebuildObservers(connection);
         }
 
         void ServerSpawnPlayer(NetworkConnection connection)

@@ -35,6 +35,7 @@ namespace Game.Core
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();
+        public InterestRules Interest = new InterestRules(); // #167, ADR-135
         public ParkourRules Parkour = new ParkourRules();
         public VehicleRules Vehicles = new VehicleRules();
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();

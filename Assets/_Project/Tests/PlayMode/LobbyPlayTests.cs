@@ -177,7 +177,12 @@ namespace Game.Tests
             RemoteClient remote = null;
             yield return net.AddClient(c => remote = c);
             yield return NetHarness.WaitUntil(() => director.Elevators.ServerScheduled, "doors scheduled once both stand in their elevators", Log);
-            Assert.AreEqual(2, MultiHarness.PlayersSeenBy(net.Host).Count);
+            // The server's list: the host's own client only sees a player within the interest radius (#167), and the
+            // two elevators stand in different regions.
+            int players = 0;
+            foreach (var nob in net.Host.ServerManager.Objects.Spawned.Values)
+                if (nob != null && nob.GetComponent<Combatant>() != null && nob.GetComponent<Combatant>().IsPlayer) players++;
+            Assert.AreEqual(2, players);
             Assert.AreNotEqual(net.HostPlayer.transform.position, remote.Player.transform.position);
             yield return net.Teardown();
         }

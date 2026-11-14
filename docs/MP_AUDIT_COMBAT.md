@@ -2,7 +2,7 @@
 
 원격 클라이언트가 호스트와 같은 것을 보고 듣는지, 싱글 티켓(G1~G10 등)에서 만든 시스템별로 점검한 표.
 방법: 코드의 SyncVar / ServerRpc / ObserversRpc / 서버 전용 상태를 읽어 표를 만들고, 호스트 + 원격 클라이언트 PlayMode(`ReplicationCombatTests`, `MultiHarness`)로 원격 쪽 결과만 확인한다.
-규칙: 판정은 서버, 클라이언트는 입력·표시만(ADR-029). RPC는 `ObserversRpc` 전체 관찰자(거리 조건 없음, 관심 영역 컬링은 #167).
+규칙: 판정은 서버, 클라이언트는 입력·표시만(ADR-029). RPC는 `ObserversRpc` 관찰자에게만(관찰자는 거리로 정해짐: 관심 영역 #167, ADR-135).
 
 범례: SV = SyncVar(서버 쓰기, 모든 관찰자 읽기), OR = ObserversRpc, SR = ServerRpc(소유자 요청), 서버 = 서버 객체에만 있음.
 
