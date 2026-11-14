@@ -1,0 +1,104 @@
+using Game.Core;
+using Game.Net;
+using UnityEngine;
+
+namespace Game.Gameplay
+{
+    // The two wheels over the match (ADR-130): the marker wheel (team matches: hold the ping button a moment). It reads the local player's last input, opens a wheel, and on letting go does what
+    // the part under the cursor says. A wheel is the whole screen's business while it is open: PlayerController feeds the
+    // mouse into it instead of the camera and drops firing. Installs itself next to every match like TeamHud.
+    public class WheelHud : MonoBehaviour
+    {
+        const int SortOrder = 3; // above TeamHud
+
+        public static WheelHud Instance { get; private set; }
+
+        public RadialWheel MarkerWheel { get; private set; }
+
+        Canvas _canvas;
+        float _pingHeld;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Hook()
+        {
+            MatchState.Started -= Install;
+            MatchState.Started += Install;
+        }
+
+        static void Install(MatchState state)
+        {
+            if (Instance != null || state == null) return;
+            var go = new GameObject("WheelHud");
+            go.transform.SetParent(state.transform, false);
+            go.AddComponent<WheelHud>();
+        }
+
+        void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(this);
+                return;
+            }
+            Instance = this;
+            _canvas = UiKit.Canvas("WheelCanvas", SortOrder, false);
+            _canvas.transform.SetParent(transform, false);
+            var kinds = new string[Pings.KindCount];
+            var kindColours = new Color[Pings.KindCount];
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                kinds[i] = Pings.Name((PingKind)i);
+                kindColours[i] = TeamPingView.ColourOf((PingKind)i);
+            }
+            MarkerWheel = RadialWheel.Build(_canvas.transform, "MarkerWheel", "마커", kinds, kindColours);
+        }
+
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            MarkerWheel?.Hide();
+        }
+
+        void LateUpdate()
+        {
+            var me = Combatant.LocalPlayer;
+            var player = PlayerController.Local;
+            bool allowed = me != null && player != null && !me.Dead.Value && UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay && !SpawnProtection.InputBlocked;
+            var input = allowed ? player.LastInput : default;
+
+            // Marker wheel: team matches, on foot; held past the tap time it opens, letting go places the ping.
+            bool markerOk = allowed && me.HasTeam && !me.Knocked.Value;
+            Tick(MarkerWheel, markerOk && input.PingHeld, ref _pingHeld, DeviceInput.WheelHoldSeconds, kind =>
+            {
+                if (kind >= 0) PlaceMarker(me, player, (PingKind)kind);
+            });
+        }
+
+        // Opens `wheel` once the button has been held `after` seconds; on release hands the chosen part over.
+        static void Tick(RadialWheel wheel, bool held, ref float heldFor, float after, System.Action<int> chosen)
+        {
+            if (held)
+            {
+                heldFor += Time.unscaledDeltaTime;
+                if (heldFor >= after) wheel.Show();
+                return;
+            }
+            heldFor = 0f;
+            if (!wheel.IsOpen) return;
+            int part = wheel.Selected;
+            wheel.Hide();
+            chosen(part);
+        }
+
+        // What the marker wheel does with a part: the ping at the crosshair, "enemy" when one stands on the spot.
+        public static void PlaceMarker(Combatant me, PlayerController player, PingKind kind)
+        {
+            if (!player.TryPingPoint(out var point)) return;
+            kind = Pings.Upgrade(kind, TeamHud.EnemyNear(me, point));
+            // The plain "go" is the player's own map marker (drawn on the compass, minimap and in the world as before);
+            // TeamHud shares it with the team when it changes.
+            if (kind == PingKind.Go) MapMarker.Set(point);
+            else me.CmdPing((byte)kind, point);
+        }
+    }
+}

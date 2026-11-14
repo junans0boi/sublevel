@@ -215,7 +215,7 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator PressingY_LiftsAKnockedTeammate_SlowsTheWalk_AndYAgainPutsItDown()
+        public IEnumerator PressingTheCarryKey_LiftsAKnockedTeammate_SlowsTheWalk_AndPressingAgainPutsItDown()
         {
             TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, BotReviveSearchMeters = 0f, DownInvulnerableSeconds = 0f };
             yield return Load(TeamMode.Squad);
@@ -257,6 +257,108 @@ namespace Game.Tests
             yield return null;
             _input.Frame.CarryPressed = false;
             yield return WaitUntil(() => !Me.IsCarrying && !mate.BeingCarried, 3f, "put down");
+        }
+
+        [UnityTest]
+        public IEnumerator TeammatePing_ShowsInTheWorldCompassMinimapAndMap_WithItsDistance_ThenFadesAway()
+        {
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, PingLifeSeconds = 2.5f, DownInvulnerableSeconds = 0f };
+            yield return Load(TeamMode.Squad);
+            yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
+            yield return WaitUntil(() => TeamHud.Instance.CompassMembersShown == 3, 5f, "the hosts exist");
+            var mate = Mates[0];
+            var pc = PlayerController.Local;
+            var spot = Me.transform.position + Me.transform.forward * 20f;
+            pc.LookAt(spot + Vector3.up * 1.2f);
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(mate.ServerPing(PingKind.Danger, spot));
+            yield return WaitUntil(() => TeamHud.Instance.PingView.WorldShown == 1, 2f, "the ping in the world");
+            var pings = TeamHud.Instance.PingView;
+            Assert.AreEqual(1, pings.CompassShown, "on the compass");
+            Assert.AreEqual(1, pings.MinimapShown, "on the minimap");
+            Assert.AreEqual(1, pings.MapShown, "on the full map");
+            StringAssert.Contains("위험", pings.WorldText(0));
+            StringAssert.Contains("20m", pings.WorldText(0), "with its distance");
+            Assert.AreEqual(mate.TeamSlot.Value.ToString(), pings.WorldText(0).Substring(0, 1), "and the pinger's number");
+
+            // Behind the camera: gone from the world, still on the compass and the map.
+            pc.LookAt(Me.transform.position - Me.transform.forward * 20f + Vector3.up * 1.6f);
+            yield return null;
+            yield return null;
+            Assert.AreEqual(0, pings.WorldShown, "behind the camera");
+            Assert.AreEqual(1, pings.CompassShown);
+
+            yield return WaitUntil(() => pings.Visible == 0, 4f, "the ping expires");
+            Assert.AreEqual(0, pings.WorldShown);
+            Assert.AreEqual(0, pings.CompassShown);
+            Assert.AreEqual(0, pings.MapShown);
+        }
+
+        [UnityTest]
+        public IEnumerator PingOnAnEnemy_IsEnemySpotted_AndTheOwnMapMarkerIsShared()
+        {
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f };
+            yield return Load(TeamMode.Squad);
+            yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
+            MapMarker.Clear();
+            var enemy = Enemy;
+            Assert.IsTrue(TeamHud.EnemyNear(Me, enemy.transform.position + Vector3.right * 1f));
+            Assert.IsFalse(TeamHud.EnemyNear(Me, Me.transform.position), "teammates and oneself are not enemies");
+
+            // The map marker (what a tap on the ping button sets) goes to the team: on an enemy it is "enemy spotted".
+            int total = Me.PingsHeard.Total;
+            MapMarker.Set(enemy.transform.position + Vector3.right * 1f);
+            yield return WaitUntil(() => Me.PingsHeard.Total == total + 1, 2f, "the shared ping");
+            Assert.AreEqual(PingKind.Enemy, Me.PingsHeard.Active.Last().Kind);
+            yield return new WaitForSeconds(TeamRules.Current.PingMinIntervalSeconds + 0.1f);
+            MapMarker.Set(Me.transform.position + Me.transform.forward * 30f);
+            yield return WaitUntil(() => Me.PingsHeard.Total == total + 2, 2f, "the second ping");
+            Assert.AreEqual(PingKind.Go, Me.PingsHeard.Active.Last().Kind, "on bare ground it is a plain go ping");
+            MapMarker.Clear();
+        }
+
+        [UnityTest]
+        public IEnumerator HoldingThePingButton_OpensTheMarkerWheel_TheMouseChoosesAndTheViewStaysPut()
+        {
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f };
+            yield return Load(TeamMode.Squad);
+            yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
+            yield return WaitUntil(() => WheelHud.Instance != null, 3f, "the wheel hud");
+            var wheel = WheelHud.Instance.MarkerWheel;
+            var pc = PlayerController.Local;
+            pc.LookAt(Me.transform.position + Me.transform.forward * 20f + Vector3.up * 1.2f);
+            yield return null;
+            yield return null;
+            float yaw = pc.Yaw;
+            int total = Me.PingsHeard.Total;
+
+            _input.Frame.PingHeld = true;
+            yield return WaitUntil(() => wheel.IsOpen, 2f, "the wheel opens after the hold time");
+            Assert.IsTrue(RadialWheel.AnyOpen);
+            // The mouse goes down: the "물자" part (straight down) is chosen, and the camera does not turn.
+            _input.Frame.Look = new Vector2(0f, -6f);
+            yield return null;
+            _input.Frame.Look = Vector2.zero;
+            yield return null;
+            Assert.AreEqual(3, wheel.Selected);
+            Assert.AreEqual(Pings.Name(PingKind.Loot), wheel.CentreText);
+            Assert.AreEqual(yaw, pc.Yaw, 1e-3f, "the view stays put while the wheel is open");
+            _input.Frame.PingHeld = false;
+            yield return WaitUntil(() => !wheel.IsOpen, 2f, "closed on release");
+            yield return WaitUntil(() => Me.PingsHeard.Total == total + 1, 2f, "the chosen marker placed");
+            Assert.AreEqual(PingKind.Loot, Me.PingsHeard.Active.Last().Kind);
+            Assert.IsFalse(RadialWheel.AnyOpen);
+
+            // Letting go inside the dead zone places nothing.
+            yield return new WaitForSeconds(TeamRules.Current.PingMinIntervalSeconds + 0.1f);
+            _input.Frame.PingHeld = true;
+            yield return WaitUntil(() => wheel.IsOpen, 2f, "opens again");
+            _input.Frame.PingHeld = false;
+            yield return WaitUntil(() => !wheel.IsOpen, 2f, "closed");
+            yield return new WaitForSeconds(0.3f);
+            Assert.AreEqual(total + 1, Me.PingsHeard.Total, "nothing chosen, nothing placed");
         }
 
         [UnityTest]

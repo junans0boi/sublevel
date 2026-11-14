@@ -40,6 +40,12 @@ namespace Game.Core
         public float CarryRangeMeters = 2f;       // to lift
         public float CarryKeepMeters = 4f;        // the carried one is let go beyond this (lag, a vault)
 
+        // ---- Pings (ADR-130) ----
+        public float PingLifeSeconds = 8f;          // a team ping stays this long
+        public float PingMinIntervalSeconds = 0.4f; // per player: faster requests are dropped by the server
+        public int PingMaxPerOwner = 3;             // a player's newest pings that stay at once
+        public float PingMaxMeters = 600f;          // reach of the aim ray (PlayerController.PingDistance)
+
         // ---- Bots in a team ----
         public float BotFollowMeters = 14f;       // a roaming bot walks back once its leader is farther than this...
         public float BotRegroupMeters = 35f;      // ...and sprints (dropping loot) beyond this

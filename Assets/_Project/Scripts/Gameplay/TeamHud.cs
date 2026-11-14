@@ -31,6 +31,7 @@ namespace Game.Gameplay
         const float Margin = 36f, ListBottom = 36f + HudStatus.Height + 14f;
         const float RowWidth = 300f, RowHeight = 34f, RowGap = 4f;
         const float TagLift = 0.55f;
+        const float EnemyPingRadius = 3f; // a ping this close to an enemy marks it
         const float RequestSeconds = 0.3f;
         const float CompassMemberSize = 14f;
         const float MinimapEdge = Minimap.ViewSize * 0.5f - 8f;
@@ -43,6 +44,7 @@ namespace Game.Gameplay
         public bool Active => _canvas != null && _canvas.enabled;
         public int MembersShown => _members.Count;
         public string MemberText(int i) => i >= 0 && i < _rows.Count && _rows[i].Root.activeSelf ? _rows[i].Name.text : "";
+        public TeamPingView PingView => _pings;
         public bool KnockedShown => _knockedBand != null && _knockedBand.activeSelf;
         public bool RevivePromptShown => _prompt != null && _prompt.activeSelf;
         public string PromptText => RevivePromptShown ? _promptLabel.text : "";
@@ -96,7 +98,7 @@ namespace Game.Gameplay
             return found;
         }
 
-        // The knocked teammate Y would lift now: nearest within CarryRangeMeters that nobody revives or carries.
+        // The knocked teammate the carry key would lift now: nearest within CarryRangeMeters that nobody revives or carries.
         public static Combatant CarryCandidate(Combatant me)
         {
             if (me == null || !me.HasTeam || !me.Standing || me.Reviving || me.IsCarrying) return null;
@@ -134,13 +136,14 @@ namespace Game.Gameplay
             public Combatant Of;
             public RectTransform Tag;
             public Text TagName, TagState;
-            public RectTransform Compass, CompassPing, Minimap, MinimapPing, Map, MapPing, WorldPing;
+            public RectTransform Compass, Minimap, Map;
             public string ShownTag;
             public int ShownTagState = -1;
         }
 
         Canvas _canvas;
         Transform _root;
+        TeamPingView _pings;
         readonly List<Combatant> _members = new List<Combatant>();
         readonly List<Row> _rows = new List<Row>();
         readonly List<View> _views = new List<View>();
@@ -322,11 +325,29 @@ namespace Game.Gameplay
             me.CmdBeginRevive(candidate.NetworkObject);
         }
 
+        // The map marker (a tap on the ping button, a click on the map) goes to the team as a "go" ping, or as "enemy
+        // spotted" when an enemy stands on the spot. Clearing it tells nobody: a team ping fades by itself.
         void SharePing(Combatant me)
         {
             if (MapMarker.Version == _pingVersion) return;
             _pingVersion = MapMarker.Version;
-            me.CmdSetPing(MapMarker.Has, MapMarker.Has ? MapMarker.Position : Vector3.zero);
+            if (!MapMarker.Has) return;
+            var at = MapMarker.Position;
+            me.CmdPing((byte)Pings.Upgrade(PingKind.Go, EnemyNear(me, at)), at);
+        }
+
+        // An enemy (alive, not a teammate) within a few metres of a spot.
+        public static bool EnemyNear(Combatant me, Vector3 at)
+        {
+            float best = EnemyPingRadius * EnemyPingRadius;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var c = all[i];
+                if (c == null || c == me || c.Dead.Value || me.IsTeammateOf(c)) continue;
+                if ((c.transform.position - at).sqrMagnitude <= best) return true;
+            }
+            return false;
         }
 
         // ---- Overlays: knocked, revive prompt and bar, waiting for the team ----
@@ -417,30 +438,8 @@ namespace Game.Gameplay
                     Show(v.Map.gameObject, alive);
                     if (alive) v.Map.anchoredPosition = MapPixels(at);
                 }
-
-                // The teammate's ping, in its colour.
-                bool ping = c != null && c.PingOn.Value;
-                var pingAt = ping ? c.PingAt.Value : Vector3.zero;
-                if (v.CompassPing != null)
-                {
-                    Show(v.CompassPing.gameObject, ping);
-                    if (ping) v.CompassPing.anchoredPosition = new Vector2(CompassStrip.MarkerOffset(heading, Minimap.Bearing(from, pingAt), out _), 12f);
-                }
-                if (v.MinimapPing != null)
-                {
-                    Show(v.MinimapPing.gameObject, ping);
-                    if (ping) v.MinimapPing.anchoredPosition = ClampToMinimap(Minimap.ToView(pingAt, from));
-                }
-                if (v.MapPing != null)
-                {
-                    Show(v.MapPing.gameObject, ping);
-                    if (ping) v.MapPing.anchoredPosition = MapPixels(pingAt);
-                }
-                Vector2 pingScreen = default;
-                bool worldPing = ping && hud && cam != null && OnScreen(cam, pingAt + Vector3.up * WorldMarkerView.LiftMeters, scale, out pingScreen);
-                Show(v.WorldPing.gameObject, worldPing);
-                if (worldPing) v.WorldPing.anchoredPosition = pingScreen;
             }
+            _pings.Tick(me, cam, scale, heading, from, hud, Time.time);
         }
 
         void TickTag(View v, Camera cam, float scale, bool show)
@@ -466,7 +465,7 @@ namespace Game.Gameplay
             }
         }
 
-        static bool OnScreen(Camera cam, Vector3 world, float scale, out Vector2 canvas)
+        internal static bool OnScreen(Camera cam, Vector3 world, float scale, out Vector2 canvas)
         {
             canvas = default;
             if (scale <= 0f) return false;
@@ -476,13 +475,13 @@ namespace Game.Gameplay
             return true;
         }
 
-        static Vector2 ClampToMinimap(Vector2 at)
+        internal static Vector2 ClampToMinimap(Vector2 at)
         {
             float reach = Mathf.Max(Mathf.Abs(at.x), Mathf.Abs(at.y));
             return reach > MinimapEdge ? at * (MinimapEdge / reach) : at;
         }
 
-        static Vector2 MapPixels(Vector3 world)
+        internal static Vector2 MapPixels(Vector3 world)
         {
             var uv = MapImage.WorldToUv(world);
             return new Vector2(Mathf.Clamp01(uv.x) * MapScreen.MapPx, Mathf.Clamp01(uv.y) * MapScreen.MapPx);
@@ -511,6 +510,7 @@ namespace Game.Gameplay
             }
             if (!changed) return;
             for (int i = 0; i < _views.Count; i++) AttachHosted(_views[i]);
+            _pings.SetHosts(_compassStrip, _minimapClip, _mapArea);
         }
 
         // ---- Building ----
@@ -520,6 +520,7 @@ namespace Game.Gameplay
             _canvas = UiKit.Canvas("TeamHudCanvas", SortOrder, false);
             _canvas.transform.SetParent(transform, false);
             _root = _canvas.transform;
+            _pings = new TeamPingView(_root);
             var centre = new Vector2(0.5f, 0.5f);
 
             // Knocked: a band under the centre with the bleed bar.
@@ -597,8 +598,6 @@ namespace Game.Gameplay
                 "", 16, UiKit.Danger, TextAnchor.MiddleCenter, FontStyle.Bold);
             Shadowed(v.TagState);
             v.Tag.gameObject.SetActive(false);
-            v.WorldPing = Diamond("TeamPing", _root, 12f, colour);
-            v.WorldPing.gameObject.SetActive(false);
             AttachHosted(v);
             return v;
         }
@@ -611,30 +610,28 @@ namespace Game.Gameplay
             if (_compassStrip != null && v.Compass == null)
             {
                 v.Compass = NumberChip("TeamMember", _compassStrip, CompassMemberSize, colour, number, 11);
-                v.CompassPing = Diamond("TeamPing", _compassStrip, 9f, colour);
             }
             if (_minimapClip != null && v.Minimap == null)
             {
                 v.Minimap = NumberChip("TeamMember", _minimapClip, 13f, colour, number, 10);
-                v.MinimapPing = Diamond("TeamPing", _minimapClip, 8f, colour);
             }
             if (_mapArea != null && v.Map == null)
             {
                 v.Map = NumberChip("TeamMember", _mapArea, 22f, colour, number, 15, Vector2.zero);
-                v.MapPing = Diamond("TeamPing", _mapArea, 15f, colour, Vector2.zero);
             }
         }
 
         void DestroyView(View v)
         {
-            foreach (var rect in new[] { v.Tag, v.Compass, v.CompassPing, v.Minimap, v.MinimapPing, v.Map, v.MapPing, v.WorldPing })
+            foreach (var rect in new[] { v.Tag, v.Compass, v.Minimap, v.Map })
                 if (rect != null) Destroy(rect.gameObject);
         }
 
         void SetViewsShown(bool on)
         {
+            if (!on) _pings.HideAll();
             for (int i = 0; i < _views.Count; i++)
-                foreach (var rect in new[] { _views[i].Tag, _views[i].Compass, _views[i].CompassPing, _views[i].Minimap, _views[i].MinimapPing, _views[i].Map, _views[i].MapPing, _views[i].WorldPing })
+                foreach (var rect in new[] { _views[i].Tag, _views[i].Compass, _views[i].Minimap, _views[i].Map })
                     if (rect != null) Show(rect.gameObject, on);
         }
 
@@ -650,19 +647,7 @@ namespace Game.Gameplay
             return rect;
         }
 
-        static RectTransform Diamond(string name, Transform parent, float size, Color colour, Vector2? anchor = null)
-        {
-            var a = anchor ?? new Vector2(0.5f, 0.5f);
-            var rect = UiKit.Rect(name, parent, a, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
-            var diamond = UiKit.Rect("Diamond", rect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
-            diamond.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            UiKit.Box(UiKit.Fill("Rim", diamond, -1.5f), Rim);
-            UiKit.Box(UiKit.Fill("Fill", diamond), colour);
-            rect.gameObject.SetActive(false);
-            return rect;
-        }
-
-        static void Shadowed(Text text)
+        internal static void Shadowed(Text text)
         {
             var shadow = text.gameObject.AddComponent<Shadow>();
             shadow.effectColor = Rim;

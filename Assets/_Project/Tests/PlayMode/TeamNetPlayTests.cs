@@ -70,9 +70,9 @@ namespace Game.Tests
             remote.Controller.Teleport(host.transform.position + host.transform.right * 1f);
             yield return NetHarness.WaitUntil(() => Vector3.Distance(host.transform.position, mate.transform.position) < 1.6f, "remote body beside the host", Log);
             yield return Seconds(0.3f);
-            Assert.AreEqual(mate.ObjectId, TeamHud.CarryCandidate(host)?.ObjectId, "the knocked teammate is the one Y would lift");
+            Assert.AreEqual(mate.ObjectId, TeamHud.CarryCandidate(host)?.ObjectId, "the knocked teammate is the one the carry key would lift");
 
-            // (The Y key itself is tested in TeamPlayTests: in this process the HUD follows whichever player started last.)
+            // (The carry key itself is tested in TeamPlayTests: in this process the HUD follows whichever player started last.)
             host.CmdBeginCarry(mate.NetworkObject);
             yield return NetHarness.WaitUntil(() => host.IsCarrying && mate.BeingCarried, "the lift", Log);
             yield return NetHarness.WaitUntil(() => remote.Player.BeingCarried && MultiHarness.ReplicaOf(remote.Manager, host).IsCarrying, "the remote client knows it is carried", Log);

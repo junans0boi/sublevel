@@ -199,6 +199,13 @@ namespace Game.Gameplay
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
             if (SpawnProtection.InputBlocked || ElevatorPanel.Riding)
                 f = new PlayerInputFrame { SelectSlot = -1, Look = f.Look, Menu = f.Menu, Inventory = f.Inventory, Map = f.Map, FreeLook = f.FreeLook, Ping = f.Ping };
+            // An open wheel takes the mouse (ADR-130): its cursor moves, the view and the weapon stay still.
+            if (RadialWheel.AnyOpen)
+            {
+                RadialWheel.FeedOpen(f.Look);
+                f.Look = Vector2.zero;
+                f.FirePressed = f.FireHeld = f.AimHeld = f.Ping = false;
+            }
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor, ScopeView.CurrentZoom);
             LastInput = f;
@@ -809,13 +816,20 @@ namespace Game.Gameplay
         }
 
         // Puts the map marker on the first surface (ground, building) under the crosshair within PingDistance.
-        // Local only for now: team pings come with team mode (the marker already carries an owner and colour).
+        // In a team match TeamHud shares it with the team as a "go" ping (ADR-130).
         // Returns false when nothing is in reach.
         public bool PingAtCrosshair()
         {
-            if (Camera == null || !Rig.TryAimHit(Camera.transform, transform, PingDistance, out var point)) return false;
+            if (!TryPingPoint(out var point)) return false;
             MapMarker.Set(point);
             return true;
+        }
+
+        // The first surface under the crosshair within PingDistance.
+        public bool TryPingPoint(out Vector3 point)
+        {
+            point = default;
+            return Camera != null && Rig.TryAimHit(Camera.transform, transform, PingDistance, out point);
         }
 
         // ---- Hooks for tests and scripted control ----

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Game.Net
 {
     // Team play on a combatant (ADR-072): its team and number, being knocked down (기절) instead of dying while a
-    // teammate stands, bleeding out, reviving a teammate (F held), and the ping its owner shares with the team.
+    // teammate stands, bleeding out, reviving a teammate (F held); pings are in Combatant.Ping.cs.
     // The server decides everything here; TeamDirector ticks it every frame. Solo matches never set a team, and a
     // combatant without a team is never knocked down, so nothing here changes a solo match.
     public partial class Combatant
@@ -24,9 +24,6 @@ namespace Game.Net
         public readonly SyncVar<int> ReviveTargetId = new SyncVar<int>(-1);
         public readonly SyncVar<int> RevivedById = new SyncVar<int>(-1);
         public readonly SyncVar<float> ReviveProgress = new SyncVar<float>();
-        // The owner's map marker, shared with the team (ADR-065 (6) marker, ADR-072).
-        public readonly SyncVar<bool> PingOn = new SyncVar<bool>();
-        public readonly SyncVar<Vector3> PingAt = new SyncVar<Vector3>();
 
         // Server only: someone was knocked down (victim, the damage that did it) / revived (revived, reviver).
         // Static like ServerDied: subscribers unsubscribe themselves; cleared when a play session starts.
@@ -275,15 +272,6 @@ namespace Game.Net
             ServerRevived?.Invoke(this, by);
         }
 
-        [Server]
-        public void ServerSetPing(bool on, Vector3 at)
-        {
-            float sqr = at.sqrMagnitude;
-            if (float.IsNaN(sqr) || float.IsInfinity(sqr)) return;
-            if (PingOn.Value != on) PingOn.Value = on;
-            if (on && PingAt.Value != at) PingAt.Value = at;
-        }
-
         // ---- Owner requests ----
 
         [ServerRpc]
@@ -295,8 +283,5 @@ namespace Game.Net
 
         [ServerRpc]
         public void CmdCancelRevive() => ServerCancelRevive();
-
-        [ServerRpc]
-        public void CmdSetPing(bool on, Vector3 at) => ServerSetPing(on, at);
     }
 }

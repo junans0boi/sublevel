@@ -42,7 +42,7 @@ namespace Game.Gameplay
         public bool Ping;          // middle mouse: tap (in a team match: released before the wheel opens) marks the point under the crosshair (ADR-065 (6))
         public bool PingHeld;      // the ping button is down: held a moment it opens the marker wheel in a team match (ADR-130)
         public bool EmoteHeld;     // N held: the emote wheel (ADR-131)
-        public bool CarryPressed;  // Y: pressed this frame, lifts or puts down a knocked teammate (ADR-129)
+        public bool CarryPressed;  // K: pressed this frame, lifts or puts down a knocked teammate (ADR-129)
     }
 
     public interface IPlayerInput

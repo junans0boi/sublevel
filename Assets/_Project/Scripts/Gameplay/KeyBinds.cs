@@ -45,7 +45,7 @@ namespace Game.Gameplay
             Set(BindAction.Heal, Key.H); Set(BindAction.Boost, Key.J); Set(BindAction.Interact, Key.F);
             Set(BindAction.ToggleView, Key.V); Set(BindAction.Inventory, Key.Tab); Set(BindAction.Map, Key.M);
             d[(int)BindAction.Ping] = MouseBase + 2; Set(BindAction.Menu, Key.Escape); Set(BindAction.NetStats, Key.F3);
-            Set(BindAction.Carry, Key.Y); Set(BindAction.Emote, Key.N);
+            Set(BindAction.Carry, Key.K); Set(BindAction.Emote, Key.N);
             return d;
         }
 
