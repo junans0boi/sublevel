@@ -397,6 +397,14 @@ namespace Game.Core
             return new[] { weapon, new LootEntry { Kind = LootKind.Ammo, Ammo = def.Ammo, Amount = mag } };
         }
 
+        // ADR-136: what a table/crate roll puts on the ground: a gun comes unloaded with a full magazine's rounds
+        // as its own ammo item beside it (so both must be farmed); everything else is the roll itself.
+        public static LootEntry[] SpawnEntries(WeaponTable table, LootEntry roll)
+        {
+            if (roll == null) return new LootEntry[0];
+            return roll.Kind == LootKind.Weapon ? DropEntries(table, roll.WeaponId, roll.Amount) : new[] { roll };
+        }
+
         // Takes the whole reserve of one ammo type. Returns how many rounds that was.
         public int RemoveAmmo(AmmoType type)
         {

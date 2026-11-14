@@ -138,5 +138,28 @@ namespace Game.Tests
             Assert.AreEqual(LootKind.Weapon, e[0].Kind);
             Assert.AreEqual(0, Loadout.DropEntries(table, 0, 3).Length, "no weapon, nothing");
         }
+
+        // ---- ADR-136 (#174): a rolled gun lies unloaded, a magazine's rounds beside it as their own item ----
+
+        [Test]
+        public void SpawnEntries_RolledGun_IsUnloaded_WithItsAmmoBeside()
+        {
+            var e = Loadout.SpawnEntries(Table(), new LootEntry { Kind = LootKind.Weapon, WeaponId = 2, Amount = 8 });
+            Assert.AreEqual(2, e.Length);
+            Assert.AreEqual(0, e[0].Amount, "gun on the ground holds no rounds");
+            Assert.AreEqual(LootKind.Ammo, e[1].Kind);
+            Assert.AreEqual(AmmoType.Shotgun12, e[1].Ammo);
+            Assert.AreEqual(8, e[1].Amount);
+        }
+
+        [Test]
+        public void SpawnEntries_OtherLoot_IsUnchanged_AndNullIsNothing()
+        {
+            var heal = new LootEntry { Kind = LootKind.Bandage, Amount = 2 };
+            var e = Loadout.SpawnEntries(Table(), heal);
+            Assert.AreEqual(1, e.Length);
+            Assert.AreSame(heal, e[0]);
+            Assert.AreEqual(0, Loadout.SpawnEntries(Table(), null).Length);
+        }
     }
 }

@@ -237,7 +237,7 @@ namespace Game.Net
             for (int i = 0; i < items.Count; i++)
             {
                 LootScatter.RingOffset(i, items.Count, rules.RingRadius, out float x, out float z);
-                director.ServerSpawnLoot(items[i], crate.Position + new Vector3(x, 0.3f, z));
+                director.ServerSpawnLootRoll(items[i], crate.Position + new Vector3(x, 0.3f, z));
             }
             _crates.Remove(crate);
             Opened?.Invoke(crate);

@@ -210,7 +210,7 @@ namespace Game.Net
             var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);
             for (int i = 0; i < plan.Length; i++)
             {
-                ServerSpawnLoot(plan[i], _lootSpawns[i].position);
+                ServerSpawnLootRoll(plan[i], _lootSpawns[i].position);
             }
 
             foreach (var point in _dummySpawns)
@@ -366,6 +366,13 @@ namespace Game.Net
                     foreach (var t in group)
                         if (t != null) points.Add(t.position);
             method.Invoke(null, new object[] { points });
+        }
+
+        // ADR-136: a rolled gun lies unloaded with its ammo as a separate item 0.4 m beside it.
+        public void ServerSpawnLootRoll(LootEntry roll, Vector3 position)
+        {
+            var entries = Loadout.SpawnEntries(GameData.Weapons, roll);
+            for (int i = 0; i < entries.Length; i++) ServerSpawnLoot(entries[i], position + Vector3.right * (0.4f * i));
         }
 
         public void ServerSpawnLoot(LootEntry entry, Vector3 position)
