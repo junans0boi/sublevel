@@ -161,7 +161,7 @@ namespace Game.Gameplay
             else if (_valid)
             {
                 edge = UiKit.Accent;
-                _overlay.color = With(UiKit.Accent, _hover ? 0.1f : 0.035f);
+                _overlay.color = With(UiKit.Accent, _hover ? 0.08f : 0.025f);
             }
             else
             {

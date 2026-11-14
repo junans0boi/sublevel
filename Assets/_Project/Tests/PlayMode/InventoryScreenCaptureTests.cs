@@ -6,6 +6,7 @@ using Game.Gameplay;
 using Game.Net;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
@@ -163,6 +164,38 @@ namespace Game.Tests
             }
             screen.SetPointerForTests(null);
             screen.CancelDrag();
+        }
+
+        // Hover and press feedback of a row, through the EventSystem handlers.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator CaptureRowHoverAndPress()
+        {
+            string folder = Folder();
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            Gear(me);
+            me.ServerGive(new LootEntry { Kind = HealRules.BandageLootKind, Amount = 3 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Helmet, Tier = 1 });
+            yield return new WaitForSeconds(0.4f);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(0.6f);
+            var screen = InventoryScreen.Instance;
+            var row = screen.ScreenCanvas.transform.Find("InventoryPanel/Pack/Bag" + InventoryBackend.BandageRow).gameObject;
+            foreach (var size in Sizes)
+            {
+                var at = Screen(screen, "Pack/Bag" + InventoryBackend.BandageRow, size[0], size[1]);
+                screen.SetPointerForTests(at);
+                var data = new PointerEventData(EventSystem.current) { position = at, button = PointerEventData.InputButton.Left };
+                ExecuteEvents.Execute(row, data, ExecuteEvents.pointerEnterHandler);
+                yield return new WaitForSeconds(0.4f);
+                yield return Shot(folder, "row_hover", size[0], size[1], at, false);
+                ExecuteEvents.Execute(row, data, ExecuteEvents.pointerDownHandler);
+                yield return new WaitForSeconds(0.3f);
+                yield return Shot(folder, "row_press", size[0], size[1], at, false);
+                ExecuteEvents.Execute(row, data, ExecuteEvents.pointerUpHandler);
+                ExecuteEvents.Execute(row, data, ExecuteEvents.pointerExitHandler);
+            }
+            screen.SetPointerForTests(null);
         }
 
         static Vector2 Screen(InventoryScreen screen, string path, int w, int h)

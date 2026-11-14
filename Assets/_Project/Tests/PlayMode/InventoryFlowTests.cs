@@ -5,6 +5,7 @@ using Game.Gameplay;
 using Game.Net;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
@@ -244,6 +245,105 @@ namespace Game.Tests
             screen.SetSort(false);
             yield return null;
             Assert.Less(screen.PackRowTop(1), screen.PackRowTop(InventoryBackend.BandageRow), "back to kind order");
+        }
+
+        // ---- The same flows through the real EventSystem handlers on the built objects ----
+
+        static GameObject Find(InventoryScreen screen, string path)
+        {
+            var t = screen.ScreenCanvas.transform.Find("InventoryPanel/" + path);
+            Assert.IsNotNull(t, path);
+            return t.gameObject;
+        }
+
+        static PointerEventData Data(PointerEventData.InputButton button, int clicks = 1) => new PointerEventData(EventSystem.current)
+        {
+            button = button, clickCount = clicks, position = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), pressPosition = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+        };
+
+        [UnityTest]
+        public IEnumerator PointerEvents_RightClickOnTheCell_FitsIt_AndHoverShowsTheTooltip()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var optics = me.GetComponent<CombatantOptics>();
+            var screen = InventoryScreen.Instance;
+            yield return TwoRifles(me);
+            optics.ServerStash(12);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return WaitUntil(() => InventoryBackend.BagOpticCount(me, 12) == 1, 2f, "grip cell listed");
+            yield return null;
+            var cell = Find(screen, "Pack/Optic0");
+            Assert.IsTrue(cell.activeInHierarchy);
+
+            ExecuteEvents.Execute(cell, Data(PointerEventData.InputButton.Left), ExecuteEvents.pointerEnterHandler);
+            Assert.IsTrue(screen.TooltipVisible, "hover shows the tooltip");
+            StringAssert.Contains("수직 손잡이", screen.TooltipTitle);
+            StringAssert.Contains("우클릭", screen.TooltipBody);
+            ExecuteEvents.Execute(cell, Data(PointerEventData.InputButton.Left), ExecuteEvents.pointerExitHandler);
+            Assert.IsFalse(screen.TooltipVisible, "leaving hides it");
+
+            ExecuteEvents.Execute(cell, Data(PointerEventData.InputButton.Right), ExecuteEvents.pointerClickHandler);
+            yield return WaitUntil(() => optics.AttachmentInSlot(me.ActiveSlot.Value, AttachSlot.Grip) == 12, 3f, "right click fitted the grip");
+            Assert.AreEqual(0, optics.InBag(12));
+
+            // Right click on the fitted grip's slot: back to the bag.
+            var slot = Find(screen, "Weapons/Slot" + (me.ActiveSlot.Value + 1) + "/Attach" + (int)AttachSlot.Grip);
+            yield return null;
+            ExecuteEvents.Execute(slot, Data(PointerEventData.InputButton.Right), ExecuteEvents.pointerClickHandler);
+            yield return WaitUntil(() => optics.InBag(12) == 1, 3f, "right click on the slot detached it");
+        }
+
+        [UnityTest]
+        public IEnumerator PointerEvents_DragTheCellOntoASlot_FitsIt_AndAWrongSlotTakesNothing()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var optics = me.GetComponent<CombatantOptics>();
+            var screen = InventoryScreen.Instance;
+            yield return TwoRifles(me);
+            optics.ServerStash(11);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return WaitUntil(() => InventoryBackend.BagOpticCount(me, 11) == 1, 2f, "suppressor cell listed");
+            yield return null;
+            var cell = Find(screen, "Pack/Optic0");
+            var left = Data(PointerEventData.InputButton.Left);
+            ExecuteEvents.Execute(cell, left, ExecuteEvents.beginDragHandler);
+            Assert.IsTrue(screen.Dragging, "drag started on the cell");
+
+            // Over the grip slot: refused, nothing changes, the drag ends.
+            ExecuteEvents.Execute(Find(screen, "Weapons/Slot1/Attach" + (int)AttachSlot.Grip), left, ExecuteEvents.dropHandler);
+            yield return new WaitForSeconds(0.2f);
+            Assert.AreEqual(1, optics.InBag(11), "wrong place: still in the bag");
+            Assert.IsFalse(screen.Dragging, "a drop ends the drag");
+
+            ExecuteEvents.Execute(cell, left, ExecuteEvents.beginDragHandler);
+            Assert.IsTrue(screen.Dragging);
+            ExecuteEvents.Execute(Find(screen, "Weapons/Slot1/Attach" + (int)AttachSlot.Muzzle), left, ExecuteEvents.dropHandler);
+            ExecuteEvents.Execute(cell, left, ExecuteEvents.endDragHandler);
+            yield return WaitUntil(() => optics.AttachmentInSlot(0, AttachSlot.Muzzle) == 11, 3f, "dropped on the muzzle slot");
+            Assert.IsFalse(screen.Dragging);
+        }
+
+        [UnityTest]
+        public IEnumerator PointerEvents_ClickOnAThrowableRow_SelectsIt_DoubleClickTakesItOut()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var user = me.GetComponent<ThrowableUser>();
+            var screen = InventoryScreen.Instance;
+            user.ServerAdd(ThrowableKind.Frag, 1);
+            user.ServerAdd(ThrowableKind.Flash, 1);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return WaitUntil(() => screen.PackRowVisible(InventoryBackend.FlashRow), 2f, "flash row");
+            yield return null;
+            var row = Find(screen, "Pack/Bag" + InventoryBackend.FlashRow);
+            ExecuteEvents.Execute(row, Data(PointerEventData.InputButton.Left), ExecuteEvents.pointerClickHandler);
+            yield return WaitUntil(() => user.SelectedKind == ThrowableKind.Flash, 2f, "one click selects the flash");
+            Assert.AreNotEqual(InventoryBackend.ThrowableSlot, me.ActiveSlot.Value, "not taken out by a single click");
+            var frag = Find(screen, "Pack/Bag" + InventoryBackend.GrenadeRow);
+            ExecuteEvents.Execute(frag, Data(PointerEventData.InputButton.Left, 2), ExecuteEvents.pointerClickHandler);
+            yield return WaitUntil(() => user.SelectedKind == ThrowableKind.Frag && me.ActiveSlot.Value == InventoryBackend.ThrowableSlot, 2f, "double click takes the grenade out");
         }
     }
 }
