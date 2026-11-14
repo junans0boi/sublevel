@@ -158,9 +158,13 @@ namespace Game.Tests
             yield return WaitUntil(() => healing.Using, 2f, "the drink to start");
             yield return WaitUntil(() => healing.Gauge.Value > 0f && healing.Drinks.Value == 1, 8f, "the drink to finish");
 
-            // Right click on flash and molotov drops one on the ground; a drag to the ground does the same.
+            // #179: right click on a throwable row sets it as the throwable slot's kind (nothing is dropped); a drag to
+            // the ground drops one.
             int loot = LootItem.All.Count;
             screen.QuickDrop(screen.ExtraSource(InventorySourceKind.Flash));
+            yield return WaitUntil(() => user.SelectedKind == ThrowableKind.Flash, 2f, "flash set as the throwable");
+            Assert.AreEqual(loot, LootItem.All.Count, "a right click does not drop it");
+            Assert.IsTrue(screen.DropOnGround(screen.ExtraSource(InventorySourceKind.Flash)));
             Assert.IsTrue(screen.DropOnGround(screen.ExtraSource(InventorySourceKind.Molotov)));
             Assert.IsTrue(screen.DropOnGround(screen.ExtraSource(InventorySourceKind.Syringe)));
             yield return WaitUntil(() => LootItem.All.Count == loot + 3, 3f, "three drops");

@@ -9,9 +9,11 @@ namespace Game.Gameplay
         readonly Image _background;
         readonly Image _sprite;
         readonly Text _fallback;
-        static readonly Color WeaponPlate = new Color(0.66f, 0.70f, 0.74f, 1f);
+        static readonly Color WeaponPlate = new Color(0.62f, 0.67f, 0.71f, 0.92f);
+        static readonly Color GhostTint = new Color(1f, 1f, 1f, 0.2f);
         string _key;
         string _name;
+        bool _ghost;
 
         InventoryItemIcon(Image background, Image sprite, Text fallback)
         {
@@ -21,6 +23,23 @@ namespace Game.Gameplay
         }
 
         public string Key => _key ?? "";
+        public bool IsGhost => _ghost;
+
+        // #179: an empty attachment slot shows the dim picture of what goes there (key "" = nothing).
+        public void SetGhost(string key)
+        {
+            key = key ?? "";
+            if (_ghost && _key == key) return;
+            _ghost = true;
+            _key = key;
+            _name = "";
+            Sprite sprite = ItemIcons.Get(key);
+            _sprite.sprite = sprite;
+            _sprite.enabled = sprite != null;
+            _sprite.color = GhostTint;
+            _background.color = UiKit.Panel;
+            _fallback.enabled = false;
+        }
 
         public static InventoryItemIcon Build(RectTransform rect)
         {
@@ -37,7 +56,9 @@ namespace Game.Gameplay
         {
             key = key ?? "";
             displayName = displayName ?? "";
-            if (_key == key && _name == displayName) return;
+            if (_key == key && _name == displayName && !_ghost) return;
+            _ghost = false;
+            _sprite.color = Color.white;
             _key = key;
             _name = displayName;
             Sprite sprite = ItemIcons.Get(key);

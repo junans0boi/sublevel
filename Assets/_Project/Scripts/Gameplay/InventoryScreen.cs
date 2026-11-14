@@ -7,29 +7,14 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // Four-zone Tab inventory. Presentation reads replicated state; every mutation goes through InventoryBackend.
-    public class InventoryScreen : MonoBehaviour
+    // The Tab inventory (#179): the ground list and the carried list on the left, the live character with the worn
+    // pieces in the middle, the weapon cards with their attachment slots on the right, melee and throwable slots below.
+    // Presentation reads replicated state; every mutation goes through InventoryBackend (server rules unchanged).
+    // Construction is in InventoryScreen.Build.cs.
+    public partial class InventoryScreen : MonoBehaviour
     {
         public const int MaxVicinityRows = 12;
-
-        const int SortingOrder = 100;
-        const float PanelWidth = 1680f, PanelHeight = 980f;
-        const float ColumnHeight = 890f, ColumnTop = 70f, Gap = 20f;
-        const float GroundWidth = 340f, BagWidth = 360f, GearWidth = 360f, WeaponWidth = 560f;
-        const float Pad = 14f, HeaderHeight = 54f;
-        const float GroundRowHeight = 54f, GroundRowGap = 6f;
-        const float BagRowHeight = 38f, BagRowGap = 3f; // fifteen rows (boost items, flash, molotov: ADR-116), then loose optics (ADR-082)
-        const float BagOpticHeight = 40f, BagOpticGap = 3f, BagOpticLabel = 22f; // ADR-100: 16 ids = 6 columns x 3 rows
-        const int BagOpticColumns = 6, BagOpticRows = 3;
-        const float AttachChip = 46f, AttachGap = 4f;
-        const float GearCardHeight = 220f, WeaponCardHeight = 142f, WeaponCardGap = 8f;
-
-        static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.62f);
-        static readonly Color Durability = new Color(0.32f, 0.72f, 0.58f, 1f);
-        static readonly Vector2 TopLeft = new Vector2(0f, 1f);
-        static readonly Vector2 MidLeft = new Vector2(0f, 0.5f);
-        static readonly Vector2 Centre = new Vector2(0.5f, 0.5f);
-        static readonly Vector2 TopCentre = new Vector2(0.5f, 1f);
+        public const int AttachPlaces = 5;
 
         public static InventoryScreen Instance { get; private set; }
 
@@ -37,13 +22,25 @@ namespace Game.Gameplay
         public int VicinityCount => _vicinity.Count;
         public bool Dragging => _dragSource.IsValid;
         public InventoryDragSource ActiveDragSource => _dragSource;
+        public InventoryPreview Preview => _preview;
+        public bool SortByRecent => _sortRecent;
+        public Canvas ScreenCanvas => _canvas;
 
         Canvas _canvas;
         RectTransform _panel;
+        CanvasGroup _panelGroup;
+        Image _backdropImage;
+        InventoryPreview _preview;
         readonly List<LootItem> _vicinity = new List<LootItem>(MaxVicinityRows);
-        readonly List<InventoryDropZone> _dropZones = new List<InventoryDropZone>(6);
+        readonly List<InventoryDropZone> _dropZones = new List<InventoryDropZone>(24);
         int _hash;
         bool _dirty = true;
+        float _openT = 1f;
+        bool _sortRecent;
+        readonly int[] _recentStamp = new int[InventoryBackend.BackpackRows];
+        readonly int[] _lastCount = new int[InventoryBackend.BackpackRows];
+        int _stampSeq;
+        readonly List<int> _order = new List<int>(InventoryBackend.BackpackRows);
 
         readonly GameObject[] _vicinityRows = new GameObject[MaxVicinityRows];
         readonly Text[] _vicinityNames = new Text[MaxVicinityRows];
@@ -63,6 +60,8 @@ namespace Game.Gameplay
         readonly InventoryDragItem[] _bagOpticDrags = new InventoryDragItem[OpticBag.MaxId];
         Text _bagOpticTitle;
         GameObject _bagEmpty; // ADR-137: shown while nothing is carried
+        Text _sortKindLabel, _sortRecentLabel;
+        Image _sortKindLine, _sortRecentLine;
         GameObject _healBox;
         Text _healLabel;
         RectTransform _healFill;
@@ -70,42 +69,67 @@ namespace Game.Gameplay
         RectTransform _carryFill;
         Image _carryFillImage;
 
-        readonly Text[] _gearNames = new Text[2];
-        readonly Text[] _gearDetails = new Text[2];
-        readonly RectTransform[] _gearFill = new RectTransform[2];
-        readonly InventoryItemIcon[] _gearIcons = new InventoryItemIcon[2];
-        readonly InventoryDragItem[] _gearDrags = new InventoryDragItem[2];
+        // Worn pieces: helmet, vest, backpack.
+        const int GearSlots = 3;
+        const int BackpackGear = 2;
+        readonly Text[] _gearNames = new Text[GearSlots];
+        readonly Text[] _gearDetails = new Text[GearSlots];
+        readonly Text[] _gearBadge = new Text[GearSlots];
+        readonly GameObject[] _gearBadgeBox = new GameObject[GearSlots];
+        readonly RectTransform[] _gearFill = new RectTransform[GearSlots];
+        readonly InventoryItemIcon[] _gearIcons = new InventoryItemIcon[GearSlots];
+        readonly InventoryDragItem[] _gearDrags = new InventoryDragItem[GearSlots];
 
         readonly GameObject[] _weaponActive = new GameObject[Loadout.SlotCount];
         readonly Text[] _weaponNames = new Text[Loadout.SlotCount];
-        readonly Text[] _weaponAmmo = new Text[Loadout.SlotCount];
+        readonly Text[] _weaponAmmo = new Text[Loadout.SlotCount];      // "30 / 90발  ·  연사", read by tests
+        readonly Text[] _weaponAmmoBig = new Text[Loadout.SlotCount];
+        readonly Text[] _weaponAmmoSmall = new Text[Loadout.SlotCount];
         readonly Text[] _weaponBadge = new Text[Loadout.SlotCount];
+        readonly Text[] _weaponLabel = new Text[Loadout.SlotCount];
+        readonly Text[] _weaponHint = new Text[3];
         readonly InventoryItemIcon[] _weaponIcons = new InventoryItemIcon[Loadout.SlotCount];
         readonly InventoryDragItem[] _weaponDrags = new InventoryDragItem[Loadout.SlotCount];
-        readonly GameObject[] _opticChip = new GameObject[Loadout.SlotCount];
-        readonly Text[] _opticName = new Text[Loadout.SlotCount];
-        readonly InventoryItemIcon[] _opticIcon = new InventoryItemIcon[Loadout.SlotCount];
-        readonly InventoryDragItem[] _opticDrag = new InventoryDragItem[Loadout.SlotCount];
-        // ADR-100: muzzle, grip, stock and magazine chips of each weapon card, [slot * 4 + (AttachSlot - 1)].
-        readonly GameObject[] _attachChip = new GameObject[Loadout.SlotCount * 4];
-        readonly InventoryItemIcon[] _attachIcon = new InventoryItemIcon[Loadout.SlotCount * 4];
-        readonly InventoryDragItem[] _attachDrag = new InventoryDragItem[Loadout.SlotCount * 4];
+        // Attachment slots of the three gun cards: [weaponSlot * AttachPlaces + (int)AttachSlot].
+        readonly GameObject[] _slotRoot = new GameObject[3 * AttachPlaces];
+        readonly InventoryItemIcon[] _slotIcon = new InventoryItemIcon[3 * AttachPlaces];
+        readonly InventoryDragItem[] _slotDrag = new InventoryDragItem[3 * AttachPlaces];
+        // Throwable card: one chip per kind carried.
+        readonly GameObject[] _pipRoot = new GameObject[4];
+        readonly InventoryItemIcon[] _pipIcon = new InventoryItemIcon[4];
+        readonly Text[] _pipCount = new Text[4];
+        readonly GameObject[] _pipSelect = new GameObject[4];
+        readonly InventoryDragItem[] _pipDrag = new InventoryDragItem[4];
 
         InventoryDragSource _dragSource;
         GameObject _dragGhost;
         RectTransform _dragGhostRect;
         InventoryItemIcon _dragGhostIcon;
+        float _ghostPop;
+        Vector2? _fakePointer; // tests and captures place the pointer themselves
+        public void SetPointerForTests(Vector2? screenPosition) => _fakePointer = screenPosition;
         bool _dropHandled;
         bool _suppressQuickDropUntilRightRelease;
 
         GameObject _tooltip;
         RectTransform _tooltipRect;
-        Text _tooltipText;
+        CanvasGroup _tooltipGroup;
+        InventoryItemIcon _tooltipIcon;
+        Text _tooltipTitle, _tooltipType, _tooltipBody;
+        RectTransform _tooltipRule;
+        bool _tooltipWant;
+        float _tooltipAlpha;
+
+        public string TooltipTitle => _tooltipTitle != null ? _tooltipTitle.text : "";
+        public string TooltipBody => _tooltipBody != null ? _tooltipType.text + "\n" + _tooltipBody.text : "";
+        public bool TooltipVisible => _tooltip != null && _tooltip.activeSelf && _tooltipWant;
 
         void Awake()
         {
             Instance = this;
             Build();
+            _preview = InventoryPreview.Create(transform);
+            BindPreview();
             _canvas.gameObject.SetActive(false);
         }
 
@@ -119,6 +143,7 @@ namespace Game.Gameplay
         {
             UiFocus.Changed -= OnFocusChanged;
             CancelDrag();
+            if (_preview != null) _preview.Hide();
         }
 
         void OnDestroy()
@@ -134,18 +159,28 @@ namespace Game.Gameplay
             if (!open)
             {
                 CancelDrag();
-                HideTooltip();
+                HideTooltipCore(true);
                 _vicinity.Clear();
+                if (_preview != null) _preview.Hide();
                 return;
             }
             _dirty = true;
+            _openT = 0f;
+            ApplyOpen();
             var me = Combatant.LocalPlayer;
-            if (me != null) Refresh(me);
+            if (me != null)
+            {
+                Refresh(me);
+                if (_preview != null) _preview.Show(me);
+            }
         }
 
         void Update()
         {
             if (!IsOpen) return;
+            AnimateOpen();
+            FollowPointer();
+            AnimateTooltip();
             if (_suppressQuickDropUntilRightRelease && Mouse.current != null && !Mouse.current.rightButton.isPressed &&
                 !Mouse.current.rightButton.wasReleasedThisFrame)
                 _suppressQuickDropUntilRightRelease = false;
@@ -163,6 +198,42 @@ namespace Game.Gameplay
             }
             Refresh(me);
             ShowHealing();
+            if (_preview != null) _preview.Refresh(me, InventoryPreview.KeyOf(me));
+        }
+
+        // A short fade and slide when the screen opens.
+        void AnimateOpen()
+        {
+            if (_openT >= 1f) return;
+            _openT = Mathf.Min(1f, _openT + Time.unscaledDeltaTime / 0.16f);
+            ApplyOpen();
+        }
+
+        void ApplyOpen()
+        {
+            float e = 1f - (1f - _openT) * (1f - _openT) * (1f - _openT);
+            _panelGroup.alpha = e;
+            _panel.anchoredPosition = new Vector2(0f, (1f - e) * -26f);
+            _backdropImage.color = new Color(Backdrop.r, Backdrop.g, Backdrop.b, Backdrop.a * e);
+        }
+
+        // The drag picture and the tooltip follow the pointer every frame, not only on the frames events arrive.
+        Camera UiCamera => _canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _canvas.worldCamera;
+
+        // For tests and captures: applies the placed pointer (drag picture, tooltip) now.
+        public void RefreshPointerNow() => FollowPointer();
+
+        void FollowPointer()
+        {
+            if (_fakePointer == null && Mouse.current == null) return;
+            var position = _fakePointer ?? Mouse.current.position.ReadValue();
+            if (Dragging)
+            {
+                MoveDrag(position, UiCamera);
+                _ghostPop = Mathf.MoveTowards(_ghostPop, 1f, Time.unscaledDeltaTime * 10f);
+                _dragGhostRect.localScale = Vector3.one * (1f + 0.12f * Mathf.Sin(_ghostPop * Mathf.PI * 0.5f));
+            }
+            else if (_tooltipWant) PlaceTooltip(position, UiCamera);
         }
 
         // #110: the timed use (started by a right click here or by H) shows its progress in the header, since the
@@ -188,6 +259,16 @@ namespace Game.Gameplay
             ShowBackpack(me);
             ShowGear(me);
             ShowWeapons(me);
+            ShowThrowables(me);
+        }
+
+        // Public so a capture can show the state it just set up without waiting a frame.
+        public void RefreshNow()
+        {
+            var me = Combatant.LocalPlayer;
+            if (me == null || !IsOpen) return;
+            _dirty = true;
+            Refresh(me);
         }
 
         void CollectVicinity(Vector3 position)
@@ -211,8 +292,7 @@ namespace Game.Gameplay
                 {
                     hash = hash * 31 + InventoryBackend.WeaponId(combatant, i);
                     hash = hash * 31 + InventoryBackend.WeaponMag(combatant, i);
-                    hash = hash * 31 + InventoryBackend.OpticOf(combatant, i);
-                    for (int s = 1; s < Attachments.Slots; s++) hash = hash * 31 + InventoryBackend.OpticOf(combatant, Attachments.GearIndex(i, (AttachSlot)s));
+                    for (int s = 0; s < Attachments.Slots; s++) hash = hash * 31 + InventoryBackend.OpticOf(combatant, Attachments.GearIndex(i, (AttachSlot)s));
                     hash = hash * 31 + InventoryBackend.FireMode(combatant, i).Length;
                 }
                 hash = hash * 31 + (combatant.Holstered.Value ? 1 : 0);
@@ -227,6 +307,9 @@ namespace Game.Gameplay
                     hash = hash * 31 + gear.Durability;
                     hash = hash * 31 + gear.MaxDurability;
                 }
+                hash = hash * 31 + InventoryBackend.BackpackTier(combatant);
+                hash = hash * 31 + (int)InventoryBackend.SelectedThrowable(combatant);
+                hash = hash * 31 + (_sortRecent ? 1 : 0);
                 hash = hash * 31 + _vicinity.Count;
                 for (int i = 0; i < _vicinity.Count; i++)
                 {
@@ -240,105 +323,6 @@ namespace Game.Gameplay
                 }
                 return hash;
             }
-        }
-
-        void ShowVicinity()
-        {
-            for (int i = 0; i < MaxVicinityRows; i++)
-            {
-                bool used = i < _vicinity.Count;
-                _vicinityRows[i].SetActive(used);
-                if (!used) continue;
-                var item = _vicinity[i];
-                string name = InventoryBackend.LootName(item);
-                _vicinityNames[i].text = name;
-                _vicinityAmounts[i].text = InventoryBackend.LootAmount(item);
-                _vicinityIcons[i].Set(InventoryBackend.LootIconKey(item), name);
-                _vicinityDrags[i].Configure(this, new InventoryDragSource(InventorySourceKind.Vicinity, item, i));
-            }
-            _vicinityEmpty.SetActive(_vicinity.Count == 0);
-        }
-
-        void ShowBackpack(Combatant me)
-        {
-            for (int i = 0; i < InventoryBackend.AmmoTypeCount; i++)
-            {
-                int count = InventoryBackend.Reserve(me, i);
-                ShowPackRow(i, count);
-                _packDrags[i].Configure(this, AmmoSource(i));
-            }
-            ShowPackRow(InventoryBackend.MedkitRow, me.Medkits.Value);
-            _packDrags[InventoryBackend.MedkitRow].Configure(this, MedkitSource());
-            int grenades = InventoryBackend.Grenades(me);
-            ShowPackRow(InventoryBackend.GrenadeRow, grenades);
-            _packDrags[InventoryBackend.GrenadeRow].Configure(this, GrenadeSource());
-            ShowPackRow(InventoryBackend.BandageRow, InventoryBackend.Bandages(me));
-            _packDrags[InventoryBackend.BandageRow].Configure(this, BandageSource());
-            ShowPackRow(InventoryBackend.FirstAidRow, InventoryBackend.FirstAids(me));
-            _packDrags[InventoryBackend.FirstAidRow].Configure(this, FirstAidSource());
-            ShowPackRow(InventoryBackend.SmokeRow, InventoryBackend.Smokes(me));
-            _packDrags[InventoryBackend.SmokeRow].Configure(this, SmokeSource());
-            ShowPackRow(InventoryBackend.JerrycanRow, InventoryBackend.Jerrycans(me));
-            _packDrags[InventoryBackend.JerrycanRow].Configure(this, JerrycanSource());
-            ShowPackRow(InventoryBackend.DrinkRow, InventoryBackend.BoostCount(me, HealKind.Drink));
-            _packDrags[InventoryBackend.DrinkRow].Configure(this, ExtraSource(InventorySourceKind.Drink));
-            ShowPackRow(InventoryBackend.PillRow, InventoryBackend.BoostCount(me, HealKind.Pill));
-            _packDrags[InventoryBackend.PillRow].Configure(this, ExtraSource(InventorySourceKind.Pill));
-            ShowPackRow(InventoryBackend.SyringeRow, InventoryBackend.BoostCount(me, HealKind.Syringe));
-            _packDrags[InventoryBackend.SyringeRow].Configure(this, ExtraSource(InventorySourceKind.Syringe));
-            ShowPackRow(InventoryBackend.FlashRow, InventoryBackend.Flashes(me));
-            _packDrags[InventoryBackend.FlashRow].Configure(this, ExtraSource(InventorySourceKind.Flash));
-            ShowPackRow(InventoryBackend.MolotovRow, InventoryBackend.Molotovs(me));
-            _packDrags[InventoryBackend.MolotovRow].Configure(this, ExtraSource(InventorySourceKind.Molotov));
-
-            // Loose optics (ADR-082): one cell per optic id held, packed in id order.
-            int cell = 0;
-            for (int id = 1; id <= OpticBag.MaxId; id++)
-            {
-                int count = InventoryBackend.BagOpticCount(me, id);
-                if (count <= 0) continue;
-                string name = InventoryBackend.OpticName(id);
-                _bagOpticIcons[cell].Set(ItemIcons.OpticKey(id), name);
-                _bagOpticCounts[cell].text = count > 1 ? "x" + count : "";
-                _bagOpticDrags[cell].Configure(this, BagOpticSource(id));
-                _bagOpticCells[cell].SetActive(true);
-                cell++;
-            }
-            for (int i = cell; i < OpticBag.MaxId; i++) _bagOpticCells[i].SetActive(false);
-            _bagOpticTitle.text = "조준경·부착물";
-            _bagOpticTitle.gameObject.SetActive(cell > 0);
-
-            // Compact layout (ADR-137): held rows stack from the top, then the optics grid, then the load bar.
-            float top = HeaderHeight;
-            int shown = 0;
-            for (int i = 0; i < InventoryBackend.BackpackRows; i++)
-            {
-                if (!_packRows[i].activeSelf) continue;
-                ((RectTransform)_packRows[i].transform).anchoredPosition = new Vector2(Pad, -top);
-                top += BagRowHeight + BagRowGap;
-                shown++;
-            }
-            if (cell > 0)
-            {
-                _bagOpticTitle.rectTransform.anchoredPosition = new Vector2(Pad, -top);
-                float gridTop = top + BagOpticLabel;
-                for (int i = 0; i < cell; i++)
-                {
-                    var rect = (RectTransform)_bagOpticCells[i].transform;
-                    rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, -(gridTop + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap)));
-                }
-                top = gridTop + ((cell - 1) / BagOpticColumns + 1) * (BagOpticHeight + BagOpticGap) + 2f;
-            }
-            _bagEmpty.SetActive(shown == 0 && cell == 0);
-            if (shown == 0 && cell == 0) top += 64f;
-            ((RectTransform)_carryLabel.transform.parent).anchoredPosition = new Vector2(Pad, -top);
-
-            // The bag's load against its size; red when over (the server then refuses what does not fit).
-            string carry = InventoryBackend.CarryLabel(me);
-            float fraction = InventoryBackend.CarryFraction(me);
-            _carryLabel.text = carry.Length > 0 ? carry : "가방 용량 —";
-            _carryFill.anchorMax = new Vector2(Mathf.Clamp01(fraction), 1f);
-            _carryFillImage.color = fraction > 0.999f ? UiKit.Danger : fraction > 0.85f ? UiKit.Accent : Durability;
         }
 
         // What the rows added after the first inventory show (bandages, kits, smokes, keys, bag load).
@@ -362,74 +346,180 @@ namespace Game.Gameplay
             }
         }
 
-        // ADR-137: a row exists only while its count is above zero.
-        void ShowPackRow(int row, int count)
+        void ShowVicinity()
         {
-            _packRows[row].SetActive(count > 0);
-            _packCounts[row].text = "x" + count;
+            for (int i = 0; i < MaxVicinityRows; i++)
+            {
+                bool used = i < _vicinity.Count;
+                _vicinityRows[i].SetActive(used);
+                if (!used) continue;
+                var item = _vicinity[i];
+                string name = InventoryBackend.LootName(item);
+                _vicinityNames[i].text = name;
+                _vicinityAmounts[i].text = InventoryBackend.LootAmount(item);
+                _vicinityIcons[i].Set(InventoryBackend.LootIconKey(item), name);
+                _vicinityDrags[i].Configure(this, new InventoryDragSource(InventorySourceKind.Vicinity, item, i));
+            }
+            _vicinityEmpty.SetActive(_vicinity.Count == 0);
+        }
+
+        // How many the bag holds of a row.
+        static int PackCount(Combatant me, int row)
+        {
+            if (row < InventoryBackend.AmmoTypeCount) return InventoryBackend.Reserve(me, row);
+            switch (row)
+            {
+                case InventoryBackend.MedkitRow: return me.Medkits.Value;
+                case InventoryBackend.GrenadeRow: return InventoryBackend.Grenades(me);
+                case InventoryBackend.BandageRow: return InventoryBackend.Bandages(me);
+                case InventoryBackend.FirstAidRow: return InventoryBackend.FirstAids(me);
+                case InventoryBackend.SmokeRow: return InventoryBackend.Smokes(me);
+                case InventoryBackend.JerrycanRow: return InventoryBackend.Jerrycans(me);
+                case InventoryBackend.DrinkRow: return InventoryBackend.BoostCount(me, HealKind.Drink);
+                case InventoryBackend.PillRow: return InventoryBackend.BoostCount(me, HealKind.Pill);
+                case InventoryBackend.SyringeRow: return InventoryBackend.BoostCount(me, HealKind.Syringe);
+                case InventoryBackend.FlashRow: return InventoryBackend.Flashes(me);
+                default: return InventoryBackend.MolotovRow == row ? InventoryBackend.Molotovs(me) : 0;
+            }
+        }
+
+        InventoryDragSource PackSource(int row)
+        {
+            if (row < InventoryBackend.AmmoTypeCount) return AmmoSource(row);
+            switch (row)
+            {
+                case InventoryBackend.MedkitRow: return MedkitSource();
+                case InventoryBackend.GrenadeRow: return GrenadeSource();
+                case InventoryBackend.BandageRow: return BandageSource();
+                case InventoryBackend.FirstAidRow: return FirstAidSource();
+                case InventoryBackend.SmokeRow: return SmokeSource();
+                case InventoryBackend.JerrycanRow: return JerrycanSource();
+                case InventoryBackend.DrinkRow: return ExtraSource(InventorySourceKind.Drink);
+                case InventoryBackend.PillRow: return ExtraSource(InventorySourceKind.Pill);
+                case InventoryBackend.SyringeRow: return ExtraSource(InventorySourceKind.Syringe);
+                case InventoryBackend.FlashRow: return ExtraSource(InventorySourceKind.Flash);
+                default: return ExtraSource(InventorySourceKind.Molotov);
+            }
+        }
+
+        void ShowBackpack(Combatant me)
+        {
+            // ADR-137: a row exists only while its count is above zero. Rows are sorted by kind (row order) or by when
+            // the count last grew (the newest on top).
+            _order.Clear();
+            for (int row = 0; row < InventoryBackend.BackpackRows; row++)
+            {
+                int count = PackCount(me, row);
+                if (count > _lastCount[row]) _recentStamp[row] = ++_stampSeq;
+                _lastCount[row] = count;
+                _packRows[row].SetActive(count > 0);
+                _packCounts[row].text = "x" + count;
+                _packDrags[row].Configure(this, PackSource(row));
+                if (count > 0) _order.Add(row);
+            }
+            if (_sortRecent)
+                _order.Sort((a, b) => _recentStamp[a] != _recentStamp[b] ? _recentStamp[b].CompareTo(_recentStamp[a]) : a.CompareTo(b));
+
+            // Loose optics and attachments (ADR-082, ADR-100): one cell per id held, packed in id order.
+            int cell = 0;
+            for (int id = 1; id <= OpticBag.MaxId; id++)
+            {
+                int count = InventoryBackend.BagOpticCount(me, id);
+                if (count <= 0) continue;
+                string name = InventoryBackend.OpticName(id);
+                _bagOpticIcons[cell].Set(ItemIcons.OpticKey(id), name);
+                _bagOpticCounts[cell].text = count > 1 ? "x" + count : "";
+                _bagOpticDrags[cell].Configure(this, BagOpticSource(id));
+                _bagOpticCells[cell].SetActive(true);
+                cell++;
+            }
+            for (int i = cell; i < OpticBag.MaxId; i++) _bagOpticCells[i].SetActive(false);
+            _bagOpticTitle.gameObject.SetActive(cell > 0);
+
+            // Compact layout (ADR-137): held rows stack from the top, then the attachments grid.
+            float top = BagListTop;
+            foreach (int row in _order)
+            {
+                ((RectTransform)_packRows[row].transform).anchoredPosition = new Vector2(Pad, -top);
+                top += BagRowHeight + BagRowGap;
+            }
+            if (cell > 0)
+            {
+                top += 6f;
+                _bagOpticTitle.rectTransform.anchoredPosition = new Vector2(Pad, -top);
+                float gridTop = top + BagOpticLabel;
+                for (int i = 0; i < cell; i++)
+                {
+                    var rect = (RectTransform)_bagOpticCells[i].transform;
+                    rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, -(gridTop + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap)));
+                }
+            }
+            _bagEmpty.SetActive(_order.Count == 0 && cell == 0);
+
+            // The bag's load against its size; red when over (the server then refuses what does not fit).
+            string carry = InventoryBackend.CarryLabel(me);
+            float fraction = InventoryBackend.CarryFraction(me);
+            _carryLabel.text = carry.Length > 0 ? carry : "가방 용량 —";
+            _carryFill.anchorMax = new Vector2(Mathf.Clamp01(fraction), 1f);
+            _carryFillImage.color = fraction > 0.999f ? UiKit.Danger : fraction > 0.85f ? UiKit.Accent : Durability;
         }
 
         void ShowGear(Combatant me)
         {
-            for (int slot = 0; slot < 2; slot++)
+            for (int slot = 0; slot < GearSlots; slot++)
             {
+                if (slot == BackpackGear)
+                {
+                    int tier = InventoryBackend.BackpackTier(me);
+                    _gearNames[slot].text = tier > 0 ? LootNames.Of(LootKind.Backpack, 0, AmmoType.Pistol9, tier) : "가방";
+                    _gearNames[slot].color = tier > 0 ? UiKit.Text : UiKit.TextDim;
+                    _gearDetails[slot].text = tier > 0 ? "용량 " + InventoryBackend.CarryCapacity(me).ToString("0") : "비어 있음";
+                    _gearFill[slot].anchorMax = new Vector2(tier > 0 ? tier / 3f : 0f, 1f);
+                    _gearIcons[slot].Set(ItemIcons.BackpackKey(tier), "가방");
+                    _gearBadgeBox[slot].SetActive(tier > 0);
+                    _gearBadge[slot].text = tier > 0 ? "T" + tier : "";
+                    _gearDrags[slot].Configure(this, new InventoryDragSource(InventorySourceKind.Backpack, null, slot));
+                    continue;
+                }
                 var gear = InventoryBackend.Gear(me, slot);
                 string baseName = slot == InventoryBackend.HelmetSlot ? "헬멧" : "조끼";
-                _gearNames[slot].text = gear.Has ? baseName + " " + gear.Tier + "단계" : baseName + "  ·  비어 있음";
+                _gearNames[slot].text = gear.Has ? baseName + " " + gear.Tier + "단계" : baseName;
                 _gearNames[slot].color = gear.Has ? UiKit.Text : UiKit.TextDim;
-                _gearDetails[slot].text = gear.Has ? "내구도  " + gear.Durability + " / " + gear.MaxDurability : "장구류를 이곳에 놓으세요";
+                _gearDetails[slot].text = gear.Has ? "내구도  " + gear.Durability + " / " + gear.MaxDurability : "비어 있음";
                 _gearFill[slot].anchorMax = new Vector2(Mathf.Clamp01(gear.Fraction), 1f);
                 _gearIcons[slot].Set(gear.Has ? (slot == 0 ? "helmet_" : "vest_") + gear.Tier : "", baseName);
+                _gearBadgeBox[slot].SetActive(gear.Has);
+                _gearBadge[slot].text = gear.Has ? gear.Durability.ToString() : "";
                 var kind = slot == 0 ? InventorySourceKind.Helmet : InventorySourceKind.Vest;
                 _gearDrags[slot].Configure(this, new InventoryDragSource(kind, null, slot));
             }
         }
 
+        static readonly AttachSlot[] PlaceOrder = { AttachSlot.Optic, AttachSlot.Muzzle, AttachSlot.Grip, AttachSlot.Mag, AttachSlot.Stock };
+
         void ShowWeapons(Combatant me)
         {
             for (int slot = 0; slot < Loadout.SlotCount; slot++)
             {
+                if (slot == InventoryBackend.ThrowableSlot) continue; // ShowThrowables
                 int id = InventoryBackend.WeaponId(me, slot);
                 int mag = InventoryBackend.WeaponMag(me, slot);
                 bool active = me.ActiveSlot.Value == slot && !me.Holstered.Value;
                 var weapon = GameData.Weapons.Find(id);
                 _weaponActive[slot].SetActive(active);
-                int opticId = weapon != null ? InventoryBackend.OpticOf(me, slot) : 0;
-                _opticChip[slot].SetActive(opticId != 0);
-                if (opticId != 0)
+                if (slot < 3)
                 {
-                    string opticName = InventoryBackend.OpticName(opticId);
-                    _opticName[slot].text = opticName;
-                    _opticIcon[slot].Set(ItemIcons.OpticKey(opticId), opticName);
-                    _opticDrag[slot].Configure(this, new InventoryDragSource(InventorySourceKind.Optic, null, slot));
-                }
-                for (int s = 1; s < Attachments.Slots; s++)
-                {
-                    int ci = slot * 4 + s - 1;
-                    int fitted = weapon != null ? InventoryBackend.OpticOf(me, Attachments.GearIndex(slot, (AttachSlot)s)) : 0;
-                    _attachChip[ci].SetActive(fitted != 0);
-                    if (fitted == 0) continue;
-                    _attachIcon[ci].Set(ItemIcons.OpticKey(fitted), InventoryBackend.OpticName(fitted));
-                    _attachDrag[ci].Configure(this, new InventoryDragSource(InventorySourceKind.Optic, null, Attachments.GearIndex(slot, (AttachSlot)s)));
-                }
-                if (slot == InventoryBackend.ThrowableSlot)
-                {
-                    int grenades = InventoryBackend.Grenades(me);
-                    _weaponNames[slot].text = grenades > 0 ? "수류탄" : "비어 있음";
-                    _weaponNames[slot].color = grenades > 0 ? UiKit.Text : UiKit.TextDim;
-                    _weaponAmmo[slot].text = grenades > 0 ? "x" + grenades : "투척물 슬롯";
-                    _weaponBadge[slot].text = "투척";
-                    _weaponIcons[slot].Set(grenades > 0 ? "grenade" : "", "수류탄");
-                    _weaponDrags[slot].Configure(this, grenades > 0 ? GrenadeSource() : default);
-                    continue;
+                    ShowAttachSlots(me, slot, weapon);
+                    _weaponHint[slot].text = weapon == null ? (slot == InventoryBackend.SidearmSlot ? "권총을 이곳으로 끌어 놓으세요" : "총기를 이곳으로 끌어 놓으세요") : "";
                 }
                 if (weapon == null)
                 {
                     _weaponNames[slot].text = "비어 있음";
                     _weaponNames[slot].color = UiKit.TextDim;
                     _weaponAmmo[slot].text = slot == InventoryBackend.MeleeSlot ? "근접 무기를 이곳에 놓으세요" : "총기를 이곳에 놓으세요";
-                    _weaponBadge[slot].text = "구경 —";
+                    _weaponBadge[slot].text = slot == InventoryBackend.MeleeSlot ? "" : InventoryBackend.SlotLabel(slot);
                     _weaponIcons[slot].Set("", "총");
+                    if (_weaponAmmoBig[slot] != null) { _weaponAmmoBig[slot].text = ""; _weaponAmmoSmall[slot].text = ""; }
                 }
                 else if (weapon.IsMelee)
                 {
@@ -437,20 +527,92 @@ namespace Game.Gameplay
                     _weaponNames[slot].text = weapon.Name;
                     _weaponNames[slot].color = active ? UiKit.Accent : UiKit.Text;
                     _weaponAmmo[slot].text = "피해 " + weapon.Damage.ToString("0") + "  ·  사거리 " + weapon.Range.ToString("0.0") + "m";
-                    _weaponBadge[slot].text = "근접";
+                    _weaponBadge[slot].text = "";
                     _weaponIcons[slot].Set(InventoryBackend.WeaponKey(id), weapon.Name);
                 }
                 else
                 {
                     int ammoIndex = InventoryBackend.AmmoIndex(weapon);
                     string mode = InventoryBackend.FireMode(me, slot);
+                    int reserve = InventoryBackend.Reserve(me, ammoIndex);
                     _weaponNames[slot].text = weapon.Name;
                     _weaponNames[slot].color = active ? UiKit.Accent : UiKit.Text;
-                    _weaponAmmo[slot].text = mag + " / " + InventoryBackend.Reserve(me, ammoIndex) + "발" + (mode.Length > 0 ? "  ·  " + mode : "");
-                    _weaponBadge[slot].text = InventoryBackend.AmmoName(ammoIndex);
+                    _weaponAmmo[slot].text = mag + " / " + reserve + "발" + (mode.Length > 0 ? "  ·  " + mode : "");
+                    _weaponBadge[slot].text = InventoryBackend.SlotLabel(slot) + "  ·  " + InventoryBackend.AmmoName(ammoIndex);
                     _weaponIcons[slot].Set(InventoryBackend.WeaponKey(id), weapon.Name);
+                    if (_weaponAmmoBig[slot] != null)
+                    {
+                        _weaponAmmoBig[slot].text = mag.ToString();
+                        _weaponAmmoSmall[slot].text = "/ " + reserve + (mode.Length > 0 ? "\n" + mode : "");
+                    }
                 }
+                if (weapon == null || weapon.IsMelee) { if (_weaponAmmoBig[slot] != null) { _weaponAmmoBig[slot].text = ""; _weaponAmmoSmall[slot].text = ""; } }
                 _weaponDrags[slot].Configure(this, WeaponSource(slot));
+            }
+        }
+
+        void ShowAttachSlots(Combatant me, int slot, WeaponDef weapon)
+        {
+            bool gun = weapon != null && !weapon.IsMelee;
+            for (int p = 0; p < AttachPlaces; p++)
+            {
+                int ci = slot * AttachPlaces + p;
+                var place = (AttachSlot)p;
+                bool supported = gun && InventoryBackend.WeaponTakesPlace(weapon.Id, place);
+                _slotRoot[ci].SetActive(supported);
+                if (!supported) continue;
+                int gearIndex = Attachments.GearIndex(slot, place);
+                int fitted = InventoryBackend.OpticOf(me, gearIndex);
+                if (fitted != 0)
+                {
+                    _slotIcon[ci].Set(ItemIcons.OpticKey(fitted), InventoryBackend.OpticName(fitted));
+                    _slotDrag[ci].Configure(this, new InventoryDragSource(InventorySourceKind.Optic, null, gearIndex));
+                }
+                else
+                {
+                    _slotIcon[ci].SetGhost(InventoryBackend.PlaceGhostKey(place));
+                    _slotDrag[ci].Configure(this, new InventoryDragSource(InventorySourceKind.EmptyAttach, null, gearIndex));
+                }
+            }
+        }
+
+        // Slot 5: the selected kind with its count, and a chip for each kind carried (click one to select it).
+        void ShowThrowables(Combatant me)
+        {
+            const int slot = InventoryBackend.ThrowableSlot;
+            var selected = InventoryBackend.SelectedThrowable(me);
+            int total = 0;
+            for (var k = ThrowableKind.Frag; k <= ThrowableKind.Molotov; k++) total += InventoryBackend.ThrowableCount(me, k);
+            bool active = me.ActiveSlot.Value == slot && !me.Holstered.Value;
+            _weaponActive[slot].SetActive(active);
+            int count = InventoryBackend.ThrowableCount(me, selected);
+            bool has = total > 0;
+            _weaponNames[slot].text = has ? Throwables.NameOf(selected) : "비어 있음";
+            _weaponNames[slot].color = !has ? UiKit.TextDim : active ? UiKit.Accent : UiKit.Text;
+            _weaponAmmo[slot].text = has ? "x" + count : "투척물 슬롯";
+            _weaponBadge[slot].text = "";
+            _weaponIcons[slot].Set(has ? InventoryBackend.ThrowIconKey(selected) : "", Throwables.NameOf(selected));
+            _weaponAmmoBig[slot].text = has ? "x" + count : "";
+            _weaponAmmoSmall[slot].text = has && count == 0 ? "없음" : "";
+            _weaponDrags[slot].Configure(this, new InventoryDragSource(InventorySourceKind.Weapon, null, slot));
+            for (int i = 0; i < 4; i++)
+            {
+                var kind = (ThrowableKind)i;
+                int n = InventoryBackend.ThrowableCount(me, kind);
+                _pipRoot[i].SetActive(n > 0);
+                if (n <= 0) continue;
+                _pipIcon[i].Set(InventoryBackend.ThrowIconKey(kind), Throwables.NameOf(kind));
+                _pipCount[i].text = "x" + n;
+                _pipSelect[i].SetActive(kind == selected);
+                _pipDrag[i].Configure(this, new InventoryDragSource(InventoryBackend.SourceKindOf(kind), null, 0));
+            }
+            // The chips pack to the left.
+            int shown = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                if (!_pipRoot[i].activeSelf) continue;
+                ((RectTransform)_pipRoot[i].transform).anchoredPosition = new Vector2(PipX + shown * (PipSize + PipGap), PipY);
+                shown++;
             }
         }
 
@@ -471,6 +633,9 @@ namespace Game.Gameplay
             ? new InventoryDragSource(InventorySourceKind.BagOptic, null, opticId) : default;
         public InventoryDragSource WeaponSource(int slot) => slot >= 0 && slot < Loadout.SlotCount
             ? new InventoryDragSource(InventorySourceKind.Weapon, null, slot) : default;
+        // A fitted attachment of a weapon card (gear index = Attachments.GearIndex(slot, place)).
+        public InventoryDragSource AttachedSource(int weaponSlot, AttachSlot place) =>
+            new InventoryDragSource(InventorySourceKind.Optic, null, Attachments.GearIndex(weaponSlot, place));
         public InventoryDragSource GearSource(int slot) => slot == InventoryBackend.HelmetSlot
             ? new InventoryDragSource(InventorySourceKind.Helmet, null, slot)
             : slot == InventoryBackend.VestSlot ? new InventoryDragSource(InventorySourceKind.Vest, null, slot) : default;
@@ -560,6 +725,27 @@ namespace Game.Gameplay
             return true;
         }
 
+        // #179: onto one attachment slot of a weapon card (gear index); it must be that place on that gun.
+        public bool DropOnAttachSlot(InventoryDragSource source, int gearIndex)
+        {
+            if (!CanDropOnAttachSlot(source, gearIndex)) return false;
+            var me = Combatant.LocalPlayer;
+            int slot = Attachments.WeaponSlotOf(gearIndex);
+            if (source.Kind == InventorySourceKind.BagOptic) InventoryBackend.AttachOpticFromBag(me, source.Index, slot);
+            else InventoryBackend.AttachOpticFromGround(me, source.Loot, slot);
+            _dirty = true;
+            return true;
+        }
+
+        // #179: onto the throwable slot: the kind becomes what slot 5 throws.
+        public bool DropOnThrowable(InventoryDragSource source)
+        {
+            if (!CanDropOnThrowable(source)) return false;
+            InventoryBackend.SetThrowable(Combatant.LocalPlayer, InventoryBackend.ThrowKindOf(source.Kind).Value, false);
+            _dirty = true;
+            return true;
+        }
+
         public bool DropOnGear(InventoryDragSource source, int slot)
         {
             if (!CanDropOnGear(source, slot)) return false;
@@ -574,6 +760,7 @@ namespace Game.Gameplay
             CancelDrag();
             _dragSource = source;
             _dropHandled = false;
+            _ghostPop = 0f;
             SourcePresentation(source, out string key, out string name);
             _dragGhostIcon.Set(key, name);
             _dragGhost.SetActive(true);
@@ -586,7 +773,7 @@ namespace Game.Gameplay
         {
             if (!Dragging) return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)_canvas.transform, screenPosition, eventCamera, out var local);
-            _dragGhostRect.anchoredPosition = local + new Vector2(18f, -18f);
+            _dragGhostRect.anchoredPosition = local + new Vector2(22f, -22f); // the slot under the pointer stays visible
         }
 
         public void EndDrag(Vector2 screenPosition, Camera eventCamera)
@@ -608,14 +795,25 @@ namespace Game.Gameplay
         {
             var me = Combatant.LocalPlayer;
             if (me == null) return;
+            var throwKind = InventoryBackend.ThrowKindOf(source.Kind);
+            if (throwKind != null)
+            {
+                // #179: a click sets the kind slot 5 throws; a double click also takes it out.
+                InventoryBackend.SetThrowable(me, throwKind.Value, clickCount >= 2);
+                _dirty = true;
+                return;
+            }
             if (source.Kind == InventorySourceKind.Vicinity && clickCount >= 2) InventoryBackend.Pickup(me, source.Loot);
             else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
             else if (clickCount >= 2 && InventoryBackend.RightClickHeal(source.Kind, out var heal)) InventoryBackend.UseHealing(me, heal);
             else if (source.Kind == InventorySourceKind.Jerrycan && clickCount >= 2) InventoryBackend.UseJerrycan(me);
+            else if (source.Kind == InventorySourceKind.Weapon && source.Index == InventoryBackend.ThrowableSlot) InventoryBackend.SelectSlot(me, source.Index);
             else if (source.Kind == InventorySourceKind.Weapon && InventoryBackend.WeaponId(me, source.Index) != 0)
                 InventoryBackend.SelectSlot(me, source.Index);
         }
 
+        // Right click. Attachments: a loose one is fitted to the best gun, a fitted one goes to the bag; throwables are
+        // set as the throwable slot's kind; ground items are picked up; the rest drops (healing items are used).
         public void QuickDrop(InventoryDragSource source)
         {
             if (_suppressQuickDropUntilRightRelease)
@@ -623,18 +821,64 @@ namespace Game.Gameplay
                 if (Mouse.current == null || !Mouse.current.rightButton.isPressed) _suppressQuickDropUntilRightRelease = false;
                 return;
             }
-            if (Dragging) CancelDrag();
-            else if (InventoryBackend.RightClickHeal(source.Kind, out var heal))
+            if (Dragging) { CancelDrag(); return; }
+            var me = Combatant.LocalPlayer;
+            if (me == null) return;
+            var throwKind = InventoryBackend.ThrowKindOf(source.Kind);
+            if (throwKind != null) { InventoryBackend.SetThrowable(me, throwKind.Value, false); _dirty = true; return; }
+            switch (source.Kind)
             {
-                if (TryExtraCount(source, Combatant.LocalPlayer, out int held) && held > 0) InventoryBackend.UseHealing(Combatant.LocalPlayer, heal);
+                case InventorySourceKind.Vicinity:
+                    if (InventoryBackend.IsOptic(source.Loot))
+                    {
+                        int gun = InventoryBackend.AutoAttachSlot(me, source.Loot.Optic.Value);
+                        if (gun >= 0) { InventoryBackend.AttachOpticFromGround(me, source.Loot, gun); _dirty = true; return; }
+                    }
+                    InventoryBackend.Pickup(me, source.Loot);
+                    _dirty = true;
+                    return;
+                case InventorySourceKind.BagOptic:
+                    AutoEquipFromBag(source.Index);
+                    return;
+                case InventorySourceKind.Optic:
+                    if (CanDrag(source)) { InventoryBackend.DetachOpticToBag(me, source.Index); _dirty = true; }
+                    return;
+                case InventorySourceKind.EmptyAttach:
+                case InventorySourceKind.Backpack:
+                    return;
+            }
+            if (InventoryBackend.RightClickHeal(source.Kind, out var heal))
+            {
+                if (TryExtraCount(source, me, out int held) && held > 0) InventoryBackend.UseHealing(me, heal);
             }
             else DropOnGround(source);
+        }
+
+        // Fits a loose attachment of the bag to the best gun: the one in hand first. False when no gun takes it.
+        public bool AutoEquipFromBag(int opticId)
+        {
+            var me = Combatant.LocalPlayer;
+            if (me == null || InventoryBackend.BagOpticCount(me, opticId) <= 0) return false;
+            int slot = InventoryBackend.AutoAttachSlot(me, opticId);
+            if (slot < 0) return false;
+            InventoryBackend.AttachOpticFromBag(me, opticId, slot);
+            _dirty = true;
+            return true;
         }
 
         public void CancelDragFromPointer()
         {
             _suppressQuickDropUntilRightRelease = true;
             CancelDrag();
+        }
+
+        // Sort toggle of the carried list: by kind or by when it was picked up.
+        public void SetSort(bool recent)
+        {
+            _sortRecent = recent;
+            _dirty = true;
+            UiKit.SetTab(_sortKindLabel, _sortKindLine, !recent);
+            UiKit.SetTab(_sortRecentLabel, _sortRecentLine, recent);
         }
 
         internal bool DropOn(InventoryDropKind kind, int index, InventoryDragSource source)
@@ -645,6 +889,8 @@ namespace Game.Gameplay
                 case InventoryDropKind.Ground: return DropOnGround(source);
                 case InventoryDropKind.Weapon: return DropOnWeaponSlot(source, index);
                 case InventoryDropKind.Gear: return DropOnGear(source, index);
+                case InventoryDropKind.Throwable: return DropOnThrowable(source);
+                case InventoryDropKind.Attach: return DropOnAttachSlot(source, index);
                 default: return false;
             }
         }
@@ -662,7 +908,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Ammo: return InventoryBackend.Reserve(me, source.Index) > 0;
                 case InventorySourceKind.Medkit: return me.Medkits.Value > 0;
                 case InventorySourceKind.Grenade: return InventoryBackend.Grenades(me) > 0;
-                case InventorySourceKind.Weapon: return InventoryBackend.WeaponId(me, source.Index) != 0;
+                case InventorySourceKind.Weapon: return source.Index != InventoryBackend.ThrowableSlot && InventoryBackend.WeaponId(me, source.Index) != 0;
                 case InventorySourceKind.Optic: return InventoryBackend.OpticOf(me, source.Index) != 0;
                 case InventorySourceKind.BagOptic: return InventoryBackend.BagOpticCount(me, source.Index) > 0;
                 case InventorySourceKind.Helmet: return InventoryBackend.Gear(me, InventoryBackend.HelmetSlot).Has;
@@ -701,8 +947,29 @@ namespace Game.Gameplay
             return false;
         }
 
+        // A loose attachment (bag or ground) on one slot of a gun card: right gun and right place.
+        public bool CanDropOnAttachSlot(InventoryDragSource source, int gearIndex)
+        {
+            var me = Combatant.LocalPlayer;
+            if (me == null) return false;
+            int id;
+            if (source.Kind == InventorySourceKind.BagOptic) { if (!CanDrag(source)) return false; id = source.Index; }
+            else if (source.Kind == InventorySourceKind.Vicinity && InventoryBackend.IsOptic(source.Loot) && source.Loot.IsSpawned) id = source.Loot.Optic.Value;
+            else return false;
+            return InventoryBackend.CanFitPlace(me, Attachments.WeaponSlotOf(gearIndex), Attachments.SlotOfIndex(gearIndex), id);
+        }
+
+        bool CanDropOnThrowable(InventoryDragSource source)
+        {
+            var kind = InventoryBackend.ThrowKindOf(source.Kind);
+            return kind != null && InventoryBackend.ThrowableCount(Combatant.LocalPlayer, kind.Value) > 0;
+        }
+
         bool CanDropOnGear(InventoryDragSource source, int slot)
         {
+            if (slot == BackpackGear)
+                return source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned &&
+                       InventoryBackend.CanEquipBackpack(Combatant.LocalPlayer, source.Loot);
             return slot >= 0 && slot < 2 && source.Kind == InventorySourceKind.Vicinity && source.Loot != null && source.Loot.IsSpawned &&
                    InventoryBackend.CanEquipArmor(Combatant.LocalPlayer, source.Loot, slot);
         }
@@ -715,17 +982,60 @@ namespace Game.Gameplay
                 case InventoryDropKind.Ground: return CanDropOnGround(source);
                 case InventoryDropKind.Weapon: return CanDropOnWeaponSlot(source, index);
                 case InventoryDropKind.Gear: return CanDropOnGear(source, index);
+                case InventoryDropKind.Throwable: return CanDropOnThrowable(source);
+                case InventoryDropKind.Attach: return CanDropOnAttachSlot(source, index);
                 default: return false;
             }
         }
 
+        static bool IsAttachmentSource(InventoryDragSource source) =>
+            source.Kind == InventorySourceKind.BagOptic || source.Kind == InventorySourceKind.Optic ||
+            (source.Kind == InventorySourceKind.Vicinity && InventoryBackend.IsOptic(source.Loot));
+
         void SetDropHighlights(bool active)
         {
+            bool attachment = active && IsAttachmentSource(_dragSource);
             for (int i = 0; i < _dropZones.Count; i++)
             {
                 var zone = _dropZones[i];
+                if (zone.Kind == InventoryDropKind.Attach)
+                {
+                    // Only an attachment in hand lights the slots: green where it fits, a red pulse where it does not.
+                    zone.SetDragState(attachment, attachment && CanDropOn(zone.Kind, zone.Index, _dragSource));
+                    continue;
+                }
                 zone.SetDragState(active, active && CanDropOn(zone.Kind, zone.Index, _dragSource));
             }
+        }
+
+        // Test and capture reads of what the drop zones show during a drag.
+        public bool AttachSlotShowsInvalid(int weaponSlot, AttachSlot place)
+        {
+            foreach (var zone in _dropZones)
+                if (zone.Kind == InventoryDropKind.Attach && zone.Index == Attachments.GearIndex(weaponSlot, place)) return zone.ShowsInvalid;
+            return false;
+        }
+
+        public bool AttachSlotShowsValid(int weaponSlot, AttachSlot place)
+        {
+            foreach (var zone in _dropZones)
+                if (zone.Kind == InventoryDropKind.Attach && zone.Index == Attachments.GearIndex(weaponSlot, place)) return zone.ShowsValid;
+            return false;
+        }
+
+        public bool AttachSlotVisible(int weaponSlot, AttachSlot place) => _slotRoot[weaponSlot * AttachPlaces + (int)place].activeSelf;
+        public string AttachSlotIconKey(int weaponSlot, AttachSlot place) => _slotIcon[weaponSlot * AttachPlaces + (int)place].Key;
+        public bool AttachSlotIsGhost(int weaponSlot, AttachSlot place) => _slotIcon[weaponSlot * AttachPlaces + (int)place].IsGhost;
+        public InventoryDragSource AttachSlotSource(int weaponSlot, AttachSlot place) => _slotDrag[weaponSlot * AttachPlaces + (int)place] != null
+            ? SourceOfSlot(weaponSlot, place) : default;
+
+        InventoryDragSource SourceOfSlot(int weaponSlot, AttachSlot place)
+        {
+            var me = Combatant.LocalPlayer;
+            int gearIndex = Attachments.GearIndex(weaponSlot, place);
+            return InventoryBackend.OpticOf(me, gearIndex) != 0
+                ? new InventoryDragSource(InventorySourceKind.Optic, null, gearIndex)
+                : new InventoryDragSource(InventorySourceKind.EmptyAttach, null, gearIndex);
         }
 
         void SourcePresentation(InventoryDragSource source, out string key, out string name)
@@ -752,9 +1062,26 @@ namespace Game.Gameplay
                     key = ItemIcons.OpticKey(source.Index);
                     name = InventoryBackend.OpticName(source.Index);
                     break;
+                case InventorySourceKind.EmptyAttach:
+                    var place = Attachments.SlotOfIndex(source.Index);
+                    key = InventoryBackend.PlaceGhostKey(place);
+                    name = Attachments.PlaceName(place);
+                    break;
+                case InventorySourceKind.Backpack:
+                    int bag = InventoryBackend.BackpackTier(me);
+                    key = ItemIcons.BackpackKey(bag);
+                    name = "가방";
+                    break;
                 case InventorySourceKind.Medkit: key = "medkit"; name = "구급상자"; break;
-                case InventorySourceKind.Grenade: key = "grenade"; name = "수류탄"; break;
+                case InventorySourceKind.Grenade: key = "grenade"; name = ThrowableRules.GrenadeName; break;
                 case InventorySourceKind.Weapon:
+                    if (source.Index == InventoryBackend.ThrowableSlot)
+                    {
+                        var kind = InventoryBackend.SelectedThrowable(me);
+                        key = InventoryBackend.ThrowIconKey(kind);
+                        name = Throwables.NameOf(kind);
+                        break;
+                    }
                     int id = InventoryBackend.WeaponId(me, source.Index);
                     var weapon = GameData.Weapons.Find(id);
                     key = InventoryBackend.WeaponKey(id);
@@ -782,24 +1109,77 @@ namespace Game.Gameplay
             }
         }
 
+        // ---- Tooltip: name, type line, stat lines, with the item's picture ----
+
         public void ShowTooltip(InventoryDragSource source, Vector2 screenPosition, Camera eventCamera)
         {
-            string description = InventoryBackend.Describe(source, Combatant.LocalPlayer);
+            string description = source.Kind == InventorySourceKind.Weapon && source.Index == InventoryBackend.ThrowableSlot
+                ? DescribeThrowableSlot(Combatant.LocalPlayer)
+                : InventoryBackend.Describe(source, Combatant.LocalPlayer);
             if (description.Length == 0) return;
-            _tooltipText.text = description;
-            var canvasRect = (RectTransform)_canvas.transform;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, eventCamera, out var local);
-            local += new Vector2(18f, -18f);
-            local.x = Mathf.Clamp(local.x, canvasRect.rect.xMin, canvasRect.rect.xMax - _tooltipRect.rect.width);
-            local.y = Mathf.Clamp(local.y, canvasRect.rect.yMin + _tooltipRect.rect.height, canvasRect.rect.yMax);
-            _tooltipRect.anchoredPosition = local;
+            SourcePresentation(source, out string key, out string name);
+            var lines = description.Split('\n');
+            var parts = new List<string>();
+            for (int i = 1; i < lines.Length; i++) parts.AddRange(lines[i].Split(new[] { " · " }, System.StringSplitOptions.RemoveEmptyEntries));
+            _tooltipTitle.text = lines[0];
+            _tooltipType.text = parts.Count > 0 ? parts[0] : "";
+            _tooltipBody.text = parts.Count > 1 ? string.Join("\n", parts.GetRange(1, parts.Count - 1)) : "";
+            if (source.Kind == InventorySourceKind.EmptyAttach) _tooltipIcon.SetGhost(key); else _tooltipIcon.Set(key, name);
+            bool hasBody = _tooltipBody.text.Length > 0;
+            float bodyHeight = hasBody ? _tooltipBody.preferredHeight : 0f;
+            _tooltipRule.gameObject.SetActive(hasBody);
+            var bodyRect = _tooltipBody.rectTransform;
+            bodyRect.sizeDelta = new Vector2(bodyRect.sizeDelta.x, bodyHeight + 2f);
+            _tooltipRect.sizeDelta = new Vector2(TooltipWidth, TooltipHeader + (hasBody ? bodyHeight + 22f : 6f));
+            _tooltipWant = true;
             _tooltip.SetActive(true);
             _tooltip.transform.SetAsLastSibling();
+            PlaceTooltip(screenPosition, eventCamera);
         }
 
-        public void HideTooltip()
+        string DescribeThrowableSlot(Combatant me)
         {
-            if (_tooltip != null) _tooltip.SetActive(false);
+            var kind = InventoryBackend.SelectedThrowable(me);
+            int total = 0;
+            for (var k = ThrowableKind.Frag; k <= ThrowableKind.Molotov; k++) total += InventoryBackend.ThrowableCount(me, k);
+            if (total == 0) return "투척 칸\n비어 있음 · 투척물을 끌어 놓거나 우클릭";
+            return Throwables.NameOf(kind) + "\n투척 칸 · 보유 " + InventoryBackend.ThrowableCount(me, kind) + "개 · 클릭 또는 5: 다음 종류";
+        }
+
+        void PlaceTooltip(Vector2 screenPosition, Camera eventCamera)
+        {
+            var canvasRect = (RectTransform)_canvas.transform;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, eventCamera, out var local);
+            local += new Vector2(22f, -22f);
+            var size = _tooltipRect.rect.size;
+            local.x = Mathf.Min(local.x, canvasRect.rect.xMax - size.x - 8f);
+            if (local.x < canvasRect.rect.xMin + 8f) local.x = canvasRect.rect.xMin + 8f;
+            // Flip above the pointer when it would run off the bottom.
+            if (local.y - size.y < canvasRect.rect.yMin + 8f) local.y = local.y + size.y + 44f;
+            local.y = Mathf.Min(local.y, canvasRect.rect.yMax - 8f);
+            _tooltipRect.anchoredPosition = local;
+        }
+
+        public void HideTooltip() => HideTooltip(false);
+        public void HideTooltip(bool now) => HideTooltipCore(now);
+
+        void HideTooltipCore(bool now)
+        {
+            _tooltipWant = false;
+            if (now && _tooltip != null)
+            {
+                _tooltipAlpha = 0f;
+                _tooltipGroup.alpha = 0f;
+                _tooltip.SetActive(false);
+            }
+        }
+
+        void AnimateTooltip()
+        {
+            if (_tooltip == null || !_tooltip.activeSelf) return;
+            _tooltipAlpha = Mathf.MoveTowards(_tooltipAlpha, _tooltipWant ? 1f : 0f, Time.unscaledDeltaTime * (_tooltipWant ? 9f : 14f));
+            _tooltipGroup.alpha = _tooltipAlpha;
+            if (!_tooltipWant && _tooltipAlpha <= 0f) _tooltip.SetActive(false);
         }
 
         // ---- Legacy public click hooks kept for existing tests and callers ----
@@ -816,230 +1196,15 @@ namespace Game.Gameplay
         public LootItem VicinityItem(int index) => index >= 0 && index < _vicinity.Count ? _vicinity[index] : null;
         public string VicinityText(int index) => _vicinityNames[index].text + " " + _vicinityAmounts[index].text;
         public string BackpackText(int row) => _packNames[row].text + " " + _packCounts[row].text;
+        public bool PackRowVisible(int row) => _packRows[row].activeSelf;
+        public float PackRowTop(int row) => -((RectTransform)_packRows[row].transform).anchoredPosition.y;
         public string CarryText => _carryLabel != null ? _carryLabel.text : "";
         public string GearCardText(int slot) => _gearNames[slot].text + "\n" + _gearDetails[slot].text;
         public string WeaponCardText(int slot) => _weaponNames[slot].text + "\n" + _weaponAmmo[slot].text + " " + _weaponBadge[slot].text;
-
-        // ---- Construction (once) ----
-
-        void Build()
-        {
-            _canvas = UiKit.Canvas("InventoryCanvas", SortingOrder, true);
-            _canvas.transform.SetParent(transform, false);
-            var root = _canvas.transform;
-            UiKit.Box(UiKit.Fill("Backdrop", root), Backdrop, true);
-
-            _panel = UiKit.Rect("InventoryPanel", root, Centre, Centre, Vector2.zero, new Vector2(PanelWidth, PanelHeight));
-            var header = UiKit.Rect("Header", _panel, TopCentre, TopCentre, Vector2.zero, new Vector2(PanelWidth, 54f));
-            UiKit.Label(UiKit.Fill("Title", header), "인벤토리", 34, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Label(UiKit.Fill("Hint", header), "끌어서 이동  ·  더블클릭 사용  ·  우클릭 버리기 (회복템은 사용)  ·  Tab / Esc 닫기", 18, UiKit.TextDim, TextAnchor.MiddleRight);
-            // #110: progress of a timed heal, centred in the header.
-            var heal = UiKit.Rect("Healing", header, Centre, Centre, new Vector2(-60f, 0f), new Vector2(300f, 50f));
-            _healLabel = UiKit.Label(UiKit.Rect("Label", heal, TopLeft, TopLeft, Vector2.zero, new Vector2(300f, 30f)), "", 19, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            var healTrack = UiKit.Rect("Track", heal, TopLeft, TopLeft, new Vector2(0f, -36f), new Vector2(300f, 8f));
-            UiKit.Box(healTrack, UiKit.PanelLight);
-            _healFill = UiKit.Fill("Fill", healTrack);
-            _healFill.anchorMax = new Vector2(0f, 1f);
-            UiKit.Box(_healFill, UiKit.Accent);
-            _healBox = heal.gameObject;
-            _healBox.SetActive(false);
-
-            float x = 0f;
-            var ground = Column(_panel, "바닥", "주변 아이템", x, GroundWidth); x += GroundWidth + Gap;
-            var bag = Column(_panel, "가방", "보유 아이템", x, BagWidth); x += BagWidth + Gap;
-            var gear = Column(_panel, "장구류", "헬멧 · 조끼", x, GearWidth); x += GearWidth + Gap;
-            var weapons = Column(_panel, "총기", "5칸 · 조준경", x, WeaponWidth);
-
-            BuildVicinity(ground, GroundWidth);
-            BuildBackpack(bag, BagWidth);
-            BuildGear(gear, GearWidth);
-            BuildWeapons(weapons, WeaponWidth);
-            AddDropZone(ground, InventoryDropKind.Ground, 0);
-            AddDropZone(bag, InventoryDropKind.Bag, 0);
-            BuildDragGhost(root);
-            BuildTooltip(root);
-        }
-
-        static RectTransform Column(Transform parent, string title, string subtitle, float x, float width)
-        {
-            var column = UiKit.Rect(title, parent, TopLeft, TopLeft, new Vector2(x, -ColumnTop), new Vector2(width, ColumnHeight));
-            UiKit.Box(column, UiKit.Panel, true);
-            UiKit.Label(UiKit.Rect("Title", column, TopLeft, TopLeft, new Vector2(Pad, -8f), new Vector2(width - 2f * Pad, 28f)), title, 23, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Label(UiKit.Rect("Subtitle", column, TopLeft, TopLeft, new Vector2(Pad, -34f), new Vector2(width - 2f * Pad, 20f)), subtitle, 18, UiKit.TextDim);
-            return column;
-        }
-
-        static RectTransform Row(string name, Transform column, float width, float top, float height) =>
-            UiKit.Rect(name, column, TopLeft, TopLeft, new Vector2(Pad, -top), new Vector2(width - 2f * Pad, height));
-
-        static RectTransform InRow(string name, Transform row, float x, float width, float height) =>
-            UiKit.Rect(name, row, MidLeft, MidLeft, new Vector2(x, 0f), new Vector2(width, height));
-
-        void BuildVicinity(RectTransform column, float width)
-        {
-            float content = width - 2f * Pad;
-            for (int i = 0; i < MaxVicinityRows; i++)
-            {
-                var row = Row("Loot" + i, column, width, HeaderHeight + i * (GroundRowHeight + GroundRowGap), GroundRowHeight);
-                UiKit.Box(row, UiKit.PanelLight, true);
-                _vicinityIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 6f, 42f, 42f));
-                _vicinityNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, GroundRowHeight), "", 19, UiKit.Text);
-                _vicinityAmounts[i] = UiKit.Label(InRow("Amount", row, content - 80f, 68f, GroundRowHeight), "", 18, UiKit.TextDim, TextAnchor.MiddleRight);
-                _vicinityDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
-                _vicinityRows[i] = row.gameObject;
-                row.gameObject.SetActive(false);
-            }
-            var empty = Row("Empty", column, width, HeaderHeight, 64f);
-            UiKit.Label(empty, "주변에 아이템 없음", 19, UiKit.TextDim, TextAnchor.MiddleCenter);
-            _vicinityEmpty = empty.gameObject;
-        }
-
-        void BuildBackpack(RectTransform column, float width)
-        {
-            float content = width - 2f * Pad;
-            for (int i = 0; i < InventoryBackend.BackpackRows; i++)
-            {
-                var row = Row("Bag" + i, column, width, HeaderHeight + i * (BagRowHeight + BagRowGap), BagRowHeight);
-                UiKit.Box(row, UiKit.PanelLight, true);
-                string name;
-                string key;
-                if (i < InventoryBackend.AmmoTypeCount) { name = InventoryBackend.AmmoName(i) + " 탄약"; key = InventoryBackend.AmmoKey(i); }
-                else if (i == InventoryBackend.MedkitRow) { name = "구급상자"; key = "medkit"; }
-                else if (i == InventoryBackend.BandageRow) { name = HealRules.BandageName; key = "bandage"; }
-                else if (i == InventoryBackend.FirstAidRow) { name = HealRules.FirstAidName; key = "firstaid"; }
-                else if (i == InventoryBackend.SmokeRow) { name = ThrowableRules.SmokeName; key = "smoke"; }
-                else if (i == InventoryBackend.JerrycanRow) { name = FuelRules.JerrycanName; key = "jerrycan"; }
-                else if (i == InventoryBackend.DrinkRow) { name = HealRules.DrinkName; key = "drink"; }
-                else if (i == InventoryBackend.PillRow) { name = HealRules.PillName; key = "pill"; }
-                else if (i == InventoryBackend.SyringeRow) { name = HealRules.SyringeName; key = "syringe"; }
-                else if (i == InventoryBackend.FlashRow) { name = ThrowableRules.FlashName; key = "flash"; }
-                else if (i == InventoryBackend.MolotovRow) { name = ThrowableRules.MolotovName; key = "molotov"; }
-                else { name = "수류탄"; key = "grenade"; }
-                _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, BagRowHeight - 4f, BagRowHeight - 4f));
-                _packIcons[i].Set(key, name);
-                _packNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, BagRowHeight), name, 19, UiKit.Text);
-                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 20, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
-                _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
-                _packRows[i] = row.gameObject;
-            }
-            var emptyBag = Row("Empty", column, width, HeaderHeight, 56f);
-            UiKit.Label(emptyBag, "아직 주운 것이 없습니다", 19, UiKit.TextDim, TextAnchor.MiddleCenter);
-            _bagEmpty = emptyBag.gameObject;
-            // Loose optics (ADR-082): a grid of cells, one per optic id held; drag one onto a weapon card to fit it.
-            float opticTop = HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap);
-            _bagOpticTitle = UiKit.Label(Row("OpticsTitle", column, width, opticTop, BagOpticLabel), "조준경·부착물  ·  없음", 17, UiKit.TextDim);
-            float cellWidth = (content - (BagOpticColumns - 1) * BagOpticGap) / BagOpticColumns;
-            for (int i = 0; i < OpticBag.MaxId; i++)
-            {
-                float cx = Pad + (i % BagOpticColumns) * (cellWidth + BagOpticGap);
-                float cy = opticTop + BagOpticLabel + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap);
-                var cellRect = UiKit.Rect("Optic" + i, column, TopLeft, TopLeft, new Vector2(cx, -cy), new Vector2(cellWidth, BagOpticHeight));
-                UiKit.Box(cellRect, UiKit.PanelLight, true);
-                _bagOpticIcons[i] = InventoryItemIcon.Build(InRow("Icon", cellRect, 2f, cellWidth - 4f, BagOpticHeight));
-                _bagOpticCounts[i] = UiKit.Label(UiKit.Rect("Count", cellRect, TopLeft, TopLeft, new Vector2(cellWidth - 30f, -BagOpticHeight + 20f), new Vector2(28f, 20f)), "x1", 15, UiKit.Text, TextAnchor.LowerRight, FontStyle.Bold);
-                _bagOpticDrags[i] = cellRect.gameObject.AddComponent<InventoryDragItem>();
-                _bagOpticCells[i] = cellRect.gameObject;
-                cellRect.gameObject.SetActive(false);
-            }
-            // Under them: the bag's load as text and a bar ("가방 용량 23/60").
-            float carryTop = opticTop + BagOpticLabel + BagOpticRows * (BagOpticHeight + BagOpticGap) + 2f;
-            var carry = Row("Carry", column, width, carryTop, 52f);
-            _carryLabel = UiKit.Label(UiKit.Rect("Label", carry, TopLeft, TopLeft, Vector2.zero, new Vector2(content, 28f)), "가방 용량 —", 19, UiKit.Text);
-            var track = UiKit.Rect("Track", carry, TopLeft, TopLeft, new Vector2(0f, -34f), new Vector2(content, 10f));
-            UiKit.Box(track, UiKit.PanelLight);
-            _carryFill = UiKit.Fill("Fill", track);
-            _carryFill.anchorMax = new Vector2(0f, 1f);
-            _carryFillImage = UiKit.Box(_carryFill, Durability);
-        }
-
-        void BuildGear(RectTransform column, float width)
-        {
-            for (int slot = 0; slot < 2; slot++)
-            {
-                var card = Row(slot == 0 ? "Helmet" : "Vest", column, width, HeaderHeight + slot * (GearCardHeight + 16f), GearCardHeight);
-                UiKit.Box(card, UiKit.PanelLight, true);
-                _gearIcons[slot] = InventoryItemIcon.Build(UiKit.Rect("Icon", card, TopLeft, TopLeft, new Vector2(16f, -18f), new Vector2(92f, 92f)));
-                _gearNames[slot] = UiKit.Label(UiKit.Rect("Name", card, TopLeft, TopLeft, new Vector2(124f, -20f), new Vector2(width - 166f, 36f)), "", 23, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-                _gearDetails[slot] = UiKit.Label(UiKit.Rect("Detail", card, TopLeft, TopLeft, new Vector2(124f, -62f), new Vector2(width - 166f, 48f)), "", 18, UiKit.TextDim);
-                var track = UiKit.Rect("Durability", card, TopLeft, TopLeft, new Vector2(16f, -136f), new Vector2(width - 60f, 10f));
-                UiKit.Box(track, UiKit.Panel);
-                _gearFill[slot] = UiKit.Fill("Fill", track);
-                UiKit.Box(_gearFill[slot], Durability);
-                UiKit.Label(UiKit.Rect("DropHint", card, TopLeft, TopLeft, new Vector2(16f, -162f), new Vector2(width - 60f, 34f)), "바닥으로 끌어 버리기", 18, UiKit.TextDim);
-                _gearDrags[slot] = card.gameObject.AddComponent<InventoryDragItem>();
-                AddDropZone(card, InventoryDropKind.Gear, slot);
-            }
-        }
-
-        void BuildWeapons(RectTransform column, float width)
-        {
-            for (int slot = 0; slot < Loadout.SlotCount; slot++)
-            {
-                var card = Row("Slot" + (slot + 1), column, width, HeaderHeight + slot * (WeaponCardHeight + WeaponCardGap), WeaponCardHeight);
-                UiKit.Box(card, UiKit.PanelLight, true);
-                var active = UiKit.Rect("Active", card, TopLeft, TopLeft, Vector2.zero, new Vector2(6f, WeaponCardHeight));
-                UiKit.Box(active, UiKit.Accent);
-                _weaponActive[slot] = active.gameObject;
-                UiKit.Label(UiKit.Rect("SlotLabel", card, TopLeft, TopLeft, new Vector2(18f, -6f), new Vector2(124f, 22f)), (slot + 1) + "  " + InventoryBackend.SlotLabel(slot), 17, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-                _weaponIcons[slot] = InventoryItemIcon.Build(UiKit.Rect("Icon", card, TopLeft, TopLeft, new Vector2(18f, -32f), new Vector2(124f, 88f)));
-                _weaponNames[slot] = UiKit.Label(UiKit.Rect("Name", card, TopLeft, TopLeft, new Vector2(156f, -8f), new Vector2(width - 186f, 32f)), "비어 있음", 25, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-                _weaponAmmo[slot] = UiKit.Label(UiKit.Rect("Ammo", card, TopLeft, TopLeft, new Vector2(156f, -42f), new Vector2(width - 186f, 28f)), "", 20, UiKit.TextDim);
-                var badge = UiKit.Rect("CalibreBadge", card, TopLeft, TopLeft, new Vector2(156f, -78f), new Vector2(112f, 30f));
-                UiKit.Box(badge, new Color(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, 0.18f));
-                _weaponBadge[slot] = UiKit.Label(UiKit.Fill("Label", badge, 4f), "구경 —", 17, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
-                // The optic on this weapon: icon and name; drag it off to the ground to drop it.
-                var chip = UiKit.Rect("Optic", card, TopLeft, TopLeft, new Vector2(278f, -76f), new Vector2(width - 2f * Pad - 278f - 6f, 46f));
-                UiKit.Box(chip, UiKit.Panel, true);
-                _opticIcon[slot] = InventoryItemIcon.Build(UiKit.Rect("Icon", chip, MidLeft, MidLeft, new Vector2(2f, 0f), new Vector2(70f, 44f)));
-                _opticName[slot] = UiKit.Label(UiKit.Rect("Name", chip, MidLeft, MidLeft, new Vector2(76f, 0f), new Vector2(width - 2f * Pad - 278f - 6f - 84f, 46f)), "", 19, UiKit.Text, TextAnchor.MiddleLeft);
-                _opticDrag[slot] = chip.gameObject.AddComponent<InventoryDragItem>();
-                _opticChip[slot] = chip.gameObject;
-                chip.gameObject.SetActive(false);
-                // Muzzle, grip, stock and magazine: small icon chips in the card's top right corner (ADR-100).
-                for (int s = 1; s < Attachments.Slots; s++)
-                {
-                    int ci = slot * 4 + s - 1;
-                    var small = UiKit.Rect("Attach" + s, card, TopLeft, TopLeft, new Vector2(width - Pad - 12f - (Attachments.Slots - s) * (AttachChip + AttachGap) + AttachGap, -8f), new Vector2(AttachChip, AttachChip));
-                    UiKit.Box(small, UiKit.Panel, true);
-                    _attachIcon[ci] = InventoryItemIcon.Build(UiKit.Fill("Icon", small, 2f));
-                    _attachDrag[ci] = small.gameObject.AddComponent<InventoryDragItem>();
-                    _attachChip[ci] = small.gameObject;
-                    small.gameObject.SetActive(false);
-                }
-                _weaponDrags[slot] = card.gameObject.AddComponent<InventoryDragItem>();
-                AddDropZone(card, InventoryDropKind.Weapon, slot);
-            }
-        }
-
-        void AddDropZone(RectTransform target, InventoryDropKind kind, int index)
-        {
-            var overlayRect = UiKit.Fill("DropState", target, 2f);
-            var overlay = UiKit.Box(overlayRect, Color.clear);
-            overlay.enabled = false;
-            var zone = target.gameObject.AddComponent<InventoryDropZone>();
-            zone.Configure(this, kind, index, overlay);
-            _dropZones.Add(zone);
-        }
-
-        void BuildDragGhost(Transform root)
-        {
-            _dragGhostRect = UiKit.Rect("DragIcon", root, Centre, Centre, Vector2.zero, new Vector2(72f, 72f));
-            var group = _dragGhostRect.gameObject.AddComponent<CanvasGroup>();
-            group.blocksRaycasts = false;
-            group.interactable = false;
-            group.alpha = 0.92f;
-            _dragGhostIcon = InventoryItemIcon.Build(_dragGhostRect);
-            _dragGhost = _dragGhostRect.gameObject;
-            _dragGhost.SetActive(false);
-        }
-
-        void BuildTooltip(Transform root)
-        {
-            _tooltipRect = UiKit.Rect("Tooltip", root, Centre, TopLeft, Vector2.zero, new Vector2(260f, 92f));
-            UiKit.Box(_tooltipRect, new Color(0.04f, 0.05f, 0.06f, 0.97f));
-            _tooltipText = UiKit.Label(UiKit.Fill("Text", _tooltipRect, 12f), "", 18, UiKit.Text, TextAnchor.UpperLeft);
-            _tooltip = _tooltipRect.gameObject;
-            _tooltip.SetActive(false);
-        }
+        public bool ThrowChipVisible(ThrowableKind kind) => _pipRoot[(int)kind].activeSelf;
+        public bool ThrowChipSelected(ThrowableKind kind) => _pipRoot[(int)kind].activeSelf && _pipSelect[(int)kind].activeSelf;
+        public InventoryDragSource ThrowChipSource(ThrowableKind kind) => new InventoryDragSource(InventoryBackend.SourceKindOf(kind), null, 0);
+        public InventoryDragSource ThrowSlotSource() => new InventoryDragSource(InventorySourceKind.Weapon, null, InventoryBackend.ThrowableSlot);
+        public bool DropOnThrowableSlot(InventoryDragSource source) => DropOnThrowable(source);
     }
 }
