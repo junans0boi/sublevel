@@ -62,6 +62,7 @@ namespace Game.Gameplay
         readonly Text[] _bagOpticCounts = new Text[OpticBag.MaxId];
         readonly InventoryDragItem[] _bagOpticDrags = new InventoryDragItem[OpticBag.MaxId];
         Text _bagOpticTitle;
+        GameObject _bagEmpty; // ADR-137: shown while nothing is carried
         GameObject _healBox;
         Text _healLabel;
         RectTransform _healFill;
@@ -304,7 +305,33 @@ namespace Game.Gameplay
                 cell++;
             }
             for (int i = cell; i < OpticBag.MaxId; i++) _bagOpticCells[i].SetActive(false);
-            _bagOpticTitle.text = cell == 0 ? "조준경·부착물  ·  없음" : "조준경·부착물";
+            _bagOpticTitle.text = "조준경·부착물";
+            _bagOpticTitle.gameObject.SetActive(cell > 0);
+
+            // Compact layout (ADR-137): held rows stack from the top, then the optics grid, then the load bar.
+            float top = HeaderHeight;
+            int shown = 0;
+            for (int i = 0; i < InventoryBackend.BackpackRows; i++)
+            {
+                if (!_packRows[i].activeSelf) continue;
+                ((RectTransform)_packRows[i].transform).anchoredPosition = new Vector2(Pad, -top);
+                top += BagRowHeight + BagRowGap;
+                shown++;
+            }
+            if (cell > 0)
+            {
+                _bagOpticTitle.rectTransform.anchoredPosition = new Vector2(Pad, -top);
+                float gridTop = top + BagOpticLabel;
+                for (int i = 0; i < cell; i++)
+                {
+                    var rect = (RectTransform)_bagOpticCells[i].transform;
+                    rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, -(gridTop + (i / BagOpticColumns) * (BagOpticHeight + BagOpticGap)));
+                }
+                top = gridTop + ((cell - 1) / BagOpticColumns + 1) * (BagOpticHeight + BagOpticGap) + 2f;
+            }
+            _bagEmpty.SetActive(shown == 0 && cell == 0);
+            if (shown == 0 && cell == 0) top += 64f;
+            ((RectTransform)_carryLabel.transform.parent).anchoredPosition = new Vector2(Pad, -top);
 
             // The bag's load against its size; red when over (the server then refuses what does not fit).
             string carry = InventoryBackend.CarryLabel(me);
@@ -335,13 +362,11 @@ namespace Game.Gameplay
             }
         }
 
+        // ADR-137: a row exists only while its count is above zero.
         void ShowPackRow(int row, int count)
         {
-            bool any = count > 0;
+            _packRows[row].SetActive(count > 0);
             _packCounts[row].text = "x" + count;
-            _packNames[row].color = any ? UiKit.Text : UiKit.TextDim;
-            _packCounts[row].color = any ? UiKit.Text : UiKit.TextDim;
-            _packRows[row].GetComponent<Image>().color = any ? UiKit.PanelLight : new Color(UiKit.PanelLight.r, UiKit.PanelLight.g, UiKit.PanelLight.b, 0.45f);
         }
 
         void ShowGear(Combatant me)
@@ -892,11 +917,14 @@ namespace Game.Gameplay
                 else { name = "수류탄"; key = "grenade"; }
                 _packIcons[i] = InventoryItemIcon.Build(InRow("Icon", row, 8f, BagRowHeight - 4f, BagRowHeight - 4f));
                 _packIcons[i].Set(key, name);
-                _packNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, BagRowHeight), name, 19, UiKit.TextDim);
-                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 20, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+                _packNames[i] = UiKit.Label(InRow("Name", row, 56f, content - 142f, BagRowHeight), name, 19, UiKit.Text);
+                _packCounts[i] = UiKit.Label(InRow("Count", row, content - 74f, 62f, BagRowHeight), "x0", 20, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
                 _packDrags[i] = row.gameObject.AddComponent<InventoryDragItem>();
                 _packRows[i] = row.gameObject;
             }
+            var emptyBag = Row("Empty", column, width, HeaderHeight, 56f);
+            UiKit.Label(emptyBag, "아직 주운 것이 없습니다", 19, UiKit.TextDim, TextAnchor.MiddleCenter);
+            _bagEmpty = emptyBag.gameObject;
             // Loose optics (ADR-082): a grid of cells, one per optic id held; drag one onto a weapon card to fit it.
             float opticTop = HeaderHeight + InventoryBackend.BackpackRows * (BagRowHeight + BagRowGap);
             _bagOpticTitle = UiKit.Label(Row("OpticsTitle", column, width, opticTop, BagOpticLabel), "조준경·부착물  ·  없음", 17, UiKit.TextDim);

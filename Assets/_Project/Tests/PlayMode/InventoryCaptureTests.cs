@@ -88,6 +88,93 @@ namespace Game.Tests
             UiFocus.Close();
         }
 
+        // #175: nothing picked up yet -> no rows, a hint; one pickup -> exactly that row.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator CaptureEmptyBag()
+        {
+            string folder = Environment.GetEnvironmentVariable("INV_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = "Logs/invshots";
+            Directory.CreateDirectory(folder);
+            SceneManager.LoadScene("TestBox");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var me = Combatant.LocalPlayer;
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(1.0f);
+            yield return Shot(folder, "inv_06_empty_bag");
+            var rows = InventoryScreen.Instance.GetComponentsInChildren<Transform>(false);
+            int visibleBagRows = 0;
+            foreach (var t in rows) if (t.name.StartsWith("Bag") && t.gameObject.activeInHierarchy) visibleBagRows++;
+            Assert.AreEqual(0, visibleBagRows, "no bag row while nothing is carried");
+            UiFocus.Close();
+            me.ServerGive(new LootEntry { Kind = HealRules.BandageLootKind, Amount = 3 });
+            yield return new WaitForSeconds(0.3f);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return new WaitForSeconds(1.0f);
+            yield return Shot(folder, "inv_07_one_item");
+            visibleBagRows = 0;
+            foreach (var t in InventoryScreen.Instance.GetComponentsInChildren<Transform>(false))
+                if (t.name.StartsWith("Bag") && t.gameObject.activeInHierarchy) visibleBagRows++;
+            Assert.AreEqual(1, visibleBagRows, "only the bandages");
+            UiFocus.Close();
+        }
+
+        // #174: a rolled gun lies unloaded with its rounds as a separate item beside it.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator CaptureRolledGunOnGround()
+        {
+            string folder = Environment.GetEnvironmentVariable("INV_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = "Logs/invshots";
+            Directory.CreateDirectory(folder);
+            SceneManager.LoadScene("TestBox");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var me = Combatant.LocalPlayer;
+            int before = LootItem.All.Count;
+            var at = me.transform.position + me.transform.forward * 4f + Vector3.up * 0.3f;
+            MatchDirector.Instance.ServerSpawnLootRoll(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 }, at);
+            yield return new WaitForSeconds(1.0f);
+            Assert.AreEqual(before + 2, LootItem.All.Count, "a gun and its ammo");
+            LootItem gun = null, ammo = null;
+            foreach (var item in LootItem.All)
+            {
+                if ((LootKind)item.Kind.Value == LootKind.Weapon && item.Amount.Value == 0 && item.WeaponId.Value == 3) gun = item;
+                if ((LootKind)item.Kind.Value == LootKind.Ammo && item.Amount.Value == 30 && (at - item.transform.position).sqrMagnitude < 4f) ammo = item;
+            }
+            Assert.IsNotNull(gun, "the gun with an empty magazine");
+            Assert.IsNotNull(ammo, "30 rounds as their own item");
+            var src = PlayerController.Local.Camera != null ? PlayerController.Local.Camera : Camera.main;
+            var cam = new GameObject("ShotCam").AddComponent<Camera>();
+            cam.CopyFrom(src);
+            cam.transform.position = at + Vector3.up * 1.4f - me.transform.forward * 1.3f + me.transform.right * 0.5f;
+            cam.transform.rotation = Quaternion.LookRotation((at + me.transform.right * 0.2f - cam.transform.position).normalized);
+            var rt = RenderTexture.GetTemporary(1920, 1080, 24, RenderTextureFormat.ARGB32);
+            var prev = cam.targetTexture;
+            cam.targetTexture = rt;
+            cam.Render();
+            cam.targetTexture = prev;
+            var active = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(1920, 1080, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0);
+            tex.Apply();
+            RenderTexture.active = active;
+            RenderTexture.ReleaseTemporary(rt);
+            UnityEngine.Object.Destroy(cam.gameObject);
+            File.WriteAllBytes(Path.Combine(folder, "inv_05_ground_gun_and_ammo.png"), tex.EncodeToPNG());
+            UnityEngine.Object.Destroy(tex);
+        }
+
         static IEnumerator Shot(string folder, string name)
         {
             yield return null; // not WaitForEndOfFrame: it stalls in a batch mode editor
