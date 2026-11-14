@@ -664,7 +664,14 @@ namespace Game.Net
             // Choosing a slot, even the one already in hand, takes a put-away weapon out again.
             bool drawn = Holstered.Value;
             if (drawn) { Holstered.Value = false; _loadout.StartDraw(); }
-            if (!_loadout.SelectSlot(slot) && !drawn) return false;
+            bool changed = _loadout.SelectSlot(slot);
+            // The throwable key (5): taking it out readies what is carried; pressing it again cycles the kinds (#176).
+            if (slot == Loadout.ThrowableSlot && GetComponent<ThrowableUser>() is ThrowableUser thrower)
+            {
+                if (changed || drawn) thrower.ServerReadyCarried(); else thrower.ServerCycle();
+                changed = true;
+            }
+            if (!changed && !drawn) return false;
             Push();
             return true;
         }

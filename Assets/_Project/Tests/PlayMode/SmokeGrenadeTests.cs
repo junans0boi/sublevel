@@ -127,17 +127,77 @@ namespace Game.Tests
             Assert.AreEqual(2, user.SelectedCount);
             Assert.AreEqual("연막탄", user.SelectedName);
             user.ServerCycle();
-            Assert.AreEqual(ThrowableKind.Flash, user.SelectedKind, "then the flash (ADR-105)");
-            user.ServerCycle();
-            Assert.AreEqual(ThrowableKind.Molotov, user.SelectedKind, "then the fire bottle (ADR-110)");
-            user.ServerCycle();
-            Assert.AreEqual(ThrowableKind.Frag, user.SelectedKind);
-            Assert.AreEqual(0, user.SelectedCount);
+            Assert.AreEqual(ThrowableKind.Flash, user.SelectedKind, "nothing else carried: the next in the list");
+            user.ServerSelect(ThrowableKind.Frag);
+            Assert.AreEqual(0, user.SelectedCount, "a kind with none can still be selected: the HUD shows 0");
 
             Assert.IsTrue(me.ServerGive(new LootEntry { Kind = ThrowableRules.SmokeLootKind, Amount = 1 }));
             Assert.AreEqual(3, user.Smokes.Value);
             Assert.IsFalse(me.ServerGive(new LootEntry { Kind = ThrowableRules.SmokeLootKind, Amount = 1 }), "three at most");
             Assert.AreEqual(3, user.Smokes.Value);
+        }
+
+        // #176: the throwable slot key (5) readies what is carried, and pressing it again cycles the carried kinds;
+        // each kind then throws with G. T skips the kinds that are not carried.
+        [UnityTest]
+        public IEnumerator SlotFive_ReadiesSmoke_CyclesEveryCarriedKind_AndEachThrows()
+        {
+            yield return LoadTestBox(null);
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            var input = (ScriptedInput)PlayerController.InputOverride;
+            Assert.AreEqual(ThrowableKind.Frag, user.SelectedKind);
+            Assert.AreEqual(1, user.ServerAdd(ThrowableKind.Smoke, 1));
+            yield return WaitUntil(() => user.Smokes.Value == 1, 2f, "count reached the owner");
+
+            IEnumerator PressFive()
+            {
+                input.Frame.SelectSlot = Loadout.ThrowableSlot;
+                yield return null; // one frame: one key press
+                input.Frame.SelectSlot = -1;
+                yield return null;
+                yield return null;
+            }
+            IEnumerator ThrowWithG(ThrowableKind kind)
+            {
+                int before = user.ServerThrows;
+                input.Frame.ThrowHeld = input.Frame.ThrowPressed = true;
+                yield return null;
+                yield return null;
+                input.Frame.ThrowPressed = false;
+                yield return null;
+                input.Frame.ThrowHeld = false;
+                input.Frame.ThrowReleased = true;
+                yield return null;
+                yield return null;
+                input.Frame.ThrowReleased = false;
+                yield return WaitUntil(() => user.ServerThrows == before + 1, 2f, "thrown: " + kind);
+                Assert.AreEqual(kind, user.LastThrown.ThrowKind);
+                yield return new WaitForSeconds(ThrowableRules.Current.MinThrowInterval + 0.1f);
+            }
+
+            yield return PressFive();
+            yield return WaitUntil(() => me.ActiveSlot.Value == Loadout.ThrowableSlot, 2f, "slot 5 in hand");
+            Assert.AreEqual(ThrowableKind.Smoke, user.SelectedKind, "frag is not carried: slot 5 readies the smoke grenade");
+            yield return ThrowWithG(ThrowableKind.Smoke);
+
+            foreach (var k in new[] { ThrowableKind.Frag, ThrowableKind.Smoke, ThrowableKind.Flash, ThrowableKind.Molotov })
+                Assert.AreEqual(1, user.ServerAdd(k, 1), "carry " + k);
+            yield return WaitUntil(() => user.TotalCount == 4, 2f, "counts reached the owner");
+            me.ServerSelectSlot(0); // another slot in hand: 5 takes the throwable out and keeps the kind, then cycles
+            var order = new[] { ThrowableKind.Smoke, ThrowableKind.Flash, ThrowableKind.Molotov, ThrowableKind.Frag };
+            foreach (var k in order)
+            {
+                yield return PressFive();
+                Assert.AreEqual(k, user.SelectedKind, "slot 5 selects " + k);
+                yield return ThrowWithG(k);
+            }
+
+            // Only one kind left in the bag: T and 5 both stay on it instead of landing on an empty one.
+            Assert.AreEqual(0, user.TotalCount);
+            Assert.AreEqual(1, user.ServerAdd(ThrowableKind.Flash, 1));
+            user.ServerCycle();
+            Assert.AreEqual(ThrowableKind.Flash, user.SelectedKind, "T skips kinds that are not carried");
         }
     }
 }

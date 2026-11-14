@@ -175,8 +175,22 @@ namespace Game.Net
         [Server]
         public void ServerSelect(ThrowableKind kind) => Selected.Value = (int)kind;
 
+        // The next kind that is carried; when nothing else is, the next in the list (so the HUD can still show a 0).
         [Server]
-        public void ServerCycle() => ServerSelect(Throwables.Next(SelectedKind));
+        public void ServerCycle()
+        {
+            var next = Throwables.Next(SelectedKind);
+            for (var k = next; k != SelectedKind; k = Throwables.Next(k))
+                if (CountOf(k) > 0) { next = k; break; }
+            ServerSelect(next);
+        }
+
+        // Taking the throwable slot out: keeps the selected kind when some is left, else goes to one that is carried.
+        [Server]
+        public void ServerReadyCarried()
+        {
+            if (SelectedCount <= 0) ServerCycle();
+        }
 
         // The owner's call (the T key): the host is the server, so it does not wait for the next network tick.
         public void RequestCycle()
