@@ -84,6 +84,7 @@ namespace Game.Gameplay
             _combatant.Punched += OnPunch;
             _fxRoot = new GameObject("ShotFx").transform;
             if (GetComponent<BackpackVisual>() == null) gameObject.AddComponent<BackpackVisual>(); // ADR-091
+            if (GetComponent<ArmorVisual>() == null) gameObject.AddComponent<ArmorVisual>(); // #179: worn helmet and vest
             if (GetComponent<AttachmentVisual>() == null) gameObject.AddComponent<AttachmentVisual>(); // ADR-120
 
             _flashRenderer = NewRenderer("MuzzleFlash", transform, CombatFxMeshes.MuzzleFlash, _glowMaterial);

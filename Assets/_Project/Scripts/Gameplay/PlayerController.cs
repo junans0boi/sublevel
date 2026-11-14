@@ -785,6 +785,9 @@ namespace Game.Gameplay
                 r.enabled = shown != 1;
                 r.shadowCastingMode = shown == 2 && head ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
             }
+            // #179: the worn helmet and vest go with the body (the eye sits inside the helmet).
+            var armor = GetComponent<ArmorVisual>();
+            if (armor != null) armor.SetVisible(shown == 0);
         }
 
         // Seated, the view turns with the vehicle (the mouse looks around relative to its heading), and getting in

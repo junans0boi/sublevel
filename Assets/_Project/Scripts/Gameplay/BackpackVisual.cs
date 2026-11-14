@@ -69,7 +69,7 @@ namespace Game.Gameplay
             _renderer.enabled = _filter.sharedMesh != null;
         }
 
-        static Transform FindTorso(Transform root)
+        internal static Transform FindTorso(Transform root)
         {
             foreach (var name in TorsoNames)
             {
@@ -79,7 +79,7 @@ namespace Game.Gameplay
             return null;
         }
 
-        static Transform Deep(Transform t, string name)
+        internal static Transform Deep(Transform t, string name)
         {
             if (t.name == name) return t;
             for (int i = 0; i < t.childCount; i++)
@@ -90,7 +90,7 @@ namespace Game.Gameplay
             return null;
         }
 
-        static Material Tint(Color color)
+        internal static Material Tint(Color color)
         {
             if (Tinted.TryGetValue(color, out var m) && m != null) return m;
             if (_shader == null) _shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
