@@ -39,15 +39,7 @@ namespace Game.Net
             if (Time.time >= _nextNoise) EmitNoise(driver);
         }
 
-        Combatant Driver()
-        {
-            int id = _vehicle.OccupantId(Vehicles.DriverSeat);
-            if (id < 0) return null;
-            var all = Combatant.All;
-            for (int i = 0; i < all.Count; i++)
-                if (all[i] != null && all[i].ObjectId == id) return all[i];
-            return null;
-        }
+        Combatant Driver() => _vehicle.FindCombatant(_vehicle.OccupantId(Vehicles.DriverSeat));
 
         // The driver, alive, no pistol out (with a pistol out the button fires it).
         static bool MayHonk(Combatant c) => c != null && !c.Dead.Value && !c.TeamBlocksAction && c.ActiveWeaponId == 0;

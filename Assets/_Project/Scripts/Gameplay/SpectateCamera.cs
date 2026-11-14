@@ -150,6 +150,19 @@ namespace Game.Gameplay
             if (next != null) Target = next;
         }
 
+        const float KillEntryWaitSeconds = 1f;
+        Combatant _deadSeen;
+        float _deadSeenAt;
+
+        static bool KillKnown(int id) => MatchState.Instance != null && MatchState.Instance.TryGetDeath(id, out _);
+
+        // True for the first KillEntryWaitSeconds after the watched one was seen dead.
+        bool WaitingForKill(Combatant dead)
+        {
+            if (_deadSeen != dead) { _deadSeen = dead; _deadSeenAt = Time.unscaledTime; }
+            return Time.unscaledTime - _deadSeenAt < KillEntryWaitSeconds;
+        }
+
         static int KillerOf(int id) => MatchState.Instance != null ? MatchState.Instance.KillerOf(id) : -1;
 
         List<SpectateCandidate> Candidates()
@@ -194,7 +207,9 @@ namespace Game.Gameplay
             if (Current == Mode.Follow)
             {
                 // The watched one died: their teammate, their killer, the next killer down the chain, or anyone.
-                if (Target == null || Target.Dead.Value)
+                // On a client the kill entry (who did it) can arrive a moment after the health says dead: look at the body meanwhile.
+                bool waiting = Target != null && Target.Dead.Value && !KillKnown(Target.ObjectId) && WaitingForKill(Target);
+                if ((Target == null || Target.Dead.Value) && !waiting)
                 {
                     var me = Combatant.LocalPlayer;
                     int killer = Target != null ? KillerOf(Target.ObjectId) : -1;

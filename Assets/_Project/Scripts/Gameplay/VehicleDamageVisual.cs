@@ -113,7 +113,25 @@ namespace Game.Gameplay
                 if (mf != null) _shells.Add(new Shell(mf, -1) { Part = i });
             }
             _startTime = Time.time;
+            _ready = true;
+            // The holes and dents the server sent a late joiner arrive with the spawn, before this Start has run (#165).
+            foreach (var e in _early)
+            {
+                if (e.Hole) OnHoled(e.Local, e.Dir, e.Radius, e.Depth);
+                else OnDented(e.Local, e.Dir, e.Radius, e.Depth);
+            }
+            _early.Clear();
         }
+
+        struct Early
+        {
+            public bool Hole;
+            public Vector3 Local, Dir;
+            public float Radius, Depth;
+        }
+
+        readonly List<Early> _early = new List<Early>();
+        bool _ready;
 
         void Update()
         {
@@ -445,6 +463,7 @@ namespace Game.Gameplay
         // line meets no body mesh (a thin frame, a gap round a rider) there is no hole: nothing floats in the air.
         void OnHoled(Vector3 local, Vector3 localNormal, float radius, float depth)
         {
+            if (!_ready) { _early.Add(new Early { Hole = true, Local = local, Dir = localNormal, Radius = radius, Depth = depth }); return; }
             var n = localNormal.sqrMagnitude > 0f ? localNormal.normalized : Vector3.up;
             var from = local + n * 0.5f;
             if (!RaySurface(from, -n, 1f, out _, out var point, out _)) return;
@@ -516,6 +535,7 @@ namespace Game.Gameplay
         // to `radius`, never more than DentMaxDepth in total per vertex, and bends the normals with the new shape.
         void OnDented(Vector3 local, Vector3 localDir, float radius, float depth)
         {
+            if (!_ready) { _early.Add(new Early { Local = local, Dir = localDir, Radius = radius, Depth = depth }); return; }
             if (depth <= 0f || radius <= 0f) return;
             var rules = VehicleDamageRules.For(_damage.Vehicle.Kind);
             bool any = false;

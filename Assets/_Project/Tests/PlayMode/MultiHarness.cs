@@ -90,6 +90,7 @@ namespace Game.Tests
             var client = new RemoteClient { Input = new HarnessInput() };
             if (token != null) client.Token = token;
             if (_hider == null) _hider = new GameObject("ReplicaLayers").AddComponent<ReplicaLayers>();
+            _hider.Host = Host;
             ushort port = MatchDirector.Instance.Port;
             client.Manager = NetHarness.Build("NM_Remote" + Clients.Count, Host.SpawnablePrefabs, port);
             SessionHelloSender.Attach(client.Manager, client.Token);
@@ -158,6 +159,7 @@ namespace Game.Tests
         public IEnumerator Teardown()
         {
             PlayerController.InputOverride = null;
+            ReplicaLayers.SeparateVehicles = false;
             foreach (var c in Clients)
             {
                 if (c.Manager == null) continue;
@@ -178,14 +180,27 @@ namespace Game.Tests
     // The remote clients' copies of every object live in the same physics scene as the host's real ones, so the server's
     // shots would hit those copies (which have no server state). Their colliders go on the Ignore Raycast layer, which
     // the default ray mask skips; bodies still collide as before. Test-only: in a real host the client IS the server object.
+    //
+    // Vehicles (#165): a vehicle that one manager simulates must not be pushed by the other managers' copies of the same
+    // vehicle or of the people (in separate processes those copies would not exist in its world), or it is thrown about.
     public sealed class ReplicaLayers : MonoBehaviour
     {
         public readonly List<NetworkManager> Managers = new List<NetworkManager>();
+        // The server's manager.
+        public NetworkManager Host;
+        // On for the vehicle audits only: the sweep costs a few thousand physics calls in a map full of vehicles.
+        public static bool SeparateVehicles;
+        readonly HashSet<(int, int)> _ignored = new HashSet<(int, int)>();
+        int _lastCount;
+        float _nextSweep;
+
         void LateUpdate()
         {
+            int count = Host != null ? Host.ServerManager.Objects.Spawned.Count : 0;
             foreach (var m in Managers)
             {
                 if (m == null || !m.IsClientStarted) continue;
+                count += m.ClientManager.Objects.Spawned.Count;
                 foreach (var nob in m.ClientManager.Objects.Spawned.Values)
                 {
                     if (nob == null || nob.IsServerInitialized) continue;
@@ -193,6 +208,46 @@ namespace Game.Tests
                         if (c.gameObject.layer != 2) c.gameObject.layer = 2;
                 }
             }
+            if (!SeparateVehicles || Host == null || (count == _lastCount && Time.unscaledTime < _nextSweep)) return;
+            _lastCount = count;
+            _nextSweep = Time.unscaledTime + 0.25f;
+            SeparateWorlds();
+        }
+
+        // Manager 0 is the server's own objects, 1.. the clients' replicas.
+        void SeparateWorlds()
+        {
+            var vehicles = new List<(Vehicle vehicle, int world, int id)>();
+            var bodies = new List<(Collider[] colliders, int world)>();
+            Collect(Host.ServerManager.Objects.Spawned.Values, 0, vehicles, bodies, false);
+            for (int i = 0; i < Managers.Count; i++)
+                if (Managers[i] != null && Managers[i].IsClientStarted) Collect(Managers[i].ClientManager.Objects.Spawned.Values, i + 1, vehicles, bodies, true);
+            foreach (var v in vehicles)
+            {
+                foreach (var other in vehicles)
+                    if (other.world != v.world && other.id == v.id) Ignore(v.vehicle.Colliders, other.vehicle.Colliders, v.vehicle.GetInstanceID(), other.vehicle.GetInstanceID());
+                foreach (var body in bodies)
+                    if (body.world != v.world) Ignore(v.vehicle.Colliders, body.colliders, v.vehicle.GetInstanceID(), body.colliders.Length > 0 && body.colliders[0] != null ? body.colliders[0].GetInstanceID() : 0);
+            }
+        }
+
+        static void Collect(IEnumerable<NetworkObject> objects, int world, List<(Vehicle, int, int)> vehicles, List<(Collider[], int)> bodies, bool replicasOnly)
+        {
+            foreach (var nob in objects)
+            {
+                if (nob == null || (replicasOnly && nob.IsServerInitialized)) continue;
+                var v = nob.GetComponent<Vehicle>();
+                if (v != null) vehicles.Add((v, world, nob.ObjectId));
+                else if (nob.GetComponent<Combatant>() != null) bodies.Add((nob.GetComponentsInChildren<Collider>(true), world));
+            }
+        }
+
+        void Ignore(IReadOnlyList<Collider> mine, IReadOnlyList<Collider> theirs, int keyA, int keyB)
+        {
+            if (!_ignored.Add((keyA, keyB))) return;
+            for (int i = 0; i < mine.Count; i++)
+                for (int j = 0; j < theirs.Count; j++)
+                    if (mine[i] != null && theirs[j] != null) Physics.IgnoreCollision(mine[i], theirs[j], true);
         }
     }
 }

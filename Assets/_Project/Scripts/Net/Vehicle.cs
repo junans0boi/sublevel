@@ -306,9 +306,14 @@ namespace Game.Net
         {
             Combatant.ServerDied -= OnServerDied;
             Combatant.ServerDied += OnServerDied;
+            NetworkManager.ServerManager.Objects.OnPreDestroyClientObjects += OnOwnerDisconnecting;
         }
 
-        public override void OnStopServer() => Combatant.ServerDied -= OnServerDied;
+        public override void OnStopServer()
+        {
+            Combatant.ServerDied -= OnServerDied;
+            if (NetworkManager != null) NetworkManager.ServerManager.Objects.OnPreDestroyClientObjects -= OnOwnerDisconnecting;
+        }
 
         void Update()
         {
@@ -634,9 +639,21 @@ namespace Game.Net
 
         // ---- Occupants (every side) ----
 
-        static Combatant FindCombatant(int objectId)
+        // The combatant with this network id as the manager this vehicle lives in holds it (a process with several managers,
+        // the two-client tests, has one copy of everyone in each; Combatant.All lists them all).
+        internal Combatant FindCombatant(int objectId)
         {
             if (objectId < 0) return null;
+            var nm = NetworkManager;
+            if (nm != null)
+            {
+                var spawned = IsServerInitialized ? nm.ServerManager.Objects.Spawned : nm.ClientManager.Objects.Spawned;
+                if (spawned.TryGetValue(objectId, out var nob) && nob != null)
+                {
+                    var found = nob.GetComponent<Combatant>();
+                    if (found != null) return found;
+                }
+            }
             var all = Combatant.All;
             for (int i = 0; i < all.Count; i++)
                 if (all[i] != null && all[i].ObjectId == objectId) return all[i];
@@ -868,10 +885,24 @@ namespace Game.Net
                 default: return;
             }
             if (seat != Vehicles.DriverSeat || was == objectId) return;
-            // The driver's client simulates the vehicle; with nobody at the wheel the server does.
-            var driver = FindCombatant(objectId);
-            if (driver != null && driver.Owner.IsValid) GiveOwnership(driver.Owner);
+            ServerFollowDriver();
+        }
+
+        // The driver's client simulates the vehicle; with nobody at the wheel (or a driver nobody owns) the server does.
+        void ServerFollowDriver()
+        {
+            var driver = FindCombatant(Seat0.Value);
+            if (driver != null && driver.Owner.IsValid)
+            {
+                if (Owner != driver.Owner) GiveOwnership(driver.Owner);
+            }
             else if (Owner.IsValid) RemoveOwnership();
+        }
+
+        // A connection is going: a vehicle it owns (its driver's) must not be despawned with it, passengers and all.
+        void OnOwnerDisconnecting(NetworkConnection connection)
+        {
+            if (connection != null && Owner == connection) RemoveOwnership();
         }
 
         // Gets `c` in: the driver's seat if free, else the free seat with the nearest door. Returns the seat, or -1 when
@@ -976,6 +1007,7 @@ namespace Game.Net
         // Seats held by someone who is gone (despawned, disconnected) are freed; the dead are put out.
         void ServerCheckSeats()
         {
+            ServerFollowDriver(); // also after the driver's connection came back (#166)
             for (int s = 0; s < SeatCount; s++)
             {
                 int id = OccupantId(s);
