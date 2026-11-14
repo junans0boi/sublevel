@@ -22,6 +22,10 @@ namespace Game.Core
         public float KnockedHp = 100f;            // the knock bar, drained by bleeding and by further damage
         public float BleedPerSecond = 2.5f;       // first knock: 100 hp in 40 s
         public float BleedGrowthPerKnock = 0.5f;  // every further knock in the same life bleeds this much faster (+50 %)
+        // Seconds the n-th knock of one life takes to bleed the whole bar out (ADR-129, PUBG: 90, 30, 30, 10, 7, 5, 4, 3, 2);
+        // knocks past the end of the table keep the last value. Empty/null: the older per-second fields above are used.
+        public float[] BleedSeconds = { 90f, 30f, 30f, 10f, 7f, 5f, 4f, 3f, 2f };
+        public float DownInvulnerableSeconds = 1.5f; // no damage for this long after going down
         public float KnockedMoveFactor = 1f;      // crawling, on top of the prone stance's own factor
         public float KnockedDamageFactor = 1f;    // damage taken while knocked
 
@@ -30,6 +34,11 @@ namespace Game.Core
         public float ReviveRangeMeters = 2f;      // to start; the server lets it go on up to ReviveKeepMeters
         public float ReviveKeepMeters = 2.75f;
         public float ReviveHp = 10f;              // health right after being revived
+
+        // ---- Carrying a knocked teammate (ADR-129) ----
+        public float CarryMoveFactor = 0.55f;     // the carrier's walking speed
+        public float CarryRangeMeters = 2f;       // to lift
+        public float CarryKeepMeters = 4f;        // the carried one is let go beyond this (lag, a vault)
 
         // ---- Bots in a team ----
         public float BotFollowMeters = 14f;       // a roaming bot walks back once its leader is farther than this...
@@ -40,7 +49,12 @@ namespace Game.Core
         public int SizeOf(TeamMode mode) => mode == TeamMode.Duo ? Math.Max(1, DuoSize) : mode == TeamMode.Squad ? Math.Max(1, SquadSize) : 1;
 
         // Bleeding of the `knocks`-th knock of this life (1 = first), hp per second.
-        public float BleedFor(int knocks) => BleedPerSecond * (1f + BleedGrowthPerKnock * Math.Max(0, knocks - 1));
+        public float BleedFor(int knocks)
+        {
+            if (BleedSeconds != null && BleedSeconds.Length > 0)
+                return KnockedHp / Math.Max(0.01f, BleedSeconds[Math.Min(Math.Max(0, knocks - 1), BleedSeconds.Length - 1)]);
+            return BleedPerSecond * (1f + BleedGrowthPerKnock * Math.Max(0, knocks - 1));
+        }
     }
 
     // Who is on which team. Teams are numbered from 1; 0 means "no team" (solo, training dummies outside a match):
@@ -190,6 +204,23 @@ namespace Game.Core
         {
             if (!self && !rules.FriendlyFire && Teams.Same(attackerTeam, victimTeam)) return 0f;
             return victimKnocked ? amount * rules.KnockedDamageFactor : amount;
+        }
+    }
+
+    // Carrying a knocked teammate on the back (ADR-129): the rules of starting and keeping it, pure.
+    public static class KnockCarry
+    {
+        public static bool CanStart(float distance, bool carrierStanding, bool carrierBusy, bool targetKnocked, bool targetFree, bool sameTeam, TeamRules rules) =>
+            carrierStanding && !carrierBusy && targetKnocked && targetFree && sameTeam && distance <= rules.CarryRangeMeters;
+
+        public static bool KeepGoing(float distance, bool carrierStanding, bool targetKnocked, TeamRules rules) =>
+            carrierStanding && targetKnocked && distance <= rules.CarryKeepMeters;
+
+        // Where the carried body rides: on the carrier's back, a little above its feet.
+        public static (float x, float y, float z) Offset(float yawDeg)
+        {
+            float r = yawDeg * 0.0174532925f;
+            return (-(float)Math.Sin(r) * 0.3f, 0.55f, -(float)Math.Cos(r) * 0.3f);
         }
     }
 

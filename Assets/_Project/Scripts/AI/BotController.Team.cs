@@ -26,6 +26,13 @@ namespace Game.AI
             _wasKnocked = true;
             _hasDestination = false;
             if (!OnNavMesh) return;
+            // Carried on a teammate's back (ADR-129): rides along instead of crawling.
+            if (_self.TryCarryPose(out var carriedAt, out float carrierYaw))
+            {
+                _agent.Warp(carriedAt);
+                transform.rotation = Quaternion.Euler(0f, carrierYaw, 0f);
+                return;
+            }
             var mate = NearestTeammate(true, float.MaxValue, out float distance);
             float speed = GameData.Rules.Locomotion.WalkSpeed * TeamRules.Current.KnockedMoveFactor;
             if (_stance != null) speed *= _stance.MoveFactor;

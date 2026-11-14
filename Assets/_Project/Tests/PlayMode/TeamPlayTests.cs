@@ -53,7 +53,8 @@ namespace Game.Tests
         {
             // Bots leave the player alone so nothing but the test hurts it.
             BotRules.Current = new BotRules { TargetsPlayers = false };
-            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f };
+            // The untouchable second after a knock is tested on its own; the other tests hit again at once.
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f };
             yield return null;
         }
 
@@ -144,9 +145,28 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator JustKnocked_IsUntouchableFor1_5Seconds_ThenTakesDamage()
+        {
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f };
+            yield return Load(TeamMode.Squad);
+            EndProtection();
+            var enemy = Enemy;
+            var mate = Mates[0];
+            Hit(mate, enemy, 500f);
+            Assert.IsTrue(mate.Knocked.Value);
+            float hp = mate.Hp.Value;
+            Hit(mate, enemy, 40f);
+            Assert.AreEqual(hp, mate.Hp.Value, 1e-3f, "no damage right after going down");
+            float end = Time.time + TeamRules.Current.DownInvulnerableSeconds + 0.2f;
+            while (Time.time < end) yield return null;
+            Hit(mate, enemy, 10f);
+            Assert.Less(mate.Hp.Value, hp - 5f, "damage counts once the invulnerability is over");
+        }
+
+        [UnityTest]
         public IEnumerator Knocked_BleedsOut_CreditedToTheKnocker()
         {
-            TeamRules.Current = new TeamRules { BleedPerSecond = 50f };
+            TeamRules.Current = new TeamRules { BleedSeconds = new[] { 2f } }; // 50 hp per second
             yield return Load(TeamMode.Squad);
             EndProtection();
             var enemy = Enemy;
@@ -192,6 +212,51 @@ namespace Game.Tests
             Assert.IsFalse(mate.Dead.Value);
             Assert.AreEqual(TeamRules.Current.ReviveHp, mate.Hp.Value, 1e-3f);
             Assert.IsFalse(Me.Reviving);
+        }
+
+        [UnityTest]
+        public IEnumerator PressingY_LiftsAKnockedTeammate_SlowsTheWalk_AndYAgainPutsItDown()
+        {
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, BotReviveSearchMeters = 0f, DownInvulnerableSeconds = 0f };
+            yield return Load(TeamMode.Squad);
+            yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
+            EndProtection();
+            var mate = Mates[0];
+            Hit(mate, Enemy, 500f);
+            Assert.IsTrue(mate.Knocked.Value);
+            var beside = Me.transform.position + Me.transform.right * 1f;
+            var agent = mate.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled) agent.Warp(beside);
+            else mate.transform.position = beside;
+            yield return null;
+            Assert.AreEqual(mate, TeamHud.CarryCandidate(Me));
+            yield return WaitUntil(() => TeamHud.Instance.RevivePromptShown && TeamHud.Instance.PromptText.Contains("업기"), 3f, "the prompt names the carry key");
+
+            _input.Frame.CarryPressed = true;
+            yield return null;
+            yield return null;
+            _input.Frame.CarryPressed = false;
+            yield return WaitUntil(() => Me.IsCarrying && mate.BeingCarried, 3f, "lifted");
+            Assert.IsTrue(Me.TeamBlocksAction);
+            Assert.IsNull(TeamHud.ReviveCandidate(Me), "no reviving while carrying");
+
+            var from = Me.transform.position;
+            _input.Frame.Move = new Vector2(0f, 1f);
+            float end = Time.time + 2f;
+            while (Time.time < end) yield return null;
+            _input.Frame.Move = Vector2.zero;
+            float walked = Flat(from, Me.transform.position);
+            Assert.Greater(walked, 0.5f, "can walk");
+            Assert.Less(walked, GameData.Rules.Locomotion.WalkSpeed * 2f * 0.85f, "slower than a plain walk");
+            Assert.Less(Flat(mate.transform.position, Me.transform.position), 1.5f, "the carried body rides on the back");
+            Assert.IsTrue(mate.Knocked.Value);
+
+            yield return new WaitForSeconds(0.4f); // the request spacing
+            _input.Frame.CarryPressed = true;
+            yield return null;
+            yield return null;
+            _input.Frame.CarryPressed = false;
+            yield return WaitUntil(() => !Me.IsCarrying && !mate.BeingCarried, 3f, "put down");
         }
 
         [UnityTest]

@@ -276,7 +276,9 @@ namespace Game.Gameplay
                 K(other, "인벤토리", BindAction.Inventory, "가방과 주변 물건을 엽니다."),
                 K(other, "지도", BindAction.Map, "전체 지도를 엽니다. 지도를 클릭하면 마커를 찍고, 우클릭하면 지웁니다."),
                 K(other, "네트워크 상태", BindAction.NetStats, "핑, 패킷 손실, 서버 틱 표시를 켜고 끕니다."),
-                K(other, "핑", BindAction.Ping, "조준점이 가리키는 지점(최대 600m)에 마커를 찍습니다. 방위 띠·미니맵·화면에 방향과 거리가 나오고, 10m 안으로 다가가면 사라집니다."),
+                K(other, "핑", BindAction.Ping, "조준점이 가리키는 지점(최대 600m)에 마커를 찍습니다. 팀 매치에서는 길게 누르면 마커 휠이 열립니다. 방위 띠·미니맵·화면에 방향과 거리가 나오고, 10m 안으로 다가가면 사라집니다."),
+                K(other, "팀원 업기", BindAction.Carry, "쓰러진 팀원 가까이에서 누르면 업습니다. 업은 채로는 느리게 걷고, 다시 누르면 내려놓습니다."),
+                K(other, "감정 표현", BindAction.Emote, "누르고 있으면 감정 표현 휠이 열립니다. 마우스를 움직여 고르고 놓으면 표현합니다."),
                 K(other, "메뉴", BindAction.Menu, "일시정지 메뉴를 열고 닫습니다. 설정에서 키를 고르는 중에는 Esc가 취소입니다."),
             };
         }

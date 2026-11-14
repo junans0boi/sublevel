@@ -291,6 +291,7 @@ namespace Game.Net
             _speedFrom = transform.position;
             // Swimming and the breath (ADR-112): every peer reads the body against the water.
             if (GetComponent<CombatantSwim>() == null) gameObject.AddComponent<CombatantSwim>();
+            HookCarry();
         }
 
         public override void OnStopNetwork()

@@ -46,7 +46,7 @@ namespace Game.Net
         // Server: who knocked this one down (credited if it bleeds out or its team is wiped) and with what.
         Combatant _knockedBy;
         DamageInfo _knockInfo;
-        float _bleedOwed;
+        float _bleedOwed, _downInvulnerableUntil;
         readonly ReviveTimer _revive = new ReviveTimer();
         Combatant _reviveTarget, _revivedBy;
 
@@ -55,7 +55,7 @@ namespace Game.Net
         public bool Reviving => ReviveTargetId.Value >= 0;
         public bool BeingRevived => RevivedById.Value >= 0;
         // Knocked down or busy reviving: no shooting, punching, picking up or healing.
-        public bool TeamBlocksAction => Knocked.Value || Reviving;
+        public bool TeamBlocksAction => Knocked.Value || Reviving || IsCarrying;
         public bool HasTeam => TeamId.Value != Teams.None;
 
         public bool IsTeammateOf(Combatant other) => other != null && other != this && Teams.Same(TeamId.Value, other.TeamId.Value);
@@ -94,6 +94,8 @@ namespace Game.Net
         // Friendly fire and the knocked damage factor (ADR-072). False when nothing is left to apply.
         bool ServerTeamAdjust(ref DamageInfo dealt)
         {
+            // Just went down: untouchable for a moment (ADR-129). Bleeding and a wiped team's end skip this path.
+            if (Knocked.Value && Time.time < _downInvulnerableUntil) return false;
             var attacker = dealt.Attacker;
             float amount = Knocks.DamageBetween(dealt.Amount, attacker != null ? attacker.TeamId.Value : Teams.None, TeamId.Value,
                 attacker == this, Knocked.Value, TeamRules.Current);
@@ -114,9 +116,12 @@ namespace Game.Net
             _knockedBy = dealt.Attacker != this ? dealt.Attacker : null;
             _knockInfo = dealt;
             _bleedOwed = 0f;
+            _downInvulnerableUntil = Time.time + rules.DownInvulnerableSeconds;
             KnockCount.Value = KnockCount.Value + 1;
             Knocked.Value = true;
             ServerCancelRevive();
+            ServerEndCarry();
+            ServerReleaseCarried();
             _loadout.CancelReload();
             Holstered.Value = true;
             Aim.Value = 0;
@@ -164,11 +169,14 @@ namespace Game.Net
             if (_health.IsDead)
             {
                 if (Reviving) ServerCancelRevive();
+                ServerEndCarry();
+                ServerReleaseCarried();
                 if (Knocked.Value) Knocked.Value = false;
                 if (BeingRevived) ClearRevivedBy();
                 return;
             }
             TickRevive(dt);
+            TickCarry();
             // The reviver went away (died, left) without saying so.
             if (BeingRevived && (_revivedBy == null || !_revivedBy.IsSpawned || _revivedBy._reviveTarget != this)) ClearRevivedBy();
             if (!Knocked.Value || BeingRevived) return;
@@ -185,7 +193,7 @@ namespace Game.Net
         public bool ServerBeginRevive(Combatant target)
         {
             if (_health == null || target == null || target == this || !Standing || Reviving || VehicleSeat.IsAttached(this)) return false;
-            if (!target.IsServerInitialized || target.Dead.Value || target.BeingRevived) return false;
+            if (!target.IsServerInitialized || target.Dead.Value || target.BeingRevived || target.BeingCarried || IsCarrying) return false;
             float distance = Vector3.Distance(transform.position, target.transform.position);
             if (!_revive.CanStart(distance, Standing, target.Knocked.Value, IsTeammateOf(target), TeamRules.Current)) return false;
             _revive.Start();

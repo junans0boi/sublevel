@@ -39,7 +39,10 @@ namespace Game.Gameplay
         public bool CycleThrowable; // T: pressed this frame, switches the selected throwable (frag / smoke)
         public int ZoomSteps;      // mouse wheel this frame: +1 a notch up (zoom in), -1 down, 0 none (ADR-063)
         public int ZeroSteps;      // PageUp +1 / PageDown -1 this frame: scope zero distance (ADR-103)
-        public bool Ping;          // middle mouse: pressed this frame, marks the point under the crosshair (ADR-065 (6))
+        public bool Ping;          // middle mouse: tap (in a team match: released before the wheel opens) marks the point under the crosshair (ADR-065 (6))
+        public bool PingHeld;      // the ping button is down: held a moment it opens the marker wheel in a team match (ADR-130)
+        public bool EmoteHeld;     // N held: the emote wheel (ADR-131)
+        public bool CarryPressed;  // Y: pressed this frame, lifts or puts down a knocked teammate (ADR-129)
     }
 
     public interface IPlayerInput
@@ -53,6 +56,10 @@ namespace Game.Gameplay
         public const float DefaultMouseSensitivity = 0.12f;
         // Shared by every device input; the settings screen changes it.
         public static float MouseSensitivity = DefaultMouseSensitivity;
+
+        // Held this long, a button opens its wheel instead of acting as a tap.
+        public const float WheelHoldSeconds = 0.25f;
+        float _pingDownAt;
 
         public PlayerInputFrame Read()
         {
@@ -93,7 +100,17 @@ namespace Game.Gameplay
             f.FireHeld = KeyBinds.Held(BindAction.Fire);
             f.FirePressed = KeyBinds.Pressed(BindAction.Fire);
             f.AimHeld = KeyBinds.Held(BindAction.Aim);
-            f.Ping = KeyBinds.Pressed(BindAction.Ping);
+            // In a team match a long press is the marker wheel, so the tap counts when the button comes up.
+            var me = Net.Combatant.LocalPlayer;
+            if (me != null && me.HasTeam)
+            {
+                if (KeyBinds.Pressed(BindAction.Ping)) _pingDownAt = Time.unscaledTime;
+                f.Ping = KeyBinds.Released(BindAction.Ping) && Time.unscaledTime - _pingDownAt < WheelHoldSeconds;
+            }
+            else f.Ping = KeyBinds.Pressed(BindAction.Ping);
+            f.PingHeld = KeyBinds.Held(BindAction.Ping);
+            f.EmoteHeld = KeyBinds.Held(BindAction.Emote);
+            f.CarryPressed = KeyBinds.Pressed(BindAction.Carry);
             // Ctrl + a number is kept for vehicle seats; on foot it selects nothing.
             if (f.SlowWalk) { }
             else

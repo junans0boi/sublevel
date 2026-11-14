@@ -34,7 +34,10 @@ namespace Game.Tests
             Assert.AreEqual(100f, rules.KnockedHp, 1e-6f);
             Assert.AreEqual(10f, rules.ReviveSeconds, 1e-6f);
             Assert.AreEqual(10f, rules.ReviveHp, 1e-6f);
-            Assert.AreEqual(40f, Knocks.SecondsLeft(100f, 1, rules), 1e-4f, "first knock bleeds out in 40 s");
+            Assert.AreEqual(90f, Knocks.SecondsLeft(100f, 1, rules), 1e-3f, "first knock bleeds out in 90 s (PUBG table)");
+            Assert.AreEqual(30f, Knocks.SecondsLeft(100f, 2, rules), 1e-3f);
+            rules.BleedSeconds = null;
+            Assert.AreEqual(40f, Knocks.SecondsLeft(100f, 1, rules), 1e-4f, "without a table: the older 40 s");
             Assert.AreEqual(100f / 3.75f, Knocks.SecondsLeft(100f, 2, rules), 1e-3f, "the second bleeds 50 % faster");
         }
 
@@ -140,9 +143,62 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Bleed_GrowsWithEveryKnock()
+        public void Bleed_FollowsThePubgTable_ByNthKnock()
         {
             var rules = new TeamRules();
+            var expected = new[] { 90f, 30f, 30f, 10f, 7f, 5f, 4f, 3f, 2f };
+            for (int n = 1; n <= expected.Length; n++)
+                Assert.AreEqual(expected[n - 1], Knocks.SecondsLeft(rules.KnockedHp, n, rules), 1e-3f, $"knock {n}");
+            Assert.AreEqual(2f, Knocks.SecondsLeft(rules.KnockedHp, 12, rules), 1e-3f, "past the table the last value stays");
+            Assert.AreEqual(90f, Knocks.SecondsLeft(rules.KnockedHp, 0, rules), 1e-3f, "never slower than the first");
+            Assert.AreEqual(1.5f, rules.DownInvulnerableSeconds, 1e-6f, "1.5 s untouchable after going down");
+        }
+
+        [Test]
+        public void DataFile_HasTheBleedTable()
+        {
+            var rules = JsonUtility.FromJson<GameRules>(Resources.Load<TextAsset>("GameData/rules").text).Team;
+            CollectionAssert.AreEqual(new TeamRules().BleedSeconds, rules.BleedSeconds);
+            Assert.AreEqual(1.5f, rules.DownInvulnerableSeconds, 1e-6f);
+        }
+
+        [Test]
+        public void Carry_NeedsAFreeKnockedTeammateInReach_AndEndsWhenFarOrDown()
+        {
+            var rules = new TeamRules();
+            Assert.IsTrue(KnockCarry.CanStart(1f, true, false, true, true, true, rules));
+            Assert.IsFalse(KnockCarry.CanStart(rules.CarryRangeMeters + 0.1f, true, false, true, true, true, rules), "too far");
+            Assert.IsFalse(KnockCarry.CanStart(1f, false, false, true, true, true, rules), "the carrier is down");
+            Assert.IsFalse(KnockCarry.CanStart(1f, true, true, true, true, true, rules), "the carrier is busy");
+            Assert.IsFalse(KnockCarry.CanStart(1f, true, false, false, true, true, rules), "the teammate is standing");
+            Assert.IsFalse(KnockCarry.CanStart(1f, true, false, true, false, true, rules), "someone already revives or carries it");
+            Assert.IsFalse(KnockCarry.CanStart(1f, true, false, true, true, false, rules), "an enemy");
+            Assert.IsTrue(KnockCarry.KeepGoing(rules.CarryKeepMeters - 0.1f, true, true, rules));
+            Assert.IsFalse(KnockCarry.KeepGoing(rules.CarryKeepMeters + 0.1f, true, true, rules), "left behind");
+            Assert.IsFalse(KnockCarry.KeepGoing(1f, false, true, rules), "the carrier went down");
+            Assert.IsFalse(KnockCarry.KeepGoing(1f, true, false, rules), "the carried one died or got up");
+            Assert.Less(rules.CarryMoveFactor, 1f, "carrying is slow");
+            var (x, y, z) = KnockCarry.Offset(0f);
+            Assert.AreEqual(-0.3f, z, 1e-4f, "behind the carrier");
+            Assert.Greater(y, 0f);
+            Assert.AreEqual(0f, x, 1e-4f);
+        }
+
+        [Test]
+        public void LastTeammateDown_WholeTeamIsFinished()
+        {
+            // The last one standing of a squad goes down: nobody can revive the knocked ones, so all four are finished.
+            var members = new List<TeamMember> { Down(1), Down(1), Down(1), Down(1), Up(2) };
+            for (int i = 0; i < 4; i++) Assert.IsTrue(TeamStandings.MustFinish(members, i), "member " + i);
+            Assert.IsFalse(TeamStandings.MustFinish(members, 4));
+            members[2] = Up(1);
+            for (int i = 0; i < 4; i++) Assert.IsFalse(TeamStandings.MustFinish(members, i), "one stands: nobody is finished");
+        }
+
+        [Test]
+        public void Bleed_GrowsWithEveryKnock()
+        {
+            var rules = new TeamRules { BleedSeconds = null };
             Assert.AreEqual(2.5f, rules.BleedFor(1), 1e-6f);
             Assert.AreEqual(3.75f, rules.BleedFor(2), 1e-6f);
             Assert.AreEqual(5f, rules.BleedFor(3), 1e-6f);

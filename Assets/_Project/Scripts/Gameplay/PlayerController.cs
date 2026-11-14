@@ -219,16 +219,23 @@ namespace Game.Gameplay
             // Teams (ADR-072): knocked down = crawl only (lying, no weapon, no jumping, sprinting or leaning);
             // reviving a teammate = kneel still. F held stays in the frame for the revive (TeamHud).
             bool knocked = _combatant.Knocked.Value;
-            if (knocked || _combatant.Reviving)
+            bool carrying = _combatant.IsCarrying;
+            if (knocked || _combatant.Reviving || carrying)
             {
                 if (InParkour) AbortParkour();
                 f.Sprint = f.Jump = f.Crouch = f.Prone = f.AimHeld = f.FireHeld = f.FirePressed = f.LeanLeft = f.LeanRight = false;
                 f.Interact = f.Reload = f.Heal = f.Boost = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
                 f.ThrowHeld = f.ThrowPressed = f.ThrowReleased = false;
                 f.SelectSlot = -1;
-                if (!knocked) f.Move = Vector2.zero;
+                // Carried on a teammate's back (ADR-129): no crawling of its own, it rides where the carrier goes.
+                if (!knocked && !carrying || _combatant.BeingCarried) f.Move = Vector2.zero;
                 _autoRun = false;
                 LastInput = f;
+                if (_combatant.TryCarryPose(out var carriedAt, out float carrierYaw))
+                {
+                    Teleport(carriedAt);
+                    Yaw = carrierYaw;
+                }
             }
 
             // Aiming needs a gun (not a melee weapon, ADR-073) and wins over sprinting; leaning is for standing and walking only.
@@ -377,6 +384,7 @@ namespace Game.Gameplay
                 // Slower while a bandage or kit is being used.
                 speedFactor *= CombatantHealing.MoveFactorOf(_combatant) * CombatantHealing.BoostSpeedOf(_combatant);
                 if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
+                if (carrying) speedFactor *= TeamRules.Current.CarryMoveFactor;
                 Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
                 // Coming from anything else (a seat, a ride, a vault) the body starts from standing.
                 if (_moveFrame != Time.frameCount - 1) _moveX = _moveZ = 0f;

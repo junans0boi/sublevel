@@ -79,7 +79,7 @@ namespace Game.Gameplay
         // local combatant cannot revive). PlayerController asks before an F tap picks something up.
         public static Combatant ReviveCandidate(Combatant me)
         {
-            if (me == null || !me.HasTeam || !me.Standing || me.Reviving) return null;
+            if (me == null || !me.HasTeam || !me.Standing || me.Reviving || me.IsCarrying) return null;
             float best = TeamRules.Current.ReviveRangeMeters;
             best *= best;
             Combatant found = null;
@@ -87,7 +87,27 @@ namespace Game.Gameplay
             for (int i = 0; i < all.Count; i++)
             {
                 var c = all[i];
-                if (c == null || !me.IsTeammateOf(c) || !c.Knocked.Value || c.Dead.Value || c.BeingRevived) continue;
+                if (c == null || !me.IsTeammateOf(c) || !c.Knocked.Value || c.Dead.Value || c.BeingRevived || c.BeingCarried) continue;
+                float sqr = (c.transform.position - me.transform.position).sqrMagnitude;
+                if (sqr > best) continue;
+                best = sqr;
+                found = c;
+            }
+            return found;
+        }
+
+        // The knocked teammate Y would lift now: nearest within CarryRangeMeters that nobody revives or carries.
+        public static Combatant CarryCandidate(Combatant me)
+        {
+            if (me == null || !me.HasTeam || !me.Standing || me.Reviving || me.IsCarrying) return null;
+            float best = TeamRules.Current.CarryRangeMeters;
+            best *= best;
+            Combatant found = null;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var c = all[i];
+                if (c == null || !me.IsTeammateOf(c) || !c.Knocked.Value || c.Dead.Value || c.BeingRevived || c.BeingCarried) continue;
                 float sqr = (c.transform.position - me.transform.position).sqrMagnitude;
                 if (sqr > best) continue;
                 best = sqr;
@@ -279,6 +299,13 @@ namespace Game.Gameplay
         {
             var player = PlayerController.Local;
             bool held = player != null && player.LastInput.InteractHeld && UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay;
+            if (player != null && player.LastInput.CarryPressed && UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay && Time.time >= _nextRevive)
+            {
+                var lift = CarryCandidate(me);
+                if (me.IsCarrying) me.CmdEndCarry();
+                else if (lift != null) me.CmdBeginCarry(lift.NetworkObject);
+                _nextRevive = Time.time + RequestSeconds;
+            }
             if (me.Reviving)
             {
                 if (!held && Time.time >= _nextRevive)
@@ -311,12 +338,14 @@ namespace Game.Gameplay
             if (knocked)
             {
                 bool helped = me.BeingRevived;
+                bool carried = me.BeingCarried;
                 int seconds = Mathf.CeilToInt(me.BleedSecondsLeft);
-                int key = helped ? -2 : seconds;
+                int key = helped ? -2 : carried ? -3 - seconds : seconds;
                 if (key != _shownBleed)
                 {
                     _shownBleed = key;
-                    _knockedHint.text = helped ? "팀원이 부활시키는 중" : "출혈 " + HudDigits.IntText(seconds) + "초 — 팀원의 부활을 기다리세요";
+                    string bleed = "출혈 " + HudDigits.IntText(seconds) + "초";
+                    _knockedHint.text = helped ? "팀원이 부활시키는 중" : carried ? "팀원이 업고 있습니다 — " + bleed : bleed + " — 팀원의 부활을 기다리세요";
                 }
                 _bleedFill.anchorMax = new Vector2(helped ? me.ReviveProgress.Value : Mathf.Clamp01(me.Hp.Value / Mathf.Max(1f, TeamRules.Current.KnockedHp)), 1f);
                 _bleedFillImage.color = helped ? TeamColours.Of(me.TeamSlot.Value) : UiKit.Danger;
@@ -324,11 +353,13 @@ namespace Game.Gameplay
             else _shownBleed = -1;
 
             var candidate = ReviveCandidate(me);
-            bool prompt = candidate != null && UiFocus.Current == UiScreen.None;
+            bool carrying = me.IsCarrying;
+            bool prompt = (candidate != null || carrying) && UiFocus.Current == UiScreen.None;
             Show(_prompt, prompt);
             if (prompt)
             {
-                string text = "F 길게 눌러 부활 · " + candidate.TeamName.Value;
+                string carryKey = KeyBinds.Name(BindAction.Carry);
+                string text = carrying ? carryKey + " 내려놓기" : "F 길게 눌러 부활 · " + carryKey + " 업기 · " + candidate.TeamName.Value;
                 if (_promptLabel.text != text) _promptLabel.text = text;
             }
 
@@ -508,7 +539,7 @@ namespace Game.Gameplay
             _knockedBand.SetActive(false);
 
             // Revive prompt and progress, under the crosshair.
-            var prompt = UiKit.Rect("RevivePrompt", _root, new Vector2(0.5f, 0.42f), centre, Vector2.zero, new Vector2(420f, 36f));
+            var prompt = UiKit.Rect("RevivePrompt", _root, new Vector2(0.5f, 0.42f), centre, Vector2.zero, new Vector2(520f, 36f));
             UiKit.Box(prompt, UiKit.Panel);
             _promptLabel = UiKit.Label(UiKit.Fill("Text", prompt), "", 22, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
             _prompt = prompt.gameObject;
