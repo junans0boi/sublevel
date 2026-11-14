@@ -28,6 +28,13 @@ namespace Game.Net
         // The ThrowableKind; set before spawning so every client knows what it is looking at.
         public readonly SyncVar<int> Kind = new SyncVar<int>();
 
+        // A smoke cloud or a fire that is up (ADR-130): what a client that spawns this object later (a late joiner)
+        // is told. 0 = nothing yet, 1 = smoke cloud, 2 = fire. The seconds still to run are refreshed once a second.
+        public readonly SyncVar<byte> Effect = new SyncVar<byte>();
+        public readonly SyncVar<float> EffectLeft = new SyncVar<float>();
+        public readonly SyncVar<NetworkObject> ThrowerObject = new SyncVar<NetworkObject>();
+        float _effectEnd, _nextRefresh;
+
         // Raised on every client when a grenade goes off: (centre, the thrower's object or null if it is gone).
         // Static, so it outlives scenes: subscribers unsubscribe in OnDestroy. Cleared when a play session starts.
         public static event Action<Vector3, NetworkObject> ClientExploded;
@@ -91,6 +98,7 @@ namespace Game.Net
         public void Init(Combatant thrower, Vector3 velocity, ThrowableRules rules, ThrowableKind kind, float fuseOverride)
         {
             _thrower = thrower;
+            ThrowerObject.Value = thrower != null ? thrower.NetworkObject : null;
             _velocity = velocity;
             _rules = rules;
             Kind.Value = (int)kind;
@@ -121,6 +129,35 @@ namespace Game.Net
             _position = transform.position;
         }
 
+        // A client that arrives while the cloud or the fire is up shows it with what is left of its time.
+        public override void OnStartClient()
+        {
+            if (IsServerInitialized || Effect.Value == 0) return;
+            _exploded = true;
+            if (_visual != null) _visual.SetActive(false);
+            if (_smokeVisual != null) _smokeVisual.SetActive(false);
+            StartCoroutine(AnnounceWhenReady());
+        }
+
+        // The views that show the effect belong to combatants that may spawn a moment after this object does on a
+        // client that is still loading: wait for the local player (at most a few seconds), then tell them.
+        System.Collections.IEnumerator AnnounceWhenReady()
+        {
+            float give = Time.time + 5f;
+            while (Combatant.LocalPlayer == null && Time.time < give) yield return null;
+            yield return null;
+            var thrower = ThrowerObject.Value;
+            if (Effect.Value == 1) ClientSmoked?.Invoke(transform.position, SmokeRules.Current.Radius, EffectLeft.Value, thrower);
+            else if (Effect.Value == 2) ClientFired?.Invoke(transform.position, MolotovRules.Current.Radius, EffectLeft.Value, thrower);
+        }
+
+        void RefreshEffectLeft()
+        {
+            if (Effect.Value == 0 || Time.time < _nextRefresh) return;
+            _nextRefresh = Time.time + 1f;
+            EffectLeft.Value = Mathf.Max(0f, _effectEnd - Time.time);
+        }
+
         public override void OnStopServer()
         {
             if (_zoneId != 0) SmokeZones.Remove(_zoneId);
@@ -130,6 +167,7 @@ namespace Game.Net
         void Update()
         {
             if (!IsServerInitialized) return;
+            RefreshEffectLeft();
             if (_burning)
             {
                 FireTick();
@@ -220,6 +258,10 @@ namespace Game.Net
             var centre = _position;
             transform.position = centre;
             var attacker = _thrower != null ? _thrower : null;
+            Effect.Value = 1;
+            EffectLeft.Value = smoke.Seconds;
+            _effectEnd = Time.time + smoke.Seconds;
+            _nextRefresh = Time.time + 1f;
             _zoneId = SmokeZones.Add(centre.x, centre.y + smoke.CentreLiftMeters, centre.z, smoke.Radius);
             ServerSmoked?.Invoke(centre, attacker);
             RpcSmoked(centre, smoke.Radius, smoke.Seconds, attacker != null ? attacker.NetworkObject : null);
@@ -240,6 +282,10 @@ namespace Game.Net
             _fireCentre = centre;
             transform.position = centre;
             _despawnAt = Time.time + rules.FireSeconds + LingerSeconds;
+            Effect.Value = 2;
+            EffectLeft.Value = rules.FireSeconds;
+            _effectEnd = Time.time + rules.FireSeconds;
+            _nextRefresh = Time.time + 1f;
             var attacker = _thrower != null ? _thrower : null;
             ServerFired?.Invoke(centre, attacker);
             RpcFired(centre, rules.Radius, rules.FireSeconds, attacker != null ? attacker.NetworkObject : null);

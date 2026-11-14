@@ -115,6 +115,14 @@ namespace Game.Gameplay
             _aim = new AimInput(_rules.Aim.TapSeconds);
         }
 
+        // A body some other peer owns is still something to hit: the server's copy of a remote player (and every
+        // replica) keeps its capsule on, otherwise shots and blasts pass through it (ADR-130). The owner turns its own
+        // on in OnStartClient and is the only one that moves it.
+        public override void OnStartNetwork()
+        {
+            if (!Owner.IsLocalClient) _controller.enabled = true;
+        }
+
         public override void OnStartClient()
         {
             if (!IsOwner) return;

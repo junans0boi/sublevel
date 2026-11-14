@@ -84,7 +84,8 @@ namespace Game.Tests
         }
 
         // Connects one more client to the host and waits until its player exists on its side.
-        public IEnumerator AddClient(Action<RemoteClient> done = null, string token = null)
+        // `beforeConnect` gets the new client's manager before it connects (tests register their broadcast listeners there).
+        public IEnumerator AddClient(Action<RemoteClient> done = null, string token = null, Action<NetworkManager> beforeConnect = null)
         {
             var client = new RemoteClient { Input = new HarnessInput() };
             if (token != null) client.Token = token;
@@ -93,6 +94,7 @@ namespace Game.Tests
             client.Manager = NetHarness.Build("NM_Remote" + Clients.Count, Host.SpawnablePrefabs, port);
             SessionHelloSender.Attach(client.Manager, client.Token);
             _hider.Managers.Add(client.Manager);
+            beforeConnect?.Invoke(client.Manager);
             if (!client.Manager.ClientManager.StartConnection("127.0.0.1", port)) throw new Exception("remote client failed to start");
             yield return NetHarness.WaitUntil(() => client.Manager.IsClientStarted, "remote client connected+authenticated", Log);
             yield return NetHarness.WaitUntil(() => client.Manager.ClientManager.Connection.FirstObject != null, "remote client got its player", Log);
