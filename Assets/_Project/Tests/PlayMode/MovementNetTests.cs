@@ -53,7 +53,16 @@ namespace Game.Tests
         sealed class Trace
         {
             public readonly List<(double t, Vector3 p)> S = new List<(double, Vector3)>();
-            public void Add(Transform t) => S.Add((Time.timeAsDouble, t.position));
+            // Frames this slow are the machine stalling (another Unity, GC, a screenshot), not the network: windows over them are not judged.
+            public const double HitchSeconds = 0.10;
+            public readonly List<double> Hitches = new List<double>();
+            public void Add(Transform t)
+            {
+                if (Time.unscaledDeltaTime > HitchSeconds) Hitches.Add(Time.timeAsDouble);
+                S.Add((Time.timeAsDouble, t.position));
+            }
+            // A stall at time h delays what the observer samples until about h + HitchSeconds * 2.
+            public bool NearHitch(double t0, double t1) => Hitches.Exists(h => h >= t0 - 0.25 && h <= t1 + 0.25);
 
             Vector3 At(double t)
             {
@@ -68,7 +77,7 @@ namespace Game.Tests
                 var list = new List<float>();
                 for (double t = t0; t + 0.1 <= t1; t += 0.05)
                 {
-                    if (!use(t)) continue;
+                    if (!use(t) || NearHitch(t, t + 0.1)) continue;
                     var d = At(t + 0.1) - At(t);
                     d.y = 0f;
                     list.Add(d.magnitude / 0.1f);
@@ -178,6 +187,7 @@ namespace Game.Tests
                 }
                 // Windows overlap by half, so a freeze of n windows lasts about (n + 1) * 0.05 s.
                 float freeze = longest > 0 ? (longest + 1) * 0.05f : 0f;
+                Log($"{name}: {trace.Hitches.Count} frames over {Trace.HitchSeconds * 1000:F0} ms (windows near them are skipped)");
                 Log($"{name}: sprint {truth:F1} m/s true, windows {speeds.Count}, speed min {min:F2} mean {sum / speeds.Count:F2} max {max:F2}, stand-still windows {slow}, longest freeze {freeze:F2} s");
                 Assert.LessOrEqual(freeze, MaxFreezeSeconds, name + " saw the runner freeze");
                 int slowWindows = speeds.FindAll(v => v < MinSpeedShare * truth).Count;

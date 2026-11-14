@@ -15,7 +15,7 @@ namespace Game.Tests
             var go = new GameObject("UiShotCamera");
             var cam = go.AddComponent<Camera>();
             var main = Camera.main;
-            if (main != null) cam.CopyFrom(main);
+            if (main != null) { cam.CopyFrom(main); cam.transform.SetPositionAndRotation(main.transform.position, main.transform.rotation); } // CopyFrom keeps the settings, not the place (#172: shots of a player's view)
             else cam.clearFlags = CameraClearFlags.SolidColor;
             var rt = new RenderTexture(width, height, 24);
             cam.targetTexture = rt;

@@ -14,6 +14,9 @@ namespace Game.Net
         static readonly int[] Muted = new int[Counts.Length];
 
         public static int Total { get; private set; }
+        // Refusals per refused combatant (network object id), for the per-client numbers of the match scenario (#172).
+        static readonly System.Collections.Generic.Dictionary<int, int> ByObject = new System.Collections.Generic.Dictionary<int, int>();
+        public static int CountFor(Combatant who) => who != null && ByObject.TryGetValue(who.ObjectId, out int n) ? n : 0;
         public static int Count(GuardKind kind) => Counts[(int)kind];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -22,6 +25,7 @@ namespace Game.Net
             Total = 0;
             System.Array.Clear(Counts, 0, Counts.Length);
             System.Array.Clear(Muted, 0, Muted.Length);
+            ByObject.Clear();
             for (int i = 0; i < LoggedAt.Length; i++) LoggedAt[i] = float.NegativeInfinity;
         }
 
@@ -31,6 +35,7 @@ namespace Game.Net
             int k = (int)kind;
             Counts[k]++;
             Total++;
+            if (who != null) { ByObject.TryGetValue(who.ObjectId, out int n); ByObject[who.ObjectId] = n + 1; }
             float now = Time.realtimeSinceStartup;
             if (now - LoggedAt[k] < GameData.Rules.Guard.LogIntervalSeconds) { Muted[k]++; return false; }
             Debug.LogWarning($"[ServerGuard] refused {kind} from {(who != null ? who.name : "?")}: {detail}" + (Muted[k] > 0 ? $" (+{Muted[k]} more)" : ""));

@@ -11,6 +11,9 @@ namespace Game.Net
     {
         public const float Interval = 0.25f;
         const float ResendSeconds = 0.75f;
+        // A deliberate teleport is announced by CmdTeleported (reliable), the new position travels on its own (unreliable): under lag
+        // the position can arrive first. A jump is judged only if it is still unannounced this long after it was first seen (#172).
+        const float TeleportGraceSeconds = 0.45f;
 
         // What corrections have happened since the play session started (tests and the network HUD read them).
         public static int Corrections { get; private set; }
@@ -26,6 +29,7 @@ namespace Game.Net
         double _sampled;
         bool _pending;
         double _resendAt;
+        double _suspectAt = double.NegativeInfinity;
 
         void Awake()
         {
@@ -58,6 +62,7 @@ namespace Game.Net
             _good = to;
             _sampled = Time.timeAsDouble;
             _pending = false;
+            _suspectAt = double.NegativeInfinity;
         }
 
         void Update()
@@ -80,8 +85,13 @@ namespace Game.Net
             if (!MoveReconcile.Implausible(d.x, d.y, d.z, dt, GameData.Rules.Locomotion, out _))
             {
                 _good = p;
+                _suspectAt = double.NegativeInfinity;
                 return;
             }
+            // First sight of a jump: wait for its announcement (see TeleportGraceSeconds) before putting the body back.
+            if (double.IsNegativeInfinity(_suspectAt)) _suspectAt = now;
+            if (now - _suspectAt < TeleportGraceSeconds) return;
+            _suspectAt = double.NegativeInfinity;
             float error = d.magnitude;
             Corrections++;
             ServerGuard.Refuse(GuardKind.Move, _combatant, $"moved {d.magnitude:F1} m in {dt:F2} s");
