@@ -317,10 +317,21 @@ namespace Game.Net
         // ---- Owner requests ----
 
         [ServerRpc]
-        public void CmdThrow(Vector3 direction) => ServerThrowAimed(direction);
+        public void CmdThrow(Vector3 direction) { if (ThrowRequestOk(direction)) ServerThrowAimed(direction); }
 
         [ServerRpc]
-        public void CmdThrowRoll(Vector3 direction, bool roll) => ServerThrowAimed(direction, SelectedKind, roll);
+        public void CmdThrowRoll(Vector3 direction, bool roll) { if (ThrowRequestOk(direction)) ServerThrowAimed(direction, SelectedKind, roll); }
+
+        RequestBucket _throwRequests;
+
+        // A finite direction, and no more often than throws can be (with a margin for bunched packets).
+        bool ThrowRequestOk(Vector3 direction)
+        {
+            if (!InputGuard.Finite(direction.x, direction.y, direction.z)) return ServerGuard.Refuse(GuardKind.Arg, _combatant, "throw direction is not a number");
+            var g = GameData.Rules.Guard;
+            return _throwRequests.TryTake(Time.timeAsDouble, g.FireRateMargin / ThrowableRules.Current.MinThrowInterval, g.FireBurst)
+                || ServerGuard.Refuse(GuardKind.Rate, _combatant, "throw requests too often");
+        }
 
         [ServerRpc]
         public void CmdCook() => ServerBeginCook();

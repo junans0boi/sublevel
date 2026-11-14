@@ -62,6 +62,7 @@ namespace Game.Tests
         // Loads `scene` (it hosts its own match) and waits for the host's own player.
         public IEnumerator StartHost(string scene)
         {
+            MoveGuard.TrustTeleports = true;
             PrepareHostInput();
             SceneManager.LoadScene(scene);
             yield return AdoptHost();
@@ -164,6 +165,7 @@ namespace Game.Tests
 
         public IEnumerator Teardown()
         {
+            MoveGuard.TrustTeleports = false;
             PlayerController.InputOverride = null;
             ReplicaLayers.SeparateVehicles = false;
             if (_interestBefore != null) InterestRules.Current = _interestBefore;

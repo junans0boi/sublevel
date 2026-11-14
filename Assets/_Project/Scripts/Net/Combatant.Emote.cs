@@ -52,6 +52,9 @@ namespace Game.Net
         }
 
         [ServerRpc]
-        public void CmdEmote(byte emote) => ServerEmote((Emote)emote);
+        public void CmdEmote(byte emote)
+        {
+            if (NotFlooding(ref _emoteRequests, EmoteMinInterval, "emote")) ServerEmote((Emote)emote);
+        }
     }
 }

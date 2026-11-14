@@ -269,23 +269,25 @@ namespace Game.Net
 
         // Dropping from the inventory screen: the optic comes off and lands on the ground in front. `slot` is a gear
         // index: a plain weapon slot is its optic, Attachments.GearIndex names the other attachments.
+        bool SlotOk(int slot, string what) => Game.Core.InputGuard.ValidSlot(slot, SlotCount) || ServerGuard.Refuse(GuardKind.Slot, _combatant, $"{what}: slot {slot}");
+
         [ServerRpc]
         public void CmdDropOptic(int slot)
         {
-            if (_combatant.Dead.Value) return;
+            if (_combatant.Dead.Value || !SlotOk(slot, "drop optic")) return;
             ServerDetach(slot, true);
         }
 
         [ServerRpc]
         public void CmdDetachToBag(int slot)
         {
-            if (!_combatant.Dead.Value) ServerDetachToBag(slot);
+            if (!_combatant.Dead.Value && SlotOk(slot, "detach optic")) ServerDetachToBag(slot);
         }
 
         [ServerRpc]
         public void CmdAttachFromBag(int opticId, int slot)
         {
-            if (!_combatant.Dead.Value) ServerAttachFromBag(opticId, slot);
+            if (!_combatant.Dead.Value && SlotOk(slot, "attach optic")) ServerAttachFromBag(opticId, slot);
         }
 
         [ServerRpc]
@@ -298,10 +300,14 @@ namespace Game.Net
         [ServerRpc]
         public void CmdAttachFromGround(NetworkObject lootObject, int slot)
         {
-            if (_combatant.Dead.Value || lootObject == null) return;
+            if (_combatant.Dead.Value || lootObject == null || !SlotOk(slot, "optic from ground")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Optic) return;
-            if ((item.transform.position - transform.position).sqrMagnitude > Combatant.PickupRange * Combatant.PickupRange) return;
+            if ((item.transform.position - transform.position).sqrMagnitude > Combatant.ServerPickupRange * Combatant.ServerPickupRange)
+            {
+                ServerGuard.Refuse(GuardKind.Distance, _combatant, "optic pickup");
+                return;
+            }
             if (!ServerAttach(slot, item.Optic.Value)) return;
             item.Despawn();
         }

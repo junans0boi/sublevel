@@ -651,18 +651,23 @@ namespace Game.Net
         [ServerRpc]
         public void CmdFire(Vector3 direction, uint viewTick)
         {
+            if (!FireRequestOk(direction)) return;
             var time = TimeManager;
             ServerFire(direction, -1f, LagComp.RewindSeconds(time.Tick, viewTick, time.TickDelta, GameData.Rules.Ballistics.MaxRewindSeconds));
         }
 
         [ServerRpc]
-        public void CmdPunch(Vector3 direction) => ServerPunch(direction);
+        public void CmdPunch(Vector3 direction) { if (FireRequestOk(direction)) ServerPunch(direction); }
 
         [ServerRpc]
         public void CmdReload() => ServerReload();
 
         [ServerRpc]
-        public void CmdSetStance(int aim, int lean) => ServerSetStance((AimMode)aim, lean);
+        public void CmdSetStance(int aim, int lean)
+        {
+            if (aim < 0 || aim > (int)AimMode.Sights) { ServerGuard.Refuse(GuardKind.Arg, this, $"aim mode {aim}"); return; }
+            ServerSetStance((AimMode)aim, lean);
+        }
 
         [ServerRpc]
         public void CmdSetHolstered(bool holstered) => ServerSetHolstered(holstered);
@@ -740,7 +745,7 @@ namespace Game.Net
         }
 
         [ServerRpc]
-        public void CmdSelectSlot(int slot) => ServerSelectSlot(slot);
+        public void CmdSelectSlot(int slot) { if (SlotOk(slot, "select")) ServerSelectSlot(slot); }
 
         // H: timed healing when this combatant has it (the player); otherwise the instant medkit (bots use ServerUseMedkit).
         [ServerRpc]
@@ -764,7 +769,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSwapSlots(int a, int b)
         {
-            if (_health.IsDead || !_loadout.SwapSlots(a, b)) return;
+            if (_health.IsDead || !SlotOk(a, "swap") || !SlotOk(b, "swap") || !_loadout.SwapSlots(a, b)) return;
             OpticsPart?.ServerOnSlotsSwapped(a, b);
             Push();
         }
@@ -773,10 +778,10 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickupToSlot(NetworkObject lootObject, int slot)
         {
-            if (_health.IsDead || TeamBlocksAction || lootObject == null || slot < 0 || slot >= Loadout.SlotCount) return;
+            if (_health.IsDead || TeamBlocksAction || lootObject == null || !SlotOk(slot, "pickup to")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
-            if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
+            if (!PickupInReach(item, "pickup to slot")) return;
             // The slot must take this kind of weapon (a pistol only goes in the sidearm slot); also false for an unknown weapon.
             if (!_loadout.CanHold(slot, item.WeaponId.Value)) return;
             int replaced = _loadout.AddWeaponToSlot(slot, item.WeaponId.Value, item.Amount.Value, out int replacedMag);
@@ -792,7 +797,7 @@ namespace Game.Net
             if (_health.IsDead || TeamBlocksAction || lootObject == null) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
-            if ((item.transform.position - transform.position).sqrMagnitude > PickupRange * PickupRange) return;
+            if (!PickupInReach(item, "pickup")) return;
             var e = item.ToEntry();
             if (ServerGive(e, out int left))
             {
@@ -805,7 +810,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropWeapon(int slot)
         {
-            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (_health.IsDead || MatchDirector.Instance == null || !SlotOk(slot, "drop")) return;
             int weaponId = _loadout.RemoveWeapon(slot, out int mag);
             if (weaponId == 0) return;
             OpticsPart?.ServerOnWeaponRemoved(slot);
@@ -829,7 +834,7 @@ namespace Game.Net
         public void CmdDropAmmo(int ammoType)
         {
             if (_health.IsDead || MatchDirector.Instance == null) return;
-            if (!AmmoNames.IsValid((AmmoType)ammoType)) return;
+            if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType);
             if (amount <= 0) return;
             ServerDropLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)ammoType, Amount = amount });

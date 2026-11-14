@@ -84,6 +84,8 @@ namespace Game.Gameplay
         {
             if (_client == null) { _label.text = "네트워크 없음"; return; }
             Apply(_client.PingMs, _client.Loss, _client.HasPulses, _client.ServerTick, _client.TickRate);
+            // The server's count of refused client requests (#170); only a host or dedicated server has any.
+            if (ServerGuard.Total > 0) _label.text += "  거절 " + ServerGuard.Total;
         }
 
         // Shows these numbers (what Refresh does with the live ones; tests and captures call it with chosen ones).

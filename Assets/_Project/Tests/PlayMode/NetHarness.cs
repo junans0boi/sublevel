@@ -5,6 +5,7 @@ using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
 using FishNet.Transporting.Tugboat;
+using Game.Net;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -57,6 +58,7 @@ namespace Game.Tests
 
         public IEnumerator Connect(Action<string> log = null)
         {
+            MoveGuard.TrustTeleports = true;
             Server = Create("NM_Server", out _serverPrefabs);
             Client = Create("NM_Client", out _clientPrefabs);
             if (!Server.ServerManager.StartConnection(Port)) throw new Exception("server failed to start");
@@ -67,6 +69,7 @@ namespace Game.Tests
 
         public IEnumerator Teardown()
         {
+            MoveGuard.TrustTeleports = false;
             if (Client != null) Client.ClientManager.StopConnection();
             if (Server != null) Server.ServerManager.StopConnection(true);
             var end = Time.realtimeSinceStartup + TimeoutSeconds;

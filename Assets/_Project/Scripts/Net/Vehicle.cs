@@ -920,8 +920,13 @@ namespace Game.Net
                 occupants[s] = OccupantId(s);
                 distances[s] = Vector3.Distance(c.transform.position, DoorPosition(s));
             }
-            int seat = Vehicles.ChooseEnterSeat(occupants, distances, r.EnterRange);
-            if (seat < 0) return seat;
+            int seat = Vehicles.ChooseEnterSeat(occupants, distances, r.EnterRange + GameData.Rules.Guard.LagSlackMeters);
+            if (seat < 0)
+            {
+                if (c.IsPlayer && System.Array.TrueForAll(distances, d => d > r.EnterRange + GameData.Rules.Guard.LagSlackMeters))
+                    ServerGuard.Refuse(GuardKind.Vehicle, c, "enter from too far");
+                return seat;
+            }
             ServerSeat(c, seat);
             // Taking the wheel starts the engine.
             if (seat == Vehicles.DriverSeat) ServerSetEngine(true);
@@ -948,6 +953,7 @@ namespace Game.Net
             int from = SeatIndexOf(c);
             if (from < 0 || c.Dead.Value) return false;
             int seats = SeatCount;
+            if (!InputGuard.ValidSlot(to, seats)) return ServerGuard.Refuse(GuardKind.Vehicle, c, $"seat {to}");
             var occupants = new int[seats];
             for (int s = 0; s < seats; s++) occupants[s] = OccupantId(s);
             if (!Vehicles.CanSwitch(occupants, from, to)) return false;
@@ -1112,7 +1118,8 @@ namespace Game.Net
         [ServerRpc(RequireOwnership = false)]
         void CmdCrash(float speed, NetworkConnection conn = null)
         {
-            if (conn == null || conn != Owner || float.IsNaN(speed)) return;
+            if (conn == null || conn != Owner) return;
+            if (float.IsNaN(speed) || speed < 0f) { ServerGuard.Refuse(GuardKind.Arg, null, $"crash speed {speed}"); return; }
             ServerCrash(speed);
         }
 

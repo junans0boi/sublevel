@@ -46,6 +46,9 @@ namespace Game.Net
             PingsHeard.Add(owner, slot, (PingKind)kind, at.x, at.y, at.z, Time.time, TeamRules.Current);
 
         [ServerRpc]
-        public void CmdPing(byte kind, Vector3 at) => ServerPing((PingKind)kind, at);
+        public void CmdPing(byte kind, Vector3 at)
+        {
+            if (NotFlooding(ref _pingRequests, TeamRules.Current.PingMinIntervalSeconds, "ping")) ServerPing((PingKind)kind, at);
+        }
     }
 }

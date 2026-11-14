@@ -35,8 +35,25 @@ namespace Game.Net
 
         void OnEnable() { _good = transform.position; _sampled = Time.timeAsDouble; }
 
-        // The owner moved itself on purpose to `to` (CmdTeleported).
-        public void Accept(Vector3 to)
+        // Test harnesses teleport remote players across the map; a real match never does (#170). Never set outside tests.
+        public static bool TrustTeleports;
+
+        double _lastTeleport = double.NegativeInfinity;
+
+        // The owner says it moved itself on purpose to `to` (CmdTeleported, #170): taken when near and not too often,
+        // otherwise refused, and the jump is then put back like any other.
+        public bool TryTeleport(Vector3 to)
+        {
+            double now = Time.timeAsDouble;
+            float meters = (to - transform.position).magnitude;
+            if (!TrustTeleports && !InputGuard.TeleportOk(meters, now - _lastTeleport, GameData.Rules.Guard))
+                return ServerGuard.Refuse(GuardKind.Teleport, _combatant, $"teleport {meters:F1} m, {now - _lastTeleport:F2} s after the last");
+            _lastTeleport = now;
+            Accept(to);
+            return true;
+        }
+
+        void Accept(Vector3 to)
         {
             _good = to;
             _sampled = Time.timeAsDouble;
@@ -67,6 +84,7 @@ namespace Game.Net
             }
             float error = d.magnitude;
             Corrections++;
+            ServerGuard.Refuse(GuardKind.Move, _combatant, $"moved {d.magnitude:F1} m in {dt:F2} s");
             TotalError += error;
             if (error > MaxError) MaxError = error;
             _pending = true;

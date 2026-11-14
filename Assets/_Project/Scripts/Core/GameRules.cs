@@ -13,6 +13,7 @@ namespace Game.Core
         public LeanRules Lean = new LeanRules();
         public RecoilRules Recoil = new RecoilRules();
         public FireRules Fire = new FireRules();
+        public GuardRules Guard = new GuardRules(); // #170, ADR-142
         public BallisticsRules Ballistics = new BallisticsRules(); // ADR-098
         public PenetrationRules Penetration = new PenetrationRules(); // ADR-114
         public CombatFxRules CombatFx = new CombatFxRules();

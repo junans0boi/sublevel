@@ -295,6 +295,7 @@ namespace Game.Net
         void Reject(Vector3 back)
         {
             ParkoursRejected++;
+            ServerGuard.Refuse(GuardKind.Parkour, _combatant, "parkour start/end not where the body can be");
             _parkourOpen = false;
             Parkour.Value = 0;
             if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) ParkourRejected?.Invoke(back);
@@ -326,7 +327,11 @@ namespace Game.Net
         public void CmdSetLookPitch(float degrees) => ServerSetLookPitch(degrees);
 
         [Server]
-        public void ServerSetLookPitch(float degrees) => LookPitch.Value = Mathf.Clamp(degrees, -90f, 90f);
+        public void ServerSetLookPitch(float degrees)
+        {
+            if (!(Mathf.Abs(degrees) <= GameData.Rules.Guard.MaxLookPitchDegrees)) ServerGuard.Refuse(GuardKind.Arg, _combatant, $"look pitch {degrees}");
+            LookPitch.Value = float.IsNaN(degrees) ? 0f : Mathf.Clamp(degrees, -90f, 90f);
+        }
 
         [ServerRpc]
         public void CmdStartParkour(int move, Vector3 start, Vector3 end, int glassId) => ServerStartParkour(move, start, end, glassId);
@@ -359,11 +364,11 @@ namespace Game.Net
         void TargetCorrect(NetworkConnection connection, Vector3 back) => Corrected?.Invoke(back);
 
         // The owner moved itself on purpose (elevator ride, leaving a vehicle): the server's last good place moves too.
-        // Trusted for now; #170 hardens it.
+        // Checked by MoveGuard.TryTeleport (#170).
         [ServerRpc]
         public void CmdTeleported(Vector3 to)
         {
-            if (!float.IsNaN(to.x + to.y + to.z) && TryGetComponent<MoveGuard>(out var guard)) guard.Accept(to);
+            if (TryGetComponent<MoveGuard>(out var guard)) guard.TryTeleport(to);
         }
     }
 }
