@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Game.Core;
+using Game.Net;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -69,7 +71,16 @@ namespace Game.Gameplay
 
         const float MarkerEdge = Minimap.ViewSize * 0.5f - 7f;
 
-        RectTransform _content, _arrow, _mapRect;
+        RectTransform _content, _arrow, _mapRect, _zoneRect;
+        RawImage _zoneImage;
+        Texture2D _zoneTexture;
+        int[] _zoneCell;       // region index per overlay texel
+        ZoneState[] _zoneShown = new ZoneState[0];
+        // What the overlay shows, for tests: the state painted for a region, and the tag under its name.
+        public ZoneState ShownState(int region) => region >= 0 && region < _zoneShown.Length ? _zoneShown[region] : ZoneState.Safe;
+        public Texture2D ZoneTexture => _zoneTexture;
+        public string NameLabelOf(int region) => region >= 0 && region < _nameText.Count ? _nameText[region].text : "";
+        readonly List<Text> _nameText = new List<Text>();
         GameObject _markerRoot;
         RectTransform _markerDot, _markerLine;
         Image _markerDotFill, _markerLineImage;
@@ -111,6 +122,12 @@ namespace Game.Gameplay
             v._mapImage.raycastTarget = false;
             v._mapImage.color = new Color(1f, 1f, 1f, 0.9f);
             v._mapRect.gameObject.SetActive(false);
+
+            // Region states: a picture over the map, painted when a region changes state.
+            v._zoneRect = UiKit.Rect("ZoneStates", v._content, centre, centre, Vector2.zero, Vector2.zero);
+            v._zoneImage = v._zoneRect.gameObject.AddComponent<RawImage>();
+            v._zoneImage.raycastTarget = false;
+            v._zoneRect.gameObject.SetActive(false);
 
             var gridColor = new Color(UiKit.Steel.r, UiKit.Steel.g, UiKit.Steel.b, 0.16f);
             v._gridRoot = UiKit.Rect("Grid", v._content, centre, centre, Vector2.zero, Vector2.zero).gameObject;
@@ -158,6 +175,7 @@ namespace Game.Gameplay
             }
 
             ShowRegionName(playerPosition);
+            RefreshZones();
 
             var flat = new Vector3(playerPosition.x, 0f, playerPosition.z);
             var texture = HudBackend.MapImage();
@@ -214,6 +232,12 @@ namespace Game.Gameplay
                     _gridH[i].anchoredPosition = new Vector2(0f, (firstZ + i * GridMeters - centre.z) * Minimap.PixelsPerMeter);
                 }
             }
+            if (_zoneRect.gameObject.activeSelf && _world != null && _world.Size > 0f)
+            {
+                float size = _world.Size;
+                _zoneRect.sizeDelta = new Vector2(size * Minimap.PixelsPerMeter, size * Minimap.PixelsPerMeter);
+                _zoneRect.anchoredPosition = Minimap.ToView(new Vector3(size * 0.5f, 0f, size * 0.5f), centre);
+            }
             if (_mapRect.gameObject.activeSelf && _world != null && _world.Size > 0f)
             {
                 float size = _world.Size;
@@ -235,6 +259,51 @@ namespace Game.Gameplay
             _regionLabel.text = RegionName;
         }
 
+        // Repaints the region states when any of them changed (the director tells clients only when one does).
+        void RefreshZones()
+        {
+            if (_world == null || _zoneCell == null) return;
+            var director = ZoneDirector.Instance;
+            bool changed = false;
+            for (int i = 0; i < _zoneShown.Length; i++)
+            {
+                var now = director != null ? director.StateOf(i) : ZoneState.Safe;
+                if (now == _zoneShown[i]) continue;
+                _zoneShown[i] = now;
+                changed = true;
+            }
+            if (!changed) return;
+            int n = Minimap.ZoneRes;
+            var pixels = _zoneTexture.GetRawTextureData<Color32>();
+            bool any = false;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    int r = _zoneCell[y * n + x];
+                    var state = r >= 0 ? _zoneShown[r] : ZoneState.Safe;
+                    bool edge = state != ZoneState.Safe && (Cell(x - 1, y) != r || Cell(x + 1, y) != r || Cell(x, y - 1) != r || Cell(x, y + 1) != r);
+                    pixels[y * n + x] = Minimap.ZoneTexel(state, edge, x, y);
+                    any |= state != ZoneState.Safe;
+                }
+            _zoneTexture.Apply();
+            _zoneRect.gameObject.SetActive(any);
+            _placedAt = new Vector3(float.NaN, 0f, 0f); // place it
+            for (int i = 0; i < _nameText.Count; i++)
+            {
+                string tag = Minimap.ZoneTag(_zoneShown[i]);
+                string name = _world.Regions[i].Name ?? "";
+                _nameText[i].text = tag.Length == 0 ? name : name + "\n<size=14><b>" + tag + "</b></size>";
+                var zc = Minimap.ZoneColour(_zoneShown[i]);
+                _nameText[i].color = tag.Length == 0 ? new Color(UiKit.TextDim.r, UiKit.TextDim.g, UiKit.TextDim.b, 0.8f) : new Color(zc.r, zc.g, zc.b, 1f);
+            }
+        }
+
+        int Cell(int x, int y)
+        {
+            int n = Minimap.ZoneRes;
+            return x < 0 || y < 0 || x >= n || y >= n ? -1 : _zoneCell[y * n + x];
+        }
+
         // Builds the marker pools when a different map shows up (once per scene load; not per frame).
         void EnsureWorld(WorldInfo world)
         {
@@ -244,7 +313,10 @@ namespace Game.Gameplay
             _elevators.Clear(); _elevatorPos.Clear();
             _borders.Clear(); _borderPos.Clear();
             _passMarks.Clear(); _passPos.Clear();
-            _names.Clear(); _namePos.Clear();
+            _names.Clear(); _namePos.Clear(); _nameText.Clear();
+            if (_zoneTexture != null) Object.Destroy(_zoneTexture);
+            _zoneTexture = null; _zoneCell = null; _zoneShown = new ZoneState[0];
+            _zoneRect.gameObject.SetActive(false);
             _world = world;
             _shownRegion = -2;
             _placedAt = new Vector3(float.NaN, 0f, 0f);
@@ -286,9 +358,12 @@ namespace Game.Gameplay
                 var label = UiKit.Rect("Name" + i, root, centre, centre, Vector2.zero, new Vector2(120f, 24f));
                 var text = UiKit.Label(label, regions[i].Name ?? "", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
                 text.color = new Color(UiKit.TextDim.r, UiKit.TextDim.g, UiKit.TextDim.b, 0.8f);
+                label.sizeDelta = new Vector2(120f, 44f);
                 _names.Add(label);
+                _nameText.Add(text);
                 _namePos.Add(regions[i].Centre);
             }
+            BuildZoneCells(world);
             var elevators = world.Elevators;
             for (int i = 0; i < elevators.Count; i++)
             {
@@ -299,6 +374,23 @@ namespace Game.Gameplay
                 _elevators.Add(marker);
                 _elevatorPos.Add(elevators[i].Position);
             }
+        }
+
+        // Which region each overlay texel belongs to (the nearest region centre, like ZoneGeometry.RegionAt).
+        void BuildZoneCells(WorldInfo world)
+        {
+            if (world.Size <= 0f || world.Regions.Count == 0) return;
+            int n = Minimap.ZoneRes;
+            _zoneCell = new int[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                    _zoneCell[y * n + x] = Minimap.NearestRegion(world.Regions, new Vector3((x + 0.5f) / n * world.Size, 0f, (y + 0.5f) / n * world.Size));
+            _zoneShown = new ZoneState[world.Regions.Count];
+            _zoneTexture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+            _zoneImage.texture = _zoneTexture;
+            var clear = new Color32[n * n];
+            _zoneTexture.SetPixels32(clear);
+            _zoneTexture.Apply();
         }
     }
 }

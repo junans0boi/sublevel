@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Game.Core;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -54,6 +55,55 @@ namespace Game.Gameplay
             // The border runs perpendicular to the line between the centres.
             float dx = centreB.x - centreA.x, dz = centreB.z - centreA.z;
             return Mathf.Atan2(dx, -dz) * Mathf.Rad2Deg;
+        }
+
+        // ---- Region states on the minimap (#178) ----
+
+        // Texels of the zone overlay along one side of the island.
+        public const int ZoneRes = 192;
+        const int StripePeriod = 8; // texels: half on, half off
+
+        // Colour of the state: warning amber, lockdown radiation green, bombardment orange, closed dark red.
+        public static Color ZoneColour(ZoneState state)
+        {
+            switch (state)
+            {
+                case ZoneState.Warning: return new Color(1f, 0.78f, 0.2f);
+                case ZoneState.Lockdown: return new Color(0.66f, 0.9f, 0.18f);
+                case ZoneState.Bombardment: return new Color(1f, 0.42f, 0.08f);
+                case ZoneState.Closed: return new Color(0.62f, 0.07f, 0.06f);
+                default: return Color.clear;
+            }
+        }
+
+        // One texel of the overlay. Next to close (warning): faint fill, dashed edge. Closing now (lockdown, bombardment):
+        // diagonal stripes and a solid bright edge. Closed: heavy fill. Safe: nothing.
+        public static Color32 ZoneTexel(ZoneState state, bool edge, int x, int y)
+        {
+            if (state == ZoneState.Safe) return new Color32(0, 0, 0, 0);
+            bool stripe = (x + y) % StripePeriod < StripePeriod / 2;
+            float a;
+            switch (state)
+            {
+                case ZoneState.Warning: a = edge ? (stripe ? 0.95f : 0f) : 0.18f; break;
+                case ZoneState.Closed: a = edge ? 1f : (stripe ? 0.72f : 0.55f); break;
+                default: a = edge ? 1f : (stripe ? 0.5f : 0.2f); break;
+            }
+            var c = ZoneColour(state);
+            return new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(a * 255f));
+        }
+
+        // Short tag under a region's name on the minimap; "" while it is safe.
+        public static string ZoneTag(ZoneState state)
+        {
+            switch (state)
+            {
+                case ZoneState.Warning: return "봉쇄 예정";
+                case ZoneState.Lockdown: return "봉쇄 중";
+                case ZoneState.Bombardment: return "폭격 중";
+                case ZoneState.Closed: return "폐쇄";
+                default: return "";
+            }
         }
     }
 }
