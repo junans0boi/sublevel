@@ -192,6 +192,26 @@ namespace Game.Net
             if (SelectedCount <= 0) ServerCycle();
         }
 
+        // #179: the inventory sets the throwable slot's kind (drag onto slot 5, right click "set as throwable"). Only a
+        // kind that is carried; `takeOut` also takes the slot out (a double click) without cycling when it is already out.
+        [Server]
+        public bool ServerSetThrowable(ThrowableKind kind, bool takeOut)
+        {
+            if (_combatant.Dead.Value || kind < ThrowableKind.Frag || kind > ThrowableKind.Molotov || CountOf(kind) <= 0) return false;
+            ServerSelect(kind);
+            bool out5 = _combatant.ActiveSlot.Value == Loadout.ThrowableSlot && !_combatant.Holstered.Value;
+            if (takeOut && !out5) _combatant.ServerSelectSlot(Loadout.ThrowableSlot);
+            return true;
+        }
+
+        public void RequestSetThrowable(ThrowableKind kind, bool takeOut)
+        {
+            if (IsServerInitialized) ServerSetThrowable(kind, takeOut); else CmdSetThrowable((int)kind, takeOut);
+        }
+
+        [ServerRpc]
+        public void CmdSetThrowable(int kind, bool takeOut) => ServerSetThrowable((ThrowableKind)kind, takeOut);
+
         // The owner's call (the T key): the host is the server, so it does not wait for the next network tick.
         public void RequestCycle()
         {

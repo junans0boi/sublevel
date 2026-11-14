@@ -318,6 +318,27 @@ namespace Game.Tests
             Assert.AreEqual(w.MagSize, l.MagCapacity(slot));
         }
 
+        // #179: right click on a loose attachment picks the gun: in hand first, the other next, none when nothing fits.
+        [Test]
+        public void BestGun_PrefersTheGunInHand_ThenTheOthers()
+        {
+            var fits = new[] { true, true, false };
+            var worn = new[] { 0, 0, 0 };
+            System.Func<int, bool> f = i => fits[i];
+            System.Func<int, int> w = i => worn[i];
+            Assert.AreEqual(1, Attachments.BestGun(12, 1, 3, f, w), "the gun in hand");
+            Assert.AreEqual(0, Attachments.BestGun(12, 2, 3, f, w), "a sidearm in hand that cannot take it: the first slot");
+            Assert.AreEqual(0, Attachments.BestGun(12, 4, 3, f, w), "throwable in hand: slot order");
+            worn[1] = 12;
+            Assert.AreEqual(0, Attachments.BestGun(12, 1, 3, f, w), "the one in hand already wears it: the other gun");
+            worn[0] = 12;
+            Assert.AreEqual(-1, Attachments.BestGun(12, 1, 3, f, w), "both wear it already");
+            fits[0] = fits[1] = false;
+            Assert.AreEqual(-1, Attachments.BestGun(12, 0, 3, f, w), "no gun takes it");
+            worn[1] = 9; fits[1] = true;
+            Assert.AreEqual(1, Attachments.BestGun(12, 1, 3, f, w), "a different one in the place is swapped out");
+        }
+
         sealed class FloatCompare : System.Collections.IComparer
         {
             public int Compare(object x, object y) => Mathf.Abs((float)x - (float)y) < 1e-4f ? 0 : ((float)x).CompareTo((float)y);

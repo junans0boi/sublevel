@@ -26,6 +26,8 @@ namespace Game.Gameplay
         Syringe,
         Flash,
         Molotov,
+        Backpack,    // #179: the worn backpack slot (tooltip only)
+        EmptyAttach, // #179: an empty attachment slot of a weapon card; Index = gear index (tooltip, drop target)
     }
 
     public readonly struct InventoryDragSource
@@ -303,22 +305,22 @@ namespace Game.Gameplay
                 case InventorySourceKind.Medkit:
                     return "구급상자\n보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개";
                 case InventorySourceKind.Grenade:
-                    return "수류탄\n보유 " + Grenades(combatant) + "개";
+                    return ThrowableRules.GrenadeName + "\n투척물 · 보유 " + Grenades(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Bandage:
                     return HealRules.BandageName + "\n보유 " + Bandages(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.FirstAid:
                     return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.Smoke:
-                    return ThrowableRules.SmokeName + "\n보유 " + Smokes(combatant) + "개";
+                    return ThrowableRules.SmokeName + "\n투척물 · 보유 " + Smokes(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Drink:
                 case InventorySourceKind.Pill:
                 case InventorySourceKind.Syringe:
                     var boost = BoostKindOf(source.Kind);
                     return Healing.NameOf(boost) + "\n보유 " + BoostCount(combatant, boost) + "개 · 우클릭 사용 (J: 가장 작은 것)";
                 case InventorySourceKind.Flash:
-                    return ThrowableRules.FlashName + "\n보유 " + Flashes(combatant) + "개 · 우클릭 버리기";
+                    return ThrowableRules.FlashName + "\n투척물 · 보유 " + Flashes(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Molotov:
-                    return ThrowableRules.MolotovName + "\n보유 " + Molotovs(combatant) + "개 · 우클릭 버리기";
+                    return ThrowableRules.MolotovName + "\n투척물 · 보유 " + Molotovs(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Jerrycan:
                     return FuelRules.JerrycanName + "\n보유 " + Jerrycans(combatant) + "개 · 차량 옆에서 J 또는 더블클릭 주유";
                 case InventorySourceKind.Weapon:
@@ -327,9 +329,15 @@ namespace Game.Gameplay
                     return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + (weapon.IsMelee ? "근접 무기" : AmmoName(AmmoIndex(weapon)));
                 case InventorySourceKind.Optic:
                     int opticId = OpticOf(combatant, source.Index);
-                    return opticId == 0 ? "" : LootNames.OfOptic(opticId) + "\n" + Attachments.Describe(opticId);
+                    return opticId == 0 ? "" : LootNames.OfOptic(opticId) + "\n" + Attachments.Describe(opticId) + " · 우클릭: 가방으로 분리";
                 case InventorySourceKind.BagOptic:
-                    return Attachments.NameOf(source.Index).Length == 0 ? "" : LootNames.OfOptic(source.Index) + "\n" + Attachments.Describe(source.Index) + " · 보유 " + BagOpticCount(combatant, source.Index) + "개 · 총기 칸으로 끌어 장착";
+                    return Attachments.NameOf(source.Index).Length == 0 ? "" : LootNames.OfOptic(source.Index) + "\n" + Attachments.Describe(source.Index) + " · 보유 " + BagOpticCount(combatant, source.Index) + "개 · 우클릭: 자동 장착, 총기 칸으로 끌어 장착";
+                case InventorySourceKind.Backpack:
+                    int tier = BackpackTier(combatant);
+                    return tier <= 0 ? "가방\n비어 있음 · 가방을 주워 용량을 늘리세요" : LootNames.Of(LootKind.Backpack, 0, AmmoType.Pistol9, tier) + "\n장구류 · 용량 " + CarryCapacity(combatant).ToString("0");
+                case InventorySourceKind.EmptyAttach:
+                    var place = Attachments.SlotOfIndex(source.Index);
+                    return Attachments.PlaceName(place) + " 칸\n비어 있음 · 맞는 부착물을 끌어 놓거나 우클릭";
                 case InventorySourceKind.Helmet: return GearDescription(combatant, HelmetSlot, "헬멧");
                 case InventorySourceKind.Vest: return GearDescription(combatant, VestSlot, "조끼");
                 default: return "";
@@ -528,6 +536,112 @@ namespace Game.Gameplay
         {
             var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
             if (user != null) user.CmdDropMolotov();
+        }
+
+        // ---- #179: attachments by place, auto-equip, throwable slot, backpack ----
+
+        // Does the weapon have a slot for this place (some attachment of the place fits it)?
+        public static bool WeaponTakesPlace(int weaponId, AttachSlot place)
+        {
+            if (weaponId == 0) return false;
+            for (int id = 1; id <= OpticBag.MaxId; id++)
+                if (Attachments.SlotOf(id) == place && Optics.CanAttach(weaponId, id)) return true;
+            return false;
+        }
+
+        public static AttachSlot? PlaceOfId(int opticId) => Attachments.SlotOf(opticId);
+
+        // Icon key of what an empty slot of this place waits for (dim picture).
+        public static string PlaceGhostKey(AttachSlot place)
+        {
+            switch (place)
+            {
+                case AttachSlot.Optic: return "optic_reddot";
+                case AttachSlot.Muzzle: return "att_comp";
+                case AttachSlot.Grip: return "att_grip_v";
+                case AttachSlot.Stock: return "att_stock";
+                default: return "att_mag";
+            }
+        }
+
+        // Can the weapon slot take this attachment id in this place (right gun, right place)?
+        public static bool CanFitPlace(Combatant combatant, int weaponSlot, AttachSlot place, int opticId) =>
+            CanAttachOptic(combatant, weaponSlot, opticId) && Attachments.SlotOf(opticId) == place;
+
+        // Right click on a loose attachment: the weapon slot it goes on (the gun in hand first); -1 when none takes it.
+        public static int AutoAttachSlot(Combatant combatant, int opticId)
+        {
+            if (combatant == null) return -1;
+            var place = Attachments.SlotOf(opticId);
+            if (place == null) return -1;
+            return Attachments.BestGun(opticId, combatant.Holstered.Value ? -1 : combatant.ActiveSlot.Value, Loadout.SidearmSlot + 1,
+                slot => Optics.CanAttach(combatant.WeaponInSlot(slot), opticId),
+                slot => OpticOf(combatant, Attachments.GearIndex(slot, place.Value)));
+        }
+
+        public static int BackpackTier(Combatant combatant)
+        {
+            var carry = combatant != null ? combatant.GetComponent<CombatantCarry>() : null;
+            return carry != null ? carry.BackpackTier.Value : 0;
+        }
+
+        public static float CarryCapacity(Combatant combatant)
+        {
+            var carry = combatant != null ? combatant.GetComponent<CombatantCarry>() : null;
+            return carry != null ? carry.Capacity : 0f;
+        }
+
+        // Mirrors the server: a better backpack tier only.
+        public static bool CanEquipBackpack(Combatant combatant, LootItem loot) =>
+            loot != null && (LootKind)loot.Kind.Value == LootKind.Backpack && loot.Tier.Value > BackpackTier(combatant);
+
+        public static bool IsThrowableSource(InventorySourceKind kind) => ThrowKindOf(kind) != null;
+
+        public static ThrowableKind? ThrowKindOf(InventorySourceKind kind)
+        {
+            switch (kind)
+            {
+                case InventorySourceKind.Grenade: return ThrowableKind.Frag;
+                case InventorySourceKind.Smoke: return ThrowableKind.Smoke;
+                case InventorySourceKind.Flash: return ThrowableKind.Flash;
+                case InventorySourceKind.Molotov: return ThrowableKind.Molotov;
+                default: return null;
+            }
+        }
+
+        public static InventorySourceKind SourceKindOf(ThrowableKind kind)
+        {
+            switch (kind)
+            {
+                case ThrowableKind.Smoke: return InventorySourceKind.Smoke;
+                case ThrowableKind.Flash: return InventorySourceKind.Flash;
+                case ThrowableKind.Molotov: return InventorySourceKind.Molotov;
+                default: return InventorySourceKind.Grenade;
+            }
+        }
+
+        public static string ThrowIconKey(ThrowableKind kind) =>
+            kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : kind == ThrowableKind.Molotov ? "molotov" : "grenade";
+
+        public static ThrowableKind SelectedThrowable(Combatant combatant)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.SelectedKind : ThrowableKind.Frag;
+        }
+
+        public static int ThrowableCount(Combatant combatant, ThrowableKind kind)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            return user != null ? user.CountOf(kind) : 0;
+        }
+
+        // Makes the kind the one slot 5 throws (and takes the slot out when `takeOut`); false when none is carried.
+        public static bool SetThrowable(Combatant combatant, ThrowableKind kind, bool takeOut)
+        {
+            var user = combatant != null ? combatant.GetComponent<ThrowableUser>() : null;
+            if (user == null || user.CountOf(kind) <= 0) return false;
+            user.RequestSetThrowable(kind, takeOut);
+            return true;
         }
 
         public static HealKind BoostKindOf(InventorySourceKind kind) =>

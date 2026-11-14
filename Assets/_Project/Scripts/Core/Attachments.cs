@@ -63,6 +63,16 @@ namespace Game.Core
 
         public static AttachSlot? SlotOf(int id) => SlotOf(id, OpticRules.Current);
 
+        // #179: right click on a loose attachment: which weapon slot (0..) takes it. The weapon in hand first, then the
+        // others in slot order; a gun that cannot take it, or already wears this very one, is skipped. -1: none.
+        public static int BestGun(int id, int active, int slots, Func<int, bool> fits, Func<int, int> fitted)
+        {
+            if (active >= 0 && active < slots && fits(active) && fitted(active) != id) return active;
+            for (int slot = 0; slot < slots; slot++)
+                if (slot != active && fits(slot) && fitted(slot) != id) return slot;
+            return -1;
+        }
+
         static readonly string[] PlaceNames = { "조준경", "총구", "손잡이", "개머리판", "탄창" };
         public static string PlaceName(AttachSlot slot) => PlaceNames[(int)slot];
 
