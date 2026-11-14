@@ -70,6 +70,7 @@ namespace Game.Gameplay
         const float MaxViewPitch = 89f;
 
         bool _autoRun;
+        bool _autoRunSprint; // auto-run was started while sprinting
         bool _sprintOverruled; // C or Z pressed during this sprint: it no longer gets the body up
         float _lastMoveY;
         bool _sentSlowWalk;
@@ -289,11 +290,16 @@ namespace Game.Gameplay
             if (!VehicleSeat.IsAttached(_combatant)) transform.rotation = Quaternion.Euler(0f, OnLedge ? _hangYaw : Yaw, 0f);
 
             // Auto-run: = toggles it; a fresh W or S, aiming, a screen or anything else taking the body ends it.
-            if (f.AutoRun) _autoRun = !_autoRun;
+            if (f.AutoRun)
+            {
+                _autoRun = !_autoRun;
+                _autoRunSprint = _autoRun && f.Sprint; // started during a sprint: it keeps the sprint speed (#177)
+            }
             bool freshForwardBack = Mathf.Abs(f.Move.y) > 0.1f && Mathf.Abs(_lastMoveY) <= 0.1f;
             _lastMoveY = f.Move.y;
             if (freshForwardBack || aim != AimMode.Hip || UiFocus.Current == UiScreen.Menu || SpawnProtection.InputBlocked
                 || ExternalControl || ResultScreen.BlocksGameplay) _autoRun = false;
+            if (!_autoRun) _autoRunSprint = false;
             if (_autoRun) f.Move.y = 1f;
 
             if (InParkour)
@@ -321,7 +327,7 @@ namespace Game.Gameplay
             // Healing is walk-only, and a jump ends it (ADR-099).
             bool healing = CombatantHealing.IsUsing(_combatant);
             if (healing && f.Jump) GetComponent<CombatantHealing>().RequestCancel();
-            bool sprint = f.Sprint && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl && !healing;
+            bool sprint = (f.Sprint || _autoRunSprint) && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl && !healing;
 
             // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
             if (f.Jump && !ExternalControl && _stance != null && _controller.isGrounded && BodyStance != Stance.Prone && TryStartParkour())
