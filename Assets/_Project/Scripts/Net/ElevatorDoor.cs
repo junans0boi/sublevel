@@ -351,6 +351,7 @@ namespace Game.Net
             if (!only.IsAuthenticated) return;
             _network.ServerManager.Broadcast(only, ServerStatus());
             foreach (int id in _serverEnded) _network.ServerManager.Broadcast(only, new SpawnProtectionEnded { ObjectId = id });
+            GetComponent<ElevatorRides>()?.ServerSendCycles(only); // a ride that is running right now
         }
 
         void OnClientLoaded(NetworkConnection connection, bool asServer)

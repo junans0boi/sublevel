@@ -323,6 +323,18 @@ namespace Game.Net
             return true;
         }
 
+        // Server: a client that just loaded is told the cycles that are running (it joined mid-ride, ADR-131).
+        public void ServerSendCycles(NetworkConnection connection)
+        {
+            if (!ServerActive || connection == null || !connection.IsAuthenticated) return;
+            double now = Time.timeAsDouble;
+            foreach (var kv in _cycles)
+            {
+                if (!ElevatorCycle.Active(now - kv.Value.Start, DeploymentRules.Current)) continue;
+                _network.ServerManager.Broadcast(connection, new ElevatorCycleStatus { Station = kv.Key, Kind = (byte)kv.Value.Kind, Ago = (float)(now - kv.Value.Start) });
+            }
+        }
+
         void ServerSetCycle(int station, ElevatorCycleKind kind, double start)
         {
             SetCycle(station, kind, start);

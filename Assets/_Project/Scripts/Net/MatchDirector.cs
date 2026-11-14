@@ -112,6 +112,10 @@ namespace Game.Net
             var doors = GetComponent<DoorSystem>();
             if (doors == null) doors = gameObject.AddComponent<DoorSystem>();
             doors.Bind(_networkManager);
+            // Time of day and weather: the server picks, every client derives (ADR-131).
+            var sky = GetComponent<SkySync>();
+            if (sky == null) sky = gameObject.AddComponent<SkySync>();
+            sky.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             if (_startAsHost && NetSession.Role == NetSession.RoleKind.Client)

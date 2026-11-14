@@ -91,5 +91,19 @@ namespace Game.Tests
             Assert.Greater(rain, 30);
             Assert.Greater(fog, 30);
         }
+
+        // ADR-125: every peer derives the hour from the one start hour and the match time it was told.
+        [Test]
+        public void HourAt_RunsFromTheStartHour_OnlyWhenTheClockRuns_AndWraps()
+        {
+            float start = WorldSky.StartHour(DayTimeChoice.Random, 99);
+            Assert.AreEqual(start, WorldSky.HourAt(start, 0f, true), 1e-4f);
+            Assert.AreEqual(WorldSky.Wrap(start + 0.3f), WorldSky.HourAt(start, 60f, true), 1e-3f, "0.3 h per real minute");
+            Assert.AreEqual(WorldSky.DuskHour, WorldSky.HourAt(WorldSky.DuskHour, 600f, false), 1e-4f, "a chosen time stands still");
+            Assert.AreEqual(0.5f, WorldSky.HourAt(23.5f, 200f, true), 1e-3f, "past midnight (200 s = 1 h)");
+            Assert.AreEqual(start, WorldSky.HourAt(start, -5f, true), 1e-4f, "never before the start");
+            // Two peers with the same seed and the same match time see the same hour and weather.
+            Assert.AreEqual(WorldSky.PickWeather(WeatherChoice.Random, 99), WorldSky.PickWeather(WeatherChoice.Random, 99));
+        }
     }
 }

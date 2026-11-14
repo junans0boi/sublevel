@@ -1,10 +1,28 @@
 using System;
 using System.Collections.Generic;
+using FishNet.Broadcast;
+using FishNet.Connection;
+using FishNet.Managing;
+using FishNet.Transporting;
 using Game.Core;
 using UnityEngine;
 
 namespace Game.Net
 {
+    // Server -> clients: a crate came down (also sent to a client that finishes loading, Ago = how long ago, ADR-131).
+    public struct SupplyDropped : IBroadcast
+    {
+        public int Id, Region, Seed;
+        public Vector3 Position;
+        public float Ago;
+    }
+
+    // Server -> clients: the crate was opened (its items are ordinary loot now).
+    public struct SupplyOpened : IBroadcast { public int Id; }
+
+    // Client -> server: the player held F next to crate `Id`.
+    public struct SupplyOpenRequest : IBroadcast { public int Id; }
+
     // One supply crate that came down (#144).
     public class SupplyCrate
     {
@@ -19,8 +37,9 @@ namespace Game.Net
 
     // Server: at the start of each lockdown stage the rules ask for (SupplyRules), an elevator in a still-safe region
     // sends a crate down (ADR-113). Opening it lays its loot out as ordinary pickups, like a death crate.
-    // Single-player first: the crate is plain server state plus the static events below, not a network object, so
-    // the views of the host's own client follow it; remote clients would need a broadcast (out of scope).
+    // The crate is plain server state plus the static events below, not a network object; remote clients get the same
+    // list through broadcasts (SupplyDropped / SupplyOpened, a late joiner is sent the crates still there, ADR-131) and
+    // ask to open one with SupplyOpenRequest, so their views and map follow it the way the host's do.
     // Installs itself under the ZoneDirector, so nothing in the scenes refers to it.
     public class SupplyDirector : MonoBehaviour
     {
@@ -50,10 +69,96 @@ namespace Game.Net
             if (director != null && director.GetComponent<SupplyDirector>() == null) director.gameObject.AddComponent<SupplyDirector>();
         }
 
+        NetworkManager _network;
+        bool _bound;
+        bool ServerActive => _network != null && _network.IsServerStarted;
+
         void Awake() => Instance = this;
         void OnEnable() => ZoneDirector.ServerRegionStateChanged += OnRegionState;
         void OnDisable() => ZoneDirector.ServerRegionStateChanged -= OnRegionState;
-        void OnDestroy() { if (Instance == this) Instance = null; }
+
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            if (!_bound || _network == null) return;
+            _network.ClientManager.UnregisterBroadcast<SupplyDropped>(OnClientDropped);
+            _network.ClientManager.UnregisterBroadcast<SupplyOpened>(OnClientOpened);
+            _network.ServerManager.UnregisterBroadcast<SupplyOpenRequest>(OnOpenRequest);
+            _network.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
+        }
+
+        // Called on its own as soon as a NetworkManager exists; tests with their own managers call it directly.
+        public void Bind(NetworkManager network)
+        {
+            if (_bound || network == null) return;
+            _bound = true;
+            _network = network;
+            _network.ClientManager.RegisterBroadcast<SupplyDropped>(OnClientDropped);
+            _network.ClientManager.RegisterBroadcast<SupplyOpened>(OnClientOpened);
+            _network.ServerManager.RegisterBroadcast<SupplyOpenRequest>(OnOpenRequest);
+            _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
+        }
+
+        void Start() => TryBind();
+
+        void TryBind()
+        {
+            if (_bound) return;
+            var all = NetworkManager.Instances;
+            if (all.Count > 0) Bind(all[0]);
+        }
+
+        // F held next to a landed crate: the server opens it itself, a client asks the server.
+        public void RequestOpen(SupplyCrate crate, Combatant by)
+        {
+            if (crate == null || by == null) return;
+            if (by.IsServerInitialized) ServerTryOpen(crate, by);
+            else if (_network != null && _network.IsClientStarted) _network.ClientManager.Broadcast(new SupplyOpenRequest { Id = crate.Id });
+        }
+
+        void OnOpenRequest(NetworkConnection connection, SupplyOpenRequest request, Channel channel)
+        {
+            if (!ServerActive || connection == null || connection.FirstObject == null) return;
+            var by = connection.FirstObject.GetComponent<Combatant>();
+            foreach (var crate in _crates)
+                if (crate.Id == request.Id) { ServerTryOpen(crate, by); return; }
+        }
+
+        void OnClientLoaded(NetworkConnection connection, bool asServer)
+        {
+            if (!asServer || !ServerActive || connection == null || !connection.IsAuthenticated) return;
+            foreach (var c in _crates)
+                _network.ServerManager.Broadcast(connection, new SupplyDropped { Id = c.Id, Region = c.Region, Seed = c.Seed, Position = c.Position, Ago = Time.time - c.DroppedAt });
+        }
+
+        // A remote client: the host's own director already holds the crate.
+        void OnClientDropped(SupplyDropped m, Channel channel)
+        {
+            if (ServerActive) return;
+            foreach (var c in _crates) if (c.Id == m.Id) return;
+            float droppedAt = Time.time - m.Ago;
+            var crate = new SupplyCrate
+            {
+                Id = m.Id, Region = m.Region, Position = m.Position, Seed = m.Seed,
+                DroppedAt = droppedAt, LandsAt = droppedAt + SupplyRules.Current.DescentSeconds,
+            };
+            _crates.Add(crate);
+            DropCount++;
+            Dropped?.Invoke(crate);
+        }
+
+        void OnClientOpened(SupplyOpened m, Channel channel)
+        {
+            if (ServerActive) return;
+            for (int i = 0; i < _crates.Count; i++)
+            {
+                if (_crates[i].Id != m.Id) continue;
+                var crate = _crates[i];
+                _crates.RemoveAt(i);
+                Opened?.Invoke(crate);
+                return;
+            }
+        }
 
         void OnRegionState(int region, ZoneState state)
         {
@@ -84,6 +189,7 @@ namespace Game.Net
             _crates.Add(crate);
             DropCount++;
             Dropped?.Invoke(crate);
+            if (ServerActive) _network.ServerManager.Broadcast(new SupplyDropped { Id = crate.Id, Region = region, Seed = seed, Position = crate.Position, Ago = 0f });
             return crate;
         }
 
@@ -135,6 +241,7 @@ namespace Game.Net
             }
             _crates.Remove(crate);
             Opened?.Invoke(crate);
+            if (ServerActive) _network.ServerManager.Broadcast(new SupplyOpened { Id = crate.Id });
             return true;
         }
 

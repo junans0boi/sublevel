@@ -61,6 +61,10 @@ namespace Game.Core
             }
         }
 
+        // The hour `elapsedSeconds` of match time after the start (every peer derives its own clock from the one start hour).
+        public static float HourAt(float startHour, float elapsedSeconds, bool clockRuns) =>
+            clockRuns ? Wrap(startHour + Math.Max(0f, elapsedSeconds) * HoursPerRealMinute / 60f) : Wrap(startHour);
+
         public static WeatherKind PickWeather(WeatherChoice choice, int seed)
         {
             if (choice != WeatherChoice.Random) return (WeatherKind)((int)choice - 1);

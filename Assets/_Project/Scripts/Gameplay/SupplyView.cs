@@ -9,7 +9,7 @@ namespace Game.Gameplay
 {
     // What the player sees and does with the supply crates (#144, ADR-113): the crate coming down on a line, the
     // coloured signal smoke over it (the smoke grenade's puffs and material, a tall column), the hold-F opening with
-    // its prompt. Follows SupplyDirector's static events, so it is only as networked as that is (host).
+    // its prompt. Follows SupplyDirector's static events (which the director raises on remote clients too, ADR-131).
     // Installs itself under the director on the first crate; nothing in the scenes refers to it.
     public class SupplyView : MonoBehaviour
     {
@@ -216,7 +216,7 @@ namespace Game.Gameplay
             view._progress = crate == null ? 0f : SupplyPlan.Hold(before, held, true, dt, seconds);
             if (crate != null && view._progress >= 1f)
             {
-                director.ServerTryOpen(crate, me);
+                director.RequestOpen(crate, me); // a remote client asks the server
                 view._progress = 0f;
                 return true;
             }
