@@ -4,19 +4,22 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // The two wheels over the match (ADR-130): the marker wheel (team matches: hold the ping button a moment). It reads the local player's last input, opens a wheel, and on letting go does what
+    // The two wheels over the match (ADR-130, ADR-131): the marker wheel (team matches: hold the ping button a moment)
+    // and the emote wheel (hold N). It reads the local player's last input, opens a wheel, and on letting go does what
     // the part under the cursor says. A wheel is the whole screen's business while it is open: PlayerController feeds the
     // mouse into it instead of the camera and drops firing. Installs itself next to every match like TeamHud.
     public class WheelHud : MonoBehaviour
     {
         const int SortOrder = 3; // above TeamHud
+        const float EmoteHoldSeconds = 0.12f;
 
         public static WheelHud Instance { get; private set; }
 
         public RadialWheel MarkerWheel { get; private set; }
+        public RadialWheel EmoteWheel { get; private set; }
 
         Canvas _canvas;
-        float _pingHeld;
+        float _pingHeld, _emoteHeld;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook()
@@ -51,12 +54,21 @@ namespace Game.Gameplay
                 kindColours[i] = TeamPingView.ColourOf((PingKind)i);
             }
             MarkerWheel = RadialWheel.Build(_canvas.transform, "MarkerWheel", "마커", kinds, kindColours);
+            var emotes = new string[Emotes.Count];
+            var emoteColours = new Color[Emotes.Count];
+            for (int i = 0; i < emotes.Length; i++)
+            {
+                emotes[i] = Emotes.Name((Emote)(i + 1));
+                emoteColours[i] = UiKit.Accent;
+            }
+            EmoteWheel = RadialWheel.Build(_canvas.transform, "EmoteWheel", "감정 표현", emotes, emoteColours);
         }
 
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
             MarkerWheel?.Hide();
+            EmoteWheel?.Hide();
         }
 
         void LateUpdate()
@@ -67,10 +79,16 @@ namespace Game.Gameplay
             var input = allowed ? player.LastInput : default;
 
             // Marker wheel: team matches, on foot; held past the tap time it opens, letting go places the ping.
-            bool markerOk = allowed && me.HasTeam && !me.Knocked.Value;
+            bool markerOk = allowed && me.HasTeam && !me.Knocked.Value && !EmoteWheel.IsOpen;
             Tick(MarkerWheel, markerOk && input.PingHeld, ref _pingHeld, DeviceInput.WheelHoldSeconds, kind =>
             {
                 if (kind >= 0) PlaceMarker(me, player, (PingKind)kind);
+            });
+
+            bool emoteOk = allowed && !me.Knocked.Value && !me.IsCarrying && !me.BeingCarried && !MarkerWheel.IsOpen;
+            Tick(EmoteWheel, emoteOk && input.EmoteHeld, ref _emoteHeld, EmoteHoldSeconds, part =>
+            {
+                if (part >= 0) player.StartEmote((Emote)(part + 1));
             });
         }
 

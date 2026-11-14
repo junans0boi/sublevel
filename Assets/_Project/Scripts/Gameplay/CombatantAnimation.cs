@@ -498,6 +498,7 @@ namespace Game.Gameplay
             PoseRifle();
             PoseMelee();
             PoseLedge();
+            PoseEmote();
             if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)

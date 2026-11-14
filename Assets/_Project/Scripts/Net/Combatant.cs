@@ -334,6 +334,7 @@ namespace Game.Net
                 if (Aim.Value != 0 && (_health.IsDead || Melee.CanStrike(ActiveWeapon))) Aim.Value = 0;
                 if (Holstered.Value && _health.IsDead) Holstered.Value = false;
                 if (Lean.Value != 0 && _health.IsDead) Lean.Value = 0;
+                ServerTickEmote();
             }
             TickLean();
             TickSpeed();

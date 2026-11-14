@@ -209,6 +209,9 @@ namespace Game.Gameplay
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor, ScopeView.CurrentZoom);
             LastInput = f;
+            // Moving, firing or changing something ends an emote (ADR-133).
+            if (_combatant.Emoting && (f.Move.sqrMagnitude > 0.01f || f.Jump || f.FireHeld || f.FirePressed || f.AimHeld || f.Crouch || f.Prone
+                || f.Reload || f.Holster || f.Heal || f.ThrowPressed || f.SelectSlot >= 0)) _combatant.CmdEmote(0);
             UpdateCursor();
             _recoil.Tick(Time.deltaTime, _rules.Recoil.RecoverRate(_combatant.ActiveWeapon) * FittedMods.Recover, _rules.Recoil.RecoverDelaySeconds);
 
@@ -823,6 +826,14 @@ namespace Game.Gameplay
             if (!TryPingPoint(out var point)) return false;
             MapMarker.Set(point);
             return true;
+        }
+
+        // The emote wheel's choice (ADR-133): empty hands first (the weapon is put away), then the server plays it for everyone.
+        public void StartEmote(Emote emote)
+        {
+            if (_combatant.Dead.Value || _combatant.TeamBlocksAction) return;
+            if (_combatant.ActiveWeaponId != 0) SetHolstered(true);
+            _combatant.CmdEmote((byte)emote);
         }
 
         // The first surface under the crosshair within PingDistance.
