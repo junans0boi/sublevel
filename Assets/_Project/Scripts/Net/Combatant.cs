@@ -312,6 +312,7 @@ namespace Game.Net
             _rng = new System.Random(unchecked(matchSeed * 31 + ObjectId * 7919 + 17));
             _receivers = GetComponents<ILootReceiver>();
             _carry = GetComponent<CombatantCarry>();
+            if (GetComponent<PositionRecorder>() == null) gameObject.AddComponent<PositionRecorder>(); // #162
             // A body that someone else's client moves is watched (#161); the host's own and the AI's are not.
             if (_isPlayer && Owner != null && Owner.IsValid && !Owner.IsLocalClient && GetComponent<MoveGuard>() == null) gameObject.AddComponent<MoveGuard>();
             Push();
@@ -399,7 +400,9 @@ namespace Game.Net
 
         [Server]
         // `aimMeters` >= 0: the shooter (a bot) aims straight at a target that far away, so the bullet crosses the line there.
-        public bool ServerFire(Vector3 direction, float aimMeters = -1f)
+        // `rewindSeconds` > 0: the shooter saw the others that long ago (lag compensation, #162); bullets are judged
+        // against where the others stood then.
+        public bool ServerFire(Vector3 direction, float aimMeters = -1f, float rewindSeconds = 0f)
         {
             float sqr = direction.sqrMagnitude;
             // Knocked down or reviving (ADR-072): no shooting.
@@ -422,7 +425,7 @@ namespace Game.Net
             for (int i = 0; i < pellets; i++)
             {
                 var dir = aim * Quaternion.Euler(PitchBuf[i], YawBuf[i], 0f) * Vector3.forward;
-                ServerLaunch(origin, dir, weapon, aimMeters >= 0f ? aimMeters : EffectiveZero);
+                ServerLaunch(origin, dir, weapon, aimMeters >= 0f ? aimMeters : EffectiveZero, rewindSeconds);
             }
             // Bots hear the shot where it was fired, whoever fired it.
             BotNoise.Emit(origin.x, origin.y, origin.z, ShotHearingRadius(BotRules.Current.GunshotHearingRadius), ObjectId);
@@ -639,8 +642,18 @@ namespace Game.Net
 
         // ---- Owner requests ----
 
+        // The server tick this client was showing the others at (sent with a shot, #162).
+        public uint ViewTick => LagComp.ViewTick(TimeManager.LastPacketTick.RemoteTick);
+
+        // A shot with no view tick is judged where the others are now (tests; the player sends its tick).
+        public void CmdFire(Vector3 direction) => CmdFire(direction, uint.MaxValue);
+
         [ServerRpc]
-        public void CmdFire(Vector3 direction) => ServerFire(direction);
+        public void CmdFire(Vector3 direction, uint viewTick)
+        {
+            var time = TimeManager;
+            ServerFire(direction, -1f, LagComp.RewindSeconds(time.Tick, viewTick, time.TickDelta, GameData.Rules.Ballistics.MaxRewindSeconds));
+        }
 
         [ServerRpc]
         public void CmdPunch(Vector3 direction) => ServerPunch(direction);

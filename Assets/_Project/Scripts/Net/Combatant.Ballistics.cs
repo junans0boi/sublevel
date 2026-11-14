@@ -20,6 +20,7 @@ namespace Game.Net
             public float DamageScale; // share of damage left after the pieces gone through
             public int Pieces;
             public Vector3 Muzzle; // where the shot started (for the effects)
+            public double RewindAt; // server time the shooter saw the others at (lag compensation, #162); 0 = now. A bullet in flight keeps judging against that moment.
         }
 
         // Where the sights and the bullet cross, metres (zeroing, G10b). Server side.
@@ -27,7 +28,7 @@ namespace Game.Net
         public float EffectiveZero => ZeroMeters > 0f ? ZeroMeters : GameData.Rules.Ballistics.DefaultZeroMeters;
 
         // Launches one projectile. `zero` is the distance at which the bullet crosses the line of sight.
-        void ServerLaunch(Vector3 origin, Vector3 dir, WeaponDef weapon, float zero)
+        void ServerLaunch(Vector3 origin, Vector3 dir, WeaponDef weapon, float zero, float rewind = 0f)
         {
             var r = GameData.Rules.Ballistics;
             float speed = Ballistics.MuzzleSpeed(weapon, r);
@@ -45,6 +46,7 @@ namespace Game.Net
                 TEnd = Mathf.Min(weapon.Range / speed, r.MaxFlightSeconds),
                 Muzzle = origin,
                 DamageScale = 1f,
+                RewindAt = rewind > 0f ? Time.timeAsDouble - rewind : 0.0,
             };
             float instant = Mathf.Min(r.InstantMeters / speed, bullet.TEnd);
             bool done = ServerAdvance(ref bullet, instant, whole: true);
@@ -87,7 +89,17 @@ namespace Game.Net
             {
                 float left = length - Vector3.Distance(a, from);
                 // [VEHICLE HOOK] same as Physics.Raycast on foot; from a seat it passes the shooter's own car and its occupants.
-                if (left <= 1e-4f || !VehicleSeat.Raycast(this, from, dir, left, out var hit)) break;
+                if (left <= 1e-4f) break;
+                RaycastHit hit;
+                bool got;
+                float victimFeet = float.NaN; // the victim's feet as they were for this test
+                // The others stand where the shooter saw them (#162); they are back before anything else happens.
+                using (var rewound = LagCompensation.Rewind(this, from, dir, left, b.RewindAt))
+                {
+                    got = VehicleSeat.Raycast(this, from, dir, left, out hit);
+                    if (got && rewound.TryRewound(hit.collider.GetComponentInParent<Combatant>(), out var then)) victimFeet = then.y;
+                }
+                if (!got) break;
                 stopped = true;
                 end = hit.point;
                 normal = hit.normal;
@@ -99,7 +111,7 @@ namespace Game.Net
                 {
                     surface = BulletSurface.Body;
                     // The zone comes from how high on the victim the shot landed, in the victim's current stance.
-                    zone = HitZones.At(hit.point.y - target.transform.position.y, target.EyeHeightOffset, GameData.Rules.Fire.Zones);
+                    zone = HitZones.At(hit.point.y - (float.IsNaN(victimFeet) ? target.transform.position.y : victimFeet), target.EyeHeightOffset, GameData.Rules.Fire.Zones);
                     target.ServerTakeDamage(new DamageInfo
                     {
                         Amount = DamageRules.ForZone(weapon, travelled + Vector3.Distance(a, hit.point), zone) * scale,

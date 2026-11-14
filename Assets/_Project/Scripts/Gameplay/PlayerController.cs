@@ -116,12 +116,16 @@ namespace Game.Gameplay
             _aim = new AimInput(_rules.Aim.TapSeconds);
         }
 
-        // A body some other peer owns is still something to hit: the server's copy of a remote player (and every
-        // replica) keeps its capsule on, otherwise shots and blasts pass through it (ADR-130). The owner turns its own
-        // on in OnStartClient and is the only one that moves it.
-        public override void OnStartNetwork()
+        // The server's copy of a player some other peer owns is still something to hit: its capsule stays on, otherwise
+        // shots and blasts pass through it (ADR-130). The owner turns its own on in OnStartClient and is the only one that
+        // moves it. Only the server judges hits, so client replicas keep theirs off. Hit-only: queries see the capsule,
+        // but no body is blocked or pushed by it (the copy lags its owner, and in one test process it overlaps the
+        // owner's own body) (#161).
+        public override void OnStartServer()
         {
-            if (!Owner.IsLocalClient) _controller.enabled = true;
+            if (Owner.IsLocalClient) return;
+            _controller.enabled = true;
+            _controller.excludeLayers = ~0;
         }
 
         public override void OnStartClient()
@@ -716,7 +720,7 @@ namespace Game.Gameplay
             var direction = AimDirection();
             // The host is the server: fire now instead of waiting for the next network tick to carry the request.
             if (IsServerInitialized) _combatant.ServerFire(direction);
-            else _combatant.CmdFire(direction);
+            else _combatant.CmdFire(direction, _combatant.ViewTick); // what the shooter was looking at (#162)
         }
 
         // Where a shot or a punch goes from the eyes. While the view is turned away in free look it goes where the

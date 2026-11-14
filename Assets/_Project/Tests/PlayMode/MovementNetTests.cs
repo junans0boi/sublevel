@@ -77,6 +77,15 @@ namespace Game.Tests
             }
         }
 
+        // The test box's training dummies shoot whoever they see; a runner they kill stops running.
+        IEnumerator AddRunner(Action<RemoteClient> done)
+        {
+            RemoteClient c = null;
+            yield return _net.AddClient(x => c = x);
+            MultiHarness.ReplicaOf(_net.Host, c.Player).ServerDamageFilter = _ => 0f;
+            done(c);
+        }
+
         static IEnumerator Frames(float seconds, Action each)
         {
             float end = Time.time + seconds;
@@ -124,8 +133,8 @@ namespace Game.Tests
         public IEnumerator LegitMovement_At100msAnd2Percent_NeedsNoCorrection_AndSeenSmoothlyByAnotherClient()
         {
             RemoteClient a = null, b = null;
-            yield return _net.AddClient(c => a = c);
-            yield return _net.AddClient(c => b = c);
+            yield return AddRunner(c => a = c);
+            yield return AddRunner(c => b = c);
             _net.Simulate(a);
             _net.Simulate(b);
             var aOnB = MultiHarness.ReplicaOf(b.Manager, a.Player);
@@ -184,7 +193,7 @@ namespace Game.Tests
         public IEnumerator ABodyThatJumps100MetresByItself_IsPutBackByTheServer()
         {
             RemoteClient a = null;
-            yield return _net.AddClient(c => a = c);
+            yield return AddRunner(c => a = c);
             _net.Simulate(a);
             a.Controller.Teleport(new Vector3(-20f, 0.1f, -2f));
             yield return Frames(1f, null);
@@ -209,7 +218,7 @@ namespace Game.Tests
         public IEnumerator ADeliberateTeleport_IsNotACheat()
         {
             RemoteClient a = null;
-            yield return _net.AddClient(c => a = c);
+            yield return AddRunner(c => a = c);
             _net.Simulate(a);
             a.Controller.Teleport(new Vector3(-20f, 0.1f, -2f));
             yield return Frames(1f, null);
@@ -235,7 +244,7 @@ namespace Game.Tests
             yield return _net.StartHost("TrainingRange");
             MoveGuard.ResetStats();
             RemoteClient a = null;
-            yield return _net.AddClient(c => a = c);
+            yield return AddRunner(c => a = c);
             _net.Simulate(a);
             var pc = a.Controller;
             pc.Teleport(new Vector3(50.5f, 0.1f, -14f));
