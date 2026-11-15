@@ -130,8 +130,8 @@ namespace Game.Tests
                 var large = Buildings.Generate(kind, 500f, 500f, 3);
                 Assert.AreEqual(maxW, large.Width, 0.001f, kind.ToString());
                 Assert.AreEqual(maxD, large.Depth, 0.001f, kind.ToString());
-                Assert.IsEmpty(BuildingRules.Validate(small), kind + " at its smallest");
-                Assert.IsEmpty(BuildingRules.Validate(large), kind + " at its largest");
+                Assert.IsEmpty(BuildingRules.Validate(small), kind + " at its smallest\n" + Describe(BuildingRules.Validate(small)));
+                Assert.IsEmpty(BuildingRules.Validate(large), kind + " at its largest\n" + Describe(BuildingRules.Validate(large)));
             }
         }
 
@@ -456,6 +456,124 @@ namespace Game.Tests
             for (int i = 0; i < BuildingRules.MaxPieces(BuildingKind.Shed); i++)
                 plan.Pieces.Add(Plug("Filler" + i, 0f, 0.1f, 5f, 5.1f, 0f, 0.1f, SurfaceKind.Trim));
             Assert.IsTrue(Violates(plan, BuildingRule.PieceBudget));
+        }
+
+        // ---- furniture and lamps (#190, #191, ADR-147) ----
+
+        static HashSet<PropKind> PropKinds(BuildingKind kind, float w, float d, int seeds)
+        {
+            var found = new HashSet<PropKind>();
+            for (int seed = 0; seed < seeds; seed++)
+                foreach (var p in Buildings.Generate(kind, w, d, seed).Pieces)
+                    if (p.Kind == SurfaceKind.Prop) found.Add(p.Prop);
+            return found;
+        }
+
+        [Test]
+        public void Houses_GetADistinctFurnitureSetPerRoomRole()
+        {
+            var kinds = PropKinds(BuildingKind.House, 12f, 9f, 40);
+            foreach (var needed in new[] { PropKind.Bed, PropKind.Sofa, PropKind.Kitchen, PropKind.BathSet, PropKind.Wardrobe, PropKind.Table, PropKind.Desk, PropKind.TvStand, PropKind.Bookcase })
+                Assert.IsTrue(kinds.Contains(needed), "no house furnished with " + needed);
+            // A kitchen is only in a kitchen or a studio, a bed never in a bathroom.
+            for (int seed = 0; seed < 40; seed++)
+            {
+                var plan = Buildings.Generate(BuildingKind.House, 12f, 9f, seed);
+                foreach (var piece in plan.Pieces.Where(p => p.Kind == SurfaceKind.Prop))
+                {
+                    var room = plan.Rooms.First(r => r.Contains(piece.X, piece.Z) && piece.MinY >= r.FloorY - 0.01f && piece.MinY < r.CeilingY);
+                    if (room.Role == RoomRole.Bath) Assert.IsTrue(piece.Prop == PropKind.BathSet || piece.Prop == PropKind.Bathtub, $"{piece.Prop} in a bathroom, seed {seed}");
+                    if (piece.Prop == PropKind.BathSet || piece.Prop == PropKind.Bathtub) Assert.AreEqual(RoomRole.Bath, room.Role, $"seed {seed}");
+                }
+            }
+        }
+
+        [Test]
+        public void IndustrialAndSmallBuildings_GetTheirOwnSets()
+        {
+            var warehouse = PropKinds(BuildingKind.Warehouse, 24f, 16f, 20);
+            foreach (var needed in new[] { PropKind.Shelf, PropKind.Pallet, PropKind.Barrel, PropKind.Desk, PropKind.Locker })
+                Assert.IsTrue(warehouse.Contains(needed), "warehouse without " + needed);
+            var factory = PropKinds(BuildingKind.FactoryHall, 30f, 20f, 20);
+            foreach (var needed in new[] { PropKind.Machine, PropKind.Workbench, PropKind.Crate })
+                Assert.IsTrue(factory.Contains(needed), "factory without " + needed);
+            var shed = PropKinds(BuildingKind.Shed, 5f, 5f, 30);
+            Assert.IsTrue(shed.Contains(PropKind.Workbench), "shed without a workbench");
+            Assert.IsFalse(shed.Contains(PropKind.Bed));
+        }
+
+        [TestCase(BuildingKind.House, 10f, 8f)]
+        [TestCase(BuildingKind.Warehouse, 24f, 16f)]
+        [TestCase(BuildingKind.FactoryHall, 30f, 20f)]
+        [TestCase(BuildingKind.Shed, 5f, 5f)]
+        public void Furniture_IsBuiltFromManyPartsAndStaysInsideTheBudget(BuildingKind kind, float w, float d)
+        {
+            for (int seed = 0; seed < Seeds; seed++)
+            {
+                var plan = Buildings.Generate(kind, w, d, seed);
+                int props = plan.Pieces.Count(p => p.Kind == SurfaceKind.Prop);
+                Assert.Greater(props, 0, $"{kind} seed {seed} has no furniture");
+                // Every prop is more than one box: parts are named after the prop they belong to.
+                foreach (var piece in plan.Pieces.Where(p => p.Kind == SurfaceKind.Prop))
+                    Assert.GreaterOrEqual(plan.Decor.Count(x => x.Name.StartsWith(piece.Name + ".")), 4, $"{piece.Name} ({piece.Prop}) is too plain, seed {seed}");
+                Assert.LessOrEqual(plan.Decor.Count, BuildingRules.MaxDecor(kind), $"{kind} seed {seed}");
+            }
+        }
+
+        [Test]
+        public void EveryRoomHasALampUnderItsCeiling_AndLampsAreFlaggedForTiredTubesOnlyInHalls()
+        {
+            foreach (var kind in new[] { BuildingKind.House, BuildingKind.Warehouse, BuildingKind.FactoryHall, BuildingKind.Shed })
+                for (int seed = 0; seed < 10; seed++)
+                {
+                    var plan = Buildings.Generate(kind, kind == BuildingKind.Shed ? 5f : 24f, kind == BuildingKind.Shed ? 5f : 16f, seed);
+                    Assert.IsNotEmpty(plan.Lamps);
+                    Assert.LessOrEqual(plan.Lamps.Count, BuildingRules.MaxLamps);
+                    foreach (var room in plan.Rooms)
+                        Assert.IsTrue(plan.Lamps.Any(l => l.Room == room.Name && room.Contains(l.X, l.Z)), $"{kind} {room.Name} seed {seed} has no lamp");
+                    if (kind == BuildingKind.House) Assert.IsFalse(plan.Lamps.Any(l => l.Flicker));
+                }
+        }
+
+        [Test]
+        public void FurnitureNeverStandsInADoorway()
+        {
+            for (int seed = 0; seed < 60; seed++)
+            {
+                var plan = Buildings.Generate(BuildingKind.House, 12f, 9f, seed);
+                Assert.IsFalse(BuildingRules.Validate(plan).Any(v => v.Rule == BuildingRule.DecorBlocksDoor), $"seed {seed}");
+            }
+        }
+
+        [Test]
+        public void DecorBlockingADoor_OrALampMissing_IsAViolation()
+        {
+            var plan = Buildings.Generate(BuildingKind.Shed, 5f, 5f, 3);
+            var door = plan.Doors[0];
+            plan.Decor.Add(new BuildingDecor { Name = "Wardrobe", Mat = DecorMat.Wood, X = door.X, Y = door.Y + 1f, Z = door.Z, SizeX = 0.8f, SizeY = 2f, SizeZ = 0.8f });
+            Assert.IsTrue(Violates(plan, BuildingRule.DecorBlocksDoor));
+            plan = Buildings.Generate(BuildingKind.Shed, 5f, 5f, 3);
+            plan.Lamps.Clear();
+            Assert.IsTrue(Violates(plan, BuildingRule.LampMissing));
+        }
+
+        [Test]
+        public void Furniture_FacesIntoTheRoomAndSameSeedGivesTheSameParts()
+        {
+            var a = Buildings.Generate(BuildingKind.House, 12f, 9f, 5);
+            var b = Buildings.Generate(BuildingKind.House, 12f, 9f, 5);
+            Assert.AreEqual(a.Decor.Count, b.Decor.Count);
+            for (int i = 0; i < a.Decor.Count; i++) Assert.AreEqual(a.Decor[i].X, b.Decor[i].X, 1e-5f);
+            // The first sofa's backrest (its tallest parts) is nearer the wall behind it than the front edge of its box.
+            foreach (var sofa in a.Pieces.Where(p => p.Prop == PropKind.Sofa))
+            {
+                var parts = a.Decor.Where(x => x.Name.StartsWith(sofa.Name + ".")).ToList();
+                var back = parts.OrderByDescending(x => x.Y + x.SizeY / 2).First();
+                float fx = 0f, fz = 0f;
+                if (sofa.Facing == 0) fz = 1f; else if (sofa.Facing == 2) fz = -1f; else if (sofa.Facing == 1) fx = 1f; else fx = -1f;
+                float backAlong = (back.X - sofa.X) * fx + (back.Z - sofa.Z) * fz;
+                Assert.Less(backAlong, 0f, "the sofa's backrest is not at its back");
+            }
         }
     }
 }

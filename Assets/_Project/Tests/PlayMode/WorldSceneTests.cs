@@ -53,6 +53,33 @@ namespace Game.Tests
             Assert.AreEqual(NavMeshPathStatus.PathComplete, path.status, "path is cut off: " + what);
         }
 
+        // #191, ADR-147: hundreds of lamps in the map, but only the few nearest the camera are lit.
+        [UnityTest]
+        public IEnumerator InteriorLamps_AreLitOnlyNearTheCamera()
+        {
+            var pool = Object.FindFirstObjectByType<InteriorLights>();
+            Assert.IsNotNull(pool, "the World scene should hold the interior light pool");
+            Assert.Greater(pool.TotalLamps, 100, "lamps in the map");
+            var lamps = Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(l => l.transform.parent != null && l.transform.parent.name == "Lamps").ToList();
+            Assert.AreEqual(pool.TotalLamps, lamps.Count);
+            var focus = new GameObject("LampFocus").transform;
+            InteriorLights.Focus = focus;
+            focus.position = lamps[0].transform.position + Vector3.down * 1.5f;
+            yield return new WaitForSeconds(0.6f);
+            int on = lamps.Count(l => l.enabled);
+            Assert.That(on, Is.InRange(1, InteriorLights.MaxOn), "lamps on near a lamp");
+            Assert.IsTrue(lamps[0].enabled, "the nearest lamp is on");
+            Assert.IsTrue(pool.CameraInside, "a camera under a lamp is inside a building");
+            Assert.Greater(pool.GradeWeight, 0.5f, "the view is darker inside");
+            focus.position = new Vector3(0f, -400f, 0f);
+            yield return new WaitForSeconds(1.0f);
+            Assert.AreEqual(0, lamps.Count(l => l.enabled), "lamps on far from every building");
+            Assert.IsFalse(pool.CameraInside);
+            Assert.AreEqual(0f, pool.GradeWeight, 0.01f, "outdoors keeps the shared grade");
+            InteriorLights.Focus = null;
+            Object.Destroy(focus.gameObject);
+        }
+
         [UnityTest]
         public IEnumerator Player_SpawnsStandingInsideAnElevatorStation()
         {

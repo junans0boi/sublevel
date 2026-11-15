@@ -8,6 +8,7 @@ namespace Game.Core
         ExteriorDoorCount, ExteriorDoorSides, DoorSize, DoorBlocked, RoomUnreachable, RoomWithoutWindow, WindowSill,
         StairMissing, StairStep, StairTop, LootOutside, LootUnsupported, LootInsidePiece, LootUnreachable,
         PieceOutsideFootprint, CeilingClearance, WallThickness, FloorStep, SpawnPoint, PieceBudget,
+        DecorBudget, DecorOutside, LampMissing, LampBudget, DecorBlocksDoor,
     }
 
     public struct BuildingViolation
@@ -48,6 +49,21 @@ namespace Game.Core
             }
         }
 
+        // Visual furniture boxes and lamps per building: interior meshes are batched, but the triangles still count.
+        public static int MaxDecor(BuildingKind kind)
+        {
+            switch (kind)
+            {
+                case BuildingKind.House: return 1000;
+                case BuildingKind.Warehouse: return 2000;
+                case BuildingKind.FactoryHall: return 1500;
+                case BuildingKind.Shed: return 220;
+                default: return 0;
+            }
+        }
+
+        public const int MaxLamps = 12;
+
         public static int MinExteriorDoors(BuildingKind kind) =>
             kind == BuildingKind.Shed || kind == BuildingKind.ElevatorStation ? 1 : 2;
 
@@ -75,6 +91,36 @@ namespace Game.Core
             }
             if (lowestFloor > MaxFloorStep + Eps || Math.Abs(lowestFloor - plan.FloorY) > Eps)
                 Add(BuildingRule.FloorStep, $"ground floor at {lowestFloor:F2} m, expected {plan.FloorY:F2} and at most {MaxFloorStep}");
+
+            // ---- furniture and lamps ----
+            if (plan.Decor.Count > MaxDecor(plan.Kind)) Add(BuildingRule.DecorBudget, $"{plan.Decor.Count} decor boxes > {MaxDecor(plan.Kind)}");
+            foreach (var dc in plan.Decor)
+            {
+                // Inside the footprint, above the floor, and no higher than a tall cabinet's top above any ceiling.
+                if (dc.X - dc.SizeX * 0.5f < -hw - Eps || dc.X + dc.SizeX * 0.5f > hw + Eps || dc.Z - dc.SizeZ * 0.5f < -hd - Eps
+                    || dc.Z + dc.SizeZ * 0.5f > hd + Eps || dc.Y - dc.SizeY * 0.5f < -Eps || dc.SizeX <= 0f || dc.SizeY <= 0f || dc.SizeZ <= 0f)
+                    Add(BuildingRule.DecorOutside, dc.Name);
+                // Furniture must not stand in a doorway: only the thin rugs lie on the floor there.
+                if (dc.SizeY < 0.05f || dc.Name.StartsWith("Lamp", StringComparison.Ordinal)) continue;
+                foreach (var door in plan.Doors)
+                {
+                    bool wallAlongX = Math.Abs(door.ForwardZ) > 0.5f;
+                    float halfAlong = door.Width * 0.5f, reach = door.Exterior ? 0.6f : 0.4f;
+                    float hx = wallAlongX ? halfAlong : reach, hz = wallAlongX ? reach : halfAlong;
+                    if (dc.X - dc.SizeX * 0.5f < door.X + hx && dc.X + dc.SizeX * 0.5f > door.X - hx && dc.Z - dc.SizeZ * 0.5f < door.Z + hz
+                        && dc.Z + dc.SizeZ * 0.5f > door.Z - hz && dc.Y - dc.SizeY * 0.5f < door.Y + 2f && dc.Y + dc.SizeY * 0.5f > door.Y + 0.05f)
+                        Add(BuildingRule.DecorBlocksDoor, $"{dc.Name} at {door.Name}");
+                }
+            }
+            if (plan.Lamps.Count > MaxLamps) Add(BuildingRule.LampBudget, $"{plan.Lamps.Count} lamps > {MaxLamps}");
+            if (plan.Kind != BuildingKind.ElevatorStation)
+                foreach (var room in plan.Rooms)
+                {
+                    bool lit = false;
+                    foreach (var lamp in plan.Lamps)
+                        if (lamp.Room == room.Name && room.Contains(lamp.X, lamp.Z) && lamp.Y > room.FloorY + 2f && lamp.Y < room.CeilingY) lit = true;
+                    if (!lit) Add(BuildingRule.LampMissing, room.Name);
+                }
 
             // ---- doors ----
             int exterior = 0;

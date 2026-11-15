@@ -39,6 +39,8 @@ public static partial class WorldBuilder
         public Vector3 Origin;                  // centre of the footprint on the ground
         public Quaternion Rotation;
         public readonly List<Vector3> Loot = new List<Vector3>();
+        public readonly List<(Light light, bool flicker)> Lamps = new List<(Light light, bool flicker)>();
+        public Transform Box;                   // the inside of the building as a scaled unit box (not stations)
         public Vector3 Spawn;                   // stations only (feet)
         public float SpawnYaw;
     }
@@ -156,7 +158,19 @@ public static partial class WorldBuilder
             AddElevatorShaft(root, i, placed, store);
             stations.Add(placed);
         }
-        Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes combined into {renderers} renderers");
+        var lamps = lots.SelectMany(l => l.Lamps).ToList();
+        var pool = Child(parent, "InteriorLights").gameObject.AddComponent<Game.Gameplay.InteriorLights>();
+        Set(pool, "_lights", p => { p.arraySize = lamps.Count; for (int i = 0; i < lamps.Count; i++) p.GetArrayElementAtIndex(i).objectReferenceValue = lamps[i].light; });
+        var boxes = lots.Where(l => l.Box != null).Select(l => l.Box).ToList();
+        Set(pool, "_boxes", p => { p.arraySize = boxes.Count; for (int i = 0; i < boxes.Count; i++) p.GetArrayElementAtIndex(i).objectReferenceValue = boxes[i]; });
+        var gradeVolume = Child(pool.transform, "InteriorGrade").gameObject.AddComponent<Volume>();
+        gradeVolume.isGlobal = true;
+        gradeVolume.priority = 5f;
+        gradeVolume.weight = 0f;
+        gradeVolume.sharedProfile = InteriorGradeProfile();
+        Set(pool, "_grade", p => p.objectReferenceValue = gradeVolume);
+        Set(pool, "_flicker", p => { p.arraySize = lamps.Count; for (int i = 0; i < lamps.Count; i++) p.GetArrayElementAtIndex(i).boolValue = lamps[i].flicker; });
+        Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes + {lots.Sum(l => l.Plan.Decor.Count) + stations.Sum(l => l.Plan.Decor.Count)} furniture parts combined into {renderers} renderers, {lamps.Count} lamps");
     }
 
     // The sliding door across the station's front opening (ElevatorDoors finds it by `Station`): 3.2 x 3.0 x 0.12 m,
@@ -216,11 +230,14 @@ public static partial class WorldBuilder
         colliders.isStatic = true;
 
         uint style = Hash(seed, 7);
-        var order = new List<(Material material, bool interior)>();
-        var batches = new Dictionary<(Material material, bool interior), WorldMeshes.BoxBatch>();
-        WorldMeshes.BoxBatch Batch(WorldMaterials.Surface surface, bool interior)
+        // Inside parts are split into 10 m cells per storey: a mesh only gets the few nearest lamps (URP's per-object
+        // light limit), so one mesh over a 40 m hall would be lit by four lamps all over.
+        var order = new List<(Material material, bool interior, int cell)>();
+        var batches = new Dictionary<(Material material, bool interior, int cell), WorldMeshes.BoxBatch>();
+        WorldMeshes.BoxBatch Batch(WorldMaterials.Surface surface, bool interior, Vector3 at = default)
         {
-            var key = (surface.Material, interior);
+            int cell = interior ? 1 + ((Mathf.FloorToInt(at.x / 10f) + 20) * 64 + Mathf.FloorToInt(at.z / 10f) + 20) * 2 + (at.y > 3.5f ? 1 : 0) : 0;
+            var key = (surface.Material, interior, cell);
             if (!batches.TryGetValue(key, out var batch))
             {
                 batches[key] = batch = new WorldMeshes.BoxBatch(surface.Tile);
@@ -236,13 +253,15 @@ public static partial class WorldBuilder
             var size = new Vector3(piece.SizeX, piece.SizeY, piece.SizeZ);
             bool interior = piece.Kind == SurfaceKind.WallInner || piece.Kind == SurfaceKind.Prop || piece.Kind == SurfaceKind.Stairs;
             var parts = cutSlab && piece.Name == "Slab" ? SplitAround(center, size, hole) : new List<(Vector3 center, Vector3 size)> { (center, size) };
-            foreach (var part in parts)
-                Batch(SurfaceFor(kind, piece, style), interior).Add(part.center, part.size, skipBottom: piece.MinY <= 0.001f);
+            // A prop's box is only its collider: what you see is its decor parts below.
+            if (piece.Kind != SurfaceKind.Prop)
+                foreach (var part in parts)
+                    Batch(SurfaceFor(kind, piece, style), interior, part.center).Add(part.center, part.size, skipBottom: piece.MinY <= 0.001f);
             // A house's rooms get a plastered ceiling: without it the underside of the roof shows roof tiles and
             // the underside of an upper floor shows floor boards.
             if (kind == BuildingKind.House && piece.MinY > 1.5f && (piece.Kind == SurfaceKind.Roof || piece.Kind == SurfaceKind.Floor)
                 && size.x > 0.7f && size.z > 0.7f)
-                Batch(WorldMaterials.PlasterInner, true).Add(new Vector3(piece.X, piece.MinY, piece.Z), new Vector3(size.x - 0.5f, 0.03f, size.z - 0.5f));
+                Batch(WorldMaterials.PlasterInner, true, new Vector3(piece.X, piece.MinY, piece.Z)).Add(new Vector3(piece.X, piece.MinY, piece.Z), new Vector3(size.x - 0.5f, 0.03f, size.z - 0.5f));
 
             foreach (var part in parts)
             {
@@ -263,6 +282,12 @@ public static partial class WorldBuilder
             });
         }
 
+        foreach (var decor in plan.Decor)
+        {
+            var at = new Vector3(decor.X, decor.Y, decor.Z);
+            Batch(WorldMaterials.Decor(decor.Mat), true, at).Add(at, new Vector3(decor.SizeX, decor.SizeY, decor.SizeZ));
+        }
+
         // Foundation skirt: its top is inside the floor slab, its sides reach into the ground. Not a collider.
         if (plan.Width > 0.3f && plan.Depth > 0.3f)
         {
@@ -279,7 +304,7 @@ public static partial class WorldBuilder
         var shell = new List<Renderer>();
         foreach (var key in order)
         {
-            var part = new GameObject((key.interior ? "Inside_" : "Shell_") + key.material.name);
+            var part = new GameObject((key.interior ? "Inside_" : "Shell_") + key.material.name + (key.interior ? "_" + key.cell : ""));
             part.transform.SetParent(go.transform, false);
             part.AddComponent<MeshFilter>().sharedMesh = store.Add(batches[key].ToMesh($"{name}_{part.name}"));
             var renderer = part.AddComponent<MeshRenderer>();
@@ -300,10 +325,66 @@ public static partial class WorldBuilder
         }
 
         AddWindowGlass(go.transform, plan, seed);
+        AddLamps(go.transform, plan, placed);
+        if (kind != BuildingKind.ElevatorStation) placed.Box = AddInteriorBox(go.transform, plan);
 
         foreach (var point in plan.LootPoints)
             placed.Loot.Add(origin + rotation * new Vector3(point.X, point.Y, point.Z) + Vector3.up * LootLift);
         return placed;
+    }
+
+    // Darker inside than out: a post volume that lowers the exposure of the shared grade while the camera is inside a
+    // building, so the sky's flat ambient stops washing out the lamps (InteriorLights drives its weight, ADR-148).
+    // The rooms are plain transforms scaled to the building's inner box: no collider, so no ray or bullet meets them.
+    const float InteriorExposure = -0.6f;
+
+    static VolumeProfile InteriorGradeProfile()
+    {
+        string path = WorldMaterials.GeneratedDir + "/World_InteriorGrade.asset";
+        var profile = UnityEditor.AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+        if (profile == null)
+        {
+            profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            UnityEditor.AssetDatabase.CreateAsset(profile, path);
+        }
+        if (!profile.TryGet(out UnityEngine.Rendering.Universal.ColorAdjustments grading))
+        {
+            grading = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>();
+            UnityEditor.AssetDatabase.AddObjectToAsset(grading, profile);
+        }
+        grading.postExposure.Override(InteriorExposure);
+        UnityEditor.EditorUtility.SetDirty(profile);
+        return profile;
+    }
+
+    static Transform AddInteriorBox(Transform building, BuildingPlan plan)
+    {
+        var go = Child(building, "InteriorBox");
+        go.localPosition = new Vector3(0f, plan.FloorY + (plan.Height - plan.FloorY) * 0.5f, 0f);
+        go.localScale = new Vector3(plan.Width - 0.6f, plan.Height - plan.FloorY, plan.Depth - 0.6f);
+        return go;
+    }
+
+    // The lights of a plan's lamps, all off: InteriorLights switches on the few nearest to the camera (ADR-147).
+    static void AddLamps(Transform building, BuildingPlan plan, Placed placed)
+    {
+        if (plan.Lamps.Count == 0) return;
+        var group = Child(building, "Lamps");
+        foreach (var lamp in plan.Lamps)
+        {
+            var go = new GameObject(lamp.Name);
+            go.transform.SetParent(group, false);
+            go.transform.localPosition = new Vector3(lamp.X, lamp.Y, lamp.Z);
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = lamp.Range;
+            light.intensity = lamp.Intensity;
+            light.color = plan.Kind == BuildingKind.House ? new Color(1f, 0.82f, 0.6f) : new Color(0.92f, 0.96f, 1f);
+            light.shadows = LightShadows.None;
+            light.lightmapBakeType = LightmapBakeType.Realtime;
+            light.enabled = false;
+            placed.Lamps.Add((light, lamp.Flicker));
+        }
     }
 
     // The height the building stands at: the lot's, unless the ground under the footprint says otherwise

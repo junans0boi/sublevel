@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Game.Core;
 using UnityEditor;
 using UnityEngine;
 
@@ -210,6 +211,33 @@ public static class WorldMaterials
     public static Surface Shelving => Set("Shelving", "Planks039", new Color(0.62f, 0.60f, 0.56f), 1.2f, 0.6f);
     public static Surface Crate => Set("Crate", "Planks039", new Color(0.92f, 0.86f, 0.74f), 1.2f, 0.6f);
     public static Surface Bedding => Set("Bedding", "PaintedPlaster017", new Color(0.50f, 0.56f, 0.62f), 3f, 1.5f, smoothness: 0.4f, bumpScale: 0.5f);
+    // Furniture parts (ADR-147): the same texture sets as the rest of the world, tinted so a room is not one colour.
+    public static Surface Decor(DecorMat mat)
+    {
+        switch (mat)
+        {
+            case DecorMat.Wood: return Set("DecorWood", "Planks039", new Color(0.78f, 0.62f, 0.46f), 0.9f, 0.45f);
+            case DecorMat.WoodDark: return Set("DecorWoodDark", "Planks039", new Color(0.50f, 0.36f, 0.26f), 0.9f, 0.45f);
+            case DecorMat.Fabric: return Set("DecorFabric", "PaintedPlaster017", new Color(0.36f, 0.45f, 0.55f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
+            case DecorMat.Fabric2: return Set("DecorFabric2", "PaintedPlaster017", new Color(0.62f, 0.30f, 0.26f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
+            case DecorMat.Metal: return Set("DecorMetal", "Metal022", new Color(0.62f, 0.64f, 0.66f), 0.8f, 0.8f, smoothness: 0.85f);
+            case DecorMat.Paint: return Set("DecorPaint", "PaintedMetal014", new Color(0.42f, 0.55f, 0.50f), 1f, 1f);
+            case DecorMat.Warn: return Set("DecorWarn", "PaintedMetal014", new Color(0.95f, 0.72f, 0.12f), 1f, 1f);
+            case DecorMat.Ceramic: return Set("DecorCeramic", "PaintedPlaster017", new Color(0.93f, 0.93f, 0.90f), 2f, 1f, smoothness: 0.9f, bumpScale: 0.2f);
+            case DecorMat.Screen: return Set("DecorScreen", "PaintedMetal014", new Color(0.05f, 0.055f, 0.06f), 1f, 1f, smoothness: 1f, bumpScale: 0f);
+            case DecorMat.Crate: return Set("DecorCrate", "Planks039", new Color(0.88f, 0.76f, 0.58f), 0.8f, 0.4f);
+            default:
+                {
+                    var lamp = Set("DecorLamp", "PaintedPlaster017", new Color(1f, 0.93f, 0.8f), 1f, 1f);
+                    lamp.Material.EnableKeyword("_EMISSION");
+                    lamp.Material.SetColor("_EmissionColor", new Color(1f, 0.8f, 0.5f) * 2.4f);
+                    lamp.Material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                    EditorUtility.SetDirty(lamp.Material);
+                    return lamp;
+                }
+        }
+    }
+
     public static Surface Concrete => Set("Concrete", "Concrete047A", Color.white, 3f, 3f);
     public static Surface ConcreteDark => Set("ConcreteDark", "Concrete047A", new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
     // Elevator shaft walls (ADR-065 (1)): the same concrete, much darker, so the shaft reads as underground under
