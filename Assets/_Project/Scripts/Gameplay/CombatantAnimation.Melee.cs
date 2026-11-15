@@ -84,6 +84,9 @@ namespace Game.Gameplay
             // A negative turn about the right axis swings a hanging arm forward (and on up over the head).
             Turn(ArmRight, -pose.ArmRaiseDeg * k, transform.right);
             Turn(ArmRight, pose.ArmSweepDeg * k, transform.up);
+            // The hand closes round the grip instead of hanging open (#219).
+            if (!_gripBonesLooked) FindGripBones();
+            CloseHand(1, GripCurlDeg * 0.9f * k);
         }
     }
 }

@@ -92,6 +92,7 @@ namespace Game.Gameplay
             t.rotation = cam.rotation * Quaternion.Euler(euler);
             t.position = cam.position + cam.rotation * position;
             PlacedAtEye = true;
+            _weaponVisual.PlaceMeleeArms(t, id);
         }
     }
 }

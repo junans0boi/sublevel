@@ -196,6 +196,19 @@ namespace Game.Gameplay
 
         bool _propAtEye;
 
+        // First person melee (MeleeVisual moves the model): the right hand closed on the grip where the third-person hand
+        // holds it, the left arm kept low and out of view (#219).
+        public void PlaceMeleeArms(Transform model, int id)
+        {
+            var arms = Arms();
+            if (arms == null || _eyeCamera == null) return;
+            var cam = _eyeCamera;
+            arms.SetVisible(true);
+            var grip = model.position + model.rotation * _gripRest[id];
+            arms.Place(cam, 1, grip, cam.right * 0.6f + cam.up * 0.5f, 1f);
+            arms.Place(cam, 0, FirstPersonArms.Shoulder(cam, 0) + cam.rotation * new Vector3(0.1f, -0.5f, 0.1f), cam.up * 0.4f - cam.right * 0.5f, 0.4f, false);
+        }
+
         // Nothing aimed: the hands with a throwable, a bandage or a bottle, or reaching for loot (#220 #221 #212).
         void PlaceItemArms()
         {
