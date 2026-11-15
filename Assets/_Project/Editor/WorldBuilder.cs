@@ -37,8 +37,9 @@ public static partial class WorldBuilder
     const int WaterDepthResolution = 1024;
     const float WaterDepthRange = 4f;       // metres of depth the water shader can tell apart
     const float SeaMargin = 3000f;          // the sea plane reaches this far beyond the map, past the far clip
-    // Players wade to this depth and no deeper: a ring of invisible walls follows that depth contour.
-    const float BarrierDepth = 1.2f;
+    // Players swim to this depth and no deeper (#146, ADR-144): a ring of invisible walls follows that depth contour.
+    // Swimming starts at 1.2 m (SwimRules.EnterDepth), so the strip between is open water along the whole coast.
+    const float BarrierDepth = 5f;
     const float BarrierCell = 8f, BarrierHeight = 8f, BarrierThickness = 0.6f;
     const int IgnoreRaycastLayer = 2;       // built-in layer: shots, sight lines and the camera pass through
 

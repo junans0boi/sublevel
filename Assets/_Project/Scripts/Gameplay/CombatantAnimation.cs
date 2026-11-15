@@ -229,6 +229,7 @@ namespace Game.Gameplay
             float hp = _combatant.Hp.Value;
             bool hit = hp < _lastHp && !dead;
             _lastHp = hp;
+            TrackSwim(dead);
 
             // Seated, the body rides with the car: none of that motion is walking.
             float seatAmount = dead ? 0f : VehicleSeat.SeatedAmount(_combatant);
@@ -251,6 +252,7 @@ namespace Game.Gameplay
             // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
             bool slowWalk = !dead && _stance != null && _stance.SlowWalk.Value && !_legs.Backward && _walkClipSpeed > 0f;
             float shown = slowWalk ? Mathf.Min(speed, _walkClipSpeed) : speed;
+            if (_swimAmount > 0.01f) shown = 0f; // swimming: the idle pose under the stroke and kick (PoseSwim), not the crawl
             _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
@@ -277,7 +279,7 @@ namespace Game.Gameplay
             TrackJumpPose(dead);
 
             // A melee weapon keeps the upper layer off: its ready pose and swings are bone turns (ADR-073).
-            bool armed = !dead && _combatant.ActiveWeaponId != 0 && !HoldsMelee;
+            bool armed = !dead && _combatant.ActiveWeaponId != 0 && !HoldsMelee && _swimAmount < 0.5f;
             bool punching = !dead && Time.time < _punchUntil;
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
@@ -298,6 +300,8 @@ namespace Game.Gameplay
         bool TrackAir()
         {
             var jump = GameData.Rules.Jump;
+            // Floating is not falling: no jump pose over deep water.
+            if (_swimAmount > 0.01f) { _inAir = false; _landUntil = -1f; return false; }
             if (_motion.Airborne)
             {
                 // Taking off: start on the rise pose instead of sweeping to it from wherever the last jump ended.
@@ -499,6 +503,7 @@ namespace Game.Gameplay
             PoseMelee();
             PoseLedge();
             PoseEmote();
+            PoseSwim();
             if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)

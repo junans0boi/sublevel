@@ -10,7 +10,7 @@ namespace Game.Net
     {
         readonly SwimBreath _breath = new SwimBreath();
         Combatant _combatant;
-        bool _swimming;
+        bool _swimming, _stowed;
 
         // In water deep enough to swim (shooting and throwing refuse).
         public bool InWater => _swimming;
@@ -30,6 +30,18 @@ namespace Game.Net
 
         void Awake() => _combatant = GetComponent<Combatant>();
 
+        // PUBG: no weapon in the water. The server puts it away on entering and takes it out again on leaving, so
+        // every peer sees empty hands (the weapon pose, aiming and reloading already refuse a put-away weapon).
+        void StowWhileSwimming()
+        {
+            if (_swimming && !_combatant.Holstered.Value) { _combatant.ServerSetHolstered(true); _stowed = _combatant.Holstered.Value; }
+            else if (!_swimming && _stowed)
+            {
+                _stowed = false;
+                if (_combatant.Holstered.Value) _combatant.ServerSetHolstered(false);
+            }
+        }
+
         void Update()
         {
             if (_combatant == null) return;
@@ -41,6 +53,7 @@ namespace Game.Net
             }
             float depth = WaterVolume.DepthAt(transform.position, out float surface, out _);
             _swimming = Swim.Swimming(_swimming, depth, rules);
+            if (_combatant.IsServerInitialized) StowWhileSwimming();
             HeadUnder = _swimming && Swim.HeadUnder(_combatant.EyePosition.y, surface, rules);
             float damage = _breath.Tick(Time.deltaTime, HeadUnder, rules);
             if (damage > 0f && _combatant.IsServerInitialized)

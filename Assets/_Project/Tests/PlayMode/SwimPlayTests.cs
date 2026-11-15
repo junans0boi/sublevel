@@ -78,6 +78,12 @@ namespace Game.Tests
             Assert.AreEqual(feetFloat, pc.transform.position.y, 0.15f, "floating with the eyes just over the surface");
             Assert.IsTrue(swim.InWater);
             Assert.IsFalse(swim.HeadUnder, "head up");
+            Assert.IsTrue(me.Holstered.Value, "the weapon is put away in the water");
+            Assert.AreEqual(0, me.ActiveWeaponId, "empty hands");
+            var anim = me.GetComponent<CombatantAnimation>();
+            Assert.IsNotNull(anim);
+            Assert.Greater(anim.SwimPose, 0.95f, "swim pose shown");
+            Assert.Less(anim.DivePose, 0.05f, "head up: no dive pose");
             Assert.AreEqual(1f, swim.Breath, 1e-3f);
 
             // No shooting, no throwing from the water.
@@ -96,12 +102,18 @@ namespace Game.Tests
             float speed = Vector2.Distance(new Vector2(from.x, from.z), new Vector2(to.x, to.z));
             Assert.AreEqual(Swim.Speed(GameData.Rules.Locomotion.SprintSpeed, SwimRules.Current), speed, 0.5f, "swim speed");
             input.Frame.Move = Vector2.zero;
+            float phase0 = anim.StrokePhase;
+            input.Frame.Move = new Vector2(0f, 1f);
+            yield return new WaitForSeconds(0.3f);
+            Assert.AreNotEqual(phase0, anim.StrokePhase, "the stroke runs while swimming");
+            input.Frame.Move = Vector2.zero;
 
             // Dive (Ctrl held): the head goes under, the breath drains, then drowning hurts.
             float hp0 = me.Hp.Value;
             float drownBefore = swim.DrownDamage;
             input.Frame.SlowWalk = true;
             yield return WaitUntil(() => swim.HeadUnder, 3f, "the head under water");
+            yield return WaitUntil(() => anim.DivePose > 0.95f, 2f, "dive pose");
             yield return WaitUntil(() => pc.transform.position.y < feetFloat - 0.7f, 3f, "sinking to the dive depth");
             yield return WaitUntil(() => swim.Breath <= 0f, 4f, "the breath to run out");
             yield return new WaitForSeconds(1.5f);
@@ -121,6 +133,16 @@ namespace Game.Tests
             yield return WaitUntil(() => !pc.Swimming, 2f, "out of the water");
             yield return new WaitForSeconds(0.6f);
             Assert.IsFalse(swim.InWater);
+            Assert.IsFalse(me.Holstered.Value, "the weapon comes back out of the water");
+            Assert.AreEqual(3, me.ActiveWeaponId);
+            Assert.Less(anim.SwimPose, 0.05f, "swim pose gone");
+            // A body standing on something higher than the surface inside the volume (a shore hill) has no depth.
+            var hill = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            hill.transform.position = new Vector3(3003f, 2.5f, 3003f);
+            hill.transform.localScale = new Vector3(2f, 3f, 2f);
+            Physics.SyncTransforms();
+            Assert.AreEqual(0f, WaterVolume.DepthAt(new Vector3(3003f, 4.05f, 3003f), out _, out _), 1e-3f, "on a hill over the water's square: dry");
+            UnityEngine.Object.Destroy(hill);
             UnityEngine.Object.Destroy(pool);
         }
     }

@@ -65,8 +65,9 @@ namespace Game.Net
                 if (w == null || !w.Area.Contains(new Vector2(position.x, position.z))) continue;
                 float top = w.SurfaceY;
                 if (position.y > top + 3f) continue;
-                // The floor: the highest solid below the surface that is not a body.
-                int n = Physics.RaycastNonAlloc(new Vector3(position.x, top + 0.5f, position.z), Vector3.down, Hits, 60f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                // The floor: the highest solid below the surface that is not a body. The ray starts above a body standing
+                // higher than the surface, so a shore hill over the sea's square is not read as 60 m of water.
+                int n = Physics.RaycastNonAlloc(new Vector3(position.x, Mathf.Max(top, position.y) + 0.5f, position.z), Vector3.down, Hits, 60f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float floor = top - 60f;
                 for (int k = 0; k < n; k++)
                 {

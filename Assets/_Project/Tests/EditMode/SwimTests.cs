@@ -1,5 +1,6 @@
 using Game.Core;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Game.Tests
 {
@@ -62,6 +63,21 @@ namespace Game.Tests
             Assert.Greater(b.Tick(0.1f, true, Rules), 0f);
             Assert.AreEqual(0f, b.Tick(0.1f, false, Rules));
             Assert.Greater(b.Fraction, 0f);
+        }
+
+        [Test]
+        public void Pose_StrokeAndKickFollowSpeed_ArmsAndLegsAlternate()
+        {
+            Assert.AreEqual(0f, Swim.Effort(0f, 6.3f, Rules));
+            Assert.AreEqual(1f, Swim.Effort(9f, 6.3f, Rules), "clamped");
+            Assert.AreEqual(0.5f, Swim.Effort(1.45f, 6.3f, Rules), 0.01f);
+            Assert.Less(Swim.StrokeHz(0f, Rules), Swim.StrokeHz(1f, Rules));
+            Assert.Less(Swim.KickHz(0f, Rules), Swim.KickHz(1f, Rules));
+            // The other arm is half a stroke behind; one is over the water while the other pulls under it.
+            Assert.AreEqual(180f, Mathf.Abs(Swim.ArmAngle(0.2f, 0) - Swim.ArmAngle(0.2f, 1)), 1e-3f);
+            Assert.AreEqual(0f, Swim.ArmAngle(1f, 0), 1e-3f, "wraps");
+            Assert.AreEqual(-Swim.KickThigh(0.1f, 0, Rules), Swim.KickThigh(0.1f, 1, Rules), 1e-3f, "legs kick opposite");
+            Assert.LessOrEqual(Mathf.Abs(Swim.KickThigh(0.25f, 0, Rules)), Rules.KickDeg + 1e-3f);
         }
     }
 }

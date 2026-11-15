@@ -34,6 +34,7 @@ namespace Game.Gameplay
         // In deep water, swimming (ADR-112).
         public bool Swimming => _swimming;
         bool _swimming;
+        float _waterSurface;
         // Free look (Alt held): the view orbits away from where the character faces by these angles (ADR-065 (2)).
         public bool FreeLooking { get; private set; }
         // Auto-run (=): walking forward on its own until W or S is pressed, aiming starts or a screen opens (ADR-065 (1)).
@@ -368,6 +369,7 @@ namespace Game.Gameplay
             // Deep water (G12, ADR-112): swim lying on the surface; out of it the body stands again.
             float waterDepth = WaterVolume.DepthAt(transform.position, out float waterSurface, out float waterFloor);
             bool wasSwimming = _swimming;
+            _waterSurface = waterSurface;
             _swimming = !ExternalControl && !knocked && Swim.Swimming(_swimming, waterDepth, SwimRules.Current);
             if (_swimming) BodyStance = Stance.Prone;
             else if (wasSwimming && BodyStance == Stance.Prone) BodyStance = Stance.Stand;
@@ -773,6 +775,13 @@ namespace Game.Gameplay
             };
             var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();
             Rig.Place(Camera.transform, transform, eye, ViewYaw, ViewPitch, view, Time.deltaTime);
+            if (_swimming)
+            {
+                // The chase camera follows the head: over the water while the head is up, under it while diving (#184).
+                var at = Camera.transform.position;
+                at.y = Swim.HeadUnder(eye.y, _waterSurface, SwimRules.Current) ? Mathf.Min(at.y, _waterSurface - 0.1f) : Mathf.Max(at.y, _waterSurface + 0.12f);
+                Camera.transform.position = at;
+            }
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
             float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
                 : _aim.Mode == AimMode.Hip && Rig.Mode == ViewMode.FirstPerson ? GameSettings.FirstPersonFov

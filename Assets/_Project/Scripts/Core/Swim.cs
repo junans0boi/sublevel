@@ -22,6 +22,15 @@ namespace Game.Core
         public float HeadUnderMargin = 0.05f;
         public float VerticalSpeed = 2.5f;      // rising and sinking, m/s
         public float FloorClearance = 0.05f;
+        // Pose (code-driven, no clip): crawl stroke and flutter kick, rates in cycles per second.
+        public float StrokeHzIdle = 0.22f;      // treading water
+        public float StrokeHzFull = 0.85f;      // at the swim speed
+        public float KickHzIdle = 0.8f;
+        public float KickHzFull = 2.4f;
+        public float KickDeg = 24f;             // thigh swing either side of straight
+        public float LevelDeg = 30f;            // chest lift taken off the crawl's (ProneHeadLiftDeg) so the body lies level
+        public float DivePitchDeg = 30f;        // diving: the head dips this far under the line of the body
+        public float PoseBlendPerSecond = 4f;   // entering and leaving the water
     }
 
     public static class Swim
@@ -41,6 +50,32 @@ namespace Game.Core
             float eye = dive ? surfaceY - rules.DiveEyeDepth : surfaceY + rules.EyeAboveSurface;
             return Math.Max(eye - eyeAboveFeet, groundY + rules.FloorClearance);
         }
+
+        // 0 treading water .. 1 at the swim speed.
+        public static float Effort(float speed, float sprintSpeed, SwimRules rules)
+        {
+            float full = Math.Max(0.1f, Speed(sprintSpeed, rules));
+            return Math.Min(1f, Math.Max(0f, speed / full));
+        }
+
+        public static float StrokeHz(float effort, SwimRules rules) => rules.StrokeHzIdle + (rules.StrokeHzFull - rules.StrokeHzIdle) * effort;
+        public static float KickHz(float effort, SwimRules rules) => rules.KickHzIdle + (rules.KickHzFull - rules.KickHzIdle) * effort;
+
+        // An arm's turn from hanging back along the body (degrees about the right axis; positive lifts it up and over
+        // to reach forward at 180). `phase` 0..1 of the stroke, `side` 0 or 1 (the other arm half a stroke behind).
+        // Crawl: recovery over the water for the first half, the pull under it for the second.
+        public static float ArmAngle(float phase, int side)
+        {
+            float p = phase + 0.5f * side;
+            return 360f * (p - (float)Math.Floor(p));
+        }
+
+        // Treading: arms held forward of the shoulders and sculling a little.
+        public static float ArmIdleAngle(float phase, int side) => 165f + 15f * (float)Math.Sin((phase + 0.5f * side) * 2.0 * Math.PI);
+
+        // Flutter kick: a leg's thigh turn (degrees about the right axis) for a kick phase 0..1; the other leg opposite.
+        public static float KickThigh(float phase, int side, SwimRules rules) =>
+            rules.KickDeg * (float)Math.Sin((phase + 0.5f * side) * 2.0 * Math.PI);
 
         public static bool HeadUnder(float eyeY, float surfaceY, SwimRules rules) => eyeY < surfaceY - rules.HeadUnderMargin;
     }

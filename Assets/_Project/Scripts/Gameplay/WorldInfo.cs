@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Core;
+using Game.Net;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -124,7 +125,13 @@ namespace Game.Gameplay
             return found;
         }
 
-        void Awake() => Current = this;
+        void Awake()
+        {
+            Current = this;
+            // The sea is swimmable water (#146, ADR-144): one volume over the whole map; the ground under it is the seabed.
+            // Shore land is above the surface, so it has no depth. The plane that is drawn belongs to the builder.
+            if (_size > 0f) WaterVolume.Create(transform, new Vector2(_size * 0.5f, _size * 0.5f), new Vector2(_size, _size), _seaLevel, false);
+        }
 
         void OnDestroy()
         {
