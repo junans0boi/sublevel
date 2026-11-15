@@ -70,14 +70,14 @@ namespace Game.Tests
             var beyond = new Vector3(3000f, 1.5f, 3008f);
             Assert.IsTrue(Physics.Linecast(eye, beyond, out var sight) && sight.collider == door.Panel, "closed door blocks sight");
             Assert.AreEqual(1, DoorSystem.ClosedBetween(eye, beyond), "and sound");
-            // A shot stops at the door.
+            // A rifle round goes through the thin wooden door (ADR-114: a door is wood, 0.45 m limit) and stops at the wall behind.
             Combatant.ShotResult seen = default;
             void On(in Combatant.ShotResult s) => seen = s;
             me.ShotResolved += On;
             me.StanceSpreadFactor = 0f;
             Assert.IsTrue(me.ServerFire(Vector3.forward), "fired");
             Assert.AreEqual(ShotHit.World, seen.Hit);
-            Assert.AreEqual(2f - 0.03f, seen.End.z - 3000f, 0.4f, "the bullet ended at the door, not the wall behind");
+            Assert.AreEqual(12f - 0.25f, seen.End.z - 3000f, 0.5f, "the bullet went through the wooden door and ended at the wall behind");
 
             // F: the door in reach and in view opens (away from the player), and everything passes.
             Assert.IsTrue(DoorSystem.TryInteract(me, eye, Vector3.forward), "F reaches the door");

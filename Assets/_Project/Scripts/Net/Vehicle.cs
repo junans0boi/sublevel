@@ -552,7 +552,23 @@ namespace Game.Net
                 nearest = hit.distance;
                 best = hit;
             }
-            return nearest < float.MaxValue;
+            if (nearest < float.MaxValue) return true;
+            // Sunk into the ground (a drop from a parking spot that bottomed the springs): the sphere starts inside it, so
+            // every hit is at distance 0 and the wheel would never find it again. Ray from just above the anchor instead.
+            const float Lift = 0.5f;
+            var up = transform.up;
+            int rays = Physics.RaycastNonAlloc(AnchorWorld(i) + up * Lift, -up, WheelHits, Lift + r.WheelRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float top = float.MaxValue;
+            for (int h = 0; h < rays; h++)
+            {
+                var hit = WheelHits[h];
+                if (hit.distance >= top || hit.collider.attachedRigidbody == _body || hit.collider is CharacterController || hit.collider.GetComponentInParent<Combatant>() != null) continue;
+                top = hit.distance;
+                best = hit;
+            }
+            if (top == float.MaxValue) return false;
+            best.distance = Mathf.Max(0.001f, top - Lift - r.WheelRadius);
+            return true;
         }
 
         // On its roof or side and (nearly) still for RightingDelaySeconds: it slowly turns back onto its wheels.
