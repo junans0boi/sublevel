@@ -333,6 +333,7 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.4f);
             yield return Burst("D_hipfire", new[] { 0.05f, 0.15f, 0.3f }, () => _frame.FirePressed = _frame.FireHeld = true);
             _frame.FireHeld = false;
+            yield return Views("D_lean_none_hip", false, Watch.Behind, Watch.Front);
             foreach (var left in new[] { true, false })
                 foreach (var aim in new[] { false, true })
                 {
