@@ -282,6 +282,7 @@ namespace Game.Gameplay
             // A melee weapon keeps the upper layer off: its ready pose and swings are bone turns (ADR-073).
             bool armed = !dead && HeldId != 0 && !HoldsMelee && _swimAmount < 0.5f;
             bool punching = !dead && Time.time < _punchUntil;
+            TrackItems(dead, hit);
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
             // hands is posed in code over the base layer (ADR-083), so the clip pose stays off for it.
@@ -503,6 +504,7 @@ namespace Game.Gameplay
             PoseGait();
             PoseRifle();
             PoseMelee();
+            PoseItems();
             PoseLedge();
             PoseEmote();
             PoseSwim();

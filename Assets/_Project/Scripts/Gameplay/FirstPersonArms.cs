@@ -9,7 +9,7 @@ namespace Game.Gameplay
     public sealed class FirstPersonArms
     {
         // Viewmodel arms run a little long so the support hand reaches a rifle's handguard from the shoulder.
-        public const float UpperMeters = 0.36f, ForeMeters = 0.34f, PalmCentre = 0.05f;
+        public const float UpperMeters = 0.36f, ForeMeters = 0.34f, PalmCentre = 0.05f, MinReach = 0.46f;
         static readonly Vector3 ShoulderRight = new Vector3(0.2f, -0.2f, -0.08f);
 
         readonly GameObject _root;
@@ -20,6 +20,9 @@ namespace Game.Gameplay
 
         // Hand parts (world positions this frame) for the review shots and tests.
         public Vector3 HandPosition(int side) => _hand[side].position;
+        public Vector3 PalmPosition(int side) => _hand[side].TransformPoint(new Vector3(0f, -0.02f, 0.07f));
+        public static Vector3 Shoulder(Transform camera, int side) =>
+            camera.TransformPoint(new Vector3(ShoulderRight.x * (side == 1 ? 1f : -1f), ShoulderRight.y, ShoulderRight.z));
         public bool Visible => _root.activeSelf;
 
         public FirstPersonArms(Transform parent, Material sleeve, Material glove)
@@ -79,10 +82,16 @@ namespace Game.Gameplay
 
         // `centre`: where the middle of the palm goes (world); `back`: the way the back of the hand faces (world);
         // `curl`: 0 flat .. 1 closed round the weapon. Side 0 left, 1 right.
-        public void Place(Transform camera, int side, Vector3 centre, Vector3 back, float curl)
+        public void Place(Transform camera, int side, Vector3 centre, Vector3 back, float curl, bool keepOutOfLens = true)
         {
             float sign = side == 1 ? 1f : -1f;
             var shoulder = camera.TransformPoint(new Vector3(ShoulderRight.x * sign, ShoulderRight.y, ShoulderRight.z));
+            // Never folded up close to the lens (an over-bent arm swings its elbow and forearm across the whole view):
+            // the palm stays at least MinReach from the shoulder and a hand's reach in front of the camera.
+            var local = camera.InverseTransformPoint(centre);
+            if (keepOutOfLens && local.z < 0.3f) { local.z = 0.3f; centre = camera.TransformPoint(local); }
+            var away = centre - shoulder;
+            if (keepOutOfLens && away.magnitude < MinReach) centre = shoulder + away.normalized * MinReach;
             // The wrist sits a palm's half-length behind the palm centre, along the line from the shoulder.
             var toCentre = (centre - shoulder).normalized;
             var wrist = centre - toCentre * PalmCentre;

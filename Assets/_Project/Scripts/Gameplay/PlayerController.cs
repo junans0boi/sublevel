@@ -455,6 +455,9 @@ namespace Game.Gameplay
             bool doorKey = !elevatorKey && !supplyKey && f.Interact && TeamHud.ReviveCandidate(_combatant) == null
                 && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, Camera != null ? Camera.transform.forward : transform.forward);
             if (!elevatorKey && !supplyKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
+            // The hand reaches for the door or the loot (#212, own view only).
+            if (doorKey || (f.Interact && !elevatorKey && !supplyKey && NearbyLoot != null))
+                if (TryGetComponent(out CombatantAnimation reachAnim)) reachAnim.StartGesture(doorKey ? HandGesture.Door : HandGesture.Pickup);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload && !ThrowableInHand && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload(); // R pulls the pin then (ThrowableView)
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);

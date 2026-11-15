@@ -51,7 +51,7 @@ namespace Game.Gameplay
         int _holsterId;
         float _holsterStart = -10f;
         // The weapon in the hands for the poses: the active one, or the one being put away.
-        public int HeldId => _combatant.ActiveWeaponId != 0 ? _combatant.ActiveWeaponId : _holsterId;
+        public int HeldId => _itemHidesWeapon ? 0 : _combatant.ActiveWeaponId != 0 ? _combatant.ActiveWeaponId : _holsterId;
         public ActionPose ActionShown { get; private set; }
 
         // How much of the two-handed long gun hold is shown (0..1) and how far it is raised (0 low ready, 1 shouldered).

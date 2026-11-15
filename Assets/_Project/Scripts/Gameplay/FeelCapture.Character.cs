@@ -221,16 +221,48 @@ namespace Game.Gameplay
             me.ServerTakeDamage(new DamageInfo { Amount = 10f, Zone = HitZone.Body });
             yield return new WaitForSeconds(0.08f);
             yield return VShot("K_fp_hit");
-            me.ServerDamageFilter = _ => 0f;
+            me.ServerDamageFilter = d => d.Amount; me.ServerTakeDamage(45f); me.ServerDamageFilter = _ => 0f;
             var healing = me.GetComponent<CombatantHealing>();
-            me.ServerGive(new LootEntry { Kind = LootKind.Bandage, Amount = 1 });
+            healing.Bandages.Value = 1; // the bag is full of ammo by now: set the count directly
+            Debug.Log($"[FeelCapture] fp heal prep count {healing.CountOf(HealKind.Bandage)} reloading {me.Reloading.Value} hp {me.Hp.Value} team {me.TeamBlocksAction}");
             Debug.Log("[FeelCapture] fp heal started " + healing.ServerBegin(HealKind.Bandage));
-            yield return new WaitForSeconds(1f);
-            yield return VShot("K_fp_heal");
+            Time.timeScale = 0.3f; // the shots take longer than the motion
+            foreach (var t in new[] { 0.3f, 0.9f, 1.4f }) { yield return new WaitForSeconds(t == 0.3f ? 0.3f : 0.5f); yield return VShot($"K_fp_heal_{Mathf.RoundToInt(t * 10)}"); }
+            Time.timeScale = 1f;
             yield return new WaitForSeconds(4f);
+            me.ServerDamageFilter = d => d.Amount; me.ServerTakeDamage(20f); me.ServerDamageFilter = _ => 0f;
+            healing.Drinks.Value = 2;
+            Debug.Log("[FeelCapture] fp drink started " + healing.ServerBegin(HealKind.Drink));
+            Time.timeScale = 0.3f;
+            foreach (var t in new[] { 0.3f, 1.0f }) { yield return new WaitForSeconds(t == 0.3f ? 0.3f : 0.7f); yield return VShot($"K_fp_drink_{Mathf.RoundToInt(t * 10)}"); }
+            Time.timeScale = 1f;
+            yield return new WaitForSeconds(4f);
+            var thrower = me.GetComponent<ThrowableUser>();
+            if (thrower != null) thrower.ServerAdd(3);
             me.ServerSelectSlot(Loadout.ThrowableSlot);
             yield return new WaitForSeconds(1f);
             yield return VShot("K_fp_throwable");
+            { var ia = me.GetComponent<CombatantAnimation>(); Debug.Log($"[FeelCapture] throwable slot {me.ActiveSlot.Value} holstered {me.Holstered.Value} total {thrower.TotalCount} active {ia.ItemActive} w {ia.ItemWeight:F2} prop {ia.ItemPose.Prop} cam {PlayerController.Local.Rig.Mode}"); }
+            Time.timeScale = 0.3f;
+            if (thrower != null) thrower.ServerBeginCook();
+            yield return new WaitForSeconds(0.5f); yield return VShot("K_fp_throw_pin");
+            _frame.FirePressed = _frame.FireHeld = true; yield return null; _frame.FirePressed = false;
+            yield return new WaitForSeconds(0.6f); yield return VShot("K_fp_throw_windup");
+            _frame.FireHeld = false; _frame.FireReleased = true; yield return null; _frame.FireReleased = false;
+            foreach (var t in new[] { 0.1f, 0.2f, 0.4f }) { yield return new WaitForSeconds(t == 0.1f ? 0.1f : 0.15f); yield return VShot($"K_fp_throw_rel_{Mathf.RoundToInt(t * 10)}"); }
+            Time.timeScale = 1f;
+            yield return new WaitForSeconds(1f);
+            // Reach for loot and a door, bare hands (#212).
+            me.ServerSetHolstered(true);
+            yield return new WaitForSeconds(0.8f);
+            Time.timeScale = 0.3f;
+            me.GetComponent<CombatantAnimation>().StartGesture(HandGesture.Pickup);
+            foreach (var t in new[] { 0.1f, 0.2f }) { yield return new WaitForSeconds(0.12f); yield return VShot($"K_fp_pickup_{Mathf.RoundToInt(t * 10)}"); }
+            yield return new WaitForSeconds(0.6f);
+            me.GetComponent<CombatantAnimation>().StartGesture(HandGesture.Door);
+            yield return new WaitForSeconds(0.12f); yield return VShot("K_fp_door_0");
+            Time.timeScale = 1f;
+            me.ServerSetHolstered(false);
             if (pc.Rig.Mode != ViewMode.ThirdPerson) pc.Rig.ToggleMode();
         }
 
@@ -346,10 +378,13 @@ namespace Game.Gameplay
             // G. throw.
             me.ServerSelectSlot(Loadout.ThrowableSlot);
             yield return new WaitForSeconds(1.0f);
+            Time.timeScale = 0.25f;
+            yield return Burst("G_throw_hold", new[] { 0.05f }, null, false);
             if (user != null) user.ServerBeginCook();
-            yield return Burst("G_throw_cook", new[] { 0.05f, 0.4f }, () => _frame.FireHeld = _frame.FirePressed = true);
-            yield return Burst("G_throw_release", new[] { 0.05f, 0.15f, 0.3f, 0.6f }, () => { _frame.FireHeld = false; _frame.FireReleased = true; });
+            yield return Burst("G_throw_cook", new[] { 0.05f, 0.4f }, () => _frame.FireHeld = _frame.FirePressed = true, false);
+            yield return Burst("G_throw_release", new[] { 0.04f, 0.1f, 0.17f, 0.24f, 0.32f, 0.45f }, () => { _frame.FireHeld = false; _frame.FireReleased = true; }, false);
             _frame.FireReleased = false;
+            Time.timeScale = 1f;
             yield return new WaitForSeconds(2f);
 
             // H. heal / eat / drink.
@@ -364,9 +399,22 @@ namespace Game.Gameplay
             {
                 bool ok = healing.ServerBegin(kind);
                 Debug.Log($"[FeelCapture] heal {tag} started {ok}");
-                yield return Burst("H_heal_" + tag, new[] { 0.3f, 1.0f, 2.0f }, null);
+                Time.timeScale = 0.3f;
+                yield return Burst("H_heal_" + tag, new[] { 0.3f, 0.9f, 1.5f }, null, false);
+                Time.timeScale = 1f;
                 yield return new WaitForSeconds(4f);
             }
+
+            // L. reach for loot and a door.
+            me.ServerSetHolstered(true);
+            yield return new WaitForSeconds(0.8f);
+            var reach = me.GetComponent<CombatantAnimation>();
+            Time.timeScale = 0.25f;
+            yield return Burst("L_pickup", new[] { 0.05f, 0.15f, 0.27f, 0.4f }, () => reach.StartGesture(HandGesture.Pickup), false);
+            yield return new WaitForSeconds(0.5f);
+            yield return Burst("L_door", new[] { 0.05f, 0.12f, 0.22f, 0.35f }, () => reach.StartGesture(HandGesture.Door), false);
+            Time.timeScale = 1f;
+            me.ServerSetHolstered(false);
 
             // I. jump, turn in place.
             yield return Equip(me, 3);

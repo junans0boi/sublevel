@@ -161,7 +161,8 @@ namespace Game.Gameplay
             // Looking through a magnified scope the lens fills the view: the weapon and the optic body in front of the
             // camera would only cover it, so they are not drawn (the scope overlay draws the tube's ring instead).
             SetScopeHidden(wanted != 0 && ScopeView.HidesWeapon ? wanted : 0);
-            if (wanted == 0) return;
+            if (wanted == 0) { PlaceItemArms(); return; }
+            _propAtEye = false;
 
             _sightsBlend = Mathf.MoveTowards(_sightsBlend, _sights ? 1f : 0f, _anchorChangePerSecond * Time.deltaTime);
             var fit = _fitByWeaponId[wanted];
@@ -192,6 +193,41 @@ namespace Game.Gameplay
         // an SMG a little nearer, the long guns tucked in; the hip spots keep each class's muzzle pointing at about the same place.
         Vector3 SightsAnchorFor(Fit fit) => fit.Size.z < 0.4f ? new Vector3(0f, -0.012f, 0.42f) : fit.Size.z < 0.65f ? new Vector3(0f, -0.012f, 0.32f) : _sightsAnchor;
         Vector3 HipAnchorFor(Fit fit) => fit.Size.z < 0.4f ? new Vector3(0.12f, -0.125f, 0.36f) : fit.Size.z < 0.65f ? new Vector3(0.13f, -0.135f, 0.3f) : _hipAnchor;
+
+        bool _propAtEye;
+
+        // Nothing aimed: the hands with a throwable, a bandage or a bottle, or reaching for loot (#220 #221 #212).
+        void PlaceItemArms()
+        {
+            bool on = _eyeCamera != null && _anim != null && _anim.ItemActive && !_combatant.Dead.Value;
+            var arms = on ? Arms() : null;
+            if (arms == null)
+            {
+                if (_arms != null) _arms.SetVisible(false);
+                if (_propAtEye && _anim != null) { var p = _anim.Props(); if (p != null) p.Hide(); _propAtEye = false; }
+                if (_anim != null) _anim.ShowMagAt(false, Vector3.zero, Quaternion.identity);
+                return;
+            }
+            var pose = _anim.ItemPose;
+            float w = _anim.ItemWeight;
+            var cam = _eyeCamera;
+            var rest = new Vector3(0.15f, -0.45f, 0.05f);
+            arms.SetVisible(true);
+            // The body-frame spots are at the chest, below the lens: in view they ride higher and further out.
+            var lift = new Vector3(0.02f, 0.14f, 0.34f);
+            Vector3 Spot(int side, Vector3 off, float weight) =>
+                FirstPersonArms.Shoulder(cam, side) + cam.rotation * (lift * weight * w) + cam.rotation * Vector3.Lerp(rest * (side == 1 ? 1f : -1f) + new Vector3(side == 1 ? 0f : 0.3f, 0f, 0f), off, weight * w);
+            if (pose.RightW > 0f) arms.Place(cam, 1, Spot(1, new Vector3(pose.RX, pose.RY, pose.RZ), pose.RightW), cam.up * 0.6f + cam.right * 0.5f, pose.Curl);
+            else arms.Place(cam, 1, Spot(1, Vector3.zero, 0f), cam.up * 0.6f + cam.right * 0.5f, 0.3f, false);
+            if (pose.LeftW > 0f) arms.Place(cam, 0, Spot(0, new Vector3(pose.LX, pose.LY, pose.LZ), pose.LeftW), cam.up * 0.4f - cam.right * 0.5f, 0.6f);
+            else arms.Place(cam, 0, Spot(0, Vector3.zero, 0f), cam.up * 0.4f - cam.right * 0.5f, 0.3f, false);
+            var props = _anim.Props();
+            if (props != null)
+            {
+                if (pose.Prop != HandProp.None && w > 0.3f) { props.Show(pose.Prop, arms.PalmPosition(1) + cam.up * 0.04f + cam.forward * 0.02f, Quaternion.LookRotation(cam.forward, Vector3.up)); _propAtEye = true; }
+                else { props.Hide(); _propAtEye = false; }
+            }
+        }
 
         ViewmodelInput ViewInput()
         {
