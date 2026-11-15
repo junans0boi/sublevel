@@ -10,7 +10,7 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // #180 / ADR-144: standing still in the sights, single shots at a motionless chest 20 m away all hit
+    // #186 / ADR-089: standing still in the sights, single shots at a motionless chest 20 m away all hit
     // (PUBG: stationary ADS deviation is about 0). Goes through the real input path, not ServerFire with a closed cone.
     public class AdsAccuracyPlayTests
     {
