@@ -216,7 +216,8 @@ namespace Game.Tests
         {
             var director = FindDirector();
             var player = _net.HostPlayer;
-            SupplyRules.Current = new SupplyRules { FirstStage = 1, EveryStages = 1, DescentSeconds = 1.5f, OpenSeconds = 0.6f, SmokeSeconds = 60f };
+            SupplyRules.Current = new SupplyRules { FirstStage = 1, EveryStages = 1, DescentSeconds = 1.5f, OpenSeconds = 60f, SmokeSeconds = 60f };
+            // OpenSeconds is only the bots' dwell: a bot leaving the elevator the crate lands in front of must not open it before the remote does.
             Heard remoteHeard = null;
             RemoteClient remote = null;
             var supply = SupplyDirector.Instance;

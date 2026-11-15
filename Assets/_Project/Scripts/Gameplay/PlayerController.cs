@@ -370,7 +370,7 @@ namespace Game.Gameplay
             float waterDepth = WaterVolume.DepthAt(transform.position, out float waterSurface, out float waterFloor);
             bool wasSwimming = _swimming;
             _waterSurface = waterSurface;
-            _swimming = !ExternalControl && !knocked && Swim.Swimming(_swimming, waterDepth, SwimRules.Current);
+            _swimming = !ExternalControl && !knocked && !SpawnProtection.InputBlocked && Swim.Swimming(_swimming, waterDepth, SwimRules.Current);
             if (_swimming) BodyStance = Stance.Prone;
             else if (wasSwimming && BodyStance == Stance.Prone) BodyStance = Stance.Stand;
             bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up

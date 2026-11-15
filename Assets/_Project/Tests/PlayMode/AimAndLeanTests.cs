@@ -468,10 +468,14 @@ namespace Game.Tests
             yield return WaitUntil(() => me.AimMode == AimMode.Sights && weapon.AtEye, 2f, "sights on, weapon at the eye");
             yield return new WaitForSeconds(0.3f);
             Assert.IsTrue(rifle.enabled && rifle.gameObject.activeInHierarchy, "the weapon stays visible while the body is hidden");
+            // ADR-154 (3): the sight line sits at the screen centre, so the weapon hangs from the aim point down
+            // (its middle can even fall below the screen); what must hold is that its top, the sights, is just under the aim point.
             var onScreen = pc.Camera.WorldToViewportPoint(rifle.bounds.center);
+            var inCamera = pc.Camera.transform.InverseTransformPoint(rifle.bounds.center);
+            float sightsHeight = inCamera.y + rifle.bounds.extents.y;
             Assert.Greater(onScreen.z, 0.1f, "in front of the camera");
             Assert.AreEqual(0.5f, onScreen.x, 0.05f, "centred under the aim point");
-            Assert.That(onScreen.y, Is.InRange(0.05f, 0.5f), "below the aim point, inside the screen");
+            Assert.That(sightsHeight, Is.InRange(-0.12f, 0.02f), "the sights sit just below the aim point (metres in camera space)");
 
             yield return Tap();
             yield return WaitUntil(() => me.AimMode == AimMode.Hip && !weapon.AtEye, 2f, "sights off");
