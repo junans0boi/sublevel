@@ -220,7 +220,9 @@ namespace Game.Gameplay
             {
                 if (_flashPs == null)
                 {
-                    _flashPs = NewBurst("ExplosionFlash", _softGlow, centre, 0.2f, 0f, 6f, 1.3f);
+                    // Above the roof and no bigger than the clearance there: a bigger quad cuts into the ground and the walls and
+                    // shows as a hard-edged rectangle (#155).
+                    _flashPs = NewBurst("ExplosionFlash", _softGlow, new Vector3(b.center.x, b.max.y + 1.0f, b.center.z), 0.2f, 0f, 3.2f, 1.2f);
                     SetColorOverLife(_flashPs, new[] { (0f, Color.white), (1f, new Color(1f, 0.55f, 0.2f)) }, new[] { (0f, 0.9f), (1f, 0f) });
                     _fireball = NewBurst("Fireball", _softGlow, centre, 1.0f, 4f, 1.5f, 2.6f);
                     SetColorOverLife(_fireball, new[] { (0f, new Color(1f, 0.55f, 0.2f)), (0.25f, new Color(1f, 0.32f, 0.05f)), (0.7f, new Color(0.5f, 0.08f, 0.02f)), (1f, new Color(0.15f, 0.04f, 0.02f)) },

@@ -171,6 +171,7 @@ public static class VehicleModels
     // The character (Player.prefab, measured with VehicleBuilder.Measure): shoulder joint below and beside the eye,
     // the arm's reach (upper arm 0.165 + forearm 0.225 + to the palm), and the seated hip below the eye.
     public const float ShoulderDown = 0.24f, ShoulderSide = 0.15f, ArmReach = 0.42f, GripReach = 0.40f;
+    public const float HeadAboveCushion = 1.03f; // measured: VehiclePosePlayTests.EveryCar_DriversHeadStaysUnderTheRoof
     public const float SeatedEyeUp = 0.76f;   // eye above the cushion top, sitting upright
     const float HipUp = 0.1f, HipToEye = 0.73f, HipToShoulder = 0.50f;
 
@@ -521,7 +522,9 @@ public static class VehicleModels
             // quarter to three with the elbows a little bent (GripReach); the others sit back.
             float roofInside = (parts.HasGlass ? parts.GlassBounds.max.y : bb.max.y) - 0.04f;
             float seatX = Mathf.Abs(centre.x);
-            Vector3 Cushion(float x, float backZ, float cushionY) => new Vector3(x, cushionY + shift.y, backZ + shift.z + 0.25f);
+            // The seated body's helmet top is HeadAboveCushion over the cushion (the pose rests the hips on it): in a low roof
+            // the hips sink into the seat until the head is under the roof's top (it showed through, #155).
+            Vector3 Cushion(float x, float backZ, float cushionY) => new Vector3(x, Mathf.Min(cushionY + shift.y, bb.max.y - HeadAboveCushion - 0.03f), backZ + shift.z + 0.25f);
             Vector3 Eye(Vector3 cushion) => new Vector3(cushion.x, Mathf.Min(cushion.y + SeatedEyeUp, roofInside - 0.10f), cushion.z - 0.15f);
             var cushions = new List<Vector3> { Cushion(centre.x, spec.FrontBackZ, spec.FrontCushionY), Cushion(-centre.x, spec.FrontBackZ, spec.FrontCushionY) };
             if (spec.Seats > 2)

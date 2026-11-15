@@ -181,6 +181,29 @@ namespace Game.Tests
             Assert.IsEmpty(failures, string.Join("\n", failures));
         }
 
+        // #155: the driver's helmet stays under the roof of every car (it showed through the roof of the Fairheaven and the Goblin).
+        [UnityTest, Timeout(300000)]
+        public IEnumerator EveryCar_DriversHeadStaysUnderTheRoof()
+        {
+            yield return Load();
+            var me = Combatant.LocalPlayer;
+            var failures = new List<string>();
+            foreach (var v in Vehicle.All.Where(x => x != null && !x.IsMotorcycle).OrderBy(x => x.name).ToList())
+            {
+                yield return Enter(v);
+                float roof = float.NegativeInfinity, head = float.NegativeInfinity;
+                foreach (var r in v.GetComponentsInChildren<Renderer>())
+                    if (!(r is ParticleSystemRenderer) && r.enabled && !r.name.Contains("Antenna")) roof = Mathf.Max(roof, r.bounds.max.y);
+                string highest = "";
+                foreach (var r in me.GetComponentsInChildren<Renderer>())
+                    if (!(r is ParticleSystemRenderer) && r.enabled && r.bounds.max.y > head) { head = r.bounds.max.y; highest = r.name; }
+                Debug.Log($"[#155] {Name(v)}: head top {head:F3}, roof top {roof:F3}, eye {me.EyePosition.y:F3}, highest renderer {highest}, body y {me.transform.position.y:F3}");
+                if (head > roof - 0.02f) failures.Add($"{Name(v)}: head top {head:F3} m is not under the roof top {roof:F3} m (eye {me.EyePosition.y:F3})");
+                yield return Leave(v);
+            }
+            Assert.IsEmpty(failures, string.Join("\n", failures));
+        }
+
         [UnityTest]
         public IEnumerator SeatedOnATiltedMotorcycle_TheEyeStaysAtTheSeatMarker()
         {
