@@ -116,9 +116,13 @@ namespace Game.Gameplay
             if (PlayFootstep(_footstepVolume)) FootstepsPlayed++;
         }
 
+        // Every footstep anyone takes, with the ground it landed on (GroundFx leaves prints from it, #205).
+        public static event Action<Transform, FootSurface> StepTaken;
+
         bool PlayFootstep(float volume)
         {
             var surface = SurfaceAt(transform.position);
+            StepTaken?.Invoke(transform, surface);
             var clips = surface == FootSurface.Concrete ? _footsteps : StepClips(surface);
             if (clips.Length == 0) clips = _footsteps;
             if (clips.Length == 0) return false;

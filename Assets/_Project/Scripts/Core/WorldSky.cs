@@ -31,14 +31,14 @@ namespace Game.Core
 
         static readonly Key[] Keys =
         {
-            new Key { Hour = 0f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.34f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.28f, Exp = 0.10f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.05f, Gg = 0.07f, Gb = 0.14f },
-            new Key { Hour = 5f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.34f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.28f, Exp = 0.10f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.05f, Gg = 0.07f, Gb = 0.14f },
+            new Key { Hour = 0f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
+            new Key { Hour = 5f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
             new Key { Hour = 6.5f,  Elev = 5f,  Sun = 0.80f, Sr = 1f,    Sg = 0.62f, Sb = 0.36f, Amb = 0.55f, Fr = 0.7f,  Fg = 0.75f, Fb = 1f,   Fill = 0.25f, Exp = 0.65f, Tr = 1f,    Tg = 0.75f, Tb = 0.6f,  Gr = 0.85f, Gg = 0.62f, Gb = 0.5f },
             new Key { Hour = 9f,    Elev = 45f, Sun = 1.50f, Sr = 1f,    Sg = 0.95f, Sb = 0.88f, Amb = 1f,    Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
             new Key { Hour = 16f,   Elev = 40f, Sun = 1.50f, Sr = 1f,    Sg = 0.95f, Sb = 0.88f, Amb = 1f,    Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
             new Key { Hour = 18.3f, Elev = 4f,  Sun = 0.95f, Sr = 1f,    Sg = 0.50f, Sb = 0.24f, Amb = 0.55f, Fr = 0.7f,  Fg = 0.7f,  Fb = 1f,   Fill = 0.25f, Exp = 0.60f, Tr = 1f,    Tg = 0.65f, Tb = 0.5f,  Gr = 0.9f,  Gg = 0.55f, Gb = 0.42f },
-            new Key { Hour = 20f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.34f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.28f, Exp = 0.10f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.05f, Gg = 0.07f, Gb = 0.14f },
-            new Key { Hour = 24f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.34f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.28f, Exp = 0.10f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.05f, Gg = 0.07f, Gb = 0.14f },
+            new Key { Hour = 20f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
+            new Key { Hour = 24f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
         };
 
         static float L(float a, float b, float t) => a + (b - a) * t;

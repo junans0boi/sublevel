@@ -43,6 +43,8 @@ float _GameGroundOff; // global: 1 skips the untiling sample and the colour drif
 static float2 g_GroundXZ = float2(0.0, 0.0);
 static half g_UntileMix = 0.0h;   // how far the turned second sample shows, once per pixel
 
+float _GameWet; // global: 0 dry .. 1 soaked, set by GroundFx (#207)
+
 float GroundHash(float2 p)
 {
     p = frac(p * float2(0.1031, 0.1030));
@@ -540,6 +542,19 @@ void SplatmapFragment(
     defaultOcclusion = lerp(defaultOcclusion, maskOcclusion, hasMask);
     half occlusion = dot(splatControl, defaultOcclusion);
 #endif
+
+    // Game: rain darkens and glosses the ground; flat low-lying patches turn into puddles that mirror the sky (#207).
+    {
+        half wet = (half)_GameWet;
+        half pud = 0.0h;
+    #ifndef TERRAIN_SPLAT_BASEPASS
+        float2 pw = IN.positionWS.xz;
+        pud = wet * (half)(smoothstep(0.63, 0.7, GroundNoise(pw / 5.5 + 31.7)) * smoothstep(0.3, 0.55, GroundNoise(pw / 38.0 + 2.1)) * g_RockWeights.y);
+    #endif
+        albedo *= lerp(1.0h, 0.62h, wet) * lerp(1.0h, 0.5h, pud);
+        smoothness = lerp(max(smoothness, wet * 0.5h), 0.96h, pud);
+        normalTS = normalize(lerp(normalTS, half3(0.0h, 0.0h, 1.0h), pud));
+    }
 
     InputData inputData;
     InitializeInputData(IN, normalTS, inputData);

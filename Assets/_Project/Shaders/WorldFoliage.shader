@@ -58,6 +58,7 @@ Shader "Game/WorldFoliage"
         CBUFFER_END
 
         float _GameWindBoost; // global: 0 calm .. 1 storm
+float4 _GameBends[4]; // global: someone walking through (world x, z, radius m, 0 = unused), set by GroundFx
 
         struct Attributes
         {
@@ -80,6 +81,18 @@ Shader "Game/WorldFoliage"
             // Two travelling waves and a steady lean downwind (gust is about 0.4 on average, never reversing far).
             float gust = 0.45 + 0.45 * sin(phase) + 0.25 * sin(phase * 2.7 + 1.3);
             positionWS.xz += dir * (gust * _WindBend * h * h * strength);
+            // Walkers push low plants (grass, flowers, bushes) away from their feet and press them down (#205).
+            float low = step(_WindHeight, 2.0);
+            for (int b = 0; b < 4; b++)
+            {
+                float2 away = foot.xz - _GameBends[b].xy;
+                float r = max(_GameBends[b].z, 0.01);
+                float d = length(away);
+                float push = saturate(1.0 - d / r) * step(0.01, _GameBends[b].z) * low;
+                push *= push;
+                positionWS.xz += away / max(d, 0.05) * (push * 0.5 * h);
+                positionWS.y -= push * 0.3 * h * h;
+            }
             // Flutter: small, quick, different for every vertex; stronger on the outer parts.
             float t = _Time.y * 4.6;
             float3 seed = positionOS * 3.7 + foot * 0.9;
