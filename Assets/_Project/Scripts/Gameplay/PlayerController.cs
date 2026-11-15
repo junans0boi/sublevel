@@ -199,6 +199,7 @@ namespace Game.Gameplay
             if (f.Menu) UiFocus.Toggle(UiScreen.Menu);
             else if (f.Inventory && !_combatant.Dead.Value && !ResultScreen.BlocksGameplay) UiFocus.Toggle(UiScreen.Inventory);
             else if (f.Map && UiFocus.MapAvailable && !_combatant.Dead.Value) UiFocus.Toggle(UiScreen.Map);
+            _jumpCancels = f.Jump; // a jump key still ends a use while a screen is open (ADR-144)
             f = UiFocus.GameplayInput(UiFocus.Current, f);
             if (ResultScreen.BlocksGameplay && !_combatant.Dead.Value) f = new PlayerInputFrame { SelectSlot = -1 };
             // In the elevator until the doors open: no moving, firing or picking up; the view and the screens work.
@@ -210,6 +211,13 @@ namespace Game.Gameplay
                 RadialWheel.FeedOpen(f.Look);
                 f.Look = Vector2.zero;
                 f.FirePressed = f.FireHeld = f.AimHeld = f.Ping = false;
+            }
+            // PUBG throwing (ADR-144): with the throwable in hand the fire button is the throw key (hold = arc, release =
+            // throw) and no longer shoots or punches. G still throws from any slot.
+            if (ThrowableInHand)
+            {
+                f.ThrowPressed |= f.FirePressed; f.ThrowHeld |= f.FireHeld; f.ThrowReleased |= f.FireReleased;
+                f.FirePressed = f.FireHeld = false;
             }
             // Scopes slow the mouse by their zoom; the settings add aim/scope factors and the vertical invert.
             f.Look = GameSettings.AdjustLook(f.Look, _aim.Mode != AimMode.Hip, ScopeView.SensitivityFactor, ScopeView.CurrentZoom);
@@ -330,7 +338,7 @@ namespace Game.Gameplay
             SlowWalking = f.SlowWalk && !ExternalControl;
             // Healing is walk-only, and a jump ends it (ADR-099).
             bool healing = CombatantHealing.IsUsing(_combatant);
-            if (healing && f.Jump) GetComponent<CombatantHealing>().RequestCancel();
+            if (healing && (f.Jump || _jumpCancels)) GetComponent<CombatantHealing>().RequestCancel();
             bool sprint = (f.Sprint || _autoRunSprint) && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl && !healing;
 
             // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
@@ -446,7 +454,7 @@ namespace Game.Gameplay
                 && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, Camera != null ? Camera.transform.forward : transform.forward);
             if (!elevatorKey && !supplyKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
-            if (f.Reload && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload();
+            if (f.Reload && !ThrowableInHand && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload(); // R pulls the pin then (ThrowableView)
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
@@ -687,6 +695,9 @@ namespace Game.Gameplay
             var gear = GetComponent<CombatantGear>();
             RecoilPattern.Punch(_recoil, _recoilRng, gear != null ? gear.VestTier.Value : 0, _rules.Recoil);
         }
+
+        bool _jumpCancels;
+        bool ThrowableInHand => _combatant.ActiveSlot.Value == Loadout.ThrowableSlot && !_combatant.Holstered.Value;
 
         void TryFire(in PlayerInputFrame f)
         {

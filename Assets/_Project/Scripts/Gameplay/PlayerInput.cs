@@ -12,6 +12,7 @@ namespace Game.Gameplay
         public bool Jump;
         public bool FireHeld;
         public bool FirePressed;
+        public bool FireReleased;  // let go this frame (the throwable in hand throws on it, ADR-144)
         public bool Reload;
         public bool Interact;
         public bool Boost;         // J: drink the smallest boost item carried
@@ -99,6 +100,7 @@ namespace Game.Gameplay
             f.CycleThrowable = KeyBinds.Pressed(BindAction.CycleThrowable);
             f.FireHeld = KeyBinds.Held(BindAction.Fire);
             f.FirePressed = KeyBinds.Pressed(BindAction.Fire);
+            f.FireReleased = KeyBinds.Released(BindAction.Fire);
             f.AimHeld = KeyBinds.Held(BindAction.Aim);
             // In a team match a long press is the marker wheel, so the tap counts when the button comes up.
             var me = Net.Combatant.LocalPlayer;

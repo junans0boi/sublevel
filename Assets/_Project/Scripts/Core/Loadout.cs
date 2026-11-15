@@ -415,6 +415,16 @@ namespace Game.Core
             return amount;
         }
 
+        // Takes up to `amount` rounds (a split of the stack, ADR-144); returns how many left.
+        public int RemoveAmmo(AmmoType type, int amount)
+        {
+            int index = (int)type;
+            if (index < 0 || index >= _reserve.Length || amount <= 0) return 0;
+            int taken = System.Math.Min(amount, _reserve[index]);
+            _reserve[index] -= taken;
+            return taken;
+        }
+
         public bool RemoveMedkit()
         {
             if (Medkits <= 0) return false;

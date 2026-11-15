@@ -50,6 +50,41 @@ namespace Game.Tests
             Debug.Log($"[HealThrowCapture] gauge {healing.Gauge.Value:F1} step {healing.BoostStep} hp {me.Hp.Value:F0} speed x{CombatantHealing.BoostSpeedOf(me):F3}");
         }
 
+        sealed class HoldFire : IPlayerInput
+        {
+            public bool Held;
+            bool _was;
+            public PlayerInputFrame Read()
+            {
+                var f = new PlayerInputFrame { SelectSlot = -1, FireHeld = Held, FirePressed = Held && !_was };
+                _was = Held;
+                return f;
+            }
+        }
+
+        // #183: key 5 took the grenade out, R pulled the pin, the fire button is held: arc, landing mark, red fuse seconds.
+        [UnityTest, Timeout(180000)]
+        public IEnumerator PubgThrowArc()
+        {
+            var input = new HoldFire();
+            PlayerController.InputOverride = input;
+            yield return Load();
+            var me = Combatant.LocalPlayer;
+            var user = me.GetComponent<ThrowableUser>();
+            PlayerController.Local.LookAt(me.EyePosition + new Vector3(-10f, 6f, 2f));
+            user.ServerAdd(2);
+            yield return new WaitForSeconds(0.5f);
+            me.ServerSelectSlot(Loadout.ThrowableSlot);
+            yield return new WaitForSeconds(0.5f);
+            user.ServerBeginCook();
+            input.Held = true;
+            yield return new WaitForSeconds(1.2f);
+            Assert.IsTrue(me.GetComponent<ThrowableView>().PreviewVisible);
+            yield return Shot("throw_arc_cooking");
+            input.Held = false;
+            PlayerController.InputOverride = null;
+        }
+
         static void QuietDummies()
         {
             foreach (var c in Combatant.All)

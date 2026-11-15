@@ -269,7 +269,7 @@ namespace Game.Net
 
         // Dropping from the inventory screen: the optic comes off and lands on the ground in front. `slot` is a gear
         // index: a plain weapon slot is its optic, Attachments.GearIndex names the other attachments.
-        bool SlotOk(int slot, string what) => Game.Core.InputGuard.ValidSlot(slot, SlotCount) || ServerGuard.Refuse(GuardKind.Slot, _combatant, $"{what}: slot {slot}");
+        bool SlotOk(int slot, string what) => (slot >= 0 && slot < Attachments.IndexStride * Attachments.Slots && Game.Core.InputGuard.ValidSlot(Attachments.WeaponSlotOf(slot), SlotCount)) || ServerGuard.Refuse(GuardKind.Slot, _combatant, $"{what}: slot {slot}");
 
         [ServerRpc]
         public void CmdDropOptic(int slot)

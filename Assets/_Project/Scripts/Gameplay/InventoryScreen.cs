@@ -791,10 +791,26 @@ namespace Game.Gameplay
             SetDropHighlights(false);
         }
 
-        public void Activate(InventoryDragSource source, int clickCount)
+        public void Activate(InventoryDragSource source, int clickCount) =>
+            Activate(source, clickCount, Keyboard.current != null && Keyboard.current.ctrlKey.isPressed);
+
+        public void Activate(InventoryDragSource source, int clickCount, bool ctrl)
         {
             var me = Combatant.LocalPlayer;
             if (me == null) return;
+            // ADR-144: Ctrl + click splits half an ammo stack onto the ground.
+            if (clickCount == 1 && source.Kind == InventorySourceKind.Ammo && ctrl)
+            {
+                InventoryBackend.DropAmmoHalf(me, source.Index);
+                _dirty = true;
+                return;
+            }
+            // ADR-144: a double click fits a loose attachment to the best gun (like the right click).
+            if (clickCount >= 2 && (source.Kind == InventorySourceKind.BagOptic || (source.Kind == InventorySourceKind.Vicinity && InventoryBackend.IsOptic(source.Loot))))
+            {
+                QuickDrop(source);
+                return;
+            }
             var throwKind = InventoryBackend.ThrowKindOf(source.Kind);
             if (throwKind != null)
             {
@@ -1201,6 +1217,7 @@ namespace Game.Gameplay
         public string CarryText => _carryLabel != null ? _carryLabel.text : "";
         public string GearCardText(int slot) => _gearNames[slot].text + "\n" + _gearDetails[slot].text;
         public string WeaponCardText(int slot) => _weaponNames[slot].text + "\n" + _weaponAmmo[slot].text + " " + _weaponBadge[slot].text;
+        public bool HealBarVisible => _healBox != null && _healBox.activeSelf;
         public bool ThrowChipVisible(ThrowableKind kind) => _pipRoot[(int)kind].activeSelf;
         public bool ThrowChipSelected(ThrowableKind kind) => _pipRoot[(int)kind].activeSelf && _pipSelect[(int)kind].activeSelf;
         public InventoryDragSource ThrowChipSource(ThrowableKind kind) => new InventoryDragSource(InventoryBackend.SourceKindOf(kind), null, 0);

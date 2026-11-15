@@ -421,5 +421,67 @@ namespace Game.Tests
             yield return WaitUntil(() => _blasts == 1, 5f, "the grenade went off");
             Assert.AreEqual(me, _blastBy);
         }
+
+        // ADR-144 / #183: PUBG sequence - key 5 takes it out, R pulls the pin, the fire button held shows the arc and
+        // letting go throws with the cooked fuse; another slot cancels, and the fire button never punches meanwhile.
+        [UnityTest]
+        public IEnumerator Key5_Fire_R_Sequence_Throws_AndAnotherSlotCancels()
+        {
+            yield return LoadTestBox(-1f);
+            var me = Combatant.LocalPlayer;
+            var user = Thrower(me);
+            var view = me.GetComponent<ThrowableView>();
+            yield return AQuietDummy(d => { });
+            PlayerController.Local.LookAt(me.EyePosition + new Vector3(-10f, 6f, 2f));
+            Assert.AreEqual(1, user.ServerAdd(1));
+            Assert.AreEqual(1, user.ServerAdd(ThrowableKind.Smoke, 1));
+            yield return WaitUntil(() => user.TotalCount == 2, 2f, "counts reached the owner");
+            _input.Frame.SelectSlot = Loadout.ThrowableSlot;
+            yield return null;
+            _input.Frame.SelectSlot = -1;
+            yield return WaitUntil(() => me.ActiveSlot.Value == Loadout.ThrowableSlot, 2f, "key 5 took the throwable out");
+            Assert.AreEqual(ThrowableKind.Frag, user.SelectedKind);
+
+            _input.Frame.Reload = true; // R
+            yield return null;
+            _input.Frame.Reload = false;
+            yield return WaitUntil(() => user.Cooking.Value, 2f, "R pulled the pin without the arc");
+            Assert.IsFalse(view.PreviewVisible);
+
+            _input.Frame.FireHeld = _input.Frame.FirePressed = true;
+            yield return null;
+            _input.Frame.FirePressed = false;
+            yield return null;
+            yield return null;
+            Assert.IsTrue(view.PreviewVisible, "the arc shows while the fire button is held");
+            Assert.AreEqual(0, user.ServerThrows);
+            _input.Frame.FireHeld = false;
+            _input.Frame.FireReleased = true;
+            yield return null;
+            yield return null;
+            _input.Frame.FireReleased = false;
+            yield return WaitUntil(() => user.ServerThrows == 1, 2f, "letting go threw it");
+            Assert.IsFalse(user.Cooking.Value);
+            Assert.IsFalse(view.PreviewVisible);
+            Assert.Greater(user.LastThrown.Velocity.magnitude, 1f);
+
+            // Hold again, then another slot: no throw.
+            _input.Frame.FireHeld = _input.Frame.FirePressed = true;
+            yield return null;
+            _input.Frame.FirePressed = false;
+            yield return null;
+            _input.Frame.SelectSlot = 0;
+            yield return null;
+            _input.Frame.SelectSlot = -1;
+            yield return null;
+            yield return null;
+            _input.Frame.FireHeld = false;
+            _input.Frame.FireReleased = true;
+            yield return null;
+            yield return null;
+            _input.Frame.FireReleased = false;
+            Assert.AreEqual(1, user.ServerThrows, "another slot cancelled the throw");
+            Assert.IsFalse(view.PreviewVisible);
+        }
     }
 }

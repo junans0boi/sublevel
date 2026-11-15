@@ -85,7 +85,7 @@ namespace Game.Gameplay
                 case TrainingStep.Aim: return $"{K(BindAction.Aim)}를 눌러 조준경으로 조준";
                 case TrainingStep.Zero: return "조준경을 든 채 PageUp / PageDown으로 영점 거리 바꾸기";
                 case TrainingStep.Heal: return $"{K(BindAction.Heal)} 붕대·구급상자, {K(BindAction.Boost)} 음료·진통제로 회복";
-                case TrainingStep.Throw: return $"{K(BindAction.Throw)}를 누르고 있다 떼서 던지기 ({K(BindAction.CycleThrowable)} 종류 바꾸기)";
+                case TrainingStep.Throw: return $"5로 투척물을 들고 {K(BindAction.Fire)}를 누르고 있다 떼서 던지기 ({K(BindAction.Reload)} 핀 뽑기, 5를 다시 눌러 종류 바꾸기)";
                 case TrainingStep.Vehicle: return $"남쪽 주차장 차량 곁에서 {K(BindAction.Interact)}로 타기";
                 case TrainingStep.Door: return $"남서쪽 집 문 앞에서 {K(BindAction.Interact)}로 열기";
                 default: return "";

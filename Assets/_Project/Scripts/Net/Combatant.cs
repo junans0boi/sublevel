@@ -840,6 +840,17 @@ namespace Game.Net
             ServerDropLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)ammoType, Amount = amount });
         }
 
+        // Ctrl-click on an ammo row (ADR-144): half the stack, at least one round, onto the ground.
+        [ServerRpc]
+        public void CmdDropAmmoHalf(int ammoType)
+        {
+            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
+            int amount = _loadout.RemoveAmmo((AmmoType)ammoType, System.Math.Max(1, _loadout.Reserve((AmmoType)ammoType) / 2));
+            if (amount <= 0) return;
+            ServerDropLoot(new LootEntry { Kind = LootKind.Ammo, Ammo = (AmmoType)ammoType, Amount = amount });
+        }
+
         [ServerRpc]
         public void CmdDropMedkit()
         {

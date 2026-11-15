@@ -503,6 +503,11 @@ namespace Game.Gameplay
             if (combatant != null) combatant.CmdDropAmmo(ammoIndex);
         }
 
+        public static void DropAmmoHalf(Combatant combatant, int ammoIndex)
+        {
+            if (combatant != null) combatant.CmdDropAmmoHalf(ammoIndex);
+        }
+
         public static void DropMedkit(Combatant combatant)
         {
             if (combatant != null) combatant.CmdDropMedkit();

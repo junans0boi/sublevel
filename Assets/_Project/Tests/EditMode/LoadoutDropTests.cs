@@ -84,6 +84,18 @@ namespace Game.Tests
         }
 
         [Test]
+        public void SplittingAmmo_TakesUpToTheAmount()
+        {
+            var l = new Loadout(Table());
+            l.AddAmmo(AmmoType.Pistol9, 45);
+            Assert.AreEqual(22, l.RemoveAmmo(AmmoType.Pistol9, 45 / 2));
+            Assert.AreEqual(23, l.Reserve(AmmoType.Pistol9));
+            Assert.AreEqual(23, l.RemoveAmmo(AmmoType.Pistol9, 99), "never more than is there");
+            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Pistol9, 5));
+            Assert.AreEqual(0, l.RemoveAmmo(AmmoType.Pistol9, -1));
+        }
+
+        [Test]
         public void DroppingAmmo_ReturnsTheWholeReserve_AndZeroesIt()
         {
             var l = new Loadout(Table());

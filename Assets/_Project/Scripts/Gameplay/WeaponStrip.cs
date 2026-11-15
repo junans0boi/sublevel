@@ -83,7 +83,9 @@ namespace Game.Gameplay
 
             int active = HudBackend.ActiveSlot(me);
             // Highlight only what is really in hand: an empty slot is no selection.
-            if (active < 0 || active >= HudBackend.Throwable || HudBackend.WeaponInSlot(me, active) == 0) active = -1;
+            // The throwable cell lights when it is in hand and something is carried (ADR-144).
+            bool throwOut = active == HudBackend.Throwable && ThrowableUser.Local != null && ThrowableUser.Local.TotalCount > 0;
+            if (!throwOut && (active < 0 || active >= HudBackend.Throwable || HudBackend.WeaponInSlot(me, active) == 0)) active = -1;
             if (active != _shownActive)
             {
                 _shownActive = active;

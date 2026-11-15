@@ -247,6 +247,61 @@ namespace Game.Tests
             Assert.Less(screen.PackRowTop(1), screen.PackRowTop(InventoryBackend.BandageRow), "back to kind order");
         }
 
+        // ADR-144 / #185: PUBG item use with the screen open and the stack/equip shortcuts.
+        [UnityTest]
+        public IEnumerator CtrlClick_SplitsHalfTheAmmoStack_AndTheDropLandsOnTheGround()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var screen = InventoryScreen.Instance;
+            UiFocus.Set(UiScreen.Inventory);
+            me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 40 });
+            yield return WaitUntil(() => me.ReserveRifle556.Value >= 40, 2f, "ammo reached the owner");
+            int before = me.ReserveRifle556.Value;
+            screen.Activate(screen.AmmoSource((int)AmmoType.Rifle556), 1, true);
+            yield return WaitUntil(() => me.ReserveRifle556.Value == before - before / 2, 2f, "half the stack left the bag");
+            Assert.IsTrue(screen.DropOutside(screen.AmmoSource((int)AmmoType.Rifle556)), "dragged out of the panel: all the rest drops");
+            yield return WaitUntil(() => me.ReserveRifle556.Value == 0, 2f, "the rest dropped");
+        }
+
+        [UnityTest]
+        public IEnumerator DoubleClick_LooseAttachmentInTheBag_FitsTheGun()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var optics = me.GetComponent<CombatantOptics>();
+            var screen = InventoryScreen.Instance;
+            yield return TwoRifles(me);
+            int hand = me.ActiveSlot.Value;
+            optics.ServerStash(12);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return WaitUntil(() => InventoryBackend.BagOpticCount(me, 12) == 1, 2f, "grip in the bag list");
+            screen.Activate(screen.BagOpticSource(12), 2, false);
+            yield return WaitUntil(() => optics.AttachmentInSlot(hand, AttachSlot.Grip) == 12, 3f, "grip fitted by the double click");
+        }
+
+        [UnityTest]
+        public IEnumerator UsingABandage_WithTheScreenOpen_ShowsProgress_AndAJumpKeyCancelsIt()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var screen = InventoryScreen.Instance;
+            var healing = me.GetComponent<CombatantHealing>();
+            me.ServerGive(new LootEntry { Kind = HealRules.BandageLootKind, Amount = 2 });
+            me.ServerTakeDamage(40f);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return WaitUntil(() => InventoryBackend.Bandages(me) == 2, 2f, "bandages");
+            screen.Activate(screen.ExtraSource(InventorySourceKind.Bandage), 2, false);
+            yield return WaitUntil(() => healing.Using, 2f, "the use started with the screen open");
+            yield return new WaitForSeconds(0.6f);
+            Assert.IsTrue(screen.HealBarVisible, "the progress bar shows in the screen");
+            Assert.Greater(healing.Progress01, 0.05f);
+            ((ScriptedInput)PlayerController.InputOverride).Frame.Jump = true;
+            yield return WaitUntil(() => !healing.Using, 2f, "a jump key ended the use");
+            ((ScriptedInput)PlayerController.InputOverride).Frame.Jump = false;
+            Assert.AreEqual(2, InventoryBackend.Bandages(me), "the bandage stays");
+        }
+
         // ---- The same flows through the real EventSystem handlers on the built objects ----
 
         static GameObject Find(InventoryScreen screen, string path)

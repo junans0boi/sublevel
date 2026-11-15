@@ -318,6 +318,9 @@ namespace Game.Gameplay
             var input = player.LastInput;
             bool able = !_combatant.Dead.Value && _user.SelectedCount > 0;
             if (input.ThrowPressed && able) _aiming = true;
+            // R pulls the pin of a fragmentation grenade in hand, aiming or not (ADR-101, ADR-144).
+            bool inHand = _combatant.ActiveSlot.Value == Loadout.ThrowableSlot && !_combatant.Holstered.Value;
+            if (input.Reload && able && (_aiming || inHand)) _user.RequestCook();
             if (!_aiming) return;
             // Dead, nothing left to throw, or a screen took the keys (the input is then empty): the throw is off.
             if (!able || (!input.ThrowHeld && !input.ThrowReleased))
@@ -329,7 +332,6 @@ namespace Game.Gameplay
             // Along where the character looks, like its shots. The aim button held turns the throw into a roll.
             var direction = Quaternion.Euler(-player.Pitch, player.Yaw, 0f) * Vector3.forward;
             bool roll = input.AimHeld;
-            if (input.Reload) _user.RequestCook();
             if (input.ThrowReleased)
             {
                 StopAiming();
