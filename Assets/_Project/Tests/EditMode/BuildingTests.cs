@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Game.Core;
@@ -574,6 +575,54 @@ namespace Game.Tests
                 float backAlong = (back.X - sofa.X) * fx + (back.Z - sofa.Z) * fz;
                 Assert.Less(backAlong, 0f, "the sofa's backrest is not at its back");
             }
+        }
+
+        // ---- lived-in rooms (#190, ADR-154) ----
+
+        [Test]
+        public void HouseRooms_HoldAtLeastThreePiecesOnAverage_AndNeverANarrowSlotBetweenProps()
+        {
+            int rooms = 0, props = 0;
+            for (int seed = 0; seed < 60; seed++)
+            {
+                var plan = Buildings.Generate(BuildingKind.House, 12f, 9f, seed);
+                var pieces = plan.Pieces.Where(p => p.Kind == SurfaceKind.Prop).ToList();
+                props += pieces.Count;
+                rooms += plan.Rooms.Count(r => r.Role != RoomRole.Bath);
+                for (int i = 0; i < pieces.Count; i++)
+                    for (int j = i + 1; j < pieces.Count; j++)
+                    {
+                        var a = pieces[i]; var b = pieces[j];
+                        if (Math.Abs(a.MinY - b.MinY) > 0.5f) continue;   // another floor
+                        float sx = Math.Max(b.MinX - a.MaxX, a.MinX - b.MaxX), sz = Math.Max(b.MinZ - a.MaxZ, a.MinZ - b.MaxZ);
+                        if (sx < 0f && sz < 0f) Assert.Fail($"{a.Name} overlaps {b.Name}, seed {seed}");
+                        float gap = (float)Math.Sqrt(Math.Max(sx, 0f) * Math.Max(sx, 0f) + Math.Max(sz, 0f) * Math.Max(sz, 0f));
+                        Assert.IsFalse(gap > 0.1001f && gap < 0.7999f, $"{a.Name} and {b.Name} leave a {gap:0.00} m slot, seed {seed}");
+                    }
+            }
+            Assert.GreaterOrEqual((float)props / rooms, 3f, "pieces per room (bathrooms left out)");
+        }
+
+        [Test]
+        public void Houses_HaveWallPicturesCurtainsAndFloorClutter_ClearOfDoorsAndLoot()
+        {
+            int pictures = 0, curtains = 0, clutter = 0;
+            for (int seed = 0; seed < 40; seed++)
+            {
+                var plan = Buildings.Generate(BuildingKind.House, 12f, 9f, seed);
+                pictures += plan.Decor.Count(d => d.Name.Contains(".") && d.Y > 1.2f && d.Y < 1.9f && Math.Min(d.SizeX, d.SizeZ) < 0.03f && Math.Max(d.SizeX, d.SizeZ) > 0.5f);
+                curtains += plan.Decor.Count(d => d.Name.StartsWith("Curtain") && d.Name.EndsWith("Rod"));
+                foreach (var c in plan.Decor.Where(d => d.Name.StartsWith("Clutter") && !d.Name.EndsWith("Lid") && d.Name.Length < 12))
+                {
+                    clutter++;
+                    foreach (var loot in plan.LootPoints.Where(l => !l.OnProp))
+                        Assert.IsFalse(Math.Abs(loot.X - c.X) < 0.35f && Math.Abs(loot.Z - c.Z) < 0.35f && Math.Abs(loot.Y - (c.Y - c.SizeY / 2)) < 0.3f, $"clutter on loot {loot.Name}, seed {seed}");
+                }
+                Assert.IsFalse(BuildingRules.Validate(plan).Any(v => v.Rule == BuildingRule.DecorBlocksDoor), $"seed {seed}");
+            }
+            Assert.Greater(pictures, 20, "wall pictures");
+            Assert.Greater(curtains, 40, "curtain rods");
+            Assert.Greater(clutter, 100, "floor clutter");
         }
     }
 }

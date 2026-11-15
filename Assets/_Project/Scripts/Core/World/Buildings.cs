@@ -20,7 +20,10 @@ namespace Game.Core
         public const float RoofOverhang = 0.3f;
         public const float TwoStoreyMinDepth = 7.8f;         // room for a straight flight plus both landings
         public const float ElevatorBay = 3f;
-        const float PropSpacing = 1.2f;                      // free gap kept between props: a capsule always fits
+        const float PropSpacing = 1.2f;                      // free gap kept around stairs and offices: a capsule always fits
+        // Between two props the gap is either closed (a run of furniture, up to 10 cm) or wide enough to walk (80 cm):
+        // never a slot a capsule cannot enter yet looks like a way through, and never a 1.2 m margin that left rooms empty.
+        const float PropWalkGap = 0.8f, PropClosedGap = 0.1f;
         const float LootTopMax = 1.3f;                       // furniture higher than this holds no loot
 
         public static void FootprintLimits(BuildingKind kind, out float minWidth, out float minDepth, out float maxWidth, out float maxDepth)
@@ -216,14 +219,18 @@ namespace Game.Core
                 var room = all[i];
                 d.SetRole(room.Name, roles[i]);
                 bool studio = roles[i] == RoomRole.Living && levels[i] == 0 && all.FindAll(r => r.Storey == 0).Count == 1;
-                int n = room.Area >= 30f ? 4 : room.Area >= 14f ? 3 : 2;
+                int n = room.Area >= 30f ? 6 : room.Area >= 18f ? 5 : room.Area >= 10f ? 4 : 3;
                 switch (roles[i])
                 {
                     case RoomRole.Living:
                         d.Furnish(room, levels[i], studio ? n + 1 : n, studio ? StudioSet : LivingSet, 2);
                         if (room.Area >= 12f) d.Rug(room, DecorMat.Fabric2);
+                        d.Centre(room, levels[i], new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f));
                         break;
-                    case RoomRole.Kitchen: d.Furnish(room, levels[i], n, KitchenSet, 1); break;
+                    case RoomRole.Kitchen:
+                        d.Furnish(room, levels[i], n, KitchenSet, 1);
+                        d.Centre(room, levels[i], new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f));
+                        break;
                     case RoomRole.Bath: d.Furnish(room, levels[i], 2, BathSet, 2); break;
                     default:
                         d.Furnish(room, levels[i], n, BedroomSet, 2);
@@ -234,6 +241,9 @@ namespace Game.Core
             }
             foreach (var room in all)
                 d.Loot(room.Name, new Rect(room.MinX, room.MaxX, room.MinZ, room.MaxZ), room.FloorY, Clamp((int)(room.Area / 5f), 2, 8), null);
+            d.Curtains();
+            for (int i = 0; i < all.Count; i++)
+                if (roles[i] != RoomRole.Bath) d.Clutter(all[i], Math.Min(levels[i], 1), Clamp((int)(all[i].Area / 7f), 2, 6));
         }
 
         static string RoomAt(List<BuildingRoom> rooms, float x, float z)
@@ -459,6 +469,7 @@ namespace Game.Core
             new Spec(PropKind.Sofa, 2.0f, 0.9f, 0.85f), new Spec(PropKind.TvStand, 1.2f, 0.45f, 0.5f),
             new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f), new Spec(PropKind.Bookcase, 1.0f, 0.35f, 1.9f),
             new Spec(PropKind.Wardrobe, 1.2f, 0.55f, 2.0f), new Spec(PropKind.Counter, 1.4f, 0.5f, 0.85f),
+            new Spec(PropKind.Armchair, 0.85f, 0.85f, 0.85f), new Spec(PropKind.Plant, 0.5f, 0.5f, 1.15f),
         };
         static readonly Spec[] StudioSet =
         {
@@ -470,12 +481,14 @@ namespace Game.Core
         {
             new Spec(PropKind.Kitchen, 2.6f, 0.6f, 0.9f), new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f),
             new Spec(PropKind.Shelf, 1.2f, 0.4f, 1.9f), new Spec(PropKind.Counter, 1.4f, 0.6f, 0.9f),
+            new Spec(PropKind.Plant, 0.5f, 0.5f, 1.15f),
         };
         static readonly Spec[] BedroomSet =
         {
             new Spec(PropKind.Bed, 1.55f, 2.0f, 0.5f), new Spec(PropKind.Wardrobe, 1.2f, 0.55f, 2.0f),
             new Spec(PropKind.Desk, 1.4f, 1.3f, 0.75f), new Spec(PropKind.Bookcase, 1.0f, 0.35f, 1.9f),
-            new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f),
+            new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f), new Spec(PropKind.Dresser, 1.1f, 0.5f, 0.9f),
+            new Spec(PropKind.Plant, 0.5f, 0.5f, 1.15f), new Spec(PropKind.Armchair, 0.85f, 0.85f, 0.85f),
         };
         static readonly Spec[] BathSet =
         {
@@ -485,7 +498,7 @@ namespace Game.Core
         {
             new Spec(PropKind.Desk, 1.4f, 1.3f, 0.75f), new Spec(PropKind.Locker, 1.2f, 0.5f, 1.9f),
             new Spec(PropKind.Bookcase, 1.0f, 0.35f, 1.9f), new Spec(PropKind.Counter, 1.8f, 0.6f, 0.9f),
-            new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f),
+            new Spec(PropKind.Table, 1.4f, 1.4f, 0.8f), new Spec(PropKind.Plant, 0.5f, 0.5f, 1.15f),
         };
         static readonly Spec[] WorkshopSet =
         {
@@ -769,18 +782,34 @@ namespace Game.Core
                 foreach (var zone in Clear[level])
                     if (r.Intersects(zone, 0f)) return false;
                 foreach (var other in Blockers[level])
-                    if (r.Intersects(other, PropSpacing)) return false;
+                    if (TooTight(r, other)) return false;
                 Box(name + _props, SurfaceKind.Prop, r.X0, r.X1, y0, y0 + height, r.Z0, r.Z1, prop);
                 var piece = Plan.Pieces[Plan.Pieces.Count - 1];
                 piece.Facing = facing;
                 Plan.Pieces[Plan.Pieces.Count - 1] = piece;
                 Furniture.Build(prop, name + _props, r.X0, r.X1, r.Z0, r.Z1, y0, height, facing, _props, Plan.Kind != BuildingKind.House,
-                    Plan.Decor, out float lootX, out float lootZ);
+                    Plan.Decor, out float lootX, out float lootZ, Plan.Kind == BuildingKind.House && !WindowNear(r));
                 _props++;
                 Blockers[level].Add(r);
                 if (height <= LootTopMax && Furniture.HoldsLoot(prop))
                     _tops.Add(new LootTop { X = lootX, Y = y0 + height, Z = lootZ, Room = room });
                 return true;
+            }
+
+            static bool TooTight(Rect a, Rect b)
+            {
+                float sx = Math.Max(b.X0 - a.X1, a.X0 - b.X1), sz = Math.Max(b.Z0 - a.Z1, a.Z0 - b.Z1);
+                if (sx < 0f && sz < 0f) return true;   // overlap
+                float dist = (float)Math.Sqrt(Math.Max(sx, 0f) * Math.Max(sx, 0f) + Math.Max(sz, 0f) * Math.Max(sz, 0f));
+                return dist > PropClosedGap && dist < PropWalkGap;
+            }
+
+            // A window in the wall next to this rectangle: no picture goes on that wall.
+            bool WindowNear(Rect r)
+            {
+                foreach (var w in Plan.Windows)
+                    if (w.X > r.X0 - 0.7f && w.X < r.X1 + 0.7f && w.Z > r.Z0 - 0.7f && w.Z < r.Z1 + 0.7f) return true;
+                return false;
             }
 
             public void SetRole(string room, RoomRole role)
@@ -822,6 +851,91 @@ namespace Game.Core
                             else { r = new Rect(room.MaxX - gap - spec.D, room.MaxX - gap, p0, p0 + spec.W); facing = 3; }
                             if (TryProp(spec.Prop.ToString(), spec.Prop, r, room.FloorY, spec.H, level, room.Name, facing)) { placed++; break; }
                         }
+                    }
+            }
+
+            // One free-standing piece in the middle of a big room (a table on the rug), if the walkways around it stay open.
+            public void Centre(BuildingRoom room, int level, Spec spec)
+            {
+                float w = room.MaxX - room.MinX, l = room.MaxZ - room.MinZ;
+                if (w < spec.W + 2.4f || l < spec.D + 2.4f) return;
+                float cx = (room.MinX + room.MaxX) * 0.5f, cz = (room.MinZ + room.MaxZ) * 0.5f;
+                TryProp(spec.Prop.ToString(), spec.Prop, new Rect(cx - spec.W * 0.5f, cx + spec.W * 0.5f, cz - spec.D * 0.5f, cz + spec.D * 0.5f), room.FloorY, spec.H, level, room.Name, Rng.Int(2) * 2);
+            }
+
+            // Curtains on both sides of every window of a house, hung on a rod: decor only, on the inner wall face.
+            public void Curtains()
+            {
+                int n = 0;
+                foreach (var w in Plan.Windows)
+                {
+                    if (!Rng.Chance(0.75f)) continue;
+                    float fx = w.ForwardX, fz = w.ForwardZ;
+                    bool wallAlongX = Math.Abs(fz) > 0.5f;
+                    float inX = w.X - fx * (w.Depth * 0.5f), inZ = w.Z - fz * (w.Depth * 0.5f);   // inner face of the wall
+                    var mat = n % 2 == 0 ? DecorMat.Fabric : DecorMat.Fabric2;
+                    float y0 = w.Y - 0.2f, y1 = w.Y + w.Height + 0.3f, half = w.Width * 0.5f;
+                    void Panel(string name, DecorMat m, float a0, float a1, float ya, float yb, float d0, float d1)
+                    {
+                        // a0..a1 along the wall from the window centre; d0..d1 into the room from the inner face.
+                        float p0 = (wallAlongX ? inZ : inX) - (wallAlongX ? fz : fx) * d0, p1 = (wallAlongX ? inZ : inX) - (wallAlongX ? fz : fx) * d1;
+                        float lo = Math.Min(p0, p1), hi = Math.Max(p0, p1);
+                        if (wallAlongX) Furniture.Add(Plan.Decor, name, m, w.X + a0, w.X + a1, ya, yb, lo, hi);
+                        else Furniture.Add(Plan.Decor, name, m, lo, hi, ya, yb, w.Z + a0, w.Z + a1);
+                    }
+                    string tag = "Curtain" + n++;
+                    Panel(tag + "L", mat, -half - 0.45f, -half + 0.05f, y0, y1, 0.01f, 0.07f);
+                    Panel(tag + "R", mat, half - 0.05f, half + 0.45f, y0, y1, 0.01f, 0.07f);
+                    Panel(tag + "Rod", DecorMat.Metal, -half - 0.5f, half + 0.5f, y1, y1 + 0.03f, 0.02f, 0.1f);
+                }
+            }
+
+            // Small things on the floor of a room: boxes, bottles, clothes, papers. Decor only (no collider), so they stay
+            // out of doorways, away from loot points and off the furniture.
+            public void Clutter(BuildingRoom room, int level, int count)
+            {
+                for (int i = 0; i < count; i++)
+                    for (int attempt = 0; attempt < 12; attempt++)
+                    {
+                        int kind = Rng.Int(5);
+                        float sx = kind == 0 ? Rng.Range(0.3f, 0.45f) : kind == 1 ? 0.12f : kind == 2 ? Rng.Range(0.4f, 0.7f) : 0.32f;
+                        float sz = kind == 0 ? Rng.Range(0.3f, 0.45f) : kind == 1 ? 0.12f : kind == 2 ? Rng.Range(0.3f, 0.5f) : 0.22f;
+                        float x = Rng.Range(room.MinX + 0.2f, room.MaxX - 0.2f - sx), z = Rng.Range(room.MinZ + 0.2f, room.MaxZ - 0.2f - sz);
+                        var r = new Rect(x, x + sx, z, z + sz);
+                        bool bad = false;
+                        foreach (var zone in Clear[level]) if (r.Intersects(zone, 0f)) bad = true;
+                        foreach (var other in Blockers[level]) if (r.Intersects(other, 0.02f)) bad = true;
+                        foreach (var loot in Plan.LootPoints)
+                            if (Math.Abs(loot.Y - room.FloorY) < 0.5f && loot.X > r.X0 - 0.6f && loot.X < r.X1 + 0.6f && loot.Z > r.Z0 - 0.6f && loot.Z < r.Z1 + 0.6f) bad = true;
+                        if (bad) continue;
+                        float y = room.FloorY;
+                        string name = "Clutter" + Plan.Decor.Count;
+                        switch (kind)
+                        {
+                            case 0: // a cardboard box, sometimes a smaller one on top
+                                Furniture.Add(Plan.Decor, name, DecorMat.Crate, r.X0, r.X1, y, y + 0.3f, r.Z0, r.Z1);
+                                Furniture.Add(Plan.Decor, name + "Lid", DecorMat.Wood, r.X0 + 0.02f, r.X1 - 0.02f, y + 0.3f, y + 0.32f, r.Z0 + 0.02f, r.Z1 - 0.02f);
+                                if (Rng.Chance(0.4f)) Furniture.Add(Plan.Decor, name + "Top", DecorMat.Crate, r.X0 + 0.04f, r.X0 + 0.2f, y + 0.32f, y + 0.5f, r.Z0 + 0.04f, r.Z0 + 0.2f);
+                                break;
+                            case 1: // two bottles
+                                Furniture.Add(Plan.Decor, name, DecorMat.Paint, r.X0, r.X0 + 0.07f, y, y + 0.26f, r.Z0, r.Z0 + 0.07f);
+                                Furniture.Add(Plan.Decor, name + "B", DecorMat.Warn, r.X0 + 0.1f, r.X0 + 0.17f, y, y + 0.2f, r.Z0 + 0.04f, r.Z0 + 0.11f);
+                                break;
+                            case 2: // clothes dropped on the floor
+                                Furniture.Add(Plan.Decor, name, Rng.Chance(0.5f) ? DecorMat.Fabric : DecorMat.Fabric2, r.X0, r.X1, y, y + 0.07f, r.Z0, r.Z1);
+                                Furniture.Add(Plan.Decor, name + "B", DecorMat.Fabric2, r.X0 + 0.1f, r.X0 + 0.3f, y + 0.07f, y + 0.12f, r.Z0 + 0.05f, r.Z1 - 0.05f);
+                                break;
+                            case 3: // papers and a book
+                                Furniture.Add(Plan.Decor, name, DecorMat.Ceramic, r.X0, r.X1, y, y + 0.012f, r.Z0, r.Z1);
+                                Furniture.Add(Plan.Decor, name + "B", DecorMat.Fabric, r.X0 + 0.04f, r.X0 + 0.2f, y + 0.012f, y + 0.05f, r.Z0 + 0.03f, r.Z0 + 0.19f);
+                                break;
+                            default: // a low stool
+                                Furniture.Add(Plan.Decor, name, DecorMat.Wood, r.X0, r.X0 + 0.32f, y + 0.3f, y + 0.34f, r.Z0, r.Z0 + 0.22f);
+                                Furniture.Add(Plan.Decor, name + "L", DecorMat.WoodDark, r.X0 + 0.02f, r.X0 + 0.06f, y, y + 0.3f, r.Z0 + 0.02f, r.Z0 + 0.06f);
+                                Furniture.Add(Plan.Decor, name + "R", DecorMat.WoodDark, r.X0 + 0.26f, r.X0 + 0.3f, y, y + 0.3f, r.Z0 + 0.16f, r.Z0 + 0.2f);
+                                break;
+                        }
+                        break;
                     }
             }
 

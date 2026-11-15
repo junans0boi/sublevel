@@ -54,7 +54,7 @@ namespace Game.Core
         {
             switch (kind)
             {
-                case BuildingKind.House: return 1000;
+                case BuildingKind.House: return 2200;
                 case BuildingKind.Warehouse: return 2000;
                 case BuildingKind.FactoryHall: return 1500;
                 case BuildingKind.Shed: return 220;

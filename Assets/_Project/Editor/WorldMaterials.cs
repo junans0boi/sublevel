@@ -43,15 +43,21 @@ public static class WorldMaterials
         ("Rock07", "rock_07"), ("Rock09", "rock_09"), ("RockMossSet01", "rock_moss_set_01"),
     };
 
-    static readonly Color[] BrickTints = { Color.white, new Color(0.84f, 0.80f, 0.78f), new Color(1f, 0.90f, 0.82f) };
-    static readonly Color[] PlasterTints = { new Color(0.90f, 0.88f, 0.82f), new Color(0.76f, 0.81f, 0.84f), new Color(0.88f, 0.79f, 0.66f) };
-    static readonly Color[] SteelTints = { new Color(1.0f, 1.0f, 1.0f), new Color(0.84f, 0.89f, 0.85f), new Color(0.95f, 0.85f, 0.78f) };
-    static readonly Color[] RoofTints = { Color.white, new Color(0.80f, 0.74f, 0.70f), new Color(0.70f, 0.72f, 0.76f) };
+    // Five tints each (#207): sand, sky blue, ochre, sage and rose plaster; red, dark and weathered brick; green, rust and grey steel;
+    // terracotta, brown, slate and moss roofs. A street no longer reads as one grey house repeated.
+    static readonly Color[] BrickTints = { Color.white, new Color(0.84f, 0.80f, 0.78f), new Color(1f, 0.90f, 0.82f), new Color(0.74f, 0.66f, 0.62f), new Color(1f, 0.78f, 0.70f) };
+    static readonly Color[] PlasterTints = { new Color(0.90f, 0.88f, 0.82f), new Color(0.76f, 0.81f, 0.84f), new Color(0.88f, 0.79f, 0.66f), new Color(0.74f, 0.82f, 0.72f), new Color(0.88f, 0.74f, 0.72f) };
+    static readonly Color[] SteelTints = { new Color(1.0f, 1.0f, 1.0f), new Color(0.84f, 0.89f, 0.85f), new Color(0.95f, 0.85f, 0.78f), new Color(0.70f, 0.80f, 0.74f), new Color(0.78f, 0.82f, 0.90f) };
+    static readonly Color[] RoofTints = { Color.white, new Color(0.80f, 0.74f, 0.70f), new Color(0.70f, 0.72f, 0.76f), new Color(1f, 0.72f, 0.60f), new Color(0.66f, 0.76f, 0.66f) };
+    static readonly Color[] AccentTints =
+    {
+        new Color(0.62f, 0.22f, 0.20f), new Color(0.22f, 0.42f, 0.46f), new Color(0.78f, 0.60f, 0.22f), new Color(0.30f, 0.42f, 0.28f), new Color(0.26f, 0.32f, 0.52f),
+    };
 
     // The scanned rocks are warm brown; pulled toward the grey of the cliffs they lie under.
     static readonly Color RockTint = new Color(0.82f, 0.88f, 0.92f);
 
-    public const int Variants = 3;
+    public const int Variants = 5;
 
     // Packs the masks every material needs. Call once before any material is asked for.
     public static void Prepare()
@@ -206,6 +212,14 @@ public static class WorldMaterials
     public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.5f);
     public static Surface SteelRoof => Set("SteelRoof", "CorrugatedSteel005", new Color(0.80f, 0.82f, 0.84f), 2f, 2f, smoothness: 0.5f);
     public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), "RoofingTiles014B", RoofTints[Wrap(variant)], 2f, 2f);
+    // Town detail (#207): painted accents for shutters, awnings, signs and mailboxes, trim around openings, fences, wires, bins.
+    public static Surface Accent(int variant) => Set("Accent" + Wrap(variant), "PaintedMetal014", AccentTints[Wrap(variant)], 1.5f, 1.5f, smoothness: 0.5f);
+    public static Surface Trim(bool light) => light
+        ? Set("TrimLight", "PaintedPlaster017", new Color(0.90f, 0.89f, 0.85f), 3f, 1.5f)
+        : Set("TrimDark", "Planks039", new Color(0.42f, 0.32f, 0.24f), 1.2f, 0.6f);
+    public static Surface FenceWhite => Set("FenceWhite", "Planks039", new Color(0.88f, 0.85f, 0.78f), 1.4f, 0.7f);
+    public static Surface Wire => Set("Wire", "PaintedMetal014", new Color(0.07f, 0.07f, 0.08f), 1f, 1f, smoothness: 0.3f);
+    public static Surface BinGreen => Set("BinGreen", "PaintedMetal014", new Color(0.20f, 0.40f, 0.30f), 1f, 1f, smoothness: 0.4f);
     public static Surface Planks => Set("Planks", "Planks039", Color.white, 2.4f, 1.2f);
     public static Surface PlanksDark => Set("PlanksDark", "Planks039", new Color(0.72f, 0.64f, 0.55f), 1.6f, 0.8f);
     public static Surface Shelving => Set("Shelving", "Planks039", new Color(0.62f, 0.60f, 0.56f), 1.2f, 0.6f);

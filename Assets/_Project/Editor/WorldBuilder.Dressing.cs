@@ -24,7 +24,7 @@ public static partial class WorldBuilder
         readonly Transform _root;
         readonly Dictionary<int, Transform> _regions = new Dictionary<int, Transform>();
         readonly Dictionary<(int region, Material material), WorldMeshes.BoxBatch> _batches = new Dictionary<(int, Material), WorldMeshes.BoxBatch>();
-        public int Pieces;
+        public int Pieces, Details;
 
         public Dressing(WorldPlan plan, WorldMeshes.HeightField ground, Transform root, List<NavMeshBuildSource> nav)
         {
@@ -66,6 +66,33 @@ public static partial class WorldBuilder
             var size = new Vector3(radius * 1.8f, height + bury, radius * 1.8f);
             Solid(region, foot + Vector3.up * ((height - bury) * 0.5f), size, Quaternion.identity);
         }
+
+        // Show-only parts (no collider, no navmesh obstacle): trim, roofs, signs, wires and other detail you cannot bump into.
+        // Their meshes are cut into 96 m cells (so the camera only draws the ones in view) and only the big ones cast shadows:
+        // one mesh per region would be drawn whole, and into every shadow cascade, from anywhere in the region (#207 perf).
+        const float DetailCell = 96f;
+        readonly Dictionary<(int region, int cx, int cz, Material material, bool shadow), WorldMeshes.BoxBatch> _details =
+            new Dictionary<(int, int, int, Material, bool), WorldMeshes.BoxBatch>();
+
+        WorldMeshes.BoxBatch Detail(int region, WorldMaterials.Surface surface, Vector3 at, bool shadow)
+        {
+            var key = (region, Mathf.FloorToInt(at.x / DetailCell), Mathf.FloorToInt(at.z / DetailCell), surface.Material, shadow);
+            if (!_details.TryGetValue(key, out var batch)) _details[key] = batch = new WorldMeshes.BoxBatch(surface.Tile);
+            Details++;
+            return batch;
+        }
+
+        public void Visual(int region, WorldMaterials.Surface surface, Vector3 center, Vector3 size, Quaternion rotation, int skipFaces = 0, bool shadow = false) =>
+            Detail(region, surface, center, shadow).Add(center, size, rotation, false, skipFaces);
+
+        public void VisualCylinder(int region, WorldMaterials.Surface surface, Vector3 foot, float radius, float height, int sides = 8, bool shadow = false) =>
+            Detail(region, surface, foot, shadow).AddCylinder(foot, radius, height, sides);
+
+        public void VisualPrism(int region, WorldMaterials.Surface surface, Vector3 baseCenter, Vector3 size, Quaternion rotation, bool slopes, bool ends) =>
+            Detail(region, surface, baseCenter, true).AddPrism(baseCenter, size, rotation, slopes, ends);
+
+        // A collider and navmesh obstacle with no mesh of its own (the parts around it are Visual).
+        public void Block(int region, Vector3 center, Vector3 size, Quaternion rotation) => Solid(region, center, size, rotation);
 
         void Solid(int region, Vector3 center, Vector3 size, Quaternion rotation)
         {
@@ -113,6 +140,20 @@ public static partial class WorldBuilder
                 go.isStatic = true;
                 renderers++;
             }
+            foreach (var pair in _details.OrderBy(p => p.Key.region).ThenBy(p => p.Key.cx).ThenBy(p => p.Key.cz).ThenBy(p => p.Key.material.name))
+            {
+                if (pair.Value.Empty) continue;
+                var parent = Region(pair.Key.region);
+                var name = $"Detail_{pair.Key.cx}_{pair.Key.cz}_{pair.Key.material.name}{(pair.Key.shadow ? "" : "_NoShadow")}";
+                var go = new GameObject(name);
+                go.transform.SetParent(parent, false);
+                go.AddComponent<MeshFilter>().sharedMesh = store.Add(pair.Value.ToMesh($"{parent.name}_{name}"));
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = pair.Key.material;
+                renderer.shadowCastingMode = pair.Key.shadow ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                go.isStatic = true;
+                renderers++;
+            }
             return renderers;
         }
     }
@@ -123,11 +164,15 @@ public static partial class WorldBuilder
         List<NavMeshBuildSource> nav, List<Placed> lots)
     {
         var dressing = new Dressing(plan, ground, Child(parent, "Dressing"), nav);
-        for (int i = 0; i < lots.Count && i < plan.Lots.Count; i++) DressLot(dressing, plan, plan.Lots[i], lots[i], Hash(plan.Seed, 700000 + i));
+        for (int i = 0; i < lots.Count && i < plan.Lots.Count; i++)
+        {
+            DressLot(dressing, plan, plan.Lots[i], lots[i], Hash(plan.Seed, 700000 + i));
+            DressTown(dressing, plan, plan.Lots[i], lots[i], Hash(plan.Seed, 900000 + i), unchecked((int)Hash(plan.Seed, i)));
+        }
         DressJunctions(dressing, plan);
         DressRoads(dressing, plan);
         int renderers = dressing.Finish(store);
-        Debug.Log($"[WorldBuilder] dressing: {dressing.Pieces} pieces combined into {renderers} renderers");
+        Debug.Log($"[WorldBuilder] dressing: {dressing.Pieces} solid pieces + {dressing.Details} show-only parts combined into {renderers} renderers");
     }
 
     // Around one building: a low wall behind and beside a house, and clutter against the outer walls away from doors.
@@ -283,6 +328,8 @@ public static partial class WorldBuilder
             if (!IsPaved(road.Kind)) continue;
             if (road.Region >= 0 && plan.Regions[road.Region].Kind == RegionKind.Wetland && road.Kind != RoadKind.Trunk) continue;
             float carried = PoleSpacing * 0.5f;
+            bool havePrev = false;
+            Vector3 prevFoot = default;
             int count = Mathf.Min(road.X.Length, road.Z.Length);
             for (int i = 0; i + 1 < count; i++)
             {
@@ -296,14 +343,34 @@ public static partial class WorldBuilder
                 {
                     var p = a + dir * carried + left * (road.Width * 0.5f + 1.7f);
                     carried += PoleSpacing;
-                    if (!d.Free(p.x, p.y, 1.3f, 2.5f)) continue;
+                    if (!d.Free(p.x, p.y, 1.3f, 2.5f)) { havePrev = false; continue; }
                     int region = plan.RegionAt(p.x, p.y);
                     var foot = d.OnGround(p.x, p.y);
                     float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
                     d.Cylinder(region, WorldMaterials.PlanksDark, foot, PoleRadius, PoleHeight, 0.4f);
                     d.Box(region, WorldMaterials.PlanksDark, foot + Vector3.up * (PoleHeight - 0.7f), new Vector3(1.7f, 0.12f, 0.12f), yaw, 0f);
+                    if (havePrev && Vector3.Distance(prevFoot, foot) < PoleSpacing * 1.6f) StringWires(d, region, prevFoot, foot, yaw);
+                    prevFoot = foot; havePrev = true;
                 }
                 carried -= length;
+            }
+        }
+    }
+
+    // Three wires from the crossarm of one pole to the next, each in two straight runs that sag in the middle.
+    static void StringWires(Dressing d, int region, Vector3 from, Vector3 to, float yaw)
+    {
+        var side = Quaternion.Euler(0f, yaw, 0f) * Vector3.right;
+        float top = PoleHeight - 0.64f;
+        for (int k = -1; k <= 1; k++)
+        {
+            var a = from + Vector3.up * top + side * (k * 0.7f);
+            var b = to + Vector3.up * top + side * (k * 0.7f);
+            var mid = (a + b) * 0.5f + Vector3.down * 0.55f;
+            foreach (var (p, q) in new[] { (a, mid), (mid, b) })
+            {
+                var along = q - p;
+                d.Visual(region, WorldMaterials.Wire, (p + q) * 0.5f, new Vector3(0.03f, 0.03f, along.magnitude), Quaternion.LookRotation(along));
             }
         }
     }

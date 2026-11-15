@@ -14,7 +14,7 @@ namespace Game.Core
             switch (prop)
             {
                 case PropKind.Crate: case PropKind.Table: case PropKind.Counter: case PropKind.Bed: case PropKind.Desk:
-                case PropKind.Workbench: case PropKind.Kitchen: case PropKind.Barrel: return true;
+                case PropKind.Workbench: case PropKind.Kitchen: case PropKind.Barrel: case PropKind.Dresser: return true;
                 default: return false;
             }
         }
@@ -22,7 +22,7 @@ namespace Game.Core
         // The decor boxes of one prop in the world rect (x0..x1, z0..z1) standing at y0 with box height h, appended to
         // `into`. lootX/lootZ: where on the box the free, flat part of the top is.
         public static void Build(PropKind prop, string name, float x0, float x1, float z0, float z1, float y0, float h,
-            int facing, int variant, bool industrial, List<BuildingDecor> into, out float lootX, out float lootZ)
+            int facing, int variant, bool industrial, List<BuildingDecor> into, out float lootX, out float lootZ, bool wallArt = false)
         {
             var f = new Frame(name, x0, x1, z0, z1, y0, facing, into);
             float w = f.W, d = f.D;
@@ -46,9 +46,31 @@ namespace Game.Core
                 case PropKind.Barrel: Barrel(f, w, d, h, variant); break;
                 case PropKind.Pallet: Pallet(f, w, d, variant); break;
                 case PropKind.Workbench: Workbench(f, w, d, h); break;
+                case PropKind.Armchair: Armchair(f, w, d, variant); break;
+                case PropKind.Plant: Plant(f, w, d, h); break;
+                case PropKind.Dresser: Dresser(f, w, d, h); break;
                 default: Crate(f, w, d, h); break;
             }
+            if (wallArt) Art(f, prop, w, variant);
             f.Map(lu, lv, out lootX, out lootZ);
+        }
+
+        // A framed picture on the wall behind a piece of furniture (the wall is at v = 0 of the frame).
+        static void Art(Frame f, PropKind prop, float w, int variant)
+        {
+            float y0, y1, aw;
+            switch (prop)
+            {
+                case PropKind.Sofa: y0 = 1.25f; y1 = 1.85f; aw = Math.Min(1.1f, w * 0.5f); break;
+                case PropKind.Bed: y0 = 1.3f; y1 = 1.8f; aw = Math.Min(0.9f, w * 0.6f); break;
+                case PropKind.Desk: case PropKind.Table: y0 = 1.3f; y1 = 1.8f; aw = 0.7f; break;
+                default: return;
+            }
+            float uc = w * 0.5f, a = uc - aw * 0.5f, b = uc + aw * 0.5f;
+            f.B(DecorMat.WoodDark, a, b, -0.03f, -0.005f, y0, y1);
+            var fill = (variant & 1) == 0 ? DecorMat.Fabric : DecorMat.Fabric2;
+            f.B(fill, a + 0.05f, b - 0.05f, -0.005f, 0f, y0 + 0.05f, y1 - 0.05f);
+            f.B(DecorMat.Ceramic, a + 0.05f, b - 0.05f, -0.005f, 0f, y0 + 0.05f + (y1 - y0 - 0.1f) * 0.55f, y1 - 0.05f);
         }
 
         // A thin rug on the floor of a room: decor only, nothing stands on it and nothing collides with it.
@@ -293,6 +315,41 @@ namespace Game.Core
             f.B(DecorMat.WoodDark, u0 + 0.02f, w - 0.02f, 0.45f - 0.01f, 0.45f, 0.1f, 0.28f);
             f.B(DecorMat.Metal, u0 + 0.13f, w - 0.13f, 0.44f, 0.45f, 0.27f, 0.29f);
             f.B(DecorMat.Metal, u0 + 0.02f, w - 0.02f, 0.04f, 0.41f, 0f, 0.04f);
+        }
+
+        static void Armchair(Frame f, float w, float d, int variant)
+        {
+            var cloth = variant % 2 == 0 ? DecorMat.Fabric : DecorMat.Fabric2;
+            f.Legs(DecorMat.WoodDark, 0.03f, w - 0.03f, 0.03f, d - 0.03f, 0.05f, 0.12f);
+            f.B(cloth, 0f, w, 0f, d, 0.12f, 0.38f);
+            f.B(cloth, 0.2f, w - 0.2f, 0.22f, d - 0.02f, 0.38f, 0.5f);
+            f.B(cloth, 0.1f, w - 0.1f, 0.02f, 0.24f, 0.38f, 0.85f);
+            f.B(cloth, 0f, 0.2f, 0.02f, d, 0.38f, 0.62f);
+            f.B(cloth, w - 0.2f, w, 0.02f, d, 0.38f, 0.62f);
+        }
+
+        static void Plant(Frame f, float w, float d, float h)
+        {
+            float cu = w * 0.5f, cv = d * 0.5f;
+            f.B(DecorMat.Ceramic, cu - 0.17f, cu + 0.17f, cv - 0.17f, cv + 0.17f, 0f, 0.3f);
+            f.B(DecorMat.WoodDark, cu - 0.15f, cu + 0.15f, cv - 0.15f, cv + 0.15f, 0.3f, 0.32f);
+            f.B(DecorMat.Wood, cu - 0.015f, cu + 0.015f, cv - 0.015f, cv + 0.015f, 0.32f, 0.8f);
+            f.B(DecorMat.Paint, cu - 0.22f, cu + 0.22f, cv - 0.04f, cv + 0.04f, 0.6f, 0.68f);
+            f.B(DecorMat.Paint, cu - 0.04f, cu + 0.04f, cv - 0.22f, cv + 0.22f, 0.72f, 0.8f);
+            f.B(DecorMat.Paint, cu - 0.15f, cu + 0.15f, cv - 0.15f, cv + 0.15f, 0.84f, h);
+        }
+
+        static void Dresser(Frame f, float w, float d, float h)
+        {
+            f.Legs(DecorMat.WoodDark, 0.02f, w - 0.02f, 0.02f, d - 0.02f, 0.05f, 0.1f);
+            f.B(DecorMat.Wood, 0f, w, 0f, d - 0.02f, 0.1f, h - 0.03f);
+            f.B(DecorMat.Ceramic, 0f, w, 0f, d, h - 0.03f, h);
+            for (int i = 0; i < 3; i++)
+            {
+                float y0 = 0.14f + i * (h - 0.28f) / 3f, y1 = y0 + (h - 0.28f) / 3f - 0.02f;
+                f.B(DecorMat.WoodDark, 0.03f, w - 0.03f, d - 0.02f, d, y0, y1);
+                f.B(DecorMat.Metal, w * 0.5f - 0.08f, w * 0.5f + 0.08f, d, d + 0.02f, (y0 + y1) * 0.5f - 0.01f, (y0 + y1) * 0.5f + 0.01f);
+            }
         }
 
         static void Sofa(Frame f, float w, float d, int variant)

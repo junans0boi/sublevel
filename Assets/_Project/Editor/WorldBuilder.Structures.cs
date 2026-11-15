@@ -170,7 +170,7 @@ public static partial class WorldBuilder
         gradeVolume.sharedProfile = InteriorGradeProfile();
         Set(pool, "_grade", p => p.objectReferenceValue = gradeVolume);
         Set(pool, "_flicker", p => { p.arraySize = lamps.Count; for (int i = 0; i < lamps.Count; i++) p.GetArrayElementAtIndex(i).boolValue = lamps[i].flicker; });
-        Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes + {lots.Sum(l => l.Plan.Decor.Count) + stations.Sum(l => l.Plan.Decor.Count)} furniture parts combined into {renderers} renderers, {lamps.Count} lamps");
+        Debug.Log($"[WorldBuilder] buildings: {lots.Count} lots + {stations.Count} stations, {pieces} boxes + {lots.Sum(l => l.Plan.Decor.Count) + stations.Sum(l => l.Plan.Decor.Count)} furniture parts ({DecorFacesHidden} of {DecorFacesTotal} faces hidden and left out) combined into {renderers} renderers, {lamps.Count} lamps");
     }
 
     // The sliding door across the station's front opening (ElevatorDoors finds it by `Station`): 3.2 x 3.0 x 0.12 m,
@@ -282,11 +282,17 @@ public static partial class WorldBuilder
             });
         }
 
-        foreach (var decor in plan.Decor)
+        int hiddenFaces = 0;
+        for (int di = 0; di < plan.Decor.Count; di++)
         {
+            var decor = plan.Decor[di];
             var at = new Vector3(decor.X, decor.Y, decor.Z);
-            Batch(WorldMaterials.Decor(decor.Mat), true, at).Add(at, new Vector3(decor.SizeX, decor.SizeY, decor.SizeZ));
+            int skip = HiddenFaces(plan, decor) | HiddenByNeighbours(plan.Decor, di);
+            for (int f = 0; f < 6; f++) hiddenFaces += skip >> f & 1;
+            Batch(WorldMaterials.Decor(decor.Mat), true, at).Add(at, new Vector3(decor.SizeX, decor.SizeY, decor.SizeZ), false, skip);
         }
+        DecorFacesHidden += hiddenFaces;
+        DecorFacesTotal += plan.Decor.Count * 6;
 
         // Foundation skirt: its top is inside the floor slab, its sides reach into the ground. Not a collider.
         if (plan.Width > 0.3f && plan.Depth > 0.3f)
@@ -331,6 +337,73 @@ public static partial class WorldBuilder
         foreach (var point in plan.LootPoints)
             placed.Loot.Add(origin + rotation * new Vector3(point.X, point.Y, point.Z) + Vector3.up * LootLift);
         return placed;
+    }
+
+    public static int DecorFacesHidden, DecorFacesTotal;
+
+    // Faces of a furniture part that lie flat against a floor, wall or ceiling piece (bit f of the result, in BoxBatch's face
+    // order): nobody can see them, so they are not put in the mesh. Only a piece that covers the whole face counts.
+    static int HiddenFaces(BuildingPlan plan, BuildingDecor d)
+    {
+        const float tol = 0.05f;
+        float hx = d.SizeX * 0.5f, hy = d.SizeY * 0.5f, hz = d.SizeZ * 0.5f;
+        int mask = 0;
+        foreach (var p in plan.Pieces)
+        {
+            if (p.Kind != SurfaceKind.Floor && p.Kind != SurfaceKind.WallInner && p.Kind != SurfaceKind.WallOuter) continue;
+            bool coversX = p.MinX <= d.X - hx + tol && p.MaxX >= d.X + hx - tol;
+            bool coversY = p.MinY <= d.Y - hy + tol && p.MaxY >= d.Y + hy - tol;
+            bool coversZ = p.MinZ <= d.Z - hz + tol && p.MaxZ >= d.Z + hz - tol;
+            if (coversX && coversZ)
+            {
+                if (Mathf.Abs(p.MaxY - (d.Y - hy)) <= tol) mask |= 1 << 1;   // stands on it
+                if (Mathf.Abs(p.MinY - (d.Y + hy)) <= tol) mask |= 1 << 0;   // hangs from it
+            }
+            if (coversX && coversY)
+            {
+                if (Mathf.Abs(p.MaxZ - (d.Z - hz)) <= tol) mask |= 1 << 3;
+                if (Mathf.Abs(p.MinZ - (d.Z + hz)) <= tol) mask |= 1 << 2;
+            }
+            if (coversY && coversZ)
+            {
+                if (Mathf.Abs(p.MaxX - (d.X - hx)) <= tol) mask |= 1 << 5;
+                if (Mathf.Abs(p.MinX - (d.X + hx)) <= tol) mask |= 1 << 4;
+            }
+        }
+        return mask;
+    }
+
+    // Faces of a furniture part that another part covers completely on the same plane (a cushion on its frame, a leg under a seat).
+    static int HiddenByNeighbours(System.Collections.Generic.List<BuildingDecor> all, int index)
+    {
+        const float tol = 0.004f;
+        var a = all[index];
+        float ax0 = a.X - a.SizeX * 0.5f, ax1 = a.X + a.SizeX * 0.5f, ay0 = a.Y - a.SizeY * 0.5f, ay1 = a.Y + a.SizeY * 0.5f, az0 = a.Z - a.SizeZ * 0.5f, az1 = a.Z + a.SizeZ * 0.5f;
+        int mask = 0;
+        for (int j = 0; j < all.Count; j++)
+        {
+            if (j == index) continue;
+            var b = all[j];
+            float bx0 = b.X - b.SizeX * 0.5f, bx1 = b.X + b.SizeX * 0.5f, by0 = b.Y - b.SizeY * 0.5f, by1 = b.Y + b.SizeY * 0.5f, bz0 = b.Z - b.SizeZ * 0.5f, bz1 = b.Z + b.SizeZ * 0.5f;
+            if (bx0 > ax1 + tol || bx1 < ax0 - tol || by0 > ay1 + tol || by1 < ay0 - tol || bz0 > az1 + tol || bz1 < az0 - tol) continue;
+            bool cx = bx0 <= ax0 + tol && bx1 >= ax1 - tol, cy = by0 <= ay0 + tol && by1 >= ay1 - tol, cz = bz0 <= az0 + tol && bz1 >= az1 - tol;
+            if (cx && cz)
+            {
+                if (Mathf.Abs(ay1 - by0) <= tol) mask |= 1 << 0;
+                if (Mathf.Abs(ay0 - by1) <= tol) mask |= 1 << 1;
+            }
+            if (cx && cy)
+            {
+                if (Mathf.Abs(az1 - bz0) <= tol) mask |= 1 << 2;
+                if (Mathf.Abs(az0 - bz1) <= tol) mask |= 1 << 3;
+            }
+            if (cy && cz)
+            {
+                if (Mathf.Abs(ax1 - bx0) <= tol) mask |= 1 << 4;
+                if (Mathf.Abs(ax0 - bx1) <= tol) mask |= 1 << 5;
+            }
+        }
+        return mask;
     }
 
     // Darker inside than out: a post volume that lowers the exposure of the shared grade while the camera is inside a

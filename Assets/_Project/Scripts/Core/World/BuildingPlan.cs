@@ -13,6 +13,7 @@ namespace Game.Core
     {
         None, Crate, Shelf, Table, Counter, Bed, Machine,
         Sofa, Wardrobe, Locker, Kitchen, BathSet, Bathtub, Desk, Bookcase, TvStand, Barrel, Pallet, Workbench,
+        Armchair, Plant, Dresser,
     }
 
     // What a room is for: it picks the furniture set (ADR-147).

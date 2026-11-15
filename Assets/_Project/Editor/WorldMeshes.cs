@@ -50,6 +50,8 @@ public static class WorldMeshes
     }
 
     // Generated meshes live in one asset file instead of in the scene, which would otherwise carry every vertex as text.
+    // (The project serializes assets as YAML, so every vertex byte is two hex characters in this file: the vertex format
+    // of BoxBatch is therefore compact and hidden faces are left out, see BoxBatch.)
     public sealed class Store
     {
         readonly string _path;
@@ -104,12 +106,14 @@ public static class WorldMeshes
 
         public int Boxes { get; private set; }
 
-        public void Add(Vector3 center, Vector3 size, bool skipBottom = false)
+        // Faces in the order up, down, +Z, -Z, +X, -X; bit f of skipFaces leaves face f out (a side that lies against a wall or the floor).
+        public void Add(Vector3 center, Vector3 size, bool skipBottom = false, int skipFaces = 0)
         {
             var h = size * 0.5f;
             for (int f = 0; f < Faces.Length; f++)
             {
                 if (skipBottom && f == 1) continue;
+                if ((skipFaces >> f & 1) != 0) continue;
                 var (n, r, u) = Faces[f];
                 float halfR = Mathf.Abs(Vector3.Dot(r, h)), halfU = Mathf.Abs(Vector3.Dot(u, h));
                 var c = center + Vector3.Scale(n, h);
@@ -129,10 +133,10 @@ public static class WorldMeshes
         }
 
         // A box turned about its own centre (set dressing placed in world space). The pattern follows the box.
-        public void Add(Vector3 center, Vector3 size, Quaternion rotation, bool skipBottom = false)
+        public void Add(Vector3 center, Vector3 size, Quaternion rotation, bool skipBottom = false, int skipFaces = 0)
         {
             int from = _vertices.Count;
-            Add(Vector3.zero, size, skipBottom);
+            Add(Vector3.zero, size, skipBottom, skipFaces);
             for (int i = from; i < _vertices.Count; i++)
             {
                 _vertices[i] = center + rotation * _vertices[i];
@@ -182,19 +186,99 @@ public static class WorldMeshes
             Boxes++;
         }
 
+        // A triangular prism (a gable roof, a ridge tent) with its base centre at `center`: size.x across the ridge, size.y
+        // the ridge height, size.z along the ridge, turned about `center` by `rotation`. `slopes` the two roof faces, `ends`
+        // the two triangles at the gables, so the two can be drawn in different materials.
+        public void AddPrism(Vector3 center, Vector3 size, Quaternion rotation, bool slopes, bool ends)
+        {
+            float a = size.x * 0.5f, h = size.y, l = size.z * 0.5f;
+            int from = _vertices.Count;
+            void Quad(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 n, Vector2 u0, Vector2 u1, Vector2 u2, Vector2 u3)
+            {
+                int first = _vertices.Count;
+                foreach (var p in new[] { p0, p1, p2, p3 }) { _vertices.Add(p); _normals.Add(n); }
+                _uvs.Add(u0); _uvs.Add(u1); _uvs.Add(u2); _uvs.Add(u3);
+                _triangles.Add(first); _triangles.Add(first + 2); _triangles.Add(first + 1);
+                _triangles.Add(first); _triangles.Add(first + 3); _triangles.Add(first + 2);
+            }
+            float slope = Mathf.Sqrt(a * a + h * h);
+            if (slopes)
+            {
+                var nr = new Vector3(h, a, 0f).normalized;
+                var nl = new Vector3(-h, a, 0f).normalized;
+                float lu = size.z / _tile.x, su = slope / _tile.y;
+                Quad(new Vector3(a, 0, -l), new Vector3(0, h, -l), new Vector3(0, h, l), new Vector3(a, 0, l), nr, new Vector2(0, 0), new Vector2(0, su), new Vector2(lu, su), new Vector2(lu, 0));
+                Quad(new Vector3(-a, 0, l), new Vector3(0, h, l), new Vector3(0, h, -l), new Vector3(-a, 0, -l), nl, new Vector2(0, 0), new Vector2(0, su), new Vector2(lu, su), new Vector2(lu, 0));
+            }
+            if (ends)
+            {
+                for (int e = 0; e < 2; e++)
+                {
+                    float z = e == 0 ? l : -l, sgn = e == 0 ? 1f : -1f;
+                    int first = _vertices.Count;
+                    var n = new Vector3(0, 0, sgn);
+                    _vertices.Add(new Vector3(-a * sgn, 0, z)); _vertices.Add(new Vector3(a * sgn, 0, z)); _vertices.Add(new Vector3(0, h, z));
+                    for (int i = 0; i < 3; i++) { _normals.Add(n); var q = _vertices[first + i]; _uvs.Add(new Vector2(q.x / _tile.x, q.y / _tile.y)); }
+                    _triangles.Add(first); _triangles.Add(first + 2); _triangles.Add(first + 1);
+                }
+            }
+            for (int i = from; i < _vertices.Count; i++)
+            {
+                _vertices[i] = center + rotation * _vertices[i];
+                _normals[i] = rotation * _normals[i];
+                _uvs[i] += new Vector2(center.x + center.z, center.y) / _tile.x;
+            }
+            Boxes++;
+        }
+
         public bool Empty => _triangles.Count == 0;
 
+        // Vertex data is stored compact (position 12 + normal 4 + tangent 4 + uv 8 = 28 bytes instead of 48): normals and
+        // tangents are unit vectors, so signed bytes are plenty. The tangents come from Unity, then the stream is rewritten.
         public Mesh ToMesh(string name)
         {
+            var temp = new Mesh();
+            if (_vertices.Count > 65000) temp.indexFormat = IndexFormat.UInt32;
+            temp.SetVertices(_vertices);
+            temp.SetNormals(_normals);
+            temp.SetUVs(0, _uvs);
+            temp.SetTriangles(_triangles, 0);
+            temp.RecalculateTangents();
+            var tangents = temp.tangents;
+            Object.DestroyImmediate(temp);
+
             var mesh = new Mesh { name = name };
             if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
-            mesh.SetVertices(_vertices);
-            mesh.SetNormals(_normals);
-            mesh.SetUVs(0, _uvs);
+            mesh.SetVertexBufferParams(_vertices.Count,
+                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+                new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.SNorm8, 4),
+                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2));
+            var data = new Packed[_vertices.Count];
+            for (int i = 0; i < data.Length; i++)
+            {
+                var n = _normals[i]; var t = tangents[i];
+                data[i] = new Packed
+                {
+                    Position = _vertices[i], Uv = _uvs[i],
+                    N0 = Snorm(n.x), N1 = Snorm(n.y), N2 = Snorm(n.z), N3 = 0,
+                    T0 = Snorm(t.x), T1 = Snorm(t.y), T2 = Snorm(t.z), T3 = Snorm(t.w),
+                };
+            }
+            mesh.SetVertexBufferData(data, 0, 0, data.Length);
             mesh.SetTriangles(_triangles, 0);
-            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        static sbyte Snorm(float v) => (sbyte)Mathf.Clamp(Mathf.RoundToInt(v * 127f), -127, 127);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct Packed
+        {
+            public Vector3 Position;
+            public sbyte N0, N1, N2, N3, T0, T1, T2, T3;
+            public Vector2 Uv;
         }
     }
 
