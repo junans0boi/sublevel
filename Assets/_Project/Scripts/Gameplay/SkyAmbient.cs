@@ -10,6 +10,7 @@ namespace Game.Gameplay
         {
             DynamicGI.UpdateEnvironment();
             if (WorldInfo.Current != null && GetComponent<EnvironmentView>() == null) gameObject.AddComponent<EnvironmentView>();
+            if (WorldInfo.Current != null && GetComponent<AmbientBeds>() == null) gameObject.AddComponent<AmbientBeds>();
         }
     }
 }

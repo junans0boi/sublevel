@@ -168,6 +168,7 @@ namespace Game.Gameplay
             float cutoff = SpatialAudio.DistantCutoff(heard);
             if (_distantShot != null) _distantShot.cutoffFrequency = cutoff;
             if (_farMuffle != null) _farMuffle.cutoffFrequency = cutoff;
+            SpatialAudio.NoteLoud(Mathf.Clamp01(near * scale)); // ambient beds duck under gunfire (#194)
             bool played = false;
             if (near > 0f && Play(_weaponSource, ClipFor(_shotByWeapon, weapon), _shotVolume * near * scale, PitchFor(_shotPitchByWeapon, weapon)))
             {

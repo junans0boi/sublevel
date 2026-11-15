@@ -260,7 +260,9 @@ namespace Game.Core
             Blend(ref grass, ref dirt, ref rock, ref sand, 2, steep);
 
             // Roads are packed dirt with a shoulder; building pads sit in a dirt apron.
+            // The shoulder is ragged: noise moves the edge in and out by a metre or two, so it is never a straight line.
             float edge = Terrain.RoadEdge(x, z);
+            if (edge < 6f) edge += 1.5f * WorldNoise.Value(x / 3.7f, z / 3.7f, unchecked(seed + 71u)) + 1.2f * WorldNoise.Value(x / 13f, z / 13f, unchecked(seed + 72u));
             if (edge < 3f) Blend(ref grass, ref dirt, ref rock, ref sand, 1, 1f - WorldTerrain.Smooth01((edge + 0.5f) / 3.5f));
             float pad = Terrain.PadDistance(x, z);
             if (pad < 3f) Blend(ref grass, ref dirt, ref rock, ref sand, 1, 0.85f * (1f - WorldTerrain.Smooth01(pad / 3f)));

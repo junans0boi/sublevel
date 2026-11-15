@@ -248,6 +248,24 @@ public static class WorldMaterials
     public static Surface Asphalt => Set("Asphalt", "Asphalt015", new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
     public static Surface DirtRoad => Set("DirtRoad", "Ground081", new Color(0.88f, 0.86f, 0.82f), 5f, 2.5f);
 
+    // Road strips (Game/WorldRoad): ragged alpha edge, wear and paint on top of the same scanned sets as the old Lit roads.
+    public static Material Road(bool paved)
+    {
+        var mat = Asset(paved ? "World_RoadPaved" : "World_RoadDirt", "Game/WorldRoad");
+        var surface = paved ? Asphalt : DirtRoad;
+        var id = paved ? "Asphalt015" : "Ground081";
+        mat.SetTexture("_BaseMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg"));
+        mat.SetTexture("_BumpMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg"));
+        mat.SetTexture("_MaskMap", SceneLook.Load<Texture2D>(MaskPath(id)));
+        // Dirt matches the terrain's own dirt layer (tinted 0.46) so a track does not glow against its verge.
+        mat.SetColor("_BaseColor", paved ? surface.Material.GetColor("_BaseColor") : new Color(0.74f, 0.68f, 0.58f));
+        mat.SetFloat("_Smoothness", paved ? 0.55f : 0.25f);
+        mat.SetFloat("_Paved", paved ? 1f : 0f);
+        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent - 100;
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
     public static Material Rock(int set)
     {
         var (folder, file) = RockSets[set];

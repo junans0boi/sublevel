@@ -37,7 +37,8 @@ public static class WorldVegetation
         public int[] TrunkOf;               // per prototype: index into TrunkRadius / TrunkHeight (-1 for bushes)
         public float[] TrunkRadius, TrunkHeight;
         public Mesh GrassShort, GrassTall;
-        public Material Grass;
+        public Material Grass, Flowers;
+        public Mesh FlowerClump;
 
         public int Prototype(PlantKind kind, int variant) => (int)kind * Vegetation.Variants + Mathf.Clamp(variant, 0, Vegetation.Variants - 1);
     }
@@ -56,16 +57,17 @@ public static class WorldVegetation
         var leafTex = Save("Leaves_Broadleaf", cluster);
         var branchTex = Save("Leaves_Conifer", branch);
         var grassTex = Save("Grass_Clump", grass);
+        var flowerTex = Save("Flowers", ComposeFlowers(blade));
         var broadleafBoardTex = Save("Billboard_Broadleaf", broadleafBoard);
         var coniferBoardTex = Save("Billboard_Conifer", coniferBoard);
 
-        var broadleafBark = Bark("Broadleaf", BroadleafBark);
-        var coniferBark = Bark("Conifer", ConiferBark);
-        var broadleafLeaves = Foliage("World_Leaves_Broadleaf", leafTex, BroadleafTint);
-        var coniferLeaves = Foliage("World_Leaves_Conifer", branchTex, ConiferTint);
-        var bushLeaves = Foliage("World_Leaves_Bush", leafTex, BushTint);
-        var broadleafBillboard = Foliage("World_Billboard_Broadleaf", broadleafBoardTex, BroadleafTint);
-        var coniferBillboard = Foliage("World_Billboard_Conifer", coniferBoardTex, ConiferTint);
+        var broadleafBark = Bark("Broadleaf", BroadleafBark, 14f, 0.28f);
+        var coniferBark = Bark("Conifer", ConiferBark, 18f, 0.22f);
+        var broadleafLeaves = Foliage("World_Leaves_Broadleaf", leafTex, BroadleafTint, 14f, 0.28f, 0.05f);
+        var coniferLeaves = Foliage("World_Leaves_Conifer", branchTex, ConiferTint, 18f, 0.22f, 0.025f);
+        var bushLeaves = Foliage("World_Leaves_Bush", leafTex, BushTint, 1.9f, 0.07f, 0.04f);
+        var broadleafBillboard = Foliage("World_Billboard_Broadleaf", broadleafBoardTex, BroadleafTint, 14f, 0.28f, 0f);
+        var coniferBillboard = Foliage("World_Billboard_Conifer", coniferBoardTex, ConiferTint, 18f, 0.22f, 0f);
 
         var kit = new Kit
         {
@@ -73,7 +75,8 @@ public static class WorldVegetation
             TrunkOf = new int[3 * Vegetation.Variants],
             TrunkRadius = new float[3 * Vegetation.Variants],
             TrunkHeight = new float[3 * Vegetation.Variants],
-            Grass = Foliage("World_Grass", grassTex, GrassTint),
+            Grass = Foliage("World_Grass", grassTex, GrassTint, 0.9f, 0.22f, 0.012f),
+            Flowers = Foliage("World_Flowers", flowerTex, Color.white, 0.8f, 0.25f, 0.012f),
         };
         for (int v = 0; v < Vegetation.Variants; v++)
         {
@@ -89,6 +92,7 @@ public static class WorldVegetation
         }
         kit.GrassShort = store.Add(GrassClump("Grass_Short", 0.95f, 0.5f));
         kit.GrassTall = store.Add(GrassClump("Grass_Reeds", 0.8f, 1.15f));
+        kit.FlowerClump = store.Add(FlowerClump("Flower_Clump", 0.9f, 0.62f));
         return kit;
     }
 
@@ -270,6 +274,24 @@ public static class WorldVegetation
             return _asSource = new Source { W = W, H = H, Color = color, Alpha = alpha };
         }
 
+        // One premultiplied "over" pixel.
+        public void Over(int x, int y, Color c, float a)
+        {
+            if (x < 0 || y < 0 || x >= W || y >= H || a <= 0f) return;
+            ref var d = ref Px[y * W + x];
+            d.r = c.r * a + d.r * (1f - a);
+            d.g = c.g * a + d.g * (1f - a);
+            d.b = c.b * a + d.b * (1f - a);
+            d.a = a + d.a * (1f - a);
+        }
+
+        public void Disc(float cx, float cy, float radius, Color c)
+        {
+            for (int y = Mathf.FloorToInt(cy - radius - 1f); y <= Mathf.CeilToInt(cy + radius + 1f); y++)
+                for (int x = Mathf.FloorToInt(cx - radius - 1f); x <= Mathf.CeilToInt(cx + radius + 1f); x++)
+                    Over(x, y, c, Mathf.Clamp01(radius - Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy)) + 0.5f));
+        }
+
         // A filled rectangle of flat colour (trunks on billboards).
         public void Fill(Rect area, Color color)
         {
@@ -370,7 +392,7 @@ public static class WorldVegetation
         // Upright blades (taller than wide); the curled ones of the atlas read as litter on a card.
         var upright = blade.Sprites.FindAll(r => r.height > r.width * 2);
         if (upright.Count == 0) upright = blade.Sprites;
-        for (int i = 0; i < 58; i++)
+        for (int i = 0; i < 84; i++)
         {
             var rect = upright[rng.Next(upright.Count)];
             float x = 16f + (float)rng.NextDouble() * (w - 32f);
@@ -477,7 +499,7 @@ public static class WorldVegetation
     static Material Asset(string name)
     {
         var path = $"{WorldMaterials.MaterialDir}/{name}.mat";
-        var shader = Shader.Find("Universal Render Pipeline/Lit") ?? throw new FileNotFoundException("URP Lit shader not found");
+        var shader = Shader.Find("Game/WorldFoliage") ?? throw new FileNotFoundException("Game/WorldFoliage shader not found");
         var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (mat == null)
         {
@@ -491,7 +513,7 @@ public static class WorldVegetation
     }
 
     // Bark: URP Lit with the scan's colour and normal and a mask packed from its roughness and occlusion.
-    static Material Bark(string name, string id)
+    static Material Bark(string name, string id, float windHeight, float bend)
     {
         var maskPath = $"{WorldMaterials.TextureDir}/{id}_mask.png";
         var rough = LoadFile($"{BarkArt}/{id}/{id}_roughness.jpg") ?? throw new FileNotFoundException("roughness map missing for " + id);
@@ -508,39 +530,50 @@ public static class WorldVegetation
         var mat = Asset("World_Bark_" + name);
         mat.SetTexture("_BaseMap", SceneLook.Load<Texture2D>($"{BarkArt}/{id}/{id}_color.jpg"));
         mat.SetTexture("_BumpMap", SceneLook.Load<Texture2D>($"{BarkArt}/{id}/{id}_normal.jpg"));
-        mat.SetTexture("_MetallicGlossMap", mask);
-        mat.SetTexture("_OcclusionMap", mask);
+        mat.SetTexture("_MaskMap", mask);
         mat.EnableKeyword("_NORMALMAP");
-        mat.EnableKeyword("_METALLICSPECGLOSSMAP");
-        mat.EnableKeyword("_OCCLUSIONMAP");
+        mat.SetFloat("_UseNormal", 1f);
+        mat.DisableKeyword("_ALPHATEST_ON");
+        mat.SetFloat("_AlphaClip", 0f);
+        mat.DisableKeyword("_MATTE");
+        mat.SetFloat("_Matte", 0f);
+        mat.SetFloat("_Cull", (float)CullMode.Back);
         mat.SetFloat("_Smoothness", 0.6f);
         mat.SetFloat("_BumpScale", 1f);
-        mat.SetFloat("_OcclusionStrength", 1f);
         mat.SetColor("_BaseColor", BarkTint);
+        mat.renderQueue = (int)RenderQueue.Geometry;
+        mat.SetOverrideTag("RenderType", "Opaque");
+        Wind(mat, windHeight, bend, 0f);
         EditorUtility.SetDirty(mat);
         return mat;
     }
 
+    static void Wind(Material mat, float height, float bend, float flutter)
+    {
+        mat.SetFloat("_WindHeight", height);
+        mat.SetFloat("_WindBend", bend);
+        mat.SetFloat("_Flutter", flutter);
+    }
+
     // Leaves, needles, grass and billboards: alpha-tested, both faces, no highlights (a waxy sheen reads as plastic).
-    static Material Foliage(string name, Texture2D texture, Color tint)
+    static Material Foliage(string name, Texture2D texture, Color tint, float windHeight, float bend, float flutter)
     {
         var mat = Asset(name);
         mat.SetTexture("_BaseMap", texture);
         mat.SetColor("_BaseColor", tint);
-        mat.SetFloat("_Surface", 0f);
         mat.SetFloat("_AlphaClip", 1f);
         mat.SetFloat("_Cutoff", LeafCutoff);
         mat.EnableKeyword("_ALPHATEST_ON");
+        mat.EnableKeyword("_MATTE");
+        mat.SetFloat("_Matte", 1f);
+        mat.DisableKeyword("_NORMALMAP");
+        mat.SetFloat("_UseNormal", 0f);
         mat.SetFloat("_Cull", (float)CullMode.Off);
         mat.doubleSidedGI = true;
         mat.SetOverrideTag("RenderType", "TransparentCutout");
         mat.renderQueue = (int)RenderQueue.AlphaTest;
         mat.SetFloat("_Smoothness", 0.1f);
-        mat.SetFloat("_Metallic", 0f);
-        mat.SetFloat("_SpecularHighlights", 0f);
-        mat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-        mat.SetFloat("_EnvironmentReflections", 0f);
-        mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+        Wind(mat, windHeight, bend, flutter);
         EditorUtility.SetDirty(mat);
         return mat;
     }
@@ -636,6 +669,13 @@ public static class WorldVegetation
         }
     }
 
+    // One entry per Vegetation.Variants: a squat wide oak, a slim young tree, a tall old one and so on.
+    static readonly float[] BroadleafHeight = { 9.5f, 11.7f, 13.9f, 8.2f, 12.6f };
+    static readonly float[] BroadleafCrown = { 0.32f, 0.35f, 0.38f, 0.42f, 0.30f };
+    static readonly float[] ConiferHeight = { 12f, 15f, 18f, 10f, 16.5f };
+    static readonly float[] BushRadius = { 0.85f, 1.05f, 1.25f, 0.7f, 1.5f };
+    static readonly float[] BushHeight = { 1.1f, 1.35f, 1.6f, 0.8f, 1.15f };
+
     static readonly Rect FullCard = new Rect(0f, 0f, 1f, 1f);
     static readonly Rect BoardSide = new Rect(0f, 0f, 0.5f, 1f), BoardTop = new Rect(0.5f, 0f, 0.5f, 1f);
 
@@ -668,8 +708,8 @@ public static class WorldVegetation
         out float trunkRadius, out float trunkHeight)
     {
         var rng = new Random(4100 + variant);
-        float height = 9.5f + 2.2f * variant + Range(rng, -0.5f, 0.5f);
-        float crownY = height * 0.62f, crownRx = height * (0.32f + 0.03f * variant), crownRy = height * 0.3f;
+        float height = BroadleafHeight[variant] + Range(rng, -0.5f, 0.5f);
+        float crownY = height * 0.62f, crownRx = height * BroadleafCrown[variant], crownRy = height * 0.3f;
         trunkRadius = 0.2f + 0.035f * height * 0.5f;
         trunkHeight = height * 0.48f;
         float limbRadius = trunkRadius;
@@ -755,7 +795,7 @@ public static class WorldVegetation
         out float trunkRadius, out float trunkHeight)
     {
         var rng = new Random(5100 + variant);
-        float height = 12f + 3f * variant + Range(rng, -0.6f, 0.6f);
+        float height = ConiferHeight[variant] + Range(rng, -0.6f, 0.6f);
         float spread = height * Range(rng, 0.22f, 0.26f);
         trunkRadius = 0.18f + 0.012f * height;
         trunkHeight = height;
@@ -837,7 +877,7 @@ public static class WorldVegetation
     static VegetationRenderer.Prototype Bush(int variant, WorldMeshes.Store store, Material leaves)
     {
         var rng = new Random(6100 + variant);
-        float radius = 0.85f + 0.2f * variant, height = 1.1f + 0.25f * variant;
+        float radius = BushRadius[variant], height = BushHeight[variant];
         var centre = new Vector3(0f, height * 0.45f, 0f);
         var mb = new MeshBuilder(1);
         for (int i = 0; i < 16; i++)
@@ -858,6 +898,53 @@ public static class WorldVegetation
             Height = height,
             Lods = new[] { Lod(store.Add(mb.ToMesh($"Bush{variant}")), false, leaves) },
         };
+    }
+
+    // Flowers: three columns of one atlas (white, yellow, violet), each a bunch of stems with blooms. Painted here
+    // from the grass blade sprites and plain discs: nothing is downloaded (the blooms are our own shapes).
+    static Canvas ComposeFlowers(Source blade)
+    {
+        const int w = 384, h = 256, column = w / 3;
+        var canvas = new Canvas(w, h);
+        var rng = new Random(909);
+        var bloom = new[] { new Color(0.94f, 0.94f, 0.9f), new Color(0.95f, 0.78f, 0.18f), new Color(0.62f, 0.42f, 0.82f) };
+        var upright = blade.Sprites.FindAll(r => r.height > r.width * 2);
+        if (upright.Count == 0) upright = blade.Sprites;
+        for (int c = 0; c < 3; c++)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                var rect = upright[rng.Next(upright.Count)];
+                float x = c * column + 10f + (float)rng.NextDouble() * (column - 20f);
+                float light = 0.7f + 0.3f * (float)rng.NextDouble();
+                canvas.Stamp(blade, rect, new Vector2(rect.x + rect.width * 0.5f, rect.yMin + 2f), new Vector2(x, 0f), h * (0.3f + 0.25f * (float)rng.NextDouble()) / rect.height,
+                    (float)(rng.NextDouble() - 0.5) * 24f, new Color(light, light, light * 0.9f), rng.Next(2) == 0);
+            }
+            for (int i = 0; i < 5; i++)
+            {
+                float x = c * column + 16f + (float)rng.NextDouble() * (column - 32f), top = h * (0.62f + 0.3f * (float)rng.NextDouble());
+                var stem = new Color(0.24f, 0.42f, 0.16f);
+                for (int y = 0; y < (int)top; y++)
+                    for (int dx = 0; dx < 2; dx++) canvas.Over((int)(x + dx + Mathf.Sin(y * 0.05f + i) * 2f), y, stem, 1f);
+                float radius = 5.5f + 2.5f * (float)rng.NextDouble();
+                canvas.Disc(x, top, radius, bloom[c] * (0.85f + 0.2f * (float)rng.NextDouble()));
+                canvas.Disc(x, top, radius * 0.35f, new Color(0.85f, 0.62f, 0.1f));
+            }
+        }
+        canvas.Finish(0.6f, 1.05f);
+        return canvas;
+    }
+
+    // Three crossed cards, one slice of the flower atlas each, so a clump carries all three colours.
+    static Mesh FlowerClump(string name, float width, float height)
+    {
+        var mb = new MeshBuilder(1);
+        for (int k = 0; k < 3; k++)
+        {
+            float a = k * 60f * Mathf.Deg2Rad;
+            mb.Card(0, Vector3.zero, new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)), Vector3.up, width, height, new Rect(k / 3f, 0f, 1f / 3f, 1f), _ => Vector3.up);
+        }
+        return mb.ToMesh(name);
     }
 
     // Grass clump: three upright cards crossing at 60 degrees. Normals point up so the clump lights like the

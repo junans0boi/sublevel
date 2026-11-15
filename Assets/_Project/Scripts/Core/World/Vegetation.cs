@@ -23,6 +23,7 @@ namespace Game.Core
     {
         public float X, Z, Scale, YawDeg;
         public bool Tall;               // reeds of the wetland shallows instead of short grass
+        public bool Flower;             // a bunch of wild flowers instead of a grass clump (in patches of the meadows)
     }
 
     // Trees, bushes and grass of the outdoor map (ADR-058 (9), ADR-070). Pure and seeded like the rest of the world:
@@ -30,7 +31,7 @@ namespace Game.Core
     // The meshes are built by the editor (WorldVegetation) and drawn instanced by the Gameplay renderers.
     public static class Vegetation
     {
-        public const int Variants = 3;
+        public const int Variants = 5;
 
         // ---- graphics levels (0 low, 1 medium, 2 high) ----
 
@@ -302,7 +303,7 @@ namespace Game.Core
         // 128..255 reeds (density (v - 128) / 127).
         public const float GrassMapCell = 2f;
         public const float GrassCell = 8f;                // the renderer builds and culls grass in squares this size
-        public const float GrassPerSquareMetre = 1.1f;    // clumps at full density, high level
+        public const float GrassPerSquareMetre = 4.5f;    // clumps at full density, high level (#193: the meadow was bare tufts)
         public const float MinGrassDensity = 0.12f;
 
         public static int GrassMapResolution(float mapSize) => (int)Math.Ceiling(mapSize / GrassMapCell);
@@ -363,10 +364,12 @@ namespace Game.Core
                 if (mx < 0 || mz < 0 || mx >= resolution || mz >= resolution) continue;
                 float density = DecodeGrass(map[mz * resolution + mx], out bool tall);
                 if (WorldNoise.Hash01(key, cellZ, salt + 2u) >= density) continue;
+                // Flowers grow in patches: a clump in a flowery patch is one 25 % of the time, elsewhere rarely.
+                bool flower = !tall && density > 0.4f && WorldNoise.Hash01(key, cellZ, salt + 5u) < (WorldNoise.Value(x / 9f, z / 9f, salt + 9u) > 0.25f ? 0.25f : 0.012f);
                 into.Add(new GrassClump
                 {
-                    X = x, Z = z, Tall = tall,
-                    Scale = 0.75f + 0.5f * WorldNoise.Hash01(key, cellZ, salt + 3u),
+                    X = x, Z = z, Tall = tall, Flower = flower,
+                    Scale = 0.8f + 0.5f * WorldNoise.Hash01(key, cellZ, salt + 3u),
                     YawDeg = WorldNoise.Hash01(key, cellZ, salt + 4u) * 360f,
                 });
             }

@@ -36,6 +36,48 @@ half4 RockSample(TEXTURE2D_PARAM(tex, smp), float2 uvTop)
 }
 #define ROCK_SAMPLE(tex, smp, uvTop) RockSample(TEXTURE2D_ARGS(tex, smp), uvTop)
 
+
+// Game: the ground repeats nowhere you can see. Grass, dirt and mud get a second sample (turned and 2.7x larger)
+// mixed in by low-frequency noise from world position, and the whole ground a slow brightness / hue drift.
+float _GameGroundOff; // global: 1 skips the untiling sample and the colour drift (low quality, A/B timing)
+static float2 g_GroundXZ = float2(0.0, 0.0);
+static half g_UntileMix = 0.0h;   // how far the turned second sample shows, once per pixel
+
+float GroundHash(float2 p)
+{
+    p = frac(p * float2(0.1031, 0.1030));
+    p += dot(p, p.yx + 33.33);
+    return frac((p.x + p.y) * p.x);
+}
+
+float GroundNoise(float2 p)
+{
+    float2 i = floor(p), f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return lerp(lerp(GroundHash(i), GroundHash(i + float2(1, 0)), f.x), lerp(GroundHash(i + float2(0, 1)), GroundHash(i + float2(1, 1)), f.x), f.y);
+}
+
+half4 UntiledSample(TEXTURE2D_PARAM(tex, smp), float2 uv)
+{
+    half4 a = SAMPLE_TEXTURE2D(tex, smp, uv);
+    UNITY_BRANCH
+    if (_GameGroundOff > 0.5) return a;
+    float2 uv2 = float2(uv.x * 0.83 - uv.y * 0.56, uv.x * 0.56 + uv.y * 0.83) * 0.37 + 0.31;
+    half4 b = SAMPLE_TEXTURE2D(tex, smp, uv2);
+    return lerp(a, b, g_UntileMix);
+}
+
+half3 GroundDrift()
+{
+    UNITY_BRANCH
+    if (_GameGroundOff > 0.5) return half3(1.0h, 1.0h, 1.0h);
+    float broad = GroundNoise(g_GroundXZ / 70.0 + 11.3);
+    float fine = GroundNoise(g_GroundXZ / 9.0 + 5.9);
+    half3 warm = half3(1.10h, 1.0h, 0.86h), cool = half3(0.90h, 1.0h, 0.97h);
+    half3 hue = lerp(cool, warm, (half)smoothstep(0.3, 0.7, broad));
+    return hue * (half)(0.84 + 0.32 * broad * 0.6 + 0.12 * fine + 0.1);
+}
+
 struct Attributes
 {
     float4 positionOS : POSITION;
@@ -198,10 +240,10 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
 {
     half4 diffAlbedo[4];
 
-    diffAlbedo[0] = SAMPLE_TEXTURE2D(_Splat0, sampler_Splat0, uvSplat01.xy);
-    diffAlbedo[1] = SAMPLE_TEXTURE2D(_Splat1, sampler_Splat0, uvSplat01.zw);
+    diffAlbedo[0] = UntiledSample(TEXTURE2D_ARGS(_Splat0, sampler_Splat0), uvSplat01.xy);
+    diffAlbedo[1] = UntiledSample(TEXTURE2D_ARGS(_Splat1, sampler_Splat0), uvSplat01.zw);
     diffAlbedo[2] = ROCK_SAMPLE(_Splat2, sampler_Splat0, uvSplat23.xy);
-    diffAlbedo[3] = SAMPLE_TEXTURE2D(_Splat3, sampler_Splat0, uvSplat23.zw);
+    diffAlbedo[3] = UntiledSample(TEXTURE2D_ARGS(_Splat3, sampler_Splat0), uvSplat23.zw);
 
     // This might be a bit of a gamble -- the assumption here is that if the diffuseMap has no
     // alpha channel, then diffAlbedo[n].a = 1.0 (and _DiffuseHasAlphaN = 0.0)
@@ -240,6 +282,7 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
     mixedDiffuse += diffAlbedo[1] * half4(_DiffuseRemapScale1.rgb * splatControl.ggg, 1.0h);
     mixedDiffuse += diffAlbedo[2] * half4(_DiffuseRemapScale2.rgb * splatControl.bbb, 1.0h);
     mixedDiffuse += diffAlbedo[3] * half4(_DiffuseRemapScale3.rgb * splatControl.aaa, 1.0h);
+    mixedDiffuse.rgb *= GroundDrift(); // Game: broad light/dark and warm/cool patches
 
     NormalMapMix(uvSplat01, uvSplat23, splatControl, mixedNormal);
 }
@@ -438,6 +481,8 @@ void SplatmapFragment(
     half occlusion = 1;
 #else
 
+    g_GroundXZ = IN.positionWS.xz;
+    g_UntileMix = (half)(smoothstep(0.25, 0.75, GroundNoise(g_GroundXZ / 17.0 + 3.7)) * 0.7);
     // Game: projection weights for the rock layer from the terrain's own normal.
     {
     #if defined(ENABLE_TERRAIN_PERPIXEL_NORMAL)

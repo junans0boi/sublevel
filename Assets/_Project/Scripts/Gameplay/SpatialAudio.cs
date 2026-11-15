@@ -88,6 +88,28 @@ namespace Game.Gameplay
             return source;
         }
 
+        // Loud events (gunfire) tell the ambient beds to duck for a moment (AmbientBeds, #194): 0..1 right after the
+        // event, easing back to 0 over a couple of seconds.
+        static float _loud, _loudAt;
+        const float LoudHold = 0.4f, LoudRelease = 1.8f;
+
+        public static void NoteLoud(float level)
+        {
+            float now = Time.unscaledTime;
+            if (Loud01 < level) _loud = level;
+            else _loud = Loud01;
+            _loudAt = now;
+        }
+
+        public static float Loud01
+        {
+            get
+            {
+                float since = Time.unscaledTime - _loudAt - LoudHold;
+                return since <= 0f ? _loud : Mathf.Max(0f, _loud * (1f - since / LoudRelease));
+            }
+        }
+
         static AudioListener _listener;
 
         // Metres from the active listener (the local player's camera), or 0 when there is none.

@@ -74,7 +74,7 @@ public static partial class WorldBuilder
         var map = BakeGrass(plan, ground, terrain.terrainData, out int grassy, out int reeds);
         var grass = Child(root, "Grass");
         grass.gameObject.AddComponent<GrassRenderer>().Fill(map, Vegetation.GrassMapResolution(plan.Size), Vegetation.GrassMapCell, plan.Seed,
-            terrain, kit.GrassShort, kit.GrassTall, kit.Grass);
+            terrain, kit.GrassShort, kit.GrassTall, kit.Grass, kit.FlowerClump, kit.Flowers);
 
         long nearTriangles = 0;
         foreach (var p in plants) nearTriangles += Triangles(kit.Prototypes[kit.Prototype(p.Kind, p.Variant)].Lods[0].Mesh);
@@ -121,7 +121,7 @@ public static partial class WorldBuilder
                     int region = plan.RegionAt(wx, wz);
                     var kind = region >= 0 ? plan.Regions[region].Kind : RegionKind.Town;
                     float regionShare = kind == RegionKind.Factory ? 0.6f : kind == RegionKind.Mountain ? 0.85f : 1f;
-                    density = allowed * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.25f, 0.85f, alpha[az, ax, 0])) * regionShare * patch;
+                    density = allowed * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.08f, 0.55f, alpha[az, ax, 0])) * regionShare * patch;
                 }
                 byte v = Vegetation.EncodeGrass(density, tall);
                 bytes[z * res + x] = v;
@@ -243,6 +243,31 @@ public static partial class WorldBuilder
         {
             SceneLook.Shot(cam, OverviewDir + "/world_grass.png", meadow.Value + Vector3.up * 1.7f, meadow.Value + new Vector3(12f, 0.2f, 9f));
             SceneLook.Shot(cam, OverviewDir + "/world_grass_prone.png", meadow.Value + Vector3.up * 0.4f, meadow.Value + new Vector3(12f, 0.3f, 9f));
+        }
+
+        // The cell with the most wild flowers, seen from a step away at eye height.
+        {
+            var bytes = File.ReadAllBytes(GrassMapPath);
+            int res = Vegetation.GrassMapResolution(plan.Size);
+            var scratch = new List<GrassClump>();
+            Vector3? flowers = null;
+            int most = 0;
+            for (int cz = 10; cz < (int)(plan.Size / Vegetation.GrassCell) - 10; cz += 2)
+                for (int cx = 10; cx < (int)(plan.Size / Vegetation.GrassCell) - 10; cx += 2)
+                {
+                    Vegetation.ScatterGrass(bytes, res, Vegetation.GrassMapCell, cx, cz, plan.Seed, scratch);
+                    int n = scratch.Count(c => c.Flower);
+                    if (n <= most) continue;
+                    var mid = scratch.Where(c => c.Flower).Aggregate(Vector2.zero, (sum, c) => sum + new Vector2(c.X, c.Z)) / n;
+                    most = n;
+                    flowers = Ground(mid.x, mid.y);
+                }
+            Debug.Log("[WorldBuilder] flower view: most flowers in one cell " + most);
+            if (flowers != null)
+            {
+                SceneLook.Shot(cam, OverviewDir + "/world_flowers.png", flowers.Value + new Vector3(-3.5f, 1.5f, -3.5f), flowers.Value + new Vector3(0f, 0.2f, 0f));
+                SceneLook.Shot(cam, OverviewDir + "/world_flowers_wide.png", flowers.Value + new Vector3(-9f, 1.7f, -9f), flowers.Value + new Vector3(4f, 0.6f, 4f));
+            }
         }
 
         var offshore = GameObject.Find("World/Offshore");

@@ -92,6 +92,8 @@ public static class WorldMeshes
         readonly List<Vector3> _vertices = new List<Vector3>();
         readonly List<Vector3> _normals = new List<Vector3>();
         readonly List<Vector2> _uvs = new List<Vector2>();
+        readonly List<Vector4> _road = new List<Vector4>(); // second UV set for Game/WorldRoad: across, along (m), lines, half width (m)
+        readonly List<Vector2> _ends = new List<Vector2>(); // third UV set: metres from the road's start and to its end
         readonly List<int> _triangles = new List<int>();
         readonly Vector2 _tile;
 
@@ -201,6 +203,8 @@ public static class WorldMeshes
     {
         readonly List<Vector3> _vertices = new List<Vector3>();
         readonly List<Vector2> _uvs = new List<Vector2>();
+        readonly List<Vector4> _road = new List<Vector4>(); // second UV set for Game/WorldRoad: across, along (m), lines, half width (m)
+        readonly List<Vector2> _ends = new List<Vector2>(); // third UV set: metres from the road's start and to its end
         readonly List<int> _triangles = new List<int>();
         readonly Vector2 _tile;
 
@@ -233,8 +237,10 @@ public static class WorldMeshes
                     var p = points[i] + right * ((k - 1) * width * 0.5f);
                     _vertices.Add(new Vector3(p.x, ground.Height(p.x, p.y) + lift, p.y));
                     _uvs.Add(new Vector2(k * width * 0.5f / _tile.x, along / _tile.y));
+                    _road.Add(new Vector4(k - 1, along, width >= 6f ? 1f : 0f, width * 0.5f));
                 }
             }
+            for (int v = first; v < _road.Count; v++) _ends.Add(new Vector2(_road[v].y, along - _road[v].y));
             for (int i = 0; i < points.Count - 1; i++)
             {
                 for (int k = 0; k < 2; k++)
@@ -253,6 +259,8 @@ public static class WorldMeshes
             if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
             mesh.SetVertices(_vertices);
             mesh.SetUVs(0, _uvs);
+            mesh.SetUVs(1, _road);
+            mesh.SetUVs(2, _ends);
             mesh.SetTriangles(_triangles, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();

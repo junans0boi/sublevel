@@ -108,7 +108,7 @@ public static partial class WorldBuilder
             go.transform.SetParent(root, false);
             go.AddComponent<MeshFilter>().sharedMesh = store.Add(pair.Value.ToMesh("Road_" + name));
             var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = paved ? asphalt.Material : dirt.Material;
+            renderer.sharedMaterial = WorldMaterials.Road(paved);
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             go.isStatic = true;
             total += pair.Value.Length;

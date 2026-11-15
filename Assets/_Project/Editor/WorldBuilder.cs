@@ -31,7 +31,7 @@ public static partial class WorldBuilder
     const int HeightmapResolution = 1025;
     const int AlphamapResolution = 1024;
     const int BaseMapResolution = 2048;
-    const float TerrainPixelError = 8f;
+    const float TerrainPixelError = 4f; // was 8: ridges at a distance showed saw teeth (#192)
     const float TerrainBaseMapDistance = 110f;
 
     const int WaterDepthResolution = 1024;
@@ -228,6 +228,7 @@ public static partial class WorldBuilder
         int res = data.alphamapResolution;
         var alpha = new float[res, res, 4];
         float cell = plan.Size / res;
+        var floor = ForestFloor(plan, res);
         for (int z = 0; z < res; z++)
         {
             for (int x = 0; x < res; x++)
@@ -238,8 +239,8 @@ public static partial class WorldBuilder
                 // Broad patches so the plains are not one colour: dry, worn ground and darker damp ground take
                 // over some of the grass (the plan only knows roads, yards, slopes and the shore).
                 float fine = Mathf.PerlinNoise(wx / 23f + 5.1f, wz / 23f + 9.4f);
-                float dry = Mathf.SmoothStep(0.5f, 0.78f, Mathf.PerlinNoise(wx / 85f + 13.7f, wz / 85f + 71.3f) * 0.72f + fine * 0.28f) * 0.5f;
-                float damp = Mathf.SmoothStep(0.52f, 0.8f, Mathf.PerlinNoise(wx / 120f + 31.9f, wz / 120f + 47.2f) * 0.75f + (1f - fine) * 0.25f) * 0.4f;
+                float dry = Mathf.SmoothStep(0.5f, 0.78f, Mathf.PerlinNoise(wx / 85f + 13.7f, wz / 85f + 71.3f) * 0.72f + fine * 0.28f) * 0.36f;
+                float damp = Mathf.SmoothStep(0.52f, 0.8f, Mathf.PerlinNoise(wx / 120f + 31.9f, wz / 120f + 47.2f) * 0.75f + (1f - fine) * 0.25f) * 0.3f;
                 // Hollows are damp and dark, crowns are dry: the hills then read from above.
                 const float around = 32f;
                 float mean = (ground.Height(wx + around, wz) + ground.Height(wx - around, wz) + ground.Height(wx, wz + around) + ground.Height(wx, wz - around)
@@ -248,6 +249,10 @@ public static partial class WorldBuilder
                 float hollow = Mathf.Clamp((mean - height) / 3f, -1f, 1f);
                 damp = Mathf.Clamp01(damp + 0.45f * Mathf.Max(0f, hollow));
                 dry = Mathf.Clamp01(dry + 0.3f * Mathf.Max(0f, -hollow));
+                // Under the trees: needle and leaf litter (dirt) with dark damp soil (the mud layer) between the roots.
+                float litter = floor[z, x] * (0.55f + 0.45f * fine);
+                dry = Mathf.Clamp01(dry + 0.65f * litter);
+                damp = Mathf.Clamp01(damp + 0.3f * litter);
                 dirt += grass * dry;
                 sand += grass * (1f - dry) * damp;
                 grass *= (1f - dry) * (1f - damp);
@@ -276,6 +281,30 @@ public static partial class WorldBuilder
         terrain.allowAutoConnect = false;
         terrain.drawTreesAndFoliage = false;
         return terrain;
+    }
+
+    // How much each splat cell lies under a tree's crown, 0..1 (the plants are planned from the same seed as the trees).
+    static float[,] ForestFloor(WorldPlan plan, int res)
+    {
+        var shade = new float[res, res];
+        float cell = plan.Size / res;
+        foreach (var p in Vegetation.Plan(plan))
+        {
+            if (!p.HasTrunk) continue;
+            float radius = (p.Kind == PlantKind.Conifer ? 3.4f : 4.4f) * p.Scale;
+            int x0 = Mathf.Max(0, Mathf.FloorToInt((p.X - radius) / cell)), x1 = Mathf.Min(res - 1, Mathf.CeilToInt((p.X + radius) / cell));
+            int z0 = Mathf.Max(0, Mathf.FloorToInt((p.Z - radius) / cell)), z1 = Mathf.Min(res - 1, Mathf.CeilToInt((p.Z + radius) / cell));
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float dx = (x + 0.5f) * cell - p.X, dz = (z + 0.5f) * cell - p.Z;
+                    float w = 1f - Mathf.Sqrt(dx * dx + dz * dz) / radius;
+                    if (w > shade[z, x]) shade[z, x] = w;
+                }
+        }
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++) shade[z, x] = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(shade[z, x] * 1.6f));
+        return shade;
     }
 
     // ---- sea ----

@@ -18,8 +18,8 @@ namespace Game.Gameplay
         [SerializeField] float _mapCell = Vegetation.GrassMapCell;
         [SerializeField] int _seed;
         [SerializeField] Terrain _terrain;
-        [SerializeField] Mesh _short, _tall;
-        [SerializeField] Material _material;
+        [SerializeField] Mesh _short, _tall, _flowerMesh;
+        [SerializeField] Material _material, _flowerMaterial;
 
         // Cells scattered per camera per frame at most, so turning round does not stall a frame.
         const int BuildsPerFrame = 40;
@@ -27,7 +27,7 @@ namespace Game.Gameplay
 
         sealed class Cell
         {
-            public Matrix4x4[] Short = new Matrix4x4[0], Tall = new Matrix4x4[0];
+            public Matrix4x4[] Short = new Matrix4x4[0], Tall = new Matrix4x4[0], Flower = new Matrix4x4[0];
             public Bounds Bounds;
             public int LastUsed;
         }
@@ -37,12 +37,13 @@ namespace Game.Gameplay
         readonly List<GrassClump> _scratch = new List<GrassClump>(128);
         readonly List<long> _evict = new List<long>();
         readonly Plane[] _planes = new Plane[6];
-        Matrix4x4[] _short0 = new Matrix4x4[256], _tall0 = new Matrix4x4[256];
+        Matrix4x4[] _short0 = new Matrix4x4[256], _tall0 = new Matrix4x4[256], _flower0 = new Matrix4x4[64];
 
         public bool HasMap => _bytes != null && _resolution > 0;
 
         // Builder entry.
-        public void Fill(TextAsset map, int resolution, float mapCell, int seed, Terrain terrain, Mesh shortClump, Mesh tallClump, Material material)
+        public void Fill(TextAsset map, int resolution, float mapCell, int seed, Terrain terrain, Mesh shortClump, Mesh tallClump, Material material,
+            Mesh flowerClump = null, Material flowerMaterial = null)
         {
             _map = map;
             _resolution = resolution;
@@ -52,6 +53,8 @@ namespace Game.Gameplay
             _short = shortClump;
             _tall = tallClump;
             _material = material;
+            _flowerMesh = flowerClump;
+            _flowerMaterial = flowerMaterial;
             Prepare();
         }
 
@@ -81,7 +84,7 @@ namespace Game.Gameplay
 
             var eye = cam.transform.position;
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
-            int frame = Time.frameCount, builds = 0, shortCount = 0, tallCount = 0;
+            int frame = Time.frameCount, builds = 0, shortCount = 0, tallCount = 0, flowerCount = 0;
             const float size = Vegetation.GrassCell;
             int x0 = Mathf.FloorToInt((eye.x - radius) / size), x1 = Mathf.FloorToInt((eye.x + radius) / size);
             int z0 = Mathf.FloorToInt((eye.z - radius) / size), z1 = Mathf.FloorToInt((eye.z + radius) / size);
@@ -101,11 +104,12 @@ namespace Game.Gameplay
                         builds++;
                     }
                     cell.LastUsed = frame;
-                    if (cell.Short.Length + cell.Tall.Length == 0 || !GeometryUtility.TestPlanesAABB(_planes, cell.Bounds)) continue;
+                    if (cell.Short.Length + cell.Tall.Length + cell.Flower.Length == 0 || !GeometryUtility.TestPlanesAABB(_planes, cell.Bounds)) continue;
                     // The outer part of the circle thins out, so the edge is not a hard line of grass.
                     float mid = Mathf.Sqrt((cx * size + size * 0.5f - eye.x) * (cx * size + size * 0.5f - eye.x) + (cz * size + size * 0.5f - eye.z) * (cz * size + size * 0.5f - eye.z));
                     float thin = share * Mathf.Lerp(1f, 0.25f, Mathf.InverseLerp(radius * 0.6f, radius, mid));
-                    int s = Mathf.CeilToInt(cell.Short.Length * thin), t = Mathf.CeilToInt(cell.Tall.Length * thin);
+                    int s = Mathf.CeilToInt(cell.Short.Length * thin), t = Mathf.CeilToInt(cell.Tall.Length * thin), f = Mathf.CeilToInt(cell.Flower.Length * thin);
+                    for (int i = 0; i < f; i++) VegetationDraw.Append(ref _flower0, ref flowerCount, cell.Flower[i]);
                     for (int i = 0; i < s; i++) VegetationDraw.Append(ref _short0, ref shortCount, cell.Short[i]);
                     for (int i = 0; i < t; i++) VegetationDraw.Append(ref _tall0, ref tallCount, cell.Tall[i]);
                 }
@@ -121,6 +125,9 @@ namespace Game.Gameplay
             };
             if (shortCount > 0) VegetationDraw.Draw(rp, _short, 0, _short0, shortCount);
             if (tallCount > 0) VegetationDraw.Draw(rp, _tall, 0, _tall0, tallCount);
+            if (flowerCount > 0 && _flowerMesh != null && _flowerMaterial != null)
+                VegetationDraw.Draw(new RenderParams(_flowerMaterial) { camera = cam, layer = rp.layer, worldBounds = rp.worldBounds, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true },
+                    _flowerMesh, 0, _flower0, flowerCount);
 
             if (_cache.Count > CacheCells) Evict(frame);
         }
@@ -129,19 +136,20 @@ namespace Game.Gameplay
         {
             Vegetation.ScatterGrass(_bytes, _resolution, _mapCell, cx, cz, _seed, _scratch);
             var cell = new Cell();
-            int shorts = 0, talls = 0;
-            foreach (var c in _scratch) { if (c.Tall) talls++; else shorts++; }
+            int shorts = 0, talls = 0, flowers = 0;
+            foreach (var c in _scratch) { if (c.Tall) talls++; else if (c.Flower) flowers++; else shorts++; }
             cell.Short = new Matrix4x4[shorts];
             cell.Tall = new Matrix4x4[talls];
+            cell.Flower = new Matrix4x4[flowers];
             float low = float.MaxValue, high = float.MinValue;
-            int si = 0, ti = 0;
+            int si = 0, ti = 0, fi = 0;
             float baseY = _terrain.GetPosition().y;
             foreach (var c in _scratch)
             {
                 // A little into the ground so a clump on a slope shows no gap under its uphill side.
                 float y = _terrain.SampleHeight(new Vector3(c.X, 0f, c.Z)) + baseY - 0.05f;
                 var m = Matrix4x4.TRS(new Vector3(c.X, y, c.Z), Quaternion.Euler(0f, c.YawDeg, 0f), Vector3.one * c.Scale);
-                if (c.Tall) cell.Tall[ti++] = m; else cell.Short[si++] = m;
+                if (c.Tall) cell.Tall[ti++] = m; else if (c.Flower) cell.Flower[fi++] = m; else cell.Short[si++] = m;
                 low = Mathf.Min(low, y);
                 high = Mathf.Max(high, y);
             }
