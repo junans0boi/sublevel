@@ -71,3 +71,24 @@
   3. **Fish-Net 라이선스 검토(#2)**, 무기 이름·형상 상표 검토 등 `HUMAN_TODO.md` 법적 항목, 릴리스 전 `-feelcapture` 등 개발용 인자 제거(RISKS).
   4. 직접 플레이로 손맛(조준·반동·수영·오토바이)을 PUBG와 비교해 피드백.
 - **Unity·잠금 규칙**: Unity는 항상 복사본 루트에서 잠금 래퍼(`scratchpad/ulock.sh`, 직접 `tools/unity.sh` 금지)로 실행하고 한 번에 하나씩 순차 실행. PlayMode/네트워크 테스트는 포트 7770을 복사본끼리 공유하므로 `mkdir /tmp/sublevel-playmode.lock`을 잡고 실행 후 `rmdir`. 배치 모드에서 `WaitForEndOfFrame`은 돌아오지 않으니 쓰지 않는다. 실행 뒤 `ProjectSettings/{ProjectSettings,GraphicsSettings,QualitySettings}.asset`과 Unity가 다시 저장한 `.mat`은 되돌리고 `Assets/InitTestScene*.unity`는 지운다. 커밋은 `git add <명시 경로>` + `git commit -- <경로>`(`-A` 금지), push는 `git pull --rebase --autostash origin main && git push origin main`, force push 금지, DECISIONS.md 충돌은 두 행 모두 유지.
+
+## 11. 2026-11-16 세션 종료 시점 (main a314742 기준, ADR 최대 164)
+**이번 라운드에 끝난 것** (자세한 건 `git log cc800ca..HEAD`와 각 ADR): 오토바이 날아감(#182), 차량 폭발·헬멧(#155), 주차 차량(#180)·엘리베이터 봇(#181), 스포츠카 탑승(#215), 배그식 투척(#183, ADR-144), 인벤토리 사용(#185), 수영·해안 물(#184 #147 #146, ADR-145), 결과 화면(#188), 문 부수기(#214, ADR-147), 실내 가구·조명·밀도(#190 #191 #239), 건물 외관(#204), 지면·식생·환경음(#192-#194), 차량 조명·타이어·엔진음(#202 #203), 발자국·비·야생동물·밤(#205-#208, ADR-163), 캐릭터: 권총/소총 자세, 장전·꺼내기·집어넣기, 1인칭 팔·손, 투척·치료·줍기·피격 동작.
+**검증 상태:** EditMode 971/971. PlayMode 470 중 3건 실패였던 것을 a314742에서 수정(AimAndLeanTests 12번째 `StartingWhileAnotherProcessHoldsThePort`는 게임이 포트 7770을 잡고 있으면 실패 — 게임을 끄고 재실행). 최신 빌드(00:49, a47c6b5)에는 a314742의 "엘리베이터 승강 중 수영 판정" 수정이 없음 → 새 빌드 필요.
+**열린 이슈 핵심:** #205(풀 눌림 눈 확인)·#206(앉은 새), #226·#219, #227 웅크려 걷기, #223 좌우/후진 다리, #234 제자리 회전, #228 달리기 점프, #231 숨쉬기, #230 캐릭터 모델 교체, #195 캐릭터 1종, #196 사망 연출, #209-#213 상호작용 물체/HUD, #240 World_Meshes.asset 42MB(직렬화 방식 결정 필요), #90, #99, #173, #2(사람).
+
+### 다음 세션의 첫 일: 모델·애니메이션·에셋 보강 (준환 지시, 2026-11-16)
+준환의 불만: 전체가 로우폴리처럼 보이고 캐릭터 애니메이션이 어색함. Mixamo는 쓴 적 없음(캐릭터+애니 = Quaternius Swat.fbx CC0, ASSET_LEDGER C-0001, 나머지는 코드 포즈).
+**준환이 새 세션의 웹 브라우저에서 Mixamo와 Unity Asset Store에 직접 로그인한다.** 에이전트는 다음을 한다.
+1. 브라우저 도구(Claude in Chrome 또는 내장 브라우저, 스킬 `anthropic-skills:chrome-browser`/`built-in-browser` 먼저 읽기)로 로그인된 상태를 **확인만** 한다. 비밀번호·토큰을 묻거나 저장하지 않는다.
+2. **배포 가능 여부를 약관 원문에서 확인**하고 후보마다 기록한다(출처 URL·확인 날짜·핵심 문구). 확인 항목: 상업 게임 포함 허용 / 소스 저장소 공개·재배포 허용 여부(우리 저장소 junans0boi/sublevel은 **PRIVATE**) / 모델·애니메이션 단독 재배포 금지 조항 / 크레딧 표기 / 실존 상표·총기 이름. Asset Store 에셋은 Unity 전용 EULA(CC0 아님), Mixamo는 Adobe 약관. 법적 최종 판단은 사람(CLAUDE.md 규칙 8, RISKS_OPEN_QUESTIONS 체크리스트에 올린다).
+3. **후보를 찾아 준환에게 보여 주고, 준환이 고른 것만** 받는다. 후보는 실사 계열 위주: Mixamo(캐릭터 1~2종 + 무기 든 달리기·장전·앉기·엎드리기·점프·수영 등 애니메이션 세트), Asset Store 무료 실사 캐릭터·건물·소품·지면 PBR, 로그인 없이 구할 수 있는 Poly Haven/ambientCG(CC0 텍스처·HDRI·스캔), Sketchfab CC0/CC-BY. 후보표: 이름, 미리보기 URL, 가격(무료만), 라이선스 요약, 폴리 수, 리깅/리타게팅 가능 여부(현재 Swat 뼈대 vs Humanoid), 예상 작업량.
+4. 준환이 승인한 항목만: (a) 계정 약관 동의/"구매(무료 획득)" 클릭은 **준환이 해당 항목을 명시 승인한 뒤에만**. 유료 결제는 하지 않는다. (b) ASSET_LEDGER.md에 출처·라이선스·날짜 기록 후 커밋(규칙 1). (c) 라이선스가 소스 공개를 막으면 저장소가 private이어도 `.gitignore`/별도 보관을 고려하고 준환에게 묻는다.
+**규칙 예외 기록:** CLAUDE.md 규칙 3(계정 생성·약관 동의 금지)에 대해 준환이 2026-11-16에 "내가 로그인한다"고 허락했다. 새 계정 생성·유료 결제는 여전히 금지. 이 예외를 ADR 한 행으로 남길 것.
+**병행 가능한 일(로그인 불필요):** PBR 텍스처 교체(지면·벽·도로·바위, Poly Haven/ambientCG CC0), URP 렌더 설정(그림자·SSAO·색 보정·대기), CC0 애니메이션 팩(Quaternius Universal Animation Library 등) 조사.
+
+### 이번 세션 교훈
+- 에이전트가 남기는 대기용 셸 루프(`until ... sleep`)가 몇 시간씩 살아 있음 → 세션 시작/종료 때 `ps`로 확인하고 정리.
+- 한 복사본(`sublevel-d` 등)을 두 에이전트가 같이 쓰면 `Logs/`와 잠금이 겹침.
+- 에이전트가 이슈 번호를 틀리게 아는 경우가 있음 → 항상 `gh issue view`로 제목 확인.
+- 실행 중인 게임이 UDP 7770을 잡으면 네트워크 PlayMode가 실패.
