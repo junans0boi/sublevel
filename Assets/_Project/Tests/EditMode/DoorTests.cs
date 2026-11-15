@@ -1,3 +1,4 @@
+using System;
 using Game.Core;
 using NUnit.Framework;
 
@@ -60,6 +61,37 @@ namespace Game.Tests
             // A door on the line x = 0 between z = -0.65 and 0.65 (facing +z, width 1.3): a path across crosses, a path beside does not.
             Assert.IsTrue(Doors.Crosses(0f, 3f, 0.2f, -3f, 0f, 0f, 1f, 0f, 0.65f));
             Assert.IsFalse(Doors.Crosses(2f, 3f, 2f, -3f, 0f, 0f, 1f, 0f, 0.65f));
+        }
+
+        [Test]
+        public void Damage_ShotgunPelletsCountMore_RamNeedsSpeed_MeleeAsIs()
+        {
+            Assert.AreEqual(40f, Doors.ShotDamage(40f, 1, Rules), 1e-4f);
+            Assert.AreEqual(24f * Rules.ShotgunFactor, Doors.ShotDamage(24f, 9, Rules), 1e-4f);
+            Assert.AreEqual(0f, Doors.ShotDamage(-5f, 1, Rules));
+            Assert.AreEqual(0f, Doors.RamDamage(Rules.RamMinSpeed - 0.1f, Rules), "a nudge does nothing");
+            Assert.AreEqual(8f * Rules.RamDamagePerMps, Doors.RamDamage(8f, Rules), 1e-3f);
+            Assert.AreEqual(55f, Doors.MeleeDamage(55f, Rules), 1e-4f);
+        }
+
+        [Test]
+        public void Stages_FollowHitPoints_AndAHardDoorTakesManyRifleRounds()
+        {
+            Assert.AreEqual(0, Doors.Stage(Rules.MaxHp, Rules));
+            Assert.AreEqual(1, Doors.Stage(Rules.MaxHp * Rules.Stage1Share, Rules));
+            Assert.AreEqual(2, Doors.Stage(Rules.MaxHp * Rules.Stage2Share, Rules));
+            Assert.AreEqual(3, Doors.Stage(0f, Rules));
+            Assert.AreEqual(3, Doors.Stage(-3f, Rules));
+            // Numbers from the weapon data: a 40-damage rifle needs 10 rounds, a shotgun at point blank (9 x 24) two.
+            Assert.AreEqual(10, (int)Math.Ceiling(Rules.MaxHp / Doors.ShotDamage(40f, 1, Rules)));
+            Assert.AreEqual(2, (int)Math.Ceiling(Rules.MaxHp / Doors.ShotDamage(9 * 24f, 9, Rules)));
+        }
+
+        [Test]
+        public void ABrokenDoor_NeverToggles()
+        {
+            Assert.AreEqual(DoorState.Broken, Doors.Toggle(DoorState.Broken, 1));
+            Assert.AreEqual(DoorState.Broken, Doors.Toggle(DoorState.Broken, -1));
         }
     }
 }

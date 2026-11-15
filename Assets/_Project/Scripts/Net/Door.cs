@@ -16,6 +16,21 @@ namespace Game.Net
         public bool Quiet;
     }
 
+    // Server -> clients: a door took damage (Hp in whole points). Quiet = a late joiner catching up (no sound).
+    public struct DoorDamaged : IBroadcast
+    {
+        public int Index;
+        public ushort Hp;
+        public bool Quiet;
+    }
+
+    // Client -> server: the driver's car hit a door at this closing speed (the server checks the distance).
+    public struct DoorRamRequest : IBroadcast
+    {
+        public int Index;
+        public float Speed;
+    }
+
     // Client -> server: F on a door (the server decides which way it swings from where the sender stands).
     public struct DoorToggleRequest : IBroadcast
     {
@@ -36,14 +51,21 @@ namespace Game.Net
         public Vector3 Forward => transform.forward;
         public Vector3 Right => transform.right;
         public float Angle => _angle;
-        public bool Blocking => Doors.Blocks(_angle, DoorRules.Current);
+        public bool Blocking => State != DoorState.Broken && Doors.Blocks(_angle, DoorRules.Current);
         public Collider Panel => _box;
+        public float Hp { get; private set; } = DoorRules.Current.MaxHp;
+        public int Stage => Doors.Stage(Hp, DoorRules.Current);
+        public Transform Hinge => _pivot;
+        public Material PanelLook => PanelMaterial();
 
         Transform _pivot;
         BoxCollider _box;
         AudioSource _audio;
         float _angle;
-        static Material _material;
+        float _droop;
+        Transform _damage;
+        int _shownStage;
+        static Material _material, _dent, _splinter;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -51,6 +73,9 @@ namespace Game.Net
             All.Clear();
             _material = null;
             Moved = null;
+            Hit = null;
+            Broke = null;
+            _dent = _splinter = null;
         }
 
         // `centre`: the middle of the opening at floor level; `facing`: the wall normal (z). Hinge on the left.
@@ -62,6 +87,7 @@ namespace Game.Net
             go.transform.SetPositionAndRotation(centre, facing);
             var door = go.AddComponent<Door>();
             door.Index = index;
+            door.Hp = rules.MaxHp;
             door.Width = width;
             door.Height = height;
             var pivot = new GameObject("Hinge").transform;
@@ -102,21 +128,87 @@ namespace Game.Net
         // Moves the door; plays its sound when the state really changes.
         public void Set(DoorState state, bool quiet = false)
         {
-            if (state == State) return;
+            if (state == State || State == DoorState.Broken) return;
             State = state;
+            if (state == DoorState.Broken) { Break(quiet); return; }
             if (quiet) { _angle = Doors.TargetAngle(state, DoorRules.Current); Apply(); return; }
             PlaySound(state != DoorState.Closed);
         }
 
+        // ---- Damage (ADR-147) ----
+
+        // Raised on every peer when the door took a hit (not a quiet catch-up) and when it broke (with `quiet` false).
+        public static event System.Action<Door> Hit;
+        public static event System.Action<Door> Broke;
+
+        // Sets the hit points the server reports; the look follows the stage.
+        public void SetHp(float hp, bool quiet = false)
+        {
+            if (State == DoorState.Broken) return;
+            Hp = hp;
+            int stage = Stage;
+            if (stage != _shownStage) { _shownStage = stage; ShowDamage(stage); }
+            if (!quiet) Hit?.Invoke(this);
+        }
+
+        void Break(bool quiet)
+        {
+            Hp = 0f;
+            _box.enabled = false;
+            foreach (var r in _pivot.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            if (!quiet) Broke?.Invoke(this);
+        }
+
+        // Dents and splinters on both faces from stage 1, a dark crack and a sagging hinge from stage 2. Placed from the
+        // door's index, so every peer shows the same marks.
+        void ShowDamage(int stage)
+        {
+            if (_damage != null) Destroy(_damage.gameObject);
+            _droop = stage >= 2 ? -3f : 0f;
+            Apply();
+            if (stage < 1 || stage > 2) return;
+            _damage = new GameObject("Damage").transform;
+            _damage.SetParent(_pivot, false);
+            var rng = new System.Random(Index * 7919 + 17);
+            float R() => (float)rng.NextDouble();
+            float half = DoorRules.Current.PanelThickness / 2f + 0.004f;
+            int dents = stage == 1 ? 5 : 11;
+            foreach (float face in new[] { -1f, 1f })
+            {
+                for (int i = 0; i < dents; i++)
+                {
+                    float x = 0.12f + (Width - 0.24f) * R(), y = 0.25f + (Height - 0.5f) * R();
+                    Piece(_damage, DentMaterial(), new Vector3(x, y, face * half), new Vector3(0.04f + 0.06f * R(), 0.09f + 0.14f * R(), 0.01f), 30f * (R() - 0.5f));
+                    // a pale sliver standing out of the dent
+                    Piece(_damage, SplinterMaterial(), new Vector3(x + 0.04f * (R() - 0.5f), y, face * (half + 0.02f)), new Vector3(0.015f, 0.10f + 0.12f * R(), 0.015f), 40f * (R() - 0.5f));
+                }
+                if (stage >= 2)
+                    Piece(_damage, DentMaterial(), new Vector3(Width * 0.5f, Height * 0.45f, face * half), new Vector3(0.015f, Height * 0.7f, 0.012f), 12f + 20f * R());
+            }
+        }
+
+        static void Piece(Transform parent, Material material, Vector3 at, Vector3 size, float rollDeg)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "Mark";
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = at;
+            go.transform.localRotation = Quaternion.Euler(0f, 0f, rollDeg);
+            go.transform.localScale = size;
+            go.GetComponent<MeshRenderer>().sharedMaterial = material;
+        }
+
         void Update()
         {
+            if (State == DoorState.Broken) return;
             float target = Doors.TargetAngle(State, DoorRules.Current);
             if (_angle == target) return;
             _angle = Doors.StepAngle(_angle, target, Time.deltaTime, DoorRules.Current);
             Apply();
         }
 
-        void Apply() => _pivot.localRotation = Quaternion.Euler(0f, _angle, 0f);
+        void Apply() => _pivot.localRotation = Quaternion.Euler(0f, _angle, 0f) * Quaternion.Euler(0f, 0f, _droop);
 
         // Raised when a door starts to open (true) or shut (false); Game.Gameplay's DoorAudio plays the sound.
         public static event System.Action<Door, bool> Moved;
@@ -125,6 +217,8 @@ namespace Game.Net
         void PlaySound(bool opening) => Moved?.Invoke(this, opening);
 
         static Material PanelMaterial() => _material != null ? _material : _material = Make("Door", new Color(0.36f, 0.25f, 0.15f), 0.25f);
+        static Material DentMaterial() => _dent != null ? _dent : _dent = Make("DoorDent", new Color(0.17f, 0.105f, 0.06f), 0.1f);
+        static Material SplinterMaterial() => _splinter != null ? _splinter : _splinter = Make("DoorSplinter", new Color(0.72f, 0.55f, 0.35f), 0.1f);
         static Material _handle;
         static Material HandleMaterial() => _handle != null ? _handle : _handle = Make("DoorHandle", new Color(0.08f, 0.08f, 0.09f), 0.6f);
 

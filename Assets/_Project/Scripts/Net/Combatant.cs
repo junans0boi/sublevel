@@ -473,6 +473,8 @@ namespace Game.Net
                 result = target._health.IsDead ? ShotHit.Kill : ShotHit.Combatant;
                 victim = target.NetworkObject;
             }
+            else if (Physics.Raycast(eye, axis, out var doorHit, strike.Range, ~0, QueryTriggerInteraction.Ignore) && doorHit.collider.GetComponentInParent<Door>() is Door door)
+                DoorSystem.ServerDamage(door, Doors.MeleeDamage(Melee.Damage(HitZone.Body, in strike), DoorRules.Current), ObjectId); // a blow at a door (ADR-147)
             bool right = (_punches & 1) == 1;
             _punches++;
             int info = (right ? PunchRightBit : 0) | ((int)result << PunchHitShift) | ((int)zone << PunchZoneShift);

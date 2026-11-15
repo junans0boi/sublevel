@@ -3,8 +3,9 @@ using System;
 namespace Game.Core
 {
     // Doors that open and close (ADR-104, G11). Closed: 0. OpenAhead: the free edge swings to the opening's FacingDeg side,
-    // OpenBack: to the other side. A door always opens away from whoever pushes it.
-    public enum DoorState : byte { Closed = 0, OpenAhead = 1, OpenBack = 2 }
+    // OpenBack: to the other side. A door always opens away from whoever pushes it. Broken (ADR-147): shot, hit or rammed
+    // to pieces, an empty doorway for good.
+    public enum DoorState : byte { Closed = 0, OpenAhead = 1, OpenBack = 2, Broken = 3 }
 
     [Serializable]
     public class DoorRules
@@ -18,6 +19,17 @@ namespace Game.Core
         public float ClosedSoundFactor = 0.5f; // heard distance through one closed door is divided by this
         public float BotReachMeters = 1.8f;    // a bot opens a closed door this close on its way
         public float PanelThickness = 0.06f;
+        // Destruction (ADR-147). A door has MaxHp; shots take the weapon's damage at the hit (as dealt to a body, falloff and
+        // penetration included), a shotgun's pellets ShotgunFactor times that; melee takes MeleeFactor times the blow;
+        // a vehicle at RamMinSpeed (closing m/s) or more takes RamDamagePerMps per m/s. Below Stage1Share of MaxHp the panel
+        // is splintered, below Stage2Share its hinge is cracked and it sags.
+        public float MaxHp = 400f;
+        public float ShotgunFactor = 1.5f;
+        public float MeleeFactor = 1f;
+        public float RamMinSpeed = 3f;
+        public float RamDamagePerMps = 60f;
+        public float Stage1Share = 0.66f;
+        public float Stage2Share = 0.33f;
     }
 
     public static class Doors
@@ -28,7 +40,7 @@ namespace Game.Core
 
         // What F does: a closed door opens away from the user, an open one closes.
         public static DoorState Toggle(DoorState state, int userSide) =>
-            state != DoorState.Closed ? DoorState.Closed : userSide > 0 ? DoorState.OpenBack : DoorState.OpenAhead;
+            state == DoorState.Broken ? state : state != DoorState.Closed ? DoorState.Closed : userSide > 0 ? DoorState.OpenBack : DoorState.OpenAhead;
 
         // Panel yaw (degrees) about its hinge, in the door's own frame (z = ahead, x = right, hinge on the left).
         public static float TargetAngle(DoorState state, DoorRules rules) =>
@@ -39,6 +51,21 @@ namespace Game.Core
             float step = rules.OpenAngleDeg / Math.Max(1e-3f, rules.OpenSeconds) * dt;
             return angle < target ? Math.Min(target, angle + step) : Math.Max(target, angle - step);
         }
+
+        // ---- Destruction (ADR-147) ----
+
+        // Damage a shot does to a door: `dealt` is what it would do to a body there; a shotgun's pellets count more.
+        public static float ShotDamage(float dealt, int pellets, DoorRules rules) =>
+            Math.Max(0f, dealt) * (pellets > 1 ? rules.ShotgunFactor : 1f);
+
+        public static float MeleeDamage(float blow, DoorRules rules) => Math.Max(0f, blow) * rules.MeleeFactor;
+
+        public static float RamDamage(float closingSpeed, DoorRules rules) =>
+            closingSpeed < rules.RamMinSpeed ? 0f : closingSpeed * rules.RamDamagePerMps;
+
+        // 0 whole, 1 splintered, 2 hinge cracked, 3 broken (no hit points left).
+        public static int Stage(float hp, DoorRules rules) =>
+            hp <= 0f ? 3 : hp <= rules.MaxHp * rules.Stage2Share ? 2 : hp <= rules.MaxHp * rules.Stage1Share ? 1 : 0;
 
         // True while the panel is far enough shut to stop sight, bullets and bodies (it is a box in the way).
         public static bool Blocks(float angle, DoorRules rules) => Math.Abs(angle) < rules.OpenAngleDeg * 0.5f;

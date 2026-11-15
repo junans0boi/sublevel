@@ -124,5 +124,60 @@ namespace Game.Tests
             }
             Debug.Log("[DoorCapture] shots in " + folder);
         }
+
+        // ADR-147: one map door whole, splintered, hinge-cracked and broken (planks in the air, then the empty doorway).
+        [UnityTest, Timeout(180000)]
+        public IEnumerator CaptureDamagedAndBrokenDoor()
+        {
+            string folder = Environment.GetEnvironmentVariable("DOOR_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = "Logs/doorshots";
+            folder = System.IO.Path.GetFullPath(folder);
+            Directory.CreateDirectory(folder);
+            PlayerController.InputOverride = new Idle();
+            SceneManager.LoadScene("World");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null || DoorSystem.Instance == null)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var pc = PlayerController.Local;
+            Combatant.LocalPlayer.ServerDamageFilter = _ => 0f;
+            var system = DoorSystem.Instance;
+            Door door = null; Vector3 eye = default, look = default;
+            for (int i = 0; i < system.Count && door == null; i++)
+            {
+                var d = system[i];
+                foreach (float sign in new[] { 1f, -1f })
+                {
+                    var from = d.transform.position + d.Forward * 3.2f * sign + Vector3.up * 1.6f;
+                    var to = d.transform.position + Vector3.up * 1.1f;
+                    if (Physics.Linecast(from, to, out var hit) && hit.collider == d.Panel && !Physics.Raycast(d.transform.position + Vector3.up * 1.2f - d.Forward * 3f * sign, -d.Forward * sign, 3f)) { door = d; eye = from; look = to; break; }
+                }
+            }
+            Assert.IsNotNull(door, "a door seen from 3 m");
+            pc.Teleport(eye + (eye - look).normalized * 4f - Vector3.up * 1.5f); // the player stands behind the camera, out of its picture
+            yield return new WaitForSeconds(1.0f);
+            var go = new GameObject("DoorShotCamera");
+            var cam = go.AddComponent<Camera>();
+            cam.enabled = false;
+            if (pc.Camera != null) cam.CopyFrom(pc.Camera);
+            cam.fieldOfView = 60f;
+            cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(look - eye));
+            var shot = go.AddComponent<LateShot>();
+            shot.Cam = cam;
+            float max = DoorRules.Current.MaxHp;
+            void Snap(string name) { shot.Path = System.IO.Path.Combine(folder, name); }
+            Snap("door_stage0.png"); yield return null; yield return null;
+            DoorSystem.ServerDamage(door, max * 0.4f); Assert.AreEqual(1, door.Stage);
+            yield return new WaitForSeconds(0.3f); Snap("door_stage1_splintered.png"); yield return null; yield return null;
+            DoorSystem.ServerDamage(door, max * 0.3f); Assert.AreEqual(2, door.Stage);
+            yield return new WaitForSeconds(0.3f); Snap("door_stage2_cracked.png"); yield return null; yield return null;
+            Assert.IsTrue(DoorSystem.ServerDamage(door, max));
+            yield return new WaitForSeconds(0.25f); Snap("door_broken_planks.png"); yield return null; yield return null;
+            yield return new WaitForSeconds(4.5f); Snap("door_broken_doorway.png"); yield return null; yield return null;
+            Debug.Log("[DoorCapture] break shots in " + folder);
+        }
     }
 }

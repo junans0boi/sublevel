@@ -33,6 +33,8 @@ namespace Game.Net
             if (Instance == this) Instance = null;
             if (!_bound || _network == null) return;
             _network.ClientManager.UnregisterBroadcast<DoorChanged>(OnChanged);
+            _network.ClientManager.UnregisterBroadcast<DoorDamaged>(OnDamaged);
+            _network.ServerManager.UnregisterBroadcast<DoorRamRequest>(OnRam);
             _network.ServerManager.UnregisterBroadcast<DoorToggleRequest>(OnRequest);
             _network.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
         }
@@ -43,6 +45,8 @@ namespace Game.Net
             _bound = true;
             _network = network;
             _network.ClientManager.RegisterBroadcast<DoorChanged>(OnChanged);
+            _network.ClientManager.RegisterBroadcast<DoorDamaged>(OnDamaged);
+            _network.ServerManager.RegisterBroadcast<DoorRamRequest>(OnRam);
             _network.ServerManager.RegisterBroadcast<DoorToggleRequest>(OnRequest);
             _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             BuildFromMap();
@@ -143,7 +147,7 @@ namespace Game.Net
         // Server: flips door `index` for someone standing at `from` (it opens away from them).
         public void ServerToggle(int index, Vector3 from)
         {
-            if (index < 0 || index >= _doors.Count) return;
+            if (index < 0 || index >= _doors.Count || _doors[index].State == DoorState.Broken) return;
             var door = _doors[index];
             int side = Doors.SideOf(from.x, from.z, door.transform.position.x, door.transform.position.z, door.Forward.x, door.Forward.z);
             ServerSet(index, Doors.Toggle(door.State, side));
@@ -156,6 +160,36 @@ namespace Game.Net
             if (door.State == state) return;
             door.Set(state);
             if (ServerActive) _network.ServerManager.Broadcast(new DoorChanged { Index = index, State = (byte)state });
+        }
+
+        // Server: the door takes `amount` damage (ADR-147); true when that broke it. Every client is told.
+        public static bool ServerDamage(Door door, float amount, int sourceId = -1)
+        {
+            var self = Instance;
+            if (self == null || door == null || door.State == DoorState.Broken || amount <= 0f) return false;
+            int index = self._doors.IndexOf(door);
+            if (index < 0) return false;
+            float hp = door.Hp - amount;
+            if (hp <= 0f)
+            {
+                self.ServerSet(index, DoorState.Broken);
+                // Bots hear it go (a wooden crash, glass-loud).
+                var at = door.transform.position;
+                BotNoise.Emit(at.x, at.y, at.z, BotRules.Current.GlassHearingRadius, sourceId, NoiseKind.Other);
+                return true;
+            }
+            door.SetHp(hp);
+            if (self.ServerActive) self._network.ServerManager.Broadcast(new DoorDamaged { Index = index, Hp = (ushort)Mathf.CeilToInt(hp) });
+            return false;
+        }
+
+        // Client: my car hit door `door` at this closing speed; the server decides. (The server's own car calls ServerDamage.)
+        public static void ClientRam(Door door, float speed)
+        {
+            var self = Instance;
+            if (self == null || self._network == null || door == null) return;
+            int index = self._doors.IndexOf(door);
+            if (index >= 0) self._network.ClientManager.Broadcast(new DoorRamRequest { Index = index, Speed = speed });
         }
 
         // Server: a bot at `position` walking along `heading` opens the closed door right ahead of it.
@@ -212,12 +246,32 @@ namespace Game.Net
             ServerToggle(request.Index, body.transform.position);
         }
 
+        void OnRam(NetworkConnection connection, DoorRamRequest request, Channel channel)
+        {
+            var body = connection != null && connection.FirstObject != null ? connection.FirstObject.GetComponent<Combatant>() : null;
+            if (body == null || body.Dead.Value || request.Index < 0 || request.Index >= _doors.Count || float.IsNaN(request.Speed)) return;
+            // The sender's car is at the door: within a car's length of the sender's body.
+            var d = _doors[request.Index].transform.position - body.transform.position;
+            if (d.sqrMagnitude > 8f * 8f) return;
+            ServerDamage(_doors[request.Index], Doors.RamDamage(Mathf.Min(request.Speed, 40f), DoorRules.Current));
+        }
+
         void OnClientLoaded(NetworkConnection connection, bool asServer)
         {
             if (!asServer || !ServerActive || !connection.IsAuthenticated) return;
             for (int i = 0; i < _doors.Count; i++)
+            {
                 if (_doors[i].State != DoorState.Closed)
                     _network.ServerManager.Broadcast(connection, new DoorChanged { Index = i, State = (byte)_doors[i].State, Quiet = true });
+                else if (_doors[i].Hp < DoorRules.Current.MaxHp)
+                    _network.ServerManager.Broadcast(connection, new DoorDamaged { Index = i, Hp = (ushort)Mathf.CeilToInt(_doors[i].Hp), Quiet = true });
+            }
+        }
+
+        void OnDamaged(DoorDamaged message, Channel channel)
+        {
+            if (message.Index < 0 || message.Index >= _doors.Count || ServerActive) return; // the host's own door was set already
+            _doors[message.Index].SetHp(message.Hp, message.Quiet);
         }
 
         void OnChanged(DoorChanged message, Channel channel)

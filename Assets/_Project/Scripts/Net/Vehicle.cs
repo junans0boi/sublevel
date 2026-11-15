@@ -616,6 +616,17 @@ namespace Game.Net
             if (!_simulating || collision.contactCount == 0) return;
             var other = collision.collider;
             if (other is CharacterController || other.GetComponentInParent<Combatant>() != null) return;
+            // A car into a door (ADR-147): the server breaks it by the closing speed; a remote driver reports it.
+            if (other.GetComponentInParent<Door>() is Door ram && Time.time >= _nextImpactAt)
+            {
+                float closing = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, collision.GetContact(0).normal));
+                if (closing >= Rules.CollisionMinSpeed || closing >= DoorRules.Current.RamMinSpeed)
+                {
+                    _nextImpactAt = Time.time + ImpactCooldownSeconds;
+                    if (IsServerInitialized) DoorSystem.ServerDamage(ram, Doors.RamDamage(closing, DoorRules.Current));
+                    else if (IsOwner) DoorSystem.ClientRam(ram, closing);
+                }
+            }
             float impact = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, collision.GetContact(0).normal));
             var r = Rules;
             if (impact < r.CollisionMinSpeed || Time.time < _nextImpactAt) return;

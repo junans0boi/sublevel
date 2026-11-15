@@ -125,6 +125,16 @@ namespace Game.Net
                     break;
                 }
                 surface = BulletSurfaces.Of(hit.collider);
+                // A door takes the shot's damage (ADR-147); when that breaks it the bullet flies on as if it were not there.
+                var door = hit.collider.GetComponentInParent<Door>();
+                if (door != null && DoorSystem.ServerDamage(door, Doors.ShotDamage(DamageRules.ForZone(weapon, travelled + Vector3.Distance(a, hit.point), HitZone.Body) * scale, weapon.Pellets, DoorRules.Current), ObjectId))
+                {
+                    stopped = false;
+                    stoppedBy = null;
+                    end = c;
+                    from = hit.point + dir * 0.02f;
+                    continue;
+                }
                 int s = (int)surface;
                 if (pieces >= rules.MaxPieces || rules.MaxThickness[s] <= 0f) break;
                 float thick = BulletSurfaces.Thickness(hit, dir, rules.MaxThickness[s], out var exit);
