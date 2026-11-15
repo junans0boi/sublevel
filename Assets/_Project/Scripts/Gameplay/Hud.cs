@@ -418,8 +418,15 @@ namespace Game.Gameplay
                 string name = InventoryBackend.LootName(loot);
                 _promptIcon.Set(InventoryBackend.LootIconKey(loot), name);
             }
+            // No loot to take and a vehicle with a free seat in reach: F gets in (#190).
+            bool vehicle = !dead && loot == null && HudBackend.VehicleEnterable(me);
+            if (vehicle)
+            {
+                _promptFor = null;
+                _promptLabel.text = "[F]  탑승";
+            }
             Show(_promptIconRoot, hasLoot);
-            Show(_prompt, hasLoot);
+            Show(_prompt, hasLoot || vehicle);
         }
 
         // Shows how the weapon is aimed (ADR-048): four lines at the edge of the spread cone from the hip, closer

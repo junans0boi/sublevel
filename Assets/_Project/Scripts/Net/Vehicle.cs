@@ -215,6 +215,19 @@ namespace Game.Net
         // Where an occupant of `seat` steps in and out (on the ground beside the door / on that side of the saddle).
         public Vector3 DoorPosition(int seat) => Seat(seat) != null ? Seat(seat).Door.position : transform.position;
 
+        // How far `point` is from getting in at `seat`: the distance to its door, but standing against the body (nose, tail,
+        // the far side) counts as at the door (#190: the low sports car could not be boarded from its nose).
+        const float BodyReach = 1.2f;
+        public float EnterDistance(Vector3 point, int seat, float slack = 0f)
+        {
+            float d = Vector3.Distance(point, DoorPosition(seat));
+            float range = Rules.EnterRange;
+            if (d <= range + slack) return d;
+            foreach (var c in _colliders)
+                if (c != null && Vector3.Distance(c.ClosestPoint(point), point) <= BodyReach + slack) return range;
+            return d;
+        }
+
         // The nearest door of a free seat within `range` of `point`: the vehicle to get on with F. Null if none.
         public static Vehicle NearestEnterable(Vector3 point, float range, out float distance)
         {
@@ -226,7 +239,7 @@ namespace Game.Net
                 if (v == null || !v.HasFreeSeat || v.Disabled) continue;
                 for (int s = 0; s < v.SeatCount; s++)
                 {
-                    float d = Vector3.Distance(point, v.DoorPosition(s));
+                    float d = v.EnterDistance(point, s);
                     if (d <= range && d < distance) { distance = d; best = v; }
                 }
             }
@@ -947,7 +960,7 @@ namespace Game.Net
             for (int s = 0; s < seats; s++)
             {
                 occupants[s] = OccupantId(s);
-                distances[s] = Vector3.Distance(c.transform.position, DoorPosition(s));
+                distances[s] = EnterDistance(c.transform.position, s, GameData.Rules.Guard.LagSlackMeters);
             }
             int seat = Vehicles.ChooseEnterSeat(occupants, distances, r.EnterRange + GameData.Rules.Guard.LagSlackMeters);
             if (seat < 0)
