@@ -64,6 +64,8 @@ namespace Game.Gameplay
         public int HolesShown { get; private set; }
         public int PartsFallen { get; private set; }
         public AudioSource BangSource => _audio;
+        // The drawn body (null when the model has none): the lamps are placed on its surface (VehicleLights).
+        public Shell BodyShell => _body != null && _shells.Count > 0 ? _shells[0] : null;
 
         void Awake()
         {
@@ -544,6 +546,61 @@ namespace Game.Gameplay
             foreach (var shell in _shells)
                 if (shell.Attached && shell.Dent(shell.FromVehicle(transform, local), shell.DirFromVehicle(transform, localDir), radius, depth, rules)) any = true;
             if (any) DentsShown++;
+            if (any && depth >= SmudgeMinDepth) Smudge(local, localDir, radius);
+        }
+
+        // A dent shades only softly, and at game camera distance (6-8 m) a 10 cm cave-in is hard to see (#90). So each real dent
+        // (a collision or a blast, not a bullet) also leaves a soft dark smudge of scraped paint and soot on the dented surface,
+        // sized to the dent. A ring of MaxSmudges per vehicle, oldest reused; it goes with the part it was on.
+        const float SmudgeMinDepth = 0.04f;
+        const int MaxSmudges = 10;
+        readonly List<Transform> _smudges = new List<Transform>();
+        int _smudgesPlaced;
+
+        public int SmudgesShown { get; private set; }
+
+        void Smudge(Vector3 local, Vector3 localDir, float radius)
+        {
+            if (_dust == null) return;
+            var d = localDir.sqrMagnitude > 0f ? localDir.normalized : Vector3.down;
+            if (!RaySurface(local - d * 0.4f, d, 1.2f, out var shell, out var point, out var normal)) return;
+            int slot = _smudgesPlaced++ % MaxSmudges;
+            var t = slot < _smudges.Count ? _smudges[slot] : null;
+            if (t == null)
+            {
+                var go = new GameObject("DentSmudge");
+                go.AddComponent<MeshFilter>().sharedMesh = CombatFxMeshes.Disc;
+                var r = go.AddComponent<MeshRenderer>();
+                r.sharedMaterial = _dust;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                r.GetPropertyBlock(_block);
+                _block.SetColor(BaseColorId, new Color(0.03f, 0.025f, 0.02f, 0.85f));
+                r.SetPropertyBlock(_block);
+                t = go.transform;
+                // A darker core inside the soft ring: reads as crumpled, scraped paint from 7 m.
+                var core = new GameObject("DentSmudge");
+                core.transform.SetParent(t, false);
+                core.transform.localPosition = Vector3.back * 0.002f;
+                core.transform.localScale = Vector3.one * 0.42f;
+                core.AddComponent<MeshFilter>().sharedMesh = CombatFxMeshes.Disc;
+                var cr = core.AddComponent<MeshRenderer>();
+                cr.sharedMaterial = _dust;
+                cr.shadowCastingMode = ShadowCastingMode.Off;
+                cr.receiveShadows = false;
+                cr.GetPropertyBlock(_block);
+                _block.SetColor(BaseColorId, new Color(0.02f, 0.015f, 0.012f, 0.9f));
+                cr.SetPropertyBlock(_block);
+                if (slot < _smudges.Count) _smudges[slot] = t; else _smudges.Add(t);
+            }
+            t.SetParent(shell.Filter.transform, false);
+            t.localPosition = shell.FromVehicle(transform, point + normal * 0.006f);
+            t.localRotation = Quaternion.LookRotation(-shell.DirFromVehicle(transform, normal));
+            // Local scale of the mesh's own space: undo the parent's scale so the size is in metres.
+            var ls = shell.Filter.transform.lossyScale;
+            float size = Mathf.Clamp(radius * 3.2f, 0.35f, 2.2f);
+            t.localScale = new Vector3(size / Mathf.Max(1e-3f, ls.x), size / Mathf.Max(1e-3f, ls.y), 1f / Mathf.Max(1e-3f, ls.z));
+            SmudgesShown++;
         }
 
         // ---- Detachable parts ----
@@ -609,7 +666,7 @@ namespace Game.Gameplay
 
         void Char(MeshRenderer r)
         {
-            if (r.name == "BulletHole" || r.name == "Rim" || r.name == "GlassCrack") return;
+            if (r.name == "BulletHole" || r.name == "Rim" || r.name == "GlassCrack" || r.name == "DentSmudge") return;
             r.GetPropertyBlock(_block);
             _block.SetColor(BaseColorId, Charred);
             r.SetPropertyBlock(_block);
@@ -830,7 +887,7 @@ namespace Game.Gameplay
             return ps;
         }
 
-        static void SetColorOverLife(ParticleSystem ps, (float t, Color c)[] colors, (float t, float a)[] alphas)
+        internal static void SetColorOverLife(ParticleSystem ps, (float t, Color c)[] colors, (float t, float a)[] alphas)
         {
             var over = ps.colorOverLifetime;
             over.enabled = true;
@@ -846,7 +903,7 @@ namespace Game.Gameplay
         // ---- Materials and textures made in code ----
 
         // A copy of an effect material drawing `texture`, untinted (a tinted _BaseColor turned the fire green).
-        static Material WithTexture(Material source, Texture2D texture, string suffix)
+        internal static Material WithTexture(Material source, Texture2D texture, string suffix)
         {
             if (source == null) return null;
             var m = new Material(source) { name = source.name + suffix };
@@ -856,7 +913,7 @@ namespace Game.Gameplay
             return m;
         }
 
-        static Texture2D Puff()
+        internal static Texture2D Puff()
         {
             if (_puff != null) return _puff;
             const int n = 64;

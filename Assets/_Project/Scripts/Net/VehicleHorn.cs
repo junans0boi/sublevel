@@ -15,6 +15,9 @@ namespace Game.Net
     public class VehicleHorn : NetworkBehaviour
     {
         public readonly SyncVar<bool> Held = new SyncVar<bool>();
+        // The lamp switch (#202, ADR-152): VehicleFxRules.LightsAuto / On / Off. Rides here because the horn is the vehicle's
+        // other driver switch and a component added to a prefab at run time cannot replicate.
+        public readonly SyncVar<byte> Lights = new SyncVar<byte>();
 
         Vehicle _vehicle;
         float _nextNoise;
@@ -67,6 +70,29 @@ namespace Game.Net
             }
             Held.Value = on;
             return true;
+        }
+
+        // ---- Lamp switch ----
+
+        public bool ServerSetLights(Combatant c, byte mode)
+        {
+            if (!IsServerInitialized || mode > VehicleFxRules.LightsOff || c == null || Driver() != c) return false;
+            Lights.Value = mode;
+            return true;
+        }
+
+        public void RequestLights(Combatant c, byte mode)
+        {
+            if (IsServerInitialized) ServerSetLights(c, mode);
+            else CmdSetLights(mode);
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        void CmdSetLights(byte mode, NetworkConnection sender = null)
+        {
+            var driver = Driver();
+            if (driver == null || driver.Owner != sender) return;
+            ServerSetLights(driver, mode);
         }
 
         // ---- Owner requests ----

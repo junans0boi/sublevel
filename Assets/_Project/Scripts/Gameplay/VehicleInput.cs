@@ -20,6 +20,7 @@ namespace Game.Gameplay
         public bool ToggleView;   // V pressed: the seat's eye view or the vehicle camera
         public bool Horn;         // left mouse held (driver with no pistol out, ADR-075)
         public bool Jerrycan;     // J pressed: pour a jerrycan into the vehicle here, or stop (ADR-075)
+        public bool Lights;       // L pressed: headlamps on / off (#202)
     }
 
     public interface IVehicleInput
@@ -47,6 +48,7 @@ namespace Game.Gameplay
             f.Interact = KeyBinds.Pressed(BindAction.Interact);
             f.ToggleView = KeyBinds.Pressed(BindAction.ToggleView);
             f.Jerrycan = KeyBinds.Pressed(BindAction.Boost);
+            f.Lights = KeyBinds.Pressed(BindAction.Headlights);
             f.Horn = KeyBinds.Held(BindAction.Fire);
             if (ctrl)
             {
@@ -158,6 +160,8 @@ namespace Game.Gameplay
             _horn = horn;
             // With a pistol out the button fires it instead.
             if (_horn != null) _horn.Request(_combatant, f.Horn && _combatant.ActiveWeaponId == 0);
+            var lights = vehicle.GetComponent<VehicleLights>();
+            if (f.Lights && lights != null && _horn != null) _horn.RequestLights(_combatant, lights.NextMode());
         }
 
         void ReleaseHorn()

@@ -127,6 +127,16 @@ namespace Game.Core
             return 1f;
         }
 
+        // Which gear (0-based) Rpm01 is in at this speed; the audio feels a shift when it changes (#203).
+        public static int Gear(float speed, float top, int gears)
+        {
+            if (top <= 0f || gears <= 0) return 0;
+            float t = Math.Min(1f, Math.Abs(speed) / top);
+            for (int i = 0; i < gears - 1; i++)
+                if (t <= (float)Math.Pow((i + 1) / (double)gears, 0.8)) return i;
+            return gears - 1;
+        }
+
         // Playback pitch of the engine loop for an engine speed.
         public static float Pitch(float rpm01, bool motorcycle) => (motorcycle ? 0.8f : 0.6f) + rpm01 * (motorcycle ? 1.4f : 1.1f);
 

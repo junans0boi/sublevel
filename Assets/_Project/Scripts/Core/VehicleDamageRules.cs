@@ -94,10 +94,10 @@ namespace Game.Core
         public float DentBulletRefDamage = 30f;
         public float DentImpactRadiusPerMps = 0.05f; // radius = speed x this, capped
         public float DentImpactMaxRadius = 0.9f;
-        public float DentImpactDepthPerMps = 0.01f;
-        public float DentBlastRadius = 1.4f;
-        public float DentBlastDepth = 0.16f;
-        public float DentMaxDepth = 0.22f;       // no vertex goes further in than this in total
+        public float DentImpactDepthPerMps = 0.014f;
+        public float DentBlastRadius = 1.0f;
+        public float DentBlastDepth = 0.2f;
+        public float DentMaxDepth = 0.26f;       // no vertex goes further in than this in total
         public int DentHistory = 48;             // kept by the server for late joiners
         public float PartDangleDeg = 14f;        // a loose part hangs open / down this far
         public float PartDespawnSeconds = 20f;   // a fallen part lies on the ground this long

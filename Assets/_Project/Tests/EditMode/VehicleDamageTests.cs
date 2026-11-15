@@ -154,7 +154,7 @@ namespace Game.Tests
         {
             Assert.AreEqual(0.05f, VehicleDamageMath.DentPush(0f, 0.05f, VehicleDamageMath.DentFalloff(0f, 1f), R), 1e-5f);
             Assert.AreEqual(0f, VehicleDamageMath.DentPush(0f, 0.05f, VehicleDamageMath.DentFalloff(1f, 1f), R));
-            Assert.AreEqual(R.DentMaxDepth - 0.18f, VehicleDamageMath.DentPush(0.18f, 0.05f, 1f, R), 1e-5f);
+            Assert.AreEqual(0.03f, VehicleDamageMath.DentPush(R.DentMaxDepth - 0.03f, 0.05f, 1f, R), 1e-5f);
             Assert.AreEqual(0f, VehicleDamageMath.DentPush(R.DentMaxDepth, 0.05f, 1f, R));
         }
 

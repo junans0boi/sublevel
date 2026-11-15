@@ -35,7 +35,7 @@ namespace Game.Gameplay
         Vehicle _framed;
         Vector3 _pivotLocal;
         float _orbit;
-        Light _cabin;
+        Light _cabin, _cabinLow;
 
         // True while this frame's camera was placed by the car camera.
         public bool Active { get; private set; }
@@ -60,7 +60,7 @@ namespace Game.Gameplay
             var vehicle = VehicleSeat.VehicleOf(_combatant);
             SetAimIgnore(vehicle);
             var cam = _player.Camera;
-            if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = false; return; }
+            if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = _cabinLow.enabled = false; return; }
             Active = true;
 
             float yaw = _player.ViewYaw, pitch = _player.ViewPitch;
@@ -150,15 +150,26 @@ namespace Game.Gameplay
             if (_cabin == null)
             {
                 if (!on) return;
-                _cabin = new GameObject("CabinLight").AddComponent<Light>();
-                _cabin.type = LightType.Point;
-                _cabin.shadows = LightShadows.None;
-                _cabin.range = 6f;
-                _cabin.intensity = 9f;
-                _cabin.color = new Color(1f, 0.96f, 0.9f);
+                _cabin = NewCabinLight("CabinLight", 7f, 10f);
+                // A second, low one at hip height behind the driver (not near the wheel, which it would blow out): lights the seats' bases and the door panels that the one under the roof leaves dark (#99).
+                _cabinLow = NewCabinLight("CabinLightLow", 4.5f, 7f);
             }
-            _cabin.enabled = on;
-            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * CabinLightOverEye - vehicle.transform.forward * CabinLightBehindEye, Quaternion.identity);
+            _cabin.enabled = _cabinLow.enabled = on;
+            if (!on) return;
+            var t = vehicle.transform;
+            _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + t.up * CabinLightOverEye - t.forward * CabinLightBehindEye, Quaternion.identity);
+            _cabinLow.transform.SetPositionAndRotation(_combatant.EyePosition - t.up * 0.45f - t.forward * 0.45f, Quaternion.identity);
+        }
+
+        static Light NewCabinLight(string name, float range, float intensity)
+        {
+            var l = new GameObject(name).AddComponent<Light>();
+            l.type = LightType.Point;
+            l.shadows = LightShadows.None;
+            l.range = range;
+            l.intensity = intensity;
+            l.color = new Color(1f, 0.96f, 0.9f);
+            return l;
         }
 
         // How far back from the pivot the camera can go without passing into anything but the car and its occupants.
