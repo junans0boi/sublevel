@@ -107,7 +107,7 @@ namespace Game.Gameplay
             var me = Combatant.LocalPlayer;
             if (_poseShots)
             {
-                yield return PoseShots(me);
+                yield return _charShots ? CharShots(me) : PoseShots(me);
                 Application.Quit();
                 yield break;
             }
