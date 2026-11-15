@@ -230,6 +230,7 @@ namespace Game.Gameplay
             bool hit = hp < _lastHp && !dead;
             _lastHp = hp;
             TrackSwim(dead);
+            TrackGait();
 
             // Seated, the body rides with the car: none of that motion is walking.
             float seatAmount = dead ? 0f : VehicleSeat.SeatedAmount(_combatant);
@@ -499,6 +500,7 @@ namespace Game.Gameplay
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);
             Turn(ArmRight, reach, transform.right);
+            PoseGait();
             PoseRifle();
             PoseMelee();
             PoseLedge();

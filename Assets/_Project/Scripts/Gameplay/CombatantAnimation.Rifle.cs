@@ -16,6 +16,7 @@ namespace Game.Gameplay
         const float RifleWeightPerSecond = 7f;
         const float MinLongGunMeters = 0.4f;
         const int MaxWeaponId = 32;
+        const float MinPistolMeters = 0.1f, PistolSupportAhead = 0.02f, PistolCupSide = 0.025f;
         const float LowReadySquare = 0.7f;     // share of the shoulders' turn away from the hold taken out at low ready   // shorter (the pistol) keeps the one-handed clip pose
         const float AccelSmoothPerSecond = 8f;
         const float PalmBelowBore = 0.03f;     // the left palm holds the handguard this far under the bore line
@@ -24,7 +25,8 @@ namespace Game.Gameplay
         float _shoulderRestYaw;      // shoulder line's turn from the facing in the saved pose (degrees, right positive)
         Quaternion _wristRBind;      // right wrist relative to the character in the saved pose, weapon pointing forward
         WeaponVisual _weapons;
-        float[] _supportAhead;       // per weapon id: the left hand this far along the weapon from the grip; 0 = not a long gun
+        float[] _supportAhead;       // per weapon id: the left hand this far along the weapon from the grip; 0 = not held in both hands
+        bool[] _isPistol;            // per weapon id: a hand gun, held in both hands with PistolHold's numbers (#218)
         bool _rifleWanted;           // a long gun in hand and nothing else posing the arms
         float _rifle;                // 0..1: how much of the two-handed hold is shown
         float _ready;                // 0 low ready .. 1 shouldered
@@ -50,10 +52,18 @@ namespace Game.Gameplay
             _wristRBind = Quaternion.Inverse(transform.rotation) * _wristR.rotation;
             _shoulderRestYaw = ShoulderYaw();
             _supportAhead = new float[MaxWeaponId + 1];
+            _isPistol = new bool[MaxWeaponId + 1];
             for (int id = 1; id <= MaxWeaponId; id++)
             {
                 var model = _weapons.ModelFor(id);
-                if (model == null || !Span(model, out float back, out float front) || front - back < MinLongGunMeters) continue;
+                var def = GameData.Weapons.Find(id);
+                if (model == null || def == null || def.IsMelee || !Span(model, out float back, out float front)) continue;
+                if (front - back < MinLongGunMeters)
+                {
+                    // A hand gun: the left hand cups the right (no handguard to hold).
+                    if (front - back >= MinPistolMeters) { _supportAhead[id] = PistolSupportAhead; _isPistol[id] = true; }
+                    continue;
+                }
                 // Close in front of the grip: the short arms reach no further (the rest of the barrel sticks out past it).
                 _supportAhead[id] = Mathf.Clamp(front * 0.3f, 0.1f, 0.16f);
             }
@@ -86,12 +96,15 @@ namespace Game.Gameplay
             return Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg;
         }
 
+        // Held in both hands: a long gun, or a pistol (#218).
         bool LongGunInHand(int id) => _supportAhead != null && id > 0 && id < _supportAhead.Length && _supportAhead[id] > 0f;
+        bool PistolInHand(int id) => LongGunInHand(id) && _isPistol[id];
+        RifleHoldRules HoldRules(int id) => PistolInHand(id) ? GameData.Rules.PistolHold : GameData.Rules.RifleHold;
 
         // Update: how much of the hold to show and how far raised. `armed` = a gun (not melee) in hand, alive.
         void TrackRifle(bool armed, bool aiming, Vector3 localVelocity)
         {
-            var r = GameData.Rules.RifleHold;
+            var r = HoldRules(_combatant.ActiveWeaponId);
             float dt = Time.deltaTime;
             _rifleWanted = armed && LongGunInHand(_combatant.ActiveWeaponId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f;
             _rifle = Mathf.MoveTowards(_rifle, _rifleWanted ? 1f : 0f, RifleWeightPerSecond * dt);
@@ -135,7 +148,7 @@ namespace Game.Gameplay
         void PoseRifle()
         {
             if (_rifle <= 0.001f || _wristR == null || _upperArmR == null || _wrist[0] == null) return;
-            var r = GameData.Rules.RifleHold;
+            var r = HoldRules(_combatant.ActiveWeaponId);
             var v = _motion.LocalVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
             float lean = 1f - _crouch * 0.5f;
@@ -169,7 +182,14 @@ namespace Game.Gameplay
             _wristR.rotation = Quaternion.Slerp(_wristR.rotation, gripTurn, _rifle);
             // Left hand: round the handguard from below, palm up and toward the weapon, fingers closed.
             var up = turn * Vector3.up;
-            Grip(0, ArmLeft, grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + turn * Vector3.right, GripCurlDeg, _rifle);
+            var across = turn * Vector3.right;
+            // Sprinting the left hand lets go and swings with the run clip (#222): the weapon is carried by the right hand.
+            float support = _rifle * (1f - r.SprintSupportRelease * _sprintShown * (1f - _ready));
+            if (PistolInHand(id))
+                // The left hand wraps the right from the left, palm in, fingers over the right fingers.
+                Grip(0, ArmLeft, grip - across * PistolCupSide + axis * _supportAhead[id] - up * 0.01f, axis, across, GripCurlDeg, support);
+            else
+                Grip(0, ArmLeft, grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + across, GripCurlDeg, support);
         }
 
         // For the pose review (FeelCapture): heights over the feet of the head joint, the right shoulder and the top of

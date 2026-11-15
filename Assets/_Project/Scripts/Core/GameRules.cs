@@ -19,6 +19,7 @@ namespace Game.Core
         public CombatFxRules CombatFx = new CombatFxRules();
         public GaitRules Gait = new GaitRules();
         public RifleHoldRules RifleHold = new RifleHoldRules(); // ADR-083
+        public RifleHoldRules PistolHold = RifleHoldRules.Pistol(); // #218: a hand gun in both hands
         public JumpRules Jump = new JumpRules();
         public StanceRules Stance = new StanceRules();
         public FallRules Fall = new FallRules();

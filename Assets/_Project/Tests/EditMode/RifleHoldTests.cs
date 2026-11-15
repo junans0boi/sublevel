@@ -29,7 +29,8 @@ namespace Game.Tests
             var sprint = RifleHold.Pose(7f, 1f, 0f, R);
             Assert.That(idle.Pitch, Is.InRange(15f, 35f));
             Assert.That(run.Pitch, Is.InRange(25f, 45f));
-            Assert.That(sprint.Pitch, Is.InRange(30f, 50f));
+            Assert.That(sprint.Pitch, Is.InRange(50f, 65f), "sprint carries the muzzle well down (#222)");
+            Assert.Greater(sprint.Pitch - run.Pitch, 15f, "sprint is distinct from run");
             Assert.Less(idle.Pitch, run.Pitch);
             Assert.Less(run.Pitch, sprint.Pitch);
             Assert.Less(sprint.Yaw, 0f, "sprinting the muzzle is turned in across the body (left)");

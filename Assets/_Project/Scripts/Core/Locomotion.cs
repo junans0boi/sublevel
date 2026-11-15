@@ -77,9 +77,9 @@ namespace Game.Core
         public float LowerSeconds = 0.3f;  // and back
         public float IdlePitchDeg = 24f, IdleYawDeg = -14f, IdleRollDeg = -8f;
         public float MovePitchDeg = 32f, MoveYawDeg = -18f, MoveRollDeg = -10f;
-        public float SprintPitchDeg = 40f, SprintYawDeg = -24f, SprintRollDeg = -14f;
+        public float SprintPitchDeg = 58f, SprintYawDeg = -30f, SprintRollDeg = -18f;
         public float IdleGripX = -0.07f, IdleGripY = -0.15f, IdleGripZ = 0.21f;
-        public float SprintGripX = -0.11f, SprintGripY = -0.17f, SprintGripZ = 0.17f;
+        public float SprintGripX = -0.12f, SprintGripY = -0.2f, SprintGripZ = 0.15f;
         // Shouldered (#121, ADR-096): the grip high enough that the sights are at the eyes, the stock in the shoulder pocket.
         public float AimGripX = -0.05f, AimGripY = 0.06f, AimGripZ = 0.24f;
         // The weapon follows the look pitch (degrees, up positive): all of it shouldered, this share at low ready;
@@ -88,13 +88,29 @@ namespace Game.Core
         public float LowTwistDeg = 15f, AimTwistDeg = 25f; // torso turned right (left shoulder forward)
         public float MoveFullSpeed = 4f;   // m/s at which the moving low ready is fully shown
         // Body: torso pitched forward with speed (more sprinting), rolled into a sidestep, leaning into a start.
-        public float RunTorsoPitchDeg = 5f, SprintTorsoPitchDeg = 13f;
+        public float RunTorsoPitchDeg = 5f, SprintTorsoPitchDeg = 17f;
         public float StrafeRollDegPerMps = 1.2f, MaxStrafeRollDeg = 6f;
         public float AccelPitchDegPerMps2 = 0.4f, MaxAccelPitchDeg = 6f;
         // Weapon bob over a stride (two steps per locomotion cycle): down at each step, side to side once per cycle.
         public float BobDownMeters = 0.025f, BobSideMeters = 0.018f, BobRollDeg = 3f;
         // A shot kicks the weapon back and the muzzle up for a moment.
         public float KickBackMeters = 0.05f, KickPitchDeg = 5f, KickSeconds = 0.12f;
+        // Sprinting: how much of the left hand's grip is let go (0 keeps it on the handguard, 1 swings free) (#222).
+        public float SprintSupportRelease = 0.9f;
+
+        // A hand gun in both hands (#218): closer in and higher than a rifle, muzzle only slightly down at low ready.
+        public static RifleHoldRules Pistol() => new RifleHoldRules
+        {
+            IdlePitchDeg = 20f, IdleYawDeg = -4f, IdleRollDeg = 0f,
+            MovePitchDeg = 26f, MoveYawDeg = -6f, MoveRollDeg = 0f,
+            SprintPitchDeg = 38f, SprintYawDeg = -10f, SprintRollDeg = -4f,
+            IdleGripX = -0.04f, IdleGripY = -0.13f, IdleGripZ = 0.28f,
+            SprintGripX = -0.07f, SprintGripY = -0.16f, SprintGripZ = 0.2f,
+            AimGripX = -0.03f, AimGripY = 0.04f, AimGripZ = 0.32f,
+            LowTwistDeg = 8f, AimTwistDeg = 12f,
+            BobDownMeters = 0.015f, BobSideMeters = 0.01f, BobRollDeg = 1.5f,
+            KickBackMeters = 0.03f, KickPitchDeg = 8f, SprintSupportRelease = 0.5f,
+        };
     }
 
     // Where a long gun is: angles (degrees), grip offset (meters) and torso twist (degrees) as RifleHoldRules describes them.

@@ -14,6 +14,15 @@ namespace Game.Gameplay
     {
         bool _charShots;
 
+        // CHAR_ONLY=B_pistol,C_ : only the shots whose name starts with one of these (empty = all).
+        static bool Want(string name)
+        {
+            string only = Environment.GetEnvironmentVariable("CHAR_ONLY");
+            if (string.IsNullOrEmpty(only)) return true;
+            foreach (var key in only.Split(',')) if (key.Length > 0 && name.StartsWith(key, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
         public static FeelCapture StartCharShots(string folder)
         {
             var capture = StartPoseShots(folder);
@@ -24,6 +33,7 @@ namespace Game.Gameplay
         // Outside views in third person, then the player's own eyes.
         IEnumerator Views(string name, bool fp = true, params Watch[] outside)
         {
+            if (!Want(name)) yield break;
             var pc = PlayerController.Local;
             if (pc.Rig.Mode != ViewMode.ThirdPerson) pc.Rig.ToggleMode();
             foreach (var v in outside)
@@ -83,6 +93,7 @@ namespace Game.Gameplay
         IEnumerator Motion(PlayerController pc, Vector3 home, Vector3 run, float room, string name, Vector2 move,
             bool sprint = false, bool slow = false, bool aim = false, bool backwards = false, int n = 3, float gap = 0.13f)
         {
+            if (!Want(name)) yield break;
             _frame.SlowWalk = slow;
             _frame.AimHeld = aim;
             _frame.Sprint = sprint;
@@ -101,6 +112,7 @@ namespace Game.Gameplay
 
         IEnumerator Burst(string name, float[] times, Action start, bool fp = true)
         {
+            if (!Want(name)) yield break;
             float t0 = Time.time;
             start?.Invoke();
             foreach (var at in times)
@@ -129,7 +141,7 @@ namespace Game.Gameplay
 
             bool fpOnly = Environment.GetEnvironmentVariable("CHAR_FP_ONLY") == "1";
             if (!fpOnly) yield return AllThirdPerson(me, pc, home, run, room, user);
-            yield return FirstPersonOnly(me, pc, home, run, room);
+            if (Want("K")) yield return FirstPersonOnly(me, pc, home, run, room);
             _watch = Watch.Game;
             PoseShotsDone = true;
             Debug.Log("[FeelCapture] char shots done: " + _folder);
@@ -271,6 +283,8 @@ namespace Game.Gameplay
                 {
                     _frame.LeanLeft = left; _frame.LeanRight = !left; _frame.AimHeld = aim;
                     yield return new WaitForSeconds(0.7f);
+                    var anim = me.GetComponent<CombatantAnimation>();
+                    Debug.Log($"[FeelCapture] lean left={left} plantL {anim.FootPlantLeft:F3} plantR {anim.FootPlantRight:F3} footLow {anim.FootLow:F3} rest {anim.FootRest:F3} | {anim.PlantDebug[0]} | {anim.PlantDebug[1]}");
                     yield return Views($"D_lean_{(left ? "Q" : "E")}_{(aim ? "ads" : "hip")}", true, Watch.Front, Watch.Behind);
                 }
             _frame.LeanLeft = _frame.LeanRight = _frame.AimHeld = false;
@@ -347,6 +361,27 @@ namespace Game.Gameplay
             {
                 for (int k = 0; k < 6; k++) { _frame.Look = new Vector2(15f, 0f); yield return null; }
                 yield return Views($"I_turn_{step}", true, Watch.Side);
+            }
+
+            // S. ground planting on a slope, breathing over time.
+            if (Want("S_"))
+            {
+                var ramp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ramp.name = "CharRamp";
+                ramp.transform.localScale = new Vector3(4f, 0.3f, 6f);
+                ramp.transform.position = home + run * 3f + Vector3.up * 0.45f;
+                ramp.transform.rotation = Quaternion.LookRotation(run, Vector3.up) * Quaternion.Euler(-18f, 0f, 0f);
+                pc.Teleport(home + run * 3f + Vector3.up * 1.2f);
+                pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+                yield return new WaitForSeconds(1.2f);
+                yield return Views("S_slope_rifle", false, Watch.Side, Watch.Quarter);
+                _frame.Crouch = true; yield return new WaitForSeconds(0.8f);
+                yield return Views("S_slope_crouch", false, Watch.Side, Watch.Front);
+                _frame.Crouch = true; yield return new WaitForSeconds(0.5f);
+                Destroy(ramp);
+                pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+                yield return new WaitForSeconds(0.8f);
+                foreach (var t in new[] { 0f, 0.9f, 1.9f, 2.8f }) { yield return new WaitForSeconds(t == 0f ? 0f : 0.9f); yield return Views($"S_breath_{t:0.0}", false, Watch.Side); }
             }
 
             // J. hit reaction and death.
