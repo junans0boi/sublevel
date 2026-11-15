@@ -196,6 +196,14 @@ namespace Game.Gameplay
         public void ShowMagAtEye(Transform cam, bool visible) =>
             ShowMag(visible, cam.TransformPoint(new Vector3(-0.1f, -0.2f, 0.35f)), cam.rotation, PistolInHand(_combatant.ActiveWeaponId));
 
+        // First person with arms: the magazine rides in the support hand's spot (#216).
+        public void ShowMagAt(bool visible, Vector3 at, Quaternion turn) => ShowMag(visible, at, turn, PistolInHand(_combatant.ActiveWeaponId));
+
+        // How far along the weapon the support hand holds from the grip (m), 0 = not held in two hands; pistols cup the right hand.
+        public float SupportAheadOf(int id) => LongGunInHand(id) ? _supportAhead[id] : 0f;
+        public bool IsPistolGrip(int id) => PistolInHand(id);
+        public const float SupportPalmBelowBore = PalmBelowBore, SupportPistolCupSide = PistolCupSide;
+
         void OnDisable() { if (_magModel != null) Destroy(_magModel); }
 
         // The locomotion cycle (0..1, two steps) the base layer is at, for the bob.

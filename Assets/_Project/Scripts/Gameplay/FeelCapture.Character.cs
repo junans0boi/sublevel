@@ -45,8 +45,13 @@ namespace Game.Gameplay
             {
                 pc.Rig.ToggleMode();
                 _watch = Watch.Game;
-                // The weapon is moved to the eye by the view's own update: give it frames, or the shot shows no gun.
-                for (int k = 0; k < 6; k++) yield return null;
+                // The camera glides in from behind the character (DistanceChangePerSecond) and the weapon follows it:
+                // wait until it sits at the eyes (a fixed frame count shot the gun mid-glide), at most a second.
+                yield return null;
+                var eyeCam = pc.Camera.transform;
+                var self = pc.GetComponent<Combatant>();
+                for (float waited = 0f; waited < 1.2f && (eyeCam.position - self.EyePosition).magnitude > 0.1f; waited += Time.deltaTime) yield return null;
+                for (int k = 0; k < 4; k++) yield return null;
                 yield return VShot($"{name}_fpp");
                 pc.Rig.ToggleMode();
                 for (int k = 0; k < 3; k++) yield return null;
@@ -171,6 +176,19 @@ namespace Game.Gameplay
                 yield return new WaitForSeconds(0.6f);
             }
             yield return Equip(me, 3);
+            pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+            yield return new WaitForSeconds(0.8f);
+            // Idle breathing over time, the aim transition frame by frame, a shot's kick (#217).
+            foreach (var i in new[] { 0, 1, 2 }) { yield return VShot($"K_fp_breath_{i}"); yield return new WaitForSeconds(0.32f); }
+            _frame.AimHeld = true; yield return new WaitForSeconds(0.06f); _frame.AimHeld = false;
+            foreach (var i in new[] { 0, 1, 2, 3 }) { yield return VShot($"K_fp_trans_{i}"); yield return new WaitForSeconds(0.045f); }
+            yield return new WaitForSeconds(0.8f);
+            _frame.AimHeld = true; yield return new WaitForSeconds(0.06f); _frame.AimHeld = false;
+            yield return new WaitForSeconds(0.8f);
+            _frame.FirePressed = _frame.FireHeld = true; yield return null; _frame.FirePressed = false;
+            yield return VShot("K_fp_fire_0"); _frame.FireHeld = false;
+            yield return new WaitForSeconds(0.04f); yield return VShot("K_fp_fire_1");
+            yield return new WaitForSeconds(0.3f); yield return VShot("K_fp_fire_2");
             foreach (var t in new[] { 0.2f, 0.6f, 1.2f })
             {
                 if (t == 0.2f) { _frame.FirePressed = _frame.FireHeld = true; yield return new WaitForSeconds(0.2f); _frame.FireHeld = false; yield return new WaitForSeconds(0.8f); _frame.Reload = true; yield return null; _frame.Reload = false; }
@@ -193,6 +211,9 @@ namespace Game.Gameplay
             yield return VShot("K_fp_drawn_0");
             _frame.Jump = true; yield return new WaitForSeconds(0.25f);
             yield return VShot("K_fp_jump");
+            yield return new WaitForSeconds(0.45f); yield return VShot("K_fp_jump_fall");
+            yield return new WaitForSeconds(0.12f); yield return VShot("K_fp_land_0");
+            yield return new WaitForSeconds(0.08f); yield return VShot("K_fp_land_1");
             yield return new WaitForSeconds(1f);
             me.ServerDamageFilter = d => d.Amount;
             me.ServerTakeDamage(new DamageInfo { Amount = 10f, Zone = HitZone.Body });
