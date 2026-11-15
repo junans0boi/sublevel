@@ -318,18 +318,10 @@ namespace Game.Net
             return true;
         }
 
-        // Where the n-th occupant of one elevator stands, relative to its spawn point (x right, z out of the door).
-        // The bay is Buildings.ElevatorBay (3 m) square; a body is 0.7 m wide.
         static Vector3 SharedOffset(int occupant)
         {
-            switch (occupant)
-            {
-                case 0: return Vector3.zero;
-                case 1: return new Vector3(0.8f, 0f, 0f);
-                case 2: return new Vector3(-0.8f, 0f, 0f);
-                case 3: return new Vector3(0.8f, 0f, -0.8f);
-                default: return new Vector3(-0.8f, 0f, -0.8f);
-            }
+            var (x, z) = Deployment.BayOffset(occupant);
+            return new Vector3(x, 0f, z);
         }
 
         void ServerProtect(Combatant combatant)

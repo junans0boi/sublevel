@@ -200,5 +200,19 @@ namespace Game.Tests
                 last = p;
             }
         }
+
+        // #181: everyone sharing an elevator (up to the 24 of a match in one bay) stands on their own spot, 0.8 m apart.
+        [Test]
+        public void BayOffset_GivesEveryOccupantOfOneElevatorItsOwnSpot()
+        {
+            for (int a = 0; a < 9; a++)
+                for (int b = a + 1; b < 9; b++)
+                {
+                    var p = Deployment.BayOffset(a); var q = Deployment.BayOffset(b);
+                    float d = (float)System.Math.Sqrt((p.x - q.x) * (p.x - q.x) + (p.z - q.z) * (p.z - q.z));
+                    Assert.GreaterOrEqual(d, 0.79f, $"occupants {a} and {b} stand {d:F2} m apart");
+                }
+            Assert.AreEqual((0f, 0f), Deployment.BayOffset(0), "the first stands on the spawn point");
+        }
     }
 }

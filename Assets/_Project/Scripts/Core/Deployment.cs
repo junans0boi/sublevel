@@ -145,6 +145,16 @@ namespace Game.Core
     //    are shared, least occupied first. The cap wins over "one per elevator" if the two ever disagree.
     public static class Deployment
     {
+        // Where the n-th occupant of one shared elevator stands relative to its spawn point (x right, z out of the door):
+        // a 3 x 3 grid of 0.8 m (the bay is 3 m square, a body 0.7 m wide); the first five are the original spots. Past
+        // nine the grid repeats (never reached: a team is 4, and elevators outnumber the cap's sharing).
+        static readonly (float x, float z)[] Bay =
+        {
+            (0f, 0f), (0.8f, 0f), (-0.8f, 0f), (0.8f, -0.8f), (-0.8f, -0.8f), (0f, -0.8f), (0f, 0.8f), (0.8f, 0.8f), (-0.8f, 0.8f),
+        };
+
+        public static (float x, float z) BayOffset(int occupant) => Bay[Math.Abs(occupant) % Bay.Length];
+
         public static int RegionCap(int participants, int regions) =>
             regions <= 0 ? Math.Max(0, participants) : (Math.Max(0, participants) + regions - 1) / regions + 1;
 
