@@ -31,6 +31,7 @@ namespace Game.Gameplay
         [SerializeField] float _anchorChangePerSecond = 12f;
 
         Combatant _combatant;
+        CombatantAnimation _anim;
         Vector3[] _handPosition;
         Quaternion[] _handRotation;
         Transform _eyeCamera;
@@ -60,6 +61,7 @@ namespace Game.Gameplay
         void Awake()
         {
             _combatant = GetComponent<Combatant>();
+            _anim = GetComponent<CombatantAnimation>();
             _handPosition = new Vector3[_modelsByWeaponId.Length];
             _handRotation = new Quaternion[_modelsByWeaponId.Length];
             for (int i = 0; i < _modelsByWeaponId.Length; i++)
@@ -128,8 +130,12 @@ namespace Game.Gameplay
             // From the top rear of the weapon to its middle.
             var center = anchor + new Vector3(0f, -fit.Size.y * 0.5f, fit.Size.z * 0.5f);
             var model = _modelsByWeaponId[wanted].transform;
-            model.rotation = _eyeCamera.rotation * fit.Rotation;
+            // Reload and draw: the weapon dips and tips (same motion as third person), the magazine shows in hand (#200).
+            var act = _anim != null ? _anim.ActionShown : default;
+            center += new Vector3(0f, -act.Down * 1.6f, 0f);
+            model.rotation = _eyeCamera.rotation * Quaternion.Euler(act.PitchDeg * 0.7f, 0f, -act.RollDeg * 0.9f) * fit.Rotation;
             model.position = _eyeCamera.position + _eyeCamera.rotation * (center - fit.CenterOffset);
+            if (_anim != null) _anim.ShowMagAtEye(_eyeCamera, act.MagInHand);
         }
     }
 }

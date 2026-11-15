@@ -33,6 +33,17 @@ namespace Game.Gameplay
         float _sprintShown;          // 0..1, eased
         float _kick;                 // 0..1 after a shot
         Vector3 _smoothVelocity, _smoothAccel;
+        // Reload and draw (#200): the replicated Reloading flag starts the clock on every side; the weapon's own times set the pace.
+        bool _wasReloading;
+        float _reloadStart = -1f, _reloadSeconds = 1f, _drawStart = -10f, _drawSeconds = 0.4f;
+        int _lastDrawnId;
+        ReloadKind _reloadKind;
+        GameObject _magModel;
+
+        // How far through the reload (0..1) and the draw (0..1; 1 when not drawing) this combatant is, for the review shots and first person.
+        public float ReloadProgress { get; private set; } = -1f;
+        public float DrawProgress { get; private set; } = 1f;
+        public ActionPose ActionShown { get; private set; }
 
         // How much of the two-handed long gun hold is shown (0..1) and how far it is raised (0 low ready, 1 shouldered).
         public float RifleHoldShown => _rifle;
@@ -126,7 +137,66 @@ namespace Game.Gameplay
                 _smoothAccel = Vector3.Lerp(_smoothAccel, accel, k);
             }
             RiflePose = RifleHold.Pose(speed, _sprintShown, _ready, r);
+            TrackAction();
         }
+
+        void TrackAction()
+        {
+            int id = _combatant.ActiveWeaponId;
+            var def = id != 0 ? GameData.Weapons.Find(id) : null;
+            bool reloading = _combatant.Reloading.Value && def != null;
+            if (reloading && !_wasReloading)
+            {
+                _reloadStart = Time.time;
+                _reloadKind = def.ReloadsByShell ? ReloadKind.Shell : PistolInHand(id) ? ReloadKind.Pistol : ReloadKind.Magazine;
+                _reloadSeconds = Mathf.Max(0.3f, def.ReloadSeconds(_combatant.ActiveMag));
+            }
+            _wasReloading = reloading;
+            // A shell reload runs as long as the flag does; the rest end at their time (or earlier if cancelled).
+            ReloadProgress = reloading ? (_reloadKind == ReloadKind.Shell ? 0.5f : Mathf.Clamp01((Time.time - _reloadStart) / _reloadSeconds)) : -1f;
+            if (id != _lastDrawnId)
+            {
+                if (id != 0) { _drawStart = Time.time; _drawSeconds = Mathf.Max(0.25f, def != null ? def.DrawSeconds : 0.4f); }
+                _lastDrawnId = id;
+            }
+            DrawProgress = Mathf.Clamp01((Time.time - _drawStart) / _drawSeconds);
+        }
+
+        // The reload or draw pose for this frame (identity when neither is on).
+        ActionPose CurrentAction()
+        {
+            ActionPose a = default;
+            if (ReloadProgress >= 0f)
+                a = ReloadMotion.Reload(_reloadKind == ReloadKind.Shell ? Mathf.Clamp01(Mathf.Min(1f, (Time.time - _reloadStart) / 0.3f)) : ReloadProgress, _reloadKind, Time.time - _reloadStart);
+            else if (DrawProgress < 1f) a = ReloadMotion.Draw(DrawProgress);
+            ActionShown = a;
+            return a;
+        }
+
+        void ShowMag(bool visible, Vector3 at, Quaternion turn, bool pistol)
+        {
+            if (visible && _magModel == null)
+            {
+                var model = _weapons != null ? _weapons.ModelFor(_combatant.ActiveWeaponId) : null;
+                var source = model != null ? model.GetComponentInChildren<Renderer>() : null;
+                _magModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                _magModel.name = "ReloadMagazine";
+                Destroy(_magModel.GetComponent<Collider>());
+                if (source != null) _magModel.GetComponent<Renderer>().sharedMaterial = source.sharedMaterial;
+                _magModel.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            if (_magModel == null) return;
+            _magModel.SetActive(visible);
+            if (!visible) return;
+            _magModel.transform.localScale = pistol ? new Vector3(0.025f, 0.07f, 0.04f) : new Vector3(0.035f, 0.11f, 0.06f);
+            _magModel.transform.SetPositionAndRotation(at, turn);
+        }
+
+        // First person: the magazine rides in a spot low on the left of the view while the reload swaps it.
+        public void ShowMagAtEye(Transform cam, bool visible) =>
+            ShowMag(visible, cam.TransformPoint(new Vector3(-0.1f, -0.2f, 0.35f)), cam.rotation, PistolInHand(_combatant.ActiveWeaponId));
+
+        void OnDisable() { if (_magModel != null) Destroy(_magModel); }
 
         // The locomotion cycle (0..1, two steps) the base layer is at, for the bob.
         float StridePhase()
@@ -169,11 +239,14 @@ namespace Game.Gameplay
 
             float amount = Mathf.Clamp01(speed / Mathf.Max(0.1f, r.MoveFullSpeed)) * (1f - 0.6f * _ready);
             RifleHold.Bob(StridePhase(), amount, r, out float down, out float side, out float bobRoll);
-            var turn = frame * Quaternion.Euler(pose.Pitch - r.KickPitchDeg * _kick, pose.Yaw, pose.Roll + bobRoll);
+            var act = CurrentAction();
+            // Breathing lifts and lowers the hands a little (#231).
+            down -= Breath * 0.004f * (1f - amount);
+            var turn = frame * Quaternion.Euler(pose.Pitch - r.KickPitchDeg * _kick + act.PitchDeg, pose.Yaw, pose.Roll + bobRoll + act.RollDeg);
             var axis = turn * Vector3.forward;
             int id = _combatant.ActiveWeaponId;
             if (!LongGunInHand(id)) return;
-            var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down, pose.Z)
+            var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down - act.Down, pose.Z)
                 - axis * (r.KickBackMeters * _kick);
             var gripTurn = turn * _wristRBind;
 
@@ -190,6 +263,14 @@ namespace Game.Gameplay
                 Grip(0, ArmLeft, grip - across * PistolCupSide + axis * _supportAhead[id] - up * 0.01f, axis, across, GripCurlDeg, support);
             else
                 Grip(0, ArmLeft, grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + across, GripCurlDeg, support);
+            if (act.LeftBlend > 0.001f)
+            {
+                // Reload: the left hand leaves the hold for the magazine well, the belt and the charging handle.
+                var spot = grip + axis * act.LeftA + up * act.LeftU + across * act.LeftC;
+                Grip(0, ArmLeft, spot, axis, up + across, GripCurlDeg * 0.6f, _rifle * act.LeftBlend * (1f - r.SprintSupportRelease * _sprintShown * (1f - _ready)));
+                ShowMag(act.MagInHand && !_weapons.AtEye, spot - up * 0.02f, turn, PistolInHand(id));
+            }
+            else ShowMag(false, Vector3.zero, Quaternion.identity, false);
         }
 
         // For the pose review (FeelCapture): heights over the feet of the head joint, the right shoulder and the top of
