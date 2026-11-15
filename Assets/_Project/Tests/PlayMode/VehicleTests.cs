@@ -373,6 +373,56 @@ namespace Game.Tests
             Assert.Greater(bike.transform.up.y, 0.8f, "still upright");
         }
 
+        // #182: the bike never leaves the ground by itself: parked, mounting, riding, braking, handbrake, dismounting.
+        [UnityTest]
+        public IEnumerator Motorcycle_NeverLaunchesItself([Values(0, 1)] int which)
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var bikes = new System.Collections.Generic.List<Vehicle>();
+            foreach (var v in Vehicle.All) if (v != null && v.IsMotorcycle) bikes.Add(v);
+            foreach (var bike in new[] { bikes[which] })
+            {
+                var home = bike.Body.position; var homeRotation = bike.Body.rotation;
+                bike.Body.position = new Vector3(-26f, 0.3f, -21f);
+                bike.Body.rotation = Quaternion.Euler(0f, 90f, 0f);
+                bike.Body.linearVelocity = bike.Body.angularVelocity = Vector3.zero;
+                yield return new WaitForSeconds(0.8f);
+                float rest = bike.transform.position.y, peak = 0f, peakUp = 0f;
+                string at = "", phase = "";
+                System.Collections.IEnumerator Watch(float seconds)
+                {
+                    float end = Time.time + seconds;
+                    while (Time.time < end)
+                    {
+                        float h = bike.transform.position.y - rest, up = bike.Body.linearVelocity.y;
+                        if (h > peak) { if (h > 0.2f && peak <= 0.2f) at += $" lift@{Time.time:F1}s phase {phase} v={bike.SpeedKmh:F0}km/h tilt={Vector3.Angle(bike.transform.up, Vector3.up):F0}"; peak = h; }
+                        if (up > peakUp) peakUp = up;
+                        yield return null;
+                    }
+                }
+                phase = "park"; yield return Watch(1f);
+                phase = "mount"; yield return GetOnAsDriver(bike);
+                me.ServerSetHolstered(true);
+                phase = "accel"; _keys.Frame.Throttle = 1f; yield return Watch(1.5f);
+                phase = "right"; _keys.Frame.Steer = 1f; yield return Watch(1.5f);
+                phase = "left"; _keys.Frame.Steer = -1f; yield return Watch(1.5f);
+                phase = "boost"; _keys.Frame.Steer = 0f; _keys.Frame.Boost = true; yield return Watch(1.5f);
+                phase = "brake"; _keys.Frame.Boost = false; _keys.Frame.Throttle = -1f; yield return Watch(1.5f);
+                phase = "reaccel"; _keys.Frame.Throttle = 1f; yield return Watch(1f);
+                phase = "handbrake"; _keys.Frame.Throttle = 0f; _keys.Frame.Handbrake = true; yield return Watch(1.5f);
+                _keys.Frame.Handbrake = false;
+                phase = "dismount"; _keys.Frame.Interact = true;
+                yield return WaitUntil(() => SeatOf(me) < 0, 3f, "off the bike");
+                yield return Watch(1.5f);
+                Debug.Log($"[#182] {bike.name}: peak height {peak:F2} m, peak up speed {peakUp:F2} m/s ({at})");
+                Assert.Less(peak, 0.6f, $"{bike.name} stays on the ground (peak {peak:F2} m, up {peakUp:F2} m/s)");
+                Assert.Less(peakUp, 4f, $"{bike.name} never shoots upward (peak {peakUp:F2} m/s)");
+                bike.Body.position = home; bike.Body.rotation = homeRotation; bike.Body.linearVelocity = bike.Body.angularVelocity = Vector3.zero;
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+
         // #109: D turns right and the bike and its rider lean right (into the turn); A the same to the left. Both bikes.
         [UnityTest]
         public IEnumerator Motorcycle_Steering_TurnsAndLeansIntoTheTurn_BothBikes()

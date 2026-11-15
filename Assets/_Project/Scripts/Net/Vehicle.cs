@@ -522,7 +522,9 @@ namespace Game.Net
                 // the frame out of the turn, further than the model's lean into it. The lean is the model's alone.
                 var sideAt = IsMotorcycle ? centre + up * Vector3.Dot(_body.worldCenterOfMass - centre, up) : centre;
                 _body.AddForceAtPosition(side * tyre.x, sideAt);
-                _body.AddForceAtPosition(wheelForward * tyre.y, centre);
+                // Same for drive and brake along the bike (#182): at the wheel centre a hard brake out of reverse (or a hard
+                // pull) pitched the frame nose-up and the springs threw it into the air. The wheelie is the model's alone.
+                _body.AddForceAtPosition(wheelForward * tyre.y, sideAt);
             }
 
             if (IsMotorcycle) SimulateTwoWheels(dt, input, wasAirborne, grounded > 0 ? groundNormal.normalized : Vector3.up);
