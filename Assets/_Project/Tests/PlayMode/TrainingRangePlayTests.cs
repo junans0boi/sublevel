@@ -262,9 +262,11 @@ namespace Game.Tests
             Assert.Greater(me.Hp.Value, hp, "and it healed");
 
             // Grenade: select the throwable slot, hold G, let go.
+            // ADR-144: key 5 is a press (a second press cycles the kind), so send exactly one frame of it.
             _input.Frame.SelectSlot = 4;
-            yield return new WaitForSeconds(0.6f);
+            yield return null;
             _input.Frame.SelectSlot = -1;
+            yield return WaitUntil(() => me.ActiveSlot.Value == Loadout.ThrowableSlot && !me.Holstered.Value, 3f, "throwable in hand");
             pc.LookAt(new Vector3(0f, 1.5f, 30f));
             _input.Frame.ThrowPressed = true;
             _input.Frame.ThrowHeld = true;

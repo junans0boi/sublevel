@@ -160,7 +160,8 @@ namespace Game.Tests
             Assert.Greater(aim.Hip.MoveFactor, aim.Sights.MoveFactor);
             Assert.Greater(GameData.Rules.Lean.OffsetMeters, 0.1f);
             foreach (var weapon in GameData.Weapons.Weapons.Where(w => w.Category != WeaponCategory.Melee)) Assert.Greater(weapon.RecoilPitchDeg, 0f, weapon.Name + " recoil");
-            Assert.AreEqual(MatchDirector.Instance.LootSpawns.Length, LootItem.All.Count, "one item per loot point");
+            // ADR-136: a rolled gun lies with its ammo as a second item.
+            Assert.AreEqual(System.Linq.Enumerable.Sum(GameData.Loot.Plan(MatchDirector.Instance.LootSpawns.Length, MatchDirector.Instance.Seed), r => Loadout.SpawnEntries(GameData.Weapons, r).Length), LootItem.All.Count, "items rolled per loot point");
             yield return null;
         }
 
@@ -210,6 +211,15 @@ namespace Game.Tests
             _input.Frame.Interact = true;
             yield return WaitUntil(() => me.ActiveWeaponId != 0, 5f, "weapon picked up");
             yield return WaitUntil(() => LootItem.All.Count == lootBefore - 1, 5f, "picked-up loot removed from the world");
+            // ADR-136: the gun lies unloaded, its ammo is a separate item beside it; take that and reload.
+            Assert.AreEqual(0, me.ActiveMag, "a floor gun comes unloaded");
+            yield return null;
+            yield return null;
+            Assert.IsNotNull(pc.NearbyLoot, "its ammo in reach");
+            _input.Frame.Interact = true;
+            yield return WaitUntil(() => LootItem.All.Count == lootBefore - 2, 5f, "ammo picked up");
+            me.CmdReload();
+            yield return WaitUntil(() => me.ActiveMag > 0, 6f, "reloaded");
             int magAtStart = me.ActiveMag;
             Assert.Greater(magAtStart, 0);
 

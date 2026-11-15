@@ -503,7 +503,7 @@ namespace Game.Tests
                 Assert.AreNotEqual(defaultPort, director.Port, "must not reuse a port someone else is serving");
                 Assert.IsTrue(Combatant.LocalPlayer.IsServerInitialized, "this process is the server of its own match");
                 yield return WaitUntil(() => Combatant.All.Count == 1 + director.DummySpawns.Length, 5f, "a fresh match: one player plus the dummies");
-                Assert.AreEqual(director.LootSpawns.Length, LootItem.All.Count, "all loot still on the ground");
+                Assert.AreEqual(System.Linq.Enumerable.Sum(GameData.Loot.Plan(director.LootSpawns.Length, director.Seed), r => Loadout.SpawnEntries(GameData.Weapons, r).Length), LootItem.All.Count, "all loot still on the ground (ADR-136: guns come with ammo)");
             }
         }
     }

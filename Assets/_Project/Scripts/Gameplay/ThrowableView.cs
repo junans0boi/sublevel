@@ -241,9 +241,7 @@ namespace Game.Gameplay
                 audio.playOnAwake = false;
                 audio.loop = true;
                 audio.spatialBlend = 1f;
-                audio.minDistance = 3f;
-                audio.maxDistance = 40f;
-                audio.rolloffMode = AudioRolloffMode.Linear;
+                SpatialAudio.Apply(audio, new SpatialAudio.Range(3f, 40f));
                 _fireAudio[i] = audio;
             }
 
