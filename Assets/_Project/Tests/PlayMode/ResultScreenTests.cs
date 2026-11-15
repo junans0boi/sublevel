@@ -109,6 +109,28 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator ResultScreen_ShowsDistanceTravelled()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            me.ServerDamageFilter = _ => 0f;
+            for (int i = 0; i < 6; i++)
+            {
+                PlayerController.Local.Teleport(PlayerController.Local.transform.position + PlayerController.Local.transform.forward * 4f);
+                yield return null;
+                yield return null;
+            }
+            KillEveryDummy(me);
+            yield return WaitUntil(() => ResultScreen.Instance.IsShown, 3f, "result screen");
+            yield return WaitUntil(() => MatchState.Instance.MetersOf(me) > 0f, 3f, "distance replicated");
+            yield return null;
+            Assert.That(MatchState.Instance.MetersOf(me), Is.InRange(10f, 40f), "six 4 m hops, a jump of 30 m or more would not count");
+            Assert.AreEqual(ResultScreen.DistanceOf(Mathf.RoundToInt(MatchState.Instance.MetersOf(me))), ResultScreen.Instance.DistanceText);
+            Assert.AreEqual("850 m", ResultScreen.DistanceOf(850));
+            Assert.AreEqual("1.2 km", ResultScreen.DistanceOf(1234));
+        }
+
+        [UnityTest]
         public IEnumerator DeadPlayer_SeesEliminated_WithPlacement_AndCannotActAnyMore()
         {
             yield return LoadTestBox();

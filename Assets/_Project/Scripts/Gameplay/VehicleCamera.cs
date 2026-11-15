@@ -19,7 +19,8 @@ namespace Game.Gameplay
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
         const float RoofClearance = 0.3f;
-        const float CabinLightOverEye = 0.35f; // up under the roof: the own arms and shoulders right by it were blown out white
+        const float CabinLightOverEye = 0.55f; // up under the roof: the own arms and shoulders right by it were blown out white
+        const float CabinLightBehindEye = 0.9f; // behind the head, so the dash and wheel get an even wash instead of a hot spot (#99)
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -152,12 +153,12 @@ namespace Game.Gameplay
                 _cabin = new GameObject("CabinLight").AddComponent<Light>();
                 _cabin.type = LightType.Point;
                 _cabin.shadows = LightShadows.None;
-                _cabin.range = 3.2f;
-                _cabin.intensity = 1.6f;
+                _cabin.range = 6f;
+                _cabin.intensity = 9f;
                 _cabin.color = new Color(1f, 0.96f, 0.9f);
             }
             _cabin.enabled = on;
-            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * CabinLightOverEye, Quaternion.identity);
+            if (on) _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + vehicle.transform.up * CabinLightOverEye - vehicle.transform.forward * CabinLightBehindEye, Quaternion.identity);
         }
 
         // How far back from the pivot the camera can go without passing into anything but the car and its occupants.

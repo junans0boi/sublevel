@@ -17,9 +17,9 @@ namespace Game.Gameplay
 
         public const float DeathCamSeconds = 4f;
         const int SortOrder = 90; // under the pause menu (100), over the HUD
-        const float Width = 520f, Padding = 28f;
+        const float Width = 860f, Padding = 28f;
         const float ButtonHeight = 56f, ButtonGap = 12f;
-        const float StatHeight = 40f;
+        const float StatHeight = 44f, TileHeight = 100f;
 
         static readonly Color Dim = new Color(0f, 0f, 0f, 0.6f);
         static readonly string[] SmallInts = new string[128];
@@ -40,7 +40,8 @@ namespace Game.Gameplay
         public MatchOutcome Outcome { get; private set; } = MatchOutcome.Playing;
         public SpectateCamera Spectate { get; private set; }
         public string TitleText => _title != null ? _title.text : "";
-        public string PlacementText => _placement != null ? _placement.text : "";
+        public string PlacementText => _placement != null ? _rank.text + " " + _placement.text : "";
+        public string DistanceText => _distance != null ? _distance.text : "";
         public string KillsText => _kills != null ? _kills.text : "";
         public string DamageText => _damage != null ? _damage.text : "";
         public string TimeText => _time != null ? _time.text : "";
@@ -48,8 +49,8 @@ namespace Game.Gameplay
         public string DeathCamText => _camName != null && _camRoot.activeSelf ? _camName.text + " / " + _camDetail.text : "";
 
         GameObject _root, _camRoot, _spectateButton;
-        Text _title, _subtitle, _placement, _kills, _damage, _time, _killedBy, _camName, _camDetail;
-        int _shownPlacement = int.MinValue, _shownTotal = int.MinValue, _shownKills = int.MinValue, _shownDamage = int.MinValue, _shownTime = int.MinValue;
+        Text _title, _subtitle, _rank, _distance, _placement, _kills, _damage, _time, _killedBy, _camName, _camDetail;
+        int _shownPlacement = int.MinValue, _shownTotal = int.MinValue, _shownKills = int.MinValue, _shownDamage = int.MinValue, _shownTime = int.MinValue, _shownMeters = int.MinValue;
         bool _wasDead, _killerKnown;
         float _camUntil;
 
@@ -166,7 +167,7 @@ namespace Game.Gameplay
             if (phase == Phase.None) Spectate.Stop(false);
             else if (phase != Phase.Spectate && Spectate.Current == SpectateCamera.Mode.Follow) Spectate.Stop(true);
             if (!panel) return;
-            _shownPlacement = _shownTotal = _shownKills = _shownDamage = _shownTime = int.MinValue;
+            _shownPlacement = _shownTotal = _shownKills = _shownDamage = _shownTime = _shownMeters = int.MinValue;
             var me = Combatant.LocalPlayer;
             bool team = me != null && me.HasTeam;
             switch (Outcome)
@@ -244,7 +245,8 @@ namespace Game.Gameplay
             {
                 _shownPlacement = placement;
                 _shownTotal = total;
-                _placement.text = placement == 0 ? "—" : "#" + IntText(placement) + " / 전체 " + IntText(total) + (team ? "팀" : "");
+                _rank.text = placement == 0 ? "—" : "#" + IntText(placement);
+                _placement.text = "/ 전체 " + IntText(total) + (team ? "팀" : "");
             }
             if (kills != _shownKills)
             {
@@ -257,6 +259,12 @@ namespace Game.Gameplay
                 _shownDamage = damage;
                 _damage.text = damage.ToString();
             }
+            int meters = Mathf.RoundToInt(state.MetersOf(me));
+            if (meters != _shownMeters)
+            {
+                _shownMeters = meters;
+                _distance.text = DistanceOf(meters);
+            }
             int seconds = Mathf.FloorToInt(state.SecondsOf(me));
             if (seconds != _shownTime)
             {
@@ -265,6 +273,9 @@ namespace Game.Gameplay
             }
             if (Outcome == MatchOutcome.Won && (me == null || !me.Dead.Value)) _killedBy.text = "—";
         }
+
+        // 850 m, then 1.2 km from a thousand.
+        public static string DistanceOf(int meters) => meters < 1000 ? meters + " m" : (meters / 1000f).ToString("0.0") + " km";
 
         public static string TimeOf(int seconds) => (seconds / 60) + ":" + (seconds % 60).ToString("00");
 
@@ -281,29 +292,65 @@ namespace Game.Gameplay
             float inner = Width - Padding * 2f;
             float y = Padding;
 
-            // A thin accent line over the title instead of a loud banner.
-            UiKit.Box(Row("Rule", panel, 64f, 3f, y), UiKit.Accent);
-            y += 3f + 18f;
-            _title = UiKit.Label(Row("Title", panel, inner, 72f, y), "", 60, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-            y += 72f + 6f;
-            _subtitle = UiKit.Label(Row("Subtitle", panel, inner, 30f, y), "", 22, UiKit.TextDim, TextAnchor.MiddleCenter);
-            y += 30f + 26f;
+            // PUBG-like: the result on the left, the placement big on the right, then one row of numbers.
+            UiKit.Box(Row("Rule", panel, inner, 3f, y), UiKit.Accent);
+            y += 3f + 14f;
+            var head = Row("Head", panel, inner, 130f, y);
+            _title = UiKit.Label(Cell("Title", head, 0f, 0.4f, 0.55f, 1f), "", 60, UiKit.Text, TextAnchor.LowerLeft, FontStyle.Bold);
+            _subtitle = UiKit.Label(Cell("Subtitle", head, 0f, 0f, 0.55f, 0.4f), "", 22, UiKit.TextDim, TextAnchor.UpperLeft);
+            _rank = UiKit.Label(Cell("Rank", head, 0.45f, 0.32f, 1f, 1f), "", 96, UiKit.Accent, TextAnchor.LowerRight, FontStyle.Bold);
+            _placement = UiKit.Label(Cell("Total", head, 0.45f, 0f, 1f, 0.32f), "", 24, UiKit.TextDim, TextAnchor.UpperRight);
+            y += 130f + 18f;
 
-            _placement = Stat(panel, "순위", inner, ref y);
-            _kills = Stat(panel, "처치", inner, ref y);
-            _damage = Stat(panel, "피해량", inner, ref y);
-            _time = Stat(panel, "생존 시간", inner, ref y);
-            _killedBy = Stat(panel, "처치자", inner, ref y);
-            _killedBy.text = "—";
-            y += 22f;
+            const float gap = 10f;
+            float tile = (inner - gap * 3f) / 4f;
+            _time = Tile(panel, "생존 시간", inner, tile, 0, gap, y);
+            _kills = Tile(panel, "처치", inner, tile, 1, gap, y);
+            _damage = Tile(panel, "피해량", inner, tile, 2, gap, y);
+            _distance = Tile(panel, "이동 거리", inner, tile, 3, gap, y);
+            y += TileHeight + 12f;
 
-            _spectateButton = UiKit.Button(Row("관전", panel, inner, ButtonHeight, y), "관전", 24, StartSpectating).gameObject;
-            y += ButtonHeight + ButtonGap;
-            y = MenuButton(panel, "다시 시작", inner, y, Restart);
-            y = MenuButton(panel, "메인 메뉴", inner, y, ToMainMenu);
+            var by = Row("처치자", panel, inner, StatHeight, y);
+            UiKit.Box(by, UiKit.PanelLight);
+            var byCaption = UiKit.Fill("Caption", by);
+            byCaption.offsetMin = new Vector2(16f, 0f);
+            UiKit.Label(byCaption, "처치자", 22, UiKit.TextDim);
+            var byValue = UiKit.Fill("Value", by);
+            byValue.offsetMax = new Vector2(-16f, 0f);
+            _killedBy = UiKit.Label(byValue, "—", 24, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+            y += StatHeight + 22f;
+
+            // Buttons side by side; 관전 only for the dead.
+            var buttons = Row("Buttons", panel, inner, ButtonHeight, y);
+            _spectateButton = UiKit.Button(Cell("관전", buttons, 0f, 0f, 0.32f, 1f), "관전", 24, StartSpectating).gameObject;
+            UiKit.Button(Cell("다시 시작", buttons, 0.34f, 0f, 0.66f, 1f), "다시 시작", 24, Restart);
+            UiKit.Button(Cell("메인 메뉴", buttons, 0.68f, 0f, 1f, 1f), "메인 메뉴", 24, ToMainMenu);
+            y += ButtonHeight + 10f;
             UiKit.Label(Row("Hint", panel, inner, 26f, y), "Enter — 다시 시작", 18, UiKit.TextDim, TextAnchor.MiddleCenter);
             y += 26f;
             panel.sizeDelta = new Vector2(Width, y + Padding);
+        }
+
+        // A box inside `parent` between two anchor corners (fractions of the parent).
+        static RectTransform Cell(string name, RectTransform parent, float x0, float y0, float x1, float y1)
+        {
+            var rect = UiKit.Fill(name, parent);
+            rect.anchorMin = new Vector2(x0, y0);
+            rect.anchorMax = new Vector2(x1, y1);
+            return rect;
+        }
+
+        // One number under its caption.
+        static Text Tile(Transform panel, string caption, float inner, float width, int index, float gap, float y)
+        {
+            float x = -inner * 0.5f + width * 0.5f + index * (width + gap);
+            var rect = UiKit.Rect(caption, panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(x, -y), new Vector2(width, TileHeight));
+            UiKit.Box(rect, UiKit.PanelLight);
+            var value = UiKit.Rect("Value", rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(width - 8f, 56f));
+            var label = UiKit.Label(value, "", 44, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var cap = UiKit.Rect("Caption", rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(width - 8f, 26f));
+            UiKit.Label(cap, caption, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
+            return label;
         }
 
         // The killer's name over the death cam, in the upper third where the eye already is.
@@ -326,27 +373,6 @@ namespace Game.Gameplay
         // A row hung from the top of the panel, `y` reference pixels down.
         static RectTransform Row(string name, Transform panel, float width, float height, float y) =>
             UiKit.Rect(name, panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -y), new Vector2(width, height));
-
-        // Caption on the left, value on the right.
-        static Text Stat(Transform panel, string caption, float width, ref float y)
-        {
-            var row = Row(caption, panel, width, StatHeight, y);
-            UiKit.Box(row, UiKit.PanelLight);
-            var name = UiKit.Fill("Caption", row);
-            name.offsetMin = new Vector2(16f, 0f);
-            UiKit.Label(name, caption, 22, UiKit.TextDim);
-            var value = UiKit.Fill("Value", row);
-            value.offsetMax = new Vector2(-16f, 0f);
-            var label = UiKit.Label(value, "", 26, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
-            y += StatHeight + 8f;
-            return label;
-        }
-
-        static float MenuButton(Transform panel, string text, float width, float y, UnityEngine.Events.UnityAction onClick)
-        {
-            UiKit.Button(Row(text, panel, width, ButtonHeight, y), text, 24, onClick);
-            return y + ButtonHeight + ButtonGap;
-        }
 
         static string IntText(int value)
         {

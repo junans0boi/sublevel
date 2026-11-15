@@ -45,6 +45,7 @@ namespace Game.Net
         public int Id;
         public float Damage;
         public float Seconds;
+        public float Meters;        // ground distance walked, swum or driven
     }
 
     // A client asking for a fresh match (solo has no revival).
@@ -80,6 +81,8 @@ namespace Game.Net
         int _serverSeen = -1, _serverAlive, _serverTotal, _serverPlayers, _serverDummies;
         bool _serverOver;
         readonly Dictionary<int, float> _serverDamage = new Dictionary<int, float>();
+        readonly Dictionary<int, float> _serverMeters = new Dictionary<int, float>();
+        readonly Dictionary<int, Vector3> _serverLastAt = new Dictionary<int, Vector3>();
         float _serverStart;
         int _serverWinnerId = -1;
         string _serverWinnerName = "";
@@ -133,6 +136,7 @@ namespace Game.Net
 
         // Health this combatant took off others / seconds it lasted; known once it died or the match was decided.
         public float DamageOf(Combatant combatant) => combatant != null && _stats.TryGetValue(combatant.ObjectId, out var s) ? s.Damage : 0f;
+        public float MetersOf(Combatant combatant) => combatant != null && _stats.TryGetValue(combatant.ObjectId, out var s) ? s.Meters : 0f;
         public float SecondsOf(Combatant combatant) => combatant != null && _stats.TryGetValue(combatant.ObjectId, out var s) ? s.Seconds : 0f;
 
         // Server only: health taken off others so far (the server total the result screen shows).
@@ -203,12 +207,34 @@ namespace Game.Net
         void Update()
         {
             if (!ServerActive) return;
+            ServerTrackDistance();
             // Combatants come and go by spawning; deaths arrive through ServerDied.
             if (Combatant.All.Count == _serverSeen) return;
             if (ServerRecount()) ServerSendStatus(null);
         }
 
         // ---- Server ----
+
+        // Ground distance of the living, summed per frame; a jump over TeleportMeters (deployment, elevator) is not travel.
+        const float TeleportMeters = 30f;
+        void ServerTrackDistance()
+        {
+            if (_serverOver) return;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var c = all[i];
+                if (c == null || !c.IsServerInitialized || _serverDead.Contains(c.ObjectId)) continue;
+                var at = c.transform.position;
+                if (_serverLastAt.TryGetValue(c.ObjectId, out var last))
+                {
+                    last.y = at.y;
+                    float d = Vector3.Distance(last, at);
+                    if (d < TeleportMeters) _serverMeters[c.ObjectId] = (_serverMeters.TryGetValue(c.ObjectId, out float m) ? m : 0f) + d;
+                }
+                _serverLastAt[c.ObjectId] = at;
+            }
+        }
 
         // Names newcomers and counts the living. True when a count changed.
         bool ServerRecount()
@@ -304,7 +330,7 @@ namespace Game.Net
         }
 
         void ServerSendStats(Combatant c) =>
-            ServerBroadcast(new PlayerStats { Id = c.ObjectId, Damage = ServerDamageOf(c), Seconds = Time.time - _serverStart });
+            ServerBroadcast(new PlayerStats { Id = c.ObjectId, Damage = ServerDamageOf(c), Seconds = Time.time - _serverStart, Meters = _serverMeters.TryGetValue(c.ObjectId, out float m) ? m : 0f });
 
         Combatant ServerLastAlive()
         {
