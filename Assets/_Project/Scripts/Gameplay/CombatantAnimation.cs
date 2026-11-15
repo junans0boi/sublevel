@@ -280,7 +280,7 @@ namespace Game.Gameplay
             TrackJumpPose(dead);
 
             // A melee weapon keeps the upper layer off: its ready pose and swings are bone turns (ADR-073).
-            bool armed = !dead && _combatant.ActiveWeaponId != 0 && !HoldsMelee && _swimAmount < 0.5f;
+            bool armed = !dead && HeldId != 0 && !HoldsMelee && _swimAmount < 0.5f;
             bool punching = !dead && Time.time < _punchUntil;
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both

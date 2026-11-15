@@ -123,6 +123,8 @@ namespace Game.Gameplay
             foreach (var at in times)
             {
                 while (Time.time - t0 < at) yield return null;
+                var animLog = PlayerController.Local.GetComponent<CombatantAnimation>();
+                Debug.Log($"[FeelCapture] {name} want {at:F2} real {Time.time - t0:F3} holster {animLog.HolsterProgress:F2} draw {animLog.DrawProgress:F2} held {animLog.HeldId} reload {animLog.ReloadProgress:F2}");
                 yield return Views($"{name}_t{Mathf.RoundToInt(at * 100):0000}", fp, Watch.Side);
             }
         }
@@ -325,8 +327,10 @@ namespace Game.Gameplay
 
             // F. draw / holster / swap.
             yield return Equip(me, 3);
-            yield return Burst("F_holster", new[] { 0.05f, 0.2f, 0.4f, 0.7f }, () => _frame.Holster = true);
-            yield return Burst("F_draw", new[] { 0.05f, 0.2f, 0.4f, 0.7f }, () => _frame.Holster = true);
+            Time.timeScale = 0.15f; // the shots take longer than the motion: slow the game so each frame lands inside it
+            yield return Burst("F_holster", new[] { 0.04f, 0.1f, 0.16f, 0.22f, 0.3f }, () => _frame.Holster = true, false);
+            yield return Burst("F_draw", new[] { 0.04f, 0.1f, 0.18f, 0.26f, 0.4f }, () => _frame.Holster = true, false);
+            Time.timeScale = 1f;
             yield return new WaitForSeconds(1f);
             int other = SlotOf(me, 1);
             yield return Burst("F_swap_rifle_to_pistol", new[] { 0.05f, 0.15f, 0.3f, 0.5f, 0.8f }, () => me.ServerSelectSlot(other));

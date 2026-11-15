@@ -124,7 +124,7 @@ namespace Game.Gameplay
 
         void Update()
         {
-            int id = _combatant.ActiveWeaponId;
+            int id = _anim != null ? _anim.HeldId : _combatant.ActiveWeaponId;
             if (id == _shown) return;
             _shown = id;
             for (int i = 0; i < _modelsByWeaponId.Length; i++)

@@ -18,6 +18,7 @@ namespace Game.Gameplay
         const int MaxWeaponId = 32;
         const float MinPistolMeters = 0.1f, PistolSupportAhead = 0.02f, PistolCupSide = 0.025f;
         const float LowReadySquare = 0.7f;     // share of the shoulders' turn away from the hold taken out at low ready   // shorter (the pistol) keeps the one-handed clip pose
+        const float StockPocketZ = 0.03f;      // the butt's spot in front of the right shoulder joint when shouldered
         const float AccelSmoothPerSecond = 8f;
         const float PalmBelowBore = 0.03f;     // the left palm holds the handguard this far under the bore line
 
@@ -26,6 +27,7 @@ namespace Game.Gameplay
         Quaternion _wristRBind;      // right wrist relative to the character in the saved pose, weapon pointing forward
         WeaponVisual _weapons;
         float[] _supportAhead;       // per weapon id: the left hand this far along the weapon from the grip; 0 = not held in both hands
+        float[] _rearBack;           // per weapon id: how far the rear of the model is behind the right hand (m), for seating the stock (#226)
         bool[] _isPistol;            // per weapon id: a hand gun, held in both hands with PistolHold's numbers (#218)
         bool _rifleWanted;           // a long gun in hand and nothing else posing the arms
         float _rifle;                // 0..1: how much of the two-handed hold is shown
@@ -43,6 +45,13 @@ namespace Game.Gameplay
         // How far through the reload (0..1) and the draw (0..1; 1 when not drawing) this combatant is, for the review shots and first person.
         public float ReloadProgress { get; private set; } = -1f;
         public float DrawProgress { get; private set; } = 1f;
+        // 0..1 while a long gun is being lowered after the holster key (1 when not), and the weapon id still held for it.
+        public float HolsterProgress { get; private set; } = 1f;
+        public const float HolsterSeconds = 0.3f;
+        int _holsterId;
+        float _holsterStart = -10f;
+        // The weapon in the hands for the poses: the active one, or the one being put away.
+        public int HeldId => _combatant.ActiveWeaponId != 0 ? _combatant.ActiveWeaponId : _holsterId;
         public ActionPose ActionShown { get; private set; }
 
         // How much of the two-handed long gun hold is shown (0..1) and how far it is raised (0 low ready, 1 shouldered).
@@ -64,6 +73,7 @@ namespace Game.Gameplay
             _shoulderRestYaw = ShoulderYaw();
             _supportAhead = new float[MaxWeaponId + 1];
             _isPistol = new bool[MaxWeaponId + 1];
+            _rearBack = new float[MaxWeaponId + 1];
             for (int id = 1; id <= MaxWeaponId; id++)
             {
                 var model = _weapons.ModelFor(id);
@@ -75,6 +85,7 @@ namespace Game.Gameplay
                     if (front - back >= MinPistolMeters) { _supportAhead[id] = PistolSupportAhead; _isPistol[id] = true; }
                     continue;
                 }
+                _rearBack[id] = Mathf.Max(0f, -back);
                 // Close in front of the grip: the short arms reach no further (the rest of the barrel sticks out past it).
                 _supportAhead[id] = Mathf.Clamp(front * 0.3f, 0.1f, 0.16f);
             }
@@ -115,9 +126,9 @@ namespace Game.Gameplay
         // Update: how much of the hold to show and how far raised. `armed` = a gun (not melee) in hand, alive.
         void TrackRifle(bool armed, bool aiming, Vector3 localVelocity)
         {
-            var r = HoldRules(_combatant.ActiveWeaponId);
+            var r = HoldRules(HeldId);
             float dt = Time.deltaTime;
-            _rifleWanted = armed && LongGunInHand(_combatant.ActiveWeaponId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f;
+            _rifleWanted = armed && LongGunInHand(HeldId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f;
             _rifle = Mathf.MoveTowards(_rifle, _rifleWanted ? 1f : 0f, RifleWeightPerSecond * dt);
             // The local player's aim key raises it on the press, before the tap/hold decision makes it an aim (#121).
             var local = PlayerController.Local;
@@ -156,10 +167,14 @@ namespace Game.Gameplay
             ReloadProgress = reloading ? (_reloadKind == ReloadKind.Shell ? 0.5f : Mathf.Clamp01((Time.time - _reloadStart) / _reloadSeconds)) : -1f;
             if (id != _lastDrawnId)
             {
-                if (id != 0) { _drawStart = Time.time; _drawSeconds = Mathf.Max(0.25f, def != null ? def.DrawSeconds : 0.4f); }
+                if (id != 0) { _drawStart = Time.time; _drawSeconds = Mathf.Max(0.25f, def != null ? def.DrawSeconds : 0.4f); _holsterId = 0; }
+                // Putting a long gun away: it stays in the hand and lowers for HolsterSeconds instead of vanishing (#200).
+                else if (_lastDrawnId != 0 && !_combatant.Dead.Value && LongGunInHand(_lastDrawnId)) { _holsterId = _lastDrawnId; _holsterStart = Time.time; }
                 _lastDrawnId = id;
             }
             DrawProgress = Mathf.Clamp01((Time.time - _drawStart) / _drawSeconds);
+            HolsterProgress = _holsterId != 0 && id == 0 ? Mathf.Clamp01((Time.time - _holsterStart) / HolsterSeconds) : 1f;
+            if (HolsterProgress >= 1f) _holsterId = 0;
         }
 
         // The reload or draw pose for this frame (identity when neither is on).
@@ -168,6 +183,7 @@ namespace Game.Gameplay
             ActionPose a = default;
             if (ReloadProgress >= 0f)
                 a = ReloadMotion.Reload(_reloadKind == ReloadKind.Shell ? Mathf.Clamp01(Mathf.Min(1f, (Time.time - _reloadStart) / 0.3f)) : ReloadProgress, _reloadKind, Time.time - _reloadStart);
+            else if (HolsterProgress < 1f) a = ReloadMotion.Draw(1f - HolsterProgress);
             else if (DrawProgress < 1f) a = ReloadMotion.Draw(DrawProgress);
             ActionShown = a;
             return a;
@@ -177,7 +193,7 @@ namespace Game.Gameplay
         {
             if (visible && _magModel == null)
             {
-                var model = _weapons != null ? _weapons.ModelFor(_combatant.ActiveWeaponId) : null;
+                var model = _weapons != null ? _weapons.ModelFor(HeldId) : null;
                 var source = model != null ? model.GetComponentInChildren<Renderer>() : null;
                 _magModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 _magModel.name = "ReloadMagazine";
@@ -194,10 +210,10 @@ namespace Game.Gameplay
 
         // First person: the magazine rides in a spot low on the left of the view while the reload swaps it.
         public void ShowMagAtEye(Transform cam, bool visible) =>
-            ShowMag(visible, cam.TransformPoint(new Vector3(-0.1f, -0.2f, 0.35f)), cam.rotation, PistolInHand(_combatant.ActiveWeaponId));
+            ShowMag(visible, cam.TransformPoint(new Vector3(-0.1f, -0.2f, 0.35f)), cam.rotation, PistolInHand(HeldId));
 
         // First person with arms: the magazine rides in the support hand's spot (#216).
-        public void ShowMagAt(bool visible, Vector3 at, Quaternion turn) => ShowMag(visible, at, turn, PistolInHand(_combatant.ActiveWeaponId));
+        public void ShowMagAt(bool visible, Vector3 at, Quaternion turn) => ShowMag(visible, at, turn, PistolInHand(HeldId));
 
         // How far along the weapon the support hand holds from the grip (m), 0 = not held in two hands; pistols cup the right hand.
         public float SupportAheadOf(int id) => LongGunInHand(id) ? _supportAhead[id] : 0f;
@@ -226,7 +242,7 @@ namespace Game.Gameplay
         void PoseRifle()
         {
             if (_rifle <= 0.001f || _wristR == null || _upperArmR == null || _wrist[0] == null) return;
-            var r = HoldRules(_combatant.ActiveWeaponId);
+            var r = HoldRules(HeldId);
             var v = _motion.LocalVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
             float lean = 1f - _crouch * 0.5f;
@@ -252,9 +268,11 @@ namespace Game.Gameplay
             down -= Breath * 0.004f * (1f - amount);
             var turn = frame * Quaternion.Euler(pose.Pitch - r.KickPitchDeg * _kick + act.PitchDeg, pose.Yaw, pose.Roll + bobRoll + act.RollDeg);
             var axis = turn * Vector3.forward;
-            int id = _combatant.ActiveWeaponId;
+            int id = HeldId;
             if (!LongGunInHand(id)) return;
-            var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down - act.Down, pose.Z)
+            // Shouldered, the butt goes into the shoulder pocket: a long stock (the bullpup's) pushes the grip forward until it does (#226).
+            float stock = _isPistol[id] ? 0f : Mathf.Max(0f, StockPocketZ + _rearBack[id] - pose.Z) * _ready;
+            var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down - act.Down, pose.Z + stock)
                 - axis * (r.KickBackMeters * _kick);
             var gripTurn = turn * _wristRBind;
 
@@ -285,7 +303,7 @@ namespace Game.Gameplay
         // the weapon in hand, meters.
         public string AimGeometry()
         {
-            var model = _weapons != null ? _weapons.ModelFor(_combatant.ActiveWeaponId) : null;
+            var model = _weapons != null ? _weapons.ModelFor(HeldId) : null;
             if (model == null || _head == null || _upperArmR == null) return "";
             float top = float.MinValue;
             foreach (var renderer in model.GetComponentsInChildren<Renderer>()) top = Mathf.Max(top, renderer.bounds.max.y);
@@ -295,7 +313,7 @@ namespace Game.Gameplay
 
         void KickRifle()
         {
-            if (LongGunInHand(_combatant.ActiveWeaponId)) _kick = 1f;
+            if (LongGunInHand(HeldId)) _kick = 1f;
         }
     }
 }
