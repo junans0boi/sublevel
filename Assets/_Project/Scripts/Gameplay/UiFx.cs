@@ -27,7 +27,7 @@ namespace Game.Gameplay
             return _runner;
         }
 
-        static CanvasGroup Group(GameObject go) => go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+        static CanvasGroup Group(GameObject go) => go.TryGetComponent<CanvasGroup>(out var g) ? g : go.AddComponent<CanvasGroup>();
 
         static void Remove(CanvasGroup g)
         {

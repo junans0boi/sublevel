@@ -48,8 +48,6 @@ public static class LobbyStageBuilder
         Box(shell, x0, -DoorHalf, 0f, h, z1 - s, z1);
         Box(shell, DoorHalf, x1, 0f, h, z1 - s, z1);
         Box(shell, x0, x1, DoorTop, h, z1 - s, z1);
-        Box(trim, x0 + s, x0 + s + 0.05f, 0.92f, 0.97f, -1.2f, 0.6f);
-        Box(trim, x1 - s - 0.05f, x1 - s, 0.92f, 0.97f, -1.2f, 0.6f);
         Box(trim, -1.6f, 1.6f, h + CeilThick, h + CeilThick + 0.15f, -0.1f, 0.1f);
         Box(lamp, -0.9f, 0.9f, h - 0.03f, h, -0.9f, 0.4f);
         // Floor indicator lamps over the opening and a thin strip of light in the door gap on the floor.
@@ -87,7 +85,7 @@ public static class LobbyStageBuilder
         }
         Part("Shell", shell, steel, ShadowCastingMode.On);
         var floorMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0.12f); floorMat.SetFloat("_Metallic", 0f);
+        floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0f); floorMat.SetFloat("_Metallic", 0f); floorMat.SetFloat("_SpecularHighlights", 0f); floorMat.SetFloat("_EnvironmentReflections", 0f); floorMat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); floorMat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         AssetDatabase.DeleteAsset(MeshDir + "/LobbyFloor.mat");
         AssetDatabase.CreateAsset(floorMat, MeshDir + "/LobbyFloor.mat");
         floorMat = AssetDatabase.LoadAssetAtPath<Material>(MeshDir + "/LobbyFloor.mat");
@@ -104,8 +102,10 @@ public static class LobbyStageBuilder
         // Art direction: a warm key (4500 K) from the camera's left at 45 degrees, cool #5FA8FF rims from behind and above
         // on both sides at about 30 degrees, a dark flat ambient. No other light.
         AddSpot(root.transform, "Key", new Vector3(-3.4f, 2.6f, 4.0f), new Vector3(0f, 1.0f, 0.1f), 55f, 14f, 3f, true, new Color(1f, 0.82f, 0.62f));
-        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.3f, 1.2f, 0.2f), 60f, 8f, 4f, false, new Color(0.37f, 0.66f, 1f));
-        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.3f, 1.2f, 0.2f), 60f, 8f, 4f, false, new Color(0.37f, 0.66f, 1f));
+        // A soft wash on the back and side walls so the car reads as a room, not a void.
+        AddSpot(root.transform, "WallWash", new Vector3(0f, 2.7f, 2.4f), new Vector3(0f, 1.3f, -1.6f), 85f, 9f, 0.9f, false, new Color(0.78f, 0.84f, 0.95f));
+        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.7f, 0.5f, 0.3f), 24f, 6f, 3f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.7f, 0.5f, 0.3f), 24f, 6f, 3f, false, new Color(0.37f, 0.66f, 1f));
 
         // Roster prefabs in PlayerAppearance.ModelIds order and the rifle template.
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
@@ -123,8 +123,8 @@ public static class LobbyStageBuilder
         // Cameras: the party seen from the front (in the hall, looking into the car), and a closeup for the 외형 screen.
         var lobby = new GameObject("CameraLobby").transform;
         lobby.SetParent(root.transform, false);
-        lobby.position = new Vector3(0f, 1.2f, 4.6f);
-        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 1.12f, 0f) - lobby.position);
+        lobby.position = new Vector3(0f, 1.35f, 6.2f);
+        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 1.05f, 0f) - lobby.position);
         var close = new GameObject("CameraCloseup").transform;
         close.SetParent(root.transform, false);
         close.position = new Vector3(0f, 1.0f, 5.6f);
@@ -182,9 +182,9 @@ public static class LobbyStageBuilder
         go.transform.localPosition = new Vector3(0f, 1.6f, 2.5f);
         var ps = go.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.loop = true; main.startLifetime = 9f; main.startSpeed = 0.03f; main.startSize = 0.018f; main.maxParticles = 140;
+        main.loop = true; main.startLifetime = 9f; main.startSpeed = 0.03f; main.startSize = 0.006f; main.maxParticles = 90;
         main.startColor = new Color(1f, 0.93f, 0.8f, 0.4f); main.simulationSpace = ParticleSystemSimulationSpace.World;
-        var em = ps.emission; em.rateOverTime = 14f;
+        var em = ps.emission; em.rateOverTime = 8f;
         var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(6f, 3f, 5f);
         var vel = ps.velocityOverLifetime; vel.enabled = true; vel.space = ParticleSystemSimulationSpace.World;
         vel.x = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f); vel.y = new ParticleSystem.MinMaxCurve(0.0f, 0.04f); vel.z = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f);

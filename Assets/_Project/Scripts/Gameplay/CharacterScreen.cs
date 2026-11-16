@@ -175,7 +175,7 @@ namespace Game.Gameplay
             {
                 // A fixed three-line block (line height 1.5, 24 px above the buttons, ellipsis by truncation) so it never
                 // runs into the colour label above it.
-                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다. 헬멧·조끼·배낭은 매치를 시작할 때만 입고, 매치 중에는 주운 장비가 우선합니다.";
+                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다. 장비는 시작할 때만 입고, 매치 중에는 주운 장비가 우선입니다.";
                 _desc.horizontalOverflow = HorizontalWrapMode.Wrap;
                 _desc.verticalOverflow = VerticalWrapMode.Truncate;
                 _desc.alignment = TextAnchor.UpperLeft;

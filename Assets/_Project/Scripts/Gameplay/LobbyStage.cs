@@ -67,9 +67,11 @@ namespace Game.Gameplay
                 {
                     def.Animator.runtimeAnimatorController = IdleController;
                     def.Animator.applyRootMotion = false;
+                    def.Animator.cullingMode = AnimatorCullingMode.AlwaysAnimate; // so the pose exists now, for fitting the rifle to the hands
                     def.Animator.speed = 0.94f + 0.03f * slot;
                     def.Animator.Update(0f);
                     def.Animator.Play(def.Animator.GetCurrentAnimatorStateInfo(0).fullPathHash, 0, 0.3f + 0.1f * slot);
+                    def.Animator.Update(0f); // evaluate the pose now: the rifle is fitted to this hand
                 }
                 else
                 {
@@ -77,7 +79,7 @@ namespace Game.Gameplay
                     if (pose == 1) PoseCrossed(def); else if (pose == 2) PoseHandOnVest(def); else PoseLowReady(def);
                 }
                 _animated[slot] = animate;
-                if (pose != 1) AttachRifle(def, go); // crossed arms: the rifle is slung, not in hand
+                if (pose != 1) AttachRifle(def, go, animate); // crossed arms: the rifle is slung, not in hand
             }
             if (a.Helmet > 0 || a.Vest > 0) go.AddComponent<ArmorVisual>().ShowTiers(a.Helmet, a.Vest);
             if (a.Pack > 0) go.AddComponent<BackpackVisual>().Show(a.Pack);
@@ -86,7 +88,7 @@ namespace Game.Gameplay
             spot.transform.SetParent(go.transform, false);
             spot.transform.localPosition = new Vector3(0f, 0.012f, 0f);
             spot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            spot.transform.localScale = Vector3.one * 2.4f;
+            spot.transform.localScale = Vector3.one * 1.0f;
             var sr = spot.AddComponent<SpriteRenderer>();
             sr.sprite = SpotSprite();
             sr.color = new Color(1f, 0.9f, 0.78f, 0.22f);
@@ -193,34 +195,53 @@ namespace Game.Gameplay
             Rot(s.LeftLowerArm, Quaternion.AngleAxis(48f, Vector3.up));
         }
 
-        // Arms crossed over the chest (starting values: tuned against captures).
+        // Turns `bone` so that the line to its child points along `dir` (given in the character's own frame).
+        static void Aim(Transform bone, Transform child, Transform frame, Vector3 dir)
+        {
+            if (bone == null || child == null) return;
+            var from = child.position - bone.position;
+            var to = frame.TransformDirection(dir.normalized);
+            if (from.sqrMagnitude < 1e-6f) return;
+            bone.rotation = Quaternion.FromToRotation(from, to) * bone.rotation;
+        }
+
+        // Arms crossed over the chest: upper arms hang a little forward, forearms lie across the body.
         public static void PoseCrossed(CharacterDef def)
         {
-            var s = def.Sockets;
-            void Rot(Transform t, Quaternion q) { if (t != null) t.rotation = q * t.rotation; }
-            Rot(s.RightUpperArm, Quaternion.AngleAxis(-70f, Vector3.up)); Rot(s.RightUpperArm, Quaternion.AngleAxis(48f, Vector3.right));
-            Rot(s.RightLowerArm, Quaternion.AngleAxis(-125f, Vector3.up));
-            Rot(s.LeftUpperArm, Quaternion.AngleAxis(70f, Vector3.up)); Rot(s.LeftUpperArm, Quaternion.AngleAxis(48f, Vector3.right));
-            Rot(s.LeftLowerArm, Quaternion.AngleAxis(125f, Vector3.up));
+            var s = def.Sockets; var f = def.transform;
+            Aim(s.RightUpperArm, s.RightLowerArm, f, new Vector3(0.15f, -0.9f, 0.35f));
+            Aim(s.RightLowerArm, s.RightHand, f, new Vector3(-0.95f, 0.12f, 0.2f));
+            Aim(s.LeftUpperArm, s.LeftLowerArm, f, new Vector3(-0.15f, -0.9f, 0.35f));
+            Aim(s.LeftLowerArm, s.LeftHand, f, new Vector3(0.95f, 0.2f, 0.32f));
         }
 
-        // Right hand low on the rifle, left hand on the vest strap at the chest.
+        // Left hand on the vest strap at the chest, right arm low and forward on the rifle.
         public static void PoseHandOnVest(CharacterDef def)
         {
-            var s = def.Sockets;
-            void Rot(Transform t, Quaternion q) { if (t != null) t.rotation = q * t.rotation; }
-            Rot(s.RightUpperArm, Quaternion.AngleAxis(-70f, Vector3.up)); Rot(s.RightUpperArm, Quaternion.AngleAxis(30f, Vector3.right));
-            Rot(s.RightLowerArm, Quaternion.AngleAxis(-55f, Vector3.up));
-            Rot(s.LeftUpperArm, Quaternion.AngleAxis(60f, Vector3.up)); Rot(s.LeftUpperArm, Quaternion.AngleAxis(52f, Vector3.right));
-            Rot(s.LeftLowerArm, Quaternion.AngleAxis(135f, Vector3.up));
+            var s = def.Sockets; var f = def.transform;
+            Aim(s.LeftUpperArm, s.LeftLowerArm, f, new Vector3(-0.3f, -0.9f, 0.2f));
+            Aim(s.LeftLowerArm, s.LeftHand, f, new Vector3(0.55f, 0.7f, 0.45f));
+            Aim(s.RightUpperArm, s.RightLowerArm, f, new Vector3(0.3f, -0.9f, 0.3f));
+            Aim(s.RightLowerArm, s.RightHand, f, new Vector3(-0.25f, -0.25f, 1f));
         }
 
-        void AttachRifle(CharacterDef def, GameObject character)
+        void AttachRifle(CharacterDef def, GameObject character, bool twoHanded)
         {
             if (RifleTemplate == null || def.Sockets.WeaponSocket == null) return;
             var w = Instantiate(RifleTemplate, def.Sockets.WeaponSocket);
             w.SetActive(true);
-            // The template carries the muzzle-forward yaw of CharacterKit.InstantiateWeapon; point it forward and a little down.
+            // The template carries the muzzle-forward yaw of CharacterKit.InstantiateWeapon: this orientation points the muzzle
+            // along the character's forward.
+            var baseRot = character.transform.rotation * RifleTemplate.transform.localRotation;
+            var s = def.Sockets;
+            if (twoHanded && s.RightHand != null && s.LeftHand != null)
+            {
+                // Between the two hands, the muzzle past the support (left) hand.
+                var axis = (s.LeftHand.position - s.RightHand.position).normalized;
+                w.transform.rotation = Quaternion.FromToRotation(character.transform.forward, axis) * baseRot;
+                w.transform.position = (s.RightHand.position + s.LeftHand.position) * 0.5f + axis * 0.12f;
+                return;
+            }
             w.transform.rotation = character.transform.rotation * Quaternion.Euler(18f, -28f, 0f) * RifleTemplate.transform.localRotation;
             w.transform.position = def.Sockets.WeaponSocket.position + character.transform.forward * 0.18f;
         }
