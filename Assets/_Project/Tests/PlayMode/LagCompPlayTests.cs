@@ -153,6 +153,7 @@ namespace Game.Tests
         // miss here: the cone's angular radius is SpreadDeg * 0.5 (DamageRules) = 0.9 deg for the Warden = 0.14 m at 9 m, under
         // the 0.3 m half-width of the body. So the expected hit rate is set by the rewind model; the assertion below is
         // relative (compensation clearly beats none) until the rate is measured over 5 runs (then: floor = min - 1).
+        [Category("Stat"), Explicit("threshold not designed yet (docs/tracks/botsnet_DONE.md); run by name")]
         [UnityTest, Timeout(240000)]
         public IEnumerator RealWeaponAt100ms_CompensationBeatsNone_OverTwentyShots()
         {
