@@ -384,7 +384,7 @@ public static class VehicleBuilder
         const float cellSize = 4f;
         var car = new VehicleRules();
         var bike = VehicleRules.MotorcycleDefaults();
-        var picked = VehicleParking.Pick(plan, car.SpawnCount + bike.SpawnCount, car.ParkingSpacingMeters);
+        var picked = VehicleSpread.Pick(VehicleParking.Candidates(plan), c => plan.RegionAt(c.X, c.Z), plan.Regions.Count, car.SpawnCount + bike.SpawnCount, car.ParkingSpacingMeters);
         var spots = new List<Transform>();
         var models = new List<int>();
         int cars = 0, bikes = 0;
@@ -470,8 +470,15 @@ public static class VehicleBuilder
             go.transform.SetParent(root, true);
             // Parked along the road (either way round); a wreck at an angle.
             float yaw = c.YawDeg + (i % 2 == 0 ? 0f : 180f) + (wreck ? (float)(rng.NextDouble() * 50.0 - 25.0) : 0f);
-            float y = wreck ? LowestUnder(c, height) : GroundUnder(c, height);
-            go.transform.SetPositionAndRotation(new Vector3(c.X, y, c.Z), Quaternion.Euler(0f, yaw, 0f));
+            float y; var tilt = Quaternion.identity;
+            if (wreck) y = LowestUnder(c, height);   // wrecks keep their own tilt (ADR-201)
+            else
+            {
+                var fit = PropGrounding.Place(height, c.X, c.Z, yaw, VehicleParking.HalfLength, VehicleParking.HalfWidth);
+                y = fit.Y;
+                tilt = Quaternion.Euler(-fit.PitchDeg, 0f, -fit.RollDeg);
+            }
+            go.transform.SetPositionAndRotation(new Vector3(c.X, y, c.Z), Quaternion.Euler(0f, yaw, 0f) * tilt);
             go.name = $"{prefab.name}_{i:00}";
         }
         return chosen.Count;
@@ -532,6 +539,46 @@ public static class VehicleBuilder
             EditorApplication.Exit(1);
             return;
         }
+        EditorApplication.Exit(0);
+    }
+
+    // ADR-201 probe (nothing is saved): re-place the World's props in memory and log how far each stands from the ground.
+    // tools/unity.sh run VehicleBuilder.MeasureProps -> Logs/run-VehicleBuilder_MeasureProps.log
+    public static void MeasureProps()
+    {
+        try
+        {
+            EditorSceneManager.OpenScene(WorldBuilder.ScenePath, OpenSceneMode.Single);
+            var old = GameObject.Find(PropRootName);
+            if (old != null) Object.DestroyImmediate(old);
+            var plan = WorldGenerator.Generate(LoadWorldSpec());
+            var terrain = Object.FindAnyObjectByType<Terrain>();
+            Func<float, float, float> height = (x, z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
+            int n = PlaceProps(plan, height, new List<ParkingSpot>());
+            float worst = 0f; int wrecks = 0;
+            foreach (Transform t in GameObject.Find(PropRootName).transform)
+            {
+                var mf = t.GetComponentInChildren<MeshFilter>();
+                float localMin = mf != null ? mf.sharedMesh.bounds.min.y : float.NaN;
+                if (t.name.Contains("_Wreck"))
+                {
+                    wrecks++;
+                    var b = t.GetComponentInChildren<MeshRenderer>().bounds;
+                    Debug.Log($"[MeasureProps] {t.name} wreck localMinY {localMin:F3} boundsMin-ground {b.min.y - height(b.center.x, b.center.z):F3}");
+                    continue;
+                }
+                float e = 0f;
+                foreach (var (l, r) in new[] { (0f, 0f), (VehicleParking.HalfLength, 0f), (-VehicleParking.HalfLength, 0f), (0f, VehicleParking.HalfWidth), (0f, -VehicleParking.HalfWidth) })
+                {
+                    var w = t.TransformPoint(new Vector3(r, 0f, l));
+                    e = Mathf.Max(e, Mathf.Abs(w.y - height(w.x, w.z)));
+                }
+                worst = Mathf.Max(worst, e);
+                Debug.Log($"[MeasureProps] {t.name} localMinY {localMin:F3} pitch/roll {t.eulerAngles.x:F1}/{t.eulerAngles.z:F1} worstFootErr {e:F3}");
+            }
+            Debug.Log($"[MeasureProps] props {n} (wrecks {wrecks}) worst foot error {worst:F3} m");
+        }
+        catch (Exception e) { Debug.LogException(e); EditorApplication.Exit(1); return; }
         EditorApplication.Exit(0);
     }
 
