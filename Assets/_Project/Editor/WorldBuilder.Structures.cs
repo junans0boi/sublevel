@@ -318,10 +318,14 @@ public static partial class WorldBuilder
         // Foundation skirt: its top is inside the floor slab, its sides reach into the ground. Not a collider.
         if (plan.Width > 0.3f && plan.Depth > 0.3f)
         {
-            var floor = SurfaceFor(kind, new BuildingPiece { Kind = SurfaceKind.Floor }, style);
+            // Dark concrete (not the beige floor), and deep enough to reach the lowest ground under the footprint: a building on a slope stands at
+            // the high side, so a fixed 1.2 m left a gap that showed as a floating pale band (T8 captures).
+            var floor = WorldMaterials.ConcreteDark;
             float top = Mathf.Min(0.05f, plan.FloorY * 0.5f);
-            var skirtCenter = new Vector3(0f, (top - FoundationDepth) * 0.5f, 0f);
-            var skirtSize = new Vector3(plan.Width - 0.1f, top + FoundationDepth, plan.Depth - 0.1f);
+            float lowestGround = LowestGround(ground, origin.x, origin.z, plan.Width, plan.Depth, rotation);
+            float depthBelow = Mathf.Max(FoundationDepth, origin.y - lowestGround + 0.4f);
+            var skirtCenter = new Vector3(0f, (top - depthBelow) * 0.5f, 0f);
+            var skirtSize = new Vector3(plan.Width - 0.1f, top + depthBelow, plan.Depth - 0.1f);
             // Around the shaft too: its top would otherwise show as a floor inside the rising car.
             foreach (var part in cutSlab ? SplitAround(skirtCenter, skirtSize, hole) : new List<(Vector3 center, Vector3 size)> { (skirtCenter, skirtSize) })
                 Batch(floor, false).Add(part.center, part.size, skipBottom: true);
@@ -481,6 +485,20 @@ public static partial class WorldBuilder
         }
     }
 
+    // The lowest ground under a footprint, sampled like FootY.
+    static float LowestGround(WorldMeshes.HeightField ground, float x, float z, float width, float depth, Quaternion rotation)
+    {
+        float lowest = float.MaxValue;
+        int nx = Mathf.Max(1, Mathf.CeilToInt(width / 2f)), nz = Mathf.Max(1, Mathf.CeilToInt(depth / 2f));
+        for (int i = 0; i <= nx; i++)
+            for (int j = 0; j <= nz; j++)
+            {
+                var p = rotation * new Vector3(((float)i / nx - 0.5f) * width, 0f, ((float)j / nz - 0.5f) * depth);
+                lowest = Mathf.Min(lowest, ground.Height(x + p.x, z + p.z));
+            }
+        return lowest;
+    }
+
     // The height the building stands at: the lot's, unless the ground under the footprint says otherwise
     // (never let the ground come through the floor, and do not float above the lowest corner).
     static float FootY(WorldMeshes.HeightField ground, float x, float y, float z, float width, float depth, Quaternion rotation)
@@ -506,6 +524,11 @@ public static partial class WorldBuilder
         int wall = (int)((style >> 4) % WorldMaterials.Variants);
         int roof = (int)((style >> 12) % WorldMaterials.Variants);
         bool brick = ((style >> 20) & 1u) == 0u;
+        // The tall kinds (T8): shops and apartments are brick, villas plaster; the roof deck of a block is concrete (tiles are for pitched roofs).
+        if (kind == BuildingKind.Shop || kind == BuildingKind.Apartment) brick = true;
+        else if (kind == BuildingKind.Villa) brick = false;
+        if (piece.Kind == SurfaceKind.Roof && piece.Name != null && piece.Name.StartsWith("Roof", StringComparison.Ordinal)
+            && (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment)) return WorldMaterials.Concrete;
 
         if (piece.Kind == SurfaceKind.Prop)
         {
