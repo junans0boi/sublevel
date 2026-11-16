@@ -99,7 +99,7 @@ namespace Game.Core
             {
                 new RegionSpec
                 {
-                    Id = "A", Name = "산악", Kind = "Mountain", CentreX = 520f, CentreZ = 800f, Radius = 320f,
+                    Id = "A", Name = "산악", Kind = "Mountain", Style = "Ridge", CentreX = 520f, CentreZ = 800f, Radius = 320f,
                     BaseHeight = 18f, Relief = 84f, Elevators = 3, Lots = 8, CompoundLots = 3, Hamlets = 0, HamletLots = 0, ConvergencePoints = 3, CompoundRadius = 40f,
                     RocksPerHectare = 60f, TreesPerHectare = 40f,
                 },

@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace Game.Tests
 {
     // #247 T6 connection: RegionSpec.Style "Ridge" puts MountainTerrain under a mountain region of the generated world.
-    // The default spec keeps the original radial relief (Style ""), so every other test is untouched.
+    // The default spec turned it on (ADR-194); Style "" is still the original radial relief, kept as the baseline these tests compare with.
     public class RidgeStyleWorldTests
     {
         static WorldPlan Make(string style)
@@ -38,9 +38,11 @@ namespace Game.Tests
         }
 
         [Test]
-        public void The_default_spec_keeps_the_radial_mountain()
+        public void The_default_spec_has_the_ridge_mountain_and_the_other_regions_stay_as_they_were()
         {
-            Assert.AreEqual("", WorldSpec.CreateDefault().Regions[0].Style);
+            var regions = WorldSpec.CreateDefault().Regions;
+            Assert.AreEqual("Ridge", regions[0].Style);
+            for (int i = 1; i < regions.Length; i++) Assert.AreEqual("", regions[i].Style, regions[i].Id);
         }
 
         [Test]
