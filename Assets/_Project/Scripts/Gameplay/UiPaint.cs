@@ -170,7 +170,8 @@ namespace Game.Gameplay
             colors.normalColor = Color.white;
             colors.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
             colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
-            colors.fadeDuration = 0.05f;
+            colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+            colors.fadeDuration = 0.15f;
             b.colors = colors;
             b.navigation = new Navigation { mode = Navigation.Mode.None };
             if (onClick != null) b.onClick.AddListener(onClick);
