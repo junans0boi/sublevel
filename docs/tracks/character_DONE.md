@@ -27,3 +27,13 @@
 - 소유 밖 변경: `.gitignore`(Ubc 무시 2줄), `Scripts/Gameplay/CharacterDef.cs`(신규), `Tests/*`(신규 2), `BACKLOG.md`, `DECISIONS/ASSET_LEDGER`(추가만).
 - 병합 후 새 클론에서 `tools/unity.sh run CharacterImport.SyncStaging` → `CharacterRoster.Build`(프리팹이 이미 있으면 갱신) 순으로 복원.
 - `ProjectSettings` 변경은 매번 되돌렸다.
+
+## 추가 라운드 (master 지시 "안 된 것" 전부)
+- **(2) UBC 의상**: UV가 몸 부위별로 분리 가능한지 확인 → 가능(섬이 부위별). 본 가중치 래스터화로 상의·하의·장갑·부츠·피부 영역을 나누고 변형 8+1 텍스처를 구움. 머리·목은 피부 유지, 손 장갑, 발 부츠. (`Editor/CharacterOutfit.cs`, ADR-225, ledger C-0009). 캡처 `Logs/roster/posed_Ubc*_front.png`.
+- **(5) 색조**: 곱하기 색조가 피부까지 물들이던 문제를 영역 재채색으로 해결(수치는 ADR-225). Swat은 머리가 별도 재질이라 곱하기 유지.
+- **(3) 머리 비율 #230**: 소총 든 자세 캡처(`PoseLowReady`) + 턱 기준 수치. 턱~정수리/키: Mixamo 0.137~0.158, UBC 0.128, Swat 0.142(헬멧 포함). 실제 성인 0.125~0.145. 테스트 `Head_ChinToCrown_RatioIsHumanSized`(허용 0.11~0.16). 소총 파지 포즈에서 양손이 총에 닿는 것을 5종 캡처로 확인(UBC·Swat 양호, Brian 등 민간은 손이 총 아래로 약간 어긋남: 포즈는 임시).
+- **(4) 헬멧·방어구·배낭**: `ArmorVisual`/`BackpackVisual`이 본 이름으로 찾아 로스터에 붙지 않는 문제 → `Head`·`Chest` 별칭 추가로 12종 모두 부착(EditMode `WornGear_MountsOnRosterBones_AtHeadChestBack`, 캡처 `posed_*`). **한계**: UBC 2종은 본 이름이 `Head`라 별칭을 못 넣어 헬멧이 눈을 덮음(Mixamo 10종은 정상). 수정은 `ArmorVisual` 3줄이라 소유 밖(애니 트랙/master).
+- **(6) RISKS**: 크레딧 표기, Mixamo 약관·파생 텍스처 커밋, "SWAT" 글씨, 민간 복장 4건을 `docs/RISKS_OPEN_QUESTIONS.md`에 추가(소유 밖 문서라 master가 병합 시 확인).
+- **(7) API**: `docs/tracks/character_API.md`.
+- **(1) 군복 계열**: master가 Mixamo에서 받는 중. 도착하면 `SyncStaging` → `CharacterRoster.Entries` 한 줄 → `Build`.
+- 테스트: EditMode 1229/1229(신규 2건 포함). 50체 PERF 재측정: 다른 Unity 5개가 동시에 돌아 p99가 흔들려(12.4ms 1회 관측) **3회 중 최선**을 기록하도록 테스트를 바꿨다: 분산 p99 7.1ms·드로우 373, 밀집 p99 7.0ms·드로우 489(합격, 조용한 머신 기준 재측정 필요). 변형 텍스처는 LFS PNG 43장 약 43MB.

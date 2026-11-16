@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1337521313054434457
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1193742131193283392}
+  m_Layer: 0
+  m_Name: Chest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1193742131193283392
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1337521313054434457}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 7.804932e-18, y: 0.00000015935518, z: 0.00000028028458}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7920786221291375578}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1678927894967374197
 GameObject:
   m_ObjectHideFlags: 0
@@ -155,46 +186,46 @@ MonoBehaviour:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
     - {fileID: 2100000, guid: 23838d88792d44be9a61a7088e4d0ade, type: 2}
-  - Name: Olive
+  - Name: Light_Olive
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 4db87fafd8c094a8fbf221d5b638d9ad, type: 2}
-  - Name: Coyote
+    - {fileID: 2100000, guid: 846b1f8f134cf4955831304b709fd4b8, type: 2}
+  - Name: Light_Charcoal
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 3e4ea697597a243b0946e0a83e63ebaa, type: 2}
-  - Name: Charcoal
+    - {fileID: 2100000, guid: 29a4998bc6fe54ff089edd50e7419c42, type: 2}
+  - Name: Light_Navy
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 609be9e3685264deaa2e8c5182d657a8, type: 2}
-  - Name: Navy
+    - {fileID: 2100000, guid: de921436ca20b4bf0b18a3ed5234cce9, type: 2}
+  - Name: Light_Coyote
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: ce81a4b560a0946a180dc9678e5e4231, type: 2}
-  - Name: Forest
+    - {fileID: 2100000, guid: 3da840f6e520a4978ad087ffec095893, type: 2}
+  - Name: Dark_Olive
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 58953b96979bd47bf96c67f4e44f062b, type: 2}
-  - Name: Slate
+    - {fileID: 2100000, guid: c8de53254d09843dbb70e42022798450, type: 2}
+  - Name: Dark_Charcoal
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: df0619625d6014fc2b3204ce2c00ef5e, type: 2}
-  - Name: Sand
+    - {fileID: 2100000, guid: 4c947fd62e4e14ce0b6882b92c42863d, type: 2}
+  - Name: Dark_Navy
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 5866eb4d2e20549b7a8bb84e36271be6, type: 2}
-  - Name: Maroon
+    - {fileID: 2100000, guid: caa642ea1a7e1479b9f2e3ccc8c1e38e, type: 2}
+  - Name: Dark_Coyote
     Materials:
     - {fileID: 2100000, guid: 7f07f2daeb0a9425dadd464b20f3af39, type: 2}
     - {fileID: 2100000, guid: 3640e792aba9d41d3953b868bc396802, type: 2}
-    - {fileID: 2100000, guid: 819042d24844e452eaed0156e9d79d23, type: 2}
+    - {fileID: 2100000, guid: caf0d58a005f844aabb8f3796344fdf1, type: 2}
 --- !u!205 &7134107408102454369
 LODGroup:
   m_ObjectHideFlags: 0
@@ -364,6 +395,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -9031846494388391581, guid: 25b4444f69f014692bd902eddd1a2706, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2991829205331592634}
+    - targetCorrespondingSourceObject: {fileID: -9031846494388391581, guid: 25b4444f69f014692bd902eddd1a2706, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1193742131193283392}
     - targetCorrespondingSourceObject: {fileID: 5472332158908625945, guid: 25b4444f69f014692bd902eddd1a2706, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3736382220524784123}
