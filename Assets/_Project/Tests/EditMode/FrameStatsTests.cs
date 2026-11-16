@@ -6,33 +6,31 @@ namespace Game.Tests
     public class FrameStatsTests
     {
         [Test]
-        public void Compute_SkipsWarmupFrames()
+        public void Percentiles_AreNearestRank()
         {
-            var times = new[] { 100f, 100f, 10f, 20f };
-            var s = FrameStats.Compute(times, warmup: 2);
-            Assert.AreEqual(2, s.Count);
-            Assert.AreEqual(15f, s.AvgMs, 1e-4f);
-            Assert.AreEqual(20f, s.MaxMs, 1e-4f);
+            var s = new FrameStats();
+            for (int i = 1; i <= 100; i++) s.Add(i);
+            Assert.AreEqual(50f, s.Percentile(50));
+            Assert.AreEqual(95f, s.Percentile(95));
+            Assert.AreEqual(99f, s.Percentile(99));
+            Assert.AreEqual(100f, s.Max());
+            Assert.AreEqual(50.5f, s.Mean(), 1e-4f);
         }
 
         [Test]
-        public void Compute_P99AndFps()
+        public void Empty_IsZero_AndClearResets()
         {
-            var times = new float[100];
-            for (int i = 0; i < 100; i++) times[i] = 10f;
-            times[98] = 50f;
-            times[99] = 50f;
-            var s = FrameStats.Compute(times, 0);
-            Assert.AreEqual(50f, s.P99Ms, 1e-4f);
-            Assert.AreEqual(1000f / 10.8f, s.Fps, 0.01f);
-        }
-
-        [Test]
-        public void Compute_EmptyAfterWarmup_ReturnsZeros()
-        {
-            var s = FrameStats.Compute(new[] { 5f }, warmup: 3);
+            var s = new FrameStats();
+            Assert.AreEqual(0f, s.Percentile(99));
+            s.Add(5f); s.Clear();
             Assert.AreEqual(0, s.Count);
-            Assert.AreEqual(0f, s.AvgMs);
+        }
+
+        [Test]
+        public void PerfArg_IsRead()
+        {
+            Assert.AreEqual("p0", ServerArgs.Parse(new[] { "--dedicated", "--perf", "p0" }).Perf);
+            Assert.IsNull(ServerArgs.Parse(new[] { "--dedicated" }).Perf);
         }
     }
 }

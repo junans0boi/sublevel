@@ -61,6 +61,7 @@ namespace Game.Net
             }
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
             MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
+            if (_options.Perf != null) ServerPerfProbe.Start(_options.Perf);
             ZoneDirector.FinalRegionOverride = _options.Region;
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
