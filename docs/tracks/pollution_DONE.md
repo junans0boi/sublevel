@@ -13,11 +13,19 @@
 | ADR-235~239 | `docs/DECISIONS.md` | |
 | 서버 `PollutionDirector`(방송·늦은 접속·피해 적용·방독 API) | `Net/PollutionDirector.cs` | Unity 컴파일 확인·커밋(2026-11-16) |
 
-수치: **Unity EditMode 전체 1232/1232 통과**(62초). dotnet 하네스 17/17 통과(새 테스트 포함 전체가 아니라 `PollutionWiringTests` 단독; 기존 41건은 S6에서 Unity 통과).
+수치: **Unity EditMode 전체 1233/1233 통과**. dotnet 하네스 17/17 통과(새 테스트 포함 전체가 아니라 `PollutionWiringTests` 단독; 기존 41건은 S6에서 Unity 통과).
+
+## 서버 연결 (WP7/8 일부, Unity 컴파일·EditMode 확인)
+- `Net/PollutionDirector.cs`: 칩 이벤트(`Combatant.ServerDied/ServerKnocked` 구독이라 **Combatant 수정 0줄**), 열쇠 6~8개 배치(`MatchDirector.ServerSpawnLoot`), 칩 줍기·입금 서버 API
+- `Net/KeyElevatorNet.cs`(신규): `KeyElevatorSystem` 서버 조정(삽입·탑승 자동·문 닫기·지역 선택·무효 시 열쇠 반환), `KeyStationStatus` 방송(패널용)
+- **소유 밖 변경 줄 수**: `ElevatorRides.cs` +31/-6(`ServerKeyRide`, `StationCount`, `Trip.Group`, `ServerSwitch`의 열쇠 차량 분기), `KeyHolder.cs` +13/0(`ServerConsumeKey`, Cmd 3개). `Combatant*.cs`·`ZoneDirector`·`loot.json`·`supply.json`·`Hud*.cs` 변경 없음.
+- HUD: `PollutionHud.Level`/`ChipFlag`가 UI 슬롯(`HudHazardView`: Warn/SecondsToClose/Region/Keys/Chip)에 맞는 값을 낸다. `Hud.Instance.Hazard.Set(...)` 호출 어댑터는 `track/ui` 병합 뒤(그 타입이 이 브랜치에 없음).
 
 ## 못 한 것 (Unity 순번 필요)
 - 연출(붉은 안개·가이거 훅·지도 점멸·HUD 그리기)과 게임 안 캡처, PlayMode 멀티 복제 테스트
-- 방독 아이템(루팅·인벤토리), 열쇠 아이템 배치(루팅 점·보급상자), 칩 드롭·보관함 오브젝트와 Net 연결(`Combatant`·`ElevatorRides`·`KeyHolder` 수정)
+- 방독 아이템: 새 `LootKind`(필터·해독제)는 `LootItem`·`InventoryBackend`·`LootMeshes`·아이콘 switch를 건드려 총기·UI 트랙과 충돌 → 병합 뒤. 서버 API(`ServerUseFilter/Antidote`)만 있음. 데이터 행은 새 파일로 넣을 예정(loot.json 끝에 끼우지 않음)
+- 칩 **부활 실행**(죽은 몸 되살리기: Combatant 상태 복구)·보관함 오브젝트·줍기/입금 입력(상호작용 UI), 열쇠 `ElevatorPanel` 확장·삽입 입력 UI, 승강장 문 열림 연출, 보급상자 열쇠 배치(지금은 전부 일반 루팅)
+- 연출 전부, 멀티 PlayMode 복제·승강기 시나리오 테스트(`ElevatorTravelPlayTests` 등 기존 PlayMode도 이번엔 안 돌림)
 - T10 기존 Lockdown/통로 제거(맵 병합 뒤)
 - 맵 어댑터(`IPollutionTerrain` 구현)는 `track/map` 병합 뒤 맵 데이터로 작성
 - 열쇠 이탈률 25/28% 시뮬 대조(JS 몬테카를로, PlayMode 통계 필요)

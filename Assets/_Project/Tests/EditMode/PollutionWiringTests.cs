@@ -136,6 +136,17 @@ namespace Game.Tests
         }
 
         [Test]
+        public void Hud_LevelAndChipFlag_MapToTheSlot()
+        {
+            Assert.AreEqual(PollutionHazardLevel.None, PollutionHud.Level(new PollutionHudModel()));
+            Assert.AreEqual(PollutionHazardLevel.Warning, PollutionHud.Level(new PollutionHudModel { BannerVisible = true, BannerSeconds = 90f }));
+            Assert.AreEqual(PollutionHazardLevel.Imminent, PollutionHud.Level(new PollutionHudModel { BannerVisible = true, BannerSeconds = 20f }));
+            Assert.AreEqual(PollutionHazardLevel.Sealed, PollutionHud.Level(new PollutionHudModel { InGas = true, BannerVisible = true, BannerSeconds = 20f }));
+            Assert.AreEqual(PollutionChipFlag.None, PollutionHud.ChipFlag(new ChipTeamStatus { Dropped = 1 }));
+            Assert.AreEqual(PollutionChipFlag.Held, PollutionHud.ChipFlag(new ChipTeamStatus { Stored = 1 }));
+        }
+
+        [Test]
         public void ChipBoard_SquadDeathDropsAChip_ThroughDepositAndRevive()
         {
             var b = new ChipBoard();

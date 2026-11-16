@@ -68,6 +68,7 @@ namespace Game.Net
             public double StartAt, SwitchAt; // server clock; SwitchAt is NaN until the rider changed cars
             public Behaviour Brain;
             public Vector3 BoardFrom;        // bots: where they stood when the ride started
+            public int Group;                // key elevator car (WP 7), 0 = a normal ride
         }
 
         struct Cycle
@@ -167,6 +168,7 @@ namespace Game.Net
             return -1;
         }
 
+        public int StationCount => _doors != null ? _doors.Sites.Count : 0;
         public int RegionOfStation(int station) => _doors != null && station >= 0 && station < _doors.Sites.Count ? _doors.Sites[station].Region : -1;
 
         // Rides only after the deployment doors opened on this peer (ElevatorDoors.DoorsClosed covers the wait).
@@ -320,6 +322,20 @@ namespace Game.Net
             _trips[rider.ObjectId] = trip;
             ServerSetCycle(station, ElevatorCycleKind.Depart, now);
             Send(rider, new ElevatorRideStatus { Kind = ElevatorRideStatus.KindStarted, Station = station, Region = region, Seconds = ElevatorCycle.RideSeconds(rules) });
+            return true;
+        }
+
+        readonly Dictionary<int, int> _groupStation = new Dictionary<int, int>();
+
+        // Server: a key elevator ride the key system already approved (WP 7): no zone or cooldown check, and every
+        // rider of the car (same group) comes out at the same station.
+        public bool ServerKeyRide(Combatant rider, int station, int region, int group)
+        {
+            if (rider == null || rider.Dead.Value || _doors == null || !ServerActive || _trips.ContainsKey(rider.ObjectId)) return false;
+            double now = Time.timeAsDouble;
+            _trips[rider.ObjectId] = new Trip { Rider = rider, From = station, ToRegion = region, To = -1, StartAt = now, SwitchAt = double.NaN, BoardFrom = rider.transform.position, Group = group };
+            ServerSetCycle(station, ElevatorCycleKind.Depart, now);
+            Send(rider, new ElevatorRideStatus { Kind = ElevatorRideStatus.KindStarted, Station = station, Region = region, Seconds = ElevatorCycle.RideSeconds(DeploymentRules.Current) });
             return true;
         }
 
@@ -503,12 +519,21 @@ namespace Game.Net
         {
             States(_states);
             int from = RegionOfStation(trip.From);
-            int region = ElevatorTravel.ArrivalRegion(from, trip.ToRegion, _states);
-            _regionOfStation.Clear();
-            for (int i = 0; i < _doors.Sites.Count; i++) _regionOfStation.Add(StationBusy(i) ? -1 : _doors.Sites[i].Region);
-            int station = ElevatorTravel.ArrivalStation(region, _regionOfStation, _rng);
-            // shortcut: every station of the region busy -> back up the same shaft; a queue if this ever matters.
-            if (station < 0) { station = trip.From; region = from; }
+            var pollution = PollutionDirector.Instance;
+            int region = trip.Group > 0 && pollution != null && pollution.Ready
+                ? KeyElevatorTravel.ArrivalRegion(from, trip.ToRegion, pollution.States)
+                : ElevatorTravel.ArrivalRegion(from, trip.ToRegion, _states);
+            int station;
+            if (trip.Group > 0 && _groupStation.TryGetValue(trip.Group, out station)) { }
+            else
+            {
+                _regionOfStation.Clear();
+                for (int i = 0; i < _doors.Sites.Count; i++) _regionOfStation.Add(StationBusy(i) ? -1 : _doors.Sites[i].Region);
+                station = ElevatorTravel.ArrivalStation(region, _regionOfStation, _rng);
+                // shortcut: every station of the region busy -> back up the same shaft; a queue if this ever matters.
+                if (station < 0) { station = trip.From; region = from; }
+                if (trip.Group > 0) _groupStation[trip.Group] = station;
+            }
             trip.To = station;
             trip.SwitchAt = now;
             ServerSetCycle(station, ElevatorCycleKind.Arrive, now);

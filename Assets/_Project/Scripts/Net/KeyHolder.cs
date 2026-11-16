@@ -79,7 +79,20 @@ namespace Game.Net
             return true;
         }
 
+        // WP 7: the key elevator takes one key when it is inserted and gives it back when the use is void.
+        [Server]
+        public bool ServerConsumeKey()
+        {
+            if (Keys.Value <= 0) return false;
+            Keys.Value--;
+            return true;
+        }
+
         // ---- Owner request ----
+
+        [ServerRpc] public void CmdKeyInsert(int station) => KeyElevatorNet.Instance?.ServerInsert(_combatant, station);
+        [ServerRpc] public void CmdKeyClose() => KeyElevatorNet.Instance?.ServerClose(_combatant);
+        [ServerRpc] public void CmdKeySelect(int region) => KeyElevatorNet.Instance?.ServerSelect(_combatant, region);
 
         [ServerRpc]
         public void CmdUseKey(int pass) => ServerUseKey(pass);

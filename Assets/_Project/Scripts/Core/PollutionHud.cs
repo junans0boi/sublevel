@@ -17,8 +17,26 @@ namespace Game.Core
         public bool CoverUseless;        // in the final region the cover does nothing
     }
 
+    // Same ordering as the UI track's HazardWarn (ui_HUD_SLOT.md): None / Warning / Imminent / Sealed.
+    public enum PollutionHazardLevel : byte { None = 0, Warning = 1, Imminent = 2, Sealed = 3 }
+    // Same as HudChip: None / Held / Used.
+    public enum PollutionChipFlag : byte { None = 0, Held = 1, Used = 2 }
+
     public static class PollutionHud
     {
+        public const float ImminentSeconds = 30f;
+
+        // The HUD slot's warning level: in the gas = Sealed, a confirmation within 30 s = Imminent, announced = Warning.
+        public static PollutionHazardLevel Level(PollutionHudModel h) =>
+            h.InGas ? PollutionHazardLevel.Sealed
+            : !h.BannerVisible ? PollutionHazardLevel.None
+            : h.BannerSeconds <= ImminentSeconds ? PollutionHazardLevel.Imminent : PollutionHazardLevel.Warning;
+
+        // Held while the team has a chip on a body-bearer or in a box; Used when only revived/spent ones remain is
+        // decided by the caller (it knows the history), here None when the team has no live chip.
+        public static PollutionChipFlag ChipFlag(ChipTeamStatus s) =>
+            s.Carried + s.Stored > 0 ? PollutionChipFlag.Held : PollutionChipFlag.None;
+
         public static PollutionHudModel Build(PollutionMatch m, double now, float x, float z, PollutionExposure exposure)
         {
             var tl = m.Timeline;

@@ -44,6 +44,10 @@ namespace Game.Net
         readonly Dictionary<int, PollutionExposure> _exposure = new Dictionary<int, PollutionExposure>();
         readonly List<Combatant> _scratch = new List<Combatant>(32);
 
+        // Revive chips (WP 8, ADR-239): where each dropped chip lies and who may use them.
+        public readonly ChipBoard Chips = new ChipBoard();
+        readonly Dictionary<int, Vector3> _chipAt = new Dictionary<int, Vector3>();
+        public bool ChipPosition(int owner, out Vector3 at) => _chipAt.TryGetValue(owner, out at);
         public PollutionMatch Match => _match;
         public bool Ready => _match != null;
         public PollutionRules Rules => RulesOverride ?? PollutionRules.Current;
@@ -52,6 +56,68 @@ namespace Game.Net
         bool ServerActive => _network != null && _network.IsServerStarted;
 
         void Awake() { Instance = this; }
+
+        void OnEnable()
+        {
+            Combatant.ServerDied += OnDied;
+            Combatant.ServerKnocked += OnKnocked;
+        }
+
+        void OnDisable()
+        {
+            Combatant.ServerDied -= OnDied;
+            Combatant.ServerKnocked -= OnKnocked;
+        }
+
+        static int TeamKey(Combatant c) => c.HasTeam ? c.TeamId.Value : -(c.ObjectId + 1);
+
+        // A death in a squad drops the owner's chip where they fell; a carrier that dies or goes down drops theirs.
+        void OnDied(Combatant c, DamageInfo info)
+        {
+            if (!_serverRunning || c == null) return;
+            Chips.OnCarrierDown(c.ObjectId);
+            int others = 0;
+            foreach (var o in Combatant.All) if (o != null && o != c && !o.Dead.Value && o.IsTeammateOf(c)) others++;
+            var mode = c.HasTeam ? TeamMatch.Mode : TeamMode.Solo;
+            if (Chips.OnDeath(c.ObjectId, TeamKey(c), mode, others, Now) != null) _chipAt[c.ObjectId] = c.transform.position;
+        }
+
+        void OnKnocked(Combatant c, DamageInfo info)
+        {
+            if (!_serverRunning || c == null) return;
+            Chips.OnCarrierDown(c.ObjectId);
+        }
+
+        // Picking a chip up, putting the carried ones into a platform's box. The caller checks the reach.
+        public ChipResult ServerPickUpChip(Combatant carrier, int owner) =>
+            Chips.PickUp(owner, Now, carrier.ObjectId, TeamKey(carrier), Rules);
+
+        public ChipResult ServerDepositChips(Combatant carrier, int boxRegion) =>
+            Chips.DepositAll(carrier.ObjectId, Now, boxRegion, States, Rules);
+
+        // Keys of the match (ADR-170): 6-8, biased toward late regions, the first ones in supply crates (the crates
+        // are the supply director's: until it takes them over they lie as loot like the rest).
+        void ServerSpawnKeys(PollutionGrid grid, int regionCount, int seed)
+        {
+            var director = MatchDirector.Instance;
+            if (director == null) return;
+            var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules);
+            var rng = new System.Random(unchecked(seed * 17 + 5));
+            var cells = new List<int>();
+            foreach (var k in plan)
+            {
+                cells.Clear();
+                for (int i = 0; i < grid.Count; i++) if (grid.IsLand(i) && grid.Region[i] == k.Region) cells.Add(i);
+                for (int tries = 0; tries < 12 && cells.Count > 0; tries++)
+                {
+                    int cell = cells[rng.Next(cells.Count)];
+                    float x = grid.OriginX + ((cell % grid.Width) + 0.5f) * grid.CellMeters, z = grid.OriginZ + ((cell / grid.Width) + 0.5f) * grid.CellMeters;
+                    if (!Physics.Raycast(new Vector3(x, 400f, z), Vector3.down, out var hit, 800f)) continue;
+                    director.ServerSpawnLoot(new LootEntry { Kind = KeyHolder.KeyLootKind, Amount = 1 }, hit.point + Vector3.up * 0.4f);
+                    break;
+                }
+            }
+        }
 
         void Start() { TryBind(); }
 
@@ -91,7 +157,10 @@ namespace Game.Net
             _match = new PollutionMatch(grid, PollutionGridBuilder.Adjacency(grid, n), n, seed, Rules);
             _clockOffset = -Time.timeAsDouble;
             _exposure.Clear();
+            _chipAt.Clear();
             _serverRunning = true;
+            if (GetComponent<KeyElevatorNet>() == null) gameObject.AddComponent<KeyElevatorNet>();
+            ServerSpawnKeys(grid, n, seed);
             _lastSync = new PollutionSync { Seed = seed, Order = _match.Snapshot.Order, GridHash = _match.GridHash };
             if (ServerActive) _network.ServerManager.Broadcast(Stamp(_lastSync));
             return true;
@@ -120,6 +189,7 @@ namespace Game.Net
         {
             if (!_serverRunning || !ServerActive) return;
             double now = Now;
+            Chips.Tick(now, _match.States(now), Rules);
             _scratch.Clear();
             _scratch.AddRange(Combatant.All);
             foreach (var c in _scratch)
