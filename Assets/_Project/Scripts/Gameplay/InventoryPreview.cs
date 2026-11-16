@@ -164,7 +164,7 @@ namespace Game.Gameplay
         // when it holds a mesh (a piece that is not worn has none). Returns how many renderers are on.
         static int ShowWornPieces(GameObject clone)
         {
-            var hand = BackpackVisual.Deep(clone.transform, "Wrist.R");
+            var hand = BackpackVisual.Humanoid(clone.transform, HumanBodyBones.RightHand) ?? BackpackVisual.Deep(clone.transform, "Wrist.R");
             int shown = 0;
             foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
             {

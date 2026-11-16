@@ -26,17 +26,21 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Hit = "Hit", Death = "Death";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death";
+        // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
+        public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
+        public const string BreathState = "Breath", FlinchState = "Flinch";
+        public const string ActionSpeed = "ActionSpeed"; // playback speed of the Action layer: the clip is stretched to the weapon's own reload time
         public const string Lowered = "Lowered", Aim = "Aim", Shoot = "Shoot";
         public const string PunchLeft = "PunchLeft", PunchRight = "PunchRight";
         public const string Move = "Move"; // speed along the legs' heading, negative when back-pedalling
         public const string Pace = "Pace"; // playback speed of the locomotion blend only
         public const string AirPhase = "AirPhase"; // which moment of its clip the air state holds (0..1)
 
-        const int BaseLayer = 0, UpperLayer = 1;
+        const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
         const float BlendDamp = 0.08f;
-        const float HitHold = 0.35f;
+        const float FlinchSeconds = 0.3f;
         const float ShootHold = 0.22f;
         const float AimAfterShot = 0.9f;       // the weapon stays up this long after the last shot
         const float UpperWeightPerSecond = 7f;
@@ -104,8 +108,8 @@ namespace Game.Gameplay
         readonly Quaternion[] _boneLeftAt = new Quaternion[TurnedBones];
         readonly bool[] _boneTurned = new bool[TurnedBones];
         string _base = Locomotion;
-        string _upper;
-        float _baseHoldUntil, _upperHoldUntil, _aimPoseUntil;
+        string _upper, _additive = BreathState;
+        float _upperHoldUntil, _aimPoseUntil, _flinchUntil;
         float _punchUntil = -1f;
         float _upperWeight;
         float _lastHp;
@@ -265,16 +269,13 @@ namespace Game.Gameplay
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir() && _seated < 0.5f;
+            if (_animator.layerCount > AdditiveLayer && Time.time >= _flinchUntil) SetAdditive(BreathState);
             if (dead) SetBase(Death);
             else
             {
-                if (hit)
-                {
-                    _animator.CrossFadeInFixedTime(Hit, 0.05f, BaseLayer, 0f);
-                    _base = Hit;
-                    _baseHoldUntil = Time.time + HitHold;
-                }
-                else if (Time.time >= _baseHoldUntil) SetBase(showAir ? Air : Locomotion);
+                // The flinch is an additive layer on top of whatever plays, so a hit no longer replaces the pose.
+                if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchSeconds; }
+                SetBase(showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
             TrackJumpPose(dead);
@@ -286,7 +287,7 @@ namespace Game.Gameplay
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
             // hands is posed in code over the base layer (ADR-083), so the clip pose stays off for it.
-            bool showUpper = ((armed && !_rifleWanted) || punching) && _base != Hit;
+            bool showUpper = (armed && !_rifleWanted) || punching;
             float weightRate = punching ? PunchWeightPerSecond : UpperWeightPerSecond;
             _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, weightRate * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
@@ -392,6 +393,13 @@ namespace Game.Gameplay
             if (_base == state) return;
             _animator.CrossFadeInFixedTime(state, Fade, BaseLayer);
             _base = state;
+        }
+
+        void SetAdditive(string state)
+        {
+            if (_additive == state) return;
+            _animator.CrossFadeInFixedTime(state, 0.15f, AdditiveLayer);
+            _additive = state;
         }
 
         void SetUpper(string state)
@@ -573,7 +581,8 @@ namespace Game.Gameplay
         void PoseLeg(int side, int thighIndex, int shinIndex, int footIndex, float thighDeg, float shinDeg, Vector3 axis)
         {
             Transform shin = _bones[shinIndex], foot = _bones[footIndex];
-            if (shin == null || foot == null || shin.childCount == 0 || (Mathf.Abs(thighDeg) <= 1e-3f && Mathf.Abs(shinDeg) <= 1e-3f))
+            // A Humanoid rig hangs the foot under the shin, so it follows by itself.
+            if (shin == null || foot == null || shin.childCount == 0 || foot.IsChildOf(shin) || (Mathf.Abs(thighDeg) <= 1e-3f && Mathf.Abs(shinDeg) <= 1e-3f))
             {
                 Turn(thighIndex, thighDeg, axis);
                 Turn(shinIndex, shinDeg, axis);

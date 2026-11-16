@@ -25,6 +25,8 @@ namespace Game.Net
         [SerializeField] Transform[] _dummySpawns = new Transform[0];
         // Bots (M2-2): one per spawn point, started with the match. Both empty = a match without bots.
         [SerializeField] NetworkObject _botPrefab;
+        // Bots with the other roster models (ADR-230); bot n uses variant n mod length. Empty = every bot is _botPrefab.
+        [SerializeField] NetworkObject[] _botVariants;
         [SerializeField] Transform[] _botSpawns = new Transform[0];
         [SerializeField] int _seed = 12345;
         [SerializeField] bool _startAsHost = true;
@@ -248,7 +250,7 @@ namespace Game.Net
                 // A bot in an elevator rides the car (the shaft has no navmesh); BotController finds the navmesh
                 // once the doors open.
                 if (!(inElevator && riding) && NavMesh.SamplePosition(position, out var hit, BotSnapMeters, NavMesh.AllAreas)) position = hit.position;
-                var bot = Instantiate(_botPrefab, position, rotation);
+                var bot = Instantiate(_botVariants != null && _botVariants.Length > 0 ? _botVariants[number % _botVariants.Length] : _botPrefab, position, rotation);
                 _networkManager.ServerManager.Spawn(bot);
                 number++;
                 var combatant = bot.GetComponent<Combatant>();

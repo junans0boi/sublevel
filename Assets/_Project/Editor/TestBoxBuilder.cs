@@ -42,6 +42,7 @@ public static class TestBoxBuilder
         var player = BuildPlayerPrefab(gear);
         var dummy = BuildDummyPrefab(gear);
         var bot = BuildBotPrefab(gear);
+        BuildBotVariants(gear);
         var loot = BuildLootPrefab(lootMats);
         VehicleBuilder.BuildPrefabs(); // [VEHICLE HOOK] ADR-065 (5): Car + Motorcycle prefabs, before the spawnable list
         AssetDatabase.SaveAssets();
@@ -235,9 +236,9 @@ public static class TestBoxBuilder
     }
 
     // Model, animation, held weapons and sounds shared by every combatant prefab.
-    static Renderer[] AddCharacter(GameObject go)
+    static Renderer[] AddCharacter(GameObject go, string rosterId = CharacterKit.DefaultRoster)
     {
-        var visual = CharacterKit.AddTo(go.transform);
+        var visual = CharacterKit.AddTo(go.transform, rosterId);
         go.AddComponent<CombatantMotion>();
         var animation = go.AddComponent<CombatantAnimation>();
         Set(animation, "_animator", p => p.objectReferenceValue = visual.Animator);
@@ -370,9 +371,15 @@ public static class TestBoxBuilder
 
     // The dummy's body with a BotController instead of the dummy behaviour. No NavMeshAgent: the controller adds
     // one on the server when there is a navmesh. NetworkTransform so clients see it walk.
-    static NetworkObject BuildBotPrefab(GearAssets gear)
+    // One bot prefab per roster model (ADR-230): MatchDirector mixes them. "Bot" itself is the default model.
+    static void BuildBotVariants(GearAssets gear)
     {
-        var go = new GameObject("Bot");
+        foreach (var e in CharacterRoster.Entries) BuildBotPrefab(gear, e.Id, "Bot_" + e.Id);
+    }
+
+    static NetworkObject BuildBotPrefab(GearAssets gear, string rosterId = CharacterKit.DefaultRoster, string prefabName = "Bot")
+    {
+        var go = new GameObject(prefabName);
         var capsule = go.AddComponent<CapsuleCollider>();
         capsule.height = 1.8f; capsule.radius = 0.35f; capsule.center = new Vector3(0, 0.9f, 0);
         go.AddComponent<NetworkObject>();
@@ -381,7 +388,7 @@ public static class TestBoxBuilder
         go.AddComponent<CombatantStance>();
         go.AddComponent<BotController>();
         var view = go.AddComponent<CombatantView>();
-        AddCharacter(go);
+        AddCharacter(go, rosterId);
         WireShotFx(view, go, gear.Glow, gear.Dust);
         AddGear(go, gear);
         // Keys to open a barrier on the way out of a closing region, and the same bag limit as a player. Bots use
@@ -389,7 +396,7 @@ public static class TestBoxBuilder
         go.AddComponent<KeyHolder>();
         go.AddComponent<CombatantHealing>();
         go.AddComponent<CombatantCarry>();
-        return SavePrefab(go, "Bot");
+        return SavePrefab(go, prefabName);
     }
 
     static NetworkObject BuildLootPrefab(Material[] mats)

@@ -1,3 +1,4 @@
+using System.Linq;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
@@ -44,6 +45,9 @@ public static class MatchKit
         if (bots != null && bots.Length > 0)
         {
             Set(director, "_botPrefab", p => p.objectReferenceValue = Prefab("Bot"));
+            // One bot prefab per roster model (TestBoxBuilder.BuildBotVariants): the match mixes all of them.
+            var variants = CharacterRoster.Entries.Select(e => AssetDatabase.LoadAssetAtPath<NetworkObject>($"{TestBoxBuilder.PrefabDir}/Bot_{e.Id}.prefab")).Where(v => v != null).ToArray();
+            if (variants.Length > 0) SetArray(director, "_botVariants", variants);
             SetArray(director, "_botSpawns", Points(go.transform, "BotSpawn", bots));
         }
 

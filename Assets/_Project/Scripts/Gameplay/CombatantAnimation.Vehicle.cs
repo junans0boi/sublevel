@@ -35,8 +35,6 @@ namespace Game.Gameplay
         const float SwayDegPerAccel = 0.6f, SwayMaxDeg = 8f, SwayEasePerSecond = 4f;
         const float HeadYawMaxDeg = 70f, HeadPitchMaxDeg = 35f;
 
-        static readonly string[] FingerNames = { "Index", "Middle", "Ring", "Pinky" };
-
         readonly Transform[] _forearm = new Transform[2], _wrist = new Transform[2];
         readonly Transform[][] _fingers = new Transform[2][];
         readonly Transform[] _thumb = new Transform[2];
@@ -253,28 +251,35 @@ namespace Game.Gameplay
                 _thumb[side].rotation = Quaternion.AngleAxis(sign * ThumbCurlDeg * curlDeg / GripCurlDeg, across) * _thumb[side].rotation;
         }
 
+        // Arm, hand, finger and toe bones from the Humanoid avatar (ADR-230); the finger groups keep the order the grips were written for:
+        // index, middle, ring, little, three joints each (proximal first), and the thumb's first curling joint.
         void FindGripBones()
         {
             _gripBonesLooked = true;
+            if (_animator == null) return;
             for (int side = 0; side < 2; side++)
             {
-                var upper = _bones[side == 0 ? ArmLeft : ArmRight];
-                string suffix = side == 0 ? ".L" : ".R";
-                _forearm[side] = Deep(upper, "LowerArm" + suffix);
-                _wrist[side] = Deep(upper, "Wrist" + suffix);
-                _fingers[side] = new Transform[FingerNames.Length * 3];
-                // In this rig the "1" bones of all fingers (and the thumb) start together at the root of the hand (they
-                // are the palm bones): the knuckles are the "2" bones, and 2..4 are the joints that curl.
-                for (int f = 0; f < FingerNames.Length; f++)
+                bool left = side == 0;
+                _forearm[side] = Bone(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
+                _wrist[side] = Bone(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+                _fingers[side] = new Transform[FingerBones.Length * 3];
+                for (int f = 0; f < FingerBones.Length; f++)
                     for (int j = 0; j < 3; j++)
-                        _fingers[side][f * 3 + j] = Deep(_wrist[side], FingerNames[f] + (j + 2) + suffix);
-                _thumb[side] = Deep(_wrist[side], "Thumb2" + suffix);
-                var last = Deep(_wrist[side], "Middle4" + suffix);
+                        _fingers[side][f * 3 + j] = Bone((HumanBodyBones)((int)(left ? FingerBones[f] : FingerBones[f] + RightFingerOffset) + j));
+                _thumb[side] = Bone(left ? HumanBodyBones.LeftThumbProximal : HumanBodyBones.RightThumbProximal);
+                var last = _fingers[side][3 * 1 + 2]; // the middle finger's tip joint; its end marker is the fingertip when the rig has one
                 _fingerTip[side] = last != null && last.childCount > 0 ? last.GetChild(0) : last;
-                var foot = _bones[side == 0 ? FootLeft : FootRight];
-                _toe[side] = foot != null && foot.childCount > 0 ? foot.GetChild(0) : null;
+                _toe[side] = Bone(left ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes);
             }
         }
+
+        // First bone of each finger on the left hand; the right hand's are RightFingerOffset further in the enum.
+        static readonly HumanBodyBones[] FingerBones =
+            { HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftRingProximal, HumanBodyBones.LeftLittleProximal };
+        const int RightFingerOffset = HumanBodyBones.RightThumbProximal - HumanBodyBones.LeftThumbProximal;
+
+        // A bone of the Humanoid rig (null when the rig lacks it, e.g. toes).
+        Transform Bone(HumanBodyBones bone) => _animator != null && _animator.isHuman ? _animator.GetBoneTransform(bone) : null;
 
         static Transform Deep(Transform root, string name)
         {
@@ -464,7 +469,7 @@ namespace Game.Gameplay
         // The head bone and its rotation relative to the body's facing in the saved pose (facing transform.forward).
         void FindHead()
         {
-            _head = Deep(_spine, "Head");
+            _head = Bone(HumanBodyBones.Head);
             if (_head == null) return;
             _headBind = Quaternion.Inverse(transform.rotation) * _head.rotation;
         }

@@ -152,6 +152,7 @@ namespace Game.Gameplay
                 int thighIndex = side == 0 ? ThighLeft : ThighRight, shinIndex = side == 0 ? ShinLeft : ShinRight, footIndex = side == 0 ? FootLeft : FootRight;
                 if (_bones[thighIndex] == null) continue;
                 TwoBone(_bones[thighIndex], thighIndex, shin, shinIndex, ankle, ankle.position + transform.up * _plant[side], transform.forward);
+                if (foot.IsChildOf(shin)) continue; // a Humanoid foot hangs under the shin and follows it by itself
                 var swing = shin.rotation * Quaternion.Inverse(shinBefore);
                 if (!_boneTurned[footIndex]) { _boneOwn[footIndex] = foot.localRotation; _boneTurned[footIndex] = true; }
                 if (!_footMoved[side]) { _footOwnPosition[side] = foot.localPosition; _footMoved[side] = true; }
