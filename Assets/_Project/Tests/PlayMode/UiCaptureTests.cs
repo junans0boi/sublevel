@@ -38,6 +38,7 @@ namespace Game.Tests
 
         static IEnumerator Menu()
         {
+            PlayerPrefs.SetInt(UiFx.ReducedKey, 1); // captures are taken after the motion, so they show the settled screen
             SceneManager.LoadScene(MainMenu.SceneName);
             yield return NetHarness.WaitUntil(() => MainMenu.Instance != null, "main menu", null, 20f);
             yield return null;
@@ -95,16 +96,32 @@ namespace Game.Tests
         public IEnumerator Lobby_Solo_And_Squad_AndTheOtherScreens()
         {
             string folder = Folder();
+            PlayerAppearanceStore.Save(PlayerAppearance.FromIndex(2, 1)); // the player's chosen look (SwatGuy, variant 1)
             yield return Menu();
             var menu = MainMenu.Instance;
             var panel = menu.Panel;
+            Assert.IsNotNull(menu.Stage, "the lobby has its 3D stage");
+            Assert.IsNotNull(menu.Stage.CharacterOf(0), "the local player stands in the car");
+            Assert.AreEqual("Lobby_MixamoSwatGuy", menu.Stage.CharacterOf(0).name, "slot 0 is the saved PlayerAppearance");
+            Assert.AreEqual(1, menu.Stage.LookOf(0).Value.Variant);
+            File.WriteAllText(Path.Combine(folder, "lobby_look.txt"), PlayerAppearanceStore.Load().Serialize());
+            {
+                var sbd = new System.Text.StringBuilder();
+                var ch = menu.Stage.CharacterOf(0);
+                sbd.AppendLine("pos " + ch.transform.position + " active " + ch.activeInHierarchy + " cam " + Camera.main.transform.position + " " + Camera.main.transform.rotation.eulerAngles);
+                foreach (var r in ch.GetComponentsInChildren<Renderer>(true))
+                    sbd.AppendLine(r.name + " enabled=" + r.enabled + " vis=" + r.isVisible + " bounds=" + r.bounds.center + " " + r.bounds.size + " mat=" + (r.sharedMaterial != null ? r.sharedMaterial.shader.name : "null") + " layer=" + r.gameObject.layer);
+                var lg = ch.GetComponentInChildren<LODGroup>(true);
+                sbd.AppendLine("lod " + (lg != null ? lg.lodCount + " size " + lg.size + " enabled " + lg.enabled : "none"));
+                File.WriteAllText(Path.Combine(folder, "lobby_char_debug.txt"), sbd.ToString());
+            }
             Assert.IsNotNull(panel, "the lobby is the entry screen");
             Assert.AreEqual("혼자 시작", panel.StatusLabel);
             StringAssert.Contains("솔로", panel.LedText);
             yield return Shots(folder, "lobby_solo");
 
             // Squad as leader: 도윤 ready, 서아 not yet (the mockup's sample party).
-            var squad = new PartyLobby(0, "해무"); squad.Join(2, "도윤"); squad.Join(3, "서아"); squad.SetReady(2, true);
+            var squad = new PartyLobby(0, "해무", PlayerAppearanceStore.Load()); squad.Join(2, "도윤", PlayerAppearance.FromIndex(5, 0)); squad.Join(3, "서아", PlayerAppearance.FromIndex(8, 2)); squad.SetReady(2, true);
             panel.SetParty(squad, 0);
             StringAssert.Contains("스쿼드", panel.LedText);
             Assert.AreEqual("파티 시작", panel.StatusLabel);
@@ -119,7 +136,7 @@ namespace Game.Tests
             yield return Shots(folder, "lobby_search");
 
             // Member view: 서아 leads, I (해무) have not readied.
-            var member = new PartyLobby(10, "서아"); member.Join(0, "해무"); member.Join(2, "도윤"); member.SetReady(2, true);
+            var member = new PartyLobby(10, "서아", PlayerAppearance.FromIndex(8, 2)); member.Join(0, "해무", PlayerAppearanceStore.Load()); member.Join(2, "도윤", PlayerAppearance.FromIndex(5, 0)); member.SetReady(2, true);
             panel.SetParty(member, 0);
             Assert.AreEqual("준비", panel.StatusLabel);
             yield return Shots(folder, "lobby_member");
@@ -137,23 +154,28 @@ namespace Game.Tests
             menu.Back();
             Assert.IsFalse(menu.CustomShown);
 
-            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
+            PlayerAppearanceStore.Clear();
             menu.ShowCharacter();
             Assert.IsTrue(menu.CharacterShown);
-            Assert.AreEqual("외형 06 / 24", menu.Character.HeaderText);
-            Assert.AreEqual("현장 소장", menu.Character.NameText);
-            Assert.AreEqual("색 변형 · 올리브", menu.Character.ColorText);
+            Assert.IsTrue(menu.Stage.Closeup, "the 3D camera is in close on the local character");
+            Assert.AreEqual("외형 01 / 15", menu.Character.HeaderText);
+            Assert.AreEqual("특수부대원", menu.Character.NameText);
             DumpScreen(menu.Character.Screen, Path.Combine(folder, "char_rects.txt"));
             yield return Shots(folder, "char");
-            menu.Character.Select(1); menu.Character.SetColor(3);
-            Assert.AreEqual("외형 02 / 24", menu.Character.HeaderText);
-            Assert.AreEqual("색 변형 · 청회색", menu.Character.ColorText);
+            menu.Character.SelectModel(4);
+            Assert.AreEqual("MixamoBrian", PlayerAppearanceStore.Load().ModelId, "the choice is saved at once");
+            Assert.AreEqual("Lobby_MixamoBrian", menu.Stage.CharacterOf(menu.Stage.LocalSlot).name, "and shown on the 3D character at once");
+            if (menu.Character.VariantCount > 1) { menu.Character.SetVariant(1); Assert.AreEqual(1, PlayerAppearanceStore.Load().Variant); }
+            menu.Character.SetGear(0, 2); menu.Character.SetGear(1, 2); menu.Character.SetGear(2, 1);
+            Assert.AreEqual(2, PlayerAppearanceStore.Load().Helmet);
+            File.WriteAllText(Path.Combine(folder, "char_look.txt"), PlayerAppearanceStore.Load().Serialize());
             yield return Shots(folder, "char_changed");
+            menu.Character.SelectModel(14);
+            Assert.AreEqual("UbcFemale", PlayerAppearanceStore.Load().ModelId, "all 15 models are selectable");
             menu.Character.Apply();
             Assert.IsFalse(menu.CharacterShown);
-            Assert.AreEqual(1, PlayerPrefs.GetInt(CharacterScreen.IndexKey));
-            Assert.AreEqual(3, PlayerPrefs.GetInt(CharacterScreen.ColorKey));
-            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
+            Assert.IsFalse(menu.Stage.Closeup);
+            PlayerAppearanceStore.Clear();
             menu.ShowQuit();
             Assert.IsTrue(menu.ModalShown);
             DumpScreen(menu.ModalScreen, Path.Combine(folder, "modal_quit_rects.txt"));
@@ -184,6 +206,26 @@ namespace Game.Tests
             yield return Shots(folder, "credits");
             menu.Back();
             Assert.IsFalse(menu.CreditsShown);
+        }
+
+        // PERF: the lobby's frame time with the 3D party standing (the editor runs with graphics, no vsync).
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Lobby_FrameTime()
+        {
+            PlayerAppearanceStore.Save(PlayerAppearance.FromIndex(2, 1));
+            yield return Menu();
+            var panel = MainMenu.Instance.Panel;
+            var squad = new PartyLobby(0, "a", PlayerAppearanceStore.Load()); squad.Join(2, "b", PlayerAppearance.FromIndex(5, 0)); squad.Join(3, "c", PlayerAppearance.FromIndex(8, 2)); squad.Join(4, "d", PlayerAppearance.FromIndex(12, 1));
+            panel.SetParty(squad, 0);
+            for (int i = 0; i < 30; i++) yield return null;
+            QualitySettings.vSyncCount = 0;
+            float t0 = Time.realtimeSinceStartup; int n = 120;
+            for (int i = 0; i < n; i++) yield return null;
+            float ms = (Time.realtimeSinceStartup - t0) / n * 1000f;
+            string folder = Folder();
+            File.WriteAllText(Path.Combine(folder, "lobby_perf.txt"), "avg frame " + ms.ToString("0.00") + " ms over " + n + " frames, " + Screen.width + "x" + Screen.height + ", 4 characters\n");
+            Assert.Less(ms, 33f, "the lobby stays above 30 fps");
+            PlayerAppearanceStore.Clear();
         }
 
         [UnityTest, Timeout(60000)]

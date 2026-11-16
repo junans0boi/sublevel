@@ -25,6 +25,18 @@ namespace Game.Gameplay
         static Sprite _white;
 
         // Noto Sans KR (OFL, asset ledger F-0001) so Korean renders the same on every machine.
+        static Font _bold;
+        // Noto Sans KR Bold (same family and licence as the Regular, ledger F-0002): headings and emphasis use the real bold
+        // cut instead of a synthesised one.
+        public static Font BoldFont
+        {
+            get
+            {
+                if (_bold == null) _bold = Resources.Load<Font>("Fonts/NotoSansKRBold");
+                return _bold != null ? _bold : Font;
+            }
+        }
+
         public static Font Font
         {
             get
@@ -109,10 +121,12 @@ namespace Game.Gameplay
         public static Text Label(RectTransform rect, string text, int size, Color color, TextAnchor align = TextAnchor.MiddleLeft, FontStyle style = FontStyle.Normal)
         {
             var label = rect.gameObject.AddComponent<Text>();
-            label.font = Font;
+            bool bold = style == FontStyle.Bold || style == FontStyle.BoldAndItalic;
+            label.font = bold ? BoldFont : Font;
             label.text = text;
             label.fontSize = size;
-            label.fontStyle = style;
+            label.fontStyle = bold && BoldFont != Font ? FontStyle.Normal : style; // the real bold cut replaces the synthetic one
+            label.lineSpacing = 1.05f;
             label.color = color;
             label.alignment = align;
             label.horizontalOverflow = HorizontalWrapMode.Overflow;

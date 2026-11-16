@@ -51,7 +51,7 @@ namespace Game.Gameplay
                         case 5: it.t = e.Licence; break;
                     }
                     var rect = Screen.Add(it, null, content);
-                    if (k == 1) { var tx = rect.GetComponent<Text>(); tx.resizeTextForBestFit = true; tx.resizeTextMinSize = 10; tx.resizeTextMaxSize = 15; rect.sizeDelta = new Vector2(587f, it.r[3]); } // long links shrink to their column, as the mockup clips them
+                    if (k == 1) { var tx = rect.GetComponent<Text>(); tx.horizontalOverflow = HorizontalWrapMode.Wrap; tx.verticalOverflow = VerticalWrapMode.Truncate; tx.resizeTextForBestFit = true; tx.resizeTextMinSize = 10; tx.resizeTextMaxSize = 15; rect.sizeDelta = new Vector2(587f, it.r[3]); } // long links shrink to their column, as the mockup clips them
                     if (k == 5) { float w = rect.GetComponent<Text>().preferredWidth + 22f; _lastBadgeW = w; }
                     if (k == 4) _badge = rect;
                     if (k == 5 && _badge != null) _badge.sizeDelta = new Vector2(_lastBadgeW, _badge.sizeDelta.y);

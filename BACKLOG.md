@@ -8,3 +8,5 @@
 - [애니] 플레이어 모델 선택(로비→`Visual` 교체): 지금 플레이어 프리팹은 MixamoSwat 하나, 봇만 12모델 (ADR-230, UI 트랙)
 
 - [S5] 환경음 베드(AmbientBeds 합성 바람·새·귀뚜라미)를 승인된 Freesound 실녹음(527499·683420·683433·522299·826326)으로 교체, 폭발·사이렌·가이거·방송 연결(S6 훅 이후)
+
+- UI: 게임 착용 장비(ArmorVisual·BackpackVisual, LootMeshes)가 반구·상자 모양이라 캐릭터와 어울리지 않음 — 문제 목록·제안 `docs/tracks/ui_GEAR_VISUAL_NOTES.md`

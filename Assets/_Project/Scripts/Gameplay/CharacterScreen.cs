@@ -1,141 +1,360 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using Game.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // 외형 (adopted mockup, Resources/Ui/Screens/char.json): the 24-slot roster, colour variants and the preview.
-    // Geometry and chrome are the measured mockup; selection, colour and 적용/취소 act on it. The choice is kept in
-    // PlayerPrefs ("ui.char.index", "ui.char.color") for the character track to read; locked slots (13..24) say so.
+    // 외형 (adopted mockup, Resources/Ui/Screens/char.json): the chrome and the roster grid are the measured mockup,
+    // laid over the real 3D lobby with the camera in close on the local character (LobbyStage). All 15 roster models are
+    // selectable (no locked slots), the colour variants come from the chosen model's CharacterDef, gear tiers are chosen
+    // below. Every change is applied to the 3D character at once and saved as the PlayerAppearance (PlayerAppearanceStore);
+    // 취소 restores the look the screen was opened with.
     public class CharacterScreen
     {
-        public const string IndexKey = "ui.char.index", ColorKey = "ui.char.color";
-        public const int Open = 12, Total = 24;
-        static readonly string[] ColorNames = { "먹빛", "올리브", "황토", "청회색", "적갈색", "설백" };
+        public const int Total = 15;
 
         public MockScreen Screen { get; private set; }
-        public int Index { get; private set; }
-        public int ColorIndex { get; private set; }
+        public PlayerAppearance Look { get; private set; }
         public string HeaderText => _header != null ? _header.text : "";
         public string NameText => _name != null ? _name.text : "";
-        public string ColorText => _colorLabel != null ? _colorLabel.text : "";
+        public string VariantText => _colorLabel != null ? _colorLabel.text : "";
+        public int VariantCount { get; private set; }
 
         MainMenu _menu;
-        Text _header, _name, _colorLabel, _check;
-        Image _preview;
+        Text _header, _name, _colorLabel, _desc;
         readonly List<Cell> _cells = new List<Cell>();
-        readonly List<Image> _colorRings = new List<Image>();
-        readonly Sprite[] _previews = new Sprite[6];
-        int _savedIndex, _savedColor;
+        readonly List<GameObject> _variantObjects = new List<GameObject>();
+        readonly List<Image[]> _variantRings = new List<Image[]>();
+        readonly List<Text> _gearTexts = new List<Text>();
+        readonly List<Image> _gearFill = new List<Image>();
+        PlayerAppearance _entry;
 
-        class Cell { public Image Fill, Ring; public RectTransform Rect; public string Name; public float X, Y; }
+        class Cell { public Image Fill, Ring, Portrait; public float X, Y; }
+        static readonly Sprite[] Portraits = new Sprite[Total];
 
         public RectTransform Build(Transform parent, MainMenu menu)
         {
             _menu = menu;
-            Screen = MockScreen.Build(parent, "char", it => OnClick(it));
-            // Find the cells (ro0..ro23), the colour buttons and the right-hand texts from the measured items.
-            MockScreen.Item lastCell = null;
+            // The preview picture, its caption and the colour swatches are replaced: the preview is the 3D character, the
+            // swatches follow the chosen model's variants.
+            Screen = MockScreen.Build(parent, "char", OnClick, it => Drop(it), false, 0f);
+            // The 24 mockup cells: the first 15 become the roster, the other 9 are not drawn (nothing is locked).
+            var cellBoxes = new List<MockScreen.Item>();
             foreach (var kv in Screen.Rects)
+                if (kv.Key.k == "box" && kv.Key.id != null && kv.Key.id.StartsWith("ro")) cellBoxes.Add(kv.Key);
+            cellBoxes.Sort((a, b) => int.Parse(a.id.Substring(2)).CompareTo(int.Parse(b.id.Substring(2))));
+            foreach (var it in Screen.Items)
             {
-                var it = kv.Key; var r = kv.Value;
-                if (it.k == "box" && it.id != null && it.id.StartsWith("ro"))
-                {
-                    var c = new Cell { Rect = r, Fill = r.GetComponent<Image>(), X = it.r[0], Y = it.r[1] };
-                    c.Ring = r.Find("Ring") != null ? r.Find("Ring").GetComponent<Image>() : null;
-                    _cells.Add(c); lastCell = it;
-                }
-                else if (it.k == "text" && lastCell != null && it.r[0] >= 48f && it.r[0] < 600f && it.fs == 16f && it.r[1] > 150f)
-                {
-                    if (_cells.Count > 0) _cells[_cells.Count - 1].Name = it.t; // the last 16px text of a cell is its name
-                }
-                else if (it.k == "text" && it.t != null && it.t.StartsWith("외형 ") && it.r[0] > 1300f) _header = r.GetComponent<Text>();
-                else if (it.k == "text" && it.fs == 21f && it.r[0] > 1300f && it.r[1] > 150f) _name = r.GetComponent<Text>();
-                else if (it.k == "text" && it.t != null && it.t.StartsWith("색 변형") ) _colorLabel = r.GetComponent<Text>();
-                else if (it.k == "box" && it.id != null && it.id.StartsWith("col")) { }
-                else if (it.k == "box" && it.r[2] == 54f && it.r[3] == 54f) _colorRings.Add(r.GetComponent<Image>());
-                else if (it.k == "text" && it.t == "✓" && it.r[0] < 600f) _check = r.GetComponent<Text>();
-                else if (it.k == "img" && Mathf.Abs(it.r[0] - 830f) < 2f && Mathf.Abs(it.r[2] - 260f) < 2f) _preview = r.GetComponent<Image>();
+                if (it.k == "text" && it.t != null && it.t.StartsWith("외형 ") && it.r[0] > 1300f) _header = Screen.Rects[it].GetComponent<Text>();
+                else if (it.k == "text" && it.fs == 21f && it.r[0] > 1300f && it.r[1] > 150f) _name = Screen.Rects[it].GetComponent<Text>();
+                else if (it.k == "text" && it.t != null && it.t.StartsWith("색 변형")) _colorLabel = Screen.Rects[it].GetComponent<Text>();
+                else if (it.k == "text" && it.t != null && it.t.StartsWith("섬 설비를")) _desc = Screen.Rects[it].GetComponent<Text>();
+                else if (it.k == "text" && it.t != null && it.t.StartsWith("기본 12 +")) Screen.Rects[it].GetComponent<Text>().text = "전체 15종";
+                else if (it.k == "text" && it.t != null && it.t.StartsWith("외형 로스터")) Screen.Rects[it].GetComponent<Text>().text = "외형 로스터 · 15종";
             }
-            for (int c = 0; c < 6; c++)
+            for (int k = 0; k < cellBoxes.Count; k++)
             {
-                var tex = Resources.Load<Texture2D>("Ui/Screens/char_preview" + c);
-                if (tex != null) _previews[c] = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                var box = cellBoxes[k];
+                var rect = Screen.Rects[box];
+                // Tiles are portrait cards now: 113 x 132 in four columns, a head-and-shoulders picture above the name.
+                float nx = 67f + (k % 4) * 123f, ny = 187f + (k / 4) * 142f;
+                var c0 = new Cell { Fill = rect.GetComponent<Image>(), X = nx, Y = ny };
+                c0.Ring = rect.Find("Ring") != null ? rect.Find("Ring").GetComponent<Image>() : null;
+                _cells.Add(c0);
+                // Everything the mockup drew inside this cell: number, name, lock icon, check.
+                foreach (var it in Screen.Items)
+                {
+                    if (it == box) continue;
+                    bool inside = it.r[0] >= box.r[0] - 1f && it.r[1] >= box.r[1] - 1f && it.r[0] + it.r[2] <= box.r[0] + box.r[2] + 1f && it.r[1] + it.r[3] <= box.r[1] + box.r[3] + 1f;
+                    if (!inside || it.r[0] < 48f || it.r[0] > 560f) continue;
+                    var r = Screen.Rects[it];
+                    if (k >= Total) { r.gameObject.SetActive(false); continue; }
+                    if (it.k == "text" && it.fs == 16f)
+                    {
+                        r.GetComponent<Text>().text = PlayerAppearance.ModelNames[k];
+                        r.anchoredPosition = new Vector2(nx, -(ny + 104f));
+                        r.sizeDelta = new Vector2(113f, 24f);
+                        var t = r.GetComponent<Text>();
+                        t.alignment = TextAnchor.MiddleCenter; t.horizontalOverflow = HorizontalWrapMode.Wrap; t.fontSize = 15;
+                    }
+                    else r.gameObject.SetActive(false); // number, lock icon, check mark
+                }
+                if (k >= Total) { rect.gameObject.SetActive(false); continue; }
+                rect.anchoredPosition = new Vector2(nx, -ny);
+                rect.sizeDelta = new Vector2(113f, 132f);
+                var pr = UiPaint.At(Screen.Stage, "Portrait" + k, nx + 18.5f, ny + 8f, 76f, 96f);
+                c0.Portrait = pr.gameObject.AddComponent<Image>();
+                c0.Portrait.color = Color.clear;
+                c0.Portrait.raycastTarget = false;
             }
-            _savedIndex = Mathf.Clamp(PlayerPrefs.GetInt(IndexKey, 5), 0, Open - 1);
-            _savedColor = Mathf.Clamp(PlayerPrefs.GetInt(ColorKey, 1), 0, 5);
-            Select(_savedIndex); SetColor(_savedColor);
+            BuildGear();
+            _menu.StartCoroutine(MakePortraits());
             return Screen.Root;
         }
 
-        public void Reload()
+        // Model names have other widths than the mockup's: centre them under the cell.
+        static void Center(RectTransform r, MockScreen.Item cell)
         {
-            _savedIndex = Mathf.Clamp(PlayerPrefs.GetInt(IndexKey, 5), 0, Open - 1);
-            _savedColor = Mathf.Clamp(PlayerPrefs.GetInt(ColorKey, 1), 0, 5);
-            Select(_savedIndex); SetColor(_savedColor);
+            r.anchoredPosition = new Vector2(cell.r[0], r.anchoredPosition.y);
+            r.sizeDelta = new Vector2(cell.r[2], r.sizeDelta.y);
+            var t = r.GetComponent<Text>();
+            t.alignment = TextAnchor.MiddleCenter;
+            t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            t.fontSize = 14;
         }
 
-        public void Select(int i)
+        static bool Drop(MockScreen.Item it)
         {
-            if (i < 0 || i >= Open) return;
-            Index = i;
+            if (it.k == "img" && it.r[2] == 260f && it.r[3] == 520f) return true;                 // 2D preview figure
+            if (it.k == "text" && it.t != null && it.t.StartsWith("끌어서 돌려")) return true;      // its caption
+            if (it.id != null && it.id.StartsWith("col")) return true;                              // colour swatch buttons
+            if (it.k == "box" && it.r[2] == 54f && it.r[3] == 54f) return true;                     // their discs
+            if (it.k == "text" && it.r[1] >= 325f && it.r[1] <= 335f && it.r[0] > 1360f && it.fs == 16f) return true; // their captions
+            if (it.k == "text" && it.t != null && it.t.StartsWith("팀 구분은")) return true;       // note below the swatches (moved below)
+            return false;
+        }
+
+        // 헬멧 / 조끼 / 배낭 tiers (0..3) under the colour row.
+        void BuildGear()
+        {
+            string[] names = { "헬멧", "조끼", "배낭" };
+            for (int g = 0; g < 3; g++)
+            {
+                float y = 560f + g * 80f;
+                UiPaint.Label(Screen.Stage, "GearName" + g, 1371, y, 120, 60, names[g], 22, UiPaint.Tx, TextAnchor.MiddleLeft);
+                for (int t = 0; t < 4; t++)
+                {
+                    int gear = g, tier = t;
+                    var b = UiPaint.Btn(Screen.Stage, "Gear" + g + t, 1500 + t * 90f, y, 80, 60, t == 0 ? "없음" : t + "단계", 18, 30, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => SetGear(gear, tier));
+                    _gearFill.Add(b.targetGraphic as Image);
+                    _gearTexts.Add(b.GetComponentInChildren<Text>());
+                }
+            }
+        }
+
+        // Head-and-shoulders pictures of the 15 models, rendered once from the roster prefabs in a far corner of the scene.
+        IEnumerator MakePortraits()
+        {
+            var stage = _menu.Stage;
+            if (stage == null || stage.RosterPrefabs == null) yield break;
+            bool have = true;
+            for (int i = 0; i < Total; i++) if (Portraits[i] == null) have = false;
+            if (!have)
+            {
+                var origin = new Vector3(600f, 0f, 600f);
+                var camGo = new GameObject("PortraitCam");
+                camGo.transform.position = origin + new Vector3(0f, 1.55f, 2.5f);
+                camGo.transform.rotation = Quaternion.LookRotation((origin + new Vector3(0f, 1.47f, 0f)) - camGo.transform.position);
+                var cam = camGo.AddComponent<Camera>();
+                cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.063f, 0.082f, 0.11f, 1f);
+                cam.fieldOfView = 20f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 20f; cam.enabled = false;
+                var lights = new GameObject("PortraitLights");
+                lights.transform.position = origin;
+                void L(Vector3 p, Color col, float i2) { var g = new GameObject("L"); g.transform.SetParent(lights.transform, false); g.transform.localPosition = p; var l = g.AddComponent<Light>(); l.type = LightType.Point; l.range = 9f; l.intensity = i2; l.color = col; }
+                L(new Vector3(-1.6f, 2.4f, 2.2f), new Color(1f, 0.86f, 0.7f), 14f);
+                L(new Vector3(1.8f, 2.2f, -1.2f), new Color(0.37f, 0.66f, 1f), 9f);
+                L(new Vector3(0f, 1.6f, 3.0f), Color.white, 5f);
+                var rt = new RenderTexture(192, 256, 24);
+                for (int i = 0; i < Total; i++)
+                {
+                    var prefab = i < stage.RosterPrefabs.Length ? stage.RosterPrefabs[i] : null;
+                    if (prefab == null || Portraits[i] != null) continue;
+                    var go = UnityEngine.Object.Instantiate(prefab, origin, Quaternion.identity);
+                    var def = go.GetComponent<CharacterDef>();
+                    if (def != null) { def.ApplyVariant(0); if (def.Animator != null) def.Animator.enabled = false; }
+                    yield return null;
+                    cam.targetTexture = rt;
+                    cam.Render();
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = rt;
+                    var tex = new Texture2D(192, 256, TextureFormat.RGB24, false);
+                    tex.ReadPixels(new Rect(0, 0, 192, 256), 0, 0);
+                    tex.Apply();
+                    RenderTexture.active = prev;
+                    cam.targetTexture = null;
+                    Portraits[i] = Sprite.Create(tex, new Rect(0, 0, 192, 256), new Vector2(0.5f, 0.5f), 100f);
+                    UnityEngine.Object.Destroy(go);
+                }
+                rt.Release();
+                UnityEngine.Object.Destroy(rt);
+                UnityEngine.Object.Destroy(camGo);
+                UnityEngine.Object.Destroy(lights);
+            }
+            ApplyPortraits();
+        }
+
+        void ApplyPortraits()
+        {
+            for (int k = 0; k < _cells.Count && k < Total; k++)
+                if (_cells[k].Portrait != null) { _cells[k].Portrait.sprite = Portraits[k]; _cells[k].Portrait.color = Portraits[k] != null ? Color.white : Color.clear; }
+            Refresh();
+        }
+
+        // Called when the screen opens: the stage zooms to the local character and the saved look is shown.
+        public void Open()
+        {
+            _entry = PlayerAppearanceStore.Load();
+            Look = _entry;
+            Refresh();
+            if (_menu.Stage != null) _menu.Stage.SetCloseup(true);
+        }
+
+        public void Close() { if (_menu.Stage != null) _menu.Stage.SetCloseup(false); }
+
+        public void SelectModel(int index)
+        {
+            if (index < 0 || index >= Total) return;
+            Look = new PlayerAppearance { ModelId = PlayerAppearance.ModelIds[index], Variant = 0, Helmet = Look.Helmet, Vest = Look.Vest, Pack = Look.Pack }.Normalized();
+            Commit();
+        }
+
+        public void SetVariant(int v)
+        {
+            if (v < 0 || v >= VariantCount) return;
+            Look = new PlayerAppearance { ModelId = Look.ModelId, Variant = v, Helmet = Look.Helmet, Vest = Look.Vest, Pack = Look.Pack }.Normalized();
+            Commit();
+        }
+
+        public void SetGear(int gear, int tier)
+        {
+            var l = Look;
+            if (gear == 0) l.Helmet = tier; else if (gear == 1) l.Vest = tier; else l.Pack = tier;
+            Look = l.Normalized();
+            Commit();
+        }
+
+        // Saves, shows the new look on the 3D character at once and redraws this screen.
+        void Commit()
+        {
+            PlayerAppearanceStore.Save(Look);
+            if (_menu.Lobby != null && _menu.Panel != null) _menu.Panel.SyncStage();
+            Refresh();
+        }
+
+        void Refresh()
+        {
+            int idx = Look.ModelIndex;
             for (int k = 0; k < _cells.Count && k < Total; k++)
             {
-                bool on = k == i;
+                bool on = k == idx;
                 if (_cells[k].Fill != null) _cells[k].Fill.color = on ? UiPaint.AcS : UiPaint.Bg;
+                if (_cells[k].Portrait != null && _cells[k].Portrait.sprite != null) _cells[k].Portrait.color = on ? Color.white : new Color(0.6f, 0.6f, 0.6f, 1f); // unselected: 60 %
                 if (_cells[k].Ring != null) { _cells[k].Ring.color = on ? UiPaint.Ac : UiPaint.Ln; _cells[k].Ring.sprite = UiPaint.Round(16, on ? 2 : 1); }
             }
-            if (_check != null)
+            if (_header != null) _header.text = "외형 " + (idx + 1).ToString("00") + " / " + Total;
+            if (_name != null) _name.text = PlayerAppearance.ModelNames[idx];
+            if (_desc != null)
             {
-                var rt = (RectTransform)_check.transform;
-                rt.anchoredPosition = new Vector2(_cells[i].X + 47f, -(_cells[i].Y + 32f));
+                // A fixed three-line block (line height 1.5, 24 px above the buttons, ellipsis by truncation) so it never
+                // runs into the colour label above it.
+                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다. 장비는 시작할 때만 입고, 매치 중에는 주운 장비가 우선입니다.";
+                _desc.horizontalOverflow = HorizontalWrapMode.Wrap;
+                _desc.verticalOverflow = VerticalWrapMode.Truncate;
+                _desc.alignment = TextAnchor.UpperLeft;
+                _desc.fontSize = 18;
+                _desc.lineSpacing = 1.5f;
+                var dr = (RectTransform)_desc.transform;
+                dr.sizeDelta = new Vector2(466f, 84f);
+                dr.anchoredPosition = new Vector2(1371f, -(897f - 24f - 84f));
             }
-            if (_header != null) _header.text = "외형 " + (i + 1).ToString("00") + " / 24";
-            if (_name != null && _cells[i].Name != null) _name.text = _cells[i].Name;
+            BuildVariants(idx);
+            for (int g = 0; g < 3; g++)
+            {
+                int cur = g == 0 ? Look.Helmet : g == 1 ? Look.Vest : Look.Pack;
+                for (int t = 0; t < 4; t++)
+                {
+                    bool on = cur == t;
+                    _gearFill[g * 4 + t].color = on ? UiPaint.AcS : UiPaint.Pn;
+                    _gearTexts[g * 4 + t].color = on ? UiPaint.Tx : UiPaint.T2;
+                }
+            }
         }
 
-        public void SetColor(int c)
+        // The variant buttons of the chosen model (swatch = the model's material colour, label = the variant's name).
+        void BuildVariants(int idx)
         {
-            if (c < 0 || c > 5) return;
-            ColorIndex = c;
-            for (int k = 0; k < _colorRings.Count && k < 6; k++)
+            foreach (var o in _variantObjects) if (o != null) UnityEngine.Object.Destroy(o);
+            _variantObjects.Clear();
+            var stage = _menu.Stage;
+            CharacterVariant[] variants = null;
+            if (stage != null && stage.RosterPrefabs != null && idx < stage.RosterPrefabs.Length && stage.RosterPrefabs[idx] != null)
             {
-                var ring = _colorRings[k].transform.Find("Ring");
-                if (ring != null) ring.GetComponent<Image>().color = k == c ? UiPaint.Tx : UiPaint.Ln;
+                var def = stage.RosterPrefabs[idx].GetComponent<CharacterDef>();
+                if (def != null) variants = def.Variants;
             }
-            if (_colorLabel != null) _colorLabel.text = "색 변형 · " + ColorNames[c];
-            if (_preview != null && _previews[c] != null) _preview.sprite = _previews[c];
+            VariantCount = variants != null ? variants.Length : 1;
+            int cur = Mathf.Clamp(Look.Variant, 0, VariantCount - 1);
+            if (_colorLabel != null)
+                _colorLabel.text = "색 변형 · " + (variants != null && cur < variants.Length && !string.IsNullOrEmpty(variants[cur].Name) ? variants[cur].Name : "기본");
+            for (int v = 0; v < VariantCount; v++)
+            {
+                int vi = v;
+                float x = 1371f + (v % 6) * 82f, y = 270f + (v / 6) * 100f;
+                var holder = UiPaint.At(Screen.Stage, "Variant" + v, x, y, 66, 82);
+                _variantObjects.Add(holder.gameObject);
+                var btn = holder.gameObject.AddComponent<Image>();
+                btn.color = Color.clear; btn.raycastTarget = true;
+                holder.gameObject.AddComponent<Button>().onClick.AddListener(() => SetVariant(vi));
+                var disc = UiPaint.At(holder, "Disc", 6, 0, 54, 54);
+                UiPaint.Box(disc, SwatchColor(variants, v), 27, v == cur ? UiPaint.Tx : UiPaint.Ln, 3);
+                UiPaint.Label(holder, "No", 0, 58, 66, 22, (v + 1).ToString(), 16, UiPaint.T2, TextAnchor.MiddleCenter);
+            }
         }
 
-        public void Apply()
+        static Color SwatchColor(CharacterVariant[] variants, int v)
         {
-            PlayerPrefs.SetInt(IndexKey, Index);
-            PlayerPrefs.SetInt(ColorKey, ColorIndex);
-            PlayerPrefs.Save();
-            _savedIndex = Index; _savedColor = ColorIndex;
-            _menu.Toast("외형을 적용했습니다.");
-            _menu.Back();
+            if (variants == null || v >= variants.Length || variants[v].Materials == null) return UiPaint.T2;
+            foreach (var m in variants[v].Materials)
+            {
+                if (m == null) continue;
+                var tex = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : m.mainTexture;
+                var tint = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : Color.white;
+                if (tex != null) { var a = Average(tex); return new Color(a.r * tint.r, a.g * tint.g, a.b * tint.b, 1f); }
+                if (tint.a > 0.5f) return new Color(tint.r, tint.g, tint.b, 1f);
+            }
+            return UiPaint.T2;
+        }
+
+        // Average colour of a texture (blitted to 1x1 on the GPU): the swatch of a variant whose look is in its texture.
+        static readonly Dictionary<Texture, Color> AverageCache = new Dictionary<Texture, Color>();
+        static Color Average(Texture tex)
+        {
+            if (AverageCache.TryGetValue(tex, out var cached)) return cached;
+            var rt = RenderTexture.GetTemporary(1, 1, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(tex, rt);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var t = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            t.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(rt);
+            var c = t.GetPixel(0, 0);
+            UnityEngine.Object.Destroy(t);
+            c.a = 1f;
+            AverageCache[tex] = c;
+            return c;
         }
 
         public void Cancel()
         {
-            Select(_savedIndex); SetColor(_savedColor);
+            Look = _entry;
+            PlayerAppearanceStore.Save(_entry);
+            if (_menu.Panel != null) _menu.Panel.SyncStage();
             _menu.Back();
         }
 
-        public void Step(int delta)
-        {
-            int i = Mathf.Clamp(Index + delta, 0, Open - 1);
-            Select(i);
-        }
+        public void Apply() => _menu.Back();
+
+        public void Step(int delta) => SelectModel(Mathf.Clamp(Look.ModelIndex + delta, 0, Total - 1));
 
         void OnClick(MockScreen.Item it)
         {
             string a = !string.IsNullOrEmpty(it.go) ? it.go : it.act;
-            if (a != null && a.StartsWith("ch:")) { Select(int.Parse(a.Substring(3))); return; }
-            if (a != null && a.StartsWith("col:")) { SetColor(int.Parse(a.Substring(4))); return; }
+            if (a != null && a.StartsWith("ch:")) { SelectModel(int.Parse(a.Substring(3))); return; }
             if (it.id == "apply") { Apply(); return; }
             if (it.id == "cancel") { Cancel(); return; }
             if (it.id == "topchar") return; // already here
@@ -150,6 +369,9 @@ namespace Game.Gameplay
             if (kb.rightArrowKey.wasPressedThisFrame) Step(1);
             if (kb.enterKey.wasPressedThisFrame) Apply();
             if (kb.escapeKey.wasPressedThisFrame) Cancel();
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.isPressed && _menu.Stage != null && !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+                _menu.Stage.Spin(-mouse.delta.ReadValue().x * 0.4f);
         }
     }
 }
