@@ -11,7 +11,7 @@ namespace Game.Net
     {
         const float WindowSeconds = 10f;
 
-        readonly FrameStats _frames = new FrameStats();
+        readonly ServerFrameStats _frames = new ServerFrameStats();
         float _windowStart;
         int _rewindsAtStart;
         string _csv;
