@@ -214,10 +214,10 @@ namespace Game.Gameplay
                 "settings.botDifficulty", Game.Core.BotLevels.Labels, 1));
             Add(Choice(SettingId.DayTime, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "시간대",
                 "무작위: 매치마다 시작 시각이 달라지고 경기 중 시간이 흐릅니다. 그 밖의 값은 그 시간대로 고정합니다.",
-                "settings.dayTime", new[] { "무작위", "낮", "저녁", "밤" }, 0));
+                "settings.dayTime", new[] { "무작위", "낮", "저녁", "밤" }, 1)); // default 낮 (ADR-210)
             Add(Choice(SettingId.Weather, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "날씨",
                 "무작위: 매치마다 날씨가 달라집니다. 비와 안개는 시야를 줄입니다.",
-                "settings.weather", new[] { "무작위", "맑음", "비", "안개" }, 0));
+                "settings.weather", new[] { "무작위", "맑음", "비", "안개" }, 1)); // default 맑음 (ADR-210)
             return rows;
         }
 
