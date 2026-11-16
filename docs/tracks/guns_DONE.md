@@ -47,3 +47,10 @@ Unity 순번에서 할 일(순차 1회): ① FBX 복사·임포트(삼각형 수
 7. 신규 총 소리 요청서 `docs/tracks/guns_SOUND_REQUEST.md`.
 - 확인: Unity EditMode 1227/1227 통과(키트배시 후 재실행), Unity 프로세스 없음. 캡처 `docs/tracks/guns_shots/guns_hold_0~2.png`.
 - 못 한 것: 플레이어 빌드 드로우콜/SetPass 정량, Breacher 실제 박스 탄창 모델링, 모델 고유 구분(일부 같은 모델 재사용), 소유 밖 배선 2건(요구서로 인계).
+
+## 펀치 버그 (2026-11-17, ADR-218)
+- 확인(코드 읽기): 서버 판정 `Combatant.ServerPunch`(쿨다운·눈→가슴 사거리·60° 원뿔·시선 차단·머리 대체·팀/차량 거부)는 정상 연결. 이미 있는 피드백: 공격자 히트마커·확인음(`CombatantView.OnPunch`), 타격음(`CombatantAudio.OnPunch`, 무기는 `MeleeAudio`), 피격 방향(`Hud.DamageFrom`), 피해자 플린치(`CombatantAnimation` hp 감소 감지). 애니 트랙 이벤트는 `Combatant.Punched`(Victim·Zone·Hit) 그대로 쓰면 된다 — 새 인터페이스 불필요.
+- 실제 틈: **봇이 발 기준 1.5m에서 휘두르는데 서버 사거리는 지면 약 1.2m** → 봇이 허공에 주먹질(`BotPunchMeters` 1.5→1.2로 정렬). 플레이어 사거리는 주먹<낫(1.4m) 규칙 때문에 1.3→1.35만.
+- 테스트: EditMode `MeleeTests.Reach_CoversChestOrHead_FromContactToTheBotSwingDistance` 추가. 기존 PlayMode `PunchPlayTests`가 HP 감소·히트마커·타격음을 이미 단언하지만 **소리 PlayMode 금지라 실행 안 함**(미확인).
+- EditMode 1364/1378: 실패 14건은 전부 `CharacterAnimatorTests`·`CharacterRosterTests`(이 워크트리에 Mixamo FBX가 없어서, 총기 변경과 무관, 병합 뒤 master가 복원) 추정.
+- 소유 밖 변경: `Core/Melee.cs`·`rules.json`(Melee 절)·`MeleeTests`.
