@@ -264,7 +264,7 @@ namespace Game.Net
                 _networkManager.ServerManager.Spawn(bot);
                 number++;
                 var combatant = bot.GetComponent<Combatant>();
-                if (combatant != null && State != null) State.ServerSetName(combatant, "봇 " + number);
+                if (combatant != null && State != null) State.ServerSetName(combatant, BotNames.For(Seed, number - 1));
                 if (inElevator) ServerProtect(combatant);
             }
         }

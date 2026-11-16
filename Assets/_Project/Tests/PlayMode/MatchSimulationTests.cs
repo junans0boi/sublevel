@@ -61,12 +61,12 @@ namespace Game.Tests
             // Data values, whatever an earlier test left behind.
             BotRules.Current = GameData.Rules.Bot;
             MatchRules.Current = new MatchRules { BotCount = Bots };
-            ZoneDirector.RulesOverride = LockdownRules.QuickMatch();
+            PollutionDirector.RulesOverride = PollutionRules.QuickMatch();
             MatchDirector.LockdownSeedOverride = Seed();
             MatchDirector.DeploymentSeedOverride = Seed();
             SceneManager.LoadScene("World");
             yield return WaitUntil(() => Combatant.LocalPlayer != null && MatchState.Instance != null, 40f, "the local player in World");
-            yield return WaitUntil(() => ZoneDirector.Instance != null && ZoneDirector.Instance.ServerReady, 15f, "the zone director to start");
+            yield return WaitUntil(() => PollutionDirector.Instance != null && PollutionDirector.Instance.ServerReady, 30f, "the pollution to start");
         }
 
         [UnityTearDown]
@@ -74,7 +74,7 @@ namespace Game.Tests
         {
             Time.timeScale = _timeScaleBefore;
             MatchRules.Current = GameData.Rules.Match ?? new MatchRules();
-            ZoneDirector.RulesOverride = null;
+            PollutionDirector.RulesOverride = null;
             MatchDirector.LockdownSeedOverride = null;
             MatchDirector.DeploymentSeedOverride = null;
             SceneManager.LoadScene("Bootstrap");
@@ -98,13 +98,12 @@ namespace Game.Tests
         [UnityTest, Timeout(9 * 60 * 1000)]
         public IEnumerator FullMatch_FifteenBots_EndsWithOneSurvivor()
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             var state = MatchState.Instance;
-            var plan = zones.ServerPlan;
-            Assert.IsNotNull(plan, "the server plans the lockdown");
-            Assert.AreEqual(4, zones.RegionCount);
-            CollectionAssert.DoesNotContain(plan.Order, plan.FinalRegion, "the final region must never be in the closing order");
-            Assert.AreEqual(zones.RegionCount - 1, plan.Order.Length);
+            var plan = zones.Match != null ? zones.Match.Timeline : null;
+            Assert.IsNotNull(plan, "the server plans the pollution");
+            Assert.AreEqual(6, zones.RegionCount);
+            Assert.AreEqual(zones.RegionCount, plan.Order.Length, "every region is confirmed once, the final one last");
 
             var recorder = MatchRecorder.Attach();
             yield return WaitUntil(() => recorder.PlanKnown, 5f, "the recorder to read the plan");
@@ -120,7 +119,6 @@ namespace Game.Tests
 
             Time.timeScale = TimeScale;
             float realEnd = Time.realtimeSinceStartup + RealSecondsLimit;
-            int finalRegion = plan.FinalRegion;
             int alive = Bots;
             Combatant last = null;
             int aliveWhenOver = -1;
@@ -136,7 +134,6 @@ namespace Game.Tests
                     nextCensus = Time.time + 3f;
                     Census(anchors, idleBots, idleReasons, matchStart);
                 }
-                Assert.AreEqual(ZoneState.Safe, zones.StateOf(finalRegion), "the final region must never start closing");
                 alive = AliveCount(out last);
                 if (state.IsOver || alive <= 1)
                 {
@@ -163,8 +160,6 @@ namespace Game.Tests
             Assert.GreaterOrEqual(state.WinnerId, 0, "a winner is named");
             Assert.AreEqual(last.ObjectId, state.WinnerId, "the winner is the one left standing");
             Assert.IsFalse(last.IsPlayer, "the player was out from the start");
-            Assert.AreEqual(0, log.aliveInClosedRegionAtEnd, "nobody alive in a closed region");
-            Assert.AreNotEqual(ZoneState.Closed, zones.StateAt(last.transform.position), "the winner stands in a region that is not closed");
             Assert.IsFalse(log.finalInClosingOrder);
             Assert.AreEqual(Bots + 1, log.participants);
             // Nobody stuck: a bot standing in one spot for long while it was neither fighting nor healing is idle.

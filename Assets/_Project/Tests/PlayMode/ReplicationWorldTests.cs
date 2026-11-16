@@ -55,7 +55,7 @@ namespace Game.Tests
             yield return _net.Teardown();
         }
 
-        static ZoneDirector FindDirector() => Object.FindFirstObjectByType<ZoneDirector>();
+        static PollutionDirector FindDirector() => PollutionDirector.Instance;
 
         static IEnumerator Seconds(float s)
         {
@@ -70,7 +70,7 @@ namespace Game.Tests
         sealed class Heard
         {
             public readonly List<SkyState> Sky = new List<SkyState>();
-            public readonly List<ZoneUpdate> Zone = new List<ZoneUpdate>();
+            public readonly List<PollutionSync> Zone = new List<PollutionSync>();
             public readonly List<ElevatorDoorStatus> Elevator = new List<ElevatorDoorStatus>();
             public readonly List<DoorChanged> Doors = new List<DoorChanged>();
             public readonly List<GlassShattered> Glass = new List<GlassShattered>();
@@ -85,7 +85,7 @@ namespace Game.Tests
         {
             var h = new Heard();
             manager.ClientManager.RegisterBroadcast<SkyState>((m, c) => h.Sky.Add(m));
-            manager.ClientManager.RegisterBroadcast<ZoneUpdate>((m, c) => h.Zone.Add(m));
+            manager.ClientManager.RegisterBroadcast<PollutionSync>((m, c) => h.Zone.Add(m));
             manager.ClientManager.RegisterBroadcast<ElevatorDoorStatus>((m, c) => h.Elevator.Add(m));
             manager.ClientManager.RegisterBroadcast<DoorChanged>((m, c) => h.Doors.Add(m));
             manager.ClientManager.RegisterBroadcast<GlassShattered>((m, c) => h.Glass.Add(m));
@@ -163,12 +163,7 @@ namespace Game.Tests
             // A short lockdown, the first region to close not the player's; a crate comes down at stage 1.
             SupplyRules.Current = new SupplyRules { FirstStage = 1, EveryStages = 1, DescentSeconds = 4f, OpenSeconds = 0.6f, SmokeSeconds = 60f };
             int mine = director.RegionIndexAt(player.transform.position);
-            var rules = SupplyPlayTests.Fast();
-            var g = director.Geometry;
-            int seed = 0;
-            for (int s = 1; s < 2000 && seed == 0; s++)
-                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, s, g.SubZoneCounts(), rules).Order[0] != mine) seed = s;
-            director.ServerConfigure(rules, seed);
+            PollutionDirectorTests.ConfigureFirst(director, SupplyPlayTests.Fast(), mine, false);
             var supply = SupplyDirector.Instance;
             yield return NetHarness.WaitUntil(() => supply != null && supply.Crates.Count == 1, "the stage-1 crate on the server", Log, 20f);
             var crate = supply.Crates[0];
@@ -186,11 +181,10 @@ namespace Game.Tests
             yield return _net.AddClient(null, beforeConnect: nm => late = Listen(nm, supply, SkySync.Instance));
             yield return NetHarness.WaitUntil(() => late.SkyOnClient.Known && late.Zone.Count > 0 && late.Doors.Count > 0 && late.Glass.Count > 0 && late.Supply.Count > 0 && late.Elevator.Count > 0, "the late client was told everything", Log, 15f);
 
-            // Zones: the closing region's state with its time, as the server holds it.
-            ZoneUpdate region = default;
-            foreach (var z in late.Zone) if (z.Kind == ZoneUpdate.KindRegion) region = z;
-            Assert.AreNotEqual((byte)ZoneState.Safe, region.State, "a region that is closing is told as closing");
-            Assert.AreEqual(director.StateOf(region.Region), (ZoneState)region.State);
+            // Pollution: the late client was sent the order, the seed and the front hash the server runs on.
+            var sync = late.Zone[late.Zone.Count - 1];
+            Assert.AreEqual(director.Match.GridHash, sync.GridHash, "the same front");
+            CollectionAssert.AreEqual(director.Match.Timeline.Order, sync.Order);
             // Doors and glass arrive quietly (nothing to hear for something that happened long ago).
             Assert.AreEqual(0, late.Doors[0].Index);
             Assert.AreEqual((byte)DoorState.OpenAhead, late.Doors[0].State);
@@ -223,12 +217,7 @@ namespace Game.Tests
             var supply = SupplyDirector.Instance;
             yield return _net.AddClient(c => remote = c, beforeConnect: nm => remoteHeard = Listen(nm, supply, SkySync.Instance));
             int mine = director.RegionIndexAt(player.transform.position);
-            var rules = SupplyPlayTests.Fast();
-            var g = director.Geometry;
-            int seed = 0;
-            for (int s = 1; s < 2000 && seed == 0; s++)
-                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, s, g.SubZoneCounts(), rules).Order[0] != mine) seed = s;
-            director.ServerConfigure(rules, seed);
+            PollutionDirectorTests.ConfigureFirst(director, SupplyPlayTests.Fast(), mine, false);
             yield return NetHarness.WaitUntil(() => remoteHeard.SupplyOnClient.Crates.Count == 1, "the crate shows up on the remote client's director", Log, 20f);
             var onClient = remoteHeard.SupplyOnClient.Crates[0];
             var onServer = supply.Crates[0];

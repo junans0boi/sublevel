@@ -87,3 +87,21 @@
 - **35 m(캡 0.25, Cover10·11 비활성) 5회**: 1/5(실패)·5/5·5/5·5/5·5/5 → **run2~5 4회 연속 통과**(3회 연속 달성). run1은 첫 실행이 탄 4발이 표적 옆(0.4 m)으로 빗나감(실행 직후 첫 PlayMode, 원인 미확인). 로그 `Logs/lagcomp25b-run{1..5}.log`(저장소 밖). 시작 전 `ps` Unity 0개, 실행 중 다른 Unity 관측 없음(깨끗). → 장애물이 원인이라는 판단 **확인**, 캡 상향 불필요(ADR-243 보류 유지).
 - **P3 서버 측정 성공**(`--region C --perf p3 --participants 50 --bots 49`, 로그 `Logs/server-p3c.log`, `Logs/perf/s8_server_p3.csv`): 봇이 에이전트를 달 때까지(≈60 s) 기다린 뒤 **49/49 봇을 허브 (520, 800) 반경 60 m로 Warp**(오류 0). 밀집 후 10초 창 프레임 평균 2.1~2.8 ms, p99 4.1~6.0 ms, 최대 38 ms, 힙 ≈28 MB → 예산(10/25 ms) 안. **단서:** 이전 P0·P3 1차 값(약 20~60 s 구간)은 봇이 승강기 안(에이전트 없음)이라 **봇 AI를 실제로 돌린 측정이 아니었다**; LagComp 되감기 수 0(봇 사격은 되감기 없음, 사람이 없어서), 대역폭·교전량(총성 수)은 미측정 → 봇 몫 ≤4 ms 게이트 판정은 **밀집 후 구간만 유효**하고 교전 지표(만남/분·총성 수) 추가 전에는 "예산 안(교전 미확인)"으로만 기록.
 - 정리: 서버·Unity 프로세스 없음.
+
+## T2·T7 (2026-11-17): 이름·난이도 혼합·오염 경고 반응 — `git merge track/pollution`(fast-forward) 후
+- 구현: `Core/BotNames`·`BotMix`·`BotPollutionPlan`(순수) + `BotController`(봇별 난이도, 이름, `TryWarnedLeaveTarget`) + `MatchDirector` 이름 한 곳. ADR-245.
+- 확인: EditMode 1342건 중 **내 `BotBehaviourTests` 전부 통과**(이름 49개 유일, 혼합 비율 ±2%p, 경고 반응 단조: 어려움 30 s 100%, 쉬움 30 s 50~80%(이론 67%), 확정 40 s 전 100%). **실패 14건은 전부 `CharacterAnimatorTests`·`CharacterRosterTests`**: 이 워크트리에 로스터 FBX가 없어서(캐릭터 트랙 자산, `Roster_*.fbx.meta`가 삭제 상태로 나옴) — 내 변경과 무관(미확인: main에서도 같은 결과인지).
+- 수치(판정): 경고 105 s 중 **확정 45 s 전(경고 60 s 시점)에 이동을 시작한 비율** = 어려움 100%, 보통 100%(0~25 s 지연), 쉬움 100%(0~45 s 지연, 45<60) — 시뮬이 아니라 지연 분포 계산값. 실제 PlayMode 시나리오에서의 비율은 **미측정**.
+- **못 한 것:** T8 열쇠(줍기·삽입·탑승·목적지: `KeyElevatorNet.ServerInsert/Select`, `ElevatorRides.StationAt`, `TeamKey` public 필요), T9 팀 구성·칩, T10 도시 관심 지점, 최종 지역 인지(`KnowsFinal`)를 `ToFinalRegion`에 연결, 방독 사용, PlayMode 검증, `BotStats.escapeStalls`. 오염 쪽 요청: `KeyElevatorNet.TeamKey` public.
+
+## T8·최종 지역 인지 (2026-11-17, `git merge main` 후) — ADR-246
+- 구현(commit): 봇 열쇠 흐름 `TryKeyElevator`(경고·전선 임박 + 열쇠 보유 + 난이도별 사용 확률 0.5/0.8/1.0 → 자기 지역 승강장으로 이동 → `ServerInsert` → 6초 동승 대기 → `ServerClose` → 선택 단계에 `BotDestination(from, states, 알려진 최종 지역)` → `ServerSelect`), 최종 지역은 지도로 알 수 있을 때만(경고·오염 지역 ≥ ceil(2/3×지역 수)) `ToFinalRegion`에 사용, `KeyElevatorNet.TeamKey` public(오염 트랙 파일 1단어, master 승인), `ElevatorRides.StationSpawn` 접근자 추가. 열쇠 줍기는 기존 `KeysWanted=1` 유지. `[BotStat] warn-leave|key-insert|key-ride` 로그와 정적 카운터(`KeyInsertOk/Fail/KeyRides/WarnedLeaveStarts`), 서버 인자 `--perf-quick N`(오염 표 가속)·`--perf`는 판정 전까지 매치 유지.
+- 확인: EditMode 1345건 중 내 테스트(열쇠 사용 확률 3건 포함) 통과, 실패 14건은 전과 같은 Character 테스트(FBX 없음).
+- **막힘: 서버 빌드 실패** — `AssetValidator`: `LICENSE.txt missing: Assets/_Project/Art/Characters/Ubc; …/Art/Weapons/Roster` (main 병합분의 에셋 폴더에 LICENSE.txt가 없음, 내 변경과 무관). 라이선스 가드라 우회·더미 파일 생성은 안 함. → 실측(경고 이동 시작 비율, 열쇠 성공률, 수렴 시간)은 **미측정**.
+
+## 실측 결과와 마무리 (2026-11-17) — 있는 그대로
+서버 빌드(`Build/server`), `--participants 50 --bots 49 --region C --perf keys --perf-quick 2`(오염 표 2배속: 경고 52.5 s, 확정 2·3.75·5.25·6.5·7.5·8.25분). 이 구간 내내 다른 Unity 2개가 동시에 돌고 있었음(CPU 100%×2, 오염). 로그 `Logs/server-keys{,2,3}.log`(저장소 밖).
+- **경고 이동 시작(`[BotStat] warn-leave`)**: 3회 실행에서 22·6·19건. 확정까지 남은 시간 최소 40.0 s(1·2회)·34.0 s(3회) → **기록된 모든 봇이 확정 ≥34 s 전에 이동 시작(100%)**, 난이도별 건수 쉬움 9/1/6·보통 10/4/10·어려움 3/1/3. 쉬움·보통이 대부분 `since=12.5 s`(= 경고 52.5 − 최소 이동 40 s 강제 시점)에 몰림 = 지연 분포 계산값(쉬움 0~45 s는 강제 시점에 잘림)과 방향 일치. **한계:** 경고 지역에 있던 봇 전체 대비 비율(분모)은 못 셈 — 이동 시작 로그만 있어 경고 지역 봇 수를 같이 기록하지 못했다(그리고 매치가 빨리 결정되어 건수가 적음).
+- **열쇠 사용 성공률: 못 잼.** 모든 봇에 열쇠 1개를 준 실행(`--perf-keys`, "gave a key to 49 bots")에서도 `key-insert`·`key-ride` 0건, 자격 로그(`key-eligible`)도 0건 → 흐름이 그 이전 관문에서 막힘. 원인(`KeyElevatorNet`/`ElevatorRides.Running`/지역 상태 중 무엇)은 **미확인**: 진단 로그(`key-gate`)를 넣었으나 그 빌드·실행은 중단되어 결과 없음. 흐름 자체의 EditMode 확률 테스트만 통과(사용 확률 0.5/0.8/1.0).
+- **최종 지역 수렴 시간: 못 잼**(위와 같은 이유로 판 끝까지의 이동 지표를 남기지 않음).
+- **미구현(BACKLOG):** T9 팀 구성·칩 임무, 방독 사용, T10 도시 관심 지점, T4 이후 측정 자동화(T13), T5/T6(측정 게이트 미발동), T11 NavMesh 연결성, T12 통계 시나리오, LagComp 통계 테스트 임계. 열쇠 흐름의 막힘 원인 조사가 다음 첫 일.

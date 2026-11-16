@@ -33,7 +33,7 @@ public static class MatchKit
         go.AddComponent<Tugboat>();
         var director = go.AddComponent<MatchDirector>();
         // The region lockdown (M3); its barriers, banner and fog install themselves when it starts.
-        go.AddComponent<ZoneDirector>();
+        go.AddComponent<PollutionDirector>();
 
         Set(director, "_networkManager", p => p.objectReferenceValue = nm);
         Set(director, "_playerPrefab", p => p.objectReferenceValue = Prefab("Player"));

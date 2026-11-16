@@ -30,8 +30,6 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning: return "경고";
-                case ZoneState.Lockdown: return "봉쇄";
-                case ZoneState.Bombardment: return "폭격";
                 case ZoneState.Closed: return "폐쇄";
                 default: return "안전";
             }
@@ -65,8 +63,6 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning: return 0.0015f;
-                case ZoneState.Lockdown: return 0.007f;
-                case ZoneState.Bombardment: return 0.009f;
                 case ZoneState.Closed: return 0.014f;
                 default: return 0f;
             }
@@ -77,8 +73,6 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning: return new Color(0.78f, 0.62f, 0.25f, 1f);
-                case ZoneState.Lockdown: return new Color(0.55f, 0.68f, 0.22f, 1f);
-                case ZoneState.Bombardment: return new Color(0.62f, 0.50f, 0.22f, 1f);
                 case ZoneState.Closed: return new Color(0.70f, 0.30f, 0.18f, 1f);
                 default: return Current.Colour;
             }

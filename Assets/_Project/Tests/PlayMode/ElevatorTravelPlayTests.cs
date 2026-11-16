@@ -167,27 +167,18 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator Lockdown_StopsTheRegionsElevators_AndRedirectsARideIntoIt()
+        public IEnumerator Confirmation_StopsTheRegionsElevators_AndRedirectsARideIntoIt()
         {
             var rides = ElevatorRides.Instance;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             Assert.IsNotNull(zones);
             var player = Combatant.LocalPlayer;
             int start = rides.StationAt(Pos);
             int startRegion = rides.RegionOfStation(start);
             // The first region to close is not the player's: the player rides into it just before it is announced.
-            var rules = new LockdownRules
-            {
-                FirstWarningSeconds = 1f, WarningSeconds = 1.5f, LockdownSeconds = 60f, BombardmentSeconds = 60f,
-                MinSecondsBetweenClosings = 1000f, RadiationDps = 0.5f, RadiationGraceSeconds = 5f, KeysPerRegion = 0,
-                SubZoneStartDelaySeconds = 1000f,
-            };
-            var g = zones.Geometry;
-            int seed = 0;
-            for (int s = 1; s < 2000 && seed == 0; s++)
-                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, s, g.SubZoneCounts(), rules).Order[0] != startRegion) seed = s;
-            zones.ServerConfigure(rules, seed);
-            int doomed = zones.ServerPlan.Order[0];
+            var rules = PollutionDirectorTests.Timed(2.5f, 1.5f);
+            PollutionDirectorTests.ConfigureFirst(zones, rules, startRegion, false);
+            int doomed = zones.Match.Timeline.Order[0];
 
             Assert.IsTrue(rides.ServerTryStart(player, start, doomed), "safe -> safe should ride");
             yield return WaitUntil(() => rides.LocalRiding, 3f, "the ride to start");
@@ -207,7 +198,7 @@ namespace Game.Tests
             StringAssert.Contains("중지", Hud.Instance.Elevator.RowText(doomed));
 
             // Locked: its stations stop, for players and for the server.
-            yield return WaitUntil(() => zones.StateOf(doomed) == ZoneState.Lockdown, 5f, "the lockdown");
+            yield return WaitUntil(() => zones.StateOf(doomed) == ZoneState.Closed, 5f, "the confirmation");
             // Bots rode out of the announced region (ADR-079): wait for a station whose car is back up.
             int lockedStation = -1;
             yield return WaitUntil(() =>
@@ -235,7 +226,7 @@ namespace Game.Tests
         public IEnumerator Bot_RidesOutOfAnAnnouncedRegion_AlongsideThePlayer_ServerDecides()
         {
             var rides = ElevatorRides.Instance;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             var player = Combatant.LocalPlayer;
             int playerStation = rides.StationAt(Pos);
             int playerRegion = rides.RegionOfStation(playerStation);
@@ -249,18 +240,9 @@ namespace Game.Tests
             Assert.IsFalse(rides.ServerRiding(player));
 
             // The bot's region closes first; the bot stands in one of its stations, nearer than any pass.
-            var rules = new LockdownRules
-            {
-                FirstWarningSeconds = 1f, WarningSeconds = 30f, LockdownSeconds = 60f, BombardmentSeconds = 60f,
-                MinSecondsBetweenClosings = 1000f, RadiationDps = 0.5f, RadiationGraceSeconds = 5f, KeysPerRegion = 0,
-                SubZoneStartDelaySeconds = 1000f,
-            };
-            var g = zones.Geometry;
-            int seed = 0;
-            for (int sd = 1; sd < 2000 && seed == 0; sd++)
-                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, sd, g.SubZoneCounts(), rules).Order[0] != playerRegion) seed = sd;
-            zones.ServerConfigure(rules, seed);
-            int doomed = zones.ServerPlan.Order[0];
+            var rules = PollutionDirectorTests.Timed(30f, 29f);
+            PollutionDirectorTests.ConfigureFirst(zones, rules, playerRegion, false);
+            int doomed = zones.Match.Timeline.Order[0];
             int botStation = StationOfRegion(doomed);
             Combatant bot = null;
             foreach (var c in Combatant.All)
@@ -282,7 +264,7 @@ namespace Game.Tests
                 {
                     var bp = bot.transform.position;
                     int reg = zones.RegionIndexAt(bp);
-                    zones.TryEscapeTarget(bp, out var exit);
+                    zones.TryEscapeTarget(bp, -1, out var exit, out _, out _);
                     Assert.Fail("the bot never took the elevator: at " + bp + " region " + reg + " (" + zones.StateOf(reg) + "), station "
                         + botStation + " region " + rides.RegionOfStation(botStation) + " at " + botSite + ", flat "
                         + new Vector2(bp.x - botSite.x, bp.z - botSite.z).magnitude + ", exit " + exit + ", brain " + brain.enabled

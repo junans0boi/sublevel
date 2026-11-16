@@ -23,12 +23,7 @@ namespace Game.Tests
             public PlayerInputFrame Read() => Frame;
         }
 
-        internal static LockdownRules Fast() => new LockdownRules
-        {
-            FirstWarningSeconds = 0.3f, WarningSeconds = 0.4f, LockdownSeconds = 600f, BombardmentSeconds = 600f,
-            MinSecondsBetweenClosings = 1000f, RadiationDps = 0f, RadiationGraceSeconds = 100f, RadiationTickSeconds = 0.1f, ClosedDps = 0f,
-            BlastIntervalSeconds = 5f, BlastWarningSeconds = 0.5f, BlastDamage = 0f, KeysPerRegion = 0, KeyOpenSeconds = 2f, SubZoneStartDelaySeconds = 1000f,
-        };
+        internal static PollutionRules Fast() => PollutionDirectorTests.Fast();
 
         internal static IEnumerator WaitUntil(Func<bool> condition, float seconds, string what)
         {
@@ -42,28 +37,28 @@ namespace Game.Tests
 
         ScriptedInput _input;
         SupplyRules _before;
-        ZoneDirector _director;
+        PollutionDirector _director;
 
         // The World scene with the shortened lockdown, the player unhurtable and out of the first region to close.
-        internal static IEnumerator LoadWorld(IPlayerInput input, SupplyRules supply, Action<ZoneDirector> got)
+        internal static IEnumerator LoadWorld(IPlayerInput input, SupplyRules supply, Action<PollutionDirector> got)
         {
             BotRules.Current = new BotRules { TargetsPlayers = false };
             PlayerController.InputOverride = input;
             SceneManager.LoadScene("World");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 40f, "the local player in World");
-            var director = UnityEngine.Object.FindFirstObjectByType<ZoneDirector>();
-            if (director == null) director = new GameObject("ZoneDirector").AddComponent<ZoneDirector>();
-            yield return WaitUntil(() => director.ServerReady, 15f, "the zone director to start");
+            yield return WaitUntil(() => PollutionDirector.Instance != null && PollutionDirector.Instance.ServerReady, 30f, "the pollution to start");
+            var director = PollutionDirector.Instance;
             Combatant.LocalPlayer.ServerDamageFilter = _ => 0f;
             SupplyRules.Current = supply;
             int player = director.RegionIndexAt(Combatant.LocalPlayer.transform.position);
             var rules = Fast();
-            var g = director.Geometry;
-            int seed = 0;
-            for (int s = 1; s < 2000 && seed == 0; s++)
-                if (Lockdown.Plan(g.RegionCount, g.PassA, g.PassB, s, g.SubZoneCounts(), rules).Order[0] != player) seed = s;
-            Assert.AreNotEqual(0, seed);
-            director.ServerConfigure(rules, seed);
+            bool found = false;
+            for (int seed = 1; seed < 80 && !found; seed++)
+            {
+                Assert.IsTrue(director.ServerConfigure(rules, seed));
+                found = director.Match.Timeline.Order[0] != player;
+            }
+            Assert.IsTrue(found, "a seed whose first region is not the player's");
             got(director);
         }
 

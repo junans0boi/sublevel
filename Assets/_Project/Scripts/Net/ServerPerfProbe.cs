@@ -45,13 +45,13 @@ namespace Game.Net
         {
             var rng = new System.Random(12345);
             // No --perf-gather: meet at the hub of the final region, or of region 0 when the match has not chosen one yet
-            // (--region N picks it, ZoneDirector.FinalRegionOverride).
-            if (GatherX == 0f && GatherZ == 0f && ZoneDirector.Instance != null)
+            // (--region N picks it, PollutionDirector.FinalRegionOverride).
+            if (GatherX == 0f && GatherZ == 0f && PollutionDirector.Instance != null)
             {
-                int region = Mathf.Max(0, ZoneDirector.Instance.FinalRegion);
-                var hub = ZoneDirector.Instance.RegionCentre(region);
+                int region = Mathf.Max(0, PollutionDirector.Instance.FinalRegion);
+                var hub = PollutionDirector.Instance.RegionCentre(region);
                 GatherX = hub.x; GatherZ = hub.z;
-                Debug.Log($"[Perf] P3 region {region} (final {ZoneDirector.Instance.FinalRegion}), hub ({hub.x:F0}, {hub.z:F0})");
+                Debug.Log($"[Perf] P3 region {region} (final {PollutionDirector.Instance.FinalRegion}), hub ({hub.x:F0}, {hub.z:F0})");
             }
             int bots = 0, moved = 0, noNav = 0, noAgent = 0;
             foreach (var c in Combatant.All)
@@ -70,8 +70,19 @@ namespace Game.Net
             else Debug.Log(line);
         }
 
+        public static bool GiveKeys;
+        bool _keysGiven;
+
         void Update()
         {
+            if (GiveKeys && !_keysGiven && Combatant.All.Count > 1)
+            {
+                _keysGiven = true;
+                int n = 0;
+                foreach (var c in Combatant.All)
+                    if (c != null && !c.IsPlayer && c.TryGetComponent(out KeyHolder holder)) { holder.ServerAdd(1); n++; }
+                Debug.Log($"[Perf] gave a key to {n} bots");
+            }
             if (_gather && !_gathered && Combatant.All.Count > 1)
             {
                 if (_matchStart < 0f) _matchStart = Time.realtimeSinceStartup;

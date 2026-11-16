@@ -69,8 +69,6 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning: return new Color(1f, 0.78f, 0.2f);
-                case ZoneState.Lockdown: return new Color(0.66f, 0.9f, 0.18f);
-                case ZoneState.Bombardment: return new Color(1f, 0.42f, 0.08f);
                 case ZoneState.Closed: return new Color(0.62f, 0.07f, 0.06f);
                 default: return Color.clear;
             }
@@ -99,8 +97,6 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning: return "봉쇄 예정";
-                case ZoneState.Lockdown: return "봉쇄 중";
-                case ZoneState.Bombardment: return "폭격 중";
                 case ZoneState.Closed: return "폐쇄";
                 default: return "";
             }

@@ -78,7 +78,7 @@ namespace Game.Net
             return true;
         }
 
-        static int TeamKey(Combatant c) => c.HasTeam ? c.TeamId.Value : -(c.ObjectId + 1); // a solo player is a team of one
+        public static int TeamKey(Combatant c) => c.HasTeam ? c.TeamId.Value : -(c.ObjectId + 1); // a solo player is a team of one
 
         static Combatant Find(int objectId)
         {

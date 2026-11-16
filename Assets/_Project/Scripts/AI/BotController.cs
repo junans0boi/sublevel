@@ -59,6 +59,8 @@ namespace Game.AI
         static MatchDirector _pointsFor, _namedFor;
         static bool _pointsGiven, _pointsBuilt;
         static int _named;
+        int _botIndex;
+        BotDifficulty _level = BotDifficulty.Normal;
 
         Combatant _self;
         CombatantStance _stance;
@@ -286,11 +288,14 @@ namespace Game.AI
             _ready = true;
             _hearFactor = 1f;
             // The difficulty scales a copy of the data (Normal is the data itself).
-            _rules = BotLevels.For(BotRules.Current, BotLevels.Level);
+            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
+            // Each bot has its own level, the setting being the centre of a mix (ADR-245).
+            _botIndex = _named;
+            _level = BotMix.For(BotLevels.Level, matchSeed, _botIndex);
+            _rules = BotLevels.For(BotRules.Current, _level);
             if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
             SyncMatch();
-            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
             InitItems();
@@ -299,7 +304,7 @@ namespace Game.AI
             _noiseSeen = BotNoise.Count;
             _maxHp = Mathf.Max(1f, _self.Hp.Value);
             _named++;
-            DisplayName = "봇 " + _named;
+            DisplayName = BotNames.For(matchSeed, _botIndex);
             BotServerActions.SetDisplayName(_self, DisplayName);
         }
 
@@ -641,7 +646,7 @@ namespace Game.AI
             // is just wandering or looking into something.
             _goal = CurrentZoneGoal(at, out var goalTarget, out bool urgent, out _goalPass);
             if (_goal != ZoneGoal.Escape) _escapeOnward = false;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             // The very end with nothing to shoot with: running away would never end the match. Fists out, go at it.
             if (_percept.EnemyVisible && _enemy != null && !CanFight && zones != null && zones.OnlyFinalRegionLeft)
             {
@@ -659,10 +664,6 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            // At a shut barrier with a key: open it (it stays open for everyone for a while).
-            if (_goal == ZoneGoal.Escape && _goalPass >= 0 && _keys != null && _keys.Keys.Value > 0 && zones.IsPassBlocking(_goalPass)
-                && zones.PassDistance(_goalPass, at) <= zones.Rules.PassInteractRange)
-                _keys.ServerUseKey(_goalPass);
             bool zoneMove = _goal != ZoneGoal.None && (urgent || intent.State == BotState.Roam || intent.State == BotState.Investigate);
             if (!zoneMove) _goal = ZoneGoal.None;
 
@@ -769,14 +770,28 @@ namespace Game.AI
             target = default;
             urgent = false;
             pass = -1;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones == null || zones.RegionCount == 0) return ZoneGoal.None;
 
             int skip = Time.time < _skipPassUntil ? _skipPass : -1;
+            // A warning on the region it stands in: leave after a reaction delay by difficulty, before the front comes (ADR-245).
+            if (TryKeyElevator(zones, at, out target))
+            {
+                urgent = true;
+                _goalPass = -1;
+                return ZoneGoal.Elevator;
+            }
+            if (TryWarnedLeaveTarget(zones, at, out target, out urgent))
+            {
+                _warnedLeaves++;
+                _goalPass = -1;
+                return ZoneGoal.Escape;
+            }
             if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
             {
                 urgent = true;
-                // A running station nearer than the pass (ADR-079): ride out instead; standing in it starts the ride.
+                // A running station nearer than the target (ADR-079): ride out instead; standing in it starts the ride.
+                // (Until the key elevators replace free rides, ADR-170 / WP 7.)
                 var rides = ElevatorRides.Instance;
                 if (rides != null && rides.ServerBotRide(_self, Flat(target - at), out var station))
                 {
@@ -790,8 +805,8 @@ namespace Game.AI
                 if (_escapeOnward) target = zones.RegionCentre(toRegion);
                 return ZoneGoal.Escape;
             }
-            if (zones.TrySafeSubZoneTarget(at, out target, out urgent)) return ZoneGoal.SafeSubZone;
-            int final = zones.FinalRegion;
+            // A player learns the final region only when enough regions are warned or lost (M7); the bot reads the same map.
+            int final = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
             if (final < 0) return ZoneGoal.None;
             if (zones.RegionIndexAt(at) != final)
             {
@@ -803,12 +818,122 @@ namespace Game.AI
             return ZoneGoal.None;
         }
 
+        // ---- Key elevator (ADR-246): walk to a station of the region, insert the key, wait for company, pick a destination ----
+        public static int KeyInsertOk, KeyInsertFail, KeyRides;   // statistics for the success rate
+        const float KeyBoardWaitSeconds = 6f;   // doors open 30 s: a few seconds for the team to step in, then close
+        const float KeyStationMaxMeters = 400f;
+        int _keyStation = -1, _keyDecision;
+        bool _keyLogged, _keyNoStation;
+        static bool _keyGateLogged;
+        float _keyAt, _keyTryAt;
+
+        bool TryKeyElevator(PollutionDirector zones, Vector3 at, out Vector3 target)
+        {
+            target = default;
+            var net = KeyElevatorNet.Instance;
+            var rides = ElevatorRides.Instance;
+            if (_keys == null || net == null || rides == null || !rides.Running)
+            {
+                if (!_keyGateLogged) { _keyGateLogged = true; Debug.Log($"[BotStat] key-gate keys={_keys != null} net={net != null} rides={rides != null} running={(rides != null && rides.Running)}"); }
+                return false;
+            }
+            var sys = net.System;
+            if (_keyStation >= 0)
+            {
+                if (sys == null || _keyStation >= sys.Count || sys.Station(_keyStation).HolderId != _self.ObjectId) { _keyStation = -1; return false; }
+                var st = sys.Station(_keyStation);
+                target = rides.StationSpawn(_keyStation);
+                switch (st.Phase)
+                {
+                    case KeyPhase.DoorOpen:
+                        if (Time.time - _keyAt >= KeyBoardWaitSeconds) net.ServerClose(_self);
+                        return true;
+                    case KeyPhase.Selecting:
+                    {
+                        var states = zones.States;
+                        int from = sys.RegionOf(_keyStation);
+                        int known = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
+                        int dest = KeyElevatorTravel.BotDestination(from, states, known);
+                        if (dest >= 0 && net.ServerSelect(_self, dest)) { KeyRides++; Debug.Log($"[BotStat] key-ride from={from} to={dest} known={known} bot={_botIndex}"); }
+                        return true;
+                    }
+                    default: _keyStation = -1; return false;
+                }
+            }
+            if (_keys.Keys.Value <= 0 || !_self.Standing) return false;
+            int own = zones.RegionIndexAt(at);
+            if (own < 0 || !(zones.StateOf(own) == ZoneState.Warning || zones.IsDoomed(at))) return false;
+            if (_keyDecision == 0) _keyDecision = BotPollutionPlan.WantsKey(_level, unchecked(_botIndex * 7919 + _self.ObjectId)) ? 1 : -1;
+            if (!_keyLogged) { _keyLogged = true; Debug.Log($"[BotStat] key-eligible bot={_botIndex} level={_level} wants={_keyDecision > 0} region={own} stations={rides.StationCount}"); }
+            if (_keyDecision < 0) return false;
+            int best = -1;
+            float bestMeters = KeyStationMaxMeters;
+            for (int i = 0; i < rides.StationCount; i++)
+            {
+                if (rides.RegionOfStation(i) != own) continue;
+                float m = Flat(rides.StationSpawn(i) - at);
+                if (m < bestMeters) { bestMeters = m; best = i; }
+            }
+            if (best < 0) { if (!_keyNoStation) { _keyNoStation = true; Debug.Log($"[BotStat] key-nostation bot={_botIndex} region={own}"); } return false; }
+            target = rides.StationSpawn(best);
+            if (rides.StationAt(at) == best && Time.time >= _keyTryAt)
+            {
+                _keyTryAt = Time.time + 1f;
+                if (net.ServerInsert(_self, best)) { _keyStation = best; _keyAt = Time.time; KeyInsertOk++; Debug.Log($"[BotStat] key-insert station={best} level={_level} bot={_botIndex}"); }
+                else { KeyInsertFail++; if (KeyInsertFail <= 5) Debug.Log($"[BotStat] key-insert-failed bot={_botIndex} station={best} standing={_self.Standing} keys={_keys.Keys.Value}"); }
+            }
+            return true;
+        }
+
+        // How many regions are warned or lost (what a player can read off the map).
+        static int KnownRegions(PollutionDirector zones)
+        {
+            int n = 0;
+            for (int r = 0; r < zones.RegionCount; r++) if (zones.StateOf(r) != ZoneState.Safe) n++;
+            return n;
+        }
+
+        // Counts the legs this bot started because of a warning, for the statistics (BotStats).
+        public static int WarnedLeaveStarts;
+        int _warnedLeaves;
+
+        bool TryWarnedLeaveTarget(PollutionDirector zones, Vector3 at, out Vector3 target, out bool urgent)
+        {
+            target = default;
+            urgent = false;
+            int own = zones.RegionIndexAt(at);
+            if (own < 0 || zones.StateOf(own) != ZoneState.Warning) return false;
+            float left = zones.SecondsLeft(own);
+            if (left < 0f) return false;
+            float since = Mathf.Max(0f, zones.Rules.WarningLeadSeconds - left);
+            if (!BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, left, zones.IsDoomed(at), _level, unchecked(_botIndex * 7919 + _self.ObjectId))) return false;
+            // The middle of the nearest region that is neither warned nor lost.
+            float best = float.MaxValue;
+            bool found = false;
+            for (int r = 0; r < zones.RegionCount; r++)
+            {
+                if (r == own || zones.StateOf(r) != ZoneState.Safe) continue;
+                var c = zones.RegionCentre(r);
+                if (zones.IsDoomed(c)) continue;
+                float d = Flat(c - at);
+                if (d < best) { best = d; target = c; found = true; }
+            }
+            if (!found) return false;
+            urgent = left <= 40f; // before that the brain may still fight; in the last stretch walking out wins
+            if (_warnedLeaves == 0)
+            {
+                WarnedLeaveStarts++;
+                Debug.Log($"[BotStat] warn-leave level={_level} since={since:F1} left={left:F1} region={own} bot={_botIndex}");
+            }
+            return true;
+        }
+
         // The nearest living combatant this bot may fight (endgame knowledge, like a shrinking final circle). One
         // standing where the lockdown is closing in is only chosen when nobody else is left: it will come out or die.
         bool TryNearestEnemy(Vector3 at, out Vector3 position)
         {
             position = default;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             float best = float.MaxValue, bestDoomed = float.MaxValue;
             Vector3 doomedAt = default;
             var all = Combatant.All;
@@ -837,7 +962,7 @@ namespace Game.AI
         // once it is known.
         bool RoamAllowed(BotVec point)
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones == null || zones.RegionCount == 0) return true;
             var p = ToVector(point);
             if (zones.IsDoomed(p)) return false;
@@ -930,8 +1055,7 @@ namespace Game.AI
             switch (_goal)
             {
                 case ZoneGoal.Escape:
-                    var zones = ZoneDirector.Instance;
-                    return zones != null && _goalPass >= 0 && zones.IsPassBlocking(_goalPass) ? "escape-barrier" : "escape";
+                    return "escape";
                 case ZoneGoal.SafeSubZone: return "safe-subzone";
                 case ZoneGoal.ToFinalRegion: return "to-final-region";
                 case ZoneGoal.Hunt: return "hunt";

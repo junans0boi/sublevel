@@ -43,3 +43,12 @@
 - 현재 상태: 오염이 판을 돌린다. `ZoneDirector`는 지오메트리 소스가 없어 **작동하지 않음**(컴파일만 유지, `BotController` 5곳 때문). **봇은 아직 오염을 피하지 않는다**(botsnet 병합 뒤 `IsDoomed/TryEscapeTarget`을 전선 도달 시간 기반으로 이전).
 - 남음(삭제 대상): `ZoneDirector.cs`, `Lockdown.cs`(+`ZoneGeometry`는 별도 파일로 보존), `PassBarrier.cs`, `KeyHolder.ServerUseKey/CmdUseKey`, `Editor/MatchKit.cs`·`TestBoxBuilder.cs` 참조, `ZoneState.Lockdown/Bombardment`. 테스트: EditMode `LockdownTests`(Lockdown 삭제와 함께, `PollutionTests`가 순서·연결·전선·피해·경고를 이미 덮음 — 겹치지 않는 항목만 이전), PlayMode `ZoneDirectorTests`·`MinimapZoneTests`·`SupplyPlayTests`·`ElevatorTravelPlayTests`·`MatchSimulationTests`·`ReplicationWorldTests`·`MatchEndToEndTests`·`SupplyCaptureTests`는 `PollutionDirector.ServerStart` 기준으로 재작성(PlayMode는 소리 여부 확인 뒤 실행 — 이번엔 실행하지 않음).
 - 환경 이슈: 이 워크트리에는 Mixamo FBX가 없어 `CharacterRosterTests` 7건이 실패한다(오염과 무관, main 체크아웃에서는 통과해야 함).
+
+## T10 완료 (코드, 06c1156) — 2026-11-16
+- 삭제: `ZoneDirector.cs`, `Lockdown.cs`(→ `ZoneState`(Safe/Warning/Closed)·`ZoneGeometry`는 `Core/ZoneGeometry.cs`로 이전), `PassBarrier.cs`, `LockdownTests.cs`, `ZoneDirectorTests.cs`, `KeyHolder.ServerUseKey/CmdUseKey`.
+- 봇: `BotController` ZoneDirector 5곳 → `PollutionDirector`(+7/-12). 통로 열쇠·소구역 분기 삭제. `IsDoomed/TryEscapeTarget`은 전선 도달 시간 기반(`PollutionDirector.Compat.cs`).
+- 테스트 재작성 목록: `FinalRegionRandomnessTests`(섬 6지역·`PollutionOrder`, `forcedFinal` 테스트 추가), `ElevatorTravelTests`·`SupplyTests`(Lockdown/Bombardment→Closed), PlayMode: 신규 `PollutionDirectorTests`(일정·피해·방독·스냅샷), `SupplyPlayTests`·`MinimapZoneTests`·`ElevatorTravelPlayTests`·`MatchSimulationTests`·`ReplicationWorldTests`(`PollutionSync` 기준)·`MatchEndToEndTests`(6단계)·`SupplyCaptureTests`. `LockdownTests`가 덮던 순서·연결·시간표·피해는 `PollutionTests`·`PollutionMapTests`가 덮는다.
+- 의미 변경(기록): 최종 지역도 마지막에 확정(전엔 닫히지 않음). `MatchSimulationTests`의 "최종 지역이 닫히지 않음"·"종료 시 폐쇄 지역에 생존자 없음" 단언 삭제(전선은 지역 확정 뒤 셀 단위로 번지므로 성립하지 않음). `MatchRecorder.finalInClosingOrder`는 "마지막이 아닌 자리에 최종 지역"일 때만 참.
+- 확인: Unity EditMode 컴파일(양 어셈블리) 통과, 1321/1335 — 실패 14건은 모두 `CharacterRosterTests`·`CharacterAnimatorTests`(이 워크트리에 Mixamo FBX 없음). **PlayMode 테스트는 실행하지 않았다**(소리 가능성) → 순번과 음소거 확인 뒤 실행 필요(`PollutionDirectorTests`, `ElevatorTravelPlayTests`, `MatchSimulationTests`, `ReplicationWorldTests`, `SupplyPlayTests`).
+- 남은 구 시스템: 자유 승강(`ElevatorRides.RequestRide/ServerTryStart`, `ElevatorPanel` hold-F)은 열쇠 승강기 UI로 교체될 때까지 유지(ADR-170) — 봇 인터페이스는 `pollution_BOT_API.md`.
+- `Editor/TestBoxBuilder.cs`의 통로 장벽 이펙트 에셋 생성 코드는 남김(미사용, 정리 대기).

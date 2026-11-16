@@ -54,6 +54,18 @@ namespace Game.Core
         public float ChipSeconds = 90f;         // from death: pick up and put into a box, or it is gone
         public float ChipReviveHp = 10f;
 
+        // A whole match in a few minutes, for review builds and the match simulation test: the table and the front
+        // speed run `scale` times faster; the warning lead shrinks with it.
+        public static PollutionRules QuickMatch(float scale = 8f)
+        {
+            var r = new PollutionRules();
+            for (int i = 0; i < r.ConfirmMinutes.Length; i++) r.ConfirmMinutes[i] /= scale;
+            r.WarningLeadSeconds /= scale;
+            r.MinConfirmGapMinutes /= scale;
+            r.FlatSpeed *= scale; r.RoadSpeed *= scale; r.SteepSpeed *= scale;
+            return r;
+        }
+
         // Confirmation time of closing k in seconds, stretched so neighbours are at least MinConfirmGapMinutes apart.
         public float[] ConfirmSeconds(int count)
         {
