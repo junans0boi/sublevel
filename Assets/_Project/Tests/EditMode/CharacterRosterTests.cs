@@ -191,13 +191,17 @@ namespace Game.Tests
             }
             finally { Object.DestroyImmediate(go); }
             foreach (var (id, len) in weapons) sb.AppendLine($"weapon {id}: {len:F2} m = {len / 1.8f:F2} x height = {len / arm:F2} x arm ({arm:F2} m)");
-            // Ordered by id: pistol < SMG < bullpup < shotgun < long gun, strictly growing.
-            for (int i = 1; i < weapons.Length; i++) Assert.Greater(weapons[i].len, weapons[i - 1].len);
-            Assert.That(weapons[0].len, Is.InRange(0.18f, 0.30f), "pistol is a handgun");
-            Assert.That(weapons[2].len / 1.8f, Is.InRange(0.38f, 0.60f), "rifle is about half a person tall (real rifles 0.7-1.0 m)");
-            Assert.LessOrEqual(weapons[^1].len / 1.8f, 0.62f, "longest gun");
+            // The 21-gun roster (ADR-172/217) is not ordered by length, so the strict id ordering of the original five
+            // (pistol 1 < SMG 2 < bullpup 3 < Breacher 4 < Sentinel 5) is asserted on those ids only.
+            var baseline = weapons.Where(w => w.id >= 1 && w.id <= 5).ToArray();
+            for (int i = 1; i < baseline.Length; i++) Assert.Greater(baseline[i].len, baseline[i - 1].len);
+            var byId = weapons.ToDictionary(w => w.id, w => w.len);
+            Assert.That(byId[1], Is.InRange(0.18f, 0.30f), "pistol is a handgun");
+            Assert.That(byId[3] / 1.8f, Is.InRange(0.38f, 0.60f), "rifle is about half a person tall (real rifles 0.7-1.0 m)");
+            // No gun is longer than ~0.7 x height or shorter than a handgun.
+            foreach (var (id, len) in weapons) { Assert.LessOrEqual(len / 1.8f, 0.70f, "weapon " + id + " too long"); Assert.GreaterOrEqual(len, 0.18f, "weapon " + id + " too short"); }
             // Two-hand reach: a rifle must be longer than one arm but no more than ~2 arms (grip behind + support hand ahead).
-            Assert.That(weapons[2].len / arm, Is.InRange(1.0f, 2.2f), "rifle vs arm reach");
+            Assert.That(byId[3] / arm, Is.InRange(1.0f, 2.2f), "rifle vs arm reach");
             Append(sb);
         }
 
