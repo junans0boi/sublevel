@@ -381,7 +381,7 @@ namespace Game.Gameplay
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal) + lying + sitting;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal + _plantDrop) + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -442,8 +442,8 @@ namespace Game.Gameplay
             if (_footLeft != null && _footRight != null)
             {
                 // Heights as the clip has them: without the landing dip.
-                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal);
-                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal);
+                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal + _plantDrop);
+                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal + _plantDrop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
                 bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f && _seated < 0.5f
@@ -540,6 +540,7 @@ namespace Game.Gameplay
         {
             if (_crouch <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
             float low = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
+            low += _plantDrop; // the pelvis drop of the foot plant (a slope) is not the crouch's to undo
             float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);
             _animator.transform.position -= transform.up * (total - _footFixTotal);
             FootFix = _footFixTotal = total;

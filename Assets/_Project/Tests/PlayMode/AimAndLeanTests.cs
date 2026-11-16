@@ -303,18 +303,32 @@ namespace Game.Tests
             float shouldersForward = 0f;
             yield return Average("UpperArm.L", "UpperArm.R", a => shouldersForward = a);
 
+            // The leg turn the code asked for, averaged over the same window as the hips line: the room's walls stop the forward
+            // part of the motion, which swings the direction (and the turn) towards the side, so the test compares the two
+            // measurements with each other instead of with a fixed angle.
+            float turn = 0f;
+            IEnumerator AverageTurn(Action<float> done)
+            {
+                float sum = 0f; int n = 0;
+                for (float end = Time.time + 0.8f; Time.time < end; n++) { yield return null; sum += me.GetComponent<CombatantAnimation>().LegTurnDeg; }
+                done(sum / n);
+            }
             _input.Frame.Move = new Vector2(1, 1);
             yield return new WaitForSeconds(0.6f);
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(45f, hips, 15f, "forward-right: the legs point where the body goes");
+            Assert.That(turn, Is.InRange(30f, 65f), "forward-right: the legs are turned towards the right");
+            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn: the legs point where the body goes");
             Assert.AreEqual(shouldersForward, shoulders, 12f, "the shoulders still face the aim");
 
             _input.Frame.Move = new Vector2(-1, 0);
             yield return new WaitForSeconds(0.6f);
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(-60f, hips, 15f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(-60f, turn, 8f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn");
             Assert.AreEqual(shouldersForward, shoulders, 12f);
 
             // With the weapon up it must point where the player aims, moving or not.

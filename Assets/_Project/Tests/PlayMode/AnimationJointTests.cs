@@ -176,6 +176,35 @@ namespace Game.Tests
         }
 
         [UnityTest]
+        public IEnumerator MovingDiagonally_TurnsTheLegsTowardsTheMotion_WhileTheShouldersKeepTheAim()
+        {
+            yield return Load();
+            yield return GiveRifle();
+            float hipsFacing = 0f, shoulderFacing = 0f, legTurn = 0f; int n = 0;
+            _input.Frame.Move = new Vector2(1, 1);
+            yield return new WaitForSeconds(0.8f);
+            for (float end = Time.time + 1.0f; Time.time < end; n++)
+            {
+                yield return null;
+                hipsFacing += Facing(HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg);
+                shoulderFacing += Facing(HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm);
+                legTurn += _anim.LegTurnDeg;
+            }
+            hipsFacing /= n; shoulderFacing /= n; legTurn /= n;
+            Debug.Log($"[AnimMetrics] diagonal: leg turn {legTurn:F1} hips line {hipsFacing:F1} shoulder line {shoulderFacing:F1} deg from the facing");
+            Assert.That(legTurn, Is.InRange(30f, 65f), "the legs turn towards the motion (a wall in the room can swing the direction, so a range)");
+            Assert.AreEqual(legTurn, hipsFacing, 18f, "the hips line follows the leg turn");
+            Assert.AreEqual(legTurn, hipsFacing - shoulderFacing, 18f, "the shoulders hold the aim while the hips turn");
+        }
+
+        // Which way a left-right pair of joints faces, degrees from the player's facing (right positive).
+        float Facing(HumanBodyBones left, HumanBodyBones right)
+        {
+            var across = _pc.transform.InverseTransformDirection(B(right).position - B(left).position);
+            return Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg;
+        }
+
+        [UnityTest]
         public IEnumerator Reload_TheActionLayerCarriesBothHands_AndTheGripIsBackAfterwards()
         {
             yield return Load();
@@ -221,6 +250,45 @@ namespace Game.Tests
             Assert.Greater(r0[6], 45f, "the trunk lies along the ground (deg from upright, 90 = flat; the chest is lifted to look ahead)");
             Assert.Less(Mathf.Max(r0[4], r0[5]), 0.4f, "both ankles close to the floor (m)");
             Assert.LessOrEqual(Mathf.Abs(r0[7]), 8f, "barrel along the look");
+        }
+
+        // Both ankles' height over the ground under each (the ramp's top), minus the rest height of an ankle on flat ground.
+        float[] SoleErrors(Collider ground, float rest)
+        {
+            var errors = new float[2];
+            int i = 0;
+            foreach (var bone in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot })
+            {
+                var p = B(bone).position;
+                Assert.IsTrue(ground.Raycast(new Ray(p + Vector3.up * 1f, Vector3.down), out var hit, 3f), "ground under the foot");
+                errors[i++] = p.y - hit.point.y - rest;
+            }
+            return errors;
+        }
+
+        [UnityTest] public IEnumerator On25DegreeSlope_BothFeetStayOnTheGround() { yield return OnSlope(25f, 0.03f); }
+        [UnityTest] public IEnumerator On35DegreeSlope_BothFeetStayWithin5Cm() { yield return OnSlope(35f, 0.05f); }
+
+        IEnumerator OnSlope(float SlopeDeg, float tolerance)
+        {
+            yield return Load();
+            var slope = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            slope.name = "TestSlope";
+            slope.transform.position = new Vector3(-12f, -0.9f, -26f);
+            slope.transform.rotation = Quaternion.Euler(-SlopeDeg, 0f, 0f);       // rises towards +z
+            slope.transform.localScale = new Vector3(8f, 2f, 14f);
+            Physics.SyncTransforms();
+            var col = slope.GetComponent<Collider>();
+            Assert.IsTrue(col.Raycast(new Ray(new Vector3(-12f, 5f, -26f), Vector3.down), out var top, 10f));
+            float flatRest = _anim.FootRest; // ankle height over the floor standing on flat ground, measured in the saved pose
+            _pc.Teleport(top.point + Vector3.up * 0.05f);
+            _pc.LookAt(top.point + new Vector3(0f, 1.6f, 10f)); // up the slope: one foot is uphill of the other when the stance is staggered
+            yield return new WaitForSeconds(1.2f);
+            var err = SoleErrors(col, flatRest / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad)); // vertical offset of an ankle over a sloped sole
+            Debug.Log($"[AnimMetrics] slope {SlopeDeg} deg: sole errors left {err[0]:F3} right {err[1]:F3} m, plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} pelvis drop {_anim.PlantDrop:F3} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]} | capsule y {_pc.transform.position.y:F3} ground at origin {top.point.y:F3}");
+            Assert.LessOrEqual(Mathf.Abs(err[0]), tolerance, "left foot on the slope (m)");
+            Assert.LessOrEqual(Mathf.Abs(err[1]), tolerance, "right foot on the slope (m)");
+            UnityEngine.Object.Destroy(slope);
         }
 
         [UnityTest]
