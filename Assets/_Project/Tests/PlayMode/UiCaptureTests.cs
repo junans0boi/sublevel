@@ -17,7 +17,7 @@ namespace Game.Tests
     [Explicit, Category("Capture")]
     public class UiCaptureTests
     {
-        static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 1920, 1200 }, new[] { 3440, 1440 } };
+        static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 1366, 768 }, new[] { 1920, 1200 }, new[] { 3440, 1440 } };
 
         static string Folder()
         {
@@ -50,6 +50,47 @@ namespace Game.Tests
                 yield return UiShot.Save(Path.Combine(folder, name + "_" + s[0] + "x" + s[1] + ".png"), s[0], s[1]);
         }
 
+        // Mockup-screen elements (rect, text, size) for the numeric comparison.
+        static void DumpScreen(MockScreen s, string path)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in s.Rects)
+            {
+                var it = kv.Key;
+                sb.AppendLine(string.Join("|", it.k, Mathf.Round(it.r[0]), Mathf.Round(it.r[1]), Mathf.Round(it.r[2]), Mathf.Round(it.r[3]), it.t ?? it.src ?? "", it.fs, it.fw));
+            }
+            File.WriteAllText(path, sb.ToString());
+        }
+
+        // Every element's rect in stage pixels (top-left origin) with its text, to compare against the measured mockup.
+        static void DumpRects(LobbyPanel panel, string path)
+        {
+            var sb = new System.Text.StringBuilder();
+            var stage = panel.Stage;
+            var corners = new Vector3[4];
+            foreach (var r in stage.GetComponentsInChildren<RectTransform>(false))
+            {
+                if (r == stage) continue;
+                r.GetWorldCorners(corners);
+                var tl = stage.InverseTransformPoint(corners[1]); var br = stage.InverseTransformPoint(corners[3]);
+                float x = tl.x + 960f, y = 540f - tl.y, w = br.x - tl.x, h = tl.y - br.y;
+                var text = r.GetComponent<UnityEngine.UI.Text>();
+                var img = r.GetComponent<UnityEngine.UI.Image>();
+                string col = text != null ? ColorUtility.ToHtmlStringRGBA(text.color) : img != null ? ColorUtility.ToHtmlStringRGBA(img.color) : "";
+                // Text: the glyph box (preferred size placed by the alignment), which is what the mockup's text rects measure.
+                if (text != null)
+                {
+                    float pw = Mathf.Min(text.preferredWidth, text.horizontalOverflow == HorizontalWrapMode.Wrap ? w : float.MaxValue), ph = text.preferredHeight;
+                    string a = text.alignment.ToString();
+                    float gx = a.EndsWith("Left") ? x : a.EndsWith("Right") ? x + w - pw : x + (w - pw) * 0.5f;
+                    float gy = a.StartsWith("Upper") ? y : a.StartsWith("Lower") ? y + h - ph : y + (h - ph) * 0.5f;
+                    x = gx; y = gy; w = pw; h = ph;
+                }
+                sb.AppendLine(string.Join("|", r.name, Mathf.Round(x), Mathf.Round(y), Mathf.Round(w), Mathf.Round(h), text != null ? text.text.Replace("\n", " ") : "", text != null ? text.fontSize + "/" + text.fontStyle : "", col));
+            }
+            File.WriteAllText(path, sb.ToString());
+        }
+
         [UnityTest, Timeout(240000)]
         public IEnumerator Lobby_Solo_And_Squad_AndTheOtherScreens()
         {
@@ -62,26 +103,84 @@ namespace Game.Tests
             StringAssert.Contains("솔로", panel.LedText);
             yield return Shots(folder, "lobby_solo");
 
-            panel.Party.SetMode(LobbyPanel.SelfId, TeamMode.Squad);
-            panel.Refresh();
+            // Squad as leader: 도윤 ready, 서아 not yet (the mockup's sample party).
+            var squad = new PartyLobby(0, "해무"); squad.Join(2, "도윤"); squad.Join(3, "서아"); squad.SetReady(2, true);
+            panel.SetParty(squad, 0);
             StringAssert.Contains("스쿼드", panel.LedText);
-            StringAssert.Contains("팀 규칙", panel.ReasonText, "squad cannot start yet and says why");
+            Assert.AreEqual("파티 시작", panel.StatusLabel);
+            StringAssert.Contains("서아 님이 준비 중입니다", panel.ReasonText);
+            DumpRects(panel, Path.Combine(folder, "lobby_squad_rects.txt"));
             yield return Shots(folder, "lobby_squad");
 
-            panel.Party.SetMode(LobbyPanel.SelfId, TeamMode.Solo);
-            panel.Refresh();
+            // Matching.
+            squad.SetReady(3, true); squad.Start(0);
+            panel.SetParty(squad, 0);
+            StringAssert.Contains("매칭 취소", panel.StatusLabel);
+            yield return Shots(folder, "lobby_search");
+
+            // Member view: 서아 leads, I (해무) have not readied.
+            var member = new PartyLobby(10, "서아"); member.Join(0, "해무"); member.Join(2, "도윤"); member.SetReady(2, true);
+            panel.SetParty(member, 0);
+            Assert.AreEqual("준비", panel.StatusLabel);
+            yield return Shots(folder, "lobby_member");
+
+            panel.SetParty(new PartyLobby(0, "해무"), 0);
             menu.ShowCustom();
             Assert.IsTrue(menu.CustomShown);
+            Assert.AreEqual("50명", menu.CustomPanel.DropText[0].text);
+            StringAssert.Contains(":", menu.CustomPanel.Code);
+            menu.CustomPanel.SetView(true);
+            Assert.IsTrue(menu.CustomPanel.FirstPerson);
+            menu.CustomPanel.SetView(false);
+            DumpScreen(menu.CustomPanel.Screen, Path.Combine(folder, "custom_rects.txt"));
             yield return Shots(folder, "custom");
             menu.Back();
             Assert.IsFalse(menu.CustomShown);
 
+            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
+            menu.ShowCharacter();
+            Assert.IsTrue(menu.CharacterShown);
+            Assert.AreEqual("외형 06 / 24", menu.Character.HeaderText);
+            Assert.AreEqual("현장 소장", menu.Character.NameText);
+            Assert.AreEqual("색 변형 · 올리브", menu.Character.ColorText);
+            DumpScreen(menu.Character.Screen, Path.Combine(folder, "char_rects.txt"));
+            yield return Shots(folder, "char");
+            menu.Character.Select(1); menu.Character.SetColor(3);
+            Assert.AreEqual("외형 02 / 24", menu.Character.HeaderText);
+            Assert.AreEqual("색 변형 · 청회색", menu.Character.ColorText);
+            yield return Shots(folder, "char_changed");
+            menu.Character.Apply();
+            Assert.IsFalse(menu.CharacterShown);
+            Assert.AreEqual(1, PlayerPrefs.GetInt(CharacterScreen.IndexKey));
+            Assert.AreEqual(3, PlayerPrefs.GetInt(CharacterScreen.ColorKey));
+            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
+            menu.ShowQuit();
+            Assert.IsTrue(menu.ModalShown);
+            DumpScreen(menu.ModalScreen, Path.Combine(folder, "modal_quit_rects.txt"));
+            yield return Shots(folder, "modal_quit");
+            menu.CloseModal();
+            Assert.IsFalse(menu.ModalShown);
+            menu.ShowModeModal();
+            DumpScreen(menu.ModalScreen, Path.Combine(folder, "modal_mode_rects.txt"));
+            yield return Shots(folder, "modal_mode");
+            menu.OnMock(new MockScreen.Item { act = "mode:squad", id = "mlq" });
+            Assert.AreEqual(TeamMode.Squad, panel.Party.Mode, "the mode window changes the lobby");
+            Assert.IsTrue(menu.ModalShown);
+            menu.OnMock(new MockScreen.Item { act = "modal:", id = "mc" });
+            menu.OnMock(new MockScreen.Item { act = "mode:solo", id = "mls" });
+            menu.CloseModal();
+            menu.Invite();
+            StringAssert.Contains("CH-7K2Q", menu.ToastText);
+            Assert.AreEqual("CH-7K2Q", GUIUtility.systemCopyBuffer);
+            yield return Shots(folder, "toast_invite");
             menu.ShowSettings();
             yield return Shots(folder, "settings");
             menu.Back();
 
             menu.ShowCredits();
             Assert.IsTrue(menu.CreditsShown);
+            Assert.AreEqual(Credits.Entries.Length, menu.CreditsRows, "one live row per Credits.Entries item");
+            DumpScreen(menu.CreditsScreen.Screen, Path.Combine(folder, "credits_rects.txt"));
             yield return Shots(folder, "credits");
             menu.Back();
             Assert.IsFalse(menu.CreditsShown);

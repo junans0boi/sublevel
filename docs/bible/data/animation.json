@@ -527,6 +527,21 @@
           "why": "캐릭터 교체 후 비례가 바뀌므로 무기 모델 트랙과 함께."
         }
       ]
+    },
+    {
+      "type": "prose",
+      "title": "구현 결과 (애니 트랙, ADR-230~234)",
+      "paragraphs": [
+        "플레이어(MixamoSwat)와 봇(12모델 Bot_<id>)이 Humanoid 로스터를 쓴다. Character.controller는 Base·Upper·Action·Additive 4레이어이고 Mixamo 소총 클립 17종은 베이크 없이 Humanoid로 직접 쓴다. 판정은 관절 높이·각도·거리 수치(AnimationJointTests, CharacterAnimatorTests)와 연속 프레임 CSV(Logs/anim_metrics.csv)다."
+      ],
+      "bullets": [
+        "왼손: 이중손 무기의 LeftHandGrip(런타임 생성)에 팜이 붙는다. 어깨 조준·달리기에서 팜-그립 최대 3.0cm, 총구-시선 2.2도.",
+        "발 IK: 접지 캐스트 + 골반 내림 + 발바닥 기울임. 25도 경사 -1.3cm, 35도 -2.7cm.",
+        "엎드림: Mixamo ProneFiringRifle 클립. 머리 0.28m, 엉덩이 0.13m, 몸통 수평, 총구 오차 0.7도. 수영은 기존 피치 몸 유지.",
+        "재장전: Action 레이어 클립(왼손이 총에서 0.6m 떨어졌다 3cm 안으로 복귀). 피격: Additive 플린치.",
+        "50인 비용: Animator 50체 2.4ms(4레이어), 봇 44체 코드 애니메이션 0.32ms. 20m 안 전부, 40m 안 IK 없음, 40m 밖 골격 컬.",
+        "남은 것(ADR-234): 방향 2D 블렌드(#223), 점프(#228)·스프린트(#222)·제자리 회전(#234)·권총(#218)·근접(#219)·난간(#233)·수영(#236) 클립은 격차 시트 대기, 기존 코드 포즈를 Humanoid 본에 올려 둠."
+      ]
     }
   ]
 }

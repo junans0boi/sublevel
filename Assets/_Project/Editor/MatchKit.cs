@@ -1,3 +1,4 @@
+using System.Linq;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
@@ -36,6 +37,8 @@ public static class MatchKit
 
         Set(director, "_networkManager", p => p.objectReferenceValue = nm);
         Set(director, "_playerPrefab", p => p.objectReferenceValue = Prefab("Player"));
+        var playerVariants = CharacterRoster.Entries.Select(e => AssetDatabase.LoadAssetAtPath<NetworkObject>($"{TestBoxBuilder.PrefabDir}/Player_{e.Id}.prefab")).Where(v => v != null).ToArray();
+        if (playerVariants.Length > 0) SetArray(director, "_playerVariants", playerVariants);
         Set(director, "_lootPrefab", p => p.objectReferenceValue = Prefab("LootItem"));
         Set(director, "_dummyPrefab", p => p.objectReferenceValue = Prefab("TrainingDummy"));
         SetArray(director, "_playerSpawns", Points(go.transform, "PlayerSpawn", players));
@@ -44,6 +47,9 @@ public static class MatchKit
         if (bots != null && bots.Length > 0)
         {
             Set(director, "_botPrefab", p => p.objectReferenceValue = Prefab("Bot"));
+            // One bot prefab per roster model (TestBoxBuilder.BuildBotVariants): the match mixes all of them.
+            var variants = CharacterRoster.Entries.Select(e => AssetDatabase.LoadAssetAtPath<NetworkObject>($"{TestBoxBuilder.PrefabDir}/Bot_{e.Id}.prefab")).Where(v => v != null).ToArray();
+            if (variants.Length > 0) SetArray(director, "_botVariants", variants);
             SetArray(director, "_botSpawns", Points(go.transform, "BotSpawn", bots));
         }
 

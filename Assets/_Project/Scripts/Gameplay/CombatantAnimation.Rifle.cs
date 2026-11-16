@@ -14,6 +14,15 @@ namespace Game.Gameplay
     public partial class CombatantAnimation
     {
         const float RifleWeightPerSecond = 7f;
+        const float ActionWeightPerSecond = 8f;
+        public const string LeftHandGripName = "LeftHandGrip";
+        static readonly int ActionSpeedId = Animator.StringToHash(ActionSpeed);
+        string _actionState = ActionNone;
+        float _actionWeight;
+        bool _actionWanted;
+        // Weight of the Action layer (0..1) and the state it is in; for the tests and pose review.
+        public float ActionLayerWeight => _actionWeight;
+        public string ActionStateShown => _actionState;
         const float MinLongGunMeters = 0.4f;
         const int MaxWeaponId = 32;
         const float MinPistolMeters = 0.1f, PistolSupportAhead = 0.02f, PistolCupSide = 0.025f;
@@ -89,6 +98,17 @@ namespace Game.Gameplay
                 // Close in front of the grip: the short arms reach no further (the rest of the barrel sticks out past it).
                 _supportAhead[id] = Mathf.Clamp(front * 0.3f, 0.1f, 0.16f);
             }
+            // LeftHandGrip (ADR-189): where the support palm goes, a child of each two-handed weapon so it follows the weapon
+            // wherever the right hand takes it. Position as the saved pose has the hold (the weapon points along the facing).
+            for (int id = 1; id <= MaxWeaponId; id++)
+            {
+                var model = _weapons.ModelFor(id);
+                if (model == null || _supportAhead[id] <= 0f) continue;
+                var grip = model.transform.Find(LeftHandGripName);
+                if (grip == null) { grip = new GameObject(LeftHandGripName).transform; grip.SetParent(model.transform, false); }
+                var offset = _isPistol[id] ? new Vector3(-PistolCupSide, -0.01f, _supportAhead[id]) : new Vector3(0f, -PalmBelowBore, _supportAhead[id]);
+                grip.SetPositionAndRotation(_wristR.position + transform.rotation * offset, transform.rotation);
+            }
         }
 
         // How far the weapon model reaches behind (negative) and in front of the right hand, along the character's forward.
@@ -128,7 +148,8 @@ namespace Game.Gameplay
         {
             var r = HoldRules(HeldId);
             float dt = Time.deltaTime;
-            _rifleWanted = armed && LongGunInHand(HeldId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f;
+            // Not while the Action layer plays a reload clip: the clip carries both hands then (ADR-188).
+            _rifleWanted = armed && LongGunInHand(HeldId) && _prone < 0.5f && _seated < 0.5f && _parkour < 0.5f && !_actionWanted;
             _rifle = Mathf.MoveTowards(_rifle, _rifleWanted ? 1f : 0f, RifleWeightPerSecond * dt);
             // The local player's aim key raises it on the press, before the tap/hold decision makes it an aim (#121).
             var local = PlayerController.Local;
@@ -149,6 +170,41 @@ namespace Game.Gameplay
             }
             RiflePose = RifleHold.Pose(speed, _sprintShown, _ready, r);
             TrackAction();
+        }
+
+        // The Action layer (reload clips, ADR-188): picks the clip by stance, stretches it to the weapon's reload time and fades the layer
+        // in and out. The rifle hold's own reload motion (ReloadMotion) stays for the first-person arms, which read ReloadProgress.
+        void DriveAction(bool dead)
+        {
+            if (_animator.layerCount <= ActionLayer) return;
+            int id = _combatant.ActiveWeaponId;
+            _actionWanted = !dead && ReloadProgress >= 0f && _seated < 0.5f && _swimAmount < 0.5f && _parkour < 0.5f && !HoldsMelee && LongGunInHand(id);
+            if (_actionWanted)
+            {
+                string state = _prone > 0.5f ? ReloadProne : _crouch > 0.5f ? ReloadCrouch : ReloadStand;
+                if (_actionState != state)
+                {
+                    _animator.CrossFadeInFixedTime(state, 0.1f, ActionLayer, 0f);
+                    _actionState = state;
+                    float length = ReloadClipLength(state);
+                    _animator.SetFloat(ActionSpeedId, _reloadKind == ReloadKind.Shell || length <= 0f ? 1f : length / Mathf.Max(0.3f, _reloadSeconds));
+                }
+            }
+            else if (_actionState != ActionNone && _actionWeight <= 0.001f)
+            {
+                _animator.Play(ActionNone, ActionLayer, 0f);
+                _actionState = ActionNone;
+            }
+            _actionWeight = Mathf.MoveTowards(_actionWeight, _actionWanted ? 1f : 0f, ActionWeightPerSecond * Time.deltaTime);
+            _animator.SetLayerWeight(ActionLayer, _actionWeight);
+        }
+
+        float ReloadClipLength(string state)
+        {
+            string clip = state == ReloadProne ? "ProneReloadingRifle" : state == ReloadCrouch ? "ReloadRifleCrouch" : "ReloadingRifleStand";
+            foreach (var c in _animator.runtimeAnimatorController.animationClips)
+                if (c.name == clip) return c.length;
+            return 0f;
         }
 
         void TrackAction()
@@ -284,11 +340,13 @@ namespace Game.Gameplay
             var across = turn * Vector3.right;
             // Sprinting the left hand lets go and swings with the run clip (#222): the weapon is carried by the right hand.
             float support = _rifle * (1f - r.SprintSupportRelease * _sprintShown * (1f - _ready));
+            // The target is the weapon's own LeftHandGrip, so both hands end on the gun whatever the right wrist did.
+            var gunGrip = _weapons.ModelFor(id) is GameObject gun ? gun.transform.Find(LeftHandGripName) : null;
             if (PistolInHand(id))
                 // The left hand wraps the right from the left, palm in, fingers over the right fingers.
-                Grip(0, ArmLeft, grip - across * PistolCupSide + axis * _supportAhead[id] - up * 0.01f, axis, across, GripCurlDeg, support);
+                Grip(0, ArmLeft, gunGrip != null ? gunGrip.position : grip - across * PistolCupSide + axis * _supportAhead[id] - up * 0.01f, axis, across, GripCurlDeg, support);
             else
-                Grip(0, ArmLeft, grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + across, GripCurlDeg, support);
+                Grip(0, ArmLeft, gunGrip != null ? gunGrip.position : grip + axis * _supportAhead[id] - up * PalmBelowBore, axis, up + across, GripCurlDeg, support);
             if (act.LeftBlend > 0.001f)
             {
                 // Reload: the left hand leaves the hold for the magazine well, the belt and the charging handle.

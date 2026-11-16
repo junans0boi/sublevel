@@ -1,43 +1,69 @@
+using System;
 using Game.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The main menu's 크레딧 panel (#89): the studio, then every asset that asks for credit (Credits.Entries) with its
-    // title, author, licence and source link, and a 뒤로 가기 button.
+    // 크레딧 (#89), drawn from the adopted mockup's credits screen (Resources/Ui/Screens/credits.json): the top bar, the
+    // studio and licence cards and the table header come from the mockup; the table rows are Credits.Entries in the
+    // mockup's row geometry (title + link, author, use, licence badge), scrollable with the mouse wheel.
     public class CreditsScreen
     {
-        const float Width = 1180f;
-        const float RowHeight = 54f;
+        const float TableX = 620f, TableY = 290f, TableW = 1236f, TableH = 700f, RowPitch = 72.8f;
 
-        public RectTransform Build(Transform parent, UnityEngine.Events.UnityAction back)
+        public MockScreen Screen { get; private set; }
+        public int RowCount { get; private set; }
+
+        public RectTransform Build(Transform parent, Action<MockScreen.Item> onAct)
         {
-            var panel = UiKit.CenteredPanel("Credits", parent, Width);
-            float y = UiKit.MenuPadding;
-            var title = UiKit.HangRow("Title", panel, Width - UiKit.MenuPadding * 2f, 48f, y);
-            UiKit.Label(title, "크레딧", 34, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            y += 56f;
-            var studio = UiKit.HangRow("Studio", panel, Width - UiKit.MenuPadding * 2f, 30f, y);
-            UiKit.Label(studio, "SUBLEVEL — STEADY TO VIVID STUDIO", 20, UiKit.Accent);
-            y += 40f;
-            var note = UiKit.HangRow("Note", panel, Width - UiKit.MenuPadding * 2f, 28f, y);
-            UiKit.Label(note, "아래 에셋은 크리에이티브 커먼즈 저작자표시 4.0(CC BY 4.0, https://creativecommons.org/licenses/by/4.0/)으로 사용합니다.", 17, UiKit.TextDim);
-            y += 40f;
-            foreach (var e in Credits.Entries)
+            Screen = MockScreen.Build(parent, "credits", onAct,
+                it => it.r[1] >= TableY && it.r[0] >= TableX);                // rows are drawn from Credits.Entries below
+            var asset = Resources.Load<TextAsset>("Ui/Screens/credits");
+            var doc = JsonUtility.FromJson<Doc>(asset.text);
+            var template = new System.Collections.Generic.List<MockScreen.Item>();
+            foreach (var it in doc.items) if (it.r[1] >= TableY && it.r[0] >= TableX) template.Add(it);
+            // The first six items are one row: title, link, author, use, badge box, badge text.
+            float y0 = template[0].r[1];
+            var view = UiPaint.At(Screen.Stage, "Rows", TableX, TableY, TableW, TableH);
+            view.gameObject.AddComponent<RectMask2D>();
+            var content = UiKit.Rect("Content", view, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(TableW, Credits.Entries.Length * RowPitch + 40f));
+            var scroll = view.gameObject.AddComponent<ScrollRect>();
+            scroll.content = content;
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 40f;
+            UiKit.Box(view, Color.clear, true); // catches the wheel over empty space too
+            for (int i = 0; i < Credits.Entries.Length; i++)
             {
-                var row = UiKit.HangRow("Entry", panel, Width - UiKit.MenuPadding * 2f, RowHeight, y);
-                var line = UiKit.Rect("Line", row, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(Width - UiKit.MenuPadding * 2f, 28f));
-                UiKit.Label(line, Credits.Line(e), 20, UiKit.Text);
-                var link = UiKit.Rect("Link", row, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -27f), new Vector2(Width - UiKit.MenuPadding * 2f, 24f));
-                UiKit.Label(link, e.Url, 15, UiKit.TextDim);
-                y += RowHeight + 4f;
+                var e = Credits.Entries[i];
+                float dy = i * RowPitch;
+                for (int k = 0; k < 6; k++)
+                {
+                    var t = template[k];
+                    var it = new MockScreen.Item { k = t.k, r = new[] { t.r[0] - TableX, t.r[1] - TableY + dy - (y0 - TableY - 12f), t.r[2], t.r[3] }, bg = t.bg, bw = t.bw, bc = t.bc, rad = t.rad, fs = t.fs, fw = t.fw, col = t.col, al = t.al, wrap = false, t = t.t };
+                    switch (k)
+                    {
+                        case 0: it.t = e.Title; break;
+                        case 1: it.t = e.Url.Replace("https://", ""); break;
+                        case 2: it.t = e.Author; break;
+                        case 3: it.t = e.Use; break;
+                        case 5: it.t = e.Licence; break;
+                    }
+                    var rect = Screen.Add(it, null, content);
+                    if (k == 1) { var tx = rect.GetComponent<Text>(); tx.resizeTextForBestFit = true; tx.resizeTextMinSize = 10; tx.resizeTextMaxSize = 15; rect.sizeDelta = new Vector2(587f, it.r[3]); } // long links shrink to their column, as the mockup clips them
+                    if (k == 5) { float w = rect.GetComponent<Text>().preferredWidth + 22f; _lastBadgeW = w; }
+                    if (k == 4) _badge = rect;
+                    if (k == 5 && _badge != null) _badge.sizeDelta = new Vector2(_lastBadgeW, _badge.sizeDelta.y);
+                }
             }
-            y += 12f;
-            UiKit.Button(UiKit.HangRow("Back", panel, 260f, UiKit.MenuButtonHeight, y), "뒤로 가기", 24, back);
-            y += UiKit.MenuButtonHeight;
-            panel.sizeDelta = new Vector2(Width, y + UiKit.MenuPadding);
-            return panel;
+            RowCount = Credits.Entries.Length;
+            return Screen.Root;
         }
+
+        RectTransform _badge;
+        float _lastBadgeW;
+
+        [Serializable] class Doc { public MockScreen.Item[] items; }
     }
 }

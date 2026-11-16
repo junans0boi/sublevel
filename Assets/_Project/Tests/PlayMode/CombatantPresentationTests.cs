@@ -80,7 +80,7 @@ namespace Game.Tests
         {
             int active = 0;
             foreach (var t in combatant.GetComponentsInChildren<Transform>(false))
-                if (t.name.StartsWith("Weapon") && t.GetComponent<AudioSource>() == null && t.parent.name == "Wrist.R") active++;
+                if (t.name.StartsWith("Weapon") && t.GetComponent<AudioSource>() == null && t.parent.name == "WeaponSocket") active++;
             return active;
         }
 

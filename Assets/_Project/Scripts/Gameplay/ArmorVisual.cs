@@ -58,7 +58,7 @@ namespace Game.Gameplay
         void Init()
         {
             if (_helmet != null) return;
-            var head = BackpackVisual.Deep(transform, "Head");
+            var head = BackpackVisual.Humanoid(transform, HumanBodyBones.Head) ?? BackpackVisual.Deep(transform, "Head");
             var torso = BackpackVisual.FindTorso(transform);
             _helmet = NewPart("Helmet", head != null ? head : torso != null ? torso : transform,
                 head != null ? head.position + transform.TransformVector(HelmetBaseAboveHead) : transform.TransformPoint(new Vector3(0f, 1.62f, 0f)),

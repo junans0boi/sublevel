@@ -26,17 +26,24 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Hit = "Hit", Death = "Death";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone";
+        // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
+        public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
+        public const string BreathState = "Breath", FlinchState = "Flinch";
+        public const string ActionSpeed = "ActionSpeed"; // playback speed of the Action layer: the clip is stretched to the weapon's own reload time
         public const string Lowered = "Lowered", Aim = "Aim", Shoot = "Shoot";
         public const string PunchLeft = "PunchLeft", PunchRight = "PunchRight";
         public const string Move = "Move"; // speed along the legs' heading, negative when back-pedalling
         public const string Pace = "Pace"; // playback speed of the locomotion blend only
         public const string AirPhase = "AirPhase"; // which moment of its clip the air state holds (0..1)
 
-        const int BaseLayer = 0, UpperLayer = 1;
+        const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
+        const float ProneFade = 0.35f;
+        const float ProneLookMaxDeg = 35f, ProneLookShare = 0.8f;
+        const float ProneHeadAheadOfEyes = 0.15f; // lying, the head joint ends this far ahead of the capsule / eyes
         const float BlendDamp = 0.08f;
-        const float HitHold = 0.35f;
+        const float FlinchSeconds = 0.3f;
         const float ShootHold = 0.22f;
         const float AimAfterShot = 0.9f;       // the weapon stays up this long after the last shot
         const float UpperWeightPerSecond = 7f;
@@ -60,6 +67,8 @@ namespace Game.Gameplay
         [SerializeField] Transform _footRight;
         // Upper legs, lower legs, upper arms; left then right of each.
         [SerializeField] Transform[] _jumpBones;
+        // Lying (ADR-231): how far ahead of the model's origin the head joint is in the prone clip, measured when the character was built.
+        [SerializeField] float _proneHeadAhead = 0.8f;
         // Ground speed the clips were authored for (m/s), measured when the character was built.
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
@@ -92,6 +101,7 @@ namespace Game.Gameplay
         float _crouch;            // 0..1: how much of the crouch is shown
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
+        float _proneClip;         // the share of it that is the prone clip (all of it unless swimming)
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
         float _seated;            // 0..1: how much of the seated pose is shown (in a car, ADR-065 (5))
@@ -104,8 +114,8 @@ namespace Game.Gameplay
         readonly Quaternion[] _boneLeftAt = new Quaternion[TurnedBones];
         readonly bool[] _boneTurned = new bool[TurnedBones];
         string _base = Locomotion;
-        string _upper;
-        float _baseHoldUntil, _upperHoldUntil, _aimPoseUntil;
+        string _upper, _additive = BreathState;
+        float _upperHoldUntil, _aimPoseUntil, _flinchUntil;
         float _punchUntil = -1f;
         float _upperWeight;
         float _lastHp;
@@ -222,9 +232,20 @@ namespace Game.Gameplay
             KickRifle();
         }
 
-        void Update()
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // Stopwatch ticks every combatant spent in Update + LateUpdate since the last reset: the cost of the code half of the animation (PERF, ADR-233).
+        public static long PerfTicks;
+        void Update() { long t = System.Diagnostics.Stopwatch.GetTimestamp(); UpdateBody(); PerfTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t; }
+        void LateUpdate() { long t = System.Diagnostics.Stopwatch.GetTimestamp(); LateUpdateBody(); PerfTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t; }
+#else
+        void Update() => UpdateBody();
+        void LateUpdate() => LateUpdateBody();
+#endif
+
+        void UpdateBody()
         {
             if (_animator == null) return;
+            UpdateLod();
             bool dead = _combatant.Dead.Value;
             float hp = _combatant.Hp.Value;
             bool hit = hp < _lastHp && !dead;
@@ -247,7 +268,10 @@ namespace Game.Gameplay
             // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
             _legTurnShown = _legs.TurnDeg * (1f - _prone);
             var proneRules = StanceRules.Current;
-            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * _prone, Vector3.right)
+            // Lying is the prone clip (ADR-231); only swimming still lies as the pitched body (it has no clip and is posed in .Swim.cs).
+            _proneClip = _prone * (1f - _swimAmount);
+            float pitched = _prone - _proneClip;
+            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * pitched, Vector3.right)
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             // Slow walk (Ctrl, ADR-065 (3)): its speed falls between the walk and run clips, whose cycles do not line up,
             // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
@@ -265,16 +289,17 @@ namespace Game.Gameplay
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir() && _seated < 0.5f;
+            if (_animator.layerCount > AdditiveLayer)
+            {
+                _animator.SetLayerWeight(AdditiveLayer, _lod >= 2 ? 0f : 1f);
+                if (Time.time >= _flinchUntil) SetAdditive(BreathState);
+            }
             if (dead) SetBase(Death);
             else
             {
-                if (hit)
-                {
-                    _animator.CrossFadeInFixedTime(Hit, 0.05f, BaseLayer, 0f);
-                    _base = Hit;
-                    _baseHoldUntil = Time.time + HitHold;
-                }
-                else if (Time.time >= _baseHoldUntil) SetBase(showAir ? Air : Locomotion);
+                // The flinch is an additive layer on top of whatever plays, so a hit no longer replaces the pose.
+                if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchSeconds; }
+                SetBase(_proneClip > 0.5f && !showAir ? Prone : showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
             TrackJumpPose(dead);
@@ -284,9 +309,10 @@ namespace Game.Gameplay
             bool punching = !dead && Time.time < _punchUntil;
             TrackItems(dead, hit);
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
+            DriveAction(dead);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
             // hands is posed in code over the base layer (ADR-083), so the clip pose stays off for it.
-            bool showUpper = ((armed && !_rifleWanted) || punching) && _base != Hit;
+            bool showUpper = ((armed && !_rifleWanted) || punching) && _proneClip < 0.5f;
             float weightRate = punching ? PunchWeightPerSecond : UpperWeightPerSecond;
             _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, weightRate * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
@@ -364,11 +390,13 @@ namespace Game.Gameplay
             _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
             // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
             // so the head (which the pitch swung forward to the end of the body) ends up under the eyes.
-            var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * _prone;
+            // Pitched (swim): the spine line lies at body height. Clip: the model's head is moved back to the eyes (the clip lies along +z from the hips).
+            var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * (_prone - _proneClip)
+                + Vector3.back * (_proneHeadAhead - ProneHeadAheadOfEyes) * _proneClip;
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal) + lying + sitting;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal + _plantDrop) + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -387,11 +415,43 @@ namespace Game.Gameplay
             return facing.sqrMagnitude < 1e-6f ? 0f : Vector3.SignedAngle(transform.forward, facing, transform.up);
         }
 
+        // Level of detail by distance to the camera (ADR-189 (3), ADR-233): 0 within IkMeters = everything; 1 within AnimateMeters = no foot IK;
+        // 2 beyond = no foot IK, no additive layer, no breathing, and the skeleton is only updated while the model is on screen (the footsteps
+        // and the held weapon matter only where they can be heard: the footstep source reaches 25 m). A headless server is always level 2.
+        public const float IkMeters = 20f, AnimateMeters = 40f;
+        int _lod;
+        float _lodNext;
+        public int Lod => _lod;
+
+        void UpdateLod()
+        {
+            if (Time.time < _lodNext) return;
+            _lodNext = Time.time + 0.25f + (GetInstanceID() & 7) * 0.02f; // spread over frames
+            float d;
+            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) d = float.MaxValue;
+            else
+            {
+                var cam = PlayerController.Local != null ? PlayerController.Local.Camera : Camera.main;
+                d = cam != null ? Vector3.Distance(cam.transform.position, transform.position) : 0f;
+            }
+            _lod = d <= IkMeters ? 0 : d <= AnimateMeters ? 1 : 2;
+            var mode = _lod >= 2 ? AnimatorCullingMode.CullUpdateTransforms : AnimatorCullingMode.AlwaysAnimate;
+            if (_animator.cullingMode != mode) _animator.cullingMode = mode;
+        }
+
         void SetBase(string state)
         {
             if (_base == state) return;
-            _animator.CrossFadeInFixedTime(state, Fade, BaseLayer);
+            // Down to and up from the ground is slower than a step.
+            _animator.CrossFadeInFixedTime(state, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
             _base = state;
+        }
+
+        void SetAdditive(string state)
+        {
+            if (_additive == state) return;
+            _animator.CrossFadeInFixedTime(state, 0.15f, AdditiveLayer);
+            _additive = state;
         }
 
         void SetUpper(string state)
@@ -415,14 +475,14 @@ namespace Game.Gameplay
         }
 
         // After the animator has posed the skeleton: read the feet, then turn the torso and pose the jump on top.
-        void LateUpdate()
+        void LateUpdateBody()
         {
             if (_animator == null) return;
             if (_footLeft != null && _footRight != null)
             {
                 // Heights as the clip has them: without the landing dip.
-                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal);
-                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal);
+                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal + _plantDrop);
+                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal + _plantDrop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
                 bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f && _seated < 0.5f
@@ -473,7 +533,9 @@ namespace Game.Gameplay
             Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch
                 + parkourRules.PoseTorsoPitchDeg * _parkour, transform.right);
             // Lying: the chest and head come back up (a negative turn about the right axis undoes the forward tip).
-            Turn(Torso, -stanceRules.ProneHeadLiftDeg * _prone, transform.right);
+            Turn(Torso, -stanceRules.ProneHeadLiftDeg * (_prone - _proneClip), transform.right);
+            // Lying with the clip: looking up or down tips the chest, and the weapon with it.
+            Turn(Torso, -Mathf.Clamp(LookPitch(), -ProneLookMaxDeg, ProneLookMaxDeg) * ProneLookShare * _proneClip, transform.right);
             // The legs face where the model is turned, not where the combatant looks.
             var legRight = Quaternion.AngleAxis(_legTurnShown, transform.up) * transform.right;
             // Knees up in front, shins folded back under them. The shin turns relative to the thigh, which already
@@ -492,11 +554,6 @@ namespace Game.Gameplay
             float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - Mathf.Max(_upperWeight, _rifle));
             Turn(ArmLeft, -armLift, transform.forward);
             Turn(ArmRight, armLift, transform.forward);
-            // Lying with a weapon: the arms (and the weapon in the hand) turn back up by what the pitch minus the head
-            // lift left them tipped down, so the weapon is level again and points the way the player looks.
-            float armUp = -Stances.ProneArmCounterDeg(stanceRules) * _prone * _upperWeight;
-            Turn(ArmLeft, armUp, transform.right);
-            Turn(ArmRight, armUp, transform.right);
             // Parkour: both arms reach forward and down onto the top (a negative turn swings a hanging arm forward).
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);
@@ -522,6 +579,7 @@ namespace Game.Gameplay
         {
             if (_crouch <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
             float low = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
+            low += _plantDrop; // the pelvis drop of the foot plant (a slope) is not the crouch's to undo
             float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);
             _animator.transform.position -= transform.up * (total - _footFixTotal);
             FootFix = _footFixTotal = total;
@@ -573,7 +631,8 @@ namespace Game.Gameplay
         void PoseLeg(int side, int thighIndex, int shinIndex, int footIndex, float thighDeg, float shinDeg, Vector3 axis)
         {
             Transform shin = _bones[shinIndex], foot = _bones[footIndex];
-            if (shin == null || foot == null || shin.childCount == 0 || (Mathf.Abs(thighDeg) <= 1e-3f && Mathf.Abs(shinDeg) <= 1e-3f))
+            // A Humanoid rig hangs the foot under the shin, so it follows by itself.
+            if (shin == null || foot == null || shin.childCount == 0 || foot.IsChildOf(shin) || (Mathf.Abs(thighDeg) <= 1e-3f && Mathf.Abs(shinDeg) <= 1e-3f))
             {
                 Turn(thighIndex, thighDeg, axis);
                 Turn(shinIndex, shinDeg, axis);

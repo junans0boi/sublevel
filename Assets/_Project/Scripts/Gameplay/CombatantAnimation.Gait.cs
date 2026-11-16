@@ -12,11 +12,13 @@ namespace Game.Gameplay
         const float BreathSeconds = 3.8f, BreathPitchDeg = 1.6f, SwayYawDeg = 0.7f, SwaySeconds = 7.3f;
         const float TurnStepMinDegPerSecond = 20f, TurnStepFullDegPerSecond = 90f, TurnStepHz = 1.3f;
         const float TurnThighDeg = 24f, TurnShinDeg = 34f, TurnStepStillSpeed = 0.5f;
-        const float PlantRayUp = 0.5f, PlantRayLength = 1.1f, PlantMaxRaise = 0.3f, PlantMaxLower = 0.25f;
+        const float PlantRayUp = 0.5f, PlantRayLength = 1.1f, PlantMaxRaise = 0.3f, PlantMaxLower = 0.4f;
+        const float PlantTiltMaxDeg = 35f; // the slope limit's walkable range (ADR-195: 35 deg walkable, 40 hard)
         const float PlantFadeHeight = 0.12f, PlantSmoothPerSecond = 16f, PlantMinMove = 0.004f;
         const float CrawlMetersPerCycle = 1.1f, CrawlRollDeg = 5f, CrawlKneeDeg = 25f;
         const float JumpStrideThighDeg = 28f, JumpStrideShinDeg = 20f, JumpStrideSpeed = 3.5f;
 
+        float _plantDrop;                          // how far the pelvis is lowered so the lower foot reaches the ground (m, eased)
         readonly float[] _plant = new float[2];   // how far each foot is moved up (m, negative = down), eased
         readonly float[] _stepShown = new float[2]; // 0..1 how much each foot is up in a turn-on-the-spot step
         readonly RaycastHit[] _groundHits = new RaycastHit[8];
@@ -27,6 +29,7 @@ namespace Game.Gameplay
         // Turn-on-the-spot stepping shown, 0..1; the breath of this frame (-1..1); how far the feet were moved to the ground (m).
         public float TurnStepShown => _turnShown;
         public float Breath { get; private set; }
+        public float PlantDrop => _plantDrop; // how far the pelvis is lowered so the lower foot reaches a slope (m)
         public float FootPlantLeft => _plant[0];
         public float FootPlantRight => _plant[1];
         public float CrawlPhase => _crawlPhase;
@@ -83,9 +86,9 @@ namespace Game.Gameplay
             float speed = new Vector2(v.x, v.z).magnitude;
             float still = 1f - Mathf.Clamp01(speed / 1.5f);
 
-            // Breathing: the chest rises and falls a little, the shoulders drift; weapon and hands ride the torso.
+            // Breathing: the chest rises and falls a little, the shoulders drift; weapon and hands ride the torso. Not far away (ADR-233).
             Breath = BreathAt(Time.time, _breathSeed);
-            float calm = still * (1f - _seated) * (1f - _swimAmount);
+            float calm = still * (1f - _seated) * (1f - _swimAmount) * (_lod >= 2 ? 0f : 1f);
             Turn(Torso, Breath * BreathPitchDeg * calm, transform.right);
             Turn(Torso, Mathf.Sin((Time.time + _breathSeed) * Mathf.PI * 2f / SwaySeconds) * SwayYawDeg * calm, transform.up);
 
@@ -124,54 +127,91 @@ namespace Game.Gameplay
             PlantFeet(speed);
         }
 
-        // Puts each foot on the ground under it: planted feet follow slopes and steps, and both feet stand on the ground
-        // when still (crouching and leaning no longer leave one in the air). Two-bone leg turn, the foot bone follows.
+        // Puts each foot on the ground under it (foot IK, ADR-189, ADR-232): planted feet follow slopes and steps, both feet stand on the
+        // ground when still (crouching and leaning no longer leave one in the air). Two-bone leg turns reach the foot; legs that are already
+        // straight cannot reach down, so the pelvis (the whole model) is lowered by what the lower foot needs and the other foot is raised
+        // by that much more. The ground under each foot is a cast per foot; the foot is tilted to the ground's slope.
         void PlantFeet(float speed)
         {
-            if (_footLeft == null || _footRight == null || _prone > 0.3f || _seated > 0.1f || _parkour > 0.1f || _swimAmount > 0.1f || _inAir || LedgePose > 0.1f)
+            if (_footLeft == null || _footRight == null || _lod >= 1 || _prone > 0.3f || _seated > 0.1f || _parkour > 0.1f || _swimAmount > 0.1f || _inAir || LedgePose > 0.1f)
             {
                 _plant[0] = _plant[1] = 0f;
+                if (_plantDrop != 0f) { _animator.transform.position += transform.up * _plantDrop; _plantDrop = 0f; }
                 return;
             }
             bool still = speed < 0.4f;
+            var want = new float[2];
+            var normal = new Vector3[2];
+            // The capsule hovers over flat ground by a small lift that the feet's targets already include (measured against the ground under the
+            // origin). On a slope it rests on its side and the origin sits above the surface by its own lift: the feet belong on the surface,
+            // so as the ground under the origin tilts (0 flat .. full at 10 degrees) the targets are measured from the origin's height instead.
+            var origin = GroundUnder(transform.position, out var originNormal);
+            float lift = origin.HasValue ? transform.position.y - origin.Value : 0f;
+            float extraLift = lift * Mathf.Clamp01((1f - originNormal.y) / (1f - 0.9848f));
+            for (int side = 0; side < 2; side++)
+            {
+                var foot = _bones[side == 0 ? FootLeft : FootRight];
+                float footY = transform.InverseTransformPoint(foot.position).y;
+                var under = GroundUnder(foot.position, out normal[side]);
+                float groundDelta = under.HasValue && origin.HasValue ? under.Value - origin.Value - extraLift : 0f;
+                PlantDebug[side] = $"footY {footY:F3} groundDelta {groundDelta:F3}";
+                want[side] = PlantMove(footY, _footRestHeight, groundDelta, still) * (1f - _stepShown[side]);
+            }
+            // The lower foot decides the pelvis: standing still it follows exactly, moving it eases (the stride lifts the feet anyway).
+            float dropTarget = Mathf.Clamp(_plantDrop - Mathf.Min(want[0], want[1]), 0f, PlantMaxLower);
+            float k = 1f - Mathf.Exp(-PlantSmoothPerSecond * Time.deltaTime);
+            float newDrop = Mathf.Lerp(_plantDrop, dropTarget, k);
+            float extra = newDrop - _plantDrop;
+            _animator.transform.position -= transform.up * extra; // feet and everything else follow at once, so the moves below add `extra`
+            _plantDrop = newDrop;
             for (int side = 0; side < 2; side++)
             {
                 var shin = _bones[side == 0 ? ShinLeft : ShinRight];
                 var foot = _bones[side == 0 ? FootLeft : FootRight];
                 if (shin == null || foot == null || shin.childCount == 0) continue;
-                float footY = transform.InverseTransformPoint(foot.position).y;
-                // Relative to the ground under the character's own origin, which is where the clip's rest height was measured.
-                float groundDelta = GroundUnder(foot.position) is float g && GroundUnder(transform.position) is float g0 ? g - g0 : 0f;
-                PlantDebug[side] = $"footY {footY:F3} groundDelta {groundDelta:F3}";
-                float move = PlantMove(footY, _footRestHeight, groundDelta, still) * (1f - _stepShown[side]);
-                _plant[side] = Mathf.Lerp(_plant[side], move, 1f - Mathf.Exp(-PlantSmoothPerSecond * Time.deltaTime));
-                if (Mathf.Abs(_plant[side]) < PlantMinMove) continue;
-                var ankle = shin.GetChild(0);
-                var shinBefore = shin.rotation;
-                var footFromAnkle = foot.position - ankle.position;
-                int thighIndex = side == 0 ? ThighLeft : ThighRight, shinIndex = side == 0 ? ShinLeft : ShinRight, footIndex = side == 0 ? FootLeft : FootRight;
-                if (_bones[thighIndex] == null) continue;
-                TwoBone(_bones[thighIndex], thighIndex, shin, shinIndex, ankle, ankle.position + transform.up * _plant[side], transform.forward);
-                var swing = shin.rotation * Quaternion.Inverse(shinBefore);
-                if (!_boneTurned[footIndex]) { _boneOwn[footIndex] = foot.localRotation; _boneTurned[footIndex] = true; }
-                if (!_footMoved[side]) { _footOwnPosition[side] = foot.localPosition; _footMoved[side] = true; }
-                foot.rotation = swing * foot.rotation;
-                foot.position = ankle.position + swing * footFromAnkle;
-                _footLeftAtPosition[side] = foot.localPosition;
+                _plant[side] = Mathf.Lerp(_plant[side], want[side] + extra, k);
+                if (Mathf.Abs(_plant[side]) >= PlantMinMove)
+                {
+                    var ankle = shin.GetChild(0);
+                    var shinBefore = shin.rotation;
+                    var footFromAnkle = foot.position - ankle.position;
+                    int thighIndex = side == 0 ? ThighLeft : ThighRight, shinIndex = side == 0 ? ShinLeft : ShinRight, footIndex = side == 0 ? FootLeft : FootRight;
+                    if (_bones[thighIndex] == null) continue;
+                    TwoBone(_bones[thighIndex], thighIndex, shin, shinIndex, ankle, ankle.position + transform.up * _plant[side], transform.forward);
+                    if (!foot.IsChildOf(shin)) // a Humanoid foot hangs under the shin and follows it by itself
+                    {
+                        var swing = shin.rotation * Quaternion.Inverse(shinBefore);
+                        if (!_boneTurned[footIndex]) { _boneOwn[footIndex] = foot.localRotation; _boneTurned[footIndex] = true; }
+                        if (!_footMoved[side]) { _footOwnPosition[side] = foot.localPosition; _footMoved[side] = true; }
+                        foot.rotation = swing * foot.rotation;
+                        foot.position = ankle.position + swing * footFromAnkle;
+                        _footLeftAtPosition[side] = foot.localPosition;
+                    }
+                }
+                // Sole flat on the ground's slope while standing; a stride keeps its own foot angles.
+                if (still && normal[side].y > 0.5f)
+                {
+                    var local = transform.InverseTransformDirection(normal[side]);
+                    // About the right axis a positive turn takes up (0,1,0) to (0,cos,sin): the angle that puts the sole's up on the ground's normal.
+                    Turn(side == 0 ? FootLeft : FootRight, Mathf.Clamp(Mathf.Atan2(local.z, local.y) * Mathf.Rad2Deg, -PlantTiltMaxDeg, PlantTiltMaxDeg), transform.right);
+                }
             }
         }
 
-        // Height of the ground under a point (nearest hit below, not this combatant), or null.
-        float? GroundUnder(Vector3 at)
+        // Height of the ground under a point (nearest hit below, not this combatant), or null; `normal` is its slope.
+        float? GroundUnder(Vector3 at) => GroundUnder(at, out _);
+
+        float? GroundUnder(Vector3 at, out Vector3 normal)
         {
             int n = Physics.RaycastNonAlloc(at + Vector3.up * PlantRayUp, Vector3.down, _groundHits, PlantRayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.NegativeInfinity;
+            normal = Vector3.up;
             for (int i = 0; i < n; i++)
             {
                 var h = _groundHits[i];
                 if (h.collider == null || h.collider.transform.IsChildOf(transform) || h.collider.GetComponentInParent<Combatant>() != null) continue;
                 if (h.normal.y < 0.5f) continue;
-                best = Mathf.Max(best, h.point.y);
+                if (h.point.y > best) { best = h.point.y; normal = h.normal; }
             }
             return float.IsNegativeInfinity(best) ? (float?)null : best;
         }
