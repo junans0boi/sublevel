@@ -421,6 +421,7 @@ namespace Game.Gameplay
                     stanceRules.For(BodyStance).MoveFactor, armed ? Locomotion.CarryFactor(_combatant.ActiveWeapon, _locomotion) : 1f, _locomotion, SlowWalking);
                 // Slower while a bandage or kit is being used.
                 speedFactor *= CombatantHealing.MoveFactorOf(_combatant) * CombatantHealing.BoostSpeedOf(_combatant);
+                speedFactor *= Combatant.StaggerMoveFactorOf(_combatant); // stopping power (ADR-182, ADR-240)
                 if (knocked) speedFactor *= TeamRules.Current.KnockedMoveFactor;
                 if (carrying) speedFactor *= TeamRules.Current.CarryMoveFactor;
                 Locomotion.PlanarVelocity(f.Move.x, f.Move.y, Yaw, sprint, _locomotion, out var vx, out var vz, speedFactor);
