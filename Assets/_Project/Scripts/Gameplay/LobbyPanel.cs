@@ -13,6 +13,9 @@ namespace Game.Gameplay
     public class LobbyPanel
     {
         public const float StageW = 1920f, StageH = 1080f;
+        // The 3D scene is the hero (ui art-direction pass): a slim control bar and two small cards instead of the mockup's
+        // full-width console. false = the mockup's own console layout (kept for the before/after comparison).
+        public const bool Compact = true;
         static readonly float[] SlotX = { 640f, 820f, 1000f, 1180f };
         static readonly Color32[] PersonColors = { new Color32(111, 143, 122, 255), new Color32(169, 130, 80, 255), new Color32(95, 118, 134, 255), new Color32(120, 120, 140, 255) };
         const float TileY = 575f;
@@ -58,8 +61,8 @@ namespace Game.Gameplay
             fit.OnFit = p.PlaceAll; // the camera may move (외형 closeup) and the canvas may resize: keep the labels on the characters
             p.BuildScene();
             p.BuildTop(training, custom, settings, credits, quit, character, bell);
-            p.BuildPlates();
-            p.BuildConsole();
+            if (Compact) { p.BuildPlatesCompact(); p.BuildConsoleCompact(); }
+            else { p.BuildPlates(); p.BuildConsole(); }
             p.Refresh();
             return p;
         }
@@ -117,6 +120,7 @@ namespace Game.Gameplay
             // the empty slots' 초대 buttons are drawn here, at the projected positions of the characters' feet.
             for (int i = 0; i < PartyLobby.SquadSize; i++) _slots[i] = BuildSlot(SlotX[i], i);
             // The door sign of the mockup ("B3 ▼ 투입 대기") above the car opening.
+            if (Compact) return;
             var sign = UiPaint.At(Stage, "DoorSign", 760, 180, 400, 28);
             UiPaint.Box(sign, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.85f), 2, UiPaint.Ac, 2);
             UiPaint.Label(sign, "Text", 0, 0, 400, 28, "B3 ▼ 투입 대기", 22, UiPaint.Ac, TextAnchor.MiddleCenter, FontStyle.Bold);
@@ -178,6 +182,106 @@ namespace Game.Gameplay
             UiPaint.Label(Stage, "KeyTitle", 1579, 163, 200, 32, "열쇠 안내", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
             var body = UiPaint.Label(Stage, "KeyBody", 1547, 203, 310, 52, "닫히는 지역에서 벗어나려면 <b>열쇠 승강기</b>를 찾으세요. 팀이 함께 타야 작동합니다.", 16, UiPaint.Tx, TextAnchor.UpperLeft);
             body.horizontalOverflow = HorizontalWrapMode.Wrap;
+        }
+
+
+        // ---------------------------------------------------------------- compact layout (3D is the hero)
+        RectTransform _unused;
+
+        // Objects the logic still writes to but the compact layout does not show.
+        T Hidden<T>(T t) where T : Component
+        {
+            if (_unused == null)
+            {
+                _unused = UiKit.Rect("Unused", Stage, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+                _unused.gameObject.SetActive(false);
+            }
+            t.transform.SetParent(_unused, false);
+            return t;
+        }
+
+        void BuildPlatesCompact()
+        {
+            // Two small cards at the top corners: a line of text each, no boxes inside boxes.
+            var a = UiPaint.At(Stage, "PlateRad", 48, 112, 332, 78);
+            UiPaint.Box(a, UiPaint.Pn, 14, UiPaint.Ln);
+            UiPaint.Pic(Stage, "Rad", "ico_rad", 64, 126, 22, 22);
+            UiPaint.Label(Stage, "RadTitle", 94, 122, 200, 28, "오염 브리핑", 20, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiPaint.Label(Stage, "RadLine1", 64, 152, 310, 26, "<color=#6ccfa0>✓ 전 지역 안전</color> · 첫 경고 05:00 후", 16, UiPaint.T2);
+            var b = UiPaint.At(Stage, "PlateKey", 1540, 112, 332, 78);
+            UiPaint.Box(b, UiPaint.Pn, 14, UiPaint.Ln);
+            UiPaint.Pic(Stage, "Key", "ico_key", 1556, 126, 22, 22);
+            UiPaint.Label(Stage, "KeyTitle", 1586, 122, 200, 28, "열쇠 안내", 20, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiPaint.Label(Stage, "KeyBody", 1556, 152, 310, 26, "열쇠 승강기는 팀이 함께 타야 작동합니다", 16, UiPaint.T2);
+        }
+
+        void BuildConsoleCompact()
+        {
+            // A 150 px bar along the bottom: mode pills | setting + view + map | the one state button. 8 px grid.
+            const float top = 928f;
+            var bar = UiPaint.At(Stage, "Console", 0, top - 40f, StageW, 1080f - top + 40f);
+            UiPaint.GradientOpaque(bar, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0f), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.94f));
+
+            // Mode: two pills.
+            BuildPill(0, 64f, top + 16f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
+            BuildPill(1, 208f, top + 16f, "스쿼드", () => { Party.SetMode(Self, TeamMode.Squad); Refresh(); });
+            _knob = Hidden(UiPaint.At(Stage, "LeverKnob", 0, 0, 1, 1));
+
+            // Centre: what will be launched, in one calm line, with the view switch and the map beside it.
+            var led = UiPaint.At(Stage, "Led", 376f, top + 8f, 312f, 72);
+            UiPaint.Box(led, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.7f), 16, UiPaint.Ln);
+            _led = UiPaint.Label(led, "Text", 0, 0, 312, 72, "", 32, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _ledCaption = Hidden(UiPaint.Label(Stage, "LedCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
+
+            UiPaint.Box(UiPaint.At(Stage, "ViewSeg", 712f, top + 16f, 256, 56), Color.clear, 28, UiPaint.Ln);
+            _tpp = UiPaint.Btn(Stage, "Tpp", 714f, top + 18f, 128, 52, "TPP 3인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.Third); Refresh(); });
+            _fpp = UiPaint.Btn(Stage, "Fpp", 842f, top + 18f, 124, 52, "FPP 1인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.First); Refresh(); });
+            _tppFill = _tpp.targetGraphic as Image; _fppFill = _fpp.targetGraphic as Image;
+            _tppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "TppBar", 0, 0, 1, 1), Color.clear, 1));
+            _fppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "FppBar", 0, 0, 1, 1), Color.clear, 1));
+
+            var map = UiPaint.At(Stage, "MapWin", 992f, top + 16f, 288, 56);
+            var mapImg = UiPaint.Box(map, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.7f), 14, UiPaint.Ln);
+            mapImg.raycastTarget = true;
+            map.gameObject.AddComponent<Button>().onClick.AddListener(() => _menu.ShowModeModal());
+            UiPaint.Label(map, "Name", 16, 0, 256, 56, "청람도 · 6개 지역 · 약 20~25분", 16, UiPaint.Tx, TextAnchor.MiddleLeft);
+
+            _reason = UiPaint.Label(Stage, "Reason", 376f, top + 88f, 904, 26, "", 16, UiPaint.T2, TextAnchor.MiddleLeft);
+            _reason.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+            // Right: the one state button (the only filled accent on the screen) and its key.
+            _status = UiPaint.Btn(Stage, "State", 1368f, top + 8f, 504, 72, "", 28, 36, UiPaint.AcS, UiPaint.Ac, UiPaint.Tx, OnStatus, FontStyle.Bold, 2);
+            _statusFill = _status.targetGraphic as Image;
+            _statusRing = _status.transform.Find("Ring").GetComponent<Image>();
+            _statusLabel = _status.GetComponentInChildren<Text>();
+            ((RectTransform)_statusLabel.transform).offsetMax = new Vector2(-140f, 0f);
+            var kbd = UiPaint.At(_status.transform, "Kbd", 400, 20, 64, 32);
+            _kbdBox = UiPaint.Box(kbd, UiPaint.Sf, 8, UiPaint.Ln);
+            _kbd = UiPaint.Label(kbd, "Key", 0, 0, 64, 32, "Enter", 15, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+
+            // Parts of the mockup console that the logic still updates.
+            _callLabel = Hidden(UiPaint.Label(Stage, "CallCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
+            _seven = Hidden(UiPaint.Label(Stage, "Seven", 0, 0, 10, 10, "--:--", 12, UiPaint.T2));
+            _fillText = Hidden(UiPaint.Label(Stage, "FillText", 0, 0, 10, 10, "", 12, UiPaint.T2));
+            for (int i = 0; i < 50; i++)
+            {
+                var c = UiPaint.At(_unused != null ? _unused : Stage, "Cell" + i, 0, 0, 1, 1);
+                _cells[i] = UiPaint.Box(c, Color.clear, 1, UiPaint.Ln, 1);
+                _cellRing[i] = c.Find("Ring").GetComponent<Image>();
+            }
+        }
+
+        void BuildPill(int i, float x, float y, string name, UnityEngine.Events.UnityAction act)
+        {
+            var b = UiPaint.Btn(Stage, "Pill" + i, x, y, 136, 56, name, 20, 28, Color.clear, UiPaint.Ln, UiPaint.Tx, act);
+            _lvrFill[i] = b.targetGraphic as Image;
+            _lvrRing[i] = b.transform.Find("Ring").GetComponent<Image>();
+            _lvrName[i] = b.GetComponentInChildren<Text>();
+            ((RectTransform)_lvrName[i].transform).offsetMin = new Vector2(24f, 0f);
+            var lamp = UiPaint.Circle(b.transform, "Lamp", 20, 28, 10, UiPaint.Ok);
+            lamp.sprite = UiPaint.Round(5);
+            if (i == 0) _lamp1 = lamp; else _lamp2 = lamp;
+            _lvrMs[i] = Hidden(UiPaint.Label(b.transform, "Ms", 0, 0, 10, 10, "", 12, UiPaint.T2));
         }
 
         // ---------------------------------------------------------------- console
@@ -331,8 +435,9 @@ namespace Game.Gameplay
             bool tpp = Party.View == Perspective.Third;
             _tpp.GetComponentInChildren<Text>().text = (tpp ? "✓ " : "") + "TPP 3인칭";
             _fpp.GetComponentInChildren<Text>().text = (tpp ? "" : "✓ ") + "FPP 1인칭";
-            _tppFill.color = tpp ? UiPaint.AcS : Color.clear; _tppBar.gameObject.SetActive(tpp);
-            _fppFill.color = tpp ? Color.clear : UiPaint.AcS; _fppBar.gameObject.SetActive(!tpp);
+            var sel = Compact ? new Color(1f, 1f, 1f, 0.14f) : UiPaint.AcS; // one accent on the screen: the view switch is neutral
+            _tppFill.color = tpp ? sel : Color.clear; _tppBar.gameObject.SetActive(tpp);
+            _fppFill.color = tpp ? Color.clear : sel; _fppBar.gameObject.SetActive(!tpp);
 
             // Party on the platform.
             for (int i = 0; i < PartyLobby.SquadSize; i++)
@@ -383,7 +488,7 @@ namespace Game.Gameplay
             _kbd.gameObject.transform.parent.gameObject.SetActive(btn.Action != LobbyAction.LeaveParty);
             _status.interactable = enabled;
             var kr = (RectTransform)_kbd.transform.parent;
-            kr.anchoredPosition = new Vector2(btn.Action == LobbyAction.CancelMatch ? 300f : 285f, kr.anchoredPosition.y);
+            if (!Compact) kr.anchoredPosition = new Vector2(btn.Action == LobbyAction.CancelMatch ? 300f : 285f, kr.anchoredPosition.y);
         }
 
         int IndexOf(int id)

@@ -121,8 +121,8 @@ public static class LobbyStageBuilder
         // Cameras: the party seen from the front (in the hall, looking into the car), and a closeup for the 외형 screen.
         var lobby = new GameObject("CameraLobby").transform;
         lobby.SetParent(root.transform, false);
-        lobby.position = new Vector3(0f, 1.9f, 14.2f);
-        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 0.38f, 0f) - lobby.position);
+        lobby.position = new Vector3(0f, 1.5f, 8.6f);
+        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 0.92f, 0f) - lobby.position);
         var close = new GameObject("CameraCloseup").transform;
         close.SetParent(root.transform, false);
         close.position = new Vector3(0f, 1.2f, 5.2f);
@@ -130,7 +130,7 @@ public static class LobbyStageBuilder
         stage.CameraLobby = lobby; stage.CameraCloseup = close;
         stage.Camera = camera;
         camera.transform.SetPositionAndRotation(lobby.position, lobby.rotation);
-        camera.fieldOfView = 28f;
+        camera.fieldOfView = 30f;
         camera.cullingMask = -1;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.02f, 0.025f, 0.03f);
