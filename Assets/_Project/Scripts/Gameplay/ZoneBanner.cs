@@ -32,7 +32,7 @@ namespace Game.Gameplay
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetSpectator() => SpectatorFeet = null;
 
-        ZoneDirector _director;
+        PollutionDirector _director;
         AudioSource _audio;
         GameObject _bannerBox, _promptBox;
         Text _bannerText, _promptText;
@@ -59,11 +59,11 @@ namespace Game.Gameplay
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook()
         {
-            ZoneDirector.Started -= Install;
-            ZoneDirector.Started += Install;
+            PollutionDirector.Started -= Install;
+            PollutionDirector.Started += Install;
         }
 
-        static void Install(ZoneDirector director)
+        static void Install(PollutionDirector director)
         {
             if (director == null || director.GetComponentInChildren<ZoneBanner>() != null) return;
             var go = new GameObject("ZoneBanner");
@@ -89,22 +89,20 @@ namespace Game.Gameplay
                 return;
             }
             Instance = this;
-            _director = GetComponentInParent<ZoneDirector>();
+            _director = GetComponentInParent<PollutionDirector>();
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
             Build();
-            ZoneDirector.ClientRegionStateChanged += OnRegionState;
-            ZoneDirector.ClientFinalRevealed += OnFinalRevealed;
-            ZoneDirector.ClientBlastIncoming += OnBlastIncoming;
+            PollutionDirector.ClientRegionStateChanged += OnRegionState;
+            PollutionDirector.ClientFinalRevealed += OnFinalRevealed;
         }
 
         void OnDestroy()
         {
             if (Instance != this) return;
-            ZoneDirector.ClientRegionStateChanged -= OnRegionState;
-            ZoneDirector.ClientFinalRevealed -= OnFinalRevealed;
-            ZoneDirector.ClientBlastIncoming -= OnBlastIncoming;
+            PollutionDirector.ClientRegionStateChanged -= OnRegionState;
+            PollutionDirector.ClientFinalRevealed -= OnFinalRevealed;
             Instance = null;
             ZoneStatus.Current = default;
             ZoneFog.Current = default;
@@ -121,16 +119,8 @@ namespace Game.Gameplay
                 case ZoneState.Warning:
                     Play(_warningClip);
                     break;
-                case ZoneState.Lockdown:
-                    Say(name + " 지역 봉쇄", UiKit.Danger, MessageSeconds);
-                    Play(_lockdownClip);
-                    break;
-                case ZoneState.Bombardment:
-                    Say(name + " 지역 폭격 시작", UiKit.Danger, MessageSeconds);
-                    Play(_bombardmentClip);
-                    break;
                 case ZoneState.Closed:
-                    Say(name + " 지역 폐쇄", UiKit.Danger, MessageSeconds * 0.8f);
+                    Say(name + " 지역 오염 확정", UiKit.Danger, MessageSeconds);
                     break;
             }
         }
@@ -139,14 +129,6 @@ namespace Game.Gameplay
         {
             if (_director == null) return;
             Say("최종 구역 — " + _director.RegionNameOf(region), UiKit.Accent, RevealSeconds);
-        }
-
-        void OnBlastIncoming(Vector3 position, float seconds, float radius)
-        {
-            var me = Combatant.LocalPlayer;
-            if (me == null || _incomingClip == null) return;
-            // The incoming sound only for missiles that land near the local player.
-            if ((me.transform.position - position).sqrMagnitude <= (radius + IncomingNear * 4f) * (radius + IncomingNear * 4f)) Play(_incomingClip);
         }
 
         void Say(string text, Color colour, float seconds)
@@ -168,7 +150,7 @@ namespace Game.Gameplay
         {
             if (_director == null)
             {
-                _director = ZoneDirector.Instance;
+                _director = PollutionDirector.Instance;
                 if (_director == null) return;
             }
             UpdateStatus();
@@ -206,15 +188,6 @@ namespace Game.Gameplay
                     s.SecondsLeft = _director.SecondsLeft(region);
                     s.FinalRevealed = _director.FinalRegionRevealed;
                     s.FinalRegionName = s.FinalRevealed ? _director.RegionNameOf(_director.FinalRegion) : "";
-                    if (_director.TryNearestExit(feet, out int pass, out var at, out _))
-                    {
-                        float dx = at.x - feet.x, dz = at.z - feet.z;
-                        float distance = Mathf.Sqrt(dx * dx + dz * dz);
-                        s.HasExit = true;
-                        s.ExitPass = pass;
-                        s.ExitDistance = distance;
-                        s.ExitDirection = distance > 1e-3f ? new Vector3(dx / distance, 0f, dz / distance) : Vector3.forward;
-                    }
                     ZoneStatus.Current = s;
                 }
             }
@@ -237,12 +210,6 @@ namespace Game.Gameplay
                 colour = _messageColour;
                 key = _message.GetHashCode();
             }
-            else if (MissileNearby())
-            {
-                text = "폭격 접근 — 벗어나세요";
-                colour = UiKit.Danger;
-                key = 1;
-            }
             else
             {
                 // The region closest to its lockdown among those still counting down.
@@ -258,18 +225,9 @@ namespace Game.Gameplay
                 {
                     int seconds = Mathf.CeilToInt(least);
                     key = 100000 + warned * 1000 + Mathf.Min(seconds, 999);
-                    if (key != _shownKey) text = _director.RegionNameOf(warned) + " 지역 봉쇄 경고 — " + seconds + "초 (봉쇄 시 방사능 초당 " + DpsText(_director.RadiationDpsOf(warned)) + ")";
+                    if (key != _shownKey) text = _director.RegionNameOf(warned) + " 지역 오염 경보 — " + seconds + "초 (확정 후 초당 " + DpsText(PollutionRules.Current.DamagePerSecond(_director.Match.Timeline.Confirmed(_director.Now) + 1)) + ")";
                     else text = _text;
                     colour = UiKit.Accent;
-                }
-                else if (status.Valid && (status.State == ZoneState.Lockdown || status.State == ZoneState.Bombardment) && status.SecondsLeft >= 0f)
-                {
-                    int seconds = Mathf.CeilToInt(status.SecondsLeft);
-                    bool bombing = status.State == ZoneState.Bombardment;
-                    key = (bombing ? 300000 : 200000) + status.RegionIndex * 1000 + Mathf.Min(seconds, 999);
-                    if (key != _shownKey) text = status.RegionName + (bombing ? " 지역 폭격 중 — 폐쇄까지 " : " 지역 봉쇄 — 폭격까지 ") + seconds + "초 · 방사능 초당 " + DpsText(_director.RadiationDpsOf(status.RegionIndex));
-                    else text = _text;
-                    colour = UiKit.Danger;
                 }
             }
 
@@ -288,30 +246,15 @@ namespace Game.Gameplay
         // "4.5" / "11": health per second, one decimal at most.
         public static string DpsText(float dps) => dps.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
-        bool MissileNearby()
-        {
-            var me = Combatant.LocalPlayer;
-            if (me == null || me.Dead.Value) return false;
-            var markers = _director.Markers;
-            var feet = me.transform.position;
-            for (int i = 0; i < markers.Count; i++)
-            {
-                float reach = markers[i].Radius + IncomingNear;
-                if ((markers[i].Position - feet).sqrMagnitude <= reach * reach && markers[i].ImpactAt > Time.time) return true;
-            }
-            return false;
-        }
-
         // "F — 열쇠로 통로 열기 (열쇠 N개)" next to a locked barrier while holding a key.
         void UpdatePrompt()
         {
             int key = 0;
             var keys = KeyHolder.Local;
-            if (PassBarrier.PromptActive && keys != null) key = 1 + keys.Keys.Value;
             if (key == _promptKey) return;
             _promptKey = key;
             bool visible = key != 0;
-            _prompt = visible ? "F — 열쇠로 통로 열기 (열쇠 " + keys.Keys.Value + "개)" : "";
+            _prompt = visible ? "승강기 열쇠 " + keys.Keys.Value + "개" : "";
             if (_promptBox.activeSelf != visible) _promptBox.SetActive(visible);
             if (visible) _promptText.text = _prompt;
         }

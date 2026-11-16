@@ -101,11 +101,11 @@ namespace Game.Gameplay
     }
 
     // Gives the zone director the map: regions, passes and sub-zones as WorldInfo knows them. Game.Net cannot see
-    // WorldInfo, so the director asks through ZoneDirector.GeometrySource.
+    // WorldInfo, so the director asks through PollutionDirector.GeometrySource.
     public static class ZoneWorld
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Hook() => ZoneDirector.GeometrySource = FromWorldInfo;
+        static void Hook() { PollutionDirector.GeometrySource = FromWorldInfo; }
 
         // Null until the world exists.
         public static ZoneGeometry FromWorldInfo()

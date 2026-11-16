@@ -21,21 +21,21 @@ namespace Game.Net
     // Runs the pollution of a match (T5/T6, SPEC 3). Next to MatchDirector, like ZoneDirector (which it replaces
     // once the lockdown is removed, T10). Server: builds the match from the map grid and the match seed, applies
     // damage in steps, sends PollutionSync. Client: rebuilds from it. No network object of its own.
-    public class PollutionDirector : MonoBehaviour
+    public partial class PollutionDirector : MonoBehaviour
     {
         public static PollutionDirector Instance { get; private set; }
         // The map's grid, its region count and (optionally) loot weights. Set by Game.Gameplay from the world data.
         public static Func<PollutionGrid> GridSource;
-        public static int RegionCount;
+        public static int MapRegionCount;
         // Raised on a client (the host too) when the pollution is known / known to differ from the server's.
         public static event Action<PollutionDirector> ClientSynced;
         public static event Action<PollutionDirector> ClientHashMismatch;
         public static PollutionRules RulesOverride;
         // The pollution runs the match instead of the lockdown (T10 flips this on and removes ZoneDirector).
-        public static bool AutoStart;
+        public static bool AutoStart = true;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Instance = null; GridSource = null; RegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = false; }
+        static void ResetStatics() { Instance = null; GridSource = null; MapRegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = true; }
 
         NetworkManager _network;
         bool _bound;
@@ -121,7 +121,7 @@ namespace Game.Net
             }
         }
 
-        void Start() { TryBind(); }
+        void Start() { TryBind(); Started?.Invoke(this); }
 
         void OnDestroy()
         {
@@ -154,9 +154,15 @@ namespace Game.Net
         {
             grid = grid ?? GridSource?.Invoke();
             if (grid == null) return false;
-            int n = regionCount > 0 ? regionCount : RegionCount;
+            int n = regionCount > 0 ? regionCount : MapRegionCount;
             if (n <= 0) return false;
-            _match = new PollutionMatch(grid, PollutionGridBuilder.Adjacency(grid, n), n, seed, Rules);
+            int forced = -1;
+            if (!string.IsNullOrEmpty(FinalRegionOverride) && EnsureGeometry())
+            {
+                forced = _geo.RegionIndexOf(FinalRegionOverride);
+                if (forced < 0 && int.TryParse(FinalRegionOverride, out int idx) && idx >= 0 && idx < n) forced = idx;
+            }
+            _match = new PollutionMatch(grid, PollutionOrder.Plan(n, PollutionGridBuilder.Adjacency(grid, n), seed, forced), seed, Rules);
             _clockOffset = -Time.timeAsDouble;
             _exposure.Clear();
             _chipAt.Clear();
@@ -190,6 +196,7 @@ namespace Game.Net
         void Update()
         {
             if (!_bound) TryBind();
+            CompatTick();
             if (!_serverRunning && AutoStart && ServerActive && MatchDirector.Instance != null)
                 ServerStart(MatchDirector.Instance.LockdownSeed);
             if (!_serverRunning || !ServerActive) return;

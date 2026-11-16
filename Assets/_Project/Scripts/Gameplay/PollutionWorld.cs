@@ -22,7 +22,7 @@ namespace Game.Gameplay
 
         static PollutionGrid Build()
         {
-            if (_grid != null) { PollutionDirector.RegionCount = _regions; return _grid; }
+            if (_grid != null) { PollutionDirector.MapRegionCount = _regions; return _grid; }
             WorldSpec spec = null;
             var text = Resources.Load<TextAsset>("GameData/world");
             if (text != null) spec = JsonUtility.FromJson<WorldSpec>(text.text);
@@ -30,7 +30,7 @@ namespace Game.Gameplay
             var plan = WorldGenerator.Generate(spec);
             _grid = PollutionGridBuilder.Build(new WorldPlanTerrain(plan), CellMeters);
             _regions = plan.Regions.Count;
-            PollutionDirector.RegionCount = _regions;
+            PollutionDirector.MapRegionCount = _regions;
             return _grid;
         }
     }
