@@ -32,6 +32,8 @@ public static class CharacterImport
             Stats(dest, sb);
         }
         SyncUniversal(sb);
+        ConfigureTextures(RosterDir, sb);
+        ConfigureTextures(UbcRosterDir, sb);
         Finish(sb, 0);
     }
 
@@ -84,15 +86,18 @@ public static class CharacterImport
             var guids = new System.Collections.Generic.Dictionary<string, string>();
             foreach (var line in Git("ls-files " + RosterDir + "/" + prefix + "_*.png.meta").Split('\n', System.StringSplitOptions.RemoveEmptyEntries))
                 guids[Path.GetFileName(line).Replace(".meta", "")] = Regex.Match(Git("show HEAD:" + line), @"guid: (\w+)").Groups[1].Value;
-            imp.ExtractTextures(RosterDir);
+            // Extract into a scratch folder, then move each file in as "<Roster_Name>_<original name>" (names collide across models).
+            var tmp = RosterDir + "/_extract_" + prefix;
+            Directory.CreateDirectory(tmp);
             AssetDatabase.Refresh();
-            foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { RosterDir }))
+            imp.ExtractTextures(tmp);
+            AssetDatabase.Refresh();
+            foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { tmp }))
             {
                 var p = AssetDatabase.GUIDToAssetPath(g);
-                var n = Path.GetFileName(p);
-                if (n.StartsWith(Prefix) || !(n.StartsWith("Soldier_") || n.StartsWith(prefix.Replace(Prefix, "")))) continue;
-                AssetDatabase.RenameAsset(p, prefix + "_" + Path.GetFileNameWithoutExtension(n));
+                AssetDatabase.MoveAsset(p, RosterDir + "/" + prefix + "_" + Path.GetFileName(p));
             }
+            AssetDatabase.DeleteAsset(tmp);
             AssetDatabase.SaveAssets();
             foreach (var kv in guids)
             {
@@ -102,6 +107,26 @@ public static class CharacterImport
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
         }
         sb.AppendLine($"{path}: Humanoid, meshLods={imp.generateMeshLods} maxMeshLod={imp.maximumMeshLod}");
+    }
+
+    // PERF_BUDGET: no 4K textures (Mixamo ships 4096). Normal maps get the normal-map type. Idempotent.
+    static void ConfigureTextures(string dir, StringBuilder sb)
+    {
+        int changed = 0;
+        foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { dir }))
+        {
+            var path = AssetDatabase.GUIDToAssetPath(g);
+            if (!Path.GetFileName(path).StartsWith(Prefix)) continue;
+            var ti = (TextureImporter)AssetImporter.GetAtPath(path);
+            bool normal = path.ToLowerInvariant().Contains("_normal");
+            bool dirty = ti.maxTextureSize != 2048 || (normal && ti.textureType != TextureImporterType.NormalMap);
+            if (!dirty) continue;
+            ti.maxTextureSize = 2048;
+            if (normal) ti.textureType = TextureImporterType.NormalMap;
+            ti.SaveAndReimport();
+            changed++;
+        }
+        sb.AppendLine($"textures in {dir}: {changed} reconfigured (max 2048, normal maps)");
     }
 
     static string Git(string args)

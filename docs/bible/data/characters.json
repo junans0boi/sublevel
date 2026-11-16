@@ -94,8 +94,8 @@
           "status": "confirmed",
           "source": "Prefabs/Roster/Roster_*.prefab, Editor/CharacterRoster.cs",
           "what": "로스터 모델",
-          "value": "Mixamo Swat 1 + UBC 남·여 2 = 3 모델 x 변형 9(기본+색조 8) = 27 외형",
-          "note": "Mixamo 추가 7~11종은 준환이 Mixamo에서 받아야 함(blocked). UBC는 의상이 없는 맨몸이라 단색 작전복 재질로 표시, 얼굴·손 피부색 구분 없음"
+          "value": "12 모델(Mixamo 10 + UBC 2) x 변형 9(기본+색조 8) = 108 외형",
+          "note": "Mixamo 새 9종은 민간 의상(청바지·후드). UBC는 의상이 없는 맨몸이라 단색 작전복 재질. 군복 계열이 더 필요하면 준환 추가 다운로드·CC0 의상 반입"
         },
         {
           "id": "rm2",
@@ -110,23 +110,23 @@
           "status": "confirmed",
           "source": "Logs/roster_measure.txt",
           "what": "비율(실측)",
-          "value": "머리(목관절~정수리)/키 0.159~0.160, 팔(어깨~손목)/키 0.272~0.312, 다리/키 0.455~0.493",
-          "note": "UBC 팔이 짧다(0.27). 소총 대비 팔: Warden 0.75m=키의 0.42배·팔의 1.33배"
+          "value": "머리(목관절~정수리)/키 0.148~0.175, 팔(어깨~손목)/키 0.25~0.31, 다리/키 0.42~0.49 (12 모델 실측)",
+          "note": "소총 대비 팔: Warden 0.75m=키의 0.42배·팔의 1.33배(Swat 기준)"
         },
         {
           "id": "rm4",
           "status": "confirmed",
           "source": "ADR-227",
           "what": "LOD",
-          "value": "Unity 내장 Mesh LOD(원본 LOD0 Swat 19.4k·UBC 14~15k, 최저 약 0.4k) + LODGroup 단일 단계로 100m 컬(lodBias 1 기준, Ultra는 200m)",
-          "note": "Swat은 LOD0가 15k 초과라 selection bias +1(근거리 약 10k)"
+          "value": "Unity 내장 Mesh LOD + 컬 단계 LODGroup 100m 컬(lodBias 1). 원본 LOD0: Swat 19.4k·UBC 14~15k·Mixamo 새 9종 42~59k → 모델별 시작 LOD(1~3)로 ≤15k",
+          "note": "4m 7.0k~14.5k, 20m 1.6k~8.0k, 70m 0.4k~2.0k"
         },
         {
           "id": "rm5",
           "status": "confirmed",
           "source": "Logs/perf/roster50.txt",
           "what": "50체 렌더(실측)",
-          "value": "에디터 PlayMode 1080p: 6~90m 분산 p99 4.5ms·드로우 243·삼각형 36만 / 8~25m 밀집 p99 5.4ms·드로우 309·삼각형 75만, SetPass 11",
+          "value": "에디터 PlayMode 1080p 12모델 혼합: 6~90m 분산 p99 5.3ms·드로우 373·삼각형 26만 / 8~25m 밀집 p99 6.3ms·드로우 489·삼각형 63만, SetPass 11",
           "note": "T-포즈 정지(애니메이터 없음)·그림자 켬. 애니메이션 비용은 애니 트랙 50인 Animator PERF가 따로"
         }
       ]

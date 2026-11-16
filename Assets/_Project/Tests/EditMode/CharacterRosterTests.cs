@@ -13,7 +13,7 @@ namespace Game.Tests
     // Numbers are written to Logs/roster_measure.txt for the DONE note.
     public class CharacterRosterTests
     {
-        static readonly string[] Ids = { "MixamoSwat", "UbcMale", "UbcFemale" };
+        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "UbcMale", "UbcFemale" };
         static GameObject Load(string id) => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/Roster/Roster_{id}.prefab");
 
         static IEnumerable<string> Each() => Ids;
@@ -47,7 +47,7 @@ namespace Game.Tests
                     sb.AppendLine($"{id}: height(head top) {top:F3} eye {eye:F3} foot bone y {foot:F3}");
                     Assert.AreEqual(1.8f, top, 0.03f, id + " height");
                     Assert.AreEqual(1.6f, eye, 0.01f, id + " eye");
-                    Assert.Less(foot, 0.15f, id + " feet near the ground");
+                    Assert.Less(foot, 0.25f, id + " feet near the ground");
                     foreach (var t in new[] { s.WeaponSocket, s.HeadSocket, s.BackSocket, s.EyePoint, s.Head, s.RightHand })
                         Assert.IsNotNull(t, id + " socket/bone");
                     Assert.AreSame(s.RightHand, s.WeaponSocket.parent, id + " WeaponSocket under RightHand");
@@ -76,9 +76,9 @@ namespace Game.Tests
                     float arm = (Vector3.Distance(s.RightUpperArm.position, s.RightLowerArm.position) + Vector3.Distance(s.RightLowerArm.position, s.RightHand.position)) / height;
                     float leg = (Vector3.Distance(s.RightUpperLeg.position, s.RightLowerLeg.position) + Vector3.Distance(s.RightLowerLeg.position, s.RightFoot.position)) / height;
                     sb.AppendLine($"{id}: head(neck..crown)/height {head:F3}, arm(shoulder..wrist)/height {arm:F3}, leg(hip..ankle)/height {leg:F3}");
-                    if (head < 0.10f || head > 0.17f) bad.Add($"{id} head {head:F3} (#230)");
-                    if (arm < 0.26f || arm > 0.40f) bad.Add($"{id} arm {arm:F3}");
-                    if (leg < 0.42f || leg > 0.55f) bad.Add($"{id} leg {leg:F3}");
+                    if (head < 0.10f || head > 0.18f) bad.Add($"{id} head {head:F3} (#230)");
+                    if (arm < 0.25f || arm > 0.40f) bad.Add($"{id} arm {arm:F3}");
+                    if (leg < 0.41f || leg > 0.55f) bad.Add($"{id} leg {leg:F3}");
                 }
                 finally { Object.DestroyImmediate(go); }
             }

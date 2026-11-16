@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using Game.Gameplay;
 using UnityEditor;
 using UnityEngine;
@@ -17,10 +18,19 @@ public static class CharacterRoster
     public const float Height = 1.8f, EyeHeight = 1.6f, CullDistance = 100f;
     const string MixDir = CharacterImport.RosterDir + "/", UbcDir = CharacterImport.UbcRosterDir + "/";
 
-    public struct Entry { public string Id, Fbx; public bool Mixamo; public float LodBias; }
+    public struct Entry { public string Id, Fbx; public bool Mixamo; public string Prefix; }
     public static readonly Entry[] Entries =
     {
-        new Entry { Id = "MixamoSwat", Fbx = MixDir + "Roster_Swat.fbx", Mixamo = true, LodBias = 1f }, // LOD0 is 19.4k tris (> 15k cap): start one LOD lower,
+        new Entry { Id = "MixamoSwat", Fbx = MixDir + "Roster_Swat.fbx", Mixamo = true, Prefix = "Roster_Swat" },
+        new Entry { Id = "MixamoBrian", Fbx = MixDir + "Roster_Brian.fbx", Mixamo = true, Prefix = "Roster_Brian" },
+        new Entry { Id = "MixamoLouise", Fbx = MixDir + "Roster_Louise.fbx", Mixamo = true, Prefix = "Roster_Louise" },
+        new Entry { Id = "MixamoJames", Fbx = MixDir + "Roster_James.fbx", Mixamo = true, Prefix = "Roster_James" },
+        new Entry { Id = "MixamoMegan", Fbx = MixDir + "Roster_Megan.fbx", Mixamo = true, Prefix = "Roster_Megan" },
+        new Entry { Id = "MixamoKate", Fbx = MixDir + "Roster_Kate.fbx", Mixamo = true, Prefix = "Roster_Kate" },
+        new Entry { Id = "MixamoJosh", Fbx = MixDir + "Roster_Josh.fbx", Mixamo = true, Prefix = "Roster_Josh" },
+        new Entry { Id = "MixamoAdam", Fbx = MixDir + "Roster_Adam.fbx", Mixamo = true, Prefix = "Roster_Adam" },
+        new Entry { Id = "MixamoMartha", Fbx = MixDir + "Roster_Martha.fbx", Mixamo = true, Prefix = "Roster_Martha" },
+        new Entry { Id = "MixamoAlex", Fbx = MixDir + "Roster_Alex.fbx", Mixamo = true, Prefix = "Roster_Alex" },
         new Entry { Id = "UbcMale", Fbx = UbcDir + "Roster_Superhero_Male.fbx" },
         new Entry { Id = "UbcFemale", Fbx = UbcDir + "Roster_Superhero_Female.fbx" },
     };
@@ -49,6 +59,16 @@ public static class CharacterRoster
         Debug.Log(report.ToString());
     }
 
+    static Texture2D FindTex(string prefix, string key, string suffix)
+    {
+        foreach (var g in AssetDatabase.FindAssets("t:Texture2D " + prefix + "_", new[] { MixDir.TrimEnd('/') }))
+        {
+            var p = AssetDatabase.GUIDToAssetPath(g); var f = Path.GetFileNameWithoutExtension(p);
+            if (f.StartsWith(prefix + "_") && f.Contains(key) && f.EndsWith("_" + suffix)) return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
+        }
+        return null;
+    }
+
     static Texture2D Tex(string path) => AssetDatabase.LoadAssetAtPath<Texture2D>(path);
 
     static Material Mat(string name, Color color, Texture2D baseMap = null, Texture2D normal = null, float smooth = 0.25f)
@@ -75,7 +95,22 @@ public static class CharacterRoster
             {
                 var n = src.name;
                 string id = $"{e.Id}_{tint.Item1}_{n}";
-                if (e.Mixamo)
+                if (e.Mixamo && e.Prefix != "Roster_Swat")
+                {
+                    // Civilian atlas: skin and clothes share the 1001 texture. The FBX does not link textures, so by Mixamo convention:
+                    // body -> 1001, body1 -> 1002, hair -> the highest-numbered texture (dark colour if that is 1001), others dark.
+                    var low = n.ToLowerInvariant();
+                    var all = AssetDatabase.FindAssets("t:Texture2D " + e.Prefix + "_", new[] { MixDir.TrimEnd('/') })
+                        .Select(AssetDatabase.GUIDToAssetPath).Where(x => x.EndsWith("_Diffuse.png")).OrderBy(x => x).ToArray();
+                    string key = low.EndsWith("body1") ? "1002" : low.EndsWith("body") ? "1001"
+                        : low.EndsWith("hair") && all.Length > 1 ? Regex.Match(all.Last(), @"_(\d{4})_").Groups[1].Value : null;
+                    var d = key != null ? FindTex(e.Prefix, key, "Diffuse") : null;
+                    var nm = key != null ? FindTex(e.Prefix, key, "Normal") : null;
+                    bool body = low.EndsWith("body") || low.EndsWith("body1");
+                    var c = d == null ? new Color(0.06f, 0.05f, 0.04f) : k >= 0 && body ? Color.Lerp(Color.white, tint.Item2 * 2.2f, 0.45f) : Color.white;
+                    list.Add(Mat(id, c, d, nm, 0.3f));
+                }
+                else if (e.Mixamo)
                 {
                     bool head = n.StartsWith("Soldier_head");
                     var d = Tex(MixDir + (head ? "Roster_Swat_Soldier_head_diffuse.png" : "Roster_Swat_Soldier_Body_diffuse.png"));
@@ -173,9 +208,22 @@ public static class CharacterRoster
         // LODGroup measures the largest bounds extent (T-pose arms are wider than the body is tall): re-fit the cull height.
         cull = lod.size / (2f * CullDistance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad));
         lod.SetLODs(new[] { new LOD(cull, renderers) });
-        foreach (var r in renderers) r.meshLodSelectionBias = e.LodBias;
+        // Start at the first Mesh LOD whose total is within the 15k cap (interface: LOD0 <= 15k).
+        int startLod = 0;
+        for (; startLod < 9; startLod++)
+        {
+            int tris = 0;
+            foreach (SkinnedMeshRenderer r in renderers)
+            {
+                var m = r.sharedMesh; int lc = Mathf.Max(1, m.lodCount);
+                for (int sm = 0; sm < m.subMeshCount; sm++) tris += (int)(m.lodCount > 0 ? m.GetLod(sm, Mathf.Min(startLod, lc - 1)).indexCount : m.GetIndexCount(sm)) / 3;
+            }
+            if (tris <= 15000) break;
+        }
+        foreach (var r in renderers) r.meshLodSelectionBias = startLod;
+        def.StartLod = startLod;
 
-        Debug.Log($"[Roster] {e.Id} lod.size {lod.size:F3} cull height {cull:F5} lods {lod.lodCount} fade {lod.fadeMode}");
+        Debug.Log($"[Roster] {e.Id} startLod {startLod} mats {string.Join(",", renderers.SelectMany(r => r.sharedMaterials).Select(x => x.name))} lod.size {lod.size:F3} cull height {cull:F5} lods {lod.lodCount} fade {lod.fadeMode}");
         var prefabPath = $"{PrefabDir}/Roster_{e.Id}.prefab";
         PrefabUtility.SaveAsPrefabAsset(wrapper, prefabPath);
         var info = $"{e.Id}: raw height {raw:F3} m -> {bounds.size.y:F3} m (scale {model.transform.localScale.x:F3}), model fwd {fwd}, variants {variants.Count}, {prefabPath}";
@@ -205,12 +253,12 @@ public static class CharacterRoster
         Directory.CreateDirectory("Logs/roster");
         int n = 0;
         for (int m = 0; m < Entries.Length; m++)
-            for (int v = 0; v < 3; v++)
+            for (int v = 0; v < 2; v++)
             {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/Roster_{Entries[m].Id}.prefab"));
-                go.transform.position = new Vector3((n - 4) * 2.1f, 0, 0);
+                go.transform.position = new Vector3((m - 5.5f) * 2.1f, 0, v * 3f);
                 var def = go.GetComponent<CharacterDef>();
-                def.ApplyVariant(v == 0 ? 0 : v * 3);
+                def.ApplyVariant(v == 0 ? 0 : 3);
                 var w = CharacterKit.InstantiateWeapon(CharacterKit.Weapons[2]);
                 w.transform.SetParent(def.Sockets.WeaponSocket, false);
                 w.transform.rotation = go.transform.rotation; // muzzle +Z
@@ -218,8 +266,8 @@ public static class CharacterRoster
                 n++;
             }
         var pole = GameObject.CreatePrimitive(PrimitiveType.Cube); pole.transform.localScale = new Vector3(0.03f, 1.8f, 0.03f); pole.transform.position = new Vector3(-10.2f, 0.9f, 0);
-        SceneLook.Shot(cam, "Logs/roster/lineup_front.png", new Vector3(0, 1.1f, -15f), new Vector3(0, 0.9f, 0));
-        SceneLook.Shot(cam, "Logs/roster/lineup_side.png", new Vector3(14f, 1.1f, -0f), new Vector3(0, 0.9f, 0));
+        SceneLook.Shot(cam, "Logs/roster/lineup_front.png", new Vector3(0, 1.1f, -27f), new Vector3(0, 0.9f, 0));
+        SceneLook.Shot(cam, "Logs/roster/lineup_side.png", new Vector3(30f, 1.1f, 0f), new Vector3(0, 0.9f, 0));
         EditorApplication.Exit(0);
     }
 }

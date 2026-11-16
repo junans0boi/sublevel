@@ -151,6 +151,7 @@ MonoBehaviour:
   - 30
   - 60
   HasHelmetMask: 0
+  StartLod: 1
   Sockets:
     Hips: {fileID: 4945524011462244455}
     Spine: {fileID: 9135662816285750871}
@@ -338,6 +339,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8531248215242998404, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
+      propertyPath: m_MeshLodSelectionBias
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8531248215242998404, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 253baeb2acd414959a190a2b53013375, type: 2}
@@ -346,9 +351,17 @@ PrefabInstance:
       value: Model
       objectReference: {fileID: 0}
     - target: {fileID: 2321523695958950486, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
+      propertyPath: m_MeshLodSelectionBias
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2321523695958950486, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: c31437af79ab74465bd4e4a33013fe90, type: 2}
+    - target: {fileID: 4942659167494779009, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
+      propertyPath: m_MeshLodSelectionBias
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4942659167494779009, guid: c3ee9f3d6adf7403ebf35ca3a5b53fa0, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 

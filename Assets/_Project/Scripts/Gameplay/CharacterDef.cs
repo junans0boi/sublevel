@@ -28,6 +28,7 @@ namespace Game.Gameplay
         public Vector3 WeaponSocketOffsetPos, WeaponSocketOffsetEuler;
         public float[] LodDistances = { 0f, 12f, 30f, 60f }; // metres where Mesh LOD 0..3 are intended (documentation; selection is Unity's)
         public bool HasHelmetMask;
+        public int StartLod; // first Mesh LOD used (LOD0 above 15k triangles is skipped)
         public HumanoidSockets Sockets;
         public Animator Animator;
         public Renderer[] Renderers;
