@@ -59,6 +59,7 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 ## S7 총기 (2026-11-16) — 릴리스 전 사람이 확인 (에이전트는 법적 판단 안 함)
 - [ ] **총기 이름 상표·상품명 검토(사람)**: 아래 가칭 전부. 검색 예: KIPRIS(상품류 13 화기·9 게임SW·28 완구·12 차량), USPTO TESS, WIPO Global Brand DB, EUIPO, Steam/Google("이름 + gun / weapon / game"). "겹칠 가능성"은 일반 상식 기반 추정이며 검색으로 확인하지 않았다(출처: `docs/research/08_gun_model_candidates.md` §5).
   - VK-9(권총, 'VK'+숫자 코드명 형식, 기존 플래그) · Vesper(권총) · Ordo · Brisk(점화플러그 브랜드 가능) · Sable(자동차 모델명 가능) · Warden · Vanguard(흔한 상표) · Bulwark · Hauler(차량·운송 상품명 가능) · Lancer(자동차 모델명, 게임 소총명 가능) · Tracer · Arbiter(게임 인물명 가능) · Sentinel · Obelisk · Breacher · Duo(상표 다수)
+  - 모델 윤곽 주의(ADR-217): AK형 모델은 쓰지 않도록 교체했으나, 현재 AR 계열(Vanguard·Bulwark·Lancer·Hauler·Fang·Bastion·Anvil)은 AR-15형 윤곽, Bulwark·Tracer·Warden은 불펍형(실총 연상 가능, 디자인권은 사람 몫). 목록 `placeholder/guns_PLACEHOLDERS.md`
   - 08 시트에 없던 추가분(미검토): Bastion · Anvil · Marshal · Fang · Hornet (ADR-182)
 - [ ] **총기 모델 형상의 실존 유사성**: 임시 모델(Quaternius·Poly Pizza CC0)은 각인·로고가 없지만 실총과 닮았는지 검토 안 함(디자인권은 사람 몫). 실총형 팩(chilly-durango·Stein·3dmodelscc0)과 CC-BY 후보(M21 EBR·MK14 등)는 쓰지 않기로 함(ADR-182). 실총 이름이 든 파일명은 import 시 개명.
 - [ ] **임시 모델·placeholder 교체**: DMR 3종·보급 5종 등 `placeholder/`에 둔 것은 릴리스 전 제거하거나 확정 모델로 교체(CLAUDE.md 규칙 2, ASSET_LEDGER 반입 시 표시).

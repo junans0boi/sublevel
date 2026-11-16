@@ -55,6 +55,10 @@ namespace Game.Core
             _until = now + e.Seconds;
         }
 
+        // The server's one call per landed hit (every pellet of a shotgun blast counts as its own hit).
+        public void Hit(WeaponDef weapon, HitZone zone, double now, StoppingRules rules = null) =>
+            Apply(WeaponStopping.Of(weapon, zone, rules ?? StoppingRules.Current), now);
+
         public void Clear() => _until = double.NegativeInfinity;
     }
 }
