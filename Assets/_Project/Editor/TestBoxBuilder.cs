@@ -329,6 +329,7 @@ public static class TestBoxBuilder
         var go = new GameObject("Player");
         var cc = go.AddComponent<CharacterController>();
         cc.height = 1.8f; cc.radius = 0.35f; cc.center = new Vector3(0, 0.9f, 0);
+        cc.slopeLimit = 40f; // ADR-195: hard walk limit = WorldSpec.WalkSlopeDeg (Unity default is 45)
         go.AddComponent<NetworkObject>();
         go.AddComponent<NetworkTransform>();
         var combatant = go.AddComponent<Combatant>();

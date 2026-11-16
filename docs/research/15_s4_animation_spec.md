@@ -46,6 +46,7 @@ GitHub: 지도 #298, T1 #299, T2 #300, T3 #301, T4 #302, T5 #303, T6 #304, T7 #3
 - **왼손**: `OnAnimatorIK(layer)` → `SetIKPosition/Rotation(LeftHand)` = 총 `LeftHandGrip`. 가중치 = `gripWeight`(기본 1) × (1 − Action 레이어의 `LeftHandIK` 해제 커브). 스프린트에서도 1 유지(로우레디 클립이 이미 그 근처에 있으므로 IK 보정이 작다).
 - **오른손**: 클립 소유. 총은 `WeaponSocket`(RightHand 자식, S3)에 붙고 오프셋은 `CharacterDef`. 조준 시선 보정은 척추 피치 분배가 담당(팔 직접 비틀기 `armUp` 삭제).
 - **발**: `OnAnimatorIK`에서 `LeftFoot/RightFoot` 위치·회전 + 접지 레이캐스트(발당 1개), 골반 오프셋은 낮은 발 기준. 경사 한도(`slopeLimit`)·웅크림·엎드림에서는 가중 감쇠. 근거: #235(경사·계단), #232(기울이기에서 발 고정).
+  - **ADR-195 반영(2026-11-16)**: 경사 하드 한계는 컨트롤러 `slopeLimit` 40도 하나로 통일. 발 IK의 경사 가중 감쇠·발 최대 보정 높이·골반 내림 한도는 이 값을 하드코딩하지 않고 `CharacterController.slopeLimit`(또는 규칙 데이터)에서 읽는다. 감쇠는 걷기 한계 35도부터 시작해 40도에서 0(IK가 불가능한 경사를 억지로 맞추지 않음). 테스트(T9)는 35·40도 경사에서 발-지면 거리와 IK 가중치를 수치로 단언. `Player.prefab` 45→40은 S3 #255 이후라, 그 전 PlayMode 측정은 45 기준일 수 있음에 유의.
 - **비용 한도(가정)**: 20 m 안 12명까지 IK, 이후 0. 측정 후 확정.
 
 ### 2.3 상태 ↔ 클립 인벤토리 매핑 (기존 16클립 + 격차)

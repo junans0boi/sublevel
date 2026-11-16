@@ -40,8 +40,8 @@
 ## 5. 파일 보관과 빌드 (Mixamo FBX를 커밋하지 않는 설계)
 조건: 신규 Mixamo FBX는 저장소에 커밋하지 않는다(비공개 저장소 포함 문구 미확인, master 지시). 약관 중 AI/ML 학습 금지는 "에셋으로 모델을 학습시키지 않는다"이므로 게임 빌드와 무관하나, 에이전트가 FBX 내용을 외부 서비스에 보내지 않게 한다.
 - **원본**: `AssetStaging/mixamo/`(git 무시). 준환이 받은 파일을 거기에 둔다.
-- **반입(재현 가능)**: `CharacterKit.SyncStaging`(에디터 메서드, `tools/unity.sh run CharacterKit.SyncStaging`)가 staging → `Assets/_Project/Art/Characters/MixamoRoster/`로 복사하고 Humanoid 임포트 설정 후 `.meta`를 만든다.
-- **gitignore 제안**: `Assets/_Project/Art/Characters/MixamoRoster/*.fbx`와 추출 텍스처는 무시하고 **`.meta`와 프리팹은 커밋**한다. `.meta` GUID가 고정되므로 프리팹 참조가 깨지지 않는다. 새 클론은 `SyncStaging` 한 번이면 복원된다.
+- **반입(재현 가능)**: `CharacterImport.SyncStaging`(에디터 메서드, `tools/unity.sh run CharacterImport.SyncStaging`)가 staging → `Assets/_Project/Art/Characters/Mixamo/Roster_*.fbx`(기존 폴더, 새 디렉터리 없음)로 복사하고 Humanoid 임포트 설정 후 `.meta`를 만든다.
+- **gitignore 제안**: `Art/Characters/Mixamo/Roster_*.fbx`·`Roster_*.png`는 무시하고 **`.meta`와 프리팹은 커밋**한다. `.meta` GUID가 고정되므로 프리팹 참조가 깨지지 않는다. 새 클론은 `SyncStaging` 한 번이면 복원된다.
 - **빌드**: 빌드 머신이 같은 staging을 가진 경우에만 모델이 들어간다. `BuildScript`가 staging 누락이면 **명확히 실패**(조용히 빈 캐릭터 금지). 빌드 산출물(번들된 게임)은 Adobe FAQ상 허용(상업 게임), 원본 FBX 단독 배포는 금지 → 빌드 결과에 원본 `.fbx`가 아니라 임포트된 에셋만 들어간다.
 - **한계**: 기존 Mixamo FBX 17개(C-0005)는 이미 git 추적 중이며 이력을 지우는 일은 규칙 4(되돌릴 수 없는 작업)로 하지 않는다. 신규만 이 설계를 따른다. 최종 판단(추적 유지 vs 이전)은 사람: RISKS_OPEN_QUESTIONS 항목.
 - **ledger**: 파일이 프로젝트에 들어갈 때(SyncStaging 시점) C-00xx 행 추가(출처·약관 확인일·수정=데시메이트 여부). 이 설계 시점에는 쓰지 않는다.
@@ -50,7 +50,7 @@
 키 1.780 m / 머리 메시 0.324 m(18%) / 눈 추정 1.66 m / 엉덩이 0.965 m / 위팔 0.277·아래팔 0.279·손 0.227 / 어깨 너비 0.369 / 삼각형 19,450(body 11,194 + head 8,256) / diffuse 1024², normal·specular 512².
 
 ## 7. LOD (T8)
-`LODGroup` LOD0 ≤15k(원본 Swat 19,450 → 감축 필요), LOD1 ≈5k, LOD2 ≈1.5k, 100 m 컬. 임포터는 `_LOD0/_LOD1` 이름 규칙으로 LODGroup을 만든다(`AssetImportRules` 주석 확인). S4 요구: **LOD가 바뀌어도 같은 Avatar·본 이름**이어야 하므로 데시메이트는 스킨 메시만 바꾸고 본은 공유. 서버 헤드리스는 `AlwaysAnimate` 유지(별도 실측).
+**ADR-197 보정: Unity 6.3 내장 Mesh LOD(임포터 `generateMeshLods`)를 쓴다. 실측 LOD0 19,450 → LOD2 5,451 → LOD4 1,407 tris, 자체 데시메이트·LODGroup 불필요.** (아래는 최초 설계) `LODGroup` LOD0 ≤15k(원본 Swat 19,450 → 감축 필요), LOD1 ≈5k, LOD2 ≈1.5k, 100 m 컬. 임포터는 `_LOD0/_LOD1` 이름 규칙으로 LODGroup을 만든다(`AssetImportRules` 주석 확인). S4 요구: **LOD가 바뀌어도 같은 Avatar·본 이름**이어야 하므로 데시메이트는 스킨 메시만 바꾸고 본은 공유. 서버 헤드리스는 `AlwaysAnimate` 유지(별도 실측).
 
 ## 8. S4와 합의가 필요한 열린 항목
 1. 클립 FBX Humanoid 임포트 방식(위 §1 추정 검증).

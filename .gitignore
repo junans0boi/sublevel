@@ -31,3 +31,8 @@ sysinfo.txt
 
 # Raw asset downloads (only the files in use are copied into Assets/)
 /AssetStaging/
+
+# Mixamo roster models (ADR-192): FBX and extracted textures stay out of git; their .meta files and prefabs are committed.
+# Restore on a fresh clone: tools/unity.sh run CharacterImport.SyncStaging (reads AssetStaging/mixamo/)
+/Assets/_Project/Art/Characters/Mixamo/Roster_*.fbx
+/Assets/_Project/Art/Characters/Mixamo/Roster_*.png

@@ -26,6 +26,7 @@ namespace Game.Core
         const float RidgeRough = 3.5f;            // broken profile: ribs and notches on the flanks
         const float PassCalm = 45f;               // within this distance of a pass the ridge is the plain straight one
         const float MountainRise = 100f, Foothills = 5f;
+        const float MassifRise = 160f, MassifOffset = 0.45f;             // Style "Ridge": the massif reaches full height this far from a road or yard
         const float TownHills = 17f, FactoryHills = 13f, WetlandHills = 5f, HillsAtRidge = 0.35f;
         const float GridCell = 16f;
 
@@ -39,6 +40,7 @@ namespace Game.Core
         readonly int regionCount;
         readonly float[] cx, cz, baseH, relief;
         readonly RegionKind[] kind;
+        readonly MountainTerrain[] massif;     // per region; null unless the region is a mountain with Style "Ridge"
         readonly float[,] centreDist;
 
         float[] passX = new float[0], passZ = new float[0], passHalf = new float[0], passSaddle = new float[0];
@@ -78,6 +80,7 @@ namespace Game.Core
             baseH = new float[regionCount];
             relief = new float[regionCount];
             kind = new RegionKind[regionCount];
+            massif = new MountainTerrain[regionCount];
             centreDist = new float[regionCount, regionCount];
             for (int i = 0; i < regionCount; i++)
             {
@@ -89,6 +92,13 @@ namespace Game.Core
                 // Peaks may reach MaxHeight but never pass it (the terrain asset clips there).
                 if (kind[i] == RegionKind.Mountain)
                     relief[i] = Math.Max(0f, Math.Min(relief[i], maxHeight - sea - baseH[i] - 6f));
+                if (kind[i] == RegionKind.Mountain && string.Equals(regions[i].Style, "Ridge", StringComparison.OrdinalIgnoreCase))
+                    {
+                    // The roads and yards start at the region centre, so the massif stands off to one side of it.
+                    float a = WorldNoise.Hash01(i, 3, unchecked(seed + 4099u)) * 6.2831853f;
+                    float off = MassifOffset * regions[i].Radius;
+                    massif[i] = new MountainTerrain(unchecked(seed + (uint)i * 7919u), cx[i] + off * (float)Math.Cos(a), cz[i] + off * (float)Math.Sin(a), regions[i].Radius, relief[i]);
+                }
             }
             for (int i = 0; i < regionCount; i++)
                 for (int j = 0; j < regionCount; j++)
@@ -277,6 +287,13 @@ namespace Game.Core
             {
                 case RegionKind.Mountain:
                 {
+                    if (massif[k] != null)
+                    {
+                        // Level along roads and yards, then the massif: its own ridges, saddles and benches instead of a radial climb.
+                        float lowland = baseH[k] + 4f * WorldNoise.Fbm(x / 120f, z / 120f, unchecked(seed + 25u), 2);
+                        float climb = Smooth01((ValleyDistance(k, x, z) - 8f) / MassifRise);
+                        return lowland + climb * massif[k].Height(x, z);
+                    }
                     float foot = baseH[k] + 4f * WorldNoise.Fbm(x / 120f, z / 120f, unchecked(seed + 25u), 2);
                     // Level along roads and yards; the ground then climbs over 100 m: foothills first, the massif behind.
                     float away = ValleyDistance(k, x, z);

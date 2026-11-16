@@ -162,13 +162,14 @@ namespace Game.Tests
             if (_root != null) Object.DestroyImmediate(_root);
         }
 
-        BoxCollider Building(string name, Vector3 at, Vector3 size)
+        BoxCollider Building(string name, Vector3 at, Vector3 size, SurfaceId surface)
         {
             var building = new GameObject(name);
             building.transform.SetParent(_root.transform, false);
             building.transform.position = at;
             var colliders = new GameObject("Colliders");
             colliders.transform.SetParent(building.transform, false);
+            colliders.AddComponent<Game.Net.SurfaceIdTag>().Id = surface; // WorldBuilder tags every collider group (#246); footsteps read the tag, not the name
             var box = colliders.AddComponent<BoxCollider>();
             box.size = size;
             return box;
@@ -178,10 +179,10 @@ namespace Game.Tests
         public void SurfaceAt_reads_buildings_and_terrain_layers()
         {
             _root = new GameObject("SoundRulesTestRoot");
-            Building("Lot01_House", new Vector3(1000f, 50f, 1000f), new Vector3(8f, 0.2f, 8f));
-            Building("Lot02_FactoryHall", new Vector3(1020f, 50f, 1000f), new Vector3(10f, 0.2f, 10f));
-            Building("Lot03_FactoryHall", new Vector3(1040f, 50f, 1000f), new Vector3(1.3f, 0.5f, 0.28f)); // a stair step
-            Building("Station01", new Vector3(1060f, 50f, 1000f), new Vector3(8f, 0.2f, 8f));
+            Building("Lot01_House", new Vector3(1000f, 50f, 1000f), new Vector3(8f, 0.2f, 8f), SurfaceId.Wood);
+            Building("Lot02_FactoryHall", new Vector3(1020f, 50f, 1000f), new Vector3(10f, 0.2f, 10f), SurfaceId.Concrete);
+            Building("Lot03_FactoryHall", new Vector3(1040f, 50f, 1000f), new Vector3(1.3f, 0.5f, 0.28f), SurfaceId.Metal); // a stair step
+            Building("Station01", new Vector3(1060f, 50f, 1000f), new Vector3(8f, 0.2f, 8f), SurfaceId.Concrete);
 
             var data = new TerrainData { alphamapResolution = 16 };
             data.heightmapResolution = 33;
@@ -210,6 +211,56 @@ namespace Game.Tests
             Assert.AreEqual(FootSurface.Grass, CombatantAudio.SurfaceAt(new Vector3(2010f, 0f, 2032f)), "grass half");
             Assert.AreEqual(FootSurface.Dirt, CombatantAudio.SurfaceAt(new Vector3(2054f, 0f, 2032f)), "road half");
             Assert.AreEqual(FootSurface.Concrete, CombatantAudio.SurfaceAt(new Vector3(5000f, -500f, 5000f)), "nothing underfoot");
+        }
+
+        // ---- ADR-183: eighteen surfaces, clip folders from the cut Freesound recordings ----
+
+        [Test]
+        public void Every_surface_has_step_clips_of_its_own_or_a_stand_in()
+        {
+            foreach (SurfaceId id in System.Enum.GetValues(typeof(SurfaceId)))
+            {
+                var clips = CombatantAudio.StepClips(id, out float gain);
+                Assert.GreaterOrEqual(clips.Length, 4, id + ": several variations");
+                Assert.That(gain, Is.InRange(0.1f, 1f), id.ToString());
+                foreach (var c in clips) StringAssert.StartsWith("step_", c.name, id.ToString());
+            }
+        }
+
+        [Test]
+        public void A_surface_with_no_folder_plays_its_stand_in_quieter()
+        {
+            CombatantAudio.StepClips(SurfaceId.Carpet, out float carpet);
+            CombatantAudio.StepClips(SurfaceId.Wood, out float wood);
+            Assert.AreEqual(0.6f, carpet, 1e-4f);
+            Assert.AreEqual(1f, wood, 1e-4f);
+        }
+
+        [TestCase("World_Grass", false, SurfaceId.Grass)]
+        [TestCase("World_Dirt", false, SurfaceId.Dirt)]
+        [TestCase("World_Mud", false, SurfaceId.Mud)]
+        [TestCase("World_Rock", false, SurfaceId.Rock)]
+        [TestCase("World_Sand", false, SurfaceId.Sand)]
+        [TestCase("anything", true, SurfaceId.Water)]
+        [TestCase(null, false, SurfaceId.Concrete)]
+        public void Terrain_layers_map_to_surfaces(string layer, bool underWater, SurfaceId expected)
+        {
+            Assert.AreEqual(expected, SoundRules.TerrainSurfaceId(layer, underWater));
+        }
+
+        [Test]
+        public void A_collider_without_a_tag_is_concrete_whatever_its_name()
+        {
+            _root = new GameObject("SoundRulesTestRoot");
+            var b = new GameObject("Lot09_House");
+            b.transform.SetParent(_root.transform, false);
+            b.transform.position = new Vector3(3000f, 50f, 3000f);
+            var c = new GameObject("Colliders");
+            c.transform.SetParent(b.transform, false);
+            c.AddComponent<BoxCollider>().size = new Vector3(8f, 0.2f, 8f);
+            Physics.SyncTransforms();
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+            Assert.AreEqual(FootSurface.Concrete, CombatantAudio.SurfaceAt(new Vector3(3000f, 50.1f, 3000f)), "no name parsing: a house name alone is not wood");
         }
     }
 }

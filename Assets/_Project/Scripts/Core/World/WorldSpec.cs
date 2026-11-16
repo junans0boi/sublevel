@@ -11,6 +11,7 @@ namespace Game.Core
         public string Id;                 // "A".."D"
         public string Name;               // display name (Korean)
         public string Kind;               // RegionKind as text so the JSON stays readable
+        public string Style = "";        // Mountain only: "" = the original radial relief, "Ridge" = MountainTerrain (ridge lines, saddles, benches; #247)
         public float CentreX, CentreZ;    // regions are the Voronoi cells of these points
         public float Radius;              // rough reach: compounds prefer to stay this close to the centre
         public float BaseHeight;

@@ -121,23 +121,24 @@ namespace Game.Gameplay
 
         bool PlayFootstep(float volume)
         {
-            var surface = SurfaceAt(transform.position);
+            var id = SurfaceIdAt(transform.position);
+            var surface = SurfaceRules.ToFoot(id);
             StepTaken?.Invoke(transform, surface);
-            var clips = surface == FootSurface.Concrete ? _footsteps : StepClips(surface);
-            if (clips.Length == 0) clips = _footsteps;
+            var clips = StepClips(id, out float clipGain);
+            if (clips.Length == 0) { clips = _footsteps; clipGain = 1f; }
             if (clips.Length == 0) return false;
             // A lowered stance or a slow walk treads more quietly, a sprint louder; the ground rings or muffles.
             var loco = GameData.Rules.Locomotion;
             var v = _motion != null ? _motion.LocalVelocity : Vector3.zero;
             bool sprinting = SoundRules.IsSprint(new Vector2(v.x, v.z).magnitude, loco.WalkSpeed, loco.SprintSpeed, _stance != null ? _stance.MoveFactor : 1f);
-            float loudness = SoundRules.StepLoudness(_stance != null ? _stance.FootstepVolumeFactor : 1f, sprinting, surface);
+            float loudness = SoundRules.StepLoudness(_stance != null ? _stance.FootstepVolumeFactor : 1f, sprinting, SurfaceSounds.Loudness(id));
             float range = SoundRules.StepRange(loudness);
             if (_stepSource != null && Mathf.Abs(range - _stepRangeApplied) > 0.5f)
             {
                 SpatialAudio.Apply(_stepSource, new SpatialAudio.Range(Mathf.Min(2f, range * 0.5f), range));
                 _stepRangeApplied = range;
             }
-            volume *= loudness;
+            volume *= loudness * clipGain;
             LastFootstepVolume = volume;
             LastFootstepRange = range;
             LastSurface = surface;
@@ -192,50 +193,62 @@ namespace Game.Gameplay
         // By weapon id: none, VK-9, Ordo, Warden, Breacher, Sentinel.
         static readonly string[] FarShotNames = { null, "pistol", "smg", "rifle", "shotgun", "sniper" };
         static AudioClip[] _farShotClips, _whizClips;
-        static readonly Dictionary<FootSurface, AudioClip[]> StepSets = new Dictionary<FootSurface, AudioClip[]>();
+        static readonly Dictionary<SurfaceId, AudioClip[]> StepSets = new Dictionary<SurfaceId, AudioClip[]>();
 
         static AudioClip[] FarShotClips => _farShotClips ??= Array.ConvertAll(FarShotNames, n => n == null ? null : Resources.Load<AudioClip>("Shots/shot_" + n + "_far"));
         static AudioClip[] WhizClips => _whizClips ??= Array.FindAll(Resources.LoadAll<AudioClip>("Shots"), c => c.name.StartsWith("whiz_", StringComparison.Ordinal));
 
-        public static AudioClip[] StepClips(FootSurface surface)
+        public static AudioClip[] StepClips(FootSurface surface) => StepClips(SurfaceRules.FromFoot(surface), out _);
+
+        // The step clips of a surface (ADR-183): its own Resources/Steps/<folder> clips named step_*, or the stand-in
+        // surface's when it has none (Carpet plays Wood quieter). Older packs share the folders; their names don't start
+        // with "step_", so they are skipped until those files are removed.
+        public static AudioClip[] StepClips(SurfaceId id, out float gain)
         {
-            if (!StepSets.TryGetValue(surface, out var clips))
-            {
-                clips = Resources.LoadAll<AudioClip>(SoundRules.StepClips(surface));
-                Array.Sort(clips, (a, b) => string.CompareOrdinal(a.name, b.name));
-                StepSets[surface] = clips;
-            }
+            var e = SurfaceSounds.Of(id);
+            string folder = SurfaceSounds.StepFolder(id, f => LoadStepFolder(f).Length > 0);
+            gain = folder == "Steps/" + e.Folder ? 1f : e.FallbackGain;
+            if (!StepSets.TryGetValue(id, out var clips)) StepSets[id] = clips = LoadStepFolder(folder);
             return clips;
         }
 
-        // What the ground under `feet` sounds like: asphalt (road strips have no collider, see PavedRoads), the
-        // terrain layer there (or water below the sea surface), a
-        // building's floor by its kind (WorldBuilder names buildings "Lot03_House", "Station01"; their boxes sit on
-        // a "Colliders" child), an elevator car or vehicle (metal); concrete otherwise.
+        static AudioClip[] LoadStepFolder(string folder)
+        {
+            var clips = Array.FindAll(Resources.LoadAll<AudioClip>(folder), c => c.name.StartsWith("step_", StringComparison.Ordinal));
+            Array.Sort(clips, (a, b) => string.CompareOrdinal(a.name, b.name));
+            return clips;
+        }
+
+        // What the ground under `feet` sounds like for bots and ground prints (the six older kinds); SurfaceIdAt has all 18.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void RegisterBotEars() => BotHearing.SurfaceAt = (x, y, z) => SurfaceAt(new Vector3(x, y, z));
 
-        public static FootSurface SurfaceAt(Vector3 feet)
+        public static FootSurface SurfaceAt(Vector3 feet) => SurfaceRules.ToFoot(SurfaceIdAt(feet));
+
+        static bool _warnedUntagged;
+
+        // The surface under `feet` as a SurfaceId: paved road strips have no collider (PavedRoads) and are Asphalt, terrain
+        // reads its dominant layer, water is anything below the sea surface, vehicles and the elevator car are metal, and
+        // everything else reads the SurfaceIdTag WorldBuilder put on its colliders. No names are parsed (ADR-183). A
+        // collider without a tag is concrete, with one warning in development builds so it cannot go unnoticed.
+        public static SurfaceId SurfaceIdAt(Vector3 feet)
         {
             if (!Physics.Raycast(feet + Vector3.up * 0.5f, Vector3.down, out var hit, 1.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                return FootSurface.Concrete;
+                return SurfaceId.Concrete;
             var world = WorldInfo.Current;
             bool underWater = world != null && hit.point.y < world.SeaLevel;
             if (hit.collider is TerrainCollider terrain)
-                return !underWater && PavedRoads.Contains(hit.point) ? FootSurface.Concrete : SoundRules.TerrainSurface(LayerAt(terrain, hit.point), underWater);
-            if (underWater) return FootSurface.Water;
-            if (hit.collider.GetComponentInParent<Vehicle>() != null) return FootSurface.Metal;
-            var root = hit.collider.transform.parent;
-            if (hit.collider.name != "Colliders" || root == null) return FootSurface.Concrete;
-            if (root.name.StartsWith("ElevatorCar", StringComparison.Ordinal)) return FootSurface.Metal;
-            BuildingKind kind;
-            if (root.name.StartsWith("Station", StringComparison.Ordinal)) kind = BuildingKind.ElevatorStation;
-            else if (!Enum.TryParse(root.name.Substring(root.name.LastIndexOf('_') + 1), out kind)) return FootSurface.Concrete;
-            // shortcut: a box narrower than a stair run counts as a stair step and every other box as floor (props
-            // and roofs are not told apart); tag the boxes in WorldBuilder if that is ever wrong where it matters.
-            var box = hit.collider as BoxCollider;
-            var piece = box != null && Mathf.Min(box.size.x, box.size.z) < 0.4f ? SurfaceKind.Stairs : SurfaceKind.Floor;
-            return SoundRules.BuildingSurface(kind, piece);
+                return !underWater && PavedRoads.Contains(hit.point) ? SurfaceId.Asphalt : SoundRules.TerrainSurfaceId(LayerAt(terrain, hit.point), underWater);
+            if (underWater) return SurfaceId.Water;
+            if (hit.collider.GetComponentInParent<Vehicle>() != null || hit.collider.GetComponentInParent<ElevatorCar>() != null) return SurfaceId.Metal;
+            var tag = hit.collider.GetComponentInParent<SurfaceIdTag>();
+            if (tag != null) return tag.Id;
+            if (!_warnedUntagged && Debug.isDebugBuild)
+            {
+                _warnedUntagged = true;
+                Debug.LogWarning($"[CombatantAudio] collider '{hit.collider.name}' has no SurfaceIdTag; footsteps fall back to concrete (docs/research/12_surface_tag_design.md)");
+            }
+            return SurfaceId.Concrete;
         }
 
         // Name of the terrain layer with the most weight at `point`.

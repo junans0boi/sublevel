@@ -33,6 +33,10 @@ namespace Game.Core
         public static float StepLoudness(float stanceFactor, bool sprinting, FootSurface surface) =>
             stanceFactor * (sprinting ? SprintStepFactor : 1f) * SurfaceLoudness(surface);
 
+        // Same, with the surface's loudness given directly (SurfaceSounds.Loudness covers all 18 surfaces, ADR-183).
+        public static float StepLoudness(float stanceFactor, bool sprinting, float surfaceLoudness) =>
+            stanceFactor * (sprinting ? SprintStepFactor : 1f) * surfaceLoudness;
+
         // Metres at which a step of this loudness falls silent.
         public static float StepRange(float loudness) => Math.Max(MinStepRange, RunStepRange * loudness);
 
@@ -70,6 +74,21 @@ namespace Game.Core
             if (name.IndexOf("Grass", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Grass;
             if (name.IndexOf("Dirt", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Mud", StringComparison.OrdinalIgnoreCase) >= 0) return FootSurface.Dirt;
             return FootSurface.Concrete; // rock and anything unmapped
+        }
+
+        // The terrain layer under the foot as a SurfaceId (WorldMaterials: World_Grass, World_Dirt, World_Rock, World_Mud, ...).
+        // Water only when the ground is below the sea surface; an unknown or missing layer is neutral concrete.
+        public static SurfaceId TerrainSurfaceId(string layerName, bool underWater)
+        {
+            if (underWater) return SurfaceId.Water;
+            var name = layerName ?? "";
+            if (name.IndexOf("Grass", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Grass;
+            if (name.IndexOf("Mud", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Mud;
+            if (name.IndexOf("Dirt", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Dirt;
+            if (name.IndexOf("Sand", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Sand;
+            if (name.IndexOf("Gravel", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Gravel;
+            if (name.IndexOf("Rock", StringComparison.OrdinalIgnoreCase) >= 0) return SurfaceId.Rock;
+            return SurfaceId.Concrete;
         }
 
         // ---- Gunshots ----
