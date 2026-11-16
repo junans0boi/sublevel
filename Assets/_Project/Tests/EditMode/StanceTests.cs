@@ -127,10 +127,9 @@ namespace Game.Tests
         [Test]
         public void ProneBodyPose_Angles_AreConsistent()
         {
-            // The body lies down by 85 degrees; lifting the chest 40 leaves the arms 45 to turn back up.
+            // The body lies down by 85 degrees; lifting the chest 40 (the arms are levelled by measuring the weapon, not by a fixed turn).
             Assert.AreEqual(85f, Rules.ProneModelPitchDeg, 1e-5f);
             Assert.AreEqual(40f, Rules.ProneHeadLiftDeg, 1e-5f);
-            Assert.AreEqual(45f, Stances.ProneArmCounterDeg(Rules), 1e-5f);
             // Pitching by a: the body's up (0,1,0) goes to (0,cos a,sin a), its facing (0,0,1) to (0,-sin a,cos a).
             double a = Rules.ProneModelPitchDeg * System.Math.PI / 180.0;
             Assert.AreEqual(0.087, System.Math.Cos(a), 1e-3, "the spine is almost horizontal");

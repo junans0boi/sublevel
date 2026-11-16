@@ -54,6 +54,7 @@ public static class CharacterKit
         public Transform[] JumpBones;      // upper legs, lower legs, upper arms; left then right of each
         public GaitProfile Gait;
         public CharacterDef Def;
+        public float ProneHeadAhead;       // head joint ahead of the model's origin in the prone clip (m)
     }
 
     // Humanoid clip import, gait measurement and the animator controller. Call once before AddTo.
@@ -143,6 +144,12 @@ public static class CharacterKit
         foreach (var m in models)
             if (m != null) m.SetActive(false);
 
+        // Lying: how far ahead of the model's origin the head ends up, so CombatantAnimation can put it under the eyes.
+        CharacterControllerBuilder.Clip("ProneFiringRifle").SampleAnimation(model.gameObject, 0f);
+        float proneHeadAhead = go.transform.InverseTransformPoint(s.Head.position).z - go.transform.InverseTransformPoint(model.position).z;
+        CharacterControllerBuilder.Clip("Swat_RifleAimingIdle_skin").SampleAnimation(model.gameObject, 0f);
+        model.localPosition = modelPos; model.localRotation = modelRot;
+
         var animator = def.Animator;
         animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(CharacterControllerBuilder.ControllerPath);
         animator.applyRootMotion = false;
@@ -155,7 +162,7 @@ public static class CharacterKit
         return new Visual
         {
             Root = go.transform, Animator = animator, BodyRenderers = def.Renderers, WeaponModels = models, WeaponFits = fits,
-            Spine = s.Spine, Hips = s.Hips, FootLeft = s.LeftFoot, FootRight = s.RightFoot, Gait = _gait, Def = def,
+            Spine = s.Spine, Hips = s.Hips, FootLeft = s.LeftFoot, FootRight = s.RightFoot, Gait = _gait, Def = def, ProneHeadAhead = proneHeadAhead,
             JumpBones = new[] { s.LeftUpperLeg, s.RightUpperLeg, s.LeftLowerLeg, s.RightLowerLeg, s.LeftUpperArm, s.RightUpperArm },
         };
     }

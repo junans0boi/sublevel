@@ -91,12 +91,7 @@ namespace Game.Tests
             var stance = StanceOf(me);
             var body = me.GetComponent<CharacterController>();
             var animation = me.GetComponent<CombatantAnimation>();
-            Transform hips = null, knee = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Hips") hips = t;
-                else if (t.name == "LowerLeg.L") knee = t;
-            }
+            Transform hips = RigBones.Bone(me, HumanBodyBones.Hips), knee = RigBones.Bone(me, HumanBodyBones.LeftLowerLeg);
             Assert.IsNotNull(hips, "Hips bone");
             Assert.IsNotNull(knee, "knee bone");
             yield return new WaitForSeconds(0.5f); // settled on the floor

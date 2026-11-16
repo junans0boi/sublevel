@@ -203,12 +203,7 @@ namespace Game.Tests
             yield return GiveRifle();
             float EyeSide() => pc.transform.InverseTransformPoint(me.EyePosition).x;
             Assert.AreEqual(0f, EyeSide(), 0.01f);
-            Transform head = null, hips = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Head") head = t;
-                else if (t.name == "Hips") hips = t;
-            }
+            Transform head = RigBones.Bone(me, HumanBodyBones.Head), hips = RigBones.Bone(me, HumanBodyBones.Hips);
             Assert.IsNotNull(head, "Head bone");
             Assert.IsNotNull(hips, "Hips bone");
             float HeadSide() => pc.transform.InverseTransformPoint(head.position).x - pc.transform.InverseTransformPoint(hips.position).x;
@@ -277,7 +272,8 @@ namespace Game.Tests
             var me = Combatant.LocalPlayer;
             var pc = PlayerController.Local;
             var bones = new System.Collections.Generic.Dictionary<string, Transform>();
-            foreach (var t in me.GetComponentsInChildren<Transform>()) bones[t.name] = t;
+            bones["UpperLeg.L"] = RigBones.Bone(me, HumanBodyBones.LeftUpperLeg); bones["UpperLeg.R"] = RigBones.Bone(me, HumanBodyBones.RightUpperLeg);
+            bones["UpperArm.L"] = RigBones.Bone(me, HumanBodyBones.LeftUpperArm); bones["UpperArm.R"] = RigBones.Bone(me, HumanBodyBones.RightUpperArm);
             // Which way a left-right pair of joints faces, in degrees from the player's facing (right positive).
             float Facing(string left, string right)
             {
@@ -386,12 +382,7 @@ namespace Game.Tests
             float ground = pc.transform.position.y;
             int steps = audio.FootstepsPlayed;
             // The knee is where the lower leg starts.
-            Transform knee = null, hips = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "LowerLeg.L") knee = t;
-                if (t.name == "Hips") hips = t;
-            }
+            Transform knee = RigBones.Bone(me, HumanBodyBones.LeftLowerLeg), hips = RigBones.Bone(me, HumanBodyBones.Hips);
             Assert.IsNotNull(knee, "knee bone");
             Assert.IsNotNull(hips, "hips bone");
             Assert.Less(animation.JumpTuck, 0.05f, "legs straight while standing");
@@ -454,12 +445,9 @@ namespace Game.Tests
             yield return GiveRifle();
             yield return WaitUntil(() => weapon.ShownWeaponId == 3, 2f, "rifle model shown");
             Renderer rifle = null;
-            Transform wrist = null;
+            Transform wrist = RigBones.Bone(me, HumanBodyBones.RightHand);
             foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Wrist.R") wrist = t;
-                else if (t.name == "Weapon3") rifle = t.GetComponentInChildren<Renderer>();
-            }
+                if (t.name == "Weapon3") rifle = t.GetComponentInChildren<Renderer>();
             Assert.IsNotNull(rifle, "rifle renderer");
             yield return null;
             Assert.IsFalse(weapon.AtEye, "third person: the weapon is in the hand");

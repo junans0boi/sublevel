@@ -7,7 +7,7 @@ using UnityEditor.Animations;
 using UnityEngine;
 
 // Animation track (ADR-188, ADR-230): builds Character.controller for every Humanoid roster model.
-//   0 Base      locomotion blend (Move), Air (time parameter), Death                         whole body
+//   0 Base      locomotion blend (Move), Air (time parameter), Prone, Death                        whole body
 //   1 Upper     Lowered / Aim / Shoot / punches                                              Humanoid upper-body mask
 //   2 Action    reload clips per stance (speed from the weapon's own reload time)            Humanoid upper-body mask
 //   3 Additive  breathing loop and the hit flinch (procedural muscle clips, added on top)    whole body, additive
@@ -54,6 +54,8 @@ public static class CharacterControllerBuilder
         air.timeParameter = CombatantAnimation.AirPhase;
         air.timeParameterActive = true;
         baseMachine.AddState(CombatantAnimation.Death).motion = Clip("RifleDeath");
+        // Lying (ADR-231): the Mixamo prone rifle pose; the crawl's roll and knees are bone turns on top of it.
+        baseMachine.AddState(CombatantAnimation.Prone).motion = Clip("ProneFiringRifle");
 
         // 1 Upper: off by default; CombatantAnimation raises its weight while a weapon is held or a punch plays.
         AddMaskedLayer(controller, "Upper", mask, AnimatorLayerBlendingMode.Override);

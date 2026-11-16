@@ -250,6 +250,7 @@ public static class TestBoxBuilder
         Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
         Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
         Set(animation, "_walkClipSpeed", p => p.floatValue = visual.Gait.WalkSpeed);
+        Set(animation, "_proneHeadAhead", p => p.floatValue = visual.ProneHeadAhead);
         Set(animation, "_footPlantHeight", p => p.floatValue = visual.Gait.FootPlantHeight);
         Set(animation, "_footLiftHeight", p => p.floatValue = visual.Gait.FootLiftHeight);
         var weaponVisual = go.AddComponent<WeaponVisual>();

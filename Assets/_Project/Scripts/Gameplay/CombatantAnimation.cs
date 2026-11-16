@@ -26,7 +26,7 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone";
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
         public const string BreathState = "Breath", FlinchState = "Flinch";
@@ -39,6 +39,9 @@ namespace Game.Gameplay
 
         const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
+        const float ProneFade = 0.35f;
+        const float ProneLookMaxDeg = 35f, ProneLookShare = 0.8f;
+        const float ProneHeadAheadOfEyes = 0.15f; // lying, the head joint ends this far ahead of the capsule / eyes
         const float BlendDamp = 0.08f;
         const float FlinchSeconds = 0.3f;
         const float ShootHold = 0.22f;
@@ -64,6 +67,8 @@ namespace Game.Gameplay
         [SerializeField] Transform _footRight;
         // Upper legs, lower legs, upper arms; left then right of each.
         [SerializeField] Transform[] _jumpBones;
+        // Lying (ADR-231): how far ahead of the model's origin the head joint is in the prone clip, measured when the character was built.
+        [SerializeField] float _proneHeadAhead = 0.8f;
         // Ground speed the clips were authored for (m/s), measured when the character was built.
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
@@ -96,6 +101,7 @@ namespace Game.Gameplay
         float _crouch;            // 0..1: how much of the crouch is shown
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
+        float _proneClip;         // the share of it that is the prone clip (all of it unless swimming)
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
         float _seated;            // 0..1: how much of the seated pose is shown (in a car, ADR-065 (5))
@@ -251,7 +257,10 @@ namespace Game.Gameplay
             // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
             _legTurnShown = _legs.TurnDeg * (1f - _prone);
             var proneRules = StanceRules.Current;
-            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * _prone, Vector3.right)
+            // Lying is the prone clip (ADR-231); only swimming still lies as the pitched body (it has no clip and is posed in .Swim.cs).
+            _proneClip = _prone * (1f - _swimAmount);
+            float pitched = _prone - _proneClip;
+            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * pitched, Vector3.right)
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             // Slow walk (Ctrl, ADR-065 (3)): its speed falls between the walk and run clips, whose cycles do not line up,
             // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
@@ -275,7 +284,7 @@ namespace Game.Gameplay
             {
                 // The flinch is an additive layer on top of whatever plays, so a hit no longer replaces the pose.
                 if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchSeconds; }
-                SetBase(showAir ? Air : Locomotion);
+                SetBase(_proneClip > 0.5f && !showAir ? Prone : showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
             TrackJumpPose(dead);
@@ -285,9 +294,10 @@ namespace Game.Gameplay
             bool punching = !dead && Time.time < _punchUntil;
             TrackItems(dead, hit);
             TrackRifle(armed, _combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil, dead ? Vector3.zero : v);
+            DriveAction(dead);
             // The flinch is a whole-body clip: let it through the weapon pose while it plays. A long gun in both
             // hands is posed in code over the base layer (ADR-083), so the clip pose stays off for it.
-            bool showUpper = (armed && !_rifleWanted) || punching;
+            bool showUpper = ((armed && !_rifleWanted) || punching) && _proneClip < 0.5f;
             float weightRate = punching ? PunchWeightPerSecond : UpperWeightPerSecond;
             _upperWeight = Mathf.MoveTowards(_upperWeight, showUpper ? 1f : 0f, weightRate * Time.deltaTime);
             _animator.SetLayerWeight(UpperLayer, _upperWeight);
@@ -365,7 +375,9 @@ namespace Game.Gameplay
             _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
             // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
             // so the head (which the pitch swung forward to the end of the body) ends up under the eyes.
-            var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * _prone;
+            // Pitched (swim): the spine line lies at body height. Clip: the model's head is moved back to the eyes (the clip lies along +z from the hips).
+            var lying = (Vector3.up * rules.ProneBodyHeight + Vector3.back * rules.ProneModelBackShift) * (_prone - _proneClip)
+                + Vector3.back * (_proneHeadAhead - ProneHeadAheadOfEyes) * _proneClip;
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
@@ -391,7 +403,8 @@ namespace Game.Gameplay
         void SetBase(string state)
         {
             if (_base == state) return;
-            _animator.CrossFadeInFixedTime(state, Fade, BaseLayer);
+            // Down to and up from the ground is slower than a step.
+            _animator.CrossFadeInFixedTime(state, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
             _base = state;
         }
 
@@ -481,7 +494,9 @@ namespace Game.Gameplay
             Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch
                 + parkourRules.PoseTorsoPitchDeg * _parkour, transform.right);
             // Lying: the chest and head come back up (a negative turn about the right axis undoes the forward tip).
-            Turn(Torso, -stanceRules.ProneHeadLiftDeg * _prone, transform.right);
+            Turn(Torso, -stanceRules.ProneHeadLiftDeg * (_prone - _proneClip), transform.right);
+            // Lying with the clip: looking up or down tips the chest, and the weapon with it.
+            Turn(Torso, -Mathf.Clamp(LookPitch(), -ProneLookMaxDeg, ProneLookMaxDeg) * ProneLookShare * _proneClip, transform.right);
             // The legs face where the model is turned, not where the combatant looks.
             var legRight = Quaternion.AngleAxis(_legTurnShown, transform.up) * transform.right;
             // Knees up in front, shins folded back under them. The shin turns relative to the thigh, which already
@@ -500,11 +515,6 @@ namespace Game.Gameplay
             float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - Mathf.Max(_upperWeight, _rifle));
             Turn(ArmLeft, -armLift, transform.forward);
             Turn(ArmRight, armLift, transform.forward);
-            // Lying with a weapon: the arms (and the weapon in the hand) turn back up by what the pitch minus the head
-            // lift left them tipped down, so the weapon is level again and points the way the player looks.
-            float armUp = -Stances.ProneArmCounterDeg(stanceRules) * _prone * _upperWeight;
-            Turn(ArmLeft, armUp, transform.right);
-            Turn(ArmRight, armUp, transform.right);
             // Parkour: both arms reach forward and down onto the top (a negative turn swings a hanging arm forward).
             float reach = -parkourRules.PoseArmReachDeg * _parkour;
             Turn(ArmLeft, reach, transform.right);

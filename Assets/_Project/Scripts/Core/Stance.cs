@@ -86,10 +86,6 @@ namespace Game.Core
         public static bool Rises(Stance from, Stance to, StanceRules rules) =>
             rules.For(to).CapsuleHeight > rules.For(from).CapsuleHeight;
 
-        // How far the arms are turned back when the body is pitched down and the chest lifted, so that what the
-        // arms were holding level stays level: the pitch less the head lift.
-        public static float ProneArmCounterDeg(StanceRules rules) => rules.ProneModelPitchDeg - rules.ProneHeadLiftDeg;
-
         // How far the hips come down when both knees bend by `kneeDeg` (thigh forward, shin back by the same
         // angle from upright) on legs `legLength` long.
         public static float KneeBendDrop(float legLength, float kneeDeg) =>
