@@ -91,6 +91,7 @@ namespace Game.Core
             if (kind == LootKind.Drink) return Tenths(rules.Drink);
             if (kind == LootKind.Pill) return Tenths(rules.Pill);
             if (kind == LootKind.Syringe) return Tenths(rules.Syringe);
+            if (kind == LootKind.GasFilter || kind == LootKind.Antidote) return Tenths(rules.Pill); // same size as a pill
             if (kind == LootKind.Flash) return Tenths(rules.Flash);
             if (kind == LootKind.Molotov) return Tenths(rules.Molotov);
             if (kind == FuelRules.JerrycanLootKind) return Tenths(rules.Jerrycan);

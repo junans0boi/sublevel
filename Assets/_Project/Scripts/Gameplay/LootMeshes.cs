@@ -42,6 +42,8 @@ namespace Game.Gameplay
                 case LootKind.Drink: BuildDrink(d); break;
                 case LootKind.Pill: BuildPill(d); break;
                 case LootKind.Syringe: BuildSyringe(d); break;
+                case LootKind.GasFilter: BuildPill(d); break;
+                case LootKind.Antidote: BuildSyringe(d); break;
                 case LootKind.Jerrycan: BuildJerrycan(d); break;
                 case LootKind.Backpack: BuildBackpack(d, Mathf.Clamp(tier, 1, 3)); break;
                 default: return null;
@@ -176,6 +178,8 @@ namespace Game.Gameplay
                 case LootKind.Drink: into[Body] = new Color(0.14f, 0.58f, 0.62f); into[Accent] = new Color(0.95f, 0.80f, 0.20f); break;
                 case LootKind.Pill: into[Body] = new Color(0.86f, 0.52f, 0.14f); into[Accent] = White; break;
                 case LootKind.Syringe: into[Body] = new Color(0.78f, 0.18f, 0.20f); into[Accent] = new Color(0.82f, 0.88f, 0.90f); break;
+                case LootKind.GasFilter: into[Body] = new Color(0.22f, 0.46f, 0.30f); into[Accent] = White; break;
+                case LootKind.Antidote: into[Body] = new Color(0.20f, 0.62f, 0.78f); into[Accent] = new Color(0.82f, 0.88f, 0.90f); break;
                 case LootKind.Key: into[Body] = Brass; into[Accent] = new Color(0.78f, 0.22f, 0.20f); break;
                 case LootKind.Jerrycan: into[Body] = new Color(0.62f, 0.16f, 0.10f); into[Accent] = new Color(0.70f, 0.72f, 0.75f); break;
                 case LootKind.Backpack: into[Body] = BackpackColors[Mathf.Clamp(tier, 1, 3) - 1]; into[Accent] = new Color(0.96f, 0.82f, 0.38f); break;

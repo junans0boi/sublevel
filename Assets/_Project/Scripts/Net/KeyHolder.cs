@@ -17,6 +17,9 @@ namespace Game.Net
         public const int MaxCarried = 4;
 
         public readonly SyncVar<int> Keys = new SyncVar<int>();
+        // Gas protection carried (pollution, ADR-237): filters and antidotes live here beside the keys.
+        public readonly SyncVar<int> Filters = new SyncVar<int>();
+        public readonly SyncVar<int> Antidotes = new SyncVar<int>();
 
         // The local player's own, for the HUD. Null when there is none.
         public static KeyHolder Local { get; private set; }
@@ -61,7 +64,10 @@ namespace Game.Net
         // Key pickups, handed over by Combatant.ServerGive. A pickup stays on the ground when no key fits.
         public bool ServerTryTake(LootEntry loot)
         {
-            if (!IsServerInitialized || loot == null || loot.Kind != KeyLootKind) return false;
+            if (!IsServerInitialized || loot == null) return false;
+            if (loot.Kind == LootKind.GasFilter) return TakeGas(Filters, loot.Amount);
+            if (loot.Kind == LootKind.Antidote) return TakeGas(Antidotes, loot.Amount);
+            if (loot.Kind != KeyLootKind) return false;
             return ServerAdd(Mathf.Max(1, loot.Amount)) > 0;
         }
 
@@ -78,6 +84,29 @@ namespace Game.Net
             director.ServerOpenPass(pass, director.Rules.KeyOpenSeconds);
             return true;
         }
+
+        static bool TakeGas(SyncVar<int> count, int amount)
+        {
+            int taken = Mathf.Clamp(Mathf.Max(1, amount), 0, MaxCarried - count.Value);
+            if (taken <= 0) return false;
+            count.Value += taken;
+            return true;
+        }
+
+        // Uses one filter (kind 0) or antidote (1): the gas cover starts on the server clock.
+        [Server]
+        public bool ServerUseGas(int kind)
+        {
+            var pollution = PollutionDirector.Instance;
+            if (_combatant == null || _combatant.Dead.Value || pollution == null || !pollution.Ready) return false;
+            var count = kind == 0 ? Filters : Antidotes;
+            if (count.Value <= 0) return false;
+            count.Value--;
+            if (kind == 0) pollution.ServerUseFilter(_combatant.ObjectId); else pollution.ServerUseAntidote(_combatant.ObjectId);
+            return true;
+        }
+
+        [ServerRpc] public void CmdUseGas(int kind) => ServerUseGas(kind == 0 ? 0 : 1);
 
         // WP 7: the key elevator takes one key when it is inserted and gives it back when the use is void.
         [Server]

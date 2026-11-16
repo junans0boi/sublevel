@@ -31,9 +31,11 @@ namespace Game.Net
         public static event Action<PollutionDirector> ClientSynced;
         public static event Action<PollutionDirector> ClientHashMismatch;
         public static PollutionRules RulesOverride;
+        // The pollution runs the match instead of the lockdown (T10 flips this on and removes ZoneDirector).
+        public static bool AutoStart;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Instance = null; GridSource = null; RegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; }
+        static void ResetStatics() { Instance = null; GridSource = null; RegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = false; }
 
         NetworkManager _network;
         bool _bound;
@@ -187,6 +189,9 @@ namespace Game.Net
 
         void Update()
         {
+            if (!_bound) TryBind();
+            if (!_serverRunning && AutoStart && ServerActive && MatchDirector.Instance != null)
+                ServerStart(MatchDirector.Instance.LockdownSeed);
             if (!_serverRunning || !ServerActive) return;
             double now = Now;
             Chips.Tick(now, _match.States(now), Rules);
