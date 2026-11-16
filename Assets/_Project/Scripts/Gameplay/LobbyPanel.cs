@@ -241,39 +241,41 @@ namespace Game.Gameplay
 
         void BuildConsoleCompact()
         {
-            // A 150 px bar along the bottom: mode pills | setting + view + map | the one state button. 8 px grid.
-            const float top = 928f;
-            var bar = UiPaint.At(Stage, "Console", 0, top - 40f, StageW, 1080f - top + 40f);
-            UiPaint.GradientOpaque(bar, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0f), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.94f));
+            // A solid bar along the bottom (48 px margins, 24 px gutters), two rows: controls, then the one line of advice.
+            //   row 1: [mode pills] [setting] [view + map] .................... [the state button]
+            var fade = UiPaint.At(Stage, "ConsoleFade", 0, 880, StageW, 40);
+            UiPaint.GradientOpaque(fade, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0f), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.96f));
+            UiKit.Box(UiPaint.At(Stage, "Console", 0, 920, StageW, 160), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.96f));
+            const float row = 944f;
 
-            // Mode: two pills.
-            BuildPill(0, 48f, top + 16f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
-            BuildPill(1, 208f, top + 16f, "스쿼드", () => { Party.SetMode(Self, TeamMode.Squad); Refresh(); });
+            BuildPill(0, 48f, row + 8f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
+            BuildPill(1, 208f, row + 8f, "스쿼드", () => { Party.SetMode(Self, TeamMode.Squad); Refresh(); });
             _knob = Hidden(UiPaint.At(Stage, "LeverKnob", 0, 0, 1, 1));
 
-            // Centre: what will be launched, in one calm line, with the view switch and the map beside it.
-            var led = UiPaint.At(Stage, "Led", 376f, top + 8f, 312f, 72);
-            _led = UiPaint.Label(led, "Text", 0, 0, 312, 72, "", 40, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var led = UiPaint.At(Stage, "Led", 384f, row, 296, 72);
+            _led = UiPaint.Label(led, "Text", 0, 0, 296, 72, "", 40, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
             _ledCaption = Hidden(UiPaint.Label(Stage, "LedCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
 
-            UiPaint.Box(UiPaint.At(Stage, "ViewSeg", 712f, top + 16f, 256, 56), Color.clear, 28, UiPaint.Ln);
-            _tpp = UiPaint.Btn(Stage, "Tpp", 714f, top + 18f, 128, 52, "TPP 3인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.Third); Refresh(); });
-            _fpp = UiPaint.Btn(Stage, "Fpp", 842f, top + 18f, 124, 52, "FPP 1인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.First); Refresh(); });
+            UiPaint.Box(UiPaint.At(Stage, "ViewSeg", 704f, row + 8f, 256, 56), Color.clear, 28, UiPaint.Ln);
+            _tpp = UiPaint.Btn(Stage, "Tpp", 706f, row + 10f, 128, 52, "TPP 3인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.Third); Refresh(); });
+            _fpp = UiPaint.Btn(Stage, "Fpp", 834f, row + 10f, 124, 52, "FPP 1인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.First); Refresh(); });
             _tppFill = _tpp.targetGraphic as Image; _fppFill = _fpp.targetGraphic as Image;
             _tppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "TppBar", 0, 0, 1, 1), Color.clear, 1));
             _fppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "FppBar", 0, 0, 1, 1), Color.clear, 1));
 
-            var map = UiPaint.At(Stage, "MapWin", 992f, top + 16f, 288, 56);
-            var mapImg = UiPaint.Box(map, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.7f), 14, UiPaint.Ln);
+            var map = UiPaint.At(Stage, "MapWin", 984f, row + 8f, 304, 56);
+            var mapImg = UiPaint.Box(map, UiPaint.Sf, 8, UiPaint.Ln);
             mapImg.raycastTarget = true;
             map.gameObject.AddComponent<Button>().onClick.AddListener(() => _menu.ShowModeModal());
-            UiPaint.Label(map, "Name", 16, 0, 256, 56, "청람도 · 6개 지역 · 약 20~25분", 16, UiPaint.Tx, TextAnchor.MiddleLeft);
+            UiPaint.Label(map, "Name", 16, 0, 272, 56, "청람도 · 6개 지역 · 약 20~25분", 16, UiPaint.Tx, TextAnchor.MiddleLeft);
 
-            _reason = UiPaint.Label(Stage, "Reason", 376f, top + 88f, 904, 26, "", 16, UiPaint.T2, TextAnchor.MiddleLeft);
-            _reason.horizontalOverflow = HorizontalWrapMode.Overflow;
+            // The advice line sits inside the bar, under the controls.
+            _reason = UiPaint.Label(Stage, "Reason", 48f, row + 84f, 1240, 28, "", 16, UiPaint.T2, TextAnchor.MiddleLeft);
+            _reason.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _reason.verticalOverflow = VerticalWrapMode.Truncate;
 
-            // Right: the one state button (the only filled accent on the screen) and its key.
-            _status = UiPaint.Btn(Stage, "State", 1512f, top + 8f, 360, 72, "", 28, 36, UiPaint.Ac, UiPaint.Ac, UiPaint.Bg, OnStatus, FontStyle.Bold, 1);
+            // The state button: the only filled accent on the screen. Opaque, so nothing shows through it.
+            _status = UiPaint.Btn(Stage, "State", 1512f, row, 360, 72, "", 28, 36, UiPaint.Ac, UiPaint.Ac, UiPaint.Bg, OnStatus, FontStyle.Bold, 1);
             _statusFill = _status.targetGraphic as Image;
             _statusRing = _status.transform.Find("Ring").GetComponent<Image>();
             _statusLabel = _status.GetComponentInChildren<Text>();
@@ -281,7 +283,6 @@ namespace Game.Gameplay
             _kbdBox = UiPaint.Box(kbd, UiPaint.Sf, 8, UiPaint.Ln);
             _kbd = UiPaint.Label(kbd, "Key", 0, 0, 64, 32, "Enter", 15, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
 
-            // Parts of the mockup console that the logic still updates.
             _callLabel = Hidden(UiPaint.Label(Stage, "CallCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
             _seven = Hidden(UiPaint.Label(Stage, "Seven", 0, 0, 10, 10, "--:--", 12, UiPaint.T2));
             _fillText = Hidden(UiPaint.Label(Stage, "FillText", 0, 0, 10, 10, "", 12, UiPaint.T2));
@@ -507,9 +508,9 @@ namespace Game.Gameplay
             bool enabled = btn.Enabled;
             UiFx.Swap(_statusLabel, btn.Label);
             // Compact: the one solid accent on the screen, dark text for contrast; the mockup layout keeps its tinted button.
-            _statusFill.color = Compact ? (primary && enabled ? UiPaint.Ac : UiPaint.Pn) : (primary && enabled ? UiPaint.AcS : UiPaint.Pn);
+            _statusFill.color = Compact ? (primary && enabled ? UiPaint.Ac : UiPaint.Sf) : (primary && enabled ? UiPaint.AcS : UiPaint.Pn);
             _statusRing.color = Compact ? (primary && enabled ? Color.clear : UiPaint.Ln) : (primary && enabled ? UiPaint.Ac : UiPaint.Ln);
-            _statusLabel.color = Compact ? (primary && enabled ? UiPaint.Bg : (enabled ? UiPaint.Tx : UiPaint.T2)) : (enabled ? UiPaint.Tx : UiPaint.T2);
+            _statusLabel.color = Compact ? (primary && enabled ? UiPaint.Bg : UiPaint.Tx) : (enabled ? UiPaint.Tx : UiPaint.T2);
             _kbd.text = btn.Action == LobbyAction.CancelMatch ? "Esc" : "Enter";
             _kbd.gameObject.transform.parent.gameObject.SetActive(!Compact && btn.Action != LobbyAction.LeaveParty);
             _status.interactable = enabled;

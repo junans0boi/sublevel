@@ -34,6 +34,9 @@ public static class LobbyStageBuilder
         var station = new WorldMeshes.BoxBatch(concrete.Tile);
         var hall = new WorldMeshes.BoxBatch(WorldMaterials.Concrete.Tile);
         var stripe = new WorldMeshes.BoxBatch(Vector2.one);
+        var seams = new WorldMeshes.BoxBatch(Vector2.one);
+        var rivets = new WorldMeshes.BoxBatch(rusty.Tile);
+        var ribs = new WorldMeshes.BoxBatch(metal.Tile);
 
         float x0 = -HalfWidth, x1 = HalfWidth, z0 = Back, z1 = Front, s = Skin, h = Height;
         void Box(WorldMeshes.BoxBatch b, float a0, float a1, float b0, float b1, float c0, float c1) =>
@@ -53,10 +56,13 @@ public static class LobbyStageBuilder
         // Floor indicator lamps over the opening and a thin strip of light in the door gap on the floor.
         for (int i = -2; i <= 2; i++) Box(lamp, i * 0.22f - 0.06f, i * 0.22f + 0.06f, DoorTop + 0.12f, DoorTop + 0.2f, z1 - s - 0.02f, z1 - s);
         Box(lamp, -DoorHalf, DoorHalf, 0f, 0.012f, z1 - s - 0.16f, z1 - s - 0.1f);
+        // Wall detail for depth: pilasters (they catch light and cast shadow), dark panel seams, rows of rivets.
+        foreach (float sy in new[] { 0.9f, 1.8f })
+        {
+            Box(seams, x0 + s, x1 - s, sy - 0.006f, sy + 0.006f, z0 + s + 0.1f, z0 + s + 0.104f);
+        }
         // The door frame's amber stripe along the opening's top and sides (the game's DoorStripe material).
         Box(stripe, -DoorHalf, DoorHalf, DoorTop - 0.05f, DoorTop, z1 - s - 0.006f, z1 - s);
-        Box(stripe, -DoorHalf, -DoorHalf + 0.05f, 0f, DoorTop, z1 - s - 0.006f, z1 - s);
-        Box(stripe, DoorHalf - 0.05f, DoorHalf, 0f, DoorTop, z1 - s - 0.006f, z1 - s);
 
         // The station wall round the car's opening and the hall floor in front of it.
         float wallZ0 = z1, wallZ1 = z1 + 0.4f, wx = 14f, wy = 14f;
@@ -84,6 +90,7 @@ public static class LobbyStageBuilder
             go.isStatic = true;
         }
         Part("Shell", shell, steel, ShadowCastingMode.On);
+        Part("Seams", seams, WorldMaterials.DoorSeam(), ShadowCastingMode.Off);
         var floorMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0f); floorMat.SetFloat("_Metallic", 0f); floorMat.SetFloat("_SpecularHighlights", 0f); floorMat.SetFloat("_EnvironmentReflections", 0f); floorMat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); floorMat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         AssetDatabase.DeleteAsset(MeshDir + "/LobbyFloor.mat");
@@ -101,9 +108,9 @@ public static class LobbyStageBuilder
         AddLamp(root.transform, "CarLight", new Vector3(0f, h - 0.25f, -0.2f), 8f, 1.6f);
         // Art direction: a warm key (4500 K) from the camera's left at 45 degrees, cool #5FA8FF rims from behind and above
         // on both sides at about 30 degrees, a dark flat ambient. No other light.
-        AddSpot(root.transform, "Key", new Vector3(-3.4f, 2.6f, 4.0f), new Vector3(0f, 1.0f, 0.1f), 55f, 14f, 3f, true, new Color(1f, 0.82f, 0.62f));
+        AddPoint(root.transform, "Key", new Vector3(-1.9f, 2.4f, 1.3f), 7f, 2.6f, new Color(1f, 0.82f, 0.62f)); // warm key from the camera's left, soft falloff (a spot leaves a hard cone edge on the wall)
         // A soft wash on the back and side walls so the car reads as a room, not a void.
-        AddSpot(root.transform, "WallWash", new Vector3(0f, 2.7f, 2.4f), new Vector3(0f, 1.3f, -1.6f), 85f, 9f, 0.9f, false, new Color(0.78f, 0.84f, 0.95f));
+        AddPoint(root.transform, "WallWash", new Vector3(0.6f, 2.5f, 0.2f), 7f, 1.8f, new Color(0.78f, 0.84f, 0.95f));
         AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
         AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
 
@@ -118,7 +125,6 @@ public static class LobbyStageBuilder
         stage.RifleTemplate = rifle;
         stage.IdleController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/_Project/Prefabs/M1_5/Character.controller");
         AddPost(root.transform);
-        AddDust(root.transform);
 
         // Cameras: the party seen from the front (in the hall, looking into the car), and a closeup for the 외형 screen.
         var lobby = new GameObject("CameraLobby").transform;
@@ -142,6 +148,15 @@ public static class LobbyStageBuilder
         RenderSettings.ambientLight = new Color(0.15f, 0.15f, 0.16f);
         RenderSettings.fog = false;
         return stage;
+    }
+
+    static void AddPoint(Transform parent, string name, Vector3 pos, float range, float intensity, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        var l = go.AddComponent<Light>();
+        l.type = LightType.Point; l.range = range; l.intensity = intensity; l.color = color; l.shadows = LightShadows.None;
     }
 
     static void AddSpot(Transform parent, string name, Vector3 pos, Vector3 target, float angle, float range, float intensity, bool shadows, Color color)

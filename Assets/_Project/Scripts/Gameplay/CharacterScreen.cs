@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Game.Core;
 using UnityEngine;
@@ -32,7 +33,8 @@ namespace Game.Gameplay
         readonly List<Image> _gearFill = new List<Image>();
         PlayerAppearance _entry;
 
-        class Cell { public Image Fill, Ring; public float X, Y; }
+        class Cell { public Image Fill, Ring, Portrait; public float X, Y; }
+        static readonly Sprite[] Portraits = new Sprite[Total];
 
         public RectTransform Build(Transform parent, MainMenu menu)
         {
@@ -58,9 +60,11 @@ namespace Game.Gameplay
             {
                 var box = cellBoxes[k];
                 var rect = Screen.Rects[box];
-                var c = new Cell { Fill = rect.GetComponent<Image>(), X = box.r[0], Y = box.r[1] };
-                c.Ring = rect.Find("Ring") != null ? rect.Find("Ring").GetComponent<Image>() : null;
-                _cells.Add(c);
+                // Tiles are portrait cards now: 113 x 132 in four columns, a head-and-shoulders picture above the name.
+                float nx = 67f + (k % 4) * 123f, ny = 187f + (k / 4) * 142f;
+                var c0 = new Cell { Fill = rect.GetComponent<Image>(), X = nx, Y = ny };
+                c0.Ring = rect.Find("Ring") != null ? rect.Find("Ring").GetComponent<Image>() : null;
+                _cells.Add(c0);
                 // Everything the mockup drew inside this cell: number, name, lock icon, check.
                 foreach (var it in Screen.Items)
                 {
@@ -69,13 +73,26 @@ namespace Game.Gameplay
                     if (!inside || it.r[0] < 48f || it.r[0] > 560f) continue;
                     var r = Screen.Rects[it];
                     if (k >= Total) { r.gameObject.SetActive(false); continue; }
-                    if (it.k == "text" && it.fs == 14f) r.GetComponent<Text>().text = (k + 1).ToString("00");
-                    else if (it.k == "text" && it.fs == 16f) { r.GetComponent<Text>().text = PlayerAppearance.ModelNames[k]; Center(r, box); }
-                    else if (it.k == "text" || it.k == "img") r.gameObject.SetActive(false); // lock icon, check mark
+                    if (it.k == "text" && it.fs == 16f)
+                    {
+                        r.GetComponent<Text>().text = PlayerAppearance.ModelNames[k];
+                        r.anchoredPosition = new Vector2(nx, -(ny + 104f));
+                        r.sizeDelta = new Vector2(113f, 24f);
+                        var t = r.GetComponent<Text>();
+                        t.alignment = TextAnchor.MiddleCenter; t.horizontalOverflow = HorizontalWrapMode.Wrap; t.fontSize = 15;
+                    }
+                    else r.gameObject.SetActive(false); // number, lock icon, check mark
                 }
-                if (k >= Total) rect.gameObject.SetActive(false);
+                if (k >= Total) { rect.gameObject.SetActive(false); continue; }
+                rect.anchoredPosition = new Vector2(nx, -ny);
+                rect.sizeDelta = new Vector2(113f, 132f);
+                var pr = UiPaint.At(Screen.Stage, "Portrait" + k, nx + 18.5f, ny + 8f, 76f, 96f);
+                c0.Portrait = pr.gameObject.AddComponent<Image>();
+                c0.Portrait.color = Color.clear;
+                c0.Portrait.raycastTarget = false;
             }
             BuildGear();
+            _menu.StartCoroutine(MakePortraits());
             return Screen.Root;
         }
 
@@ -117,6 +134,64 @@ namespace Game.Gameplay
                     _gearTexts.Add(b.GetComponentInChildren<Text>());
                 }
             }
+        }
+
+        // Head-and-shoulders pictures of the 15 models, rendered once from the roster prefabs in a far corner of the scene.
+        IEnumerator MakePortraits()
+        {
+            var stage = _menu.Stage;
+            if (stage == null || stage.RosterPrefabs == null) yield break;
+            bool have = true;
+            for (int i = 0; i < Total; i++) if (Portraits[i] == null) have = false;
+            if (!have)
+            {
+                var origin = new Vector3(600f, 0f, 600f);
+                var camGo = new GameObject("PortraitCam");
+                camGo.transform.position = origin + new Vector3(0f, 1.55f, 2.5f);
+                camGo.transform.rotation = Quaternion.LookRotation((origin + new Vector3(0f, 1.47f, 0f)) - camGo.transform.position);
+                var cam = camGo.AddComponent<Camera>();
+                cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.063f, 0.082f, 0.11f, 1f);
+                cam.fieldOfView = 20f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 20f; cam.enabled = false;
+                var lights = new GameObject("PortraitLights");
+                lights.transform.position = origin;
+                void L(Vector3 p, Color col, float i2) { var g = new GameObject("L"); g.transform.SetParent(lights.transform, false); g.transform.localPosition = p; var l = g.AddComponent<Light>(); l.type = LightType.Point; l.range = 9f; l.intensity = i2; l.color = col; }
+                L(new Vector3(-1.6f, 2.4f, 2.2f), new Color(1f, 0.86f, 0.7f), 14f);
+                L(new Vector3(1.8f, 2.2f, -1.2f), new Color(0.37f, 0.66f, 1f), 9f);
+                L(new Vector3(0f, 1.6f, 3.0f), Color.white, 5f);
+                var rt = new RenderTexture(192, 256, 24);
+                for (int i = 0; i < Total; i++)
+                {
+                    var prefab = i < stage.RosterPrefabs.Length ? stage.RosterPrefabs[i] : null;
+                    if (prefab == null || Portraits[i] != null) continue;
+                    var go = UnityEngine.Object.Instantiate(prefab, origin, Quaternion.identity);
+                    var def = go.GetComponent<CharacterDef>();
+                    if (def != null) { def.ApplyVariant(0); if (def.Animator != null) def.Animator.enabled = false; }
+                    yield return null;
+                    cam.targetTexture = rt;
+                    cam.Render();
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = rt;
+                    var tex = new Texture2D(192, 256, TextureFormat.RGB24, false);
+                    tex.ReadPixels(new Rect(0, 0, 192, 256), 0, 0);
+                    tex.Apply();
+                    RenderTexture.active = prev;
+                    cam.targetTexture = null;
+                    Portraits[i] = Sprite.Create(tex, new Rect(0, 0, 192, 256), new Vector2(0.5f, 0.5f), 100f);
+                    UnityEngine.Object.Destroy(go);
+                }
+                rt.Release();
+                UnityEngine.Object.Destroy(rt);
+                UnityEngine.Object.Destroy(camGo);
+                UnityEngine.Object.Destroy(lights);
+            }
+            ApplyPortraits();
+        }
+
+        void ApplyPortraits()
+        {
+            for (int k = 0; k < _cells.Count && k < Total; k++)
+                if (_cells[k].Portrait != null) { _cells[k].Portrait.sprite = Portraits[k]; _cells[k].Portrait.color = Portraits[k] != null ? Color.white : Color.clear; }
+            Refresh();
         }
 
         // Called when the screen opens: the stage zooms to the local character and the saved look is shown.
@@ -167,6 +242,7 @@ namespace Game.Gameplay
             {
                 bool on = k == idx;
                 if (_cells[k].Fill != null) _cells[k].Fill.color = on ? UiPaint.AcS : UiPaint.Bg;
+                if (_cells[k].Portrait != null && _cells[k].Portrait.sprite != null) _cells[k].Portrait.color = on ? Color.white : new Color(0.6f, 0.6f, 0.6f, 1f); // unselected: 60 %
                 if (_cells[k].Ring != null) { _cells[k].Ring.color = on ? UiPaint.Ac : UiPaint.Ln; _cells[k].Ring.sprite = UiPaint.Round(16, on ? 2 : 1); }
             }
             if (_header != null) _header.text = "외형 " + (idx + 1).ToString("00") + " / " + Total;
