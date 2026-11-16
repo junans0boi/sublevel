@@ -161,4 +161,66 @@ public static partial class WorldBuilder
         go.AddComponent<MeshRenderer>().sharedMaterial = material;
         go.isStatic = true;
     }
+
+    // NavMesh connectivity (tracks.md: "NavMesh connected"): from the first elevator station a complete path must reach every other station
+    // and the far side of every bridge. Run: tools/unity.sh run WorldBuilder.CheckNav. Exit code 1 on any gap.
+    public static void CheckNav()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        var info = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+        var zone = Object.FindFirstObjectByType<Game.Gameplay.ZoneNavMesh>();
+        var data = new SerializedObject(zone).FindProperty("_data").objectReferenceValue as NavMeshData;
+        NavMesh.RemoveAllNavMeshData();
+        NavMesh.AddNavMeshData(data);
+                int bad = 0, total = 0;
+        bool Reach(Vector3 from, Vector3 to, string what)
+        {
+            total++;
+            if (!NavMesh.SamplePosition(from, out var a, 6f, NavMesh.AllAreas) || !NavMesh.SamplePosition(to, out var b, 6f, NavMesh.AllAreas))
+            { Debug.LogError($"[CheckNav] no navmesh near {what}"); bad++; return false; }
+            var path = new NavMeshPath();
+            bool ok = NavMesh.CalculatePath(a.position, b.position, NavMesh.AllAreas, path) && path.status == NavMeshPathStatus.PathComplete;
+            if (!ok) { Debug.LogError($"[CheckNav] no complete path to {what} ({path.status}) from {a.position} to {b.position}, ends at {(path.corners.Length > 0 ? path.corners[path.corners.Length - 1] : Vector3.zero)}"); bad++; }
+            return ok;
+        }
+        // CalculatePath gives up on long routes over a navmesh this big (default node pool: PathPartial although the way exists), so connectivity is
+        // proven in hops: every road in 48 m steps, every station to the nearest avenue road point.
+        var plan0 = WorldGenerator.Generate(LoadSpec());
+        foreach (var road in plan0.Roads)
+            for (int i = 8; i < road.X.Length; i += 8)
+                Reach(new Vector3(road.X[i - 8], road.Y[i - 8], road.Z[i - 8]), new Vector3(road.X[i], road.Y[i], road.Z[i]), road.Name + " hop " + i);
+        foreach (var e in plan0.Elevators)
+        {
+            Vector3 best = default; float bd = float.MaxValue;
+            foreach (var road in plan0.Roads)
+                for (int i = 0; i < road.X.Length; i++)
+                {
+                    float d = (road.X[i] - e.X) * (road.X[i] - e.X) + (road.Z[i] - e.Z) * (road.Z[i] - e.Z);
+                    if (d < bd) { bd = d; best = new Vector3(road.X[i], road.Y[i], road.Z[i]); }
+                }
+            Reach(new Vector3(e.X, e.Y, e.Z), best, e.Name + " to its road");
+        }
+        // where do the roads lose the navmesh? (first gap of each road, 3 m probes)
+        var plan = WorldGenerator.Generate(LoadSpec());
+        int gaps = 0;
+        foreach (var road in plan.Roads)
+            for (int i = 0; i < road.X.Length; i++)
+            {
+                var p = new Vector3(road.X[i], plan.Height(road.X[i], road.Z[i]), road.Z[i]);
+                if (NavMesh.SamplePosition(p, out var hit, 1.2f, NavMesh.AllAreas)) continue;
+                Debug.LogError($"[CheckNav] road {road.Name} point {i}/{road.X.Length} at {p} (ground {plan.Height(p.x, p.z):F1}) has no navmesh"); gaps++;
+                break;
+            }
+        Debug.Log($"[CheckNav] {gaps} roads with a navmesh gap");
+        foreach (var b in plan.Bridges)
+        {
+            var road = plan.Roads[b.Road];
+            int a0 = Mathf.Max(0, b.FromPoint - 2), a1 = Mathf.Min(road.X.Length - 1, b.ToPoint + 2);
+            var deckMid = new Vector3(road.X[(b.FromPoint + b.ToPoint) / 2], road.Y[(b.FromPoint + b.ToPoint) / 2], road.Z[(b.FromPoint + b.ToPoint) / 2]);
+            Debug.Log($"[CheckNav] {b.Name} deck mid navmesh: {NavMesh.SamplePosition(deckMid, out _, 0.8f, NavMesh.AllAreas)}");
+            Reach(new Vector3(road.X[a0], road.Y[a0], road.Z[a0]), new Vector3(road.X[a1], road.Y[a1], road.Z[a1]), b.Name + " (across)");
+        }
+        Debug.Log($"[CheckNav] {total - bad}/{total} hops and station links complete");
+        EditorApplication.Exit(bad == 0 ? 0 : 1);
+    }
 }

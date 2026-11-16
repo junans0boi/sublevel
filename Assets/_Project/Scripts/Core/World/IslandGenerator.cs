@@ -330,6 +330,8 @@ namespace Game.Core
                         if (terrain.River(r, road.X[i], road.Z[i], out float d, out float t, out float hw, out _, out _) && d < hw + Margin)
                         { wet[i] = true; surface[i] = Math.Max(surface[i], terrain.RiverSurface(r, t)); }
                 }
+                // where this road runs over one that was solved before, it takes that road's height (a heightfield cannot hold two roads at two heights)
+                MergeWithEarlier(plan, road, target, pinned);
                 if (aTown) { pinned[0] = true; target[0] = ta.Y; }
                 if (bTown) { pinned[n - 1] = true; target[n - 1] = tb.Y; }
                 // a road starts and ends where its neighbours do: junction nodes take the ground height there
@@ -376,6 +378,26 @@ namespace Game.Core
                     i = j;
                 }
             }
+        }
+
+        static void MergeWithEarlier(WorldPlan plan, WorldRoad road, float[] target, bool[] pinned)
+        {
+            for (int i = 0; i < road.X.Length; i++)
+                for (int r = 0; r < plan.Roads.Count; r++)
+                {
+                    var o = plan.Roads[r];
+                    float reach = (road.Width + o.Width) * 0.5f + 3f, best = reach, y = 0f;
+                    for (int j = 0; j + 1 < o.X.Length; j++)
+                    {
+                        if (o.Bridge != null && o.Bridge[j]) continue;
+                        float ex = o.X[j + 1] - o.X[j], ez = o.Z[j + 1] - o.Z[j], l2 = ex * ex + ez * ez;
+                        float t = l2 > 0f ? ((road.X[i] - o.X[j]) * ex + (road.Z[i] - o.Z[j]) * ez) / l2 : 0f;
+                        t = Math.Max(0f, Math.Min(1f, t));
+                        float px = o.X[j] + ex * t - road.X[i], pz = o.Z[j] + ez * t - road.Z[i], d = (float)Math.Sqrt(px * px + pz * pz);
+                        if (d < best) { best = d; y = o.Y[j] + (o.Y[j + 1] - o.Y[j]) * t; }
+                    }
+                    if (best < reach) { pinned[i] = true; target[i] = y; break; }
+                }
         }
 
         static int RegionOfRoad(WorldPlan plan, IslandTerrain terrain, WorldRoad road)
