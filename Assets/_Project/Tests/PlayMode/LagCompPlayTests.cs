@@ -73,6 +73,8 @@ namespace Game.Tests
                 } while (true);
                 lastShot = Time.time;
                 var eye = a.Player.EyePosition;
+                var serverEye = MultiHarness.ReplicaOf(_net.Host, a.Player).EyePosition;
+                Assert.Less((serverEye - eye).magnitude, 0.3f, $"shot {i}: the server's eye of the shooter is where the client aims from (client {eye}, server {serverEye})");
                 var aim = seen.transform.position + Vector3.up * 0.9f;
                 uint view = compensated ? a.Player.ViewTick : uint.MaxValue; // MaxValue: a claim from the future = no rewind
                 // What the server rewinds by (tick model) against how far behind the real body the shown copy is: a miss with
@@ -106,6 +108,9 @@ namespace Game.Tests
             a.Controller.LookAt(lookAt);
             yield return NetHarness.WaitUntil(() => a.Player.ActiveWeaponId == weapon, "weapon in hand", Log, 5f);
             yield return Frames(1.5f);
+            // The server must hold the shooter where the test put it before anything is fired (a race here sent shots at the back wall).
+            yield return NetHarness.WaitUntil(() => (onServer.transform.position - shooterAt).sqrMagnitude < 0.3f * 0.3f, "shooter synced to the server", Log, 5f);
+            Assert.Less((onServer.transform.position - shooterAt).magnitude, 0.3f, "server sees the shooter where it was put");
             _net.Simulate(a, MultiHarness.BadRoundTripMs, loss); // 100 ms stays; loss is the caller's choice (0 for the accuracy tests)
             yield return Frames(1.5f);
 

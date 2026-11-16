@@ -10,6 +10,9 @@ namespace Game.Core
     {
         public const int MaxParticipants = MatchRules.MaxBotsLimit + 1; // 24: the cap of a match, humans and bots together
 
+        // A forced start needs someone in the room, except a measurement run (--perf, ADR-242), which plays bots only.
+        public static bool MayForceStart(int people, bool allowEmpty) => people > 0 || allowEmpty;
+
         // Ok unless the versions differ, the match already began, or the room holds `maxPlayers` people.
         public static JoinResult CheckJoin(string serverVersion, string clientVersion, int players, int maxPlayers, bool matchStarted)
         {

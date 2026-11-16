@@ -27,6 +27,14 @@ namespace Game.Tests
         }
 
         [Test]
+        public void ForcedStart_NeedsSomeone_UnlessMeasuring()
+        {
+            Assert.IsFalse(LobbyRules.MayForceStart(0, false), "production: an empty room never starts");
+            Assert.IsTrue(LobbyRules.MayForceStart(1, false));
+            Assert.IsTrue(LobbyRules.MayForceStart(0, true));
+        }
+
+        [Test]
         public void PerfArg_IsRead()
         {
             Assert.AreEqual("p0", ServerArgs.Parse(new[] { "--dedicated", "--perf", "p0" }).Perf);

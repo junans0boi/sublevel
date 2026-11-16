@@ -44,3 +44,8 @@
 - 정리: 서버 프로세스·Unity 프로세스 없음, git restore·메타 복원 완료.
 
 - 측정 중 다른 부하: master 통보로 main의 `Build/mac/Sublevel.app`(CPU 약 92%, 22분+)이 돌고 있었을 수 있음(PID·CPU를 측정 전후로 기록하지 못함). 위 LagComp 분산의 원인 후보에서 **배제하지 못한다**(독점 창이 실제로는 독점이 아니었음). 재측정 때 `ps -axo pid,pcpu,command`를 전후 기록.
+
+## 후속 (코드만, Unity 미실행)
+- `--perf`에서만 사람 0명 강제 시작 허용(`LobbyRules.MayForceStart`, `LobbyNet.AllowEmptyStart`, DedicatedServer가 `--perf`일 때 5초 뒤 시작). 프로덕션 경로 불변은 `ForcedStart_NeedsSomeone_UnlessMeasuring` 테스트로 보장. 시작 뒤 `Players=0` 매치가 정상 진행하는지는 Unity 확인 전.
+- LagComp 하네스: 사격자가 서버에 반영될 때까지 대기 + 사격 전 "서버가 본 사격자 눈 위치 == 클라 눈 위치(<0.3 m)" 어서션 추가(통과 기준은 안 내림).
+- **제안만(ADR 필요):** 사본 지연 +70~90 ms 잔차는 보간 2틱(66 ms) 위에 NetworkTransform 평활화가 얹힌 것으로 추정되고, 필요 지연이 235~320 ms로 캡 0.25 s를 넘는 샷이 있어 `Ballistics.MaxRewindSeconds` 0.25→0.30 s를 제안한다. 근거: 측정 사본 지연 최대 ≈320 ms(1.03 m / 3.2 m/s), 상행 50 ms 제외 시 ≈270 ms. 공정성 비용: 피격자가 최대 0.30 s 전 위치에서 맞는다. 룰 변경이라 승인 전까지 적용 안 함.
