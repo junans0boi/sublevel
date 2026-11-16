@@ -123,8 +123,13 @@ namespace Game.Tests
             var state = MatchState.Instance;
             Assert.IsNotNull(state, "no MatchState");
             yield return WaitUntil(() => state.TotalCount == 4 && state.AliveCount == 4, 10f, "the player and three bots counted by the match");
+            var names = new System.Collections.Generic.HashSet<string>();
             for (int i = 0; i < bots.Count; i++)
-                StringAssert.StartsWith("봇 ", state.ServerNameOf(bots[i]), "a bot is named for the kill feed");
+            {
+                string name = state.ServerNameOf(bots[i]);
+                Assert.IsFalse(string.IsNullOrEmpty(name), "a bot is named for the kill feed");
+                Assert.IsTrue(names.Add(name), "bot names are unique in a match: " + name);
+            }
         }
     }
 }

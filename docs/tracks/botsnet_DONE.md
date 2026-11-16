@@ -87,3 +87,9 @@
 - **35 m(캡 0.25, Cover10·11 비활성) 5회**: 1/5(실패)·5/5·5/5·5/5·5/5 → **run2~5 4회 연속 통과**(3회 연속 달성). run1은 첫 실행이 탄 4발이 표적 옆(0.4 m)으로 빗나감(실행 직후 첫 PlayMode, 원인 미확인). 로그 `Logs/lagcomp25b-run{1..5}.log`(저장소 밖). 시작 전 `ps` Unity 0개, 실행 중 다른 Unity 관측 없음(깨끗). → 장애물이 원인이라는 판단 **확인**, 캡 상향 불필요(ADR-243 보류 유지).
 - **P3 서버 측정 성공**(`--region C --perf p3 --participants 50 --bots 49`, 로그 `Logs/server-p3c.log`, `Logs/perf/s8_server_p3.csv`): 봇이 에이전트를 달 때까지(≈60 s) 기다린 뒤 **49/49 봇을 허브 (520, 800) 반경 60 m로 Warp**(오류 0). 밀집 후 10초 창 프레임 평균 2.1~2.8 ms, p99 4.1~6.0 ms, 최대 38 ms, 힙 ≈28 MB → 예산(10/25 ms) 안. **단서:** 이전 P0·P3 1차 값(약 20~60 s 구간)은 봇이 승강기 안(에이전트 없음)이라 **봇 AI를 실제로 돌린 측정이 아니었다**; LagComp 되감기 수 0(봇 사격은 되감기 없음, 사람이 없어서), 대역폭·교전량(총성 수)은 미측정 → 봇 몫 ≤4 ms 게이트 판정은 **밀집 후 구간만 유효**하고 교전 지표(만남/분·총성 수) 추가 전에는 "예산 안(교전 미확인)"으로만 기록.
 - 정리: 서버·Unity 프로세스 없음.
+
+## T2·T7 (2026-11-17): 이름·난이도 혼합·오염 경고 반응 — `git merge track/pollution`(fast-forward) 후
+- 구현: `Core/BotNames`·`BotMix`·`BotPollutionPlan`(순수) + `BotController`(봇별 난이도, 이름, `TryWarnedLeaveTarget`) + `MatchDirector` 이름 한 곳. ADR-245.
+- 확인: EditMode 1342건 중 **내 `BotBehaviourTests` 전부 통과**(이름 49개 유일, 혼합 비율 ±2%p, 경고 반응 단조: 어려움 30 s 100%, 쉬움 30 s 50~80%(이론 67%), 확정 40 s 전 100%). **실패 14건은 전부 `CharacterAnimatorTests`·`CharacterRosterTests`**: 이 워크트리에 로스터 FBX가 없어서(캐릭터 트랙 자산, `Roster_*.fbx.meta`가 삭제 상태로 나옴) — 내 변경과 무관(미확인: main에서도 같은 결과인지).
+- 수치(판정): 경고 105 s 중 **확정 45 s 전(경고 60 s 시점)에 이동을 시작한 비율** = 어려움 100%, 보통 100%(0~25 s 지연), 쉬움 100%(0~45 s 지연, 45<60) — 시뮬이 아니라 지연 분포 계산값. 실제 PlayMode 시나리오에서의 비율은 **미측정**.
+- **못 한 것:** T8 열쇠(줍기·삽입·탑승·목적지: `KeyElevatorNet.ServerInsert/Select`, `ElevatorRides.StationAt`, `TeamKey` public 필요), T9 팀 구성·칩, T10 도시 관심 지점, 최종 지역 인지(`KnowsFinal`)를 `ToFinalRegion`에 연결, 방독 사용, PlayMode 검증, `BotStats.escapeStalls`. 오염 쪽 요청: `KeyElevatorNet.TeamKey` public.

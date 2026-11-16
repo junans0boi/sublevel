@@ -59,6 +59,8 @@ namespace Game.AI
         static MatchDirector _pointsFor, _namedFor;
         static bool _pointsGiven, _pointsBuilt;
         static int _named;
+        int _botIndex;
+        BotDifficulty _level = BotDifficulty.Normal;
 
         Combatant _self;
         CombatantStance _stance;
@@ -286,11 +288,14 @@ namespace Game.AI
             _ready = true;
             _hearFactor = 1f;
             // The difficulty scales a copy of the data (Normal is the data itself).
-            _rules = BotLevels.For(BotRules.Current, BotLevels.Level);
+            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
+            // Each bot has its own level, the setting being the centre of a mix (ADR-245).
+            _botIndex = _named;
+            _level = BotMix.For(BotLevels.Level, matchSeed, _botIndex);
+            _rules = BotLevels.For(BotRules.Current, _level);
             if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
             SyncMatch();
-            int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
             InitItems();
@@ -299,7 +304,7 @@ namespace Game.AI
             _noiseSeen = BotNoise.Count;
             _maxHp = Mathf.Max(1f, _self.Hp.Value);
             _named++;
-            DisplayName = "봇 " + _named;
+            DisplayName = BotNames.For(matchSeed, _botIndex);
             BotServerActions.SetDisplayName(_self, DisplayName);
         }
 
@@ -769,6 +774,13 @@ namespace Game.AI
             if (zones == null || zones.RegionCount == 0) return ZoneGoal.None;
 
             int skip = Time.time < _skipPassUntil ? _skipPass : -1;
+            // A warning on the region it stands in: leave after a reaction delay by difficulty, before the front comes (ADR-245).
+            if (TryWarnedLeaveTarget(zones, at, out target, out urgent))
+            {
+                _warnedLeaves++;
+                _goalPass = -1;
+                return ZoneGoal.Escape;
+            }
             if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
             {
                 urgent = true;
@@ -797,6 +809,37 @@ namespace Game.AI
             // Only the final region is left: nobody may hide until the end, the bots go looking for each other.
             if (zones.OnlyFinalRegionLeft && TryNearestEnemy(at, out target)) return ZoneGoal.Hunt;
             return ZoneGoal.None;
+        }
+
+        // Counts the legs this bot started because of a warning, for the statistics (BotStats).
+        public static int WarnedLeaveStarts;
+        int _warnedLeaves;
+
+        bool TryWarnedLeaveTarget(PollutionDirector zones, Vector3 at, out Vector3 target, out bool urgent)
+        {
+            target = default;
+            urgent = false;
+            int own = zones.RegionIndexAt(at);
+            if (own < 0 || zones.StateOf(own) != ZoneState.Warning) return false;
+            float left = zones.SecondsLeft(own);
+            if (left < 0f) return false;
+            float since = Mathf.Max(0f, zones.Rules.WarningLeadSeconds - left);
+            if (!BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, left, zones.IsDoomed(at), _level, unchecked(_botIndex * 7919 + _self.ObjectId))) return false;
+            // The middle of the nearest region that is neither warned nor lost.
+            float best = float.MaxValue;
+            bool found = false;
+            for (int r = 0; r < zones.RegionCount; r++)
+            {
+                if (r == own || zones.StateOf(r) != ZoneState.Safe) continue;
+                var c = zones.RegionCentre(r);
+                if (zones.IsDoomed(c)) continue;
+                float d = Flat(c - at);
+                if (d < best) { best = d; target = c; found = true; }
+            }
+            if (!found) return false;
+            urgent = left <= 40f; // before that the brain may still fight; in the last stretch walking out wins
+            if (_warnedLeaves == 0) WarnedLeaveStarts++;
+            return true;
         }
 
         // The nearest living combatant this bot may fight (endgame knowledge, like a shrinking final circle). One
