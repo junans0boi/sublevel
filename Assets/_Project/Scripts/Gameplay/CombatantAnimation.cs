@@ -77,7 +77,7 @@ namespace Game.Gameplay
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
         [SerializeField] float _walkClipSpeed = 1.3f; // the walk clip alone (the slow walk plays it, sped up)
-        // The bare-handed walk and jog clips' ground speed (ADR-235), and the second in each punch clip when the fist is furthest out (the hit).
+        // The bare-handed walk and jog clips' ground speed (ADR-255), and the second in each punch clip when the fist is furthest out (the hit).
         [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f, _unarmedCrouchSpeed = 1.2f;
         [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
         // Foot height above the character's origin: planted below the first, in the air above the second.
@@ -106,7 +106,7 @@ namespace Game.Gameplay
         float _footFixTotal;      // how far GroundCrouchedFeet has the crouched model moved down (carried into next frame's placement)
         float _footRestHeight;    // the lower foot's height over the character's origin in the saved (standing) pose
         float _crouch;            // 0..1: how much of the crouch is shown
-        float _clipCrouch;        // 0..1: bare-handed crouch is the UAL crouch clips (ADR-235); the code knee bend fades out by this much
+        float _clipCrouch;        // 0..1: bare-handed crouch is the UAL crouch clips (ADR-255); the code knee bend fades out by this much
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
         float _proneClip;         // the share of it that is the prone clip (all of it unless swimming)
@@ -293,7 +293,7 @@ namespace Game.Gameplay
             _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
-            // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-235).
+            // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-255).
             _unarmedBody = HeldId == 0 || HoldsMelee;
             float clipSpeed = _unarmedBody
                 ? (_legs.Backward || slowWalk ? _unarmedWalkSpeed : _unarmedRunSpeed)

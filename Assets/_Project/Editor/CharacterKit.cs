@@ -61,7 +61,7 @@ public static class CharacterKit
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
         public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed;                     // the bare-handed walk and jog clips (m/s)
-        // Punch states (ADR-235): which clip each hand plays (the Jab/Cross swapped, or mirrored, until the right fist goes out for PunchRight and the left for
+        // Punch states (ADR-255): which clip each hand plays (the Jab/Cross swapped, or mirrored, until the right fist goes out for PunchRight and the left for
         // PunchLeft), and the second in the clip when that fist is furthest out (the hit).
         public bool PunchSwap, MirrorRight, MirrorLeft;
         public float PunchLeftImpact, PunchRightImpact;

@@ -48,7 +48,7 @@ public static class CharacterControllerBuilder
         locomotion.speedParameterActive = true;
         var baseMachine = controller.layers[0].stateMachine;
         baseMachine.defaultState = locomotion;
-        // Bare hands (ADR-235): the UAL walk and jog. The armed tree above is all rifle poses; without a weapon the hands hang and swing.
+        // Bare hands (ADR-255): the UAL walk and jog. The armed tree above is all rifle poses; without a weapon the hands hang and swing.
         var unarmed = controller.CreateBlendTreeInController(CombatantAnimation.Unarmed, out var unarmedTree, 0);
         unarmedTree.blendType = BlendTreeType.Simple1D;
         unarmedTree.blendParameter = CombatantAnimation.Move;

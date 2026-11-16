@@ -332,7 +332,7 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    // One player prefab per roster model (Player_<id>, ADR-235): MatchDirector spawns the one the client chose. "Player" is the default model.
+    // One player prefab per roster model (Player_<id>, ADR-255): MatchDirector spawns the one the client chose. "Player" is the default model.
     static void BuildPlayerVariants(GearAssets gear)
     {
         foreach (var e in CharacterRoster.Entries) BuildPlayerPrefab(gear, e.Id, "Player_" + e.Id);

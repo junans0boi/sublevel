@@ -116,7 +116,7 @@ namespace Game.Tests
             yield return null;
             Assert.AreEqual(1f, animation.CrouchPose, 0.01f);
             yield return new WaitForSeconds(0.4f); // the code bend fades out as the clip takes over
-            // Empty hands crouch with the UAL crouch clip (ADR-235): the model is not lowered in code, the clip's own hips are low.
+            // Empty hands crouch with the UAL crouch clip (ADR-255): the model is not lowered in code, the clip's own hips are low.
             Assert.Less(animation.ModelDrop, 0.03f, "the clip crouches, the model is not dropped");
             Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.3f, "the hips came down");
             Assert.Less(hips.position.y - pc.transform.position.y, 0.65f, "the hips are low (the UAL crouch kneels)");

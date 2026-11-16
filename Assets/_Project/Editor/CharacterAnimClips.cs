@@ -24,7 +24,7 @@ public static class CharacterAnimClips
         "RiflePullOut", "RiflePutAway", "RifleDeath",
     };
 
-    // Quaternius Universal Animation Library 1 (CC0, ledger C-0004): the bare-handed set the Mixamo rifle clips lack (ADR-235).
+    // Quaternius Universal Animation Library 1 (CC0, ledger C-0004): the bare-handed set the Mixamo rifle clips lack (ADR-255).
     // The FBX stays out of git like the roster models (.gitignore); its .meta is committed. Source folder: SUBLEVEL_UBC_DIR's sibling UAL1.
     public const string UalPath = "Assets/_Project/Art/Characters/Ual/UAL1_Standard.fbx";
     static string UalSource() => System.Environment.GetEnvironmentVariable("SUBLEVEL_UAL_DIR")
