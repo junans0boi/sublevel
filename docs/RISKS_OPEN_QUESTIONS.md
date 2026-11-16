@@ -62,8 +62,3 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
   - 08 시트에 없던 추가분(미검토): Bastion · Anvil · Marshal · Fang · Hornet (ADR-182)
 - [ ] **총기 모델 형상의 실존 유사성**: 임시 모델(Quaternius·Poly Pizza CC0)은 각인·로고가 없지만 실총과 닮았는지 검토 안 함(디자인권은 사람 몫). 실총형 팩(chilly-durango·Stein·3dmodelscc0)과 CC-BY 후보(M21 EBR·MK14 등)는 쓰지 않기로 함(ADR-182). 실총 이름이 든 파일명은 import 시 개명.
 - [ ] **임시 모델·placeholder 교체**: DMR 3종·보급 5종 등 `placeholder/`에 둔 것은 릴리스 전 제거하거나 확정 모델로 교체(CLAUDE.md 규칙 2, ASSET_LEDGER 반입 시 표시).
-- [ ] **캐릭터 크레딧·표기(사람)**: 로스터 모델 두 출처(Quaternius UBC=CC0, Mixamo=Adobe 로열티 프리)는 표기 의무가 없다. 그래도 크레딧 화면에 "Characters: Quaternius Universal Base Characters (CC0), Mixamo (Adobe)"를 넣을지 결정(UI 트랙이 `Credits.cs`는 CC-BY 전용이라 별도 항목 필요).
-- [ ] **Mixamo Additional Terms 원문(사람)**: AI/ML 학습 금지 조항, 비공개 저장소 포함 문구, 원본 파일 재배포 금지의 범위. 저장소에는 FBX·추출 PNG를 올리지 않았지만(`.gitignore`), `Prefabs/Roster/Textures/*.png`는 Mixamo 텍스처에서 재채색한 파생물이라 이것을 커밋해도 되는지 확인 필요(공개 전에 파생 텍스처를 제거하거나 UBC(CC0) 것만 남기는 선택지).
-- [ ] **Swat 텍스처의 "SWAT" 글씨**: Mixamo Swat 조끼 텍스처에 흰 글씨 SWAT이 있다(일반 명사, 실존 부대 로고 아님). 가상 세계관·상표·정서 검토(사람) 후 유지하거나 조끼 텍스처 영역을 지운다. 위치: `Roster_Swat_Soldier_Body_diffuse.png` 조끼 오른쪽.
-- [ ] **Mixamo 새 9종은 민간 복장**: 군복 계열을 master가 추가 다운로드 중. 도착하면 `CharacterImport.SyncStaging`이 자동 반입하고 `CharacterRoster.Entries`에 한 줄 추가.
-

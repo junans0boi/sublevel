@@ -33,7 +33,13 @@
 - **(5) 색조**: 곱하기 색조가 피부까지 물들이던 문제를 영역 재채색으로 해결(수치는 ADR-225). Swat은 머리가 별도 재질이라 곱하기 유지.
 - **(3) 머리 비율 #230**: 소총 든 자세 캡처(`PoseLowReady`) + 턱 기준 수치. 턱~정수리/키: Mixamo 0.137~0.158, UBC 0.128, Swat 0.142(헬멧 포함). 실제 성인 0.125~0.145. 테스트 `Head_ChinToCrown_RatioIsHumanSized`(허용 0.11~0.16). 소총 파지 포즈에서 양손이 총에 닿는 것을 5종 캡처로 확인(UBC·Swat 양호, Brian 등 민간은 손이 총 아래로 약간 어긋남: 포즈는 임시).
 - **(4) 헬멧·방어구·배낭**: `ArmorVisual`/`BackpackVisual`이 본 이름으로 찾아 로스터에 붙지 않는 문제 → `Head`·`Chest` 별칭 추가로 12종 모두 부착(EditMode `WornGear_MountsOnRosterBones_AtHeadChestBack`, 캡처 `posed_*`). **한계**: UBC 2종은 본 이름이 `Head`라 별칭을 못 넣어 헬멧이 눈을 덮음(Mixamo 10종은 정상). 수정은 `ArmorVisual` 3줄이라 소유 밖(애니 트랙/master).
-- **(6) RISKS**: 크레딧 표기, Mixamo 약관·파생 텍스처 커밋, "SWAT" 글씨, 민간 복장 4건을 `docs/RISKS_OPEN_QUESTIONS.md`에 추가(소유 밖 문서라 master가 병합 시 확인).
+- **(6) RISKS**: 크레딧 표기, Mixamo 약관·파생 텍스처 커밋, "SWAT" 글씨, 민간 복장 4건을 아래 "RISKS에 올릴 항목"에 목록으로 적음(RISKS 문서는 소유 밖이라 수정하지 않음).
 - **(7) API**: `docs/tracks/character_API.md`.
 - **(1) 군복 계열**: master가 Mixamo에서 받는 중. 도착하면 `SyncStaging` → `CharacterRoster.Entries` 한 줄 → `Build`.
 - 테스트: EditMode 1229/1229(신규 2건 포함). 50체 PERF 재측정: 다른 Unity 5개가 동시에 돌아 p99가 흔들려(12.4ms 1회 관측) **3회 중 최선**을 기록하도록 테스트를 바꿨다: 분산 p99 7.1ms·드로우 373, 밀집 p99 7.0ms·드로우 489(합격, 조용한 머신 기준 재측정 필요). 변형 텍스처는 LFS PNG 43장 약 43MB.
+
+## RISKS에 올릴 항목 (소유 밖 문서라 직접 수정하지 않음, master가 병합 시 추가)
+- [ ] **캐릭터 크레딧·표기(사람)**: 로스터 모델 두 출처(Quaternius UBC=CC0, Mixamo=Adobe 로열티 프리)는 표기 의무가 없다. 그래도 크레딧 화면에 "Characters: Quaternius Universal Base Characters (CC0), Mixamo (Adobe)"를 넣을지 결정(UI 트랙이 `Credits.cs`는 CC-BY 전용이라 별도 항목 필요).
+- [ ] **Mixamo Additional Terms 원문(사람)**: AI/ML 학습 금지 조항, 비공개 저장소 포함 문구, 원본 파일 재배포 금지의 범위. 저장소에는 FBX·추출 PNG를 올리지 않았지만(`.gitignore`), `Prefabs/Roster/Textures/*.png`는 Mixamo 텍스처에서 재채색한 파생물이라 이것을 커밋해도 되는지 확인 필요(공개 전에 파생 텍스처를 제거하거나 UBC(CC0) 것만 남기는 선택지).
+- [ ] **Swat 텍스처의 "SWAT" 글씨**: Mixamo Swat 조끼 텍스처에 흰 글씨 SWAT이 있다(일반 명사, 실존 부대 로고 아님). 가상 세계관·상표·정서 검토(사람) 후 유지하거나 조끼 텍스처 영역을 지운다. 위치: `Roster_Swat_Soldier_Body_diffuse.png` 조끼 오른쪽.
+- [ ] **Mixamo 새 9종은 민간 복장**: 군복 계열을 master가 추가 다운로드 중. 도착하면 `CharacterImport.SyncStaging`이 자동 반입하고 `CharacterRoster.Entries`에 한 줄 추가.
