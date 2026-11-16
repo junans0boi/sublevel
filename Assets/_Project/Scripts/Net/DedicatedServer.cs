@@ -52,7 +52,7 @@ namespace Game.Net
         void Start()
         {
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
-            ZoneDirector.FinalRegionOverride = _options.Region;
+            PollutionDirector.FinalRegionOverride = _options.Region;
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
             Debug.Log($"[Server] starting: port {_options.Port}, bots {(_options.Bots < 0 ? "auto" : _options.Bots.ToString())}, " +

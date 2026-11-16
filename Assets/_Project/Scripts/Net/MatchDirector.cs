@@ -103,6 +103,7 @@ namespace Game.Net
             // Scenes built before the match state existed get one here, so no scene has to be rebuilt for it.
             State = GetComponent<MatchState>();
             if (State == null) State = gameObject.AddComponent<MatchState>();
+            if (GetComponent<PollutionDirector>() == null) gameObject.AddComponent<PollutionDirector>(); // the pollution runs the match (T10)
         }
 
         void Start()

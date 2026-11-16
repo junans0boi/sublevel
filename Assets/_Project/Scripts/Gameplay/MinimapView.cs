@@ -263,7 +263,7 @@ namespace Game.Gameplay
         void RefreshZones()
         {
             if (_world == null || _zoneCell == null) return;
-            var director = ZoneDirector.Instance;
+            var director = PollutionDirector.Instance;
             bool changed = false;
             for (int i = 0; i < _zoneShown.Length; i++)
             {

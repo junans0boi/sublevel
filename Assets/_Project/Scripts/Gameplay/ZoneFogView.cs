@@ -5,7 +5,7 @@ namespace Game.Gameplay
 {
     // Applies the lockdown's radiation fog (ZoneFog.Current, eased by ZoneBanner for the local player) to the scene's
     // render settings, and puts the scene's own fog back once it has cleared. Installs itself next to every
-    // ZoneDirector like the banner; nothing in the scene refers to it.
+    // PollutionDirector like the banner; nothing in the scene refers to it.
     public class ZoneFogView : MonoBehaviour
     {
         bool _saved, _applied;
@@ -26,11 +26,11 @@ namespace Game.Gameplay
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook()
         {
-            ZoneDirector.Started -= Install;
-            ZoneDirector.Started += Install;
+            PollutionDirector.Started -= Install;
+            PollutionDirector.Started += Install;
         }
 
-        static void Install(ZoneDirector director)
+        static void Install(PollutionDirector director)
         {
             if (director == null || director.GetComponentInChildren<ZoneFogView>() != null) return;
             var go = new GameObject("ZoneFogView");

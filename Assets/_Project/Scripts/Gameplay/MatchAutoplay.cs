@@ -13,7 +13,7 @@ namespace Game.Gameplay
     // player is out from the start and the camera follows the current leader (most kills) as a spectator; six
     // screenshots are saved into <folder> (deployment, first fight, region warning, lockdown fog, final region,
     // winner) together with the match log, then the build quits (exit code 0 when the match ended, 1 otherwise).
-    // The lockdown runs LockdownRules.QuickMatch (ZoneDirector reads the same argument).
+    // The lockdown runs LockdownRules.QuickMatch (PollutionDirector reads the same argument).
     [DefaultExecutionOrder(300)]
     public class MatchAutoplay : MonoBehaviour, IPlayerInput
     {
@@ -68,12 +68,12 @@ namespace Game.Gameplay
 
         void OnEnable()
         {
-            ZoneDirector.ServerRegionStateChanged += OnRegion;
+            PollutionDirector.ServerRegionStateChanged += OnRegion;
         }
 
         void OnDisable()
         {
-            ZoneDirector.ServerRegionStateChanged -= OnRegion;
+            PollutionDirector.ServerRegionStateChanged -= OnRegion;
             ZoneBanner.SpectatorFeet = null;
             Time.timeScale = 1f;
         }
@@ -88,7 +88,7 @@ namespace Game.Gameplay
         {
             Directory.CreateDirectory(_folder);
             float giveUp = Time.realtimeSinceStartup + StartTimeoutSeconds;
-            while (Combatant.LocalPlayer == null || MatchState.Instance == null || ZoneDirector.Instance == null || !ZoneDirector.Instance.ServerReady)
+            while (Combatant.LocalPlayer == null || MatchState.Instance == null || PollutionDirector.Instance == null || !PollutionDirector.Instance.ServerReady)
             {
                 if (Time.realtimeSinceStartup > giveUp)
                 {
@@ -107,7 +107,7 @@ namespace Game.Gameplay
             }
             var recorder = MatchRecorder.Attach();
             var state = MatchState.Instance;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             _noiseSeen = BotNoise.Count;
 
             // A spectator: the player is the first one out (zone damage passes the spawn protection).
@@ -228,7 +228,7 @@ namespace Game.Gameplay
         }
 
         // Someone alive in that region, else a view over the region from above.
-        void FollowIn(ZoneDirector zones, int region)
+        void FollowIn(PollutionDirector zones, int region)
         {
             Combatant pick = null;
             foreach (var c in Combatant.All)
@@ -278,7 +278,7 @@ namespace Game.Gameplay
             ZoneBanner.SpectatorFeet = centre;
         }
 
-        void ShowWinner(MatchState state, ZoneDirector zones, Combatant winner)
+        void ShowWinner(MatchState state, PollutionDirector zones, Combatant winner)
         {
             if (_winnerCanvas != null) return;
             var canvas = UiKit.Canvas("AutoplayWinner", 900, false);
