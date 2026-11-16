@@ -117,7 +117,6 @@ namespace Game.Gameplay
                     _gearTexts.Add(b.GetComponentInChildren<Text>());
                 }
             }
-            UiPaint.Label(Screen.Stage, "TeamNote", 1371, 820, 466, 48, "팀 구분은 어깨 밴드 색으로 따로 표시되므로 외형을 어떤 것으로 골라도 아군을 알아볼 수 있습니다.", 16, UiPaint.T2, TextAnchor.UpperLeft).horizontalOverflow = HorizontalWrapMode.Wrap;
         }
 
         // Called when the screen opens: the stage zooms to the local character and the saved look is shown.
@@ -174,11 +173,17 @@ namespace Game.Gameplay
             if (_name != null) _name.text = PlayerAppearance.ModelNames[idx];
             if (_desc != null)
             {
-                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다.";
+                // A fixed three-line block (line height 1.5, 24 px above the buttons, ellipsis by truncation) so it never
+                // runs into the colour label above it.
+                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다. 헬멧·조끼·배낭은 매치를 시작할 때만 입고, 매치 중에는 주운 장비가 우선합니다.";
                 _desc.horizontalOverflow = HorizontalWrapMode.Wrap;
+                _desc.verticalOverflow = VerticalWrapMode.Truncate;
                 _desc.alignment = TextAnchor.UpperLeft;
-                ((RectTransform)_desc.transform).sizeDelta = new Vector2(470f, 30f);
-                _desc.fontSize = 17;
+                _desc.fontSize = 18;
+                _desc.lineSpacing = 1.5f;
+                var dr = (RectTransform)_desc.transform;
+                dr.sizeDelta = new Vector2(466f, 84f);
+                dr.anchoredPosition = new Vector2(1371f, -(897f - 24f - 84f));
             }
             BuildVariants(idx);
             for (int g = 0; g < 3; g++)

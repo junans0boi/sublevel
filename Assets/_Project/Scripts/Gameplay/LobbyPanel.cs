@@ -44,7 +44,7 @@ namespace Game.Gameplay
         class Slot
         {
             public GameObject Tile, Name, Invite;
-            public Image TileFill, TileStroke;
+            public Image TileFill, TileStroke, Dot;
             public Sprite TileDash, TileSolid;
             public Text TileLabel, NameText;
         }
@@ -129,6 +129,22 @@ namespace Game.Gameplay
         Slot BuildSlot(float x, int i)
         {
             var s = new Slot();
+            if (Compact)
+            {
+                // A name card: 220 x 56, panel with a 1 px border, a status dot, the name (22) and the state in words (14).
+                var card = UiPaint.At(Stage, "Tile" + i, x - 110, 856, 220, 56);
+                s.Tile = card.gameObject;
+                s.TileFill = UiPaint.Box(card, UiPaint.Pn, 8, UiPaint.Ln);
+                s.TileStroke = card.Find("Ring").GetComponent<Image>();
+                s.Dot = UiPaint.Circle(card, "Dot", 20, 28, 12, UiPaint.Ok);
+                s.Dot.sprite = UiPaint.Round(6);
+                s.NameText = UiPaint.Label(card, "Name", 36, 6, 176, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+                s.Name = s.NameText.gameObject;
+                s.TileLabel = UiPaint.Label(card, "State", 36, 32, 176, 20, "", 14, UiPaint.T2, TextAnchor.MiddleLeft);
+                var invite = UiPaint.Btn(Stage, "Invite" + i, x - 110, 856, 220, 56, "+ 초대", 20, 4, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
+                s.Invite = invite.gameObject;
+                return s;
+            }
             var tile = UiPaint.At(Stage, "Tile" + i, x - 86, TileY + 40, 172, 56);
             s.Tile = tile.gameObject;
             s.TileFill = UiPaint.Shape(tile, UiPaint.Trapezoid(false), Color.clear);
@@ -156,6 +172,14 @@ namespace Game.Gameplay
             float k = Mathf.Clamp(Mathf.Abs(h.y - f.y) / 185f, 0.4f, 3f) * 0.5f; // the tile is a floor mark smaller than the spacing between people
             float cx = f.x + StageW * 0.5f, cy = StageH * 0.5f - f.y;
             var slot = _slots[i];
+            if (Compact)
+            {
+                // Cards sit on one line above the bottom bar, under their characters.
+                float x = Mathf.Clamp(cx - 110f, 48f, StageW - 48f - 220f);
+                ((RectTransform)slot.Tile.transform).anchoredPosition = new Vector2(x, -856f);
+                ((RectTransform)slot.Invite.transform).anchoredPosition = new Vector2(x, -856f);
+                return;
+            }
             var tile = (RectTransform)slot.Tile.transform;
             tile.pivot = new Vector2(0f, 1f);
             tile.sizeDelta = new Vector2(172f, 56f);
@@ -223,14 +247,13 @@ namespace Game.Gameplay
             UiPaint.GradientOpaque(bar, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0f), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.94f));
 
             // Mode: two pills.
-            BuildPill(0, 64f, top + 16f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
+            BuildPill(0, 48f, top + 16f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
             BuildPill(1, 208f, top + 16f, "스쿼드", () => { Party.SetMode(Self, TeamMode.Squad); Refresh(); });
             _knob = Hidden(UiPaint.At(Stage, "LeverKnob", 0, 0, 1, 1));
 
             // Centre: what will be launched, in one calm line, with the view switch and the map beside it.
             var led = UiPaint.At(Stage, "Led", 376f, top + 8f, 312f, 72);
-            UiPaint.Box(led, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.7f), 16, UiPaint.Ln);
-            _led = UiPaint.Label(led, "Text", 0, 0, 312, 72, "", 32, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _led = UiPaint.Label(led, "Text", 0, 0, 312, 72, "", 40, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
             _ledCaption = Hidden(UiPaint.Label(Stage, "LedCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
 
             UiPaint.Box(UiPaint.At(Stage, "ViewSeg", 712f, top + 16f, 256, 56), Color.clear, 28, UiPaint.Ln);
@@ -250,12 +273,11 @@ namespace Game.Gameplay
             _reason.horizontalOverflow = HorizontalWrapMode.Overflow;
 
             // Right: the one state button (the only filled accent on the screen) and its key.
-            _status = UiPaint.Btn(Stage, "State", 1368f, top + 8f, 504, 72, "", 28, 36, UiPaint.AcS, UiPaint.Ac, UiPaint.Tx, OnStatus, FontStyle.Bold, 2);
+            _status = UiPaint.Btn(Stage, "State", 1512f, top + 8f, 360, 72, "", 28, 36, UiPaint.Ac, UiPaint.Ac, UiPaint.Bg, OnStatus, FontStyle.Bold, 1);
             _statusFill = _status.targetGraphic as Image;
             _statusRing = _status.transform.Find("Ring").GetComponent<Image>();
             _statusLabel = _status.GetComponentInChildren<Text>();
-            ((RectTransform)_statusLabel.transform).offsetMax = new Vector2(-140f, 0f);
-            var kbd = UiPaint.At(_status.transform, "Kbd", 400, 20, 64, 32);
+            var kbd = UiPaint.At(_status.transform, "Kbd", 280, 20, 64, 32);
             _kbdBox = UiPaint.Box(kbd, UiPaint.Sf, 8, UiPaint.Ln);
             _kbd = UiPaint.Label(kbd, "Key", 0, 0, 64, 32, "Enter", 15, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
 
@@ -429,8 +451,8 @@ namespace Game.Gameplay
                 _lvrMs[i].text = member ? "잠김" : on ? "✓ 선택됨" : i == 0 ? "1명" : "4인";
                 _lvrMs[i].color = on ? UiPaint.Tx : UiPaint.T2;
             }
-            _lamp1.color = solo ? UiPaint.Ac : UiPaint.Ok;
-            _lamp2.color = solo ? UiPaint.Ok : UiPaint.Ac;
+            _lamp1.color = solo ? UiPaint.Ac : UiPaint.T2;
+            _lamp2.color = solo ? UiPaint.T2 : UiPaint.Ac;
             UiFx.Swap(_led, solo ? "솔로 · 1인" : "스쿼드 · 4인");
             bool tpp = Party.View == Perspective.Third;
             _tpp.GetComponentInChildren<Text>().text = (tpp ? "✓ " : "") + "TPP 3인칭";
@@ -446,15 +468,18 @@ namespace Game.Gameplay
                 bool hasMember = i < n;
                 bool empty = !solo && i == n && n < PartyLobby.SquadSize;
                 bool shown = hasMember || empty;
-                s.Tile.SetActive(shown);
+                s.Tile.SetActive(Compact ? hasMember : shown);
                 s.Name.SetActive(hasMember); s.Invite.SetActive(empty);
-                if (empty) { SetTile(s, Color.clear, UiPaint.T2, ""); s.TileStroke.sprite = s.TileDash; }
-                else s.TileStroke.sprite = s.TileSolid;
+                if (!Compact)
+                {
+                    if (empty) { SetTile(s, Color.clear, UiPaint.T2, ""); s.TileStroke.sprite = s.TileDash; }
+                    else s.TileStroke.sprite = s.TileSolid;
+                }
                 if (!hasMember) continue;
                 var m = Party.Members[i];
                 bool lead = Party.IsLeader(m.Id), ready = m.Ready;
                 Color tint = lead ? UiPaint.Ac : ready ? UiPaint.Ok : UiPaint.Wr;
-                SetTile(s, lead || ready ? UiPaint.AcS : UiPaint.Bg, tint, lead ? "★ 파티장" : ready ? "✓ 준비 완료" : "… 준비 중");
+                SetTile(s, lead || ready ? UiPaint.AcS : UiPaint.Bg, tint, Compact ? (lead ? "파티장" : ready ? "준비 완료" : "준비 중") : (lead ? "★ 파티장" : ready ? "✓ 준비 완료" : "… 준비 중"));
                 s.NameText.text = m.Name + (m.Id == Self ? " (나)" : "");
             }
             SyncStage();
@@ -481,11 +506,12 @@ namespace Game.Gameplay
             bool primary = btn.Action == LobbyAction.Start || btn.Action == LobbyAction.Ready;
             bool enabled = btn.Enabled;
             UiFx.Swap(_statusLabel, btn.Label);
-            _statusFill.color = primary && enabled ? UiPaint.AcS : UiPaint.Pn;
-            _statusRing.color = primary && enabled ? UiPaint.Ac : UiPaint.Ln;
-            _statusLabel.color = enabled ? UiPaint.Tx : UiPaint.T2;
+            // Compact: the one solid accent on the screen, dark text for contrast; the mockup layout keeps its tinted button.
+            _statusFill.color = Compact ? (primary && enabled ? UiPaint.Ac : UiPaint.Pn) : (primary && enabled ? UiPaint.AcS : UiPaint.Pn);
+            _statusRing.color = Compact ? (primary && enabled ? Color.clear : UiPaint.Ln) : (primary && enabled ? UiPaint.Ac : UiPaint.Ln);
+            _statusLabel.color = Compact ? (primary && enabled ? UiPaint.Bg : (enabled ? UiPaint.Tx : UiPaint.T2)) : (enabled ? UiPaint.Tx : UiPaint.T2);
             _kbd.text = btn.Action == LobbyAction.CancelMatch ? "Esc" : "Enter";
-            _kbd.gameObject.transform.parent.gameObject.SetActive(btn.Action != LobbyAction.LeaveParty);
+            _kbd.gameObject.transform.parent.gameObject.SetActive(!Compact && btn.Action != LobbyAction.LeaveParty);
             _status.interactable = enabled;
             var kr = (RectTransform)_kbd.transform.parent;
             if (!Compact) kr.anchoredPosition = new Vector2(btn.Action == LobbyAction.CancelMatch ? 300f : 285f, kr.anchoredPosition.y);
@@ -499,6 +525,13 @@ namespace Game.Gameplay
 
         static void SetTile(Slot s, Color fill, Color stroke, string label)
         {
+            if (Compact)
+            {
+                // The card stays a quiet panel; the state is a dot (leader white, ready green, waiting red) and words.
+                if (s.Dot != null) s.Dot.color = stroke == UiPaint.Ac ? UiPaint.Tx : stroke;
+                s.TileLabel.text = label;
+                return;
+            }
             s.TileFill.color = fill;
             s.TileStroke.color = stroke;
             s.TileLabel.text = label;

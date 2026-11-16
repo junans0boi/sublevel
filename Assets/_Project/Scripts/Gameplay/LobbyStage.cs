@@ -11,11 +11,11 @@ namespace Game.Gameplay
     {
         public const int Slots = PartyLobby.SquadSize;
         // Local x of the four places across the car (slot 0, the local player, stands left and a little forward).
-        static readonly Vector3[] SlotPos = { new Vector3(1.7f, 0f, 0f), new Vector3(0.58f, 0f, -0.1f), new Vector3(-0.58f, 0f, -0.1f), new Vector3(-1.7f, 0f, 0f) }; // the camera looks down -Z, so +X is on screen left (slot 0 = leftmost)
+        static readonly Vector3[] SlotPos = { new Vector3(1.35f, 0f, -0.25f), new Vector3(0.45f, 0f, 0f), new Vector3(-0.45f, 0f, 0f), new Vector3(-1.35f, 0f, -0.25f) }; // the camera looks down -Z, so +X is on screen left (slot 0 = leftmost)
 
         // The slot of the local player (a step forward, so he is the biggest); set by the lobby panel.
         public int LocalSlot { get; set; }
-        Vector3 PosFor(int slot) => _closeup && slot == LocalSlot ? new Vector3(0f, 0f, 0.35f) : SlotPos[slot] + (slot == LocalSlot ? new Vector3(0f, 0f, 0.35f) : Vector3.zero);
+        Vector3 PosFor(int slot) => _closeup && slot == LocalSlot ? new Vector3(0f, 0f, 0.35f) : SlotPos[slot] + (slot == LocalSlot ? new Vector3(0f, 0f, 0.3f) : Vector3.zero);
         float YawFor(int slot) => _closeup && slot == LocalSlot ? 20f : slot == LocalSlot ? 14f : slot < LocalSlot ? 6f : -8f;
 
         public GameObject[] RosterPrefabs;      // in PlayerAppearance.ModelIds order (set by the builder)
@@ -59,28 +59,57 @@ namespace Game.Gameplay
             if (def != null)
             {
                 def.ApplyVariant(a.Variant);
-                if (def.Animator != null && IdleController != null)
+                // Three waiting poses so nobody mirrors the next: 0 the game's Humanoid rifle idle (own start offset), 1 arms
+                // crossed (rifle slung, not shown), 2 one hand on the vest strap and the rifle held low.
+                int pose = slot % 3;
+                bool animate = pose == 0 && def.Animator != null && IdleController != null;
+                if (animate)
                 {
-                    // The game's own Humanoid rifle idle (shared clips, breathing layer), each person a little out of step.
                     def.Animator.runtimeAnimatorController = IdleController;
                     def.Animator.applyRootMotion = false;
-                    def.Animator.speed = 0.92f + 0.05f * ((slot * 7) % 4);
+                    def.Animator.speed = 0.94f + 0.03f * slot;
                     def.Animator.Update(0f);
-                    def.Animator.Play(def.Animator.GetCurrentAnimatorStateInfo(0).fullPathHash, 0, (slot * 0.27f) % 1f);
-                    _animated[slot] = true;
+                    def.Animator.Play(def.Animator.GetCurrentAnimatorStateInfo(0).fullPathHash, 0, 0.3f + 0.1f * slot);
                 }
                 else
                 {
-                    if (def.Animator != null) def.Animator.enabled = false; // no controller: a held low-ready pose
-                    PoseLowReady(def);
-                    _animated[slot] = false;
+                    if (def.Animator != null) def.Animator.enabled = false; // a held pose with a procedural breath (Update)
+                    if (pose == 1) PoseCrossed(def); else if (pose == 2) PoseHandOnVest(def); else PoseLowReady(def);
                 }
-                AttachRifle(def, go);
+                _animated[slot] = animate;
+                if (pose != 1) AttachRifle(def, go); // crossed arms: the rifle is slung, not in hand
             }
             if (a.Helmet > 0 || a.Vest > 0) go.AddComponent<ArmorVisual>().ShowTiers(a.Helmet, a.Vest);
             if (a.Pack > 0) go.AddComponent<BackpackVisual>().Show(a.Pack);
+            // A soft round spot of light on the floor under each person.
+            var spot = new GameObject("Spot");
+            spot.transform.SetParent(go.transform, false);
+            spot.transform.localPosition = new Vector3(0f, 0.012f, 0f);
+            spot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            spot.transform.localScale = Vector3.one * 2.4f;
+            var sr = spot.AddComponent<SpriteRenderer>();
+            sr.sprite = SpotSprite();
+            sr.color = new Color(1f, 0.9f, 0.78f, 0.22f);
             _chars[slot] = go;
             go.SetActive(!_closeup || slot == LocalSlot);
+        }
+
+        static Sprite _spot;
+        static Sprite SpotSprite()
+        {
+            if (_spot != null) return _spot;
+            const int n = 64;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(n * 0.5f, n * 0.5f)) / (n * 0.5f);
+                    float a = Mathf.Clamp01(1f - d); a *= a;
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            tex.Apply();
+            _spot = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n / 2.4f); // 2.4 units across at scale 1
+            return _spot;
         }
 
         // Closeup (외형 screen): only the local player, centred, the camera in close. Off = the whole party.
@@ -162,6 +191,28 @@ namespace Game.Gameplay
             Rot(s.RightLowerArm, Quaternion.AngleAxis(-70f, Vector3.up));
             Rot(s.LeftUpperArm, Quaternion.AngleAxis(78f, Vector3.up)); Rot(s.LeftUpperArm, Quaternion.AngleAxis(38f, Vector3.right));
             Rot(s.LeftLowerArm, Quaternion.AngleAxis(48f, Vector3.up));
+        }
+
+        // Arms crossed over the chest (starting values: tuned against captures).
+        public static void PoseCrossed(CharacterDef def)
+        {
+            var s = def.Sockets;
+            void Rot(Transform t, Quaternion q) { if (t != null) t.rotation = q * t.rotation; }
+            Rot(s.RightUpperArm, Quaternion.AngleAxis(-70f, Vector3.up)); Rot(s.RightUpperArm, Quaternion.AngleAxis(48f, Vector3.right));
+            Rot(s.RightLowerArm, Quaternion.AngleAxis(-125f, Vector3.up));
+            Rot(s.LeftUpperArm, Quaternion.AngleAxis(70f, Vector3.up)); Rot(s.LeftUpperArm, Quaternion.AngleAxis(48f, Vector3.right));
+            Rot(s.LeftLowerArm, Quaternion.AngleAxis(125f, Vector3.up));
+        }
+
+        // Right hand low on the rifle, left hand on the vest strap at the chest.
+        public static void PoseHandOnVest(CharacterDef def)
+        {
+            var s = def.Sockets;
+            void Rot(Transform t, Quaternion q) { if (t != null) t.rotation = q * t.rotation; }
+            Rot(s.RightUpperArm, Quaternion.AngleAxis(-70f, Vector3.up)); Rot(s.RightUpperArm, Quaternion.AngleAxis(30f, Vector3.right));
+            Rot(s.RightLowerArm, Quaternion.AngleAxis(-55f, Vector3.up));
+            Rot(s.LeftUpperArm, Quaternion.AngleAxis(60f, Vector3.up)); Rot(s.LeftUpperArm, Quaternion.AngleAxis(52f, Vector3.right));
+            Rot(s.LeftLowerArm, Quaternion.AngleAxis(135f, Vector3.up));
         }
 
         void AttachRifle(CharacterDef def, GameObject character)

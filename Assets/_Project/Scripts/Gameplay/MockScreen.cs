@@ -67,11 +67,25 @@ namespace Game.Gameplay
             return r;
         }
 
-        static Color C(int[] c) => c == null || c.Length < 4 ? Color.clear : new Color32((byte)c[0], (byte)c[1], (byte)c[2], (byte)c[3]);
+        // The measured mockup colours, mapped onto the reduced palette (art-direction pass): one orange accent, green/red for
+        // status only, #10151C panels at 82 %, #2A3340 borders.
+        static Color C(int[] c)
+        {
+            if (c == null || c.Length < 4) return Color.clear;
+            if (c[0] == 106 && c[1] == 169 && c[2] == 221) { var a = UiPaint.Ac; a.a = c[3] / 255f; return a; }
+            if (c[0] == 108 && c[1] == 207 && c[2] == 156) { var a = UiPaint.Ok; a.a = c[3] / 255f; return a; }
+            if (c[0] == 240 && c[1] == 138 && c[2] == 118) { var a = UiPaint.Wr; a.a = c[3] / 255f; return a; }
+            if (c[0] == 10 && c[1] == 14 && c[2] == 20 && c[3] > 100 && c[3] < 255) return UiPaint.Pn;
+            if (c[0] == 13 && c[1] == 18 && c[2] == 24) return UiPaint.Sf;
+            if (c[0] == 6 && c[1] == 9 && c[2] == 13) return UiPaint.Bg;
+            if (c[0] == 255 && c[1] == 255 && c[2] == 255 && c[3] > 20 && c[3] < 90) return UiPaint.Ln;
+            return new Color32((byte)c[0], (byte)c[1], (byte)c[2], (byte)c[3]);
+        }
 
         static void DrawBox(Item it, RectTransform r, Action<Item> onAct)
         {
             float rad = Mathf.Min(it.rad, Mathf.Min(it.r[2], it.r[3]) * 0.5f);
+            if (it.rad >= 12 && it.rad < Mathf.Min(it.r[2], it.r[3]) * 0.5f - 1f) rad = 8f; // cards: radius 8, buttons keep their pill
             Image img;
             if (it.gt != null && it.gt.Length == 4 && it.gb != null && it.gb.Length == 4)
             {
@@ -80,16 +94,6 @@ namespace Game.Gameplay
             else
             {
                 img = UiPaint.Box(r, C(it.bg), Mathf.Max(1, Mathf.RoundToInt(rad)), it.bw > 0 && it.bc != null ? C(it.bc) : (Color?)null, Mathf.Max(1, Mathf.RoundToInt(it.bw)));
-            }
-            // Glass panel: a dark gradient (lighter at the top) and a 1 px highlight along the top edge instead of blur.
-            if (it.bg != null && it.bg.Length == 4 && it.bg[3] > 0 && it.bg[3] < 255 && it.r[2] >= 200f && it.r[3] >= 60f && rad >= 12f)
-            {
-                var g = r.gameObject.AddComponent<VertexGradient>();
-                var bgc = C(it.bg);
-                g.Top = new Color(Mathf.Min(1f, bgc.r * 1.5f + 0.02f), Mathf.Min(1f, bgc.g * 1.5f + 0.02f), Mathf.Min(1f, bgc.b * 1.5f + 0.03f), Mathf.Min(1f, bgc.a + 0.06f));
-                g.Bottom = bgc;
-                var hl = UiPaint.At(r, "Highlight", rad, 1f, it.r[2] - rad * 2f, 1f);
-                UiKit.Box(hl, new Color(1f, 1f, 1f, 0.09f));
             }
             if (it.barH > 0 && it.barC != null)
             {

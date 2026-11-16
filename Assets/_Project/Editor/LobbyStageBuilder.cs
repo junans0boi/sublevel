@@ -86,24 +86,26 @@ public static class LobbyStageBuilder
             go.isStatic = true;
         }
         Part("Shell", shell, steel, ShadowCastingMode.On);
-        Part("Floor", floor, metal.Material, ShadowCastingMode.Off);
+        var floorMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0.12f); floorMat.SetFloat("_Metallic", 0f);
+        AssetDatabase.DeleteAsset(MeshDir + "/LobbyFloor.mat");
+        AssetDatabase.CreateAsset(floorMat, MeshDir + "/LobbyFloor.mat");
+        floorMat = AssetDatabase.LoadAssetAtPath<Material>(MeshDir + "/LobbyFloor.mat");
+        Part("Floor", floor, floorMat, ShadowCastingMode.Off);
         Part("Trim", trim, rusty.Material, ShadowCastingMode.Off);
         Part("Lamp", lamp, WorldMaterials.ShaftLamp(), ShadowCastingMode.Off);
         Part("Stripe", stripe, WorldMaterials.DoorStripe(), ShadowCastingMode.Off);
         Part("StationWall", station, concrete.Material, ShadowCastingMode.On);
-        Part("HallFloor", hall, WorldMaterials.Concrete.Material, ShadowCastingMode.Off);
+        Part("HallFloor", hall, floorMat, ShadowCastingMode.Off);
 
         // Light: the car's own ceiling lamp (as in the game) plus soft fills from the front and a rim from behind so the
         // models read; no shadows except the key.
-        AddLamp(root.transform, "CarLight", new Vector3(0f, h - 0.25f, -0.2f), 8f, 2.2f);
-        AddLamp(root.transform, "FillLeft", new Vector3(-2.6f, 2.2f, 3.4f), 9f, 1.6f);
-        AddLamp(root.transform, "FillRight", new Vector3(2.6f, 2.2f, 3.4f), 9f, 1.6f);
-        AddLamp(root.transform, "Rim", new Vector3(0f, 2.4f, -1.2f), 5f, 1.4f);
-        // A soft key from the hall (the only shadow caster), a wash down onto the floor and warm rims from behind each side.
-        AddSpot(root.transform, "Key", new Vector3(3.4f, 3.6f, 7.5f), new Vector3(0f, 1.0f, 0.2f), 38f, 16f, 7f, true);
-        AddSpot(root.transform, "FloorWash", new Vector3(0f, h - 0.1f, 0.4f), new Vector3(0f, 0f, 0.4f), 120f, 4f, 3.2f, false);
-        AddSpot(root.transform, "RimLeft", new Vector3(2.0f, 2.5f, -1.3f), new Vector3(0.6f, 1.4f, 0.8f), 60f, 6f, 5f, false);
-        AddSpot(root.transform, "RimRight", new Vector3(-2.0f, 2.5f, -1.3f), new Vector3(-0.6f, 1.4f, 0.8f), 60f, 6f, 5f, false);
+        AddLamp(root.transform, "CarLight", new Vector3(0f, h - 0.25f, -0.2f), 8f, 1.6f);
+        // Art direction: a warm key (4500 K) from the camera's left at 45 degrees, cool #5FA8FF rims from behind and above
+        // on both sides at about 30 degrees, a dark flat ambient. No other light.
+        AddSpot(root.transform, "Key", new Vector3(-3.4f, 2.6f, 4.0f), new Vector3(0f, 1.0f, 0.1f), 55f, 14f, 3f, true, new Color(1f, 0.82f, 0.62f));
+        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.3f, 1.2f, 0.2f), 60f, 8f, 4f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.3f, 1.2f, 0.2f), 60f, 8f, 4f, false, new Color(0.37f, 0.66f, 1f));
 
         // Roster prefabs in PlayerAppearance.ModelIds order and the rifle template.
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
@@ -121,28 +123,28 @@ public static class LobbyStageBuilder
         // Cameras: the party seen from the front (in the hall, looking into the car), and a closeup for the 외형 screen.
         var lobby = new GameObject("CameraLobby").transform;
         lobby.SetParent(root.transform, false);
-        lobby.position = new Vector3(0f, 1.5f, 8.6f);
-        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 0.92f, 0f) - lobby.position);
+        lobby.position = new Vector3(0f, 1.2f, 4.6f);
+        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 1.12f, 0f) - lobby.position);
         var close = new GameObject("CameraCloseup").transform;
         close.SetParent(root.transform, false);
-        close.position = new Vector3(0f, 1.2f, 5.2f);
-        close.rotation = Quaternion.LookRotation(new Vector3(0f, 1.0f, 0.35f) - close.position);
+        close.position = new Vector3(0f, 1.0f, 5.6f);
+        close.rotation = Quaternion.LookRotation(new Vector3(0f, 0.95f, 0.35f) - close.position);
         stage.CameraLobby = lobby; stage.CameraCloseup = close;
         stage.Camera = camera;
         camera.transform.SetPositionAndRotation(lobby.position, lobby.rotation);
-        camera.fieldOfView = 30f;
+        camera.fieldOfView = 28f;
         camera.cullingMask = -1;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.02f, 0.025f, 0.03f);
         // A dark flat ambient: the lobby is lit by the car's lamp and the fills below, not by a sky.
         RenderSettings.skybox = null;
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.10f, 0.11f, 0.13f);
+        RenderSettings.ambientLight = new Color(0.15f, 0.15f, 0.16f);
         RenderSettings.fog = false;
         return stage;
     }
 
-    static void AddSpot(Transform parent, string name, Vector3 pos, Vector3 target, float angle, float range, float intensity, bool shadows)
+    static void AddSpot(Transform parent, string name, Vector3 pos, Vector3 target, float angle, float range, float intensity, bool shadows, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -150,7 +152,7 @@ public static class LobbyStageBuilder
         go.transform.rotation = Quaternion.LookRotation(target - pos);
         var l = go.AddComponent<Light>();
         l.type = LightType.Spot; l.spotAngle = angle; l.innerSpotAngle = angle * 0.5f; l.range = range * 4f; l.intensity = intensity;
-        l.color = new Color(1f, 0.93f, 0.82f);
+        l.color = color;
         l.shadows = shadows ? LightShadows.Soft : LightShadows.None;
     }
 
@@ -158,9 +160,9 @@ public static class LobbyStageBuilder
     static void AddPost(Transform parent)
     {
         var profile = ScriptableObject.CreateInstance<VolumeProfile>();
-        var bloom = profile.Add<Bloom>(true); bloom.threshold.Override(0.85f); bloom.intensity.Override(0.7f); bloom.scatter.Override(0.6f);
-        var vig = profile.Add<Vignette>(true); vig.intensity.Override(0.32f); vig.smoothness.Override(0.5f);
-        var ca = profile.Add<ColorAdjustments>(true); ca.contrast.Override(14f); ca.saturation.Override(-6f); ca.postExposure.Override(0.1f);
+        var bloom = profile.Add<Bloom>(true); bloom.threshold.Override(1.0f); bloom.intensity.Override(0.4f); bloom.scatter.Override(0.6f);
+        var vig = profile.Add<Vignette>(true); vig.intensity.Override(0.3f); vig.smoothness.Override(0.5f);
+        var ca = profile.Add<ColorAdjustments>(true); ca.contrast.Override(15f); ca.saturation.Override(-10f); ca.postExposure.Override(0.1f);
         var tm = profile.Add<Tonemapping>(true); tm.mode.Override(TonemappingMode.ACES);
         string path = MeshDir + "/LobbyPost.asset";
         AssetDatabase.DeleteAsset(path);
