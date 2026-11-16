@@ -104,8 +104,8 @@ public static class LobbyStageBuilder
         AddSpot(root.transform, "Key", new Vector3(-3.4f, 2.6f, 4.0f), new Vector3(0f, 1.0f, 0.1f), 55f, 14f, 3f, true, new Color(1f, 0.82f, 0.62f));
         // A soft wash on the back and side walls so the car reads as a room, not a void.
         AddSpot(root.transform, "WallWash", new Vector3(0f, 2.7f, 2.4f), new Vector3(0f, 1.3f, -1.6f), 85f, 9f, 0.9f, false, new Color(0.78f, 0.84f, 0.95f));
-        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.7f, 0.5f, 0.3f), 24f, 6f, 3f, false, new Color(0.37f, 0.66f, 1f));
-        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.7f, 0.5f, 0.3f), 24f, 6f, 3f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
 
         // Roster prefabs in PlayerAppearance.ModelIds order and the rifle template.
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
