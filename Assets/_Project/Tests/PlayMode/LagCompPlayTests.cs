@@ -17,6 +17,8 @@ namespace Game.Tests
         const string LogDir = "Logs/net-multi";
         const int Rifle = 3;
         MultiHarness _net;
+        readonly List<(WeaponDef def, float spread)> _spreads = new List<(WeaponDef, float)>();
+        bool ZeroSpread = true; // accuracy tests: no random cone, so a miss is the compensation's (ADR-244)
         readonly System.Text.StringBuilder _log = new System.Text.StringBuilder();
 
         void Log(string line) { Debug.Log(line); _log.AppendLine(line); }
@@ -25,6 +27,7 @@ namespace Game.Tests
         public IEnumerator SetUp()
         {
             _log.Clear();
+            ZeroSpread = true;
             _net = new MultiHarness { Log = Log };
             yield return _net.StartHost("TestBox");
         }
@@ -34,6 +37,8 @@ namespace Game.Tests
         {
             Directory.CreateDirectory(LogDir);
             File.WriteAllText(Path.Combine(LogDir, "lagcomp-" + TestContext.CurrentContext.Test.Name + ".log"), _log.ToString());
+            foreach (var (def, spread) in _spreads) def.SpreadDeg = spread;
+            _spreads.Clear();
             yield return _net.Teardown();
         }
 
@@ -90,6 +95,8 @@ namespace Game.Tests
         {
             RemoteClient a = null;
             yield return _net.AddClient(c => a = c);
+            var def = GameData.Weapons.Find(weapon);
+            if (ZeroSpread && def != null && def.SpreadDeg != 0f) { _spreads.Add((def, def.SpreadDeg)); def.SpreadDeg = 0f; }
             var onServer = MultiHarness.ReplicaOf(_net.Host, a.Player);
             Assert.IsTrue(onServer.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = weapon, Amount = mag }));
             Assert.IsTrue(onServer.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = ammo, Amount = 200 }));
@@ -135,6 +142,25 @@ namespace Game.Tests
             yield return Duel(a, shots, true, new Vector3(8f, 0.1f, 21f), h => withComp = h, 1.7f);
             Log($"strafing target at 35 m, bullet in flight: {withComp}/{shots} hits with compensation");
             Assert.GreaterOrEqual(withComp, shots - 1);
+        }
+
+        // The same duel with the real weapon's spread (ADR-244). Statistical: 20 shots at 9 m. Spread alone cannot cause a
+        // miss here: the cone's angular radius is SpreadDeg * 0.5 (DamageRules) = 0.9 deg for the Warden = 0.14 m at 9 m, under
+        // the 0.3 m half-width of the body. So the expected hit rate is set by the rewind model; the assertion below is
+        // relative (compensation clearly beats none) until the rate is measured over 5 runs (then: floor = min - 1).
+        [UnityTest, Timeout(240000)]
+        public IEnumerator RealWeaponAt100ms_CompensationBeatsNone_OverTwentyShots()
+        {
+            ZeroSpread = false; // SetUp puts it back
+            RemoteClient a = null;
+            yield return Arm(c => a = c, new Vector3(-26f, 0.1f, -2f), new Vector3(-17f, 1.7f, -2f));
+            const int shots = 20;
+            var near = new Vector3(-17f, 0.1f, -2f);
+            int withComp = 0, without = 0;
+            yield return Duel(a, shots, true, near, h => withComp = h);
+            yield return Duel(a, shots, false, near, h => without = h);
+            Log($"real weapon, 100 ms, no loss: {withComp}/{shots} with compensation, {without}/{shots} without");
+            Assert.Greater(withComp, without + 5, "compensation clearly beats none");
         }
     }
 }
