@@ -4,64 +4,71 @@ using NUnit.Framework;
 
 namespace Game.Tests
 {
-    // M4 gate (#77, ROADMAP "final-region randomness test", SPEC 3/3-1): on the real map (the generated World plan,
-    // 4 regions joined by passes), the final region is spread over every region and never in the closing order.
-    // The generator draws it uniformly, so each region should be final about 25 % of the time; over 200 seeds the
-    // bounds below leave more than three standard deviations (about 6 %) on either side.
+    // M4 gate (#77, SPEC 3/3-1) on the pollution (T10): on the real island (6 regions) the final region, the last
+    // one of the confirmation order, is spread over every region. The order draws it uniformly, so each region is
+    // final about 1/6 of the time; the bounds below leave more than four standard deviations on either side.
     public class FinalRegionRandomnessTests
     {
-        const int Seeds = 200;
-        const float MinShare = 0.15f;
-        const float MaxShare = 0.35f;
+        const int Seeds = 300;
+        const float MinShare = 0.08f;
+        const float MaxShare = 0.27f;
 
         static WorldPlan _world;
-
-        static WorldPlan World => _world ??= WorldGenerator.Generate(WorldSpec.CreateDefault());
+        static int[][] _adj;
+        static WorldPlan World => _world ??= WorldGenerator.Generate(WorldSpec.CreateIsland());
+        static int[][] Adj => _adj ??= PollutionGridBuilder.Adjacency(PollutionGridBuilder.Build(new WorldPlanTerrain(World), 24f), World.Regions.Count);
 
         [Test]
-        public void EveryRegion_IsFinalOftenEnough_AndNeverInTheClosingOrder()
+        public void EveryRegion_IsFinalOftenEnough_AndTheOrderHasEachRegionOnce()
         {
-            var world = World;
-            int regions = world.Regions.Count;
-            Assert.AreEqual(4, regions, "the M4 map has four regions");
+            int regions = World.Regions.Count;
+            Assert.AreEqual(6, regions, "the island has six regions");
             var finals = new int[regions];
             for (int seed = 0; seed < Seeds; seed++)
             {
-                var plan = Lockdown.Plan(world, seed);
-                Assert.IsTrue(plan.FinalRegion >= 0 && plan.FinalRegion < regions, "seed " + seed);
-                finals[plan.FinalRegion]++;
-                CollectionAssert.DoesNotContain(plan.Order, plan.FinalRegion, "seed " + seed + ": the final region is in the closing order");
-                CollectionAssert.AreEquivalent(Enumerable.Range(0, regions).Where(r => r != plan.FinalRegion), plan.Order,
-                    "seed " + seed + ": every other region closes exactly once");
-                Assert.AreEqual(ZoneState.Safe, Lockdown.StateAt(plan, plan.FinalRegion, 1e6f), "seed " + seed + ": the final region never closes");
+                var order = PollutionOrder.Plan(regions, Adj, seed);
+                finals[order[regions - 1]]++;
+                CollectionAssert.AreEquivalent(Enumerable.Range(0, regions), order, "seed " + seed + ": every region confirmed exactly once");
             }
-            for (int r = 0; r < regions; r++)
-            {
-                float share = finals[r] / (float)Seeds;
-                string all = string.Join(", ", finals.Select((n, i) => world.Regions[i].Id + " " + n));
-                Assert.GreaterOrEqual(share, MinShare, $"region {world.Regions[r].Id} is final too rarely ({all})");
-                Assert.LessOrEqual(share, MaxShare, $"region {world.Regions[r].Id} is final too often ({all})");
-            }
+            AssertSpread(finals);
         }
 
-        // The seeds a running match uses are random per match (MatchDirector.LockdownSeed); the same check over a
-        // spread of large seeds like those.
+        // The seeds a running match uses are random per match (MatchDirector.LockdownSeed): large seeds, negatives too.
         [Test]
         public void LargeSeeds_SpreadTheFinalRegionToo()
         {
-            var world = World;
-            var finals = new int[world.Regions.Count];
+            var finals = new int[World.Regions.Count];
             for (int i = 0; i < Seeds; i++)
             {
-                // Spread over the whole int range, negatives included.
                 int seed = unchecked(i * 0x6F4A7C15 + 0x2545F491);
-                finals[Lockdown.Plan(world, seed).FinalRegion]++;
+                finals[PollutionOrder.Plan(finals.Length, Adj, seed)[finals.Length - 1]]++;
             }
+            AssertSpread(finals);
+        }
+
+        // A dedicated server's --region forces the final region without changing the other seeds.
+        [Test]
+        public void ForcedFinal_IsLast_AndKeepsTheRestConnected()
+        {
+            int n = World.Regions.Count;
+            for (int r = 0; r < n; r++)
+            {
+                var order = PollutionOrder.Plan(n, Adj, 11, r);
+                Assert.AreEqual(r, order[n - 1]);
+                var open = Enumerable.Repeat(true, n).ToArray();
+                for (int k = 0; k < n - 1; k++) { open[order[k]] = false; Assert.IsTrue(PollutionOrder.IsConnected(n, Adj, open)); }
+            }
+            CollectionAssert.AreEqual(PollutionOrder.Plan(n, Adj, 5), PollutionOrder.Plan(n, Adj, 5, -1));
+        }
+
+        void AssertSpread(int[] finals)
+        {
             for (int r = 0; r < finals.Length; r++)
             {
                 float share = finals[r] / (float)Seeds;
-                Assert.GreaterOrEqual(share, MinShare, "region " + world.Regions[r].Id + ": " + string.Join(", ", finals));
-                Assert.LessOrEqual(share, MaxShare, "region " + world.Regions[r].Id + ": " + string.Join(", ", finals));
+                string all = string.Join(", ", finals.Select((n, i) => World.Regions[i].Id + " " + n));
+                Assert.GreaterOrEqual(share, MinShare, $"region {World.Regions[r].Id} is final too rarely ({all})");
+                Assert.LessOrEqual(share, MaxShare, $"region {World.Regions[r].Id} is final too often ({all})");
             }
         }
     }

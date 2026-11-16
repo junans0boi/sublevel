@@ -26,13 +26,13 @@ namespace Game.Tests
         [Test]
         public void ARegion_IsPickedOnlyAmongTheSafeOnes()
         {
-            var states = new List<ZoneState> { ZoneState.Closed, ZoneState.Safe, ZoneState.Lockdown, ZoneState.Safe, ZoneState.Warning };
+            var states = new List<ZoneState> { ZoneState.Closed, ZoneState.Safe, ZoneState.Closed, ZoneState.Safe, ZoneState.Warning };
             for (int seed = 0; seed < 50; seed++)
             {
                 int r = SupplyPlan.PickRegion(states, new System.Random(seed));
                 Assert.IsTrue(r == 1 || r == 3, "region " + r);
             }
-            Assert.AreEqual(-1, SupplyPlan.PickRegion(new List<ZoneState> { ZoneState.Closed, ZoneState.Lockdown }, new System.Random(1)));
+            Assert.AreEqual(-1, SupplyPlan.PickRegion(new List<ZoneState> { ZoneState.Closed, ZoneState.Closed }, new System.Random(1)));
         }
 
         [Test]

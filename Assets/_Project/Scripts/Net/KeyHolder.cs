@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    // The keys a combatant carries (ADR-058 (7)): one key opens one pass barrier for LockdownRules.KeyOpenSeconds.
+    // The keys a combatant carries (ADR-058 (7)): one key starts a key elevator (ADR-170).
     // The server owns the count; the owner only asks to use one, naming the pass.
     [RequireComponent(typeof(Combatant))]
     public class KeyHolder : NetworkBehaviour, ILootReceiver
@@ -71,20 +71,6 @@ namespace Game.Net
             return ServerAdd(Mathf.Max(1, loot.Amount)) > 0;
         }
 
-        // Uses one key on a pass barrier: refused when dead, without a key, when the pass is not locked or already
-        // open, or when this combatant is not next to it. AI and tests call this directly.
-        [Server]
-        public bool ServerUseKey(int pass)
-        {
-            var director = ZoneDirector.Instance;
-            if (director == null || _combatant == null || _combatant.Dead.Value || Keys.Value <= 0) return false;
-            if (!director.IsPassLocked(pass) || director.IsPassOpen(pass)) return false;
-            if (director.PassDistance(pass, transform.position) > director.Rules.PassInteractRange) return false;
-            Keys.Value--;
-            director.ServerOpenPass(pass, director.Rules.KeyOpenSeconds);
-            return true;
-        }
-
         static bool TakeGas(SyncVar<int> count, int amount)
         {
             int taken = Mathf.Clamp(Mathf.Max(1, amount), 0, MaxCarried - count.Value);
@@ -123,7 +109,5 @@ namespace Game.Net
         [ServerRpc] public void CmdKeyClose() => KeyElevatorNet.Instance?.ServerClose(_combatant);
         [ServerRpc] public void CmdKeySelect(int region) => KeyElevatorNet.Instance?.ServerSelect(_combatant, region);
 
-        [ServerRpc]
-        public void CmdUseKey(int pass) => ServerUseKey(pass);
     }
 }

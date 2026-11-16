@@ -92,6 +92,34 @@ namespace Game.Net
             }
         }
 
+        public const float DoomedLeadSeconds = 45f;
+
+        // The front has reached this point or will within DoomedLeadSeconds (bots leave, hunters leave it for last).
+        public bool IsDoomed(Vector3 p)
+        {
+            if (_match == null) return false;
+            int cell = _match.CellAt(p.x, p.z);
+            return !_match.Timeline.Grid.IsSea(cell) && _match.Timeline.ArriveMinutes[cell] * 60.0 <= Now + DoomedLeadSeconds;
+        }
+
+        // Where a bot in the gas (or about to be) should go: the middle of the nearest region the front is not at
+        // yet; the final region when nothing nearer is open. False when it is not doomed or nowhere is left.
+        public bool TryEscapeTarget(Vector3 from, int skip, out Vector3 target, out int pass, out int toRegion)
+        {
+            target = default; pass = -1; toRegion = -1;
+            if (_match == null || !IsDoomed(from)) return false;
+            float best = float.MaxValue;
+            for (int r = 0; r < _match.RegionCount; r++)
+            {
+                if (r == skip || _match.Timeline.StateOf(r, Now) == PollutionState.Contaminated) continue;
+                var c = RegionCentre(r);
+                if (IsDoomed(c)) continue;
+                float d = (c.x - from.x) * (c.x - from.x) + (c.z - from.z) * (c.z - from.z);
+                if (d < best) { best = d; toRegion = r; target = c; }
+            }
+            return toRegion >= 0;
+        }
+
         // Region transitions, from the clock: the match is deterministic, so every peer sees the same moments.
         void CompatTick()
         {

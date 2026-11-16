@@ -59,7 +59,7 @@ namespace Game.Tests
             folder = Path.GetFullPath(folder);
             Directory.CreateDirectory(folder);
             var input = new Held();
-            ZoneDirector director = null;
+            PollutionDirector director = null;
             yield return SupplyPlayTests.LoadWorld(input, new SupplyRules { FirstStage = 1, EveryStages = 1, DescentSeconds = 3f, OpenSeconds = 30f, SmokeSeconds = 300f }, d => director = d);
             var supply = SupplyDirector.Instance;
             yield return SupplyPlayTests.WaitUntil(() => supply.Crates.Count == 1, 15f, "the crate");

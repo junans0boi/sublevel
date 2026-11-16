@@ -9,7 +9,7 @@ namespace Game.Tests
     {
         static ZoneState[] States(params ZoneState[] s) => s;
 
-        const ZoneState S = ZoneState.Safe, W = ZoneState.Warning, L = ZoneState.Lockdown, B = ZoneState.Bombardment, C = ZoneState.Closed;
+        const ZoneState S = ZoneState.Safe, W = ZoneState.Warning, C = ZoneState.Closed;
 
         [Test]
         public void Defaults_MatchTheDecision()
@@ -21,12 +21,10 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Elevators_RunInSafeAndWarningRegions_AndStopFromLockdownOn()
+        public void Elevators_RunInSafeAndWarningRegions_AndStopOnceConfirmed()
         {
             Assert.IsTrue(ElevatorTravel.Runs(S));
             Assert.IsTrue(ElevatorTravel.Runs(W));
-            Assert.IsFalse(ElevatorTravel.Runs(L));
-            Assert.IsFalse(ElevatorTravel.Runs(B));
             Assert.IsFalse(ElevatorTravel.Runs(C));
         }
 
@@ -34,7 +32,7 @@ namespace Game.Tests
         public void Destinations_AreOtherSafeRegionsOnly()
         {
             var list = new List<int>();
-            ElevatorTravel.Destinations(0, States(W, S, L, S, W), list);
+            ElevatorTravel.Destinations(0, States(W, S, C, S, W), list);
             CollectionAssert.AreEqual(new[] { 1, 3 }, list);
         }
 
@@ -42,7 +40,7 @@ namespace Game.Tests
         public void Destinations_NoneFromAStoppedRegion()
         {
             var list = new List<int> { 99 };
-            ElevatorTravel.Destinations(2, States(S, S, L, S), list);
+            ElevatorTravel.Destinations(2, States(S, S, C, S), list);
             Assert.IsEmpty(list);
         }
 
@@ -57,7 +55,7 @@ namespace Game.Tests
         [Test]
         public void CanRide_ChecksBothEndsAndTheSameRegion()
         {
-            var s = States(S, W, L, S);
+            var s = States(S, W, C, S);
             Assert.IsTrue(ElevatorTravel.CanRide(0, 3, s));
             Assert.IsTrue(ElevatorTravel.CanRide(1, 0, s), "warning region: still running, to get out");
             Assert.IsFalse(ElevatorTravel.CanRide(0, 1, s), "into a warning region");
@@ -70,7 +68,7 @@ namespace Game.Tests
         [Test]
         public void Arrival_KeepsTheDestination_WhileItIsSafe()
         {
-            Assert.AreEqual(2, ElevatorTravel.ArrivalRegion(0, 2, States(L, S, S, S)));
+            Assert.AreEqual(2, ElevatorTravel.ArrivalRegion(0, 2, States(C, S, S, S)));
         }
 
         [Test]
@@ -78,7 +76,7 @@ namespace Game.Tests
         {
             // Rode 0 -> 1; region 1 went to warning on the way: the first other safe region (not the start) instead.
             Assert.AreEqual(3, ElevatorTravel.ArrivalRegion(0, 1, States(S, W, C, S)));
-            Assert.AreEqual(2, ElevatorTravel.ArrivalRegion(0, 1, States(S, L, S, S)));
+            Assert.AreEqual(2, ElevatorTravel.ArrivalRegion(0, 1, States(S, C, S, S)));
         }
 
         [Test]
@@ -90,7 +88,7 @@ namespace Game.Tests
         [Test]
         public void Arrival_NothingSafe_KeepsTheDestination()
         {
-            Assert.AreEqual(1, ElevatorTravel.ArrivalRegion(0, 1, States(L, W, C, C)));
+            Assert.AreEqual(1, ElevatorTravel.ArrivalRegion(0, 1, States(C, W, C, C)));
         }
 
         [Test]
@@ -158,7 +156,7 @@ namespace Game.Tests
         public void Bot_DoesNotRide_FromASafeOrLockedRegion_OrWithNowhereToGo()
         {
             Assert.IsFalse(ElevatorTravel.BotShouldRide(1, States(W, S, S), 10f, 200f, 0f), "safe: no reason");
-            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, States(L, S, S), 10f, 200f, 0f), "locked: elevators off");
+            Assert.IsFalse(ElevatorTravel.BotShouldRide(0, States(C, S, S), 10f, 200f, 0f), "locked: elevators off");
             Assert.IsFalse(ElevatorTravel.BotShouldRide(0, States(W, W, C), 10f, 200f, 0f), "no safe region");
             Assert.IsFalse(ElevatorTravel.BotShouldRide(5, States(W, S), 10f, 200f, 0f));
         }

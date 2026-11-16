@@ -57,7 +57,20 @@ namespace Game.Net
         public PollutionState[] States => _match?.States(Now);
         bool ServerActive => _network != null && _network.IsServerStarted;
 
-        void Awake() { Instance = this; }
+        void Awake()
+        {
+            Instance = this;
+            // Review builds (hidden, removed before release): `-fastzones` / `-autoplay` run a whole pollution in minutes.
+            var args = Environment.GetCommandLineArgs();
+            if (Array.IndexOf(args, "-fastzones") >= 0 || Array.IndexOf(args, "-autoplay") >= 0) RulesOverride = PollutionRules.QuickMatch();
+        }
+
+        // Tests: use these rules (and this seed) from now on; a running pollution starts again.
+        public bool ServerConfigure(PollutionRules rules, int seed = 0)
+        {
+            RulesOverride = rules;
+            return ServerStart(seed != 0 ? seed : (MatchDirector.Instance != null ? MatchDirector.Instance.LockdownSeed : 1));
+        }
 
         void OnEnable()
         {

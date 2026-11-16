@@ -138,7 +138,7 @@ namespace Game.Gameplay
             for (int i = 0; i < plan.Order.Length; i++)
             {
                 Log.closingOrder[i] = zones.RegionIdOf(plan.Order[i]);
-                if (plan.Order[i] == plan.FinalRegion) Log.finalInClosingOrder = true;
+                if (plan.Order[i] == plan.FinalRegion && i < plan.Order.Length - 1) Log.finalInClosingOrder = true; // the final region is the last one confirmed
             }
             Log.finalRegion = zones.RegionIdOf(plan.FinalRegion);
         }

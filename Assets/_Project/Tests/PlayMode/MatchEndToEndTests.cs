@@ -57,7 +57,7 @@ namespace Game.Tests
             public double BytesFrom;
             public readonly List<ElevatorDoorStatus> Doors = new List<ElevatorDoorStatus>();
             public readonly List<double> DoorTimes = new List<double>();
-            public readonly List<ZoneUpdate> Zones = new List<ZoneUpdate>();
+            public readonly List<PollutionSync> Zones = new List<PollutionSync>();
             public readonly List<SupplyDropped> Supply = new List<SupplyDropped>();
             public readonly List<KillEntry> Kills = new List<KillEntry>();
             public readonly List<MatchStatus> Status = new List<MatchStatus>();
@@ -69,7 +69,7 @@ namespace Game.Tests
                 Manager = nm;
                 var c = nm.ClientManager;
                 c.RegisterBroadcast<ElevatorDoorStatus>((m, ch) => { Doors.Add(m); DoorTimes.Add(Time.timeAsDouble); });
-                c.RegisterBroadcast<ZoneUpdate>((m, ch) => Zones.Add(m));
+                c.RegisterBroadcast<PollutionSync>((m, ch) => Zones.Add(m));
                 c.RegisterBroadcast<SupplyDropped>((m, ch) => Supply.Add(m));
                 c.RegisterBroadcast<KillEntry>((m, ch) => Kills.Add(m));
                 c.RegisterBroadcast<MatchStatus>((m, ch) => { Status.Add(m); LastStatus = m; });
@@ -627,23 +627,21 @@ namespace Game.Tests
             yield return Until(() => car.OccupantId(0) != B.Player.ObjectId, "B got out", 8f);
             ReplicaLayers.SeparateVehicles = false;
 
-            // ===== 6. lockdown stages and a supply drop =====
+            // ===== 6. pollution schedule and a supply drop =====
             Milestone("lockdown_supply");
             SupplyRules.Current = new SupplyRules { FirstStage = 1, EveryStages = 1, DescentSeconds = 3f, OpenSeconds = 0.6f, SmokeSeconds = 60f };
-            var zone = UnityEngine.Object.FindFirstObjectByType<ZoneDirector>();
+            var zone = PollutionDirector.Instance;
             Assert.IsNotNull(zone);
-            var rules = new LockdownRules
-            {
-                FirstWarningSeconds = 0.5f, WarningSeconds = 1.5f, LockdownSeconds = 3f, BombardmentSeconds = 2f,
-                MinSecondsBetweenClosings = 5f, RadiationDps = 0f, RadiationGraceSeconds = 100f, RadiationTickSeconds = 0.1f, ClosedDps = 0f,
-                BlastIntervalSeconds = 5f, BlastWarningSeconds = 0.5f, BlastDamage = 0f, KeysPerRegion = 0, KeyOpenSeconds = 2f, SubZoneStartDelaySeconds = 1000f,
-            };
-            zone.ServerConfigure(rules, 0);
+            var rules = PollutionDirectorTests.Timed(3f, 2f);
+            rules.ConfirmMinutes = new[] { 3f / 60f, 6f / 60f, 1000f, 1001f, 1002f, 1003f };
             foreach (var w in _wires) { w.Zones.Clear(); w.Supply.Clear(); }
-            yield return Until(() => _wires.TrueForAll(w => CountClosedRegions(w) >= 2), "two regions reached lockdown or closed on every client", 60f);
+            zone.ServerConfigure(rules, 0);
+            yield return Until(() => _wires.TrueForAll(w => w.Zones.Count >= 1), "the pollution reached every client", 30f);
+            foreach (var w in _wires) Assert.AreEqual(zone.Match.GridHash, w.Zones[w.Zones.Count - 1].GridHash, w.Name + " got the server's front hash");
+            yield return Until(() => zone.StateOf(zone.Match.Timeline.Order[1]) != ZoneState.Safe, "two regions announced on the server", 60f);
             yield return Until(() => _wires.TrueForAll(w => w.Supply.Count >= 1), "a supply drop reached every client", 30f);
             var crate = SupplyDirector.Instance.Crates.Count > 0 ? SupplyDirector.Instance.Crates[0] : null;
-            Log($"lockdown: regions closing seen by clients: {string.Join("/", _wires.ConvertAll(w => CountClosedRegions(w).ToString()))}; supply drops seen: {string.Join("/", _wires.ConvertAll(w => w.Supply.Count.ToString()))}");
+            Log($"pollution: syncs seen by clients: {string.Join("/", _wires.ConvertAll(w => w.Zones.Count.ToString()))}; supply drops seen: {string.Join("/", _wires.ConvertAll(w => w.Supply.Count.ToString()))}");
             if (crate != null)
             {
                 var stand = crate.Position + new Vector3(7f, 0f, 0f);
@@ -773,14 +771,6 @@ namespace Game.Tests
         static double Max(List<double> l) { double m = double.MinValue; foreach (var x in l) m = Math.Max(m, x); return m; }
         static double Min(List<double> l) { double m = double.MaxValue; foreach (var x in l) m = Math.Min(m, x); return m; }
 
-        static int CountClosedRegions(Wire w)
-        {
-            var seen = new HashSet<int>();
-            foreach (var z in w.Zones)
-                if (z.Kind == ZoneUpdate.KindRegion && z.State >= (byte)ZoneState.Lockdown) seen.Add(z.Region);
-            return seen.Count;
-        }
-
         void ReportNumbers(RemoteClient A, RemoteClient B, RemoteClient C)
         {
             Log("==== per-client numbers (all clients share this process: frame times are process-wide per phase) ====");
@@ -793,7 +783,7 @@ namespace Game.Tests
             Log($"all clients: reconciliation corrections {MoveGuard.Corrections} (max error {MoveGuard.MaxError:F2} m), server guard refusals {ServerGuard.Total} [{ServerGuard.Summary()}]");
             double seconds = _clock.Seconds;
             foreach (var w in _wires)
-                Log($"{w.Name}: received {w.Bytes / 1024.0:F0} KiB over {seconds:F0} s = {w.Bytes / seconds / 1024.0:F1} KiB/s, kills heard {w.Kills.Count}, zone updates {w.Zones.Count}");
+                Log($"{w.Name}: received {w.Bytes / 1024.0:F0} KiB over {seconds:F0} s = {w.Bytes / seconds / 1024.0:F1} KiB/s, kills heard {w.Kills.Count}, pollution syncs {w.Zones.Count}");
             foreach (var phase in _frames.Order)
             {
                 var ms = _frames.Ms[phase].ToArray();

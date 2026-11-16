@@ -641,7 +641,7 @@ namespace Game.AI
             // is just wandering or looking into something.
             _goal = CurrentZoneGoal(at, out var goalTarget, out bool urgent, out _goalPass);
             if (_goal != ZoneGoal.Escape) _escapeOnward = false;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             // The very end with nothing to shoot with: running away would never end the match. Fists out, go at it.
             if (_percept.EnemyVisible && _enemy != null && !CanFight && zones != null && zones.OnlyFinalRegionLeft)
             {
@@ -659,10 +659,6 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            // At a shut barrier with a key: open it (it stays open for everyone for a while).
-            if (_goal == ZoneGoal.Escape && _goalPass >= 0 && _keys != null && _keys.Keys.Value > 0 && zones.IsPassBlocking(_goalPass)
-                && zones.PassDistance(_goalPass, at) <= zones.Rules.PassInteractRange)
-                _keys.ServerUseKey(_goalPass);
             bool zoneMove = _goal != ZoneGoal.None && (urgent || intent.State == BotState.Roam || intent.State == BotState.Investigate);
             if (!zoneMove) _goal = ZoneGoal.None;
 
@@ -769,14 +765,15 @@ namespace Game.AI
             target = default;
             urgent = false;
             pass = -1;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones == null || zones.RegionCount == 0) return ZoneGoal.None;
 
             int skip = Time.time < _skipPassUntil ? _skipPass : -1;
             if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
             {
                 urgent = true;
-                // A running station nearer than the pass (ADR-079): ride out instead; standing in it starts the ride.
+                // A running station nearer than the target (ADR-079): ride out instead; standing in it starts the ride.
+                // (Until the key elevators replace free rides, ADR-170 / WP 7.)
                 var rides = ElevatorRides.Instance;
                 if (rides != null && rides.ServerBotRide(_self, Flat(target - at), out var station))
                 {
@@ -790,7 +787,6 @@ namespace Game.AI
                 if (_escapeOnward) target = zones.RegionCentre(toRegion);
                 return ZoneGoal.Escape;
             }
-            if (zones.TrySafeSubZoneTarget(at, out target, out urgent)) return ZoneGoal.SafeSubZone;
             int final = zones.FinalRegion;
             if (final < 0) return ZoneGoal.None;
             if (zones.RegionIndexAt(at) != final)
@@ -808,7 +804,7 @@ namespace Game.AI
         bool TryNearestEnemy(Vector3 at, out Vector3 position)
         {
             position = default;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             float best = float.MaxValue, bestDoomed = float.MaxValue;
             Vector3 doomedAt = default;
             var all = Combatant.All;
@@ -837,7 +833,7 @@ namespace Game.AI
         // once it is known.
         bool RoamAllowed(BotVec point)
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones == null || zones.RegionCount == 0) return true;
             var p = ToVector(point);
             if (zones.IsDoomed(p)) return false;
@@ -930,8 +926,7 @@ namespace Game.AI
             switch (_goal)
             {
                 case ZoneGoal.Escape:
-                    var zones = ZoneDirector.Instance;
-                    return zones != null && _goalPass >= 0 && zones.IsPassBlocking(_goalPass) ? "escape-barrier" : "escape";
+                    return "escape";
                 case ZoneGoal.SafeSubZone: return "safe-subzone";
                 case ZoneGoal.ToFinalRegion: return "to-final-region";
                 case ZoneGoal.Hunt: return "hunt";

@@ -13,7 +13,7 @@ namespace Game.Gameplay
     // player is out from the start and the camera follows the current leader (most kills) as a spectator; six
     // screenshots are saved into <folder> (deployment, first fight, region warning, lockdown fog, final region,
     // winner) together with the match log, then the build quits (exit code 0 when the match ended, 1 otherwise).
-    // The lockdown runs LockdownRules.QuickMatch (PollutionDirector reads the same argument).
+    // The lockdown runs PollutionRules.QuickMatch (PollutionDirector reads the same argument).
     [DefaultExecutionOrder(300)]
     public class MatchAutoplay : MonoBehaviour, IPlayerInput
     {
@@ -81,7 +81,7 @@ namespace Game.Gameplay
         void OnRegion(int region, ZoneState state)
         {
             if (state == ZoneState.Warning && _warned < 0) _warned = region;
-            if (state == ZoneState.Lockdown && _locked < 0) _locked = region;
+            if (state == ZoneState.Closed && _locked < 0) _locked = region;
         }
 
         IEnumerator Start()
