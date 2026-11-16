@@ -133,7 +133,12 @@ namespace Game.Gameplay
             TeamMatch.Mode = mode;
             _loading.text = "불러오는 중...";
             _loading.gameObject.SetActive(true);
-            if (_lobbyPanel != null) _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>().interactable = false;
+            if (_lobbyPanel != null)
+            {
+                // The lobby root already carries a CanvasGroup (fade/screen switch); AddComponent would return null and abort the load.
+                var group = _lobbyPanel.Root.gameObject.GetComponent<CanvasGroup>() ?? _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>();
+                group.interactable = false;
+            }
             SceneManager.LoadSceneAsync(scene);
         }
 
