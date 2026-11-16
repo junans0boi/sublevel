@@ -11,6 +11,7 @@ namespace Game.Core
 
         public int Width, Height;
         public float CellMeters = 12f;
+        public float OriginX, OriginZ; // world position of the grid corner (the terrain box corner); 0 when the world origin is the corner
         public byte[] Region;    // region index 0..n-1 on land and river, Sea (255) in the sea
         public float[] SlopeDeg; // terrain slope in degrees (0 on rivers)
         public byte[] Road;      // 0 none, 1 unpaved, 2 paved or bridge
@@ -22,8 +23,8 @@ namespace Game.Core
         public bool IsLand(int i) => Region[i] != Sea && !River[i];
         public int CellAt(float xMeters, float zMeters)
         {
-            int x = Math.Max(0, Math.Min(Width - 1, (int)(xMeters / CellMeters)));
-            int y = Math.Max(0, Math.Min(Height - 1, (int)(zMeters / CellMeters)));
+            int x = Math.Max(0, Math.Min(Width - 1, (int)Math.Floor((xMeters - OriginX) / CellMeters)));
+            int y = Math.Max(0, Math.Min(Height - 1, (int)Math.Floor((zMeters - OriginZ) / CellMeters)));
             return y * Width + x;
         }
 

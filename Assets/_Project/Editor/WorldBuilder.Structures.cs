@@ -16,7 +16,7 @@ public static partial class WorldBuilder
 
     // Roads: sampled finer than the 4 m of the first sketch so the strip follows the 1 m heightmap; lifted just
     // clear of the ground. Overlapping strips get slightly different lifts so they do not flicker at junctions.
-    const float RoadStep = 2f, RoadLift = 0.03f;
+    const float RoadStep = 2f, RoadLift = 0.03f, TinyDecor = 0.36f;
 
     // Buildings: a skirt under the footprint hides gaps where the pad is not perfectly level.
     const float FoundationDepth = 1.2f;
@@ -85,17 +85,26 @@ public static partial class WorldBuilder
             if (!batches.TryGetValue(key, out var batch))
                 batches[key] = batch = new WorldMeshes.StripBatch(paved ? asphalt.Tile : dirt.Tile);
 
+            // A deck over water is not painted on the ground (that is the riverbed): the road is cut into runs between decks (BuildBridges).
+            float lift = RoadLift + (paved ? 0.012f : 0f) + (i % 3) * 0.004f;
             points.Clear();
             for (int p = 0; p < count - 1; p++)
             {
+                if (road.Bridge != null && p < road.Bridge.Length && road.Bridge[p])
+                {
+                    if (points.Count > 0) { points.Add(new Vector2(road.X[p], road.Z[p])); batch.Add(points, road.Width, ground, lift); points.Clear(); }
+                    continue;
+                }
                 var a = new Vector2(road.X[p], road.Z[p]);
                 var b = new Vector2(road.X[p + 1], road.Z[p + 1]);
                 int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(a, b) / RoadStep));
                 for (int s = 0; s < steps; s++) points.Add(Vector2.Lerp(a, b, (float)s / steps));
             }
-            points.Add(new Vector2(road.X[count - 1], road.Z[count - 1]));
-            float lift = RoadLift + (paved ? 0.012f : 0f) + (i % 3) * 0.004f;
-            batch.Add(points, road.Width, ground, lift);
+            if (points.Count > 0)
+            {
+                points.Add(new Vector2(road.X[count - 1], road.Z[count - 1]));
+                batch.Add(points, road.Width, ground, lift);
+            }
         }
 
         float total = 0f;
@@ -229,6 +238,7 @@ public static partial class WorldBuilder
         go.isStatic = true;
         // One "Colliders" object per surface (all named alike, as the old name checks expect), each tagged with its SurfaceId.
         var colliderGroups = new Dictionary<SurfaceId, GameObject>();
+        var colliderBoxes = new Dictionary<SurfaceId, List<(Vector3 center, Vector3 size)>>();
         GameObject Colliders(SurfaceId surface)
         {
             if (!colliderGroups.TryGetValue(surface, out var group))
@@ -277,9 +287,11 @@ public static partial class WorldBuilder
 
             foreach (var part in parts)
             {
-                var box = Colliders(SurfaceRules.ForBuilding(kind, piece.Kind)).AddComponent<BoxCollider>();
-                box.center = part.center;
-                box.size = part.size;
+                // ADR-209: the boxes of one surface become one collision mesh (below) instead of one BoxCollider component each
+                var surfaceId = SurfaceRules.ForBuilding(kind, piece.Kind);
+                Colliders(surfaceId);
+                if (!colliderBoxes.TryGetValue(surfaceId, out var list)) colliderBoxes[surfaceId] = list = new List<(Vector3, Vector3)>();
+                list.Add((part.center, part.size));
             }
 
             // Floors and stairs are walked on; walls, roofs, trim and props only get in the way (a roof nobody
@@ -298,6 +310,7 @@ public static partial class WorldBuilder
         for (int di = 0; di < plan.Decor.Count; di++)
         {
             var decor = plan.Decor[di];
+            if (Mathf.Max(decor.SizeX, Mathf.Max(decor.SizeY, decor.SizeZ)) < TinyDecor && decor.Mat != DecorMat.Lamp) continue;   // ADR-209: parts under 36 cm (not lamps) are not worth their vertices
             var at = new Vector3(decor.X, decor.Y, decor.Z);
             int skip = HiddenFaces(plan, decor) | HiddenByNeighbours(plan.Decor, di);
             for (int f = 0; f < 6; f++) hiddenFaces += skip >> f & 1;
@@ -309,10 +322,14 @@ public static partial class WorldBuilder
         // Foundation skirt: its top is inside the floor slab, its sides reach into the ground. Not a collider.
         if (plan.Width > 0.3f && plan.Depth > 0.3f)
         {
-            var floor = SurfaceFor(kind, new BuildingPiece { Kind = SurfaceKind.Floor }, style);
+            // Dark concrete (not the beige floor), and deep enough to reach the lowest ground under the footprint: a building on a slope stands at
+            // the high side, so a fixed 1.2 m left a gap that showed as a floating pale band (T8 captures).
+            var floor = WorldMaterials.ConcreteDark;
             float top = Mathf.Min(0.05f, plan.FloorY * 0.5f);
-            var skirtCenter = new Vector3(0f, (top - FoundationDepth) * 0.5f, 0f);
-            var skirtSize = new Vector3(plan.Width - 0.1f, top + FoundationDepth, plan.Depth - 0.1f);
+            float lowestGround = LowestGround(ground, origin.x, origin.z, plan.Width, plan.Depth, rotation);
+            float depthBelow = Mathf.Max(FoundationDepth, origin.y - lowestGround + 0.4f);
+            var skirtCenter = new Vector3(0f, (top - depthBelow) * 0.5f, 0f);
+            var skirtSize = new Vector3(plan.Width - 0.1f, top + depthBelow, plan.Depth - 0.1f);
             // Around the shaft too: its top would otherwise show as a floor inside the rising car.
             foreach (var part in cutSlab ? SplitAround(skirtCenter, skirtSize, hole) : new List<(Vector3 center, Vector3 size)> { (skirtCenter, skirtSize) })
                 Batch(floor, false).Add(part.center, part.size, skipBottom: true);
@@ -320,17 +337,30 @@ public static partial class WorldBuilder
 
         var all = new List<Renderer>();
         var shell = new List<Renderer>();
-        foreach (var key in order)
+        // One renderer per (inside cell | shell): all materials of the group go in as sub-meshes of one mesh (ADR-209). The draw calls stay one per
+        // material, but the scene holds a fraction of the renderers and objects.
+        var groups = new List<(bool interior, int cell)>();
+        foreach (var key in order) if (!groups.Contains((key.interior, key.cell))) groups.Add((key.interior, key.cell));
+        foreach (var group in groups)
         {
-            var part = new GameObject((key.interior ? "Inside_" : "Shell_") + key.material.name + (key.interior ? "_" + key.cell : ""));
+            var parts = new List<WorldMeshes.BoxBatch>();
+            var materials = new List<Material>();
+            foreach (var key in order)
+            {
+                if (key.interior != group.interior || key.cell != group.cell) continue;
+                parts.Add(batches[key]);
+                materials.Add(key.material);
+            }
+            var merged = WorldMeshes.BoxBatch.ToCompactMesh($"{name}_{(group.interior ? "Inside_" + group.cell : "Shell")}", parts);
+            var part = new GameObject(group.interior ? "Inside_" + group.cell : "Shell_All");
             part.transform.SetParent(go.transform, false);
-            part.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(batches[key].ToMesh($"{name}_{part.name}"));
+            part.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(merged);
             var renderer = part.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = key.material;
-            renderer.shadowCastingMode = key.interior ? ShadowCastingMode.Off : ShadowCastingMode.On;
+            renderer.sharedMaterials = materials.ToArray();
+            renderer.shadowCastingMode = group.interior ? ShadowCastingMode.Off : ShadowCastingMode.On;
             part.isStatic = true;
             all.Add(renderer);
-            if (!key.interior) shell.Add(renderer);
+            if (!group.interior) shell.Add(renderer);
         }
         rendererCount += all.Count;
         if (all.Count > 0)
@@ -340,6 +370,13 @@ public static partial class WorldBuilder
                 ? new[] { new LOD(InteriorLodHeight, all.ToArray()), new LOD(ShellLodHeight, shell.ToArray()) }
                 : new[] { new LOD(ShellLodHeight, all.ToArray()) });
             group.RecalculateBounds();
+        }
+
+        foreach (var pair in colliderBoxes)
+        {
+            var group = colliderGroups[pair.Key];
+            group.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(WorldMeshes.BoxCollisionMesh($"{name}_Collision_{pair.Key}", pair.Value));
+            group.AddComponent<MeshCollider>();      // the mesh arrives with the filter's (WorldMeshBank)
         }
 
         AddWindowGlass(go.transform, plan, seed);
@@ -472,6 +509,20 @@ public static partial class WorldBuilder
         }
     }
 
+    // The lowest ground under a footprint, sampled like FootY.
+    static float LowestGround(WorldMeshes.HeightField ground, float x, float z, float width, float depth, Quaternion rotation)
+    {
+        float lowest = float.MaxValue;
+        int nx = Mathf.Max(1, Mathf.CeilToInt(width / 2f)), nz = Mathf.Max(1, Mathf.CeilToInt(depth / 2f));
+        for (int i = 0; i <= nx; i++)
+            for (int j = 0; j <= nz; j++)
+            {
+                var p = rotation * new Vector3(((float)i / nx - 0.5f) * width, 0f, ((float)j / nz - 0.5f) * depth);
+                lowest = Mathf.Min(lowest, ground.Height(x + p.x, z + p.z));
+            }
+        return lowest;
+    }
+
     // The height the building stands at: the lot's, unless the ground under the footprint says otherwise
     // (never let the ground come through the floor, and do not float above the lowest corner).
     static float FootY(WorldMeshes.HeightField ground, float x, float y, float z, float width, float depth, Quaternion rotation)
@@ -497,6 +548,11 @@ public static partial class WorldBuilder
         int wall = (int)((style >> 4) % WorldMaterials.Variants);
         int roof = (int)((style >> 12) % WorldMaterials.Variants);
         bool brick = ((style >> 20) & 1u) == 0u;
+        // The tall kinds (T8): shops and apartments are brick, villas plaster; the roof deck of a block is concrete (tiles are for pitched roofs).
+        if (kind == BuildingKind.Shop || kind == BuildingKind.Apartment) brick = true;
+        else if (kind == BuildingKind.Villa) brick = false;
+        if (piece.Kind == SurfaceKind.Roof && piece.Name != null && piece.Name.StartsWith("Roof", StringComparison.Ordinal)
+            && (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment)) return WorldMaterials.Concrete;
 
         if (piece.Kind == SurfaceKind.Prop)
         {

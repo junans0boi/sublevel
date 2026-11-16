@@ -1,0 +1,277 @@
+{
+ "_note": "ADR-250: cut spec for tools/sound_cut.py. Times are seconds in the staged source (AssetStaging/audio/<id>__*). Unlistened: onsets found by envelope, see docs/tracks/sound_DONE.md.",
+ "out": {
+  "gun_pistol_near_01": {
+   "src": "828786",
+   "t0": 0.0,
+   "t1": 0.9,
+   "fade_in": 0.001
+  },
+  "gun_pistol_far_01": {
+   "src": "828786",
+   "t0": 0.0,
+   "t1": 1.45,
+   "lp": 1400,
+   "delay": 0.1,
+   "fade_in": 0.08,
+   "fade_out": 0.4,
+   "peak": 0.6
+  },
+  "gun_smg_near_01": {
+   "src": "201672",
+   "t0": 0.312,
+   "t1": 0.386,
+   "fade_in": 0.0005,
+   "fade_out": 0.012
+  },
+  "gun_smg_near_02": {
+   "src": "201672",
+   "t0": 0.464,
+   "t1": 0.54,
+   "fade_in": 0.0005,
+   "fade_out": 0.012
+  },
+  "gun_smg_near_03": {
+   "src": "201672",
+   "t0": 0.616,
+   "t1": 0.688,
+   "fade_in": 0.0005,
+   "fade_out": 0.012
+  },
+  "gun_smg_far_01": {
+   "src": "201672",
+   "t0": 1.663,
+   "t1": 2.29,
+   "lp": 1800,
+   "fade_in": 0.002,
+   "fade_out": 0.3,
+   "peak": 0.55
+  },
+  "gun_rifle_near_01": {
+   "src": "201668",
+   "t0": 2.13,
+   "t1": 3.0,
+   "fade_in": 0.001,
+   "fade_out": 0.25
+  },
+  "gun_rifle_far_01": {
+   "src": "201668",
+   "t0": 2.13,
+   "t1": 4.17,
+   "lp": 1600,
+   "delay": 0.12,
+   "fade_in": 0.06,
+   "fade_out": 0.6,
+   "peak": 0.6
+  },
+  "gun_dmr_near_01": {
+   "src": "46655",
+   "t0": 0.39,
+   "t1": 1.5,
+   "fade_in": 0.001,
+   "fade_out": 0.3
+  },
+  "gun_dmr_far_01": {
+   "src": "46655",
+   "t0": 0.39,
+   "t1": 3.3,
+   "lp": 1400,
+   "delay": 0.12,
+   "fade_in": 0.06,
+   "fade_out": 0.8,
+   "peak": 0.6
+  },
+  "gun_sniper_near_01": {
+   "src": "855608",
+   "t0": 0.2,
+   "t1": 1.2,
+   "fade_in": 0.001,
+   "fade_out": 0.3
+  },
+  "gun_sniper_near_02": {
+   "src": "351777",
+   "t0": 1.99,
+   "t1": 3.3,
+   "fade_in": 0.001,
+   "fade_out": 0.4
+  },
+  "gun_sniper_far_01": {
+   "src": "351777",
+   "t0": 1.99,
+   "t1": 3.97,
+   "lp": 1200,
+   "delay": 0.15,
+   "fade_in": 0.08,
+   "fade_out": 1.0,
+   "peak": 0.6
+  },
+  "gun_shotgun_near_01": {
+   "src": "159710",
+   "t0": 0.07,
+   "t1": 1.2,
+   "fade_in": 0.001,
+   "fade_out": 0.2
+  },
+  "gun_shotgun_far_01": {
+   "src": "159710",
+   "t0": 0.07,
+   "t1": 1.2,
+   "lp": 1300,
+   "delay": 0.1,
+   "fade_in": 0.06,
+   "fade_out": 0.4,
+   "peak": 0.6
+  },
+  "gun_shotgun_pump_01": {
+   "src": "159710",
+   "t0": 1.25,
+   "t1": 2.6,
+   "fade_in": 0.003,
+   "fade_out": 0.15
+  },
+  "gun_suppressed_near_01": {
+   "src": "668071",
+   "t0": 0.0,
+   "t1": 1.2,
+   "fade_in": 0.001,
+   "fade_out": 0.3
+  },
+  "gun_tail_indoor_01": {
+   "src": "201667",
+   "t0": 0.0,
+   "t1": 2.7,
+   "fade_in": 0.002,
+   "fade_out": 0.6,
+   "peak": 0.5
+  },
+  "gun_reload_rifle_01": {
+   "src": "674742",
+   "t0": 0.0,
+   "t1": 1.57,
+   "fade_in": 0.002,
+   "fade_out": 0.05
+  },
+  "gun_dryfire_01": {
+   "src": "674568",
+   "t0": 0.0,
+   "t1": 0.29,
+   "fade_in": 0.001,
+   "fade_out": 0.02
+  },
+  "gun_casing_01": {
+   "src": "777922",
+   "t0": 0.0,
+   "t1": 0.44,
+   "fade_in": 0.001,
+   "fade_out": 0.05,
+   "peak": 0.7
+  },
+  "gun_reload_pistol_01": {
+   "src": "100804",
+   "t0": 0.0,
+   "t1": 0.74,
+   "fade_in": 0.001,
+   "fade_out": 0.03
+  },
+  "whiz_fs_01": {
+   "src": "505238",
+   "t0": 0.55,
+   "t1": 1.25,
+   "fade_in": 0.004,
+   "fade_out": 0.2,
+   "peak": 0.7
+  },
+  "whiz_fs_02": {
+   "src": "730351",
+   "t0": 5.18,
+   "t1": 6.1,
+   "fade_in": 0.004,
+   "fade_out": 0.3,
+   "peak": 0.7
+  },
+  "whiz_fs_03": {
+   "src": "730351",
+   "t0": 9.48,
+   "t1": 10.4,
+   "fade_in": 0.004,
+   "fade_out": 0.3,
+   "peak": 0.7
+  },
+  "veh_engine_idle": {
+   "src": "401552",
+   "t0": 0.0,
+   "t1": 3.1,
+   "dir": "Sfx",
+   "loop_xf": 0.25,
+   "peak": 0.8
+  },
+  "veh_horn": {
+   "src": "170243",
+   "t0": 0.0,
+   "t1": 0.4,
+   "dir": "Sfx",
+   "loop_xf": 0.06,
+   "peak": 0.9
+  },
+  "veh_tyre_squeal": {
+   "src": "71736",
+   "t0": 5.0,
+   "t1": 9.0,
+   "dir": "Sfx",
+   "loop_xf": 0.4,
+   "peak": 0.8
+  },
+  "veh_crash_01": {
+   "src": "807438",
+   "t0": 0.0,
+   "t1": 0.6,
+   "dir": "Sfx",
+   "fade_in": 0.001,
+   "fade_out": 0.05
+  },
+  "elev_travel_loop": {
+   "src": "531792",
+   "t0": 4.0,
+   "t1": 16.0,
+   "dir": "Sfx",
+   "loop_xf": 1.0,
+   "peak": 0.7
+  },
+  "elev_arrive_chime": {
+   "src": "241763",
+   "t0": 2.5,
+   "t1": 6.0,
+   "dir": "Sfx",
+   "fade_in": 0.05,
+   "fade_out": 0.4,
+   "peak": 0.8
+  },
+  "door_fs_open_01": {
+   "src": "125958",
+   "t0": 0.25,
+   "t1": 0.85,
+   "dir": "Doors/open",
+   "fade_in": 0.003,
+   "fade_out": 0.12,
+   "peak": 0.8
+  },
+  "door_fs_close_01": {
+   "src": "125958",
+   "t0": 1.85,
+   "t1": 2.85,
+   "dir": "Doors/close",
+   "fade_in": 0.001,
+   "fade_out": 0.2,
+   "peak": 0.9
+  },
+  "glass_break_01": {
+   "src": "861043",
+   "t0": 0.0,
+   "t1": 1.07,
+   "dir": "Sfx",
+   "fade_in": 0.001,
+   "fade_out": 0.1,
+   "peak": 0.9
+  }
+ }
+}

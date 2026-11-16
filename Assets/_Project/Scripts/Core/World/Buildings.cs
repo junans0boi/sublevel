@@ -33,6 +33,7 @@ namespace Game.Core
                 case BuildingKind.Shop: minWidth = 10f; minDepth = 9f; maxWidth = 16f; maxDepth = 13f; return;
                 case BuildingKind.Villa: minWidth = 11f; minDepth = 10f; maxWidth = 16f; maxDepth = 14f; return;
                 case BuildingKind.Apartment: minWidth = 14f; minDepth = 11f; maxWidth = 22f; maxDepth = 15f; return;
+                case BuildingKind.School: minWidth = 24f; minDepth = 11f; maxWidth = 34f; maxDepth = 13f; return;
             }
             kind = BuildingKinds.Family(kind);
             switch (kind)
@@ -49,6 +50,7 @@ namespace Game.Core
         public static BuildingPlan Generate(BuildingKind kind, float width, float depth, int seed)
         {
             var d = new Draft(kind, width, depth, seed);
+            if (kind == BuildingKind.School) { School(d); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
             if (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment) { Block(d, kind); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
             switch (BuildingKinds.Family(kind))
             {

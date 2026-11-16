@@ -6,7 +6,7 @@ namespace Game.Core
     // The height function of a generated world, frozen at generation time. Layers, bottom to top:
     //   natural ground (island falloff, region relief, border ridges with pass gaps)
     //   -> compound yards (flat discs) -> roads (flat core, blended shoulder) -> pads (lots, elevators, plazas).
-    internal sealed class WorldTerrain
+    internal class WorldTerrain
     {
         public const float ShoreRamp = 70f;       // land rises from the waterline to its region height over this distance
         public const float SeaRamp = 40f;         // seabed reaches full depth this far offshore
@@ -176,6 +176,7 @@ namespace Game.Core
                 float reach = halfWidth + RoadShoulder + 0.5f;
                 for (int i = 0; i + 1 < road.X.Length; i++, s++)
                 {
+                    if (road.Bridge != null && i < road.Bridge.Length && road.Bridge[i]) continue;   // a deck: the ground under it is the riverbed, not the road
                     segAx[s] = road.X[i]; segAz[s] = road.Z[i]; segAy[s] = road.Y[i];
                     segBx[s] = road.X[i + 1]; segBz[s] = road.Z[i + 1]; segBy[s] = road.Y[i + 1];
                     segHalf[s] = halfWidth;
@@ -220,7 +221,7 @@ namespace Game.Core
         // ---- regions and coast ----
 
         // Rough distance inland from the waterline (negative at sea).
-        public float Coast(float x, float z)
+        public virtual float Coast(float x, float z)
         {
             double dx = x - half, dz = z - half;
             dx *= dx;
@@ -241,7 +242,7 @@ namespace Game.Core
         }
 
         // Nearest region centre and the distance to the closest border of that region's cell.
-        public void Locate(float x, float z, out int region, out float border)
+        public virtual void Locate(float x, float z, out int region, out float border)
         {
             region = -1;
             border = float.MaxValue;
@@ -425,7 +426,7 @@ namespace Game.Core
         }
 
         // Ground before anything is built on it.
-        public float Natural(float x, float z)
+        public virtual float Natural(float x, float z)
         {
             float c = Coast(x, z);
             if (c <= -SeaRamp) return seabedFloor;

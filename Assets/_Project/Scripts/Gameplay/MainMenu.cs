@@ -42,9 +42,12 @@ namespace Game.Gameplay
         GameObject _root, _main, _settings, _hint, _credits;
         SettingsScreen _settingsScreen;
         Text _loading;
-        Button[] _buttons;
         Text _modeLabel, _startLabel;
         LobbyScreen _lobbyScreen;
+        LobbyPanel _lobbyPanel;
+        GameObject _custom;
+        public LobbyPanel Panel => _lobbyPanel;
+        public bool CustomShown => _custom != null && _custom.activeSelf;
 
         // Leaves the running match (this process hosts it) and opens the main menu. Both network sides are stopped
         // first so the sockets are closed before the scene, and its NetworkManager, goes away; the next 시작 then
@@ -89,6 +92,7 @@ namespace Game.Gameplay
             // Esc in the settings = 뒤로 가기 (drops unapplied changes).
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CustomShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && LobbyShown) _lobbyScreen.Leave();
         }
 
@@ -110,7 +114,7 @@ namespace Game.Gameplay
             TeamMatch.Mode = mode;
             _loading.text = "불러오는 중...";
             _loading.gameObject.SetActive(true);
-            for (int i = 0; i < _buttons.Length; i++) _buttons[i].interactable = false;
+            if (_lobbyPanel != null) _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>().interactable = false;
             SceneManager.LoadSceneAsync(scene);
         }
 
@@ -119,6 +123,7 @@ namespace Game.Gameplay
         {
             if (IsLoading) return;
             _main.SetActive(false);
+            _custom.SetActive(false);
             if (_hint != null) _hint.SetActive(false);
             _lobbyScreen.OpenHost();
         }
@@ -127,6 +132,7 @@ namespace Game.Gameplay
         {
             if (IsLoading) return;
             _main.SetActive(false);
+            _custom.SetActive(false);
             if (_hint != null) _hint.SetActive(false);
             _lobbyScreen.OpenJoin();
         }
@@ -154,6 +160,15 @@ namespace Game.Gameplay
             string name = Teams.ModeName(mode);
             if (_modeLabel != null) _modeLabel.text = "모드: " + name;
             if (_startLabel != null) _startLabel.text = "시작 (" + name + ")";
+        }
+
+        // 커스텀 모드 tab: 방 만들기 / 참가 (#160); normal play has no room list.
+        public void ShowCustom()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            _custom.SetActive(true);
         }
 
         public void ShowSettings()
@@ -191,6 +206,7 @@ namespace Game.Gameplay
             if (_hint != null) _hint.SetActive(!settings);
             _settings.SetActive(settings);
             if (_credits != null) _credits.SetActive(false);
+            if (_custom != null) _custom.SetActive(false);
         }
 
         void Build()
@@ -208,7 +224,7 @@ namespace Game.Gameplay
             _credits.SetActive(false);
             _lobbyScreen = LobbyScreen.Build(this, _root.transform);
 
-            var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(1400f, 30f));
+            var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 352f), new Vector2(1400f, 30f));
             _hint = hint.gameObject;
             UiKit.Label(hint, ControlsHint, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
             var version = UiKit.Rect("Version", _root.transform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-24f, 20f), new Vector2(400f, 26f));
@@ -217,31 +233,23 @@ namespace Game.Gameplay
 
         void BuildMain(Transform parent)
         {
-            var panel = UiKit.CenteredPanel("Main", parent, MainWidth);
-            _main = panel.gameObject;
-            _buttons = new Button[8];
+            // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
+            _lobbyPanel = LobbyPanel.Build(this, parent, StartTraining, ShowCustom, ShowSettings, ShowCredits, Quit);
+            _main = _lobbyPanel.Root.gameObject;
+            var studio = UiKit.Rect("Studio", _lobbyPanel.Root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -78f), new Vector2(1000f, 30f));
+            UiKit.Label(studio, Studio, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
+
+            // 커스텀 모드: the host/join entries of the room lobby.
+            var panel = UiKit.CenteredPanel("Custom", parent, MainWidth);
+            _custom = panel.gameObject;
             float y = UiKit.MenuPadding;
-            _buttons[0] = AddButton(panel, "모드", ref y, CycleMode);
-            _buttons[1] = AddButton(panel, "시작", ref y, StartGame);
-            _buttons[2] = AddButton(panel, "훈련장", ref y, StartTraining);
-            _buttons[3] = AddButton(panel, "방 만들기", ref y, OpenHost);
-            _buttons[4] = AddButton(panel, "참가", ref y, OpenJoin);
-            _buttons[5] = AddButton(panel, "설정", ref y, ShowSettings);
-            _buttons[6] = AddButton(panel, "크레딧", ref y, ShowCredits);
-            _buttons[7] = AddButton(panel, "종료", ref y, Quit);
-            _modeLabel = _buttons[0].GetComponentInChildren<Text>();
-            _startLabel = _buttons[1].GetComponentInChildren<Text>();
-            SetMode(Mode);
+            AddButton(panel, "방 만들기", ref y, OpenHost);
+            AddButton(panel, "참가", ref y, OpenJoin);
+            AddButton(panel, "뒤로 가기", ref y, Back);
             panel.sizeDelta = new Vector2(MainWidth, y - UiKit.MenuButtonGap + UiKit.MenuPadding);
-            panel.anchoredPosition = new Vector2(0f, -60f);
+            _custom.SetActive(false);
 
-            // Title block above the button column (children of the column, so it goes away with it when settings show).
-            var title = UiKit.Rect("Title", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 414f), new Vector2(1000f, 120f));
-            UiKit.Label(title, Title, 96, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-            var studio = UiKit.Rect("Studio", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 334f), new Vector2(1000f, 36f));
-            UiKit.Label(studio, Studio, 24, UiKit.Accent, TextAnchor.MiddleCenter);
-
-            var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -250f), new Vector2(600f, 40f));
+            var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(600f, 40f));
             _loading = UiKit.Label(loading, "", 28, UiKit.Text, TextAnchor.MiddleCenter);
             loading.gameObject.SetActive(false);
         }
