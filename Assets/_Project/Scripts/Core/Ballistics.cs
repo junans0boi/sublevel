@@ -23,7 +23,7 @@ namespace Game.Core
         public float BreathRecoverSeconds = 4f;
         public float BreathRestartFraction = 0.3f;
         public float MaxFlightSeconds = 5f;
-        public float MaxRewindSeconds = 0.30f;   // lag compensation: how far back a shot may be judged (#162, ADR-141)
+        public float MaxRewindSeconds = 0.25f;   // lag compensation: how far back a shot may be judged (#162, ADR-141)
     }
 
     public static class Ballistics

@@ -140,6 +140,14 @@ namespace Game.Tests
         [UnityTest, Timeout(180000)]
         public IEnumerator AimedShotAt35m_ABulletInFlight_HitsAStrafingTarget()
         {
+            // The strafing target wanders up to z 25 and crosses the two covers at (-5, 24) and (5, 24) (2 x 1.2 x 1 m): shots ended
+            // on the cover at (4.00, 1.07, 23.7), not on the target. They are not what this test measures, so they are out of the way.
+            foreach (var name in new[] { "Cover10", "Cover11" })
+            {
+                var cover = GameObject.Find(name);
+                Assert.IsNotNull(cover, name + " exists in TestBox (TestBoxBuilder covers[10], covers[11])");
+                cover.SetActive(false);
+            }
             RemoteClient a = null;
             yield return Arm(c => a = c, new Vector3(-27f, 0.1f, 21f), new Vector3(8f, 1.7f, 21f), 5, 5, AmmoType.Rifle762);
             const int shots = 5;

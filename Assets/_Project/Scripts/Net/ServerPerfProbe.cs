@@ -40,21 +40,30 @@ namespace Game.Net
         void Gather()
         {
             var rng = new System.Random(12345);
-            // No --perf-gather: meet at the hub of the match's final region (the crowd of the last circle).
+            // No --perf-gather: meet at the hub of the final region, or of region 0 when the match has not chosen one yet
+            // (--region N picks it, ZoneDirector.FinalRegionOverride).
             if (GatherX == 0f && GatherZ == 0f && ZoneDirector.Instance != null)
             {
-                var hub = ZoneDirector.Instance.RegionCentre(ZoneDirector.Instance.FinalRegion);
+                int region = Mathf.Max(0, ZoneDirector.Instance.FinalRegion);
+                var hub = ZoneDirector.Instance.RegionCentre(region);
                 GatherX = hub.x; GatherZ = hub.z;
-                Debug.Log($"[Perf] P3 final region {ZoneDirector.Instance.FinalRegion}, hub ({hub.x:F0}, {hub.z:F0})");
+                Debug.Log($"[Perf] P3 region {region} (final {ZoneDirector.Instance.FinalRegion}), hub ({hub.x:F0}, {hub.z:F0})");
             }
-            int moved = 0;
+            int bots = 0, moved = 0, noNav = 0, noAgent = 0;
             foreach (var c in Combatant.All)
             {
-                if (c == null || c.IsPlayer || !c.TryGetComponent(out NavMeshAgent agent)) continue;
-                var p = new Vector3(GatherX + (float)(rng.NextDouble() * 2 - 1) * GatherRadius, 0f, GatherZ + (float)(rng.NextDouble() * 2 - 1) * GatherRadius);
-                if (NavMesh.SamplePosition(p, out var hit, GatherRadius, NavMesh.AllAreas) && agent.Warp(hit.position)) moved++;
+                if (c == null || c.IsPlayer) continue;
+                bots++;
+                if (!c.TryGetComponent(out NavMeshAgent agent)) { noAgent++; continue; }
+                var p = new Vector3(GatherX + (float)(rng.NextDouble() * 2 - 1) * GatherRadius, c.transform.position.y, GatherZ + (float)(rng.NextDouble() * 2 - 1) * GatherRadius);
+                // The hub's height is unknown (terrain): look for the NavMesh in a tall column around the point, wide first.
+                bool found = NavMesh.SamplePosition(p, out var hit, 200f, NavMesh.AllAreas);
+                if (!found) { noNav++; continue; }
+                if (agent.Warp(hit.position)) moved++;
             }
-            Debug.Log($"[Perf] P3 gather: {moved} bots warped to ({GatherX:F0}, {GatherZ:F0}) r={GatherRadius:F0}");
+            string line = $"[Perf] P3 gather: {moved}/{bots} bots warped to ({GatherX:F0}, {GatherZ:F0}) r={GatherRadius:F0} (no agent {noAgent}, no NavMesh {noNav})";
+            if (moved < bots * 0.9f) Debug.LogError(line + " — FEWER THAN 90%, the crowd scenario is not valid");
+            else Debug.Log(line);
         }
 
         void Update()

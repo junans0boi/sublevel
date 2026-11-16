@@ -63,7 +63,7 @@ namespace Game.Core
     public static class LagComp
     {
         // How far back a shot may be judged (fairness cap): a round trip of ~100 ms plus the interpolation delay is ~0.17 s.
-        public const float MaxRewindSeconds = 0.30f; // (ADR-243, was 0.25) the default of BallisticsRules.MaxRewindSeconds (data)
+        public const float MaxRewindSeconds = 0.25f; // (ADR-243 on hold: stays 0.25) the default of BallisticsRules.MaxRewindSeconds (data)
         // The interpolation delay of the replicated bodies, in network ticks (the prefab's setting, ADR-126).
         public const int InterpolationTicks = 2;
         // How much history is kept (seconds).
