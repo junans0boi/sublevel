@@ -1,4 +1,4 @@
-# 총기 트랙 DONE (부분 완료 — 2026-11-16, Unity 미실행 상태)
+# 총기 트랙 DONE (2026-11-16, 모델 반입·Unity EditMode 확인 완료)
 
 ## 한 것 (커밋 가능 상태, Unity 미확인)
 - **루팅 연결**(ADR-215): `loot.json` 일반 16종 가중(합 53)·근접 4 유지, `supply.json`에 보급 5종 + Arbiter·Obelisk 추가. 총기 Amount=탄창 용량. 신규 `WeaponLootTests`(5건: 일반 loot에 SupplyOnly 없음·전 일반총 1행, 보급 5종 포함, 풀 탄창·양의 가중, 클래스 비율, 40000회 Roll 분포 ±2%p).
@@ -27,3 +27,11 @@
 | 31 / 32 | Bastion / Anvil | placeholder/ AssaultRifle2_3·4 + Bipod |
 | 33 / 34 / 35 | Marshal / Fang / Hornet | placeholder/ SniperRifle_3 / AssaultRifle_5 / SubmachineGun_3 |
 Unity 순번에서 할 일(순차 1회): ① FBX 복사·임포트(삼각형 수 측정) ② 후보 형상 캡처 확인·교체 ③ placeholder 5종 키트배시 ④ `CharacterKit`·`Fire.MuzzleFlashSize`·아이콘 등록(**소유 밖**: `Editor/CharacterKit`, `Scripts/.../Fire.cs`, ItemIcons) ⑤ EditMode 전체 + PERF. 소유 밖 변경 목록은 위 ④로 master가 허가해야 함.
+
+## Unity 반입 결과 (ADR-217)
+- 첫 임포트·EditMode 전체: **1227건 중 1226 통과, 1 실패(아이콘 미생성)** → `ItemIconBuilder.Build` 후 재실행 **1227/1227 통과**(`Logs/test-editmode.xml`·`.log`, 약 2분). Unity 프로세스 남은 것 없음(확인).
+- 반입: `Art/Weapons/Roster/` FBX 18 + 부착물 3(Scope 2·Bipod, 미장착). 삼각형 646~2528/총(최대 Tracer 2528), 서브메시(머티리얼) 3~6개, 용량 합 약 1MB.
+- 등록: `CharacterKit.Weapons`(+아이콘 자동), `rules.json` MuzzleFlashSize 36칸, `ItemIcons.KnownKeys`·테스트 기대값. 아이콘 PNG 16개 생성(Resources/Icons).
+- 변경 사항: Poly Pizza 3종은 시험 결과 쓸 수 없어(skinned 0 tris·축 불일치, Duo는 총열만) Quaternius 변형으로 대체 → ledger에 "미사용" 기록.
+- **안 한 것**: 키트배시(스코프·바이포드 장착), 게임 안 캡처(PlayMode 금지라 아이콘 시트만 확인), PERF 정량 판정(드로우콜 측정 안 함; 삼각형·머티리얼 수만 기록), Breacher는 펌프형 그대로(박스 탄창 윤곽 변경 안 함), 손 위치 `Forward/Up`·길이는 눈대중이라 게임 안에서 조정 필요, 신규 총 소리 없음(`CombatantAudio` 배열, 사운드 트랙).
+- 위험: Vanguard·Hauler가 AK형으로 보임(실총 연상) → 상표/디자인 검토 목록에 추가 필요.

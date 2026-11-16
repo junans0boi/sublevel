@@ -10,7 +10,7 @@ using UnityEngine;
 public static class CharacterKit
 {
     public const string CharacterPath = "Assets/_Project/Art/Characters/QuaterniusModularMen/Swat.fbx";
-    const string WeaponDir = "Assets/_Project/Art/Weapons/QuaterniusUltimateGuns/";
+    const string WeaponDir = "Assets/_Project/Art/Weapons/";
     const string ControllerPath = SceneLook.GeneratedDir + "/Character.controller";
     const string HandBone = "Wrist.R";
     const string ReferencePose = "Idle_Gun_Pointing";
@@ -26,12 +26,27 @@ public static class CharacterKit
 
     public static readonly WeaponModel[] Weapons =
     {
-        new WeaponModel { Id = 1, File = "Pistol_1.fbx", Length = 0.24f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.03f },        // VK-9
-        new WeaponModel { Id = 2, File = "SubmachineGun_1.fbx", Length = 0.50f, MuzzleAlongMinusX = true, Forward = 0.14f, Up = 0.00f }, // Ordo
-        new WeaponModel { Id = 3, File = "Bullpup_1.fbx", Length = 0.75f, MuzzleAlongMinusX = true, Forward = 0.09f, Up = 0.01f },       // Warden
-        new WeaponModel { Id = 4, File = "Shotgun_1.fbx", Length = 0.95f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },       // Breacher
-        // Sentinel: no sniper model in the pack, so the assault rifle scaled long stands in (placeholder shape).
-        new WeaponModel { Id = 5, File = "AssaultRifle_1.fbx", Length = 1.05f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },   // Sentinel
+        new WeaponModel { Id = 1, File = "QuaterniusUltimateGuns/Pistol_1.fbx", Length = 0.24f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.03f },        // VK-9
+        new WeaponModel { Id = 2, File = "QuaterniusUltimateGuns/SubmachineGun_1.fbx", Length = 0.50f, MuzzleAlongMinusX = true, Forward = 0.14f, Up = 0.00f }, // Ordo
+        new WeaponModel { Id = 3, File = "QuaterniusUltimateGuns/Bullpup_1.fbx", Length = 0.75f, MuzzleAlongMinusX = true, Forward = 0.09f, Up = 0.01f },       // Warden
+        new WeaponModel { Id = 4, File = "Roster/Wpn04_Breacher.fbx", Length = 0.95f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },       // Breacher
+        new WeaponModel { Id = 5, File = "Roster/Wpn05_Sentinel.fbx", Length = 1.20f, MuzzleAlongMinusX = true, Forward = 0.30f, Up = 0.03f },   // Sentinel
+        new WeaponModel { Id = 6, File = "Roster/Wpn06_Vesper.fbx", Length = 0.28f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.03f },  // Vesper (provisional fit, ADR-217)
+        new WeaponModel { Id = 7, File = "Roster/Wpn07_Brisk.fbx", Length = 0.5f, MuzzleAlongMinusX = true, Forward = 0.14f, Up = 0f },  // Brisk (provisional fit, ADR-217)
+        new WeaponModel { Id = 8, File = "Roster/Wpn08_Sable.fbx", Length = 0.5f, MuzzleAlongMinusX = true, Forward = 0.14f, Up = 0f },  // Sable (provisional fit, ADR-217)
+        new WeaponModel { Id = 9, File = "Roster/Wpn09_Vanguard.fbx", Length = 0.85f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.01f },  // Vanguard (provisional fit, ADR-217)
+        new WeaponModel { Id = 10, File = "Roster/Wpn10_Bulwark.fbx", Length = 0.95f, MuzzleAlongMinusX = true, Forward = 0.15f, Up = 0.02f },  // Bulwark (provisional fit, ADR-217)
+        new WeaponModel { Id = 11, File = "Roster/Wpn11_Hauler.fbx", Length = 1f, MuzzleAlongMinusX = true, Forward = 0.18f, Up = 0.02f },  // Hauler (provisional fit, ADR-217)
+        new WeaponModel { Id = 12, File = "Roster/Wpn12_Lancer.fbx", Length = 1f, MuzzleAlongMinusX = true, Forward = 0.18f, Up = 0.02f },  // Lancer (provisional fit, ADR-217)
+        new WeaponModel { Id = 13, File = "Roster/Wpn13_Tracer.fbx", Length = 0.85f, MuzzleAlongMinusX = true, Forward = 0.1f, Up = 0.01f },  // Tracer (provisional fit, ADR-217)
+        new WeaponModel { Id = 14, File = "Roster/Wpn14_Arbiter.fbx", Length = 1.1f, MuzzleAlongMinusX = true, Forward = 0.22f, Up = 0.03f },  // Arbiter (provisional fit, ADR-217)
+        new WeaponModel { Id = 15, File = "Roster/Wpn15_Obelisk.fbx", Length = 1.25f, MuzzleAlongMinusX = true, Forward = 0.3f, Up = 0.03f },  // Obelisk (provisional fit, ADR-217)
+        new WeaponModel { Id = 16, File = "Roster/Wpn16_Duo.fbx", Length = 0.85f, MuzzleAlongMinusX = true, Forward = 0.28f, Up = 0.03f },  // Duo (provisional fit, ADR-217)
+        new WeaponModel { Id = 31, File = "Roster/Wpn31_Bastion.fbx", Length = 1.05f, MuzzleAlongMinusX = true, Forward = 0.22f, Up = 0.02f },  // Bastion (provisional fit, ADR-217)
+        new WeaponModel { Id = 32, File = "Roster/Wpn32_Anvil.fbx", Length = 1.15f, MuzzleAlongMinusX = true, Forward = 0.25f, Up = 0.02f },  // Anvil (provisional fit, ADR-217)
+        new WeaponModel { Id = 33, File = "Roster/Wpn33_Marshal.fbx", Length = 1.15f, MuzzleAlongMinusX = true, Forward = 0.25f, Up = 0.03f },  // Marshal (provisional fit, ADR-217)
+        new WeaponModel { Id = 34, File = "Roster/Wpn34_Fang.fbx", Length = 0.8f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.01f },  // Fang (provisional fit, ADR-217)
+        new WeaponModel { Id = 35, File = "Roster/Wpn35_Hornet.fbx", Length = 0.35f, MuzzleAlongMinusX = true, Forward = 0.1f, Up = 0.02f },  // Hornet (provisional fit, ADR-217)
     };
 
     const string MaskPath = SceneLook.GeneratedDir + "/CharacterUpperBody.mask";
