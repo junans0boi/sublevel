@@ -31,19 +31,21 @@ namespace Game.Gameplay
         public readonly Dictionary<string, Button> ById = new Dictionary<string, Button>();
 
         // `skip` drops items that the caller draws itself (live data). `onAct` gets the clickable item.
-        public static MockScreen Build(Transform parent, string name, Action<Item> onAct, Func<Item, bool> skip = null, bool scrimOnly = false)
+        public static MockScreen Build(Transform parent, string name, Action<Item> onAct, Func<Item, bool> skip = null, bool scrimOnly = false, float dim = 0.84f)
         {
             var asset = Resources.Load<TextAsset>("Ui/Screens/" + name);
             if (asset == null) { Debug.LogError("[MockScreen] missing Ui/Screens/" + name); return null; }
             var doc = JsonUtility.FromJson<Doc>(asset.text);
             var s = new MockScreen();
             s.Root = UiKit.Fill("Mock_" + name, parent);
-            if (!scrimOnly) UiKit.Box(s.Root, UiPaint.Bg, true);
+            // The mockup's backdrop art is replaced by the real 3D lobby behind; non-lobby screens dim it as the mockup does (.84).
+            if (!scrimOnly && dim > 0f) UiKit.Box(s.Root, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, dim), true);
             s.Stage = UiKit.Rect("Stage", s.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(LobbyPanel.StageW, LobbyPanel.StageH));
             s.Root.gameObject.AddComponent<StageFit>().Stage = s.Stage;
             foreach (var item in doc.items)
             {
                 if (skip != null && skip(item)) continue;
+                if (item.k == "img" && item.r[2] >= 1900f && item.r[3] >= 1000f) continue; // backdrop art and scene drawing: the 3D lobby is behind
                 // The mockup blurs what is behind a modal card (backdrop-filter); without blur the card is drawn near-opaque.
                 if (scrimOnly && item.k == "box" && item.bg != null && item.bg.Length == 4 && item.bg[3] < 255 && item.r[2] >= 800f && item.r[2] < 1900f) item.bg[3] = 255;
                 s.Add(item, onAct);

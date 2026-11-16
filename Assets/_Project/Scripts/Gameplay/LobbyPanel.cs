@@ -27,7 +27,7 @@ namespace Game.Gameplay
         public bool Matching => Party.Matching;
 
         MainMenu _menu;
-        float _matchSeconds;
+        float _matchSeconds, _placeTimer;
         Text _led, _statusLabel, _reason, _seven, _callLabel, _fillText, _lockText, _kbd, _ledCaption;
         Image _statusFill, _statusRing, _kbdBox, _lamp1, _lamp2;
         Image[] _lvrFill = new Image[2], _lvrRing = new Image[2];
@@ -40,11 +40,10 @@ namespace Game.Gameplay
 
         class Slot
         {
-            public GameObject Tile, Figure, Dashed, Name, Invite;
+            public GameObject Tile, Name, Invite;
             public Image TileFill, TileStroke;
             public Sprite TileDash, TileSolid;
             public Text TileLabel, NameText;
-            public Image[] Body;
         }
 
         public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
@@ -53,9 +52,10 @@ namespace Game.Gameplay
             p.Party = new PartyLobby(0, "플레이어");
             p.Party.SetView(0, GameSettings.DefaultViewFirstPerson ? Perspective.First : Perspective.Third);
             p.Root = UiKit.Fill("Lobby", parent);
-            UiKit.Box(p.Root, UiPaint.Bg);
             p.Stage = UiKit.Rect("Stage", p.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(StageW, StageH));
-            p.Root.gameObject.AddComponent<StageFit>().Stage = p.Stage;
+            var fit = p.Root.gameObject.AddComponent<StageFit>();
+            fit.Stage = p.Stage;
+            fit.OnFit = p.PlaceAll; // the camera may move (외형 closeup) and the canvas may resize: keep the labels on the characters
             p.BuildScene();
             p.BuildTop(training, custom, settings, credits, quit, character, bell);
             p.BuildPlates();
@@ -113,34 +113,24 @@ namespace Game.Gameplay
         // ---------------------------------------------------------------- scene: wall, door, platform, party
         void BuildScene()
         {
-            UiPaint.Pic(Stage, "Scene", "lobby_scene", 0, 0, StageW, StageH);
+            // The scene is the 3D elevator (LobbyStage) behind this overlay; only the party's tiles, state badges, names and
+            // the empty slots' 초대 buttons are drawn here, at the projected positions of the characters' feet.
             for (int i = 0; i < PartyLobby.SquadSize; i++) _slots[i] = BuildSlot(SlotX[i], i);
+            // The door sign of the mockup ("B3 ▼ 투입 대기") above the car opening.
+            var sign = UiPaint.At(Stage, "DoorSign", 760, 180, 400, 28);
+            UiPaint.Box(sign, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.85f), 2, UiPaint.Ac, 2);
+            UiPaint.Label(sign, "Text", 0, 0, 400, 28, "B3 ▼ 투입 대기", 22, UiPaint.Ac, TextAnchor.MiddleCenter, FontStyle.Bold);
         }
 
         Slot BuildSlot(float x, int i)
         {
             var s = new Slot();
-            // Platform tile: trapezoid -70,40 .. 70,40 .. 86,96 .. -86,96 (centre x, base y 575); drawn as a rounded box stand-in
-            // with the mockup's width at the front edge, 3 px stroke.
             var tile = UiPaint.At(Stage, "Tile" + i, x - 86, TileY + 40, 172, 56);
             s.Tile = tile.gameObject;
             s.TileFill = UiPaint.Shape(tile, UiPaint.Trapezoid(false), Color.clear);
             s.TileStroke = UiPaint.Shape(UiKit.Fill("Edge", tile), UiPaint.Trapezoid(true), UiPaint.Ac);
             s.TileDash = UiPaint.Trapezoid(true, true); s.TileSolid = s.TileStroke.sprite;
             s.TileLabel = UiPaint.Label(tile, "State", 0, 14, 172, 30, "", 24, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
-            // Person figure (scale 1.25 for the local player, 1.05 for others; feet at y 605).
-            var fig = UiKit.Rect("Figure" + i, Stage, new Vector2(0f, 1f), new Vector2(0.5f, 0f), new Vector2(x, -(TileY + 30f)), new Vector2(1f, 1f));
-            s.Figure = fig.gameObject;
-            s.Body = new Image[4];
-            s.Body[0] = Part(fig, "Legs", -13, 0, 26, 72, 4);
-            s.Body[1] = Part(fig, "Torso", -19, 68, 38, 74, 8);
-            s.Body[2] = Part(fig, "Head", -16, 144, 32, 32, 16);
-            var stripe = Part(fig, "Stripe", -19, 111, 38, 7, 1);
-            stripe.color = UiPaint.Ac;
-            s.Body[3] = stripe;
-            var dashed = UiKit.Rect("Dashed" + i, Stage, new Vector2(0f, 1f), new Vector2(0.5f, 0f), new Vector2(x, -(TileY + 30f)), new Vector2(1f, 1f));
-            s.Dashed = dashed.gameObject;
-            Part(dashed, "Legs", -13, 0, 26, 72, 4, true); Part(dashed, "Torso", -19, 68, 38, 74, 8, true); Part(dashed, "Head", -16, 144, 32, 32, 16, true);
             s.Name = UiPaint.Label(Stage, "Name" + i, x - 100, TileY + 102, 200, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold).gameObject;
             s.NameText = s.Name.GetComponent<Text>();
             var inv = UiPaint.Btn(Stage, "Invite" + i, x - 60, TileY + 104, 120, 44, "+ 초대", 18, 22, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
@@ -148,12 +138,29 @@ namespace Game.Gameplay
             return s;
         }
 
-        // A body part of the figure: x from the centre, `bottom` = height of its bottom edge above the feet, y up.
-        static Image Part(RectTransform fig, string name, float x, float bottom, float w, float h, int radius, bool dashedLook = false)
+        // Moves a slot's overlay to where its character stands in the view (3D -> viewport -> stage pixels), so it also
+        // holds at any resolution and aspect (the stage is scaled by StageFit inside the canvas).
+        void PlaceSlot(int i)
         {
-            var r = UiKit.Rect(name, fig, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(x, bottom), new Vector2(w, h));
-            if (dashedLook) { UiPaint.Box(r, Color.clear, radius, UiPaint.T2, 2, true); return null; }
-            return UiPaint.Box(r, UiPaint.T2, radius, UiPaint.Ln, 2);
+            var stage = _menu != null ? _menu.Stage : null;
+            if (stage == null || Root == null) return;
+            var size = Root.rect.size;
+            if (size.y <= 0f || !stage.ViewportPoints(i, size.x / size.y, out var feetVp, out var headVp)) return;
+            float s = Stage.localScale.x > 0f ? Stage.localScale.x : 1f;
+            Vector2 f = new Vector2((feetVp.x - 0.5f) * size.x, (feetVp.y - 0.5f) * size.y) / s;
+            Vector2 h = new Vector2((headVp.x - 0.5f) * size.x, (headVp.y - 0.5f) * size.y) / s;
+            float k = Mathf.Clamp(Mathf.Abs(h.y - f.y) / 185f, 0.4f, 3f) * 0.62f; // the tile is a floor mark smaller than the spacing between people
+            float cx = f.x + StageW * 0.5f, cy = StageH * 0.5f - f.y;
+            var slot = _slots[i];
+            var tile = (RectTransform)slot.Tile.transform;
+            tile.pivot = new Vector2(0f, 1f);
+            tile.sizeDelta = new Vector2(172f, 56f);
+            tile.localScale = new Vector3(k, k, 1f);
+            tile.anchoredPosition = new Vector2(cx - 86f * k, -(cy - 14f * k));
+            var name = (RectTransform)slot.Name.transform;
+            name.anchoredPosition = new Vector2(cx - 100f, -(cy + 44f * k));
+            var inv = (RectTransform)slot.Invite.transform;
+            inv.anchoredPosition = new Vector2(cx - 60f, -(cy + 56f * k));
         }
 
         // ---------------------------------------------------------------- plates
@@ -252,6 +259,25 @@ namespace Game.Gameplay
             _lvrMs[i] = UiPaint.Label(b.transform, "Ms", 0, 61, 120, 19, "", 15, UiPaint.T2, TextAnchor.MiddleCenter);
         }
 
+        // The 3D characters follow the party: the local player shows the saved PlayerAppearance, the others their member look.
+        public void SyncStage()
+        {
+            var stage = _menu != null ? _menu.Stage : null;
+            if (stage == null) return;
+            int local = 0;
+            for (int i = 0; i < Party.Count; i++) if (Party.Members[i].Id == Self) local = i;
+            stage.LocalSlot = local;
+            for (int i = 0; i < PartyLobby.SquadSize; i++)
+            {
+                if (i >= Party.Count) { stage.SetSlot(i, null); continue; }
+                var m = Party.Members[i];
+                stage.SetSlot(i, m.Id == Self ? PlayerAppearanceStore.Load() : m.Appearance);
+            }
+            PlaceAll();
+        }
+
+        public void PlaceAll() { for (int i = 0; i < PartyLobby.SquadSize; i++) PlaceSlot(i); }
+
         // ---------------------------------------------------------------- behaviour
         // The state button's action. Squad matches wait for the team flow, so only solo starts today.
         void OnStatus()
@@ -276,6 +302,7 @@ namespace Game.Gameplay
 
         public void Tick(float dt)
         {
+
             if (Party.Matching) { _matchSeconds += dt; _seven.text = PartyLobby.Clock((int)_matchSeconds); }
             var kb = Keyboard.current;
             if (kb != null && Root.gameObject.activeInHierarchy && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) OnStatus();
@@ -314,7 +341,7 @@ namespace Game.Gameplay
                 bool hasMember = i < n;
                 bool empty = !solo && i == n && n < PartyLobby.SquadSize;
                 bool shown = hasMember || empty;
-                s.Tile.SetActive(shown); s.Figure.SetActive(hasMember); s.Dashed.SetActive(empty);
+                s.Tile.SetActive(shown);
                 s.Name.SetActive(hasMember); s.Invite.SetActive(empty);
                 if (empty) { SetTile(s, Color.clear, UiPaint.T2, ""); s.TileStroke.sprite = s.TileDash; }
                 else s.TileStroke.sprite = s.TileSolid;
@@ -324,11 +351,8 @@ namespace Game.Gameplay
                 Color tint = lead ? UiPaint.Ac : ready ? UiPaint.Ok : UiPaint.Wr;
                 SetTile(s, lead || ready ? UiPaint.AcS : UiPaint.Bg, tint, lead ? "★ 파티장" : ready ? "✓ 준비 완료" : "… 준비 중");
                 s.NameText.text = m.Name + (m.Id == Self ? " (나)" : "");
-                var color = (Color)PersonColors[i % PersonColors.Length];
-                var fig = (RectTransform)s.Figure.transform;
-                fig.localScale = Vector3.one * (m.Id == Self ? 1.25f : 1.05f);
-                for (int k = 0; k < 3; k++) s.Body[k].color = color;
             }
+            SyncStage();
 
             // Reason line, call panel, state button.
             string waiting = Party.WaitingLine();
@@ -382,6 +406,7 @@ namespace Game.Gameplay
     public class StageFit : MonoBehaviour
     {
         public RectTransform Stage;
+        public System.Action OnFit;
 
         void OnRectTransformDimensionsChange() => Fit();
         void LateUpdate() => Fit();
@@ -393,6 +418,7 @@ namespace Game.Gameplay
             if (Stage == null || w <= 0f || h <= 0f) return;
             float s = Mathf.Min(1f, Mathf.Min(w / LobbyPanel.StageW, h / LobbyPanel.StageH));
             Stage.localScale = new Vector3(s, s, 1f);
+            OnFit?.Invoke();
         }
     }
 }

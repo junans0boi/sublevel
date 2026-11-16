@@ -21,12 +21,16 @@ public static class MainMenuBuilder
         var camera = cameraObject.AddComponent<Camera>();
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.035f, 0.04f, 0.05f, 1f);
-        camera.cullingMask = 0;
+        camera.cullingMask = -1;
         camera.nearClipPlane = 0.3f;
         camera.farClipPlane = 10f;
         cameraObject.AddComponent<AudioListener>();
 
-        new GameObject("MainMenu").AddComponent<MainMenu>();
+        var menu = new GameObject("MainMenu").AddComponent<MainMenu>();
+        LobbyStageBuilder.Build(camera); // the lobby's 3D elevator and party (ADR-247)
+        var profile = RenderSetup.Apply();
+        SceneLook.EnablePost(camera);
+        SceneLook.AddPostVolume(profile);
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         RegisterFirst();

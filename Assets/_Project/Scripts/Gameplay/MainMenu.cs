@@ -40,6 +40,8 @@ namespace Game.Gameplay
         public string ModeText => _modeLabel != null ? _modeLabel.text : "";
 
         GameObject _root, _main, _settings, _hint, _credits;
+        LobbyStage _stage;
+        public LobbyStage Stage => _stage;
         CustomScreen _customScreen;
         CharacterScreen _charScreen;
         GameObject _char;
@@ -83,6 +85,7 @@ namespace Game.Gameplay
             // The next match is solo again unless a lobby decides otherwise (#160).
             NetSession.Reset();
             GameSettings.Load();
+            _stage = FindFirstObjectByType<LobbyStage>();
             Build();
         }
 
@@ -270,8 +273,8 @@ namespace Game.Gameplay
             if (_hint != null) _hint.SetActive(false);
             if (_credits != null) _credits.SetActive(false);
             if (_custom != null) _custom.SetActive(false);
-            _charScreen.Reload();
             _char.SetActive(true);
+            _charScreen.Open();
         }
 
         public void ShowQuit() => ShowModal("pop_quit");
@@ -312,7 +315,7 @@ namespace Game.Gameplay
             _settings.SetActive(settings);
             if (_credits != null) _credits.SetActive(false);
             if (_custom != null) _custom.SetActive(false);
-            if (_char != null) _char.SetActive(false);
+            if (_char != null && _char.activeSelf) { _charScreen.Close(); _char.SetActive(false); }
         }
 
         void Build()
@@ -320,7 +323,6 @@ namespace Game.Gameplay
             var canvas = UiKit.Canvas("MainMenu", SortOrder, true);
             _root = canvas.gameObject;
             _root.transform.SetParent(transform, false);
-            UiKit.Box(UiKit.Fill("Background", _root.transform), Background, true);
 
             BuildMain(_root.transform);
             _settingsScreen = new SettingsScreen();
