@@ -70,6 +70,9 @@ namespace Game.Gameplay
         // Hook for suppressors (G7): this combatant's shots sound as if SoundRules.SuppressedDistanceFactor times further.
         public bool Suppressed { get; set; }
         CombatantOptics _gear;
+        AudioLowPassFilter _stepMuffle;
+        Occlusion _occ = Occlusion.Open;
+        float _occAt = -10f;
 
         void Awake()
         {
@@ -89,6 +92,7 @@ namespace Game.Gameplay
             {
                 _stepSource = SpatialAudio.Apply(ChildSource(_bodySource.transform, "StepAudio", _bodySource), SpatialAudio.Category.Body);
                 _stepRangeApplied = SpatialAudio.For(SpatialAudio.Category.Body).Max;
+                _stepMuffle = _stepSource.gameObject.AddComponent<AudioLowPassFilter>();
                 _whizSource = SpatialAudio.Apply(ChildSource(transform, "WhizAudio", _bodySource), SpatialAudio.Category.Body);
             }
             _combatant.ShotFired += OnShot;
@@ -138,7 +142,10 @@ namespace Game.Gameplay
                 SpatialAudio.Apply(_stepSource, new SpatialAudio.Range(Mathf.Min(2f, range * 0.5f), range));
                 _stepRangeApplied = range;
             }
-            volume *= loudness * clipGain;
+            // Floors and walls between this step and the ear (ADR-251): quieter, and the highs go.
+            var occ = OcclusionToListener(transform.position, id == SurfaceId.MetalStairs);
+            if (_stepMuffle != null) _stepMuffle.cutoffFrequency = occ.CutoffHz;
+            volume *= loudness * clipGain * occ.Gain;
             LastFootstepVolume = volume;
             LastFootstepRange = range;
             LastSurface = surface;
@@ -171,16 +178,28 @@ namespace Game.Gameplay
             float scale = Suppressed || heard > meters ? Mathf.Clamp01(SpatialAudio.Gain(SpatialAudio.Category.Gunshot, heard)
                 / Mathf.Max(1e-4f, SpatialAudio.Gain(SpatialAudio.Category.Gunshot, meters))) : 1f;
             float cutoff = SpatialAudio.DistantCutoff(heard);
+            var occ = OcclusionToListener(_weaponSource.transform.position, false);
+            scale *= occ.Gain;
+            cutoff = Mathf.Min(cutoff, occ.CutoffHz);
             if (_distantShot != null) _distantShot.cutoffFrequency = cutoff;
             if (_farMuffle != null) _farMuffle.cutoffFrequency = cutoff;
             SpatialAudio.NoteLoud(Mathf.Clamp01(near * scale)); // ambient beds duck under gunfire (#194)
             bool played = false;
-            if (near > 0f && Play(_weaponSource, ClipFor(_shotByWeapon, weapon), _shotVolume * near * scale, PitchFor(_shotPitchByWeapon, weapon)))
+            // Recorded gun sounds by weapon class (ADR-250); weapons without an entry, or a build without the clips,
+            // keep the older per-weapon clips.
+            bool hasSound = WeaponSounds.TryGet(weapon, out var gun);
+            var nearSet = hasSound ? GunSet(Suppressed ? WeaponSounds.SuppressedNear : WeaponSounds.NearPrefix(gun.Class)) : NoClips;
+            var farSet = hasSound && !Suppressed ? GunSet(WeaponSounds.FarPrefix(gun.Class)) : NoClips;
+            var nearClip = nearSet.Length > 0 ? nearSet[Random.Range(0, nearSet.Length)] : ClipFor(_shotByWeapon, weapon);
+            float nearPitch = nearSet.Length > 0 ? gun.Pitch : PitchFor(_shotPitchByWeapon, weapon);
+            float loud = nearSet.Length > 0 ? gun.Loudness : 1f;
+            if (near > 0f && Play(_weaponSource, nearClip, _shotVolume * loud * near * scale, nearPitch))
             {
                 NearShotsPlayed++;
                 played = true;
             }
-            if (far > 0f && Play(_farSource, ClipFor(FarShotClips, weapon), _shotVolume * far * scale))
+            var farClip = farSet.Length > 0 ? farSet[Random.Range(0, farSet.Length)] : ClipFor(FarShotClips, weapon);
+            if (far > 0f && Play(_farSource, farClip, _shotVolume * loud * far * scale, farSet.Length > 0 ? nearPitch : 1f))
             {
                 FarShotsPlayed++;
                 played = true;
@@ -194,6 +213,17 @@ namespace Game.Gameplay
         static readonly string[] FarShotNames = { null, "pistol", "smg", "rifle", "shotgun", "sniper" };
         static AudioClip[] _farShotClips, _whizClips;
         static readonly Dictionary<SurfaceId, AudioClip[]> StepSets = new Dictionary<SurfaceId, AudioClip[]>();
+
+        static readonly AudioClip[] NoClips = new AudioClip[0];
+        static readonly Dictionary<string, AudioClip[]> GunSets = new Dictionary<string, AudioClip[]>();
+
+        // Resources/Shots clips whose name starts with prefix (all packs share the folder name).
+        static AudioClip[] GunSet(string prefix)
+        {
+            if (!GunSets.TryGetValue(prefix, out var set))
+                GunSets[prefix] = set = Array.FindAll(Resources.LoadAll<AudioClip>("Shots"), c => c.name.StartsWith(prefix, StringComparison.Ordinal));
+            return set;
+        }
 
         static AudioClip[] FarShotClips => _farShotClips ??= Array.ConvertAll(FarShotNames, n => n == null ? null : Resources.Load<AudioClip>("Shots/shot_" + n + "_far"));
         static AudioClip[] WhizClips => _whizClips ??= Array.FindAll(Resources.LoadAll<AudioClip>("Shots"), c => c.name.StartsWith("whiz_", StringComparison.Ordinal));
@@ -296,13 +326,35 @@ namespace Game.Gameplay
             if (_gear == null) _gear = GetComponent<CombatantOptics>();
             Suppressed = _gear != null && _gear.ActiveMods.Suppressed;
             bool reloading = _combatant.Reloading.Value;
-            if (reloading && !_wasReloading && Play(_bodySource, ClipFor(_reloadByWeapon, _combatant.ActiveWeaponId), _reloadVolume))
+            if (reloading && !_wasReloading && Play(_bodySource, ReloadClip(_combatant.ActiveWeaponId), _reloadVolume))
                 ReloadsPlayed++;
             _wasReloading = reloading;
 
             float hp = _combatant.Hp.Value;
             if (hp < _lastHp && _hits.Length > 0 && Play(_bodySource, _hits[Random.Range(0, _hits.Length)], _hitVolume)) HitsPlayed++;
             _lastHp = hp;
+        }
+
+        // Occlusion of this combatant's sounds toward the ear, probed at most every SoundOcclusion.RefreshSeconds and
+        // only within ProbeRange (ADR-251); the frame's ray allowance is shared by everyone.
+        Occlusion OcclusionToListener(Vector3 position, bool throughStairs)
+        {
+            if (!SpatialAudio.ListenerPosition(out var ear) || !SoundOcclusion.ShouldProbe(Vector3.Distance(position, ear))) return Occlusion.Open;
+            float now = Time.unscaledTime;
+            if (now - _occAt < SoundOcclusion.RefreshSeconds || !SoundOcclusionProbe.Budget.TryTake(Time.frameCount)) return _occ;
+            _occAt = now;
+            return _occ = SoundOcclusionProbe.Between(position + Vector3.up * 1.2f, ear, throughStairs);
+        }
+
+        // The class's recorded reload (ADR-250), else the per-weapon clip from the prefab.
+        AudioClip ReloadClip(int weaponId)
+        {
+            if (WeaponSounds.TryGet(weaponId, out var gun))
+            {
+                var set = GunSet(WeaponSounds.ReloadName(gun.Class));
+                if (set.Length > 0) return set[0];
+            }
+            return ClipFor(_reloadByWeapon, weaponId);
         }
 
         static AudioClip ClipFor(AudioClip[] byWeapon, int weaponId) =>
