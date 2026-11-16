@@ -153,7 +153,7 @@ public static class CharacterKit
         var animator = def.Animator;
         animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(CharacterControllerBuilder.ControllerPath);
         animator.applyRootMotion = false;
-        // Server-side characters must keep animating (and moving their hand-held weapon) while off screen (ADR-233 decides the final mode).
+        // CombatantAnimation picks the culling mode by distance (ADR-233): always animated within 40 m of the camera (footsteps, held weapon), culled beyond.
         animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
         var local = go.transform.position;

@@ -86,9 +86,9 @@ namespace Game.Gameplay
             float speed = new Vector2(v.x, v.z).magnitude;
             float still = 1f - Mathf.Clamp01(speed / 1.5f);
 
-            // Breathing: the chest rises and falls a little, the shoulders drift; weapon and hands ride the torso.
+            // Breathing: the chest rises and falls a little, the shoulders drift; weapon and hands ride the torso. Not far away (ADR-233).
             Breath = BreathAt(Time.time, _breathSeed);
-            float calm = still * (1f - _seated) * (1f - _swimAmount);
+            float calm = still * (1f - _seated) * (1f - _swimAmount) * (_lod >= 2 ? 0f : 1f);
             Turn(Torso, Breath * BreathPitchDeg * calm, transform.right);
             Turn(Torso, Mathf.Sin((Time.time + _breathSeed) * Mathf.PI * 2f / SwaySeconds) * SwayYawDeg * calm, transform.up);
 
@@ -133,7 +133,7 @@ namespace Game.Gameplay
         // by that much more. The ground under each foot is a cast per foot; the foot is tilted to the ground's slope.
         void PlantFeet(float speed)
         {
-            if (_footLeft == null || _footRight == null || _prone > 0.3f || _seated > 0.1f || _parkour > 0.1f || _swimAmount > 0.1f || _inAir || LedgePose > 0.1f)
+            if (_footLeft == null || _footRight == null || _lod >= 1 || _prone > 0.3f || _seated > 0.1f || _parkour > 0.1f || _swimAmount > 0.1f || _inAir || LedgePose > 0.1f)
             {
                 _plant[0] = _plant[1] = 0f;
                 if (_plantDrop != 0f) { _animator.transform.position += transform.up * _plantDrop; _plantDrop = 0f; }

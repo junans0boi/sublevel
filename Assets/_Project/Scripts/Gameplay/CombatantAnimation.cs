@@ -232,9 +232,20 @@ namespace Game.Gameplay
             KickRifle();
         }
 
-        void Update()
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // Stopwatch ticks every combatant spent in Update + LateUpdate since the last reset: the cost of the code half of the animation (PERF, ADR-233).
+        public static long PerfTicks;
+        void Update() { long t = System.Diagnostics.Stopwatch.GetTimestamp(); UpdateBody(); PerfTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t; }
+        void LateUpdate() { long t = System.Diagnostics.Stopwatch.GetTimestamp(); LateUpdateBody(); PerfTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t; }
+#else
+        void Update() => UpdateBody();
+        void LateUpdate() => LateUpdateBody();
+#endif
+
+        void UpdateBody()
         {
             if (_animator == null) return;
+            UpdateLod();
             bool dead = _combatant.Dead.Value;
             float hp = _combatant.Hp.Value;
             bool hit = hp < _lastHp && !dead;
@@ -278,7 +289,11 @@ namespace Game.Gameplay
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir() && _seated < 0.5f;
-            if (_animator.layerCount > AdditiveLayer && Time.time >= _flinchUntil) SetAdditive(BreathState);
+            if (_animator.layerCount > AdditiveLayer)
+            {
+                _animator.SetLayerWeight(AdditiveLayer, _lod >= 2 ? 0f : 1f);
+                if (Time.time >= _flinchUntil) SetAdditive(BreathState);
+            }
             if (dead) SetBase(Death);
             else
             {
@@ -400,6 +415,30 @@ namespace Game.Gameplay
             return facing.sqrMagnitude < 1e-6f ? 0f : Vector3.SignedAngle(transform.forward, facing, transform.up);
         }
 
+        // Level of detail by distance to the camera (ADR-189 (3), ADR-233): 0 within IkMeters = everything; 1 within AnimateMeters = no foot IK;
+        // 2 beyond = no foot IK, no additive layer, no breathing, and the skeleton is only updated while the model is on screen (the footsteps
+        // and the held weapon matter only where they can be heard: the footstep source reaches 25 m). A headless server is always level 2.
+        public const float IkMeters = 20f, AnimateMeters = 40f;
+        int _lod;
+        float _lodNext;
+        public int Lod => _lod;
+
+        void UpdateLod()
+        {
+            if (Time.time < _lodNext) return;
+            _lodNext = Time.time + 0.25f + (GetInstanceID() & 7) * 0.02f; // spread over frames
+            float d;
+            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) d = float.MaxValue;
+            else
+            {
+                var cam = PlayerController.Local != null ? PlayerController.Local.Camera : Camera.main;
+                d = cam != null ? Vector3.Distance(cam.transform.position, transform.position) : 0f;
+            }
+            _lod = d <= IkMeters ? 0 : d <= AnimateMeters ? 1 : 2;
+            var mode = _lod >= 2 ? AnimatorCullingMode.CullUpdateTransforms : AnimatorCullingMode.AlwaysAnimate;
+            if (_animator.cullingMode != mode) _animator.cullingMode = mode;
+        }
+
         void SetBase(string state)
         {
             if (_base == state) return;
@@ -436,7 +475,7 @@ namespace Game.Gameplay
         }
 
         // After the animator has posed the skeleton: read the feet, then turn the torso and pose the jump on top.
-        void LateUpdate()
+        void LateUpdateBody()
         {
             if (_animator == null) return;
             if (_footLeft != null && _footRight != null)
