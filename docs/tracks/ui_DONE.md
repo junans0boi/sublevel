@@ -51,3 +51,9 @@
 - 룩 고정본 `7b41de4`는 **PERF 게이트 조건부로 main에 병합**. 게이트 = 조용한 머신에서 mac 플레이어 빌드로 로비 600프레임+ p99(`ui_PERF_LOBBY.md`, `-perflobby`). **통과 전까지 릴리스 빌드 금지.** 못 맞추면 로비 후처리 단순화(-1.0 ms)를 채택하고 룩 변화를 수치로 보고한다.
 - 로비 Mesh LOD 낮춤은 미채택, URP 공용 MSAA 변경 금지.
 - 결과 화면 본체는 오염 병합 뒤(`ui_RESULT_SLOT.md`).
+
+## 매칭 대기열 연결 (botsnet_QUEUE_API, 2026-11-17)
+- `Core/QueueText`(대기·시작·취소·오류 문구, 서버의 실제 `MatchQueueState`만), `Gameplay/IMatchQueue`+`MatchQueueAdapter`(`MatchmakingClient` 래퍼), `LobbyPanel.AttachQueue`. 대기열이 붙어 있으면 "파티 시작" → `RequestStart(mode, partySize)`, 안내 줄에 "매칭 중 N/목표 · 남은 mm:ss"(서버가 말한 값만, 창 열리기 전엔 "매칭을 요청했습니다…"), 버튼은 "매칭 취소"(`Cancel()`), `State.Started`면 로비 매칭 상태를 닫고 기존 `MatchStarting`→`StartLobbyMatch`가 이어받음. 연결 실패(`RequestStart` false)는 토스트 "서버에 연결되지 않아 매칭을 시작할 수 없습니다."
+- 대기열이 없으면(싱글·호스트) 기존대로 로컬 시작(솔로 = 사람 1+봇 `FillToParticipants`). `MainMenu.SyncQueue`가 전용 서버에 클라이언트로 들어간 로비를 감지해 자동으로 붙이고 떼지만, **현재 UI에는 메인 로비에서 서버에 접속하는 흐름이 없어**(커스텀 모드 참가는 이전 방 화면) 실제로 붙는 것은 전용 서버 접속 흐름이 생긴 뒤.
+- 룩 변경 없음(기존 안내 줄·상태 버튼 재사용). 버튼의 경과 시간은 이 클라이언트의 로컬 시계(대기 시간), 남은 시간은 서버 값이라 둘은 다르다. 파티원 대기열 합류는 API에 아직 없음(파티장만 요청).
+- 테스트: EditMode `QueueText_ShowsOnlyRealState`(1366/1366), PlayMode `Lobby_QueueStates`(오류·요청·서버 값·취소·시작 단언) + 캡처 `docs/bible/img/ui/lobby_queue_1920x1080.png`.

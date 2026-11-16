@@ -100,6 +100,7 @@ namespace Game.Gameplay
 
         void Update()
         {
+            SyncQueue();
             if (CharacterShown && !ModalShown) _charScreen.Tick();
             if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }
             if (_modal != null && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { CloseModal(); return; }
@@ -315,6 +316,18 @@ namespace Game.Gameplay
         {
             if (_modal != null) Destroy(_modal.Root.gameObject);
             _modal = null;
+        }
+
+        // 파티 시작 uses the server's queue while this menu is connected to a server as a client (LobbyNet in a lobby, not hosting);
+        // otherwise it is the local start (solo against bots).
+        LobbyNet _queueLobby;
+        void SyncQueue()
+        {
+            if (_lobbyPanel == null || _lobbyScreen == null) return;
+            var lobby = _lobbyScreen.Lobby;
+            bool client = lobby != null && lobby.Phase == LobbyNet.PhaseKind.InLobby && !lobby.IsHost;
+            if (client && _queueLobby != lobby) { _queueLobby = lobby; _lobbyPanel.AttachQueue(new MatchQueueAdapter(new MatchmakingClient(lobby))); }
+            else if (!client && _queueLobby != null) { _queueLobby = null; _lobbyPanel.AttachQueue(null); }
         }
 
         public void Quit()

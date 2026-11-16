@@ -30,6 +30,8 @@ namespace Game.Gameplay
         public bool Matching => Party.Matching;
 
         MainMenu _menu;
+        IMatchQueue _queue;
+        bool _queueDirty;
         float _matchSeconds, _placeTimer;
         Text _led, _statusLabel, _reason, _seven, _callLabel, _fillText, _lockText, _kbd, _ledCaption;
         Image _statusFill, _statusRing, _kbdBox, _lamp1, _lamp2;
@@ -66,6 +68,18 @@ namespace Game.Gameplay
             p.Refresh();
             return p;
         }
+
+        // A server queue behind 파티 시작 (null = none: the start is local, a solo match against bots). Only real queue state is shown.
+        public void AttachQueue(IMatchQueue queue)
+        {
+            if (_queue != null) _queue.StateChanged -= OnQueueChanged;
+            _queue = queue;
+            if (_queue != null) _queue.StateChanged += OnQueueChanged;
+            Refresh();
+        }
+
+        public bool HasQueue => _queue != null;
+        void OnQueueChanged(MatchQueueState s) => _queueDirty = true;
 
         // Replaces the party (capture and later the real party feed) and redraws.
         public void SetParty(PartyLobby party, int self)
@@ -407,6 +421,8 @@ namespace Game.Gameplay
 
         // ---------------------------------------------------------------- behaviour
         // The state button's action. Squad matches wait for the team flow, so only solo starts today.
+        public void PressStatus() => OnStatus();
+
         void OnStatus()
         {
             var b = Party.ButtonFor(Self);
@@ -414,6 +430,12 @@ namespace Game.Gameplay
             switch (b.Action)
             {
                 case LobbyAction.Start:
+                    if (_queue != null)
+                    {
+                        if (!_queue.RequestStart(Party.Mode, Party.Count)) { _menu.Toast(QueueText.NotConnected); return; }
+                        Party.Start(Self);
+                        break;
+                    }
                     if (Party.Mode != TeamMode.Solo) { _menu.Toast("스쿼드 매치는 팀 규칙 병합 뒤에 열립니다."); return; }
                     _menu.SetMode(TeamMode.Solo);
                     GameSettings.DefaultViewFirstPerson = Party.View == Perspective.First;
@@ -421,7 +443,7 @@ namespace Game.Gameplay
                     break;
                 case LobbyAction.Ready: Party.SetReady(Self, true); break;
                 case LobbyAction.Unready: Party.SetReady(Self, false); break;
-                case LobbyAction.CancelMatch: Party.CancelMatch(Self); break;
+                case LobbyAction.CancelMatch: if (_queue != null) { _queue.Cancel(); _menu.Toast(QueueText.Cancelled); } Party.CancelMatch(Self); break;
                 case LobbyAction.LeaveParty: Party.Leave(Self); break;
             }
             Refresh();
@@ -429,6 +451,7 @@ namespace Game.Gameplay
 
         public void Tick(float dt)
         {
+            if (_queueDirty) { _queueDirty = false; if (_queue != null && _queue.State.Started) Party.MatchFound(); Refresh(); }
 
             if (Party.Matching) { _matchSeconds += dt; _seven.text = PartyLobby.Clock((int)_matchSeconds); }
             var kb = Keyboard.current;
@@ -487,7 +510,8 @@ namespace Game.Gameplay
 
             // Reason line, call panel, state button.
             string waiting = Party.WaitingLine();
-            if (search) _reason.text = member ? "파티장이 매칭을 시작했습니다. 취소는 파티장만 할 수 있습니다." : "매칭 중입니다. 사람이 더 들어오면 봇이 줄어듭니다.";
+            if (search && _queue != null) _reason.text = QueueText.Line(_queue.State, _queue.Waiting);
+            else if (search) _reason.text = member ? "파티장이 매칭을 시작했습니다. 취소는 파티장만 할 수 있습니다." : "매칭 중입니다. 사람이 더 들어오면 봇이 줄어듭니다.";
             else if (solo) _reason.text = "바로 시작할 수 있습니다. 부족한 인원은 봇이 채웁니다.";
             else if (member) _reason.text = Party.Members[IndexOf(Self)].Ready ? "준비 완료. 파티장이 시작하면 매칭이 시작됩니다." : "준비를 누르면 파티장이 시작할 수 있습니다.";
             else if (waiting.Length > 0) _reason.text = "⚠ " + string.Join(", ", Party.NotReady()) + " 님이 준비 중입니다. 준비가 끝나면 시작할 수 있습니다.";
