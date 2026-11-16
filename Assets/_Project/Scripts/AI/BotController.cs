@@ -695,7 +695,7 @@ namespace Game.AI
             var locomotion = GameData.Rules.Locomotion;
             float speed = (intent.Sprint || zoneMove) && !intent.Crouch ? locomotion.SprintSpeed : locomotion.WalkSpeed;
             if (_stance != null) speed *= _stance.MoveFactor;
-            _agent.speed = speed;
+            _agent.speed = speed * Combatant.StaggerMoveFactorOf(_self); // stopping power (ADR-182)
 
             bool far = Flat(target - at) > RouteLongMeters;
             float moveLimit = far ? RouteTargetMoveMeters : RepathMoveMeters;

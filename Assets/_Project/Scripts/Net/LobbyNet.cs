@@ -280,9 +280,12 @@ namespace Game.Net
 
         // Host: tells everyone the match begins. False while someone is not ready.
         // `force`: a dedicated server's start timer, which does not wait for the people who are not ready.
+        // Set by the dedicated server for --perf only: a forced start with nobody in the room (ADR-242).
+        public static bool AllowEmptyStart;
+
         public bool StartMatch(bool force = false)
         {
-            if (!(force ? IsHost && Phase == PhaseKind.InLobby && !HasStarted && _truth.Count > 0 : CanStart)) return false;
+            if (!(force ? IsHost && Phase == PhaseKind.InLobby && !HasStarted && LobbyRules.MayForceStart(_truth.Count, AllowEmptyStart) : CanStart)) return false;
             _matchStarted = true;
             // The match listens on its own port so the lobby's sockets need not be closed first.
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));

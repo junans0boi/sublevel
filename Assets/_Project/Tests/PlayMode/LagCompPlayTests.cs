@@ -17,6 +17,8 @@ namespace Game.Tests
         const string LogDir = "Logs/net-multi";
         const int Rifle = 3;
         MultiHarness _net;
+        readonly List<(WeaponDef def, float spread)> _spreads = new List<(WeaponDef, float)>();
+        bool ZeroSpread = true; // accuracy tests: no random cone, so a miss is the compensation's (ADR-244)
         readonly System.Text.StringBuilder _log = new System.Text.StringBuilder();
 
         void Log(string line) { Debug.Log(line); _log.AppendLine(line); }
@@ -25,6 +27,7 @@ namespace Game.Tests
         public IEnumerator SetUp()
         {
             _log.Clear();
+            ZeroSpread = true;
             _net = new MultiHarness { Log = Log };
             yield return _net.StartHost("TestBox");
         }
@@ -34,6 +37,8 @@ namespace Game.Tests
         {
             Directory.CreateDirectory(LogDir);
             File.WriteAllText(Path.Combine(LogDir, "lagcomp-" + TestContext.CurrentContext.Test.Name + ".log"), _log.ToString());
+            foreach (var (def, spread) in _spreads) def.SpreadDeg = spread;
+            _spreads.Clear();
             yield return _net.Teardown();
         }
 
@@ -68,8 +73,16 @@ namespace Game.Tests
                 } while (true);
                 lastShot = Time.time;
                 var eye = a.Player.EyePosition;
+                var serverEye = MultiHarness.ReplicaOf(_net.Host, a.Player).EyePosition;
+                Assert.Less((serverEye - eye).magnitude, 0.3f, $"shot {i}: the server's eye of the shooter is where the client aims from (client {eye}, server {serverEye})");
                 var aim = seen.transform.position + Vector3.up * 0.9f;
                 uint view = compensated ? a.Player.ViewTick : uint.MaxValue; // MaxValue: a claim from the future = no rewind
+                // What the server rewinds by (tick model) against how far behind the real body the shown copy is: a miss with
+                // |needed - model| > ~90 ms (half the target width / 3.2 m/s) is the time model's; a miss inside it is hit-box/geometry.
+                var hostTime = _net.Host.TimeManager;
+                double modelSec = compensated ? LagComp.RewindSeconds(hostTime.Tick, view, hostTime.TickDelta) : 0.0;
+                double behind = (_net.HostPlayer.transform.position - seen.transform.position).magnitude;
+                Log($"shot {i} compensated={compensated}: {(compensated ? $"serverTick-viewTick={(int)hostTime.Tick - (int)view}" : "no rewind")} model {modelSec * 1000:F0} ms, copy behind real by {behind:F2} m");
                 a.Player.CmdFire((aim - eye).normalized, view);
                 dir = -dir;
             }
@@ -80,10 +93,12 @@ namespace Game.Tests
             result(hits);
         }
 
-        IEnumerator Arm(System.Action<RemoteClient> done, Vector3 shooterAt, Vector3 lookAt, int weapon = Rifle, int mag = 30, AmmoType ammo = AmmoType.Rifle556)
+        IEnumerator Arm(System.Action<RemoteClient> done, Vector3 shooterAt, Vector3 lookAt, int weapon = Rifle, int mag = 30, AmmoType ammo = AmmoType.Rifle556, double loss = 0.0)
         {
             RemoteClient a = null;
             yield return _net.AddClient(c => a = c);
+            var def = GameData.Weapons.Find(weapon);
+            if (ZeroSpread && def != null && def.SpreadDeg != 0f) { _spreads.Add((def, def.SpreadDeg)); def.SpreadDeg = 0f; }
             var onServer = MultiHarness.ReplicaOf(_net.Host, a.Player);
             Assert.IsTrue(onServer.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = weapon, Amount = mag }));
             Assert.IsTrue(onServer.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = ammo, Amount = 200 }));
@@ -93,7 +108,10 @@ namespace Game.Tests
             a.Controller.LookAt(lookAt);
             yield return NetHarness.WaitUntil(() => a.Player.ActiveWeaponId == weapon, "weapon in hand", Log, 5f);
             yield return Frames(1.5f);
-            _net.Simulate(a);
+            // The server must hold the shooter where the test put it before anything is fired (a race here sent shots at the back wall).
+            yield return NetHarness.WaitUntil(() => (onServer.transform.position - shooterAt).sqrMagnitude < 0.3f * 0.3f, "shooter synced to the server", Log, 5f);
+            Assert.Less((onServer.transform.position - shooterAt).magnitude, 0.3f, "server sees the shooter where it was put");
+            _net.Simulate(a, MultiHarness.BadRoundTripMs, loss); // 100 ms stays; loss is the caller's choice (0 for the accuracy tests)
             yield return Frames(1.5f);
 
             done(a);
@@ -111,7 +129,7 @@ namespace Game.Tests
             yield return Duel(a, shots, true, near, h => withComp = h);
             int rewinds = LagCompensation.Rewinds - rewindsBefore;
             yield return Duel(a, shots, false, near, h => without = h);
-            Log($"strafing target at 100 ms / 2 %: {withComp}/{shots} hits with compensation (server rewound bodies in {rewinds} ray tests, rewind cap {LagComp.MaxRewindSeconds:F2} s), {without}/{shots} without");
+            Log($"strafing target at 100 ms / no loss: {withComp}/{shots} hits with compensation (server rewound bodies in {rewinds} ray tests, rewind cap {LagComp.MaxRewindSeconds:F2} s), {without}/{shots} without");
             Assert.GreaterOrEqual(withComp, shots - 1, "an aimed shot at what the shooter sees hits");
             Assert.Greater(rewinds, 0, "the server really rewound");
             Assert.Less(without, withComp, "without compensation the same shots mostly miss (the test can tell the difference)");
@@ -122,6 +140,14 @@ namespace Game.Tests
         [UnityTest, Timeout(180000)]
         public IEnumerator AimedShotAt35m_ABulletInFlight_HitsAStrafingTarget()
         {
+            // The strafing target wanders up to z 25 and crosses the two covers at (-5, 24) and (5, 24) (2 x 1.2 x 1 m): shots ended
+            // on the cover at (4.00, 1.07, 23.7), not on the target. They are not what this test measures, so they are out of the way.
+            foreach (var name in new[] { "Cover10", "Cover11" })
+            {
+                var cover = GameObject.Find(name);
+                Assert.IsNotNull(cover, name + " exists in TestBox (TestBoxBuilder covers[10], covers[11])");
+                cover.SetActive(false);
+            }
             RemoteClient a = null;
             yield return Arm(c => a = c, new Vector3(-27f, 0.1f, 21f), new Vector3(8f, 1.7f, 21f), 5, 5, AmmoType.Rifle762);
             const int shots = 5;
@@ -129,6 +155,26 @@ namespace Game.Tests
             yield return Duel(a, shots, true, new Vector3(8f, 0.1f, 21f), h => withComp = h, 1.7f);
             Log($"strafing target at 35 m, bullet in flight: {withComp}/{shots} hits with compensation");
             Assert.GreaterOrEqual(withComp, shots - 1);
+        }
+
+        // The same duel with the real weapon's spread (ADR-244). Statistical: 20 shots at 9 m. Spread alone cannot cause a
+        // miss here: the cone's angular radius is SpreadDeg * 0.5 (DamageRules) = 0.9 deg for the Warden = 0.14 m at 9 m, under
+        // the 0.3 m half-width of the body. So the expected hit rate is set by the rewind model; the assertion below is
+        // relative (compensation clearly beats none) until the rate is measured over 5 runs (then: floor = min - 1).
+        [Category("Stat"), Explicit("threshold not designed yet (docs/tracks/botsnet_DONE.md); run by name")]
+        [UnityTest, Timeout(240000)]
+        public IEnumerator RealWeaponAt100ms_CompensationBeatsNone_OverTwentyShots()
+        {
+            ZeroSpread = false; // SetUp puts it back
+            RemoteClient a = null;
+            yield return Arm(c => a = c, new Vector3(-26f, 0.1f, -2f), new Vector3(-17f, 1.7f, -2f));
+            const int shots = 20;
+            var near = new Vector3(-17f, 0.1f, -2f);
+            int withComp = 0, without = 0;
+            yield return Duel(a, shots, true, near, h => withComp = h);
+            yield return Duel(a, shots, false, near, h => without = h);
+            Log($"real weapon, 100 ms, no loss: {withComp}/{shots} with compensation, {without}/{shots} without");
+            Assert.Greater(withComp, without + 5, "compensation clearly beats none");
         }
     }
 }

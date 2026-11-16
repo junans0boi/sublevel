@@ -51,7 +51,17 @@ namespace Game.Net
 
         void Start()
         {
+            if (_options.Participants > 0)
+            {
+                // The match is this big; bots fill what people leave empty (BotFill, ADR-241).
+                var rules = MatchRules.Current;
+                rules.Participants = _options.Participants;
+                rules.MaxBots = _options.Participants - 1;
+                rules.BotCount = _options.Participants - 1;
+            }
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
+            MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
+            if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
@@ -63,6 +73,8 @@ namespace Game.Net
         }
 
         void OnDestroy() { if (Instance == this) Instance = null; }
+
+        float _lobbyOpenedAt;
 
         void Update()
         {
@@ -94,6 +106,12 @@ namespace Game.Net
             if (_lobby.HasStarted) return;
             int people = _lobby.PlayerCount;
             if (people != _lastPeople) { Debug.Log($"[Server] lobby: {people} / {_lobby.MaxPlayers} players"); _lastPeople = people; }
+            if (people == 0 && _options.Perf != null && Time.unscaledTime - _lobbyOpenedAt > 5f)
+            {
+                Debug.Log("[Server] --perf: starting a bots-only match");
+                _lobby.StartMatch(true);
+                return;
+            }
             if (people == 0) { _firstJoinAt = -1f; return; }
             if (_firstJoinAt < 0f) _firstJoinAt = Time.unscaledTime;
             if (_lobby.CanStart)
@@ -112,6 +130,7 @@ namespace Game.Net
         {
             _lobby = gameObject.AddComponent<LobbyNet>();
             _lobby.MatchStarting += OnMatchStarting;
+            _lobbyOpenedAt = Time.unscaledTime;
             _firstJoinAt = -1f;
             _lastPeople = 0;
             if (_lobby.StartDedicated(_options.Port))
