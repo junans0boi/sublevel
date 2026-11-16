@@ -142,16 +142,19 @@ namespace Game.Gameplay
             bool still = speed < 0.4f;
             var want = new float[2];
             var normal = new Vector3[2];
+            // The capsule hovers over flat ground by a small lift that the feet's targets already include (measured against the ground under the
+            // origin). On a slope it rests on its side and the origin sits above the surface by its own lift: the feet belong on the surface,
+            // so as the ground under the origin tilts (0 flat .. full at 10 degrees) the targets are measured from the origin's height instead.
+            var origin = GroundUnder(transform.position, out var originNormal);
+            float lift = origin.HasValue ? transform.position.y - origin.Value : 0f;
+            float extraLift = lift * Mathf.Clamp01((1f - originNormal.y) / (1f - 0.9848f));
             for (int side = 0; side < 2; side++)
             {
                 var foot = _bones[side == 0 ? FootLeft : FootRight];
                 float footY = transform.InverseTransformPoint(foot.position).y;
                 var under = GroundUnder(foot.position, out normal[side]);
-                // Against the character's own height, not the ground under its origin: on a steep slope the capsule rests on its side, with the origin
-                // above the slope's surface, and the feet belong on the surface.
-                float groundDelta = under.HasValue ? under.Value - transform.position.y : 0f;
+                float groundDelta = under.HasValue && origin.HasValue ? under.Value - origin.Value - extraLift : 0f;
                 PlantDebug[side] = $"footY {footY:F3} groundDelta {groundDelta:F3}";
-                // footY includes this frame's pelvis drop: the move is measured from where the foot is now.
                 want[side] = PlantMove(footY, _footRestHeight, groundDelta, still) * (1f - _stepShown[side]);
             }
             // The lower foot decides the pelvis: standing still it follows exactly, moving it eases (the stride lifts the feet anyway).

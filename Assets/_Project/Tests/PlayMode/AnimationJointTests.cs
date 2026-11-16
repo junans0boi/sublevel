@@ -106,13 +106,13 @@ namespace Game.Tests
         }
 
         // A review picture from the player's own camera, rendered off screen (WaitForEndOfFrame does not run in batch mode).
-        void Shot(string name, float side = 3f, float height = 0.9f, float aimHeight = 0.5f)
+        void Shot(string name, float side = 3f, float height = 0.9f, float aimHeight = 0.5f, float front = 0f)
         {
             var go = new GameObject("ShotCam");
             var cam = go.AddComponent<Camera>();
             cam.fieldOfView = 35; cam.clearFlags = CameraClearFlags.Skybox;
             var target = _pc.transform.position + Vector3.up * aimHeight;
-            go.transform.position = _pc.transform.position + _pc.transform.right * side + Vector3.up * height;
+            go.transform.position = _pc.transform.position + _pc.transform.right * side + _pc.transform.forward * (front == 0f ? 0f : -front) + Vector3.up * height;
             go.transform.LookAt(target);
             var rt = new RenderTexture(1280, 720, 24);
             cam.targetTexture = rt; cam.Render(); cam.targetTexture = null;
@@ -150,6 +150,7 @@ namespace Game.Tests
             yield return WaitUntil(() => _me.AimMode == AimMode.Shoulder, 2f, "shouldered");
             yield return new WaitForSeconds(0.8f);
             var rows = new List<float[]>();
+            Shot("shouldered_side"); Shot("shouldered_front", 0f, 1.3f, 1.1f, -3f);
             yield return Record("shouldered", 0.5f, rows);
             float worstPalm = 0f, worstPitch = 0f;
             foreach (var r in rows) { worstPalm = Mathf.Max(worstPalm, r[8]); worstPitch = Mathf.Max(worstPitch, Mathf.Abs(r[7])); }
@@ -166,9 +167,11 @@ namespace Game.Tests
             _input.Frame.Move = new Vector2(0, 1);
             yield return new WaitForSeconds(0.8f);
             var rows = new List<float[]>();
+            for (int i = 0; i < 4; i++) { Shot($"run_{i}", 3f, 0.9f, 0.9f); yield return new WaitForSeconds(0.12f); }
             yield return Record("run", 1.5f, rows);
             float lo = float.MaxValue, hi = float.MinValue, worstPalm = 0f, speed = 0f;
             foreach (var r in rows) { lo = Mathf.Min(lo, r[4]); hi = Mathf.Max(hi, r[4]); worstPalm = Mathf.Max(worstPalm, r[8]); speed += r[10] / rows.Count; }
+            Debug.Log($"[AnimMetrics] run position {_pc.transform.position} input {_input.Frame.Move} sprinting {_pc.Sprinting}");
             Debug.Log($"[AnimMetrics] run: left ankle {lo:F3}..{hi:F3} m, palm to grip max {worstPalm:F3} m, mean speed {speed:F2}");
             Assert.Greater(speed, 2f, "actually running (mean m/s)");
             Assert.Greater(hi - lo, 0.1f, "the foot lifts");
@@ -217,7 +220,8 @@ namespace Game.Tests
             _input.Frame.Reload = true;
             yield return Record("reload", 0.2f, rows);
             yield return WaitUntil(() => _me.Reloading.Value, 2f, "reloading");
-            yield return Record("reload", 4.5f, rows);
+            for (int i = 0; i < 6; i++) { yield return new WaitForSeconds(0.4f); Shot($"reload_{i}", 2.5f, 1.2f, 1.1f); }
+            yield return Record("reload", 2.5f, rows);
             float maxW = 0f, maxPalm = 0f;
             foreach (var r in rows) { maxW = Mathf.Max(maxW, r[9]); if (r[9] > 0.9f) maxPalm = Mathf.Max(maxPalm, r[8]); }
             Debug.Log($"[AnimMetrics] reload: action layer weight max {maxW:F2}, left palm to grip max {maxPalm:F3} m while the clip runs");
@@ -240,6 +244,7 @@ namespace Game.Tests
             _input.Frame.AimHeld = true;
             yield return new WaitForSeconds(1.0f);
             var rows = new List<float[]>();
+            Shot("prone_side");
             yield return Record("prone", 0.5f, rows);
             var r0 = rows[rows.Count - 1];
             Shot("prone_tpp");
@@ -284,6 +289,7 @@ namespace Game.Tests
             _pc.Teleport(top.point + Vector3.up * 0.05f);
             _pc.LookAt(top.point + new Vector3(0f, 1.6f, 10f)); // up the slope: one foot is uphill of the other when the stance is staggered
             yield return new WaitForSeconds(1.2f);
+            Shot($"slope{SlopeDeg:0}_side", 3f, 0.8f, 0.7f);
             var err = SoleErrors(col, flatRest / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad)); // vertical offset of an ankle over a sloped sole
             Debug.Log($"[AnimMetrics] slope {SlopeDeg} deg: sole errors left {err[0]:F3} right {err[1]:F3} m, plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} pelvis drop {_anim.PlantDrop:F3} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]} | capsule y {_pc.transform.position.y:F3} ground at origin {top.point.y:F3}");
             Assert.LessOrEqual(Mathf.Abs(err[0]), tolerance, "left foot on the slope (m)");
@@ -300,8 +306,11 @@ namespace Game.Tests
             yield return WaitUntil(() => _me.GetComponent<CombatantStance>().CrouchAmount >= 0.999f, 2f, "crouched");
             yield return new WaitForSeconds(0.6f);
             var rows = new List<float[]>();
+            Shot("crouch_side", 3f, 1.0f, 0.8f);
             yield return Record("crouch", 0.4f, rows);
             var r = rows[rows.Count - 1];
+            Physics.Raycast(_pc.transform.position + Vector3.up, Vector3.down, out var floorHit, 3f);
+            Debug.Log($"[AnimMetrics] crouch origin over floor {_pc.transform.position.y - floorHit.point.y:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} drop {_anim.PlantDrop:F3} lod {_anim.Lod} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]}");
             Debug.Log($"[AnimMetrics] crouch: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} palm {r[8]:F3}");
             Assert.That(r[3], Is.InRange(0.9f, 1.3f), "head height crouched (m)");
             Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");

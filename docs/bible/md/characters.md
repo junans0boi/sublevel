@@ -12,6 +12,16 @@
 | 확정 | 눈 높이(서기) | 1.6m | 앉기 -0.65, 엎드리기 -1.2 (Stance 규칙) | Assets/_Project/Scripts/Net/Combatant.cs:28 |
 | 확정 | 무기 소켓 | Wrist.R 이름 문자열 한 곳 | 교체 비용 작음 | docs/research/01_character.md:5-6 |
 
+## 로스터 구현 상태 (캐릭터 트랙)
+
+| 상태 | 항목 | 값 | 메모 | 근거 |
+|---|---|---|---|---|
+| 확정 | 로스터 모델 | 12 모델(Mixamo 10 + UBC 2) x 변형 9(기본+색조 8) = 108 외형 | Mixamo 새 9종은 민간 의상(청바지·후드). UBC는 의상이 없는 맨몸이라 단색 작전복 재질. 군복 계열이 더 필요하면 준환 추가 다운로드·CC0 의상 반입 | Prefabs/Roster/Roster_*.prefab, Editor/CharacterRoster.cs |
+| 확정 | 정규화 | 키 1.8m(머리 꼭대기), 눈 1.6m, +Z 정면(UBC는 원본이 -Z라 180도 회전) | Humanoid 3종 모두 Avatar 유효. 소켓은 `CharacterDef.Sockets` 참조(WeaponSocket·HeadSocket·BackSocket·EyePoint) | Tests/EditMode/CharacterRosterTests.cs |
+| 확정 | 비율(실측) | 머리(목관절~정수리)/키 0.148~0.175, 팔(어깨~손목)/키 0.25~0.31, 다리/키 0.42~0.49 (12 모델 실측) | 소총 대비 팔: Warden 0.75m=키의 0.42배·팔의 1.33배(Swat 기준) | Logs/roster_measure.txt |
+| 확정 | LOD | Unity 내장 Mesh LOD + 컬 단계 LODGroup 100m 컬(lodBias 1). 원본 LOD0: Swat 19.4k·UBC 14~15k·Mixamo 새 9종 42~59k → 모델별 시작 LOD(1~3)로 ≤15k | 4m 7.0k~14.5k, 20m 1.6k~8.0k, 70m 0.4k~2.0k | ADR-227 |
+| 확정 | 50체 렌더(실측) | 에디터 PlayMode 1080p 12모델 혼합: 6~90m 분산 p99 5.3ms·드로우 373·삼각형 26만 / 8~25m 밀집 p99 6.3ms·드로우 489·삼각형 63만, SetPass 11 | T-포즈 정지(애니메이터 없음)·그림자 켬. 애니메이션 비용은 애니 트랙 50인 Animator PERF가 따로 | Logs/perf/roster50.txt |
+
 ## 자세별 수치
 
 | 상태 | 자세 | 캡슐 높이 m | 눈 낮춤 m | 이동 배율 | 탄퍼짐 배율 | 발소리 배율 | 근거 |
