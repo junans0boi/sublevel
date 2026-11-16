@@ -1,0 +1,16 @@
+S7 patch (apply at a Unity turn; Assets/ not edited now). Fixes PlayMode CoreLoopTests.DataFiles_LoadAndAreConsistent
+"Expected: 9 But was: 25": the roster is now 16 ordinary guns + 5 supply guns + 4 melee weapons (ADR-172, ADR-182, ADR-073).
+The data-consistency meaning is kept (the line after it still checks every loot weapon id exists); only the count changes.
+Roster contents are separately pinned by EditMode WeaponRosterTests / SniperRifleTests.
+
+--- a/Assets/_Project/Tests/PlayMode/CoreLoopTests.cs
++++ b/Assets/_Project/Tests/PlayMode/CoreLoopTests.cs
+@@ -146,7 +146,7 @@
+         [UnityTest]
+         public IEnumerator DataFiles_LoadAndAreConsistent()
+         {
+-            Assert.AreEqual(9, GameData.Weapons.Weapons.Length, "5 guns + 4 melee weapons (ADR-073)");
++            Assert.AreEqual(25, GameData.Weapons.Weapons.Length, "16 ordinary + 5 supply guns (ADR-172, ADR-182) + 4 melee weapons (ADR-073)");
+             foreach (var entry in GameData.Loot.Entries)
+                 if (entry.Kind == LootKind.Weapon)
+                     Assert.IsNotNull(GameData.Weapons.Find(entry.WeaponId), "loot refers to weapon " + entry.WeaponId);
