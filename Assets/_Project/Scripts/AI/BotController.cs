@@ -823,6 +823,8 @@ namespace Game.AI
         const float KeyBoardWaitSeconds = 6f;   // doors open 30 s: a few seconds for the team to step in, then close
         const float KeyStationMaxMeters = 400f;
         int _keyStation = -1, _keyDecision;
+        bool _keyLogged, _keyNoStation;
+        static bool _keyGateLogged;
         float _keyAt, _keyTryAt;
 
         bool TryKeyElevator(PollutionDirector zones, Vector3 at, out Vector3 target)
@@ -830,7 +832,11 @@ namespace Game.AI
             target = default;
             var net = KeyElevatorNet.Instance;
             var rides = ElevatorRides.Instance;
-            if (_keys == null || net == null || rides == null || !rides.Running) return false;
+            if (_keys == null || net == null || rides == null || !rides.Running)
+            {
+                if (!_keyGateLogged) { _keyGateLogged = true; Debug.Log($"[BotStat] key-gate keys={_keys != null} net={net != null} rides={rides != null} running={(rides != null && rides.Running)}"); }
+                return false;
+            }
             var sys = net.System;
             if (_keyStation >= 0)
             {
@@ -858,6 +864,7 @@ namespace Game.AI
             int own = zones.RegionIndexAt(at);
             if (own < 0 || !(zones.StateOf(own) == ZoneState.Warning || zones.IsDoomed(at))) return false;
             if (_keyDecision == 0) _keyDecision = BotPollutionPlan.WantsKey(_level, unchecked(_botIndex * 7919 + _self.ObjectId)) ? 1 : -1;
+            if (!_keyLogged) { _keyLogged = true; Debug.Log($"[BotStat] key-eligible bot={_botIndex} level={_level} wants={_keyDecision > 0} region={own} stations={rides.StationCount}"); }
             if (_keyDecision < 0) return false;
             int best = -1;
             float bestMeters = KeyStationMaxMeters;
@@ -867,13 +874,13 @@ namespace Game.AI
                 float m = Flat(rides.StationSpawn(i) - at);
                 if (m < bestMeters) { bestMeters = m; best = i; }
             }
-            if (best < 0) return false;
+            if (best < 0) { if (!_keyNoStation) { _keyNoStation = true; Debug.Log($"[BotStat] key-nostation bot={_botIndex} region={own}"); } return false; }
             target = rides.StationSpawn(best);
             if (rides.StationAt(at) == best && Time.time >= _keyTryAt)
             {
                 _keyTryAt = Time.time + 1f;
                 if (net.ServerInsert(_self, best)) { _keyStation = best; _keyAt = Time.time; KeyInsertOk++; Debug.Log($"[BotStat] key-insert station={best} level={_level} bot={_botIndex}"); }
-                else KeyInsertFail++;
+                else { KeyInsertFail++; if (KeyInsertFail <= 5) Debug.Log($"[BotStat] key-insert-failed bot={_botIndex} station={best} standing={_self.Standing} keys={_keys.Keys.Value}"); }
             }
             return true;
         }

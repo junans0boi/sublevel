@@ -70,8 +70,19 @@ namespace Game.Net
             else Debug.Log(line);
         }
 
+        public static bool GiveKeys;
+        bool _keysGiven;
+
         void Update()
         {
+            if (GiveKeys && !_keysGiven && Combatant.All.Count > 1)
+            {
+                _keysGiven = true;
+                int n = 0;
+                foreach (var c in Combatant.All)
+                    if (c != null && !c.IsPlayer && c.TryGetComponent(out KeyHolder holder)) { holder.ServerAdd(1); n++; }
+                Debug.Log($"[Perf] gave a key to {n} bots");
+            }
             if (_gather && !_gathered && Combatant.All.Count > 1)
             {
                 if (_matchStart < 0f) _matchStart = Time.realtimeSinceStartup;

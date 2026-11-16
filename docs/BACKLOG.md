@@ -1,0 +1,1 @@
+- [botsnet] 열쇠 흐름이 승강장 진입 전에 막히는 원인(`[BotStat] key-gate` 진단 로그 실행)·T9 팀·칩·방독 사용·T10 관심 지점·T13 PERF 자동화·T11 NavMesh 연결성·T12 통계 시나리오 (docs/tracks/botsnet_DONE.md)

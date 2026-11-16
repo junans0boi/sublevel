@@ -61,6 +61,7 @@ namespace Game.Net
             }
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
             MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
+            ServerPerfProbe.GiveKeys = _options.PerfKeys;
             if (_options.PerfQuick > 1f) PollutionDirector.RulesOverride = PollutionRules.QuickMatch(_options.PerfQuick);
             if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;
