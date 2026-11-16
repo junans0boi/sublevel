@@ -9,7 +9,7 @@ ADR-230~234. 판정은 수치 + 연속 프레임 CSV + 테스트(ADR-191). 정�
 - **왼손**: `LeftHandGrip`(무기 자식, 런타임 생성)이 왼 팜 목표. 어깨 조준·달리기에서 팜-그립 최대 3.0cm(기준 5cm), 총구-시선 2.2도.
 - **재장전**: Action 레이어 클립, 왼손이 총에서 0.4~0.6m 떨어졌다 3cm 안으로 복귀.
 - **엎드림**(#225): `ProneFiringRifle` 클립. 엉덩이 0.133·머리 0.29m·몸통 89.7도·총구 오차 0.9도(전: 총구 -50도, 판자 자세). 수영은 기존 피치 몸 유지. (ADR-231)
-- **발 IK**(#235): 접지 캐스트 + 골반 내림 + 발바닥 기울임. 25도 경사 -1.3cm, 35도 -2.7cm(원점 기준 판), 평지는 기존 기준. **마지막 수정(평지 기준 복원 + 경사 보정을 원점 기울기로 섞음)은 Unity 독점 창 때문에 재측정 못 함** — 아래 "확인 못 한 것" 참고. (ADR-232)
+- **발 IK**(#235): 접지 캐스트 + 골반 내림 + 발바닥 기울임. 25도 경사 -1.3/-1.2cm, 35도 -2.7/-2.7cm, 평지 웅크림 발 0.125/0.121(눌림 없음). 평지 기준 복원 + 경사 보정을 원점 기울기로 섞은 최종 판을 재측정해 확인(2026-11-16). (ADR-232)
 - **LOD/PERF**(#50인): Animator 50체(수동 Update) Base만 2.25ms·4레이어 2.43ms, 봇 44체 코드 애니메이션 0.32ms. 20m 안 전부 / 40m 안 IK 없음 / 밖 골격 컬. (ADR-233, `AnimatorPerfTests`)
 - **테스트 재작성**: `CharacterAnimatorTests` 13건(레이어·마스크·Humanoid 클립·관절 높이·각도), `AnimationJointTests` 8건(팜-그립·총구·발 올림·재장전·엎드림·웅크림·대각 이동·경사 2종), `RigBones`로 본 이름 조회 제거(AimAndLean·Stance·SlotsAndProne·CombatantPresentation). EditMode 전체 **1235/1235 통과**(마지막 전체 실행, 발 IK 마지막 수정 전).
 - 문서: ADR-230~234, ASSET_LEDGER K-0001, BACKLOG 3줄, bible `animation.json` + `bible_build.py`.
@@ -27,7 +27,7 @@ ADR-230~234. 판정은 수치 + 연속 프레임 CSV + 테스트(ADR-191). 정�
 | #230 #237 #238 | 범위 밖 |
 
 ## 못 한 것 / 확인 못 한 것
-- **마지막 발 IK 수정 이후 PlayMode 미실행**(master가 Unity 독점 창을 줘서 중단·종료됨). 그 직전 실행에서 `AnimationJointTests` 25도 3.7cm·35도 5.3cm로 기준(3·5cm)을 약간 넘었고, 이를 고치려는 수정이 컴파일·검증 안 됨. 독점 창이 닫히면 `AnimationJointTests`, `StancePlayTests`, `AimAndLeanTests`로 확인해야 한다. 안 맞으면 직전 커밋(`feat(animation): distance LOD…`)의 발 IK(원점 기준)가 경사에서 -1.3/-2.7cm였지만 평지에서 발이 8cm 눌리는 결함이 있어 그대로는 못 쓴다.
+- 최종 판 재측정: `AnimationJointTests`·`StancePlayTests`·`AimAndLeanTests` 29/29 통과(소리 없음). 달리기 발 0.079~0.208m, 팜-그립 3.0cm.
 - 방향 2D 블렌드·점프·스프린트 클립(위), 장전 중 마그 모델 소품, 계단 측정, 12모델 전부 PlayMode 캡처(Swat·UBC·Brian 프로브만).
 - PlayMode 회귀(마지막 전체 묶음 146건): 143 통과. 실패 3건 — `ReplicationBodyTests` 2건은 묶음 실행에서만 실패, 단독 재실행 통과(멀티 클라이언트 하네스 타이밍). `StancePlayTests.Jumping_GetsUpFromACrouch…`는 가속 중 0.4s 시점 속도를 재는 타이밍 의존 테스트(4.0~6.2 변동, 단독 2회 통과). 애니 코드와 무관하다는 증거는 단독 통과뿐(추정).
 - 오디오: 모든 PlayMode는 `ProjectSettings/AudioManager.m_DisableAudio=1`로 돌린 뒤 `git restore`(래퍼 스크립트). 소리 나는 테스트는 돌리지 않았다.
