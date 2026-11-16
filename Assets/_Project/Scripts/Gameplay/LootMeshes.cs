@@ -25,6 +25,7 @@ namespace Game.Gameplay
         {
             int key = (int)kind * 100 + (kind == LootKind.Ammo ? (int)ammo : Armor.IsArmor(kind) || kind == LootKind.Backpack ? Mathf.Clamp(tier, 1, 3) : 0);
             if (Cache.TryGetValue(key, out var mesh) && mesh != null) return mesh;
+            if (WornGearMeshes.Handles(kind)) return WornGearMeshes.Ground(kind, tier); // helmet, vest, backpack share the worn models
             var d = new MeleeMeshes.Draft();
             switch (kind)
             {
@@ -155,6 +156,7 @@ namespace Game.Gameplay
         // Body, Dark and Accent colours of a pickup.
         public static void Colors(LootKind kind, AmmoType ammo, int tier, Color[] into)
         {
+            if (WornGearMeshes.Handles(kind)) { WornGearMeshes.Colors(kind, tier, into); return; }
             into[Dark] = DarkColor;
             into[Accent] = White;
             switch (kind)

@@ -176,7 +176,7 @@ namespace Game.Gameplay
                 {
                     var filter = renderer.GetComponent<MeshFilter>();
                     string n = renderer.name;
-                    on = (n == "Helmet" || n == "VestFront" || n == "VestBack" || n == "Backpack") && filter != null && filter.sharedMesh != null;
+                    on = (n == "Helmet" || n == "Vest" || n == "Backpack") && filter != null && filter.sharedMesh != null;
                 }
                 else on = false;
                 renderer.enabled = on;

@@ -354,4 +354,66 @@ public static class CharacterRoster
         }
         EditorApplication.Exit(0);
     }
+
+    static void Stage(out Camera cam)
+    {
+        SceneLook.PrepareTextures();
+        var profile = RenderSetup.Apply();
+        UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+        SceneLook.SetupSky(); SceneLook.AddLights(); SceneLook.AddPostVolume(profile);
+        SceneLook.WorldBox("Floor", null, new Vector3(0, -0.05f, 0), new Vector3(60, 0.1f, 60), SceneLook.Floor, 2.5f);
+        cam = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
+        cam.fieldOfView = 30; SceneLook.EnablePost(cam);
+        Directory.CreateDirectory("Logs/roster");
+    }
+
+    static GameObject Geared(string id, Vector3 at, int tier)
+    {
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/Roster_{id}.prefab"));
+        go.transform.position = at;
+        PoseLowReady(go.GetComponent<CharacterDef>());
+        go.AddComponent<ArmorVisual>().ShowTiers(tier, tier);
+        go.AddComponent<BackpackVisual>().Show(tier);
+        return go;
+    }
+
+    // tools/unity.sh run-gfx CharacterRoster.RenderGearSheet -> Logs/roster/gear_t{1,2,3}_{front,back}.png (all 15 models in a row),
+    // gear_detail_<id>.png (tiers 1-3 side by side, three-quarter front and back) and gear_legacy.png (the old Swat character).
+    public static void RenderGearSheet()
+    {
+        Stage(out var cam);
+        for (int tier = 1; tier <= 3; tier++)
+        {
+            var roots = new List<GameObject>();
+            for (int m = 0; m < Entries.Length; m++)
+                roots.Add(Geared(Entries[m].Id, new Vector3((m - (Entries.Length - 1) * 0.5f) * 1.15f, 0, 0), tier));
+            SceneLook.Shot(cam, $"Logs/roster/gear_t{tier}_front.png", new Vector3(0, 1.3f, 16f), new Vector3(0, 1.0f, 0));
+            SceneLook.Shot(cam, $"Logs/roster/gear_t{tier}_back.png", new Vector3(0, 1.3f, -16f), new Vector3(0, 1.0f, 0));
+            foreach (var r in roots) Object.DestroyImmediate(r);
+        }
+        foreach (var id in new[] { "MixamoSwat", "MixamoBrian", "MixamoSteve", "MixamoGasMask", "UbcMale", "UbcFemale" })
+        {
+            var roots = new List<GameObject>();
+            for (int tier = 1; tier <= 3; tier++) { var g = Geared(id, new Vector3((tier - 2) * 1.3f, 0, 0), tier); g.transform.rotation = Quaternion.Euler(0, 0, 0); roots.Add(g); }
+            cam.fieldOfView = 24;
+            SceneLook.Shot(cam, $"Logs/roster/gear_detail_{id}_front.png", new Vector3(2.4f, 1.9f, 5.2f), new Vector3(0, 1.3f, 0));
+            SceneLook.Shot(cam, $"Logs/roster/gear_detail_{id}_back.png", new Vector3(-2.4f, 1.9f, -5.2f), new Vector3(0, 1.3f, 0));
+            cam.fieldOfView = 30;
+            foreach (var r in roots) Object.DestroyImmediate(r);
+        }
+        // The old character (CharacterKit, no CharacterDef): the hand-tuned constants path.
+        SceneLook.PrepareTextures();
+        CharacterKit.Prepare();
+        for (int tier = 1; tier <= 3; tier++)
+        {
+            var slot = new GameObject("Legacy" + tier).transform; slot.position = new Vector3((tier - 2) * 1.3f, 0, 0);
+            var v = CharacterKit.AddTo(slot);
+            v.Root.gameObject.AddComponent<ArmorVisual>().ShowTiers(tier, tier);
+            v.Root.gameObject.AddComponent<BackpackVisual>().Show(tier);
+        }
+        cam.fieldOfView = 24;
+        SceneLook.Shot(cam, "Logs/roster/gear_legacy_front.png", new Vector3(2.4f, 1.9f, 5.2f), new Vector3(0, 1.3f, 0));
+        SceneLook.Shot(cam, "Logs/roster/gear_legacy_back.png", new Vector3(-2.4f, 1.9f, -5.2f), new Vector3(0, 1.3f, 0));
+        EditorApplication.Exit(0);
+    }
 }

@@ -14,6 +14,7 @@ namespace Game.Tests
     [Category("Perf")]
     public class RosterRenderPerfTests
     {
+        static bool WithGear = true;
         static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "MixamoSteve", "MixamoSwatGuy", "MixamoGasMask", "UbcMale", "UbcFemale" };
 
         static CharacterDef[] Spawn(int count, float near, float far, int seed)
@@ -29,6 +30,7 @@ namespace Game.Tests
                 var go = Object.Instantiate(prefab, new Vector3(Mathf.Sin(a) * d, 0, Mathf.Cos(a) * d), Quaternion.Euler(0, rng.Next(0, 360), 0));
                 var def = go.GetComponent<CharacterDef>();
                 def.ApplyVariant(rng.Next(0, def.Variants.Length));
+                if (WithGear) { int t = 1 + i % 3; go.AddComponent<ArmorVisual>().ShowTiers(t, t); go.AddComponent<BackpackVisual>().Show(t); } // helmet + vest + backpack on everyone
                 list[i] = def;
             }
             return list;
@@ -56,17 +58,17 @@ namespace Game.Tests
             var sb = new System.Text.StringBuilder();
             RenderProbe.Result empty = default;
             yield return RenderProbe.Measure(cam, r => empty = r, 60, 20);
-            sb.AppendLine($"empty floor+sun: {empty}");
-            foreach (var (name, near, far) in new[] { ("spread 6-90m", 6f, 90f), ("worst 8-25m", 8f, 25f) })
+            sb.AppendLine($"empty floor+sun: {empty} | with helmet+vest+backpack on every character (tiers 1-3 mixed)");
+            foreach (var (name, near, far, gear) in new[] { ("spread 6-90m NO gear", 6f, 90f, false), ("spread 6-90m +gear", 6f, 90f, true), ("worst 8-25m NO gear", 8f, 25f, false), ("worst 8-25m +gear", 8f, 25f, true) })
             {
-                var chars = Spawn(50, near, far, 1);
+                WithGear = gear; var chars = Spawn(50, near, far, 1);
                 yield return null;
                 // Best of 3: other Unity instances on the same Mac cause one-off spikes (PERF_BUDGET measures on a quiet machine).
                 RenderProbe.Result res = default; bool first = true;
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     RenderProbe.Result r1 = default;
-                    yield return RenderProbe.Measure(cam, r => r1 = r, 90, 30, $"Logs/roster/perf50_{(near < 7 ? "spread" : "worst")}.png");
+                    yield return RenderProbe.Measure(cam, r => r1 = r, 90, 30, $"Logs/roster/perf50_{(near < 7 ? "spread" : "worst")}{(gear ? "_gear" : "")}.png");
                     if (first || r1.Stats.P99Ms < res.Stats.P99Ms) res = r1;
                     first = false;
                     if (res.Stats.P99Ms <= RenderProbe.RenderBudgetMs) break;

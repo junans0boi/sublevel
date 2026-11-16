@@ -12,13 +12,12 @@ namespace Game.Gameplay
     {
         // Character-frame placement, as the prefab stands (metres): helmet base above the head bone, vest panels on
         // the chest and the back.
-        static readonly Vector3 HelmetBaseAboveHead = new Vector3(0f, 0.07f, 0.012f);
-        static readonly Vector3 VestFront = new Vector3(0f, 1.22f, 0.12f);
-        static readonly Vector3 VestBack = new Vector3(0f, 1.22f, -0.12f);
+        static readonly Vector3 HelmetBaseAboveHead = new Vector3(0f, 0.11f, 0.03f);
+        static readonly Vector3 VestCentre = new Vector3(0f, 1.22f, 0f);
         // The ground models are bigger than the body: the helmet is taller (it has to cover the model's own one),
         // the vest is narrower and shorter. Scales are along the mesh's own axes.
-        static readonly Vector3 HelmetScale = new Vector3(1f, 1.15f, 1f);
-        static readonly Vector3 VestScale = new Vector3(0.8f, 1f, 0.65f);
+        static readonly Vector3 HelmetScale = new Vector3(1.6f, 1.6f, 1.6f);
+        static readonly Vector3 VestScale = new Vector3(1.15f, 1.15f, 1.15f);
 
         sealed class Part
         {
@@ -29,7 +28,7 @@ namespace Game.Gameplay
         }
 
         CombatantGear _gear;
-        Part _helmet, _vestFront, _vestBack;
+        Part _helmet, _vestFront; // the vest is one wrap-around model now
         readonly Color[] _colors = new Color[3];
 
         public int ShownHelmetTier => _helmet == null || _helmet.Shown < 0 ? 0 : _helmet.Shown;
@@ -43,7 +42,6 @@ namespace Game.Gameplay
             _hidden = !visible;
             Apply(_helmet);
             Apply(_vestFront);
-            Apply(_vestBack);
         }
 
         bool _hidden;
@@ -58,17 +56,20 @@ namespace Game.Gameplay
         void Init()
         {
             if (_helmet != null) return;
+            if (WornGearMeshes.TryFit(transform, out var fit))
+            {
+                // Roster character: mounts on the Humanoid head and chest bones, sized by head height and shoulder width.
+                _helmet = NewPart("Helmet", fit.Head, fit.HelmetBase, transform.rotation, Vector3.one * fit.HeadScale);
+                _vestFront = NewPart("Vest", fit.Torso, fit.VestCentre, transform.rotation, Vector3.one * fit.TorsoScale);
+                return;
+            }
             var head = BackpackVisual.Humanoid(transform, HumanBodyBones.Head) ?? BackpackVisual.Deep(transform, "Head");
             var torso = BackpackVisual.FindTorso(transform);
             _helmet = NewPart("Helmet", head != null ? head : torso != null ? torso : transform,
                 head != null ? head.position + transform.TransformVector(HelmetBaseAboveHead) : transform.TransformPoint(new Vector3(0f, 1.62f, 0f)),
                 transform.rotation, HelmetScale);
             var bone = torso != null ? torso : transform;
-            // The flat ground model stands up: its top face (+y) turns to the front, the shoulder straps (+z) go up.
-            var front = transform.rotation * Quaternion.Euler(0f, 180f, 0f) * Quaternion.Euler(-90f, 0f, 0f);
-            var back = transform.rotation * Quaternion.Euler(-90f, 0f, 0f);
-            _vestFront = NewPart("VestFront", bone, transform.TransformPoint(VestFront), front, VestScale);
-            _vestBack = NewPart("VestBack", bone, transform.TransformPoint(VestBack), back, VestScale);
+            _vestFront = NewPart("Vest", bone, transform.TransformPoint(VestCentre), transform.rotation, VestScale);
         }
 
         Part NewPart(string name, Transform bone, Vector3 position, Quaternion rotation, Vector3 scale)
@@ -87,7 +88,7 @@ namespace Game.Gameplay
         void LateUpdate()
         {
             Show(LootKind.Helmet, _helmet, null, _gear.HelmetTier.Value);
-            Show(LootKind.Vest, _vestFront, _vestBack, _gear.VestTier.Value);
+            Show(LootKind.Vest, _vestFront, null, _gear.VestTier.Value);
         }
 
         // Lets a capture show tiers in edit mode, where Awake does not run.
@@ -95,7 +96,7 @@ namespace Game.Gameplay
         {
             Init();
             Show(LootKind.Helmet, _helmet, null, helmet);
-            Show(LootKind.Vest, _vestFront, _vestBack, vest);
+            Show(LootKind.Vest, _vestFront, null, vest);
         }
 
         void Show(LootKind kind, Part a, Part b, int tier)
@@ -110,12 +111,8 @@ namespace Game.Gameplay
 
         void Fill(LootKind kind, Part part, int tier)
         {
-            part.Filter.sharedMesh = tier > 0 ? LootMeshes.Model(kind, default, tier) : null;
-            if (tier > 0)
-            {
-                LootMeshes.Colors(kind, default, tier, _colors);
-                part.Renderer.sharedMaterials = new[] { BackpackVisual.Tint(_colors[0]), BackpackVisual.Tint(_colors[1]), BackpackVisual.Tint(_colors[2]) };
-            }
+            part.Filter.sharedMesh = tier > 0 ? WornGearMeshes.Model(kind, tier) : null;
+            if (tier > 0) part.Renderer.sharedMaterial = WornGearMeshes.Palette(tier);
             Apply(part);
         }
 
