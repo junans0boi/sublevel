@@ -41,6 +41,10 @@ namespace Game.Gameplay
 
         GameObject _root, _main, _settings, _hint, _credits;
         CustomScreen _customScreen;
+        CharacterScreen _charScreen;
+        GameObject _char;
+        public CharacterScreen Character => _charScreen;
+        public bool CharacterShown => _char != null && _char.activeSelf;
         public CustomScreen CustomPanel => _customScreen;
         SettingsScreen _settingsScreen;
         Text _loading;
@@ -89,6 +93,7 @@ namespace Game.Gameplay
 
         void Update()
         {
+            if (CharacterShown && !ModalShown) _charScreen.Tick();
             if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }
             if (_modal != null && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { CloseModal(); return; }
             if (_lobbyPanel != null && !IsLoading && _main != null && _main.activeSelf) _lobbyPanel.Tick(Time.unscaledDeltaTime);
@@ -258,7 +263,16 @@ namespace Game.Gameplay
         }
 
         // 외형: the character screen.
-        public void ShowCharacter() => Toast("외형 화면은 다음 작업에서 열립니다.");
+        public void ShowCharacter()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            if (_credits != null) _credits.SetActive(false);
+            if (_custom != null) _custom.SetActive(false);
+            _charScreen.Reload();
+            _char.SetActive(true);
+        }
 
         public void ShowQuit() => ShowModal("pop_quit");
 
@@ -298,6 +312,7 @@ namespace Game.Gameplay
             _settings.SetActive(settings);
             if (_credits != null) _credits.SetActive(false);
             if (_custom != null) _custom.SetActive(false);
+            if (_char != null) _char.SetActive(false);
         }
 
         void Build()
@@ -328,6 +343,9 @@ namespace Game.Gameplay
             _customScreen = new CustomScreen();
             _custom = _customScreen.Build(parent, this).gameObject;
             _custom.SetActive(false);
+            _charScreen = new CharacterScreen();
+            _char = _charScreen.Build(parent, this).gameObject;
+            _char.SetActive(false);
 
             var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(600f, 40f));
             _loading = UiKit.Label(loading, "", 28, UiKit.Text, TextAnchor.MiddleCenter);

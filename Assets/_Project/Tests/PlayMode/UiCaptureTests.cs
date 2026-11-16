@@ -137,6 +137,23 @@ namespace Game.Tests
             menu.Back();
             Assert.IsFalse(menu.CustomShown);
 
+            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
+            menu.ShowCharacter();
+            Assert.IsTrue(menu.CharacterShown);
+            Assert.AreEqual("외형 06 / 24", menu.Character.HeaderText);
+            Assert.AreEqual("현장 소장", menu.Character.NameText);
+            Assert.AreEqual("색 변형 · 올리브", menu.Character.ColorText);
+            DumpScreen(menu.Character.Screen, Path.Combine(folder, "char_rects.txt"));
+            yield return Shots(folder, "char");
+            menu.Character.Select(1); menu.Character.SetColor(3);
+            Assert.AreEqual("외형 02 / 24", menu.Character.HeaderText);
+            Assert.AreEqual("색 변형 · 청회색", menu.Character.ColorText);
+            yield return Shots(folder, "char_changed");
+            menu.Character.Apply();
+            Assert.IsFalse(menu.CharacterShown);
+            Assert.AreEqual(1, PlayerPrefs.GetInt(CharacterScreen.IndexKey));
+            Assert.AreEqual(3, PlayerPrefs.GetInt(CharacterScreen.ColorKey));
+            PlayerPrefs.DeleteKey(CharacterScreen.IndexKey); PlayerPrefs.DeleteKey(CharacterScreen.ColorKey);
             menu.ShowQuit();
             Assert.IsTrue(menu.ModalShown);
             DumpScreen(menu.ModalScreen, Path.Combine(folder, "modal_quit_rects.txt"));
