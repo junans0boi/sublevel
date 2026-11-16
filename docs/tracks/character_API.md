@@ -29,10 +29,12 @@
 - `LODGroup`은 단일 단계, 100 m 컬(`QualitySettings.lodBias` 1 기준, 2면 200 m). 4 m 삼각형 7.0~14.5k.
 - 애니: LOD1 이상에서 Additive·발 IK·손가락을 끄려면 거리(또는 `LODGroup`의 `GetLODs`가 아니라 카메라 거리)로 판단한다. Mesh LOD는 현재 몇 단계인지 API가 없다(추정).
 
-## 기존 `ArmorVisual`·`BackpackVisual`과의 호환 (확인한 것)
-- 둘 다 본 **이름**으로 마운트를 찾는다(`"Head"`, `"Torso"/"Chest"/"Abdomen"`). 프리팹에 `Head`(UBC는 원래 본), `Chest` 별칭 Transform을 넣어 붙는다. 헬멧은 머리 본, 조끼·배낭은 `Chest` 별칭(= UpperChest) 아래에 붙어 애니를 따라간다.
-- 헬멧 오프셋 상수(머리 본 +0.07 m)는 Swat 기준이다. 별칭은 정수리 −0.16 m 지점에 있어 Mixamo 10종은 눈이 가려지지 않는다. **UBC 2종은 본 이름이 이미 `Head`라 별칭을 못 넣어 브림이 y 1.67 m로 메시 눈을 덮는다.** 고치려면 `ArmorVisual.Init`이 `CharacterDef.Sockets.HeadSocket − 0.16 m`를 쓰게 3줄 수정(애니 트랙, master 중재 대상).
-- 검증: `CharacterRosterTests.WornGear_MountsOnRosterBones_AtHeadChestBack`(헬멧 본 아래, 조끼 y 1.08~1.46, 배낭 z −0.20 = 가슴 뒤).
+## 장비 비주얼 (헬멧·조끼·배낭, 절차적 로우폴리)
+- 모델은 `WornGearMeshes`(Gameplay)가 코드로 만든다: 헬멧(3단계: 가벼운 철모 / 전술 헬멧 / 풀 커버), 조끼(곡면 앞·뒤 판+어깨끈, 2단계부터 탄창 파우치, 3단계 측면 판·어깨 패드), 배낭(둥근 본체+뚜껑·끈·앞/옆 포켓, 단계마다 커지고 3단계는 매트 롤). 색은 군용 톤(1 카키, 2 올리브, 3 검정).
+- 한 조각 = 서브메시 1개 + 팔레트 재질 1개(`WornGearMeshes.Palette(tier)`, 단계별 공유) → 캐릭터당 장비 드로우콜 3. 지면 아이템(`LootMeshes`)은 같은 모양을 3 서브메시로 쓴다.
+- 부착: `ArmorVisual`·`BackpackVisual`이 `WornGearMeshes.TryFit`으로 `CharacterDef.Sockets`(머리·UpperChest)에 붙인다. 머리 높이(`HeadSocket−Head`)로 헬멧 크기, 어깨 너비로 조끼·배낭 크기를 0.85~1.2배로 맞춘다. 본 이름 별칭 `Head`/`Chest`는 더 이상 필요 없다(프리팹에 남아 있어도 무해). `CharacterDef`가 없는 기존 Swat은 손으로 맞춘 상수 경로를 쓴다.
+- 헬멧 챙은 정수리 −0.08 m(눈 위), 조끼 중심은 UpperChest, 배낭 바닥은 UpperChest −0.30 m·등 뒤 0.115 m. UBC 헬멧이 눈을 덮던 문제도 해결(소켓 기준이라 본 이름과 무관).
+- 검증: `WornGearMeshesTests`(삼각형 ≤1,500/단계, 크기, 색), `CharacterRosterTests.WornGear_MountsOnRosterBones_AtHeadChestBack_AllTiers`(15모델 x 3단계 위치·스케일).
 
 ## 애니 트랙이 알아둘 것
 - 클립은 **Humanoid 공유**(ADR-186). 기준 Avatar는 Swat이지만 각 모델이 자기 Avatar를 가진다. 로스터 15종 모두 `isHuman`.

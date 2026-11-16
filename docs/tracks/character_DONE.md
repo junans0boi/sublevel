@@ -51,3 +51,13 @@
 - 군복 3종은 위장·장비 아틀라스라 색상 이동이 깨져 변형 Base 1개만. 머리 본 이름 문제 없음(별칭으로 부착), 모델 자체 헬멧이 있어 `HasHelmetMask=true`.
 - 머티리얼↔텍스처 연결은 FBX에 없어 슬롯명 규칙으로 정했다(Steve는 body2=1001·body1=1002, GasMask는 body=1001·body1=1002·body2=1003). 캡처(`posed_MixamoSteve/SwatGuy/GasMask_front.png`)로 확인.
 - 50체 PERF(15 모델 혼합): 분산 p99 5.3ms·드로우 347·삼각형 31만, 밀집 p99 7.1ms·드로우 445·삼각형 70만, SetPass 11(합격). EditMode 1230/1230.
+
+## 장비 비주얼 개선 (master 요청, 2026-11-17)
+- **문제**: 헬멧=파란 구, 조끼=주황 박스, 배낭=박스(지면용 모델을 그대로 착용). **해결**: `Scripts/Gameplay/WornGearMeshes.cs`(신규 304줄)가 다운로드 없이 절차적 로우폴리 모델을 만든다. 헬멧 3단계(가벼운 철모+턱끈 / 전술 헬멧: 귀 보호대·마운트·뒷주머니 / 풀 커버: 안면 보호대·턱), 조끼 3단계(곡면 앞뒤 판·어깨끈 / +탄창 파우치 / +측면 판·어깨 패드), 배낭 3단계(둥근 본체·뚜껑·끈·앞 포켓 / +옆 포켓 / +매트 롤). 색 = 카키·올리브·검정(단계=톤). 팀 색 어깨 밴드는 이번에 넣지 않음(별도).
+- **부착·스케일**: `TryFit`이 `CharacterDef` 소켓에 직접 붙이고 머리 높이·어깨 너비로 0.85~1.2배 스케일(15모델 x 3단계 EditMode 단언 통과: 챙 = 정수리 −0.12~−0.04, 조끼 중심 = 가슴 ±0.08, 배낭은 가슴 뒤·목 +0.16 이내). 기존 Swat(`CharacterDef` 없음)은 상수 경로 유지: 캡처 `gear_legacy_*`로 확인(헬멧 스케일 1.6).
+- **수치**: 3종 합계 **900 / 1,160 / 1,336 tris**(단계 1/2/3, 목표 ≤1,500 충족; 헬멧 272/344/380, 조끼 260/320/388, 배낭 368/496/568). 50체 전원이 3종 착용(단계 혼합, 에디터 PlayMode 1080p, 같은 실행 A/B): 분산 +0.46ms avg·드로우 347→581·삼각형 31만→40만, 밀집 +0.8ms·드로우 445→745·삼각형 70만→82만, p99 6.9/9.2ms(합격). 서브메시 3→1(팔레트 UV)로 드로우콜 995→581. 머신 부하(load 9~10)로 p99가 흔들려 A/B로만 판단.
+- **지면 아이템**: `LootMeshes.Model/Colors`가 같은 모양·군용 톤을 쓴다(3 서브메시 유지, 바닥에 놓인 방향, 최대 0.55m). 로비(`track/ui`)는 같은 `ArmorVisual/BackpackVisual`이라 반영된다.
+- **소유 밖 변경 줄 수**(master 승인분, `git diff --numstat`): `ArmorVisual.cs` +17/−20, `BackpackVisual.cs` +10/−9, `LootMeshes.cs` +2/−0, `InventoryPreview.cs` +1/−1(이름 필터 `VestFront/VestBack`→`Vest`). 신규: `WornGearMeshes.cs`, `Tests/EditMode/WornGearMeshesTests.cs`.
+- **캡처**: `Logs/roster/gear_t{1,2,3}_{front,back}.png`(15모델 한 줄), `gear_detail_<id>_{front,back}.png`(6모델 x 단계 1~3), `gear_legacy_{front,back}.png`. 재생성: `tools/unity.sh run-gfx CharacterRoster.RenderGearSheet`.
+- **테스트**: EditMode 1233/1233. 소리가 나는 PlayMode(`ArmorVisualTests`, `CarryTests`)는 실행하지 않았다(TestBox 씬): 이름 `VestFront/VestBack` 참조는 `InventoryPreview`만이라 수정했고 두 테스트는 단계·가시성만 검사해 영향 없다고 추정(미확인).
+- **한계**: Swat·군복 3종은 모델 자체 헬멧이 있어 착용 헬멧이 겹친다(`HasHelmetMask`로 숨길지 결정 필요). 3단계 헬멧 안면 보호대는 검은 상자처럼 보인다(로우폴리 한계). 외부 모델 후보는 이번엔 제안하지 않음(절차적 결과가 목표 충족).

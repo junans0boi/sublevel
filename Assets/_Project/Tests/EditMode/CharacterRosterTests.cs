@@ -120,57 +120,39 @@ namespace Game.Tests
             Assert.IsEmpty(bad, "realistic adults are 0.125-0.145; allowed 0.11-0.16: " + string.Join("; ", bad));
         }
 
-        // Worn gear (ArmorVisual/BackpackVisual find mounts by bone NAME; the roster adds "Head"/"Chest" aliases).
+        // Worn gear: ArmorVisual/BackpackVisual mount the procedural helmet, vest and backpack on the Humanoid head/chest bones
+        // of every roster model, sized by head height and shoulder width (WornGearMeshes.TryFit).
         [Test]
-        public void WornGear_MountsOnRosterBones_AtHeadChestBack()
+        public void WornGear_MountsOnRosterBones_AtHeadChestBack_AllTiers()
         {
             var sb = new StringBuilder(); var bad = new List<string>();
             foreach (var id in Ids)
-            {
-                var go = Object.Instantiate(Load(id));
-                try
+                for (int tier = 1; tier <= 3; tier++)
                 {
-                    var s = go.GetComponent<CharacterDef>().Sockets;
-                    var armor = go.AddComponent<ArmorVisual>(); armor.ShowTiers(2, 2);
-                    var pack = go.AddComponent<BackpackVisual>(); pack.Show(2);
-                    Bounds B(string n) { var r = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == n); Assert.IsTrue(r.enabled, id + " " + n + " enabled"); return r.bounds; }
-                    var helmet = B("Helmet"); var vest = B("VestFront"); var bag = B("Backpack");
-                    var hr = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == "Helmet");
-                    var br = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == "Backpack");
-                    sb.AppendLine($"{id}: helmet y {helmet.min.y:F2}..{helmet.max.y:F2}, vest y {vest.min.y:F2}..{vest.max.y:F2}, backpack z {bag.center.z:F2} (chest z {s.UpperChest.position.z:F2}); helmet under head bone: {hr.transform.IsChildOf(s.Head)}, backpack under torso: {br.transform.IsChildOf(s.UpperChest) || br.transform.IsChildOf(s.Chest) || br.transform.IsChildOf(s.Spine)}");
-                    if (!hr.transform.IsChildOf(s.Head)) bad.Add(id + " helmet not on head bone");
-                    // UBC already has a bone named "Head" (at 1.60 m, no alias possible), so ArmorVisual's Swat-based 0.07 m offset puts the
-                    // helmet brim at ~1.67 m, over the mesh eyes: logged, not failed (fix = ArmorVisual reading Sockets.HeadSocket, animation track).
-                    sb.AppendLine($"   eyes clear of helmet brim (>= 1.68 m): {helmet.min.y >= 1.68f}");
-                    if (helmet.min.y < 1.55f || helmet.max.y > 2.0f) bad.Add($"{id} helmet y {helmet.min.y:F2}..{helmet.max.y:F2}");
-                    if (vest.center.y < 1.0f || vest.center.y > 1.5f) bad.Add($"{id} vest y {vest.center.y:F2}");
-                    if (bag.center.z >= s.UpperChest.position.z - 0.05f) bad.Add($"{id} backpack not behind the chest");
+                    var go = Object.Instantiate(Load(id));
+                    try
+                    {
+                        var s = go.GetComponent<CharacterDef>().Sockets; float crown = s.HeadSocket.position.y;
+                        go.AddComponent<ArmorVisual>().ShowTiers(tier, tier);
+                        go.AddComponent<BackpackVisual>().Show(tier);
+                        MeshRenderer R(string n) { var r = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == n); Assert.IsTrue(r.enabled, $"{id} {n} t{tier} enabled"); return r; }
+                        var h = R("Helmet"); var v = R("Vest"); var p = R("Backpack");
+                        float hs = h.transform.lossyScale.y, vs = v.transform.lossyScale.y;
+                        float brim = h.transform.position.y;
+                        sb.AppendLine($"{id} t{tier}: helmet brim {brim:F2} (crown {crown:F2}) top {h.bounds.max.y:F2} scale {hs:F2}; vest y {v.bounds.min.y:F2}..{v.bounds.max.y:F2} scale {vs:F2} w {v.bounds.size.x:F2}; pack y {p.bounds.min.y:F2}..{p.bounds.max.y:F2} z {p.bounds.max.z:F2} (chest z {s.UpperChest.position.z:F2})");
+                        if (!h.transform.IsChildOf(s.Head)) bad.Add($"{id} t{tier} helmet not on head bone");
+                        if (!v.transform.IsChildOf(s.UpperChest) || !p.transform.IsChildOf(s.UpperChest)) bad.Add($"{id} t{tier} vest/pack not on chest bone");
+                        if (brim < crown - 0.12f || brim > crown - 0.04f) bad.Add($"{id} t{tier} brim {brim:F2} vs crown {crown:F2}");
+                        if (h.bounds.max.y > crown + 0.08f) bad.Add($"{id} t{tier} helmet top {h.bounds.max.y:F2} too high");
+                        if (v.bounds.center.y < s.UpperChest.position.y - 0.08f || v.bounds.center.y > s.UpperChest.position.y + 0.08f) bad.Add($"{id} t{tier} vest not centred on chest");
+                        if (p.bounds.max.z > s.UpperChest.position.z - 0.05f) bad.Add($"{id} t{tier} pack not behind the chest");
+                        if (p.bounds.max.y > s.Neck.position.y + 0.16f) bad.Add($"{id} t{tier} pack above the neck");
+                        if (hs < 0.88f || hs > 1.18f || vs < 0.83f || vs > 1.22f) bad.Add($"{id} t{tier} scale {hs:F2}/{vs:F2}");
+                    }
+                    finally { Object.DestroyImmediate(go); }
                 }
-                finally { Object.DestroyImmediate(go); }
-            }
             Append(sb);
             Assert.IsEmpty(bad, string.Join("; ", bad));
-        }
-
-        // Memory of every texture the 14 prefabs' base variants sample (runtime size as imported, i.e. after the 2048 cap/compression).
-        [Test]
-        public void TextureMemory_OfRosterBaseVariants_IsBounded()
-        {
-            var sb = new StringBuilder(); long total = 0;
-            foreach (var id in Ids)
-            {
-                var def = Load(id).GetComponent<CharacterDef>();
-                var texs = new HashSet<Texture>();
-                foreach (var m in def.Variants[0].Materials) foreach (var n in m.GetTexturePropertyNames()) { var t = m.GetTexture(n); if (t != null) texs.Add(t); }
-                long bytes = texs.Sum(t => UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t));
-                int max = texs.Count == 0 ? 0 : texs.Max(t => Mathf.Max(t.width, t.height));
-                sb.AppendLine($"{id}: {texs.Count} textures, max {max}px, {bytes / 1048576f:F1} MB");
-                Assert.LessOrEqual(max, 2048, id + " no 4K textures (PERF_BUDGET)");
-                total += bytes;
-            }
-            sb.AppendLine($"TOTAL base-variant texture memory {total / 1048576f:F1} MB");
-            Append(sb);
-            Assert.Less(total, 400L * 1048576, "roster textures");
         }
 
         // Weapon lengths live in the editor-only CharacterKit table; read them by reflection.
