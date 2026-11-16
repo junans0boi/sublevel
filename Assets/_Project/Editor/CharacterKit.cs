@@ -9,17 +9,8 @@ using UnityEngine;
 // (CharacterRoster), the shared Humanoid controller (CharacterControllerBuilder) and the weapon models on its WeaponSocket.
 public static class CharacterKit
 {
-<<<<<<< HEAD
     public const string DefaultRoster = "MixamoSwat";
-    const string WeaponDir = "Assets/_Project/Art/Weapons/QuaterniusUltimateGuns/";
-=======
-    public const string CharacterPath = "Assets/_Project/Art/Characters/QuaterniusModularMen/Swat.fbx";
     const string WeaponDir = "Assets/_Project/Art/Weapons/";
-    const string ControllerPath = SceneLook.GeneratedDir + "/Character.controller";
-    const string HandBone = "Wrist.R";
-    const string ReferencePose = "Idle_Gun_Pointing";
-    const float CharacterHeight = 1.8f;
->>>>>>> track/ui
 
     // One row per weapon id (ADR-032 names): model file, length in meters, whether the model's muzzle points
     // along -X, and where the model's center sits relative to the wrist (forward, up) in the aiming pose.
@@ -214,8 +205,6 @@ public static class CharacterKit
         go.transform.localScale *= weapon.Length / Mathf.Max(size.x, size.z);
         return go;
     }
-<<<<<<< HEAD
-=======
 
     static void AddPart(GameObject gun, Part part)
     {
@@ -241,89 +230,4 @@ public static class CharacterKit
         }
         else child.transform.localScale = part.Size / gun.transform.lossyScale.x;
     }
-
-    // tools/unity.sh run-gfx CharacterKit.RenderClipSheet -> Logs/lookdev/clips_<name>.png (eight phases per clip,
-    // seen from the side) and every clip's length in the log. For choosing poses by eye.
-    public static void RenderClipSheet()
-    {
-        SceneLook.PrepareTextures();
-        var profile = RenderSetup.Apply();
-        Prepare();
-        UnityEditor.SceneManagement.EditorSceneManager.NewScene(
-            UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
-        SceneLook.SetupSky();
-        SceneLook.AddLights();
-        SceneLook.AddPostVolume(profile);
-        SceneLook.WorldBox("Floor", null, new Vector3(0, -0.05f, 0), new Vector3(40, 0.1f, 40), SceneLook.Floor, 2.5f);
-        var cam = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
-        cam.fieldOfView = 30;
-        SceneLook.EnablePost(cam);
-        Directory.CreateDirectory("Logs/lookdev");
-
-        foreach (var clip in AssetDatabase.LoadAllAssetsAtPath(CharacterPath).OfType<AnimationClip>().Where(c => !c.name.StartsWith("__preview__")))
-            Debug.Log($"[CharacterKit] clip {clip.name}: {clip.length:F2}s");
-
-        const int phases = 8;
-        var slots = new Visual[phases];
-        for (int i = 0; i < phases; i++)
-        {
-            var slot = new GameObject("Phase" + i).transform;
-            slot.position = new Vector3(0, 0, i * 1.4f);
-            slots[i] = AddTo(slot);
-            slots[i].WeaponModels[3].SetActive(true);
-        }
-        foreach (var name in new[] { RunClip, WalkClip, BackClip, "Roll", "Run_Left", "Run_Shoot", LoweredClip, AimClip, "Gun_Shoot", ShootClip })
-        {
-            var clip = Clip(name);
-            for (int i = 0; i < phases; i++)
-                clip.SampleAnimation(slots[i].Root.gameObject, clip.length * i / phases);
-            SceneLook.Shot(cam, $"Logs/lookdev/clips_{name}.png", new Vector3(14f, 1.2f, 4.9f), new Vector3(0, 0.9f, 4.9f));
-            // From the front-left: the left hand and the weapon's front end are hidden in the side view.
-            SceneLook.Shot(cam, $"Logs/lookdev/clips_{name}_front.png", new Vector3(-9f, 1.6f, 14f), new Vector3(0, 0.9f, 4.9f));
-        }
-        EditorApplication.Exit(0);
-    }
-
-    // tools/unity.sh run-gfx CharacterKit.RenderPreview -> Logs/lookdev/m15_weapons.png, m15_poses.png
-    public static void RenderPreview()
-    {
-        SceneLook.PrepareTextures();
-        var profile = RenderSetup.Apply();
-        Prepare();
-        UnityEditor.SceneManagement.EditorSceneManager.NewScene(
-            UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
-        SceneLook.SetupSky();
-        SceneLook.AddLights();
-        SceneLook.AddPostVolume(profile);
-        SceneLook.WorldBox("Floor", null, new Vector3(0, -0.05f, 0), new Vector3(30, 0.1f, 30), SceneLook.Floor, 2.5f);
-        var cam = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
-        cam.fieldOfView = 30;
-        SceneLook.EnablePost(cam);
-        Directory.CreateDirectory("Logs/lookdev");
-
-        // Row 1: each weapon in the aiming pose, seen from the side. Row 2: one frame of every clip in use.
-        for (int i = 0; i < Weapons.Length; i++)
-        {
-            var slot = new GameObject("Hold" + Weapons[i].Id).transform;
-            slot.position = new Vector3(0, 0, i * 1.6f);
-            var visual = AddTo(slot);
-            visual.WeaponModels[Weapons[i].Id].SetActive(true);
-        }
-        SceneLook.Shot(cam, "Logs/lookdev/m15_weapons.png", new Vector3(11f, 1.3f, 2.4f), new Vector3(0, 1.05f, 2.4f));
-
-        var poses = new[] { IdleClip, WalkClip, RunClip, BackClip, LoweredClip, AimClip, ShootClip, HitClip, DeathClip };
-        for (int i = 0; i < poses.Length; i++)
-        {
-            var slot = new GameObject("Pose" + poses[i]).transform;
-            slot.position = new Vector3(40, 0, i * 1.5f);
-            var visual = AddTo(slot);
-            visual.WeaponModels[3].SetActive(true);
-            var clip = Clip(poses[i]);
-            clip.SampleAnimation(visual.Root.gameObject, clip.length * 0.5f);
-        }
-        SceneLook.WorldBox("Floor2", null, new Vector3(40, -0.05f, 5), new Vector3(30, 0.1f, 30), SceneLook.Floor, 2.5f);
-        SceneLook.Shot(cam, "Logs/lookdev/m15_poses.png", new Vector3(70f, 1.3f, 7.5f), new Vector3(40, 1.0f, 7.5f));
-        EditorApplication.Exit(0);
-    }
->>>>>>> track/ui
 }
