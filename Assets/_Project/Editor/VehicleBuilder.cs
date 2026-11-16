@@ -470,8 +470,15 @@ public static class VehicleBuilder
             go.transform.SetParent(root, true);
             // Parked along the road (either way round); a wreck at an angle.
             float yaw = c.YawDeg + (i % 2 == 0 ? 0f : 180f) + (wreck ? (float)(rng.NextDouble() * 50.0 - 25.0) : 0f);
-            float y = wreck ? LowestUnder(c, height) : GroundUnder(c, height);
-            go.transform.SetPositionAndRotation(new Vector3(c.X, y, c.Z), Quaternion.Euler(0f, yaw, 0f));
+            float y; var tilt = Quaternion.identity;
+            if (wreck) y = LowestUnder(c, height);   // wrecks keep their own tilt (ADR-201)
+            else
+            {
+                var fit = PropGrounding.Place(height, c.X, c.Z, yaw, VehicleParking.HalfLength, VehicleParking.HalfWidth);
+                y = fit.Y;
+                tilt = Quaternion.Euler(-fit.PitchDeg, 0f, -fit.RollDeg);
+            }
+            go.transform.SetPositionAndRotation(new Vector3(c.X, y, c.Z), Quaternion.Euler(0f, yaw, 0f) * tilt);
             go.name = $"{prefab.name}_{i:00}";
         }
         return chosen.Count;
