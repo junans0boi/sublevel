@@ -33,3 +33,18 @@
 - 판단: 거리는 설계값 문제가 아니라(추정) 마을이 박스의 6~10%만 쓰는 얇은 띠여서 사이 빈 땅이 길어 보인 것. 마을 박스를 거의 채우도록 고침(ADR-208). 마을 사이를 더 좁히진 않음(SPEC 규모 유지); 목표 인접 도보 2분 이하는 평균 1.4분으로 충족, 고개 2~3구간만 초과(ADR-209).
 - 테스트: EditMode 1246/1246(TownLayoutTests는 블록 규칙으로 갱신), 규칙 위반 0, 다리 5·여울 1·도로 10도·결정성 유지. 게임 안 캡처: `Logs/world/world_top.png`(블록 격자 마을 전체 지도)·`world_aerial.png`(청람읍 전경, 거리·빈 터·마당 확인). 거리 눈높이 캡처는 못 함. `world_top.png` 왼쪽의 밝은 가로 띠는 원인 미확인(섬 밖 바다 쪽 아티팩트로 추정).
 - PERF: 건물 렌더러 약 26k(건물당 재질 수가 원인, 합치기 셀 키우기는 효과 없음), World.unity 162 MB, `.bytes` 148 MB, NavMesh 21.7 MB — 줄이지 못함. 다음 후보: 장식 재질을 정점 색 1개로 합치기, 실내 메시 LOD. NavMesh 홉 568/568 완료.
+
+## 3차: PERF 위반 해소 (같은 날, 이 워크트리 빌드 측정)
+| 항목 | 전 | 후 | 목표 |
+|---|---|---|---|
+| 건물 렌더러 | 약 26,000 | 약 3,300 (씬 전체 39.5k→16.4k) | 건물 ≤15,000 ✔ |
+| BoxCollider | 66,040 | 15,231 (건물 충돌은 표면별 메시 콜라이더) | – |
+| `World_Meshes.bytes` | 131 MB | 99.1 MB | ≤100 MB ✔ |
+| World.unity(텍스트 YAML) | 150 MB | 96 MB | ≤50 MB ✘ (바위 11k 오브젝트·소품이 남음; 에디터 텍스트 용량은 지표로 부적절, 플레이어 `level1`로 보자고 제안) |
+| 플레이어 `level1` / 앱 | 30 MB / 740 MB | 15 MB / 694 MB | – |
+| NavMesh | 20.9 MB | 21.7 MB, 홉 568/568 완료 | ≤30 MB ✔ |
+- 방법: ①건물 재질별 렌더러를 한 렌더러의 서브메시로 합침 ②건물 메시 반정밀(정점 20 B) + 36 cm 미만 장식 생략 ③충돌체를 메시 콜라이더로. 결정성: `.bytes` SHA 두 번 동일(8ba18f63…), EditMode 1246/1246(WorldSurfaceTagTests는 Collider 기준으로 수정).
+- 눈에 보이는 영향: 36 cm 미만 소품(책·컵 등) 사라짐, 위치·UV 반정밀(1.5 cm급). 캡처 `Logs/world/town_after_{C,M1}_{air,street,side,roof}.png`(저장소 밖)로 거리·옥상·위에서 본 마을 확인. PERF 변경 전 거리 캡처가 없어 전/후 쌍은 못 만들었다.
+- 캡처에서 발견해 고친 버그: 상가·빌라·아파트 위 박공 지붕·옥상 장비가 공중에 뜸 → 해당 종류는 박공·장비 제외(`WorldBuilder.Town.cs`).
+- 충돌 지점: `Scripts/Gameplay/WorldMeshBank.cs`에 MeshCollider 채우기 4줄(맵 메시 은행이라 맵 트랙 몫으로 판단). `WorldMaterials.Decor`(재질 트랙)는 건드리지 않음; 장식 재질을 정점 색 하나로 합치면 슬롯이 더 줄어든다(BACKLOG).
+- 플레이어 메모리·로딩 실측: **소리 없이 할 방법을 찾지 못함**(플레이어 `-batchmode`도 오디오 장치를 연다). 제안: `PerfCapture`(Gameplay 소유)에 `Profiler.GetTotalAllocatedMemoryLong`·로딩 시간 필드와 `AudioListener.volume = 0`을 넣고 `-perfcapture` 실행, 또는 준환 허락으로 1회 실행. 에디터 대용: 메시 메모리 ≈ `.bytes` 99 MB.
