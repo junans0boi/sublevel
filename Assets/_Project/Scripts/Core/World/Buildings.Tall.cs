@@ -152,6 +152,7 @@ namespace Game.Core
             d.Wall("StairHouseFront", SurfaceKind.WallOuter, true, zFoot + 0.1f, left ? xl : x0, left ? x1 : xr, top, top + StairHouseHeight, 0.2f, null);
             float rx0 = left ? xl : x0 - 0.2f, rx1 = left ? x1 + 0.2f : xr;
             d.Box("StairHouseRoof", SurfaceKind.Roof, rx0, rx1, top + StairHouseHeight, top + StairHouseHeight + SlabThickness, zb, zFoot + 0.2f);
+            d.RoofLoot(top, -hw, hw, -hd, hd, hw * hd > 150f ? 3 : 2, new Rect(rx0, rx1, zb, zFoot + 0.2f));
         }
 
         // Windows in a regular rhythm: one every 3 m along the wall, the same on every floor, so the facade reads as bays. A door takes the place

@@ -125,6 +125,7 @@ namespace Game.Core
 
         public string Name;
         public int Region, SubZone;
+        public int Bank = -1;               // the bank of side-by-side bays this one belongs to (ADR-257); -1: stands alone
         public float X, Y, Z;
         public float FacingDeg;
 

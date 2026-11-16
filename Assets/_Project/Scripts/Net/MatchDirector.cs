@@ -211,6 +211,19 @@ namespace Game.Net
             else if (args.ConnectionState == LocalConnectionState.Started) { _guestGiveUpAt = -1f; _guestWasUp = true; }
         }
 
+        // Roles and regions come from the spawn names the world builder gives them (LootSpawnName, ADR-256); a scene without them keeps the plain roll.
+        LootEntry[] PlanLoot()
+        {
+            var roles = new char[_lootSpawns.Length];
+            var regions = new int[_lootSpawns.Length];
+            bool tagged = _lootSpawns.Length > 0;
+            for (int i = 0; i < roles.Length; i++) tagged &= LootSpawnName.Parse(_lootSpawns[i].name, out roles[i], out regions[i]);
+            if (!tagged) return GameData.Loot.Plan(_lootSpawns.Length, _seed);
+            var plan = GameData.Loot.PlanByRole(roles, _seed);
+            LootGuarantee.Apply(plan, regions, System.Linq.Enumerable.Max(regions) + 1, GameData.Loot, LootKind.Jerrycan, 1, _seed);
+            return plan;
+        }
+
         void OnServerState(ServerConnectionStateArgs args)
         {
             if (args.ConnectionState != LocalConnectionState.Started) return;
@@ -219,7 +232,7 @@ namespace Game.Net
             NetPulseServer.Attach(_networkManager);
             ServerPlanDeployment();
 
-            var plan = GameData.Loot.Plan(_lootSpawns.Length, _seed);
+            var plan = PlanLoot();
             for (int i = 0; i < plan.Length; i++)
             {
                 ServerSpawnLootRoll(plan[i], _lootSpawns[i].position);

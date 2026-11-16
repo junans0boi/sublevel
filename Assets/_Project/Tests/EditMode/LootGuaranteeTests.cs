@@ -4,7 +4,7 @@ using NUnit.Framework;
 
 namespace Game.Tests
 {
-    // ADR-210: every region offers at least one jerrycan (vehicle fuel balance, ADR-200 / ADR-221).
+    // ADR-255: every region offers at least one jerrycan (vehicle fuel balance, ADR-200 / ADR-221).
     public class LootGuaranteeTests
     {
         static LootTable Table() => new LootTable

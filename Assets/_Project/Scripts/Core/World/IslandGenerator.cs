@@ -30,7 +30,9 @@ namespace Game.Core
         const float DeckClearance = 1.3f;      // deck above the water
         const float AvenueExtension = 12f;     // the avenue runs this far past the box so the station beside its end is within reach of a road point
         const float Margin = 1.6f;
-        const float StationBay = 12f;          // box length kept free at an avenue end for an elevator station
+        public const int BaysPerBank = 4;      // elevator cars side by side at one station (ADR-257: 20 banks x 4 = 80 slots)
+        public const float BayPitch = 5.2f;    // StationWidth plus a gap, so neighbouring bays never touch
+        const float StationBay = BaysPerBank * BayPitch + 3f;   // box length kept free at an avenue end for a bank of stations
 
         sealed class TownBuild
         {
@@ -528,11 +530,15 @@ namespace Game.Core
                 float lat = tb.AvenueWidth * 0.5f + TownLayout.Sidewalk + WorldElevator.StationDepth * 0.5f;
                 float side = (st.Side == "s" || st.Side == "e") ? 1f : -1f;
                 float lx = end < 0 ? -(t.Width * 0.5f - StationBay * 0.5f - 1f) : Math.Min(t.Width * 0.5f - StationBay * 0.5f - 1f, tb.Layout.EndX + StationBay * 0.5f + 1f), lz = side * lat;
-                IslandMath.TownToWorld(t, lx, lz, out float x, out float z);
                 // the front faces the avenue: local yaw 0 = +Z, so a station on the +Z side looks to -Z (180)
                 float localYaw = side > 0f ? 180f : 0f;
                 float yaw = (float)((((localYaw - t.RotDeg) % 360.0) + 360.0) % 360.0);
-                plan.Elevators.Add(new WorldElevator { Name = $"Elevator-{plan.Regions[st.Region].Id}-{CountIn(plan, st.Region) + 1}", Region = st.Region, SubZone = tb.Index, X = x, Y = tb.Y, Z = z, FacingDeg = yaw });
+                int bank = plan.Elevators.Count / BaysPerBank;
+                for (int bay = 0; bay < BaysPerBank; bay++)
+                {
+                    IslandMath.TownToWorld(t, lx + (bay - (BaysPerBank - 1) * 0.5f) * BayPitch, lz, out float x, out float z);
+                    plan.Elevators.Add(new WorldElevator { Name = $"Elevator-{plan.Regions[st.Region].Id}-{CountIn(plan, st.Region) + 1}", Region = st.Region, SubZone = tb.Index, Bank = bank, X = x, Y = tb.Y, Z = z, FacingDeg = yaw });
+                }
             }
         }
 

@@ -16,7 +16,7 @@ public static class MapBaker
     public const string OutputPath = "Assets/_Project/Resources/Map/world_map.png";
 
     const int N = MapProjection.PictureSize;
-    const int Grid = 1024;                  // analysis grid: one sample per metre on the default 1024 m map
+    const int Grid = 2048;                  // analysis grid: one sample per 1.2 m on the 2400 m island (was 1024 samples: 2.3 m cells made the relief look faceted)
 
     // "Field terminal" palette: muted, dark, one amber accent.
     static readonly Color32 SeaDeep = new Color32(15, 24, 33, 255);
@@ -26,6 +26,7 @@ public static class MapBaker
     static readonly Color32 Wetland = new Color32(58, 80, 70, 255);
     static readonly Color32 Town = new Color32(94, 96, 68, 255);
     static readonly Color32 Factory = new Color32(108, 92, 66, 255);
+    static readonly Color32 RiverWater = new Color32(44, 78, 96, 255);
     static readonly Color32 Casing = new Color32(16, 19, 22, 255);
     static readonly Color32 RoadTrunk = new Color32(214, 208, 186, 255);
     static readonly Color32 RoadSpur = new Color32(176, 171, 156, 255);
@@ -54,10 +55,10 @@ public static class MapBaker
         var importer = (TextureImporter)AssetImporter.GetAtPath(OutputPath);
         importer.textureType = TextureImporterType.Sprite;
         importer.spriteImportMode = SpriteImportMode.Single;
-        importer.mipmapEnabled = false;
+        importer.mipmapEnabled = true;                       // smooth when the minimap shows it smaller than 4096 px
         importer.filterMode = FilterMode.Bilinear;
         importer.wrapMode = TextureWrapMode.Clamp;
-        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.textureCompression = TextureImporterCompression.CompressedHQ;   // 16 MB in memory instead of 64
         importer.maxTextureSize = N;
         importer.isReadable = false;
         importer.alphaSource = TextureImporterAlphaSource.None;
@@ -168,6 +169,15 @@ public static class MapBaker
             }
         }
 
+        // Rivers: the water ribbon, a little wider than the bed so banks read.
+        foreach (var river in plan.Rivers)
+            for (int i = 0; i + 1 < river.X.Length; i++)
+            {
+                float toPx = N / plan.Size, w = Math.Max(river.HalfWidth[i] * toPx, 1.6f);
+                Capsule(pixels, river.X[i] * toPx, river.Z[i] * toPx, river.X[i + 1] * toPx, river.Z[i + 1] * toPx, w + 1.2f, Casing, 1f);
+                Capsule(pixels, river.X[i] * toPx, river.Z[i] * toPx, river.X[i + 1] * toPx, river.Z[i + 1] * toPx, w, RiverWater, 1f);
+            }
+
         // Roads: dark casing first, then the light surface, so junctions stay clean.
         foreach (var road in plan.Roads) DrawRoad(pixels, plan, road, true);
         foreach (var road in plan.Roads) DrawRoad(pixels, plan, road, false);
@@ -204,9 +214,9 @@ public static class MapBaker
     static void DrawRoad(Color32[] pixels, WorldPlan plan, WorldRoad road, bool casing)
     {
         float toPx = N / plan.Size;
-        float half = Math.Max(road.Width * 0.5f * toPx, 0.9f);
+        float half = Math.Max(road.Width * 0.5f * toPx, 1.6f);   // never thinner than 3 px: village streets stay lines at any zoom
         var colour = casing ? Casing : road.Kind == RoadKind.Trunk ? RoadTrunk : road.Kind == RoadKind.Spur ? RoadSpur : RoadPath;
-        float radius = casing ? half + 0.9f : half;
+        float radius = casing ? half + 1.3f : half;
         float alpha = casing ? 0.8f : 1f;
         for (int i = 0; i + 1 < road.X.Length; i++)
             Capsule(pixels, road.X[i] * toPx, road.Z[i] * toPx, road.X[i + 1] * toPx, road.Z[i + 1] * toPx, radius, colour, alpha);
@@ -237,7 +247,7 @@ public static class MapBaker
         float reach = 0.5f * Mathf.Sqrt(lot.SizeX * lot.SizeX + lot.SizeZ * lot.SizeZ) + 2f;
         int x0 = Math.Max(0, (int)((lot.X - reach) * toPx)), x1 = Math.Min(N - 1, (int)((lot.X + reach) * toPx) + 1);
         int y0 = Math.Max(0, (int)((lot.Z - reach) * toPx)), y1 = Math.Min(N - 1, (int)((lot.Z + reach) * toPx) + 1);
-        const float rim = 0.9f;
+        const float rim = 1.5f;     // outline width in metres: a clear dark edge round every building
         for (int y = y0; y <= y1; y++)
             for (int x = x0; x <= x1; x++)
             {

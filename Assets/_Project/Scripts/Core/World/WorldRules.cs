@@ -70,7 +70,7 @@ namespace Game.Core
             foreach (var region in plan.Regions)
             {
                 int elevators = 0, lots = 0, points = 0;
-                foreach (var e in plan.Elevators) if (e.Region == region.Index) elevators++;
+                { var banks = new HashSet<int>(); int alone = 0; foreach (var e in plan.Elevators) if (e.Region == region.Index) { if (e.Bank < 0) alone++; else banks.Add(e.Bank); } elevators = alone + banks.Count; }   // a bank of bays counts as one station
                 foreach (var l in plan.Lots) if (l.Region == region.Index) lots++;
                 foreach (var p in plan.ConvergencePoints) if (p.Region == region.Index) points++;
                 if (elevators < rules.MinElevators || elevators > rules.MaxElevators)
@@ -112,7 +112,7 @@ namespace Game.Core
                 var e = elevators[i];
                 if (!Inside(e.X, e.Z)) Add(found, WorldRule.InsideMap, e.Name);
                 for (int j = i + 1; j < elevators.Count; j++)
-                    if (Distance(e.X, e.Z, elevators[j].X, elevators[j].Z) < rules.MinElevatorSpacing)
+                    if ((e.Bank < 0 || e.Bank != elevators[j].Bank) && Distance(e.X, e.Z, elevators[j].X, elevators[j].Z) < rules.MinElevatorSpacing)
                         Add(found, WorldRule.ElevatorSpacing, $"{e.Name} and {elevators[j].Name}");
                 int near = 0;
                 foreach (var lot in plan.Lots)
@@ -120,7 +120,9 @@ namespace Game.Core
                 if (near < rules.MinLotsNearElevator)
                     Add(found, WorldRule.ElevatorNearLots, $"{e.Name} has {near} building lots within {rules.LotRange} m, expected {rules.MinLotsNearElevator}+");
                 bool doorstep = false;
-                foreach (var lot in plan.Lots) doorstep |= lot.Distance(e.X, e.Z) <= rules.DoorstepRange;
+                foreach (var lot in plan.Lots)
+                    foreach (var mate in plan.Elevators)
+                        if (ReferenceEquals(mate, e) || (e.Bank >= 0 && mate.Bank == e.Bank)) doorstep |= lot.Distance(mate.X, mate.Z) <= rules.DoorstepRange;   // a bank counts as one doorstep
                 if (!doorstep) Add(found, WorldRule.ElevatorDoorstepLot, $"{e.Name} has no building lot within {rules.DoorstepRange} m");
                 Pad(e.Name, e.Y, new[] { e.X, e.X + 3f, e.X - 3f, e.X, e.X }, new[] { e.Z, e.Z, e.Z, e.Z + 3f, e.Z - 3f });
             }

@@ -141,7 +141,7 @@ public static partial class WorldBuilder
         var info = FillInfo(world, plan, ground, stations);
         int rendererIndex = OutdoorRenderer();
         info.SetRenderer(rendererIndex);
-        var loot = PickLoot(lots);
+        var loot = PickLoot(plan, lots);
         AddMatch(plan, ground, info, loot);
         AddCamera(plan, rendererIndex);
 
@@ -507,14 +507,34 @@ public static partial class WorldBuilder
     }
 
     // Points per building from LootPlacement (points available x weight of its kind, capped by WorldBuildSpec.MaxLootSpawns, ADR-193).
-    static List<Vector3> PickLoot(List<Placed> buildings)
+    static List<Vector3> PickLoot(WorldPlan plan, List<Placed> buildings)
     {
         var counts = LootPlacement.Allocate(buildings.Select(b => new LootBuilding { Kind = b.Plan.Kind, Available = b.Loot.Count }).ToArray(), Cfg);
         var picked = new List<Vector3>();
+        _lootTags = new List<string>();
         for (int i = 0; i < buildings.Count; i++)
-            for (int k = 0; k < counts[i]; k++) picked.Add(buildings[i].Loot[k]);
+        {
+            var b = buildings[i];
+            // One roof point at most (when the building has three or more points: a roof is a bonus, not the building's weapon), the rest on the floors in plan order.
+            var order = new List<int>();
+            int roofPoint = -1;
+            for (int k = 0; counts[i] >= 3 && roofPoint < 0 && k < b.Loot.Count; k++) if (b.Plan.LootPoints[k].Room == "Roof") roofPoint = k;
+            if (roofPoint >= 0) order.Add(roofPoint);
+            for (int k = 0; k < b.Loot.Count; k++) if (b.Plan.LootPoints[k].Room != "Roof") order.Add(k);
+            int floorSlots = counts[i] - (roofPoint >= 0 ? 1 : 0);
+            var roles = LootPlacement.Roles(b.Plan.Kind, floorSlots, plan.Seed * 31 + i);
+            for (int k = 0; k < counts[i] && k < order.Count; k++)
+            {
+                var at = b.Loot[order[k]];
+                bool roof = order[k] == roofPoint;
+                picked.Add(at);
+                _lootTags.Add($"{(roof ? 'G' : roles[k - (roofPoint >= 0 ? 1 : 0)])}{Mathf.Max(0, plan.RegionAt(at.x, at.z))}");
+            }
+        }
         return picked;
     }
+
+    static List<string> _lootTags = new List<string>();   // role letter + region of each picked point, in order (LootSpawnName)
 
     // Temporary until M2-2/M2-3: players come up in the elevators in turn; bots hold one convergence point per region
     // (the one farthest from the region's elevators) and four more stand at loot points spread over the rest of the map.
@@ -547,7 +567,7 @@ public static partial class WorldBuilder
             var at = OnGround(ground, point.X, point.Z);
             return MatchKit.At(at.x, at.y + 0.05f, at.z);
         }).Concat(extra.Select(l => MatchKit.At(l.x, l.y + 0.05f, l.z))).ToArray();
-        var director = MatchKit.AddMatch(players, loot.Select(p => MatchKit.At(p.x, p.y, p.z)).ToArray(), new MatchKit.Spawn[0], bots);
+        var director = MatchKit.AddMatch(players, loot.Select((p, n) => { var spawn = MatchKit.At(p.x, p.y, p.z); spawn.Tag = _lootTags[n]; return spawn; }).ToArray(), new MatchKit.Spawn[0], bots);
         VehicleBuilder.AddToWorld(director, plan, ground.Height); // [VEHICLE HOOK] ADR-065 (5): 6 cars + 4 motorcycles
     }
 
