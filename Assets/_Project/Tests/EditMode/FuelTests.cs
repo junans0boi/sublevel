@@ -138,5 +138,18 @@ namespace Game.Tests
             Assert.Less(EngineNote.Volume(0.2f, 0f), EngineNote.Volume(0.9f, 1f));
             Assert.LessOrEqual(EngineNote.Volume(1f, 1f), 1f);
         }
+
+        // ADR-221: the island's roads total about 16 km. A car cruising at 60 km/h on 0.6 throttle goes about 6.25 km on a
+        // full tank; a start tank (35-90%) plus one jerrycan per region (6) covers the whole road network with margin.
+        [Test]
+        public void IslandRoads_AreCoveredByAStartTankAndOneJerrycanPerRegion()
+        {
+            const float roadMeters = 16000f, cruiseMs = 60f / 3.6f;
+            float tankMeters = Fuel.SecondsPerTank(0.6f, false, false, R) * cruiseMs;
+            Assert.AreEqual(6250f, tankMeters, 50f);
+            float worstStart = R.SpawnMin * tankMeters, cans = 6 * R.JerrycanAmount * tankMeters;
+            Assert.GreaterOrEqual(worstStart + cans, roadMeters * 1.2f, "worst start tank + 6 cans, with 20% margin");
+            Assert.Less(R.SpawnMax * tankMeters, 8000f, "a single tank cannot cross the island");
+        }
     }
 }

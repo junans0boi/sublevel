@@ -37,5 +37,15 @@ namespace Game.Tests
             var f = PropGrounding.Place(Slope, 300f, 200f, 0f, HL, HW);
             Assert.LessOrEqual(Mathf.Abs(f.Y - Slope(300f, 200f)), 0.05f);
         }
+
+        [Test]
+        public void TwistedGround_ReportsCornerError_PlaneGroundReportsNone()
+        {
+            Assert.AreEqual(0f, PropGrounding.Place(Slope, 300f, 200f, 0f, HL, HW).ErrorM, 1e-4f);
+            // Nose and tail up 0.2, sides at 0: every corner is 0.1 off the best plane.
+            var f = PropGrounding.Place((x, z) => Mathf.Abs(z - 200f) > 1f ? 0.2f : 0f, 300f, 200f, 0f, HL, HW);
+            Assert.AreEqual(0.1f, f.ErrorM, 1e-4f);
+            Assert.Greater(f.ErrorM, PropGrounding.MaxErrorM);
+        }
     }
 }

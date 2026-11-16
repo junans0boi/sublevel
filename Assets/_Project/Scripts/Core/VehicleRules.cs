@@ -31,7 +31,7 @@ namespace Game.Core
             SeatCount = 2, MassKg = 230f, MaxSpeedKmh = 105f, BoostMaxKmh = 120f, ReverseMaxKmh = 8f, EngineAccel = 7.5f,
             BrakeDecel = 8f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 4f, SuspensionTravel = 0.25f, SpringStrength = 14000f,
             SpringDamper = 1300f, WheelRadius = 0.31f, TyreGrip = 1.1f, CentreOfMassHeight = 0.55f,
-            SpawnCount = 4, RightingSeconds = 2f, RightingLiftMeters = 0.6f, DrownDepth = 0.6f, HandbrakeDecel = 6f,
+            SpawnCount = 6, RightingSeconds = 2f, RightingLiftMeters = 0.6f, DrownDepth = 0.6f, HandbrakeDecel = 6f,
             SteerDegPerSecond = 130f, SteerReturnDegPerSecond = 180f,
         };
 
@@ -118,7 +118,7 @@ namespace Game.Core
         public float AstrideArmDeg = 72f;      // hands forward to the bars
 
         // ---- Spawning ----
-        public int SpawnCount = 6;
+        public int SpawnCount = 14;   // ADR-198: cars; motorcycles 6 (MotorcycleDefaults)
         public float ParkingSpacingMeters = 40f;
 
         // ---- Seated pose (CombatantAnimation, no clips) ----
@@ -368,6 +368,7 @@ namespace Game.Core
         public const float HalfLength = 2.2f, HalfWidth = 0.95f;
         public const float NearLotMeters = 45f, ClearLotMeters = 4f, ClearElevatorMeters = 15f, EdgeMeters = 20f;
         public const float MaxGroundStep = 0.5f;
+        public const float CrossingMarginMeters = 10f;   // ADR-199: no parking on or within this of a bridge deck or ford
 
         public static List<ParkingSpot> Pick(WorldPlan plan, int count, float spacing)
         {
@@ -428,6 +429,28 @@ namespace Game.Core
             return found;
         }
 
+        static bool NearCrossing(WorldPlan plan, float x, float z)
+        {
+            foreach (var road in plan.Roads)
+            {
+                int n = Math.Min(road.X.Length, road.Z.Length);
+                for (int p = 0; p + 1 < n; p++)
+                {
+                    bool deck = (road.Bridge != null && p < road.Bridge.Length && road.Bridge[p]) || (road.Ford != null && p < road.Ford.Length && road.Ford[p]);
+                    if (deck && SegmentDistance(x, z, road.X[p], road.Z[p], road.X[p + 1], road.Z[p + 1]) < CrossingMarginMeters + HalfLength) return true;
+                }
+            }
+            return false;
+        }
+
+        static float SegmentDistance(float px, float pz, float ax, float az, float bx, float bz)
+        {
+            float dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
+            float t = len2 < 1e-6f ? 0f : Math.Max(0f, Math.Min(1f, ((px - ax) * dx + (pz - az) * dz) / len2));
+            float ex = ax + dx * t - px, ez = az + dz * t - pz;
+            return (float)Math.Sqrt(ex * ex + ez * ez);
+        }
+
         static bool Fits(WorldPlan plan, float x, float z, float dx, float dz)
         {
             if (x < EdgeMeters || z < EdgeMeters || x > plan.Size - EdgeMeters || z > plan.Size - EdgeMeters) return false;
@@ -452,6 +475,7 @@ namespace Game.Core
                 if (d < NearLotMeters) nearLot = true;
             }
             if (!nearLot) return false;
+            if (NearCrossing(plan, x, z)) return false;
             foreach (var e in plan.Elevators)
             {
                 float ex = e.X - x, ez = e.Z - z;

@@ -391,7 +391,9 @@ public static class VehicleBuilder
         for (int i = 0; i < picked.Count; i++)
         {
             var p = picked[i];
-            bool wantBike = bikes < bike.SpawnCount && (cars >= car.SpawnCount || i % 2 == 1);
+            // The first pick of each region (VehicleSpread) is a car (ADR-198); motorcycles are spread evenly over the rest.
+            int rest = i - plan.Regions.Count, restCount = picked.Count - plan.Regions.Count;
+            bool wantBike = bikes < bike.SpawnCount && (cars >= car.SpawnCount || (rest >= 0 && (rest + 1) * bike.SpawnCount / Math.Max(1, restCount) > bikes));
             models.Add(Model(wantBike ? Motorcycles[bikes % Motorcycles.Length] : Cars[cars % Cars.Length]));
             if (wantBike) bikes++; else cars++;
             spots.Add(Spot(director, i, new Vector3(p.X, GroundUnder(p, height) + 0.25f, p.Z), p.YawDeg));
@@ -458,6 +460,9 @@ public static class VehicleBuilder
         {
             if (chosen.Count >= limit) break;
             if (avoid.Any(o => Sq(o.X - c.X) + Sq(o.Z - c.Z) < PropSpacing * PropSpacing * (chosen.Contains(o) ? 1f : 0.35f))) continue;
+            // A standing car (not a wreck) must sit within PropMaxGroundError of the ground on all four corners (ADR-201).
+            bool willWreck = chosen.Count % 3 == 2 && wrecks.Count > 0;
+            if (!willWreck && PropGrounding.Place(height, c.X, c.Z, c.YawDeg, VehicleParking.HalfLength, VehicleParking.HalfWidth).ErrorM > PropGrounding.MaxErrorM) continue;
             chosen.Add(c);
             avoid.Add(c);
         }
