@@ -1,0 +1,9 @@
+lobby 1920x1080, 4 characters + UI
+baseline: sync avg 7.26 ms, p99 11.11 ms | submit avg 1.00 ms | drawcalls 230, batches 226, triangles 75686
+no UI: sync avg 7.52 ms (--0.26), p99 10.60 ms (-0.51) | submit avg 0.65 ms | drawcalls 84, triangles 73838
+no post-processing: sync avg 5.64 ms (-1.62), p99 9.80 ms (-1.31) | submit avg 0.74 ms | drawcalls 226, triangles 75682
+no volumes: sync avg 6.69 ms (-0.58), p99 10.66 ms (-0.45) | submit avg 0.81 ms | drawcalls 230, triangles 75686
+no additional lights: sync avg 7.42 ms (--0.15), p99 8.89 ms (-2.23) | submit avg 0.82 ms | drawcalls 230, triangles 75686
+no characters: sync avg 4.07 ms (-3.19), p99 5.72 ms (-5.39) | submit avg 0.60 ms | drawcalls 162, triangles 1864
+MSAA off: sync avg 7.10 ms (-0.17), p99 10.94 ms (-0.17) | submit avg 0.79 ms | drawcalls 230, triangles 75686
+shadows off: sync avg 6.31 ms (-0.96), p99 11.12 ms (-0.00) | submit avg 0.79 ms | drawcalls 230, triangles 75686

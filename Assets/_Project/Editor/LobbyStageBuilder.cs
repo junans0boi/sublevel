@@ -68,10 +68,6 @@ public static class LobbyStageBuilder
         for (int i = -2; i <= 2; i++) Box(lamp, i * 0.22f - 0.06f, i * 0.22f + 0.06f, DoorTop + 0.12f, DoorTop + 0.2f, z1 - s - 0.02f, z1 - s);
         Box(lamp, -DoorHalf, DoorHalf, 0f, 0.012f, z1 - s - 0.16f, z1 - s - 0.1f);
         // Wall detail for depth: pilasters (they catch light and cast shadow), dark panel seams, rows of rivets.
-        foreach (float sy in new[] { 0.9f, 1.8f })
-        {
-            Box(seams, x0 + s, x1 - s, sy - 0.006f, sy + 0.006f, z0 + s + 0.1f, z0 + s + 0.104f);
-        }
         // The door frame's amber stripe along the opening's top and sides (the game's DoorStripe material).
         Box(stripe, -DoorHalf, DoorHalf, DoorTop - 0.05f, DoorTop, z1 - s - 0.006f, z1 - s);
 
@@ -131,7 +127,6 @@ public static class LobbyStageBuilder
         AssetDatabase.CreateAsset(wallMat, MeshDir + "/LobbyWall.mat");
         wallMat = AssetDatabase.LoadAssetAtPath<Material>(MeshDir + "/LobbyWall.mat");
         Part("Shell", shell, wallMat, ShadowCastingMode.On);
-        Part("Seams", seams, WorldMaterials.DoorSeam(), ShadowCastingMode.Off);
         var floorMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0f); floorMat.SetFloat("_Metallic", 0f); floorMat.SetFloat("_SpecularHighlights", 0f); floorMat.SetFloat("_EnvironmentReflections", 0f); floorMat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); floorMat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         AssetDatabase.DeleteAsset(MeshDir + "/LobbyFloor.mat");
@@ -149,7 +144,7 @@ public static class LobbyStageBuilder
         AddLamp(root.transform, "CarLight", new Vector3(0f, h - 0.25f, -0.2f), 8f, 1.6f);
         // Art direction: a warm key (4500 K) from the camera's left at 45 degrees, cool #5FA8FF rims from behind and above
         // on both sides at about 30 degrees, a dark flat ambient. No other light.
-        AddPoint(root.transform, "Key", new Vector3(1.9f, 2.4f, 1.3f), 7f, 2.6f, new Color(1f, 0.82f, 0.62f)); // warm key from the camera's left, soft falloff (a spot leaves a hard cone edge on the wall)
+        AddPoint(root.transform, "Key", new Vector3(-1.9f, 2.4f, 1.3f), 7f, 2.6f, new Color(1f, 0.82f, 0.62f)); // warm key from the camera's left, soft falloff (a spot leaves a hard cone edge on the wall)
         // A soft wash on the back and side walls so the car reads as a room, not a void.
         AddPoint(root.transform, "WallWash", new Vector3(0.6f, 2.5f, 0.2f), 7f, 1.8f, new Color(0.78f, 0.84f, 0.95f));
         AddSpot(root.transform, "RimLeft", new Vector3(1.9f, 2.7f, -1.3f), new Vector3(0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
@@ -171,7 +166,7 @@ public static class LobbyStageBuilder
         var lobby = new GameObject("CameraLobby").transform;
         lobby.SetParent(root.transform, false);
         lobby.position = new Vector3(0f, 1.35f, 6.2f);
-        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 1.05f, 0f) - lobby.position);
+        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 0.95f, 0f) - lobby.position);
         var close = new GameObject("CameraCloseup").transform;
         close.SetParent(root.transform, false);
         close.position = new Vector3(0f, 1.0f, 5.6f);
@@ -202,8 +197,8 @@ public static class LobbyStageBuilder
         var cam = camGo.AddComponent<Camera>();
         cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color32(16, 21, 28, 255);
         cam.fieldOfView = 20f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 30f; cam.enabled = false;
-        camGo.transform.position = stage.transform.TransformPoint(new Vector3(0f, 1.55f, 2.5f));
-        camGo.transform.rotation = Quaternion.LookRotation(stage.transform.TransformPoint(new Vector3(0f, 1.47f, 0f)) - camGo.transform.position);
+        camGo.transform.position = stage.transform.TransformPoint(new Vector3(0f, 1.6f, 2.0f));
+        camGo.transform.rotation = Quaternion.LookRotation(stage.transform.TransformPoint(new Vector3(0f, 1.55f, 0f)) - camGo.transform.position);
         var rt = new RenderTexture(192, 256, 24) { antiAliasing = 4 };
         for (int i = 0; i < PlayerAppearance.ModelIds.Length; i++)
         {

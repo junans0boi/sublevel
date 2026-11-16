@@ -132,16 +132,16 @@ namespace Game.Gameplay
             if (Compact)
             {
                 // A name card: 220 x 56, panel with a 1 px border, a status dot, the name (22) and the state in words (14).
-                var card = UiPaint.At(Stage, "Tile" + i, x - 110, 864, 220, 56);
+                var card = UiPaint.At(Stage, "Tile" + i, x - 110, 872, 220, 48);
                 s.Tile = card.gameObject;
                 s.TileFill = UiPaint.Box(card, UiPaint.Pn, 8, UiPaint.Ln);
                 s.TileStroke = card.Find("Ring").GetComponent<Image>();
-                s.Dot = UiPaint.Circle(card, "Dot", 20, 28, 12, UiPaint.Ok);
+                s.Dot = UiPaint.Circle(card, "Dot", 20, 24, 12, UiPaint.Ok);
                 s.Dot.sprite = UiPaint.Round(6);
-                s.NameText = UiPaint.Label(card, "Name", 36, 6, 176, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+                s.NameText = UiPaint.Label(card, "Name", 36, 3, 176, 26, "", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
                 s.Name = s.NameText.gameObject;
-                s.TileLabel = UiPaint.Label(card, "State", 36, 32, 176, 20, "", 14, UiPaint.T2, TextAnchor.MiddleLeft);
-                var invite = UiPaint.Btn(Stage, "Invite" + i, x - 110, 864, 220, 56, "+ 초대", 20, 4, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
+                s.TileLabel = UiPaint.Label(card, "State", 36, 27, 176, 18, "", 14, UiPaint.T2, TextAnchor.MiddleLeft);
+                var invite = UiPaint.Btn(Stage, "Invite" + i, x - 110, 872, 220, 48, "+ 초대", 20, 4, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
                 s.Invite = invite.gameObject;
                 return s;
             }
@@ -176,8 +176,8 @@ namespace Game.Gameplay
             {
                 // Cards sit on one line above the bottom bar, under their characters.
                 float x = Mathf.Clamp(cx - 110f, 48f, StageW - 48f - 220f);
-                ((RectTransform)slot.Tile.transform).anchoredPosition = new Vector2(x, -864f);
-                ((RectTransform)slot.Invite.transform).anchoredPosition = new Vector2(x, -864f);
+                ((RectTransform)slot.Tile.transform).anchoredPosition = new Vector2(x, -872f);
+                ((RectTransform)slot.Invite.transform).anchoredPosition = new Vector2(x, -872f);
                 return;
             }
             var tile = (RectTransform)slot.Tile.transform;
