@@ -7,7 +7,7 @@
 | BigSoundBank | CC0 (3,500+) | 환경음, 생활음 | |
 | OpenGameArt 사운드 | 파일별 | CC0/CC-BY만 | CC-BY는 크레딧 |
 | itch.io 총성 팩 | 제작자별 | 약관 확인 | |
-| Freesound | **CC0 필터만** | 보충 효과음 | CC-BY/NC는 사용 안 함(관리 복잡) |
+| Freesound | **CC0 우선**. CC-BY는 ledger+크레딧 화면 반영 시에만(ADR-177) | 보충 효과음 | NC·ND·불명은 사용 안 함. 다운로드는 준환이 로그인해 직접 |
 | Kenney 오디오 | CC0 | UI/보조 | |
 
 ## 2. 제외

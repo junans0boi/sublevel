@@ -7,7 +7,7 @@
 | 상태 | 항목 | 값 | 메모 | 근거 |
 |---|---|---|---|---|
 | 확정 | 캐릭터 모델 | Quaternius Ultimate Modular Men - Swat.fbx (CC0, Generic 리그, 손 뼈 Wrist.R) | 플레이어·봇·훈련 더미가 같은 모델. 스타일화 비율(큰 머리, 5.5등신). | docs/ASSET_LEDGER.md:38 (C-0001); Assets/_Project/Editor/CharacterKit.cs:15 |
-| 미정 | 스킨·복장 변형 | 확인된 변형 없음 | 팀 구분 색이 어떻게 입혀지는지는 이 조사에서 확인 못 함. 제안은 아래 로스터 참고. |  |
+| 제안 | 스킨·복장 변형 | Mixamo: 의상 고정 + 약한 머티리얼 틴트 + 팀 색 완장·머리띠 소품. UBC: 피부 2 x 머리 2 x CC0 소품. 봇은 시드 배정, 인접 중복 금지 [S3 가정 2026-11-16, 준환 위임] | 팀 구분 색이 어떻게 입혀지는지는 이 조사에서 확인 못 함. 제안은 아래 로스터 참고. |  |
 | 확정 | 캡슐 | 높이 1.8m, 반지름 0.35m, 중심 0.9m |  | Assets/_Project/Editor/TestBoxBuilder.cs:331 |
 | 확정 | 눈 높이(서기) | 1.6m | 앉기 -0.65, 엎드리기 -1.2 (Stance 규칙) | Assets/_Project/Scripts/Net/Combatant.cs:28 |
 | 확정 | 무기 소켓 | Wrist.R 이름 문자열 한 곳 | 교체 비용 작음 | docs/research/01_character.md:5-6 |
