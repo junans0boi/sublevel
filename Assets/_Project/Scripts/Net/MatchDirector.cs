@@ -295,7 +295,7 @@ namespace Game.Net
                     int wanted = NetSession.Role == NetSession.RoleKind.Host && NetSession.Bots >= 0
                         ? LobbyRules.ClampBots(NetSession.Bots, NetSession.Players)
                         : (MatchRules.Current ?? new MatchRules()).BotsFor(Mathf.Max(1, NetSession.Players));
-                    // One car per team (ADR-252): the map's elevators are the slots, so a match never has more bots than they hold.
+                    // One car per team (ADR-260): the map's elevators are the slots, so a match never has more bots than they hold.
                     int slots = Elevators.Sites.Count * Mathf.Max(1, TeamMatch.TeamSize) - Mathf.Max(1, NetSession.Players);
                     if (wanted > slots && !_slotWarned) { _slotWarned = true; Debug.LogWarning($"[MatchDirector] {wanted} bots wanted but the {Elevators.Sites.Count} elevators hold {slots} beside the people: capped"); }
                     return Mathf.Max(0, Mathf.Min(wanted, slots));

@@ -158,7 +158,7 @@ namespace Game.Tests
             Assert.AreEqual(4, slice.TargetParticipants);
         }
 
-        // ADR-252: one car per solo participant; with 80 slots (20 stations x 4) everybody has their own, with 60 the surplus has none.
+        // ADR-260: one car per solo participant; with 80 slots (20 stations x 4) everybody has their own, with 60 the surplus has none.
         [TestCase(80, 80, 0)]
         [TestCase(80, 60, 20)]
         public void SoloDeployment_OneToACar_SurplusGetsNone(int participants, int cars, int unplaced)
