@@ -85,17 +85,26 @@ public static partial class WorldBuilder
             if (!batches.TryGetValue(key, out var batch))
                 batches[key] = batch = new WorldMeshes.StripBatch(paved ? asphalt.Tile : dirt.Tile);
 
+            // A deck over water is not painted on the ground (that is the riverbed): the road is cut into runs between decks (BuildBridges).
+            float lift = RoadLift + (paved ? 0.012f : 0f) + (i % 3) * 0.004f;
             points.Clear();
             for (int p = 0; p < count - 1; p++)
             {
+                if (road.Bridge != null && p < road.Bridge.Length && road.Bridge[p])
+                {
+                    if (points.Count > 0) { points.Add(new Vector2(road.X[p], road.Z[p])); batch.Add(points, road.Width, ground, lift); points.Clear(); }
+                    continue;
+                }
                 var a = new Vector2(road.X[p], road.Z[p]);
                 var b = new Vector2(road.X[p + 1], road.Z[p + 1]);
                 int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(a, b) / RoadStep));
                 for (int s = 0; s < steps; s++) points.Add(Vector2.Lerp(a, b, (float)s / steps));
             }
-            points.Add(new Vector2(road.X[count - 1], road.Z[count - 1]));
-            float lift = RoadLift + (paved ? 0.012f : 0f) + (i % 3) * 0.004f;
-            batch.Add(points, road.Width, ground, lift);
+            if (points.Count > 0)
+            {
+                points.Add(new Vector2(road.X[count - 1], road.Z[count - 1]));
+                batch.Add(points, road.Width, ground, lift);
+            }
         }
 
         float total = 0f;

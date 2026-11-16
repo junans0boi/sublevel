@@ -42,6 +42,8 @@ namespace Game.Core
         public int Region = -1;             // -1: links two regions
         public int Pass = -1;               // trunk roads: the pass they go through
         public float[] X = new float[0], Y = new float[0], Z = new float[0];
+        public bool[] Bridge;               // per segment (point i to i + 1): a deck over water; the terrain is not shaped to it (null: none)
+        public bool[] Ford;                 // per segment: a shallow crossing, the road runs through the water
     }
 
     // A compound (cluster of lots around a yard) and the part of its region nearest to it: the unit of partial closure.
@@ -166,6 +168,8 @@ namespace Game.Core
         public List<WorldPoint> LootPoints = new List<WorldPoint>(); // outdoor only (none yet): indoor loot comes with each BuildingPlan
         public List<ScatterPoint> Rocks = new List<ScatterPoint>();
         public List<ScatterPoint> Trees = new List<ScatterPoint>();
+        public List<WorldRiver> Rivers = new List<WorldRiver>();      // the island's rivers (none in the original world)
+        public List<WorldBridge> Bridges = new List<WorldBridge>();   // decks over water, in road order
 
         // The ground is fixed when the plan is generated: editing the lists afterwards does not move it.
         internal WorldTerrain Terrain;

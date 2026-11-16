@@ -229,7 +229,8 @@ namespace Game.Core
                 {
                     float x = road.X[i], z = road.Z[i];
                     outside |= x < 0f || z < 0f || x > plan.Size || z > plan.Size;
-                    wet |= road.Y[i] < dry || plan.Height(x, z) < dry;
+                    bool deck = road.Bridge != null && ((i < road.Bridge.Length && road.Bridge[i]) || (i > 0 && i - 1 < road.Bridge.Length && road.Bridge[i - 1]));
+                    wet |= road.Y[i] < dry || (!deck && plan.Height(x, z) < dry);   // under a deck the riverbed may be low
                     if (i == 0) continue;
                     float run = Distance(x, z, road.X[i - 1], road.Z[i - 1]);
                     steep |= run > 0.01f && Math.Abs(road.Y[i] - road.Y[i - 1]) / run > maxSlope;
@@ -361,7 +362,7 @@ namespace Game.Core
                         if (Distance(gx * WalkCell, gz * WalkCell, pass.X, pass.Z) <= reach) shut[gz * n + gx] = true;
             }
             Components(n, walkable, shut, label, queue);
-            for (int i = 0; i < plan.Regions.Count; i++)
+            for (int i = 0; rules.RegionsAreWalled && i < plan.Regions.Count; i++)
                 for (int j = i + 1; j < plan.Regions.Count; j++)
                 {
                     int a = CellAt(plan.Regions[i].HubX, plan.Regions[i].HubZ), b = CellAt(plan.Regions[j].HubX, plan.Regions[j].HubZ);

@@ -1,47 +1,1230 @@
 {
-  "Size": 1024.0,
-  "Seed": 20261113,
-  "SeaLevel": 10.0,
-  "MaxHeight": 120.0,
-  "IslandRadius": 420.0,
-  "CoastNoise": 14.0,
-  "CoastBays": 45.0,
-  "RidgeHeight": 34.0,
-  "RidgeHalfWidth": 22.0,
-  "PassesPerBorder": 2,
-  "PassWidth": 18.0,
-  "RoadWidth": 6.0,
-  "SpurWidth": 4.5,
-  "PathWidth": 2.5,
-  "MaxRoadSlopeDeg": 12.0,
-  "Rules": {
-    "MinElevators": 3, "MaxElevators": 4, "MinElevatorSpacing": 80.0, "MinLotsNearElevator": 2, "LotRange": 60.0, "DoorstepRange": 35.0,
-    "MaxLotGroundSlopeDeg": 20.0, "WalkSlopeDeg": 40.0, "MinLandKm2": 0.5, "MaxLandKm2": 0.8
+ "Size": 2400,
+ "Seed": 20261116,
+ "SeaLevel": 10,
+ "MaxHeight": 240,
+ "IslandRadius": 0,
+ "CoastNoise": 0,
+ "CoastBays": 0,
+ "RidgeHeight": 34,
+ "RidgeHalfWidth": 22,
+ "PassesPerBorder": 2,
+ "PassWidth": 18,
+ "RoadWidth": 6,
+ "SpurWidth": 4.5,
+ "PathWidth": 2.5,
+ "MaxRoadSlopeDeg": 12,
+ "Rules": {
+  "MinElevators": 3,
+  "MaxElevators": 4,
+  "MinElevatorSpacing": 80,
+  "MinLotsNearElevator": 2,
+  "LotRange": 60,
+  "DoorstepRange": 35,
+  "MaxLotGroundSlopeDeg": 20,
+  "WalkSlopeDeg": 40,
+  "MinLandKm2": 2.8,
+  "MaxLandKm2": 3.8,
+  "RegionsAreWalled": false
+ },
+ "Build": {
+  "MaxLootSpawns": 900,
+  "LootPerBuilding": 3.4,
+  "MaxRocks": 1400,
+  "MaxSingleLodRocks": 120,
+  "FarClip": 700,
+  "FogStart": 90,
+  "FogEnd": 640,
+  "AlphamapMetersPerPixel": 1,
+  "HeightmapMetersPerSample": 1
+ },
+ "Regions": [
+  {
+   "Id": "R0",
+   "Name": "북령 산악",
+   "Kind": "Mountain",
+   "Style": "",
+   "CentreX": 700,
+   "CentreZ": 400,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 3,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 45,
+   "TreesPerHectare": 40
   },
-  "Build": {
-    "MaxLootSpawns": 250, "LootPerBuilding": 3.4, "MaxRocks": 900, "MaxSingleLodRocks": 80, "FarClip": 700.0, "FogStart": 90.0, "FogEnd": 640.0,
-    "AlphamapMetersPerPixel": 1.0, "HeightmapMetersPerSample": 1.0
+  {
+   "Id": "R1",
+   "Name": "청람읍권",
+   "Kind": "Town",
+   "Style": "",
+   "CentreX": 700,
+   "CentreZ": 950,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 4,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 8,
+   "TreesPerHectare": 25
   },
+  {
+   "Id": "R2",
+   "Name": "서남 포구",
+   "Kind": "Factory",
+   "Style": "",
+   "CentreX": 700,
+   "CentreZ": 1600,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 3,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 6,
+   "TreesPerHectare": 15
+  },
+  {
+   "Id": "R3",
+   "Name": "동령 고원",
+   "Kind": "Mountain",
+   "Style": "",
+   "CentreX": 1950,
+   "CentreZ": 700,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 3,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 40,
+   "TreesPerHectare": 25
+  },
+  {
+   "Id": "R4",
+   "Name": "동천 평야",
+   "Kind": "Town",
+   "Style": "",
+   "CentreX": 1550,
+   "CentreZ": 1200,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 4,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 6,
+   "TreesPerHectare": 20
+  },
+  {
+   "Id": "R5",
+   "Name": "남동 해안",
+   "Kind": "Factory",
+   "Style": "",
+   "CentreX": 1900,
+   "CentreZ": 1500,
+   "Radius": 300,
+   "BaseHeight": 0,
+   "Relief": 0,
+   "Elevators": 3,
+   "Lots": 8,
+   "CompoundLots": 3,
+   "Hamlets": 0,
+   "HamletLots": 0,
+   "ConvergencePoints": 3,
+   "CompoundRadius": 40,
+   "RocksPerHectare": 8,
+   "TreesPerHectare": 12
+  }
+ ],
+ "Island": {
   "Regions": [
-    {
-      "Id": "A", "Name": "산악", "Kind": "Mountain", "Style": "Ridge", "CentreX": 520.0, "CentreZ": 800.0, "Radius": 320.0,
-      "BaseHeight": 18.0, "Relief": 84.0, "Elevators": 3, "Lots": 8, "CompoundLots": 3, "Hamlets": 0, "HamletLots": 0, "ConvergencePoints": 3, "CompoundRadius": 40.0,
-      "RocksPerHectare": 60.0, "TreesPerHectare": 40.0
-    },
-    {
-      "Id": "B", "Name": "습지", "Kind": "Wetland", "CentreX": 200.0, "CentreZ": 400.0, "Radius": 300.0,
-      "BaseHeight": 0.05, "Relief": 0.6, "Elevators": 3, "Lots": 8, "CompoundLots": 3, "Hamlets": 2, "HamletLots": 2, "ConvergencePoints": 3, "CompoundRadius": 40.0,
-      "RocksPerHectare": 5.0, "TreesPerHectare": 30.0
-    },
-    {
-      "Id": "C", "Name": "마을", "Kind": "Town", "CentreX": 500.0, "CentreZ": 400.0, "Radius": 280.0,
-      "BaseHeight": 8.0, "Relief": 4.5, "Elevators": 4, "Lots": 30, "CompoundLots": 7, "Hamlets": 3, "HamletLots": 3, "ConvergencePoints": 3, "CompoundRadius": 50.0,
-      "RocksPerHectare": 8.0, "TreesPerHectare": 25.0
-    },
-    {
-      "Id": "D", "Name": "공장", "Kind": "Factory", "CentreX": 824.0, "CentreZ": 400.0, "Radius": 300.0,
-      "BaseHeight": 9.0, "Relief": 3.2, "Elevators": 3, "Lots": 14, "CompoundLots": 5, "Hamlets": 2, "HamletLots": 2, "ConvergencePoints": 3, "CompoundRadius": 60.0,
-      "RocksPerHectare": 6.0, "TreesPerHectare": 8.0
-    }
-  ]
+   {
+    "Id": "R0",
+    "Name": "북령 산악",
+    "Kind": "Mountain",
+    "Seeds": [
+     700,
+     400,
+     1250,
+     350
+    ],
+    "West": 0,
+    "Elevators": 3,
+    "RocksPerHectare": 45,
+    "TreesPerHectare": 40
+   },
+   {
+    "Id": "R1",
+    "Name": "청람읍권",
+    "Kind": "Town",
+    "Seeds": [
+     700,
+     950
+    ],
+    "West": 1,
+    "Elevators": 4,
+    "RocksPerHectare": 8,
+    "TreesPerHectare": 25
+   },
+   {
+    "Id": "R2",
+    "Name": "서남 포구",
+    "Kind": "Factory",
+    "Seeds": [
+     700,
+     1600
+    ],
+    "West": 1,
+    "Elevators": 3,
+    "RocksPerHectare": 6,
+    "TreesPerHectare": 15
+   },
+   {
+    "Id": "R3",
+    "Name": "동령 고원",
+    "Kind": "Mountain",
+    "Seeds": [
+     1950,
+     700
+    ],
+    "West": 0,
+    "Elevators": 3,
+    "RocksPerHectare": 40,
+    "TreesPerHectare": 25
+   },
+   {
+    "Id": "R4",
+    "Name": "동천 평야",
+    "Kind": "Town",
+    "Seeds": [
+     1550,
+     1200
+    ],
+    "West": 0,
+    "Elevators": 4,
+    "RocksPerHectare": 6,
+    "TreesPerHectare": 20
+   },
+   {
+    "Id": "R5",
+    "Name": "남동 해안",
+    "Kind": "Factory",
+    "Seeds": [
+     1900,
+     1500
+    ],
+    "West": 0,
+    "Elevators": 3,
+    "RocksPerHectare": 8,
+    "TreesPerHectare": 12
+   }
+  ],
+  "Towns": [
+   {
+    "Id": "C",
+    "Name": "청람읍",
+    "Tier": 1,
+    "Region": 1,
+    "X": 960,
+    "Z": 1000,
+    "RotDeg": 0,
+    "Width": 440,
+    "Depth": 300,
+    "Seed": 11,
+    "Composition": "Shop:36,House:21,Stall:8,Villa:6,Apartment:4,Barracks:4,School:3,WatchTower:2,FactoryHall:2,Warehouse:2,Shed:1,Market:1"
+   },
+   {
+    "Id": "L1",
+    "Name": "새재",
+    "Tier": 2,
+    "Region": 4,
+    "X": 1530,
+    "Z": 1100,
+    "RotDeg": 8,
+    "Width": 330,
+    "Depth": 240,
+    "Seed": 21,
+    "Composition": "House:20,Shop:16,Stall:8,Apartment:4,Market:1,Shed:1"
+   },
+   {
+    "Id": "L2",
+    "Name": "해옥포",
+    "Tier": 2,
+    "Region": 2,
+    "X": 640,
+    "Z": 1610,
+    "RotDeg": -14,
+    "Width": 300,
+    "Depth": 230,
+    "Seed": 22,
+    "Composition": "House:16,Shop:16,Warehouse:5,Shed:1"
+   },
+   {
+    "Id": "L3",
+    "Name": "광석리",
+    "Tier": 2,
+    "Region": 5,
+    "X": 1900,
+    "Z": 1500,
+    "RotDeg": 10,
+    "Width": 320,
+    "Depth": 240,
+    "Seed": 23,
+    "Composition": "House:8,Villa:8,Shop:8,FactoryHall:4,Barracks:4,WatchTower:3,Warehouse:3,Shed:1"
+   },
+   {
+    "Id": "L4",
+    "Name": "북령읍",
+    "Tier": 2,
+    "Region": 0,
+    "X": 880,
+    "Z": 570,
+    "RotDeg": -6,
+    "Width": 330,
+    "Depth": 210,
+    "Seed": 24,
+    "Composition": "House:17,Shop:17,Villa:8"
+   },
+   {
+    "Id": "M1",
+    "Name": "학전",
+    "Tier": 3,
+    "Region": 1,
+    "X": 530,
+    "Z": 880,
+    "RotDeg": 5,
+    "Width": 190,
+    "Depth": 130,
+    "Seed": 31,
+    "Composition": "Shop:7,House:6,School:3"
+   },
+   {
+    "Id": "M2",
+    "Name": "논실",
+    "Tier": 3,
+    "Region": 4,
+    "X": 1520,
+    "Z": 1320,
+    "RotDeg": -8,
+    "Width": 200,
+    "Depth": 140,
+    "Seed": 32,
+    "Composition": "House:12,Shop:8,Shed:1"
+   },
+   {
+    "Id": "M3",
+    "Name": "마루재",
+    "Tier": 3,
+    "Region": 4,
+    "X": 1840,
+    "Z": 1085,
+    "RotDeg": 0,
+    "Width": 190,
+    "Depth": 130,
+    "Seed": 33,
+    "Composition": "House:14,Shop:7"
+   },
+   {
+    "Id": "M4",
+    "Name": "채석리",
+    "Tier": 3,
+    "Region": 3,
+    "X": 1990,
+    "Z": 670,
+    "RotDeg": 12,
+    "Width": 200,
+    "Depth": 140,
+    "Seed": 34,
+    "Composition": "House:8,Shop:8,Warehouse:2,Shed:1"
+   },
+   {
+    "Id": "M5",
+    "Name": "남포",
+    "Tier": 3,
+    "Region": 5,
+    "X": 1495,
+    "Z": 1790,
+    "RotDeg": -5,
+    "Width": 220,
+    "Depth": 140,
+    "Seed": 35,
+    "Composition": "House:9,Shop:8,Warehouse:2,Shed:1"
+   },
+   {
+    "Id": "M6",
+    "Name": "북해리",
+    "Tier": 3,
+    "Region": 0,
+    "X": 1010,
+    "Z": 180,
+    "RotDeg": 0,
+    "Width": 200,
+    "Depth": 140,
+    "Seed": 36,
+    "Composition": "House:11,Shop:7,Shed:1"
+   },
+   {
+    "Id": "H1",
+    "Name": "솔밭",
+    "Tier": 4,
+    "Region": 1,
+    "X": 390,
+    "Z": 1130,
+    "RotDeg": 20,
+    "Width": 160,
+    "Depth": 50,
+    "Seed": 41,
+    "Composition": "House:6"
+   },
+   {
+    "Id": "H3",
+    "Name": "샘골",
+    "Tier": 4,
+    "Region": 0,
+    "X": 1470,
+    "Z": 560,
+    "RotDeg": 0,
+    "Width": 160,
+    "Depth": 50,
+    "Seed": 42,
+    "Composition": "House:6"
+   },
+   {
+    "Id": "H4",
+    "Name": "양지",
+    "Tier": 4,
+    "Region": 3,
+    "X": 2100,
+    "Z": 1040,
+    "RotDeg": -10,
+    "Width": 170,
+    "Depth": 50,
+    "Seed": 43,
+    "Composition": "House:6"
+   },
+   {
+    "Id": "H5",
+    "Name": "달뫼",
+    "Tier": 4,
+    "Region": 1,
+    "X": 880,
+    "Z": 1190,
+    "RotDeg": 30,
+    "Width": 100,
+    "Depth": 60,
+    "Seed": 44,
+    "Composition": "House:8"
+   },
+   {
+    "Id": "H6",
+    "Name": "하동",
+    "Tier": 4,
+    "Region": 4,
+    "X": 1390,
+    "Z": 1560,
+    "RotDeg": 0,
+    "Width": 150,
+    "Depth": 50,
+    "Seed": 45,
+    "Composition": "House:4"
+   },
+   {
+    "Id": "H7",
+    "Name": "갯말",
+    "Tier": 4,
+    "Region": 2,
+    "X": 850,
+    "Z": 1790,
+    "RotDeg": 0,
+    "Width": 150,
+    "Depth": 50,
+    "Seed": 46,
+    "Composition": "House:6"
+   }
+  ],
+  "Nodes": [
+   {
+    "Id": "P1",
+    "Name": "북령고개",
+    "X": 1010,
+    "Z": 345
+   },
+   {
+    "Id": "P3",
+    "Name": "서령재",
+    "X": 640,
+    "Z": 1245
+   },
+   {
+    "Id": "P4",
+    "Name": "남령재",
+    "X": 1698,
+    "Z": 1445
+   },
+   {
+    "Id": "P5",
+    "Name": "샘골재",
+    "X": 1400,
+    "Z": 355
+   },
+   {
+    "Id": "J5",
+    "Name": "교차로",
+    "X": 1000,
+    "Z": 1745
+   }
+  ],
+  "Roads": [
+   {
+    "A": "C",
+    "B": "L1",
+    "Class": "H",
+    "Via": [
+     1150,
+     990,
+     1380,
+     1010
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "L1",
+    "B": "M2",
+    "Class": "H",
+    "Via": [
+     1530,
+     1240
+    ],
+    "Switchback": false,
+    "EndA": -1,
+    "EndB": -1
+   },
+   {
+    "A": "M2",
+    "B": "P4",
+    "Class": "H",
+    "Via": [
+     1690,
+     1340
+    ],
+    "Switchback": false,
+    "EndA": 1,
+    "EndB": 0
+   },
+   {
+    "A": "P4",
+    "B": "L3",
+    "Class": "H",
+    "Via": [
+     1800,
+     1480
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "L3",
+    "B": "M5",
+    "Class": "H",
+    "Via": [
+     1760,
+     1700,
+     1600,
+     1790
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M5",
+    "B": "J5",
+    "Class": "H",
+    "Via": [
+     1330,
+     1830,
+     1150,
+     1790
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "J5",
+    "B": "L2",
+    "Class": "H",
+    "Via": [
+     880,
+     1690
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H1",
+    "B": "P3",
+    "Class": "D",
+    "Via": [
+     500,
+     1190
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H1",
+    "B": "M1",
+    "Class": "D",
+    "Via": [
+     430,
+     1000
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M1",
+    "B": "C",
+    "Class": "P",
+    "Via": [
+     700,
+     900,
+     850,
+     960
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "C",
+    "B": "H5",
+    "Class": "P",
+    "Via": [
+     950,
+     1100
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H5",
+    "B": "P3",
+    "Class": "P",
+    "Via": [
+     760,
+     1220
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "P3",
+    "B": "L2",
+    "Class": "P",
+    "Via": [
+     620,
+     1420,
+     640,
+     1520
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M1",
+    "B": "L4",
+    "Class": "P",
+    "Via": [
+     640,
+     700
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "C",
+    "B": "L4",
+    "Class": "P",
+    "Via": [
+     960,
+     800
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "L4",
+    "B": "P1",
+    "Class": "P",
+    "Via": [
+     950,
+     460
+    ],
+    "Switchback": true,
+    "EndA": -1,
+    "EndB": 0
+   },
+   {
+    "A": "P1",
+    "B": "M6",
+    "Class": "P",
+    "Via": [
+     1040,
+     250
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M6",
+    "B": "P5",
+    "Class": "P",
+    "Via": [
+     1230,
+     215,
+     1330,
+     280
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "P5",
+    "B": "H3",
+    "Class": "P",
+    "Via": [
+     1430,
+     450
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "L4",
+    "B": "H3",
+    "Class": "P",
+    "Via": [
+     1060,
+     610,
+     1170,
+     630,
+     1300,
+     590
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H3",
+    "B": "L1",
+    "Class": "P",
+    "Via": [
+     1400,
+     800,
+     1440,
+     950
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H3",
+    "B": "M4",
+    "Class": "P",
+    "Via": [
+     1620,
+     600,
+     1800,
+     640
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M4",
+    "B": "H4",
+    "Class": "P",
+    "Via": [
+     2060,
+     850
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "L1",
+    "B": "M3",
+    "Class": "P",
+    "Via": [
+     1630,
+     1100
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M3",
+    "B": "H4",
+    "Class": "P",
+    "Via": [
+     1900,
+     1110,
+     2010,
+     1090
+    ],
+    "Switchback": true,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H4",
+    "B": "L3",
+    "Class": "P",
+    "Via": [
+     2060,
+     1290
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "M2",
+    "B": "H6",
+    "Class": "D",
+    "Via": [
+     1470,
+     1440
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   },
+   {
+    "A": "H6",
+    "B": "M5",
+    "Class": "D",
+    "Via": [
+     1450,
+     1650
+    ],
+    "Switchback": false,
+    "EndA": 1,
+    "EndB": 1
+   },
+   {
+    "A": "H7",
+    "B": "J5",
+    "Class": "D",
+    "Via": [
+     930,
+     1760
+    ],
+    "Switchback": false,
+    "EndA": 0,
+    "EndB": 0
+   }
+  ],
+  "Ridges": [
+   {
+    "Name": "백운 능선",
+    "Points": [
+     250,
+     640,
+     650,
+     440,
+     1000,
+     340,
+     1450,
+     360,
+     1900,
+     330,
+     2100,
+     540
+    ],
+    "Amp": 165,
+    "Width": 150
+   },
+   {
+    "Name": "동령 능선",
+    "Points": [
+     1560,
+     700,
+     1720,
+     950,
+     1740,
+     1300,
+     1640,
+     1650
+    ],
+    "Amp": 105,
+    "Width": 120
+   },
+   {
+    "Name": "서령 능선",
+    "Points": [
+     280,
+     1300,
+     620,
+     1230,
+     900,
+     1330,
+     1050,
+     1500
+    ],
+    "Amp": 92,
+    "Width": 115
+   }
+  ],
+  "Peaks": [
+   {
+    "Name": "백운봉",
+    "X": 790,
+    "Z": 410,
+    "H": 110,
+    "S": 120
+   },
+   {
+    "Name": "서령봉",
+    "X": 470,
+    "Z": 540,
+    "H": 55,
+    "S": 110
+   },
+   {
+    "Name": "동령봉",
+    "X": 2000,
+    "Z": 430,
+    "H": 75,
+    "S": 150
+   },
+   {
+    "Name": "솔뫼봉",
+    "X": 1690,
+    "Z": 800,
+    "H": 45,
+    "S": 90
+   },
+   {
+    "Name": "망루봉",
+    "X": 650,
+    "Z": 1040,
+    "H": 85,
+    "S": 100
+   },
+   {
+    "Name": "남석 구릉",
+    "X": 1990,
+    "Z": 1320,
+    "H": 55,
+    "S": 90
+   }
+  ],
+  "Passes": [
+   {
+    "Id": "P1",
+    "Name": "북령고개",
+    "X": 1010,
+    "Z": 345,
+    "Road": true
+   },
+   {
+    "Id": "P2",
+    "Name": "동령재",
+    "X": 1735,
+    "Z": 1090,
+    "Road": true
+   },
+   {
+    "Id": "P3",
+    "Name": "서령재",
+    "X": 640,
+    "Z": 1245,
+    "Road": true
+   },
+   {
+    "Id": "P4",
+    "Name": "남령재",
+    "X": 1698,
+    "Z": 1445,
+    "Road": true
+   },
+   {
+    "Id": "P5",
+    "Name": "샘골재",
+    "X": 1400,
+    "Z": 355,
+    "Road": true
+   },
+   {
+    "Id": "S4",
+    "Name": "서령 북안부",
+    "X": 520,
+    "Z": 505,
+    "Road": false
+   },
+   {
+    "Id": "S2",
+    "Name": "서령 안부",
+    "X": 885,
+    "Z": 1325,
+    "Road": false
+   },
+   {
+    "Id": "S3",
+    "Name": "솔뫼 안부",
+    "X": 1656,
+    "Z": 850,
+    "Road": false
+   }
+  ],
+  "Quarries": [
+   {
+    "Name": "동령 채석장",
+    "X": 2090,
+    "Z": 600,
+    "Radius": 105
+   },
+   {
+    "Name": "남석 채석장",
+    "X": 1990,
+    "Z": 1330,
+    "Radius": 90
+   }
+  ],
+  "Rivers": [
+   {
+    "Name": "청람강",
+    "Points": [
+     1170,
+     150,
+     1120,
+     360,
+     1190,
+     560,
+     1160,
+     780,
+     1260,
+     990,
+     1230,
+     1180,
+     1330,
+     1360,
+     1270,
+     1560,
+     1350,
+     1720,
+     1310,
+     1910
+    ],
+    "Hw0": 8,
+    "Hw1": 30,
+    "HwPow": 1.2,
+    "B0": 14,
+    "B1": -2,
+    "BedPow": 3,
+    "Sl0": 0.85,
+    "Sl1": 0.3
+   },
+   {
+    "Name": "동천",
+    "Points": [
+     1700,
+     1250,
+     1650,
+     1360,
+     1520,
+     1450,
+     1410,
+     1440,
+     1318,
+     1400
+    ],
+    "Hw0": 5,
+    "Hw1": 9,
+    "HwPow": 1,
+    "B0": 30,
+    "B1": 0,
+    "BedPow": 2,
+    "Sl0": 0.35,
+    "Sl1": 0.35
+   }
+  ],
+  "Stations": [
+   {
+    "Town": "L4",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 0
+   },
+   {
+    "Town": "L4",
+    "Side": "w",
+    "Frac": 0.5,
+    "Region": 0
+   },
+   {
+    "Town": "M6",
+    "Side": "w",
+    "Frac": 0.5,
+    "Region": 0
+   },
+   {
+    "Town": "C",
+    "Side": "w",
+    "Frac": 0.35,
+    "Region": 1
+   },
+   {
+    "Town": "C",
+    "Side": "n",
+    "Frac": 0.55,
+    "Region": 1
+   },
+   {
+    "Town": "M1",
+    "Side": "n",
+    "Frac": 0.5,
+    "Region": 1
+   },
+   {
+    "Town": "H5",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 1
+   },
+   {
+    "Town": "L2",
+    "Side": "n",
+    "Frac": 0.5,
+    "Region": 2
+   },
+   {
+    "Town": "L2",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 2
+   },
+   {
+    "Town": "H7",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 2
+   },
+   {
+    "Town": "M4",
+    "Side": "w",
+    "Frac": 0.5,
+    "Region": 3
+   },
+   {
+    "Town": "M4",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 3
+   },
+   {
+    "Town": "H4",
+    "Side": "w",
+    "Frac": 0.5,
+    "Region": 3
+   },
+   {
+    "Town": "L1",
+    "Side": "w",
+    "Frac": 0.5,
+    "Region": 4
+   },
+   {
+    "Town": "L1",
+    "Side": "n",
+    "Frac": 0.5,
+    "Region": 4
+   },
+   {
+    "Town": "M2",
+    "Side": "n",
+    "Frac": 0.5,
+    "Region": 4
+   },
+   {
+    "Town": "M3",
+    "Side": "s",
+    "Frac": 0.5,
+    "Region": 4
+   },
+   {
+    "Town": "L3",
+    "Side": "n",
+    "Frac": 0.5,
+    "Region": 5
+   },
+   {
+    "Town": "L3",
+    "Side": "s",
+    "Frac": 0.5,
+    "Region": 5
+   },
+   {
+    "Town": "M5",
+    "Side": "e",
+    "Frac": 0.5,
+    "Region": 5
+   }
+  ],
+  "CentreX": 1200,
+  "CentreZ": 1000,
+  "RadiusX": 1150,
+  "RadiusZ": 960,
+  "ReliefScale": 0.75,
+  "RoadDesignSlopeDeg": 10,
+  "TownBlend": 60,
+  "SwitchbackAmplitude": 58,
+  "SwitchbackWavelength": 150
+ }
 }

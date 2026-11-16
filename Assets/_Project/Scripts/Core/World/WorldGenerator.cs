@@ -53,6 +53,7 @@ namespace Game.Core
 
         public static WorldPlan Generate(WorldSpec spec)
         {
+            if (spec.Island != null && spec.Island.Towns != null && spec.Island.Towns.Length > 0) return IslandGenerator.Generate(spec);
             var plan = new WorldPlan
             {
                 Size = spec.Size, SeaLevel = spec.SeaLevel, MaxHeight = spec.MaxHeight,
@@ -833,7 +834,7 @@ namespace Game.Core
         }
 
         // Rocks (cover) and trees on a jittered grid: never on roads, pads or water, thinned by region density.
-        static void Scatter(RegionSpec[] regions, WorldPlan plan, WorldTerrain terrain, uint seed, bool rocks)
+        internal static void Scatter(RegionSpec[] regions, WorldPlan plan, WorldTerrain terrain, uint seed, bool rocks)
         {
             uint salt = unchecked(seed + (rocks ? 81u : 91u));
             float maxSlope = rocks ? 0.7f : 0.58f;           // 35 deg, 30 deg

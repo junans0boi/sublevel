@@ -119,11 +119,13 @@ public static partial class WorldBuilder
         BuildSea(plan, ground, world.transform, store);
         int barriers = BuildSeaBarrier(plan, ground, world.transform);
         BuildRoads(plan, ground, world.transform, store);
+        BuildRivers(plan, world.transform, store);
 
         var navSources = new List<NavMeshBuildSource>();
         var lots = new List<Placed>();
         var stations = new List<Placed>();
         BuildBuildings(plan, ground, world.transform, store, navSources, lots, stations);
+        BuildBridges(plan, world.transform, store, navSources);
         int holes = CutShaftHoles(terrain.terrainData, plan, stations);
         EditorUtility.SetDirty(terrain.terrainData);
         Debug.Log($"[WorldBuilder] elevator shafts: {stations.Count} shafts and cars, {holes} terrain cells opened over them");
@@ -343,6 +345,7 @@ public static partial class WorldBuilder
         go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(WorldMeshes.Quad("Sea", side, side));
         var renderer = go.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = WorldMaterials.Water(normals, depthMap, plan.Size, WaterDepthRange);
+        _seaMaterial = renderer.sharedMaterial;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
     }
