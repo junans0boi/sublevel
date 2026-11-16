@@ -51,7 +51,16 @@ namespace Game.Net
 
         void Start()
         {
+            if (_options.Participants > 0)
+            {
+                // The match is this big; bots fill what people leave empty (BotFill, ADR-241).
+                var rules = MatchRules.Current;
+                rules.Participants = _options.Participants;
+                rules.MaxBots = _options.Participants - 1;
+                rules.BotCount = _options.Participants - 1;
+            }
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
+            MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
             ZoneDirector.FinalRegionOverride = _options.Region;
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core

@@ -113,20 +113,39 @@ namespace Game.Core
     [Serializable]
     public class MatchRules
     {
-        public const int MaxBotsLimit = 23;   // 24 participants with the player
+        public const int MaxParticipantsLimit = 50; // the cap of a match, humans and bots together (ADR-168, ADR-241)
+        public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 49 with one person
 
         // Set from data when there is any; tests may replace it.
         public static MatchRules Current = new MatchRules();
 
         public int BotCount = 15;             // + the player = 16
         public int MaxBots = MaxBotsLimit;
+        // A full match (ADR-168). Bots fill what people leave empty, never fewer than MinBots; so people are at most Participants - MinBots.
+        public int Participants = MaxParticipantsLimit;
+        public int MinBots = 10;
         // People in one room (#160, ADR-124); bots fill the rest of the match.
         public int MaxPlayers = 16;
         // A dropped player's combatant waits this many seconds for the same session to return, then a bot takes over (#166, ADR-125).
         public float ReconnectSeconds = 60f;
 
+        // The most people one room can hold: Participants - MinBots, within 1..Participants.
+        public int MaxHumans => Math.Max(1, Math.Min(Participants, MaxParticipantsLimit) - Math.Max(0, MinBots));
+
         // BotCount within 0..MaxBots (and never above MaxBotsLimit).
         public int ClampedBotCount => Math.Max(0, Math.Min(BotCount, Math.Min(Math.Max(0, MaxBots), MaxBotsLimit)));
+    }
+
+    // How many bots a match of `participants` needs beside `humans` people (ADR-241). Pure.
+    public static class BotFill
+    {
+        // Fills up to `participants`, but never fewer than `minBots` (people past participants - minBots do not push the bots below it).
+        public static int Plan(int humans, int participants, int minBots)
+        {
+            participants = Math.Max(1, Math.Min(participants, MatchRules.MaxParticipantsLimit));
+            minBots = Math.Max(0, Math.Min(minBots, participants - 1));
+            return Math.Max(minBots, participants - Math.Max(0, humans));
+        }
     }
 
     // One elevator as the assignment sees it: the region it stands in (any id; equal ids = same region).

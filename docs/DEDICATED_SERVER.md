@@ -25,9 +25,10 @@ Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
 |---|---|---|
 | `--dedicated` | 전용 서버로 실행 | (없으면 일반 게임) |
 | `--port N` | 로비 포트(1..65534). 매치는 **N+1**(쓰는 중이면 빈 포트)에서 열린다. 방화벽에서 두 포트를 연다 | 7770 |
-| `--bots N` | 매치를 채울 봇 수(0..23) | 사람이 늘면 줄며 전체 16명을 채움 |
+| `--bots N` | 매치를 채울 봇 수(0..49) | 사람이 늘면 줄며 전체 16명을 채움 |
 | `--region ID` | 매치의 **최종 구역**(`A` 산악, `B` 습지, `C` 마을, `D` 공장, 또는 0부터의 번호). 모르는 값이면 경고 후 무시 | 무작위 |
-| `--max-players N` | 한 방의 사람 수(1..24) | rules.json `Match.MaxPlayers`(16) |
+| `--max-players N` | 한 방의 사람 수(1..40 = Participants−MinBots) | rules.json `Match.MaxPlayers`(16) |
+| `--participants N` | 사람+봇 합계(2..50), 슬라이스·측정용. 봇은 사람이 비운 만큼 채우되 `MinBots`(10) 미만으로 안 줄어듦 | rules.json `Match.Participants`(50) |
 | `--start-seconds N` | 첫 사람이 들어온 뒤 N초가 지나면 준비 안 한 사람이 있어도 시작(0 = 끔) | 60 |
 
 잘못된 값은 `[Server] --port must be ...` 오류를 로그에 남기고 종료 코드 2로 끝난다(추측해서 고치지 않는다).

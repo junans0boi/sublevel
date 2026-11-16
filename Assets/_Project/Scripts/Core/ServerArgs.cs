@@ -8,7 +8,8 @@ namespace Game.Core
     //   --port N               lobby port, default 7770 (the match listens on N+1)
     //   --bots N               bots that fill the match; default: fill up to the usual size beside the people
     //   --region ID            the match's final region, by id or index; default random
-    //   --max-players N        people in one room (1..24), default from rules.json
+    //   --max-players N        people in one room (1..40), default from rules.json
+    //   --participants N       people + bots in the match (2..50), default rules.json Match.Participants (slice and measurement runs)
     //   --start-seconds N      start this long after the first person joined even if not all are ready (0 = never), default 60
     public struct ServerOptions
     {
@@ -17,6 +18,7 @@ namespace Game.Core
         public int Bots;            // -1 = the lobby's own default
         public string Region;       // null = random
         public int MaxPlayers;      // 0 = rules.json
+        public int Participants;    // 0 = rules.json
         public float StartSeconds;
         public string Error;        // null when everything parsed
     }
@@ -34,7 +36,7 @@ namespace Game.Core
             {
                 string a = args[i];
                 if (a == "--dedicated" || a == "-dedicated") { o.Dedicated = true; continue; }
-                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--start-seconds";
+                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--participants" || a == "--start-seconds";
                 if (!known) continue;
                 if (i + 1 >= args.Count) { o.Error = a + " needs a value"; return o; }
                 string v = args[++i];
@@ -54,8 +56,12 @@ namespace Game.Core
                         o.Region = v.Trim();
                         break;
                     case "--max-players":
-                        if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out int max) || max < 1 || max > LobbyRules.MaxParticipants) { o.Error = "--max-players must be 1.." + LobbyRules.MaxParticipants + ", got '" + v + "'"; return o; }
+                        if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out int max) || max < 1 || max > MatchRules.Current.MaxHumans) { o.Error = "--max-players must be 1.." + MatchRules.Current.MaxHumans + ", got '" + v + "'"; return o; }
                         o.MaxPlayers = max;
+                        break;
+                    case "--participants":
+                        if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out int parts) || parts < 2 || parts > MatchRules.MaxParticipantsLimit) { o.Error = "--participants must be 2.." + MatchRules.MaxParticipantsLimit + ", got '" + v + "'"; return o; }
+                        o.Participants = parts;
                         break;
                     case "--start-seconds":
                         if (!float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float secs) || secs < 0f) { o.Error = "--start-seconds must be 0 or more, got '" + v + "'"; return o; }
