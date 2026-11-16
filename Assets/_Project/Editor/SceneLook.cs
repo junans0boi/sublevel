@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -337,5 +338,55 @@ public static class SceneLook
         Object.DestroyImmediate(tex);
         rt.Release();
         Object.DestroyImmediate(rt);
+    }
+
+    // Render time (ms, GPU done) of the saved World scene from each region hub, plus texture memory of the materials in use.
+    // Editor and offscreen, so draw call counters read zero; compare runs on the same machine only (PERF_BUDGET, S2 T7).
+    // tools/unity.sh run-gfx SceneLook.MeasureWorld  ->  Logs/s2/measure.txt
+    public static void MeasureWorld()
+    {
+        try
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/_Project/Scenes/World.unity", UnityEditor.SceneManagement.OpenSceneMode.Single);
+            var info = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+            var terrain = Object.FindFirstObjectByType<Terrain>();
+            DynamicGI.UpdateEnvironment();
+            var cam = new GameObject("MeasureCamera").AddComponent<Camera>();
+            cam.fieldOfView = 60f; cam.nearClipPlane = 0.05f; cam.farClipPlane = 700f;
+            EnablePost(cam);
+            UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(cam).SetRenderer(info.RendererIndex);
+            var rt = new RenderTexture(1920, 1080, 24) { antiAliasing = 1 };
+            cam.targetTexture = rt;
+            var probe = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            var lines = new List<string>();
+            foreach (var region in info.Regions)
+            {
+                var at = region.Hub; at.y = terrain.SampleHeight(new Vector3(at.x, 0f, at.z)) + 1.7f;
+                var look = new Vector3(info.Size * 0.5f, at.y, info.Size * 0.5f);
+                cam.transform.position = at; cam.transform.LookAt(look);
+                var times = new List<float>();
+                for (int i = 0; i < 70; i++)
+                {
+                    var t0 = System.Diagnostics.Stopwatch.StartNew();
+                    cam.Render();
+                    RenderTexture.active = rt; probe.ReadPixels(new Rect(0, 0, 1, 1), 0, 0); RenderTexture.active = null; // waits for the GPU
+                    if (i >= 10) times.Add((float)t0.Elapsed.TotalMilliseconds);
+                }
+                times.Sort();
+                lines.Add($"hub {region.Id}: avg {System.Linq.Enumerable.Average(times):F2} ms, p99 {times[(int)(times.Count * 0.99f)]:F2} ms");
+            }
+            var textures = new HashSet<Texture>();
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                foreach (var m in r.sharedMaterials)
+                    if (m != null) foreach (var n in m.GetTexturePropertyNames()) { var t = m.GetTexture(n); if (t != null) textures.Add(t); }
+            foreach (var l in terrain.terrainData.terrainLayers) { textures.Add(l.diffuseTexture); if (l.normalMapTexture != null) textures.Add(l.normalMapTexture); }
+            long bytes = 0; foreach (var t in textures) if (t != null) bytes += Profiler.GetRuntimeMemorySizeLong(t);
+            lines.Add($"textures in scene materials: {textures.Count}, runtime memory {bytes / 1048576.0:F0} MB");
+            Directory.CreateDirectory("Logs/s2");
+            File.WriteAllLines("Logs/s2/measure.txt", lines);
+            Debug.Log("[SceneLook] " + string.Join(" | ", lines));
+            EditorApplication.Exit(0);
+        }
+        catch (System.Exception e) { Debug.LogException(e); EditorApplication.Exit(1); }
     }
 }

@@ -15,6 +15,7 @@ namespace Game.Core
         public string category;      // MaterialCategory as text
         public string vendor;        // PolyHaven | AmbientCG | Custom
         public string source;        // texture set id, or the shader name for Custom
+        public string fallback;      // legacy ambientCG set used until `source` is imported under Art/Materials
         public string surface;       // SurfaceId as text (footstep and bullet impact sounds follow it)
         public float[] tile;         // metres one repeat covers: x, y
         public float[] tint;         // linear rgb

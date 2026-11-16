@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using Game.Core;
 using UnityEditor;
@@ -26,11 +27,43 @@ public static class WorldMaterials
 
     static readonly Dictionary<string, Material> Cache = new Dictionary<string, Material>();
 
-    static readonly string[] SurfaceSets =
+    // Sets no table row picks (rock and mud layers, painted metal); the rest come from materials.json (ADR-185).
+    static readonly string[] OwnSets = { "Rock051", "Ground054", "PaintedMetal014" };
+    static readonly string[] TableIds = { "grass", "dirt_road", "asphalt", "wall_brick", "wall_plaster", "roof_tin", "roof_tile", "floor_wood", "pavement_alt", "metal_rust" };
+    static string[] SurfaceSets => OwnSets.Concat(TableIds.Select(Src)).Distinct().ToArray();
+
+    static MaterialTable _table;
+    static MaterialTable Table => _table ?? (_table = JsonUtility.FromJson<MaterialTable>(File.ReadAllText(TablePath)));
+    const string TablePath = "Assets/_Project/Data/Resources/GameData/materials.json";
+
+    static MaterialEntry Entry(string tableId)
     {
-        "Ground037", "Ground081", "Rock051", "Ground054", "Asphalt015", "Bricks097", "PaintedPlaster017",
-        "CorrugatedSteel005", "RoofingTiles014B", "Planks039", "Concrete047A", "Metal022", "PaintedMetal014",
-    };
+        var entry = System.Array.Find(Table.materials, e => e.id == tableId);
+        if (entry == null) throw new KeyNotFoundException("materials.json has no material " + tableId);
+        return entry;
+    }
+
+    // The set a table row uses: its picked source once that is imported under Art/Materials, else the legacy ambientCG set.
+    static string Src(string tableId)
+    {
+        var entry = Entry(tableId);
+        return File.Exists($"{ArtMaterials}/{entry.source}/{entry.source}_color.jpg") ? entry.source : entry.fallback;
+    }
+
+    // The table's tint is a brightness match against the legacy set the pick replaces (the Poly Haven sets are darker),
+    // multiplied into every material that uses the pick (one luminance factor in linear space, so the set keeps its own hue).
+    static Color Match(string resolved)
+    {
+        var entry = System.Array.Find(Table.materials, e => e.source == resolved);
+        return entry != null && entry.tint != null && entry.tint.Length == 3 ? new Color(entry.tint[0], entry.tint[1], entry.tint[2]) : Color.white;
+    }
+
+    // A square Poly Haven set replaces a 2:1 ambientCG one: keep the intended width, take the height from the set's shape.
+    static float AspectOf(string resolved)
+    {
+        var entry = System.Array.Find(Table.materials, e => e.source == resolved);
+        return entry != null && entry.tile != null && entry.tile.Length == 2 ? entry.tile[1] / entry.tile[0] : 0f;
+    }
 
     static readonly Dictionary<string, float> MetalScale = new Dictionary<string, float>
     {
@@ -81,6 +114,7 @@ public static class WorldMaterials
     {
         var outPath = MaskPath(id);
         if (File.Exists(outPath)) return;
+        if (File.Exists($"{ArtMaterials}/{id}/{id}_arm.jpg")) { PackArm($"{ArtMaterials}/{id}/{id}_arm.jpg", outPath); return; }
         var rough = LoadFile($"{ArtMaterials}/{id}/{id}_roughness.jpg");
         if (rough == null) throw new FileNotFoundException("roughness map missing for " + id);
         var ao = LoadFile($"{ArtMaterials}/{id}/{id}_ao.jpg");
@@ -102,8 +136,13 @@ public static class WorldMaterials
     {
         var outPath = MaskPath(file);
         if (File.Exists(outPath)) return;
-        var arm = LoadFile($"{ArtModels}/{folder}/{file}_arm.jpg");
-        if (arm == null) throw new FileNotFoundException("arm map missing for " + file);
+        PackArm($"{ArtModels}/{folder}/{file}_arm.jpg", outPath);
+    }
+
+    static void PackArm(string armPath, string outPath)
+    {
+        var arm = LoadFile(armPath);
+        if (arm == null) throw new FileNotFoundException("arm map missing: " + armPath);
         var p = arm.GetPixels32();
         var packed = new Color32[p.Length];
         for (int i = 0; i < p.Length; i++)
@@ -199,8 +238,8 @@ public static class WorldMaterials
 
     static Surface Set(string name, string id, Color tint, float tileX, float tileY, float smoothness = 1f, float bumpScale = 1f) => new Surface
     {
-        Material = Lit("World_" + name, $"{ArtMaterials}/{id}/{id}_color.jpg", $"{ArtMaterials}/{id}/{id}_normal.jpg", MaskPath(id), tint, smoothness, bumpScale),
-        Tile = new Vector2(tileX, tileY),
+        Material = Lit("World_" + name, $"{ArtMaterials}/{id}/{id}_color.jpg", $"{ArtMaterials}/{id}/{id}_normal.jpg", MaskPath(id), tint * Match(id), smoothness, bumpScale),
+        Tile = new Vector2(tileX, AspectOf(id) > 0f ? tileX * AspectOf(id) : tileY),
     };
 
     static int Wrap(int variant) => ((variant % Variants) + Variants) % Variants;
@@ -208,41 +247,60 @@ public static class WorldMaterials
     // Tinted variants so a street is not one colour. Bricks, plaster and planks are 2:1 sets.
     public static Surface Brick(int variant) => Set("Brick" + Wrap(variant), "Bricks097", BrickTints[Wrap(variant)], 2.4f, 1.2f);
     public static Surface Plaster(int variant) => Set("Plaster" + Wrap(variant), "PaintedPlaster017", PlasterTints[Wrap(variant)], 3f, 1.5f);
-    public static Surface PlasterInner => Set("PlasterInner", "PaintedPlaster017", new Color(0.80f, 0.79f, 0.75f), 3f, 1.5f);
+    // Interior walls and the plastered ceilings under floors: plain light paint, no texture. A scanned plaster map shows its
+    // stains as black blotches on a ceiling lit only by ambient (S1 captures of the 3-storey blocks).
+    public static Surface PlasterInner
+    {
+        get
+        {
+            var mat = Asset("World_PlasterInner", "Universal Render Pipeline/Lit");
+            foreach (var slot in new[] { "_BaseMap", "_BumpMap", "_MetallicGlossMap", "_OcclusionMap" }) mat.SetTexture(slot, null);
+            foreach (var keyword in new[] { "_NORMALMAP", "_METALLICSPECGLOSSMAP", "_OCCLUSIONMAP" }) mat.DisableKeyword(keyword);
+            mat.SetColor("_BaseColor", new Color(0.84f, 0.82f, 0.77f));
+            mat.SetFloat("_Metallic", 0f);
+            mat.SetFloat("_Smoothness", 0.1f);
+            // A ceiling faces the ground's dark ambient and only the lamps' small spots reach it: a faint self-glow keeps it a light paint.
+            mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor", new Color(0.22f, 0.21f, 0.19f));
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(mat);
+            return new Surface { Material = mat, Tile = new Vector2(3f, 1.5f) };
+        }
+    }
     public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.5f);
-    public static Surface SteelRoof => Set("SteelRoof", "CorrugatedSteel005", new Color(0.80f, 0.82f, 0.84f), 2f, 2f, smoothness: 0.5f);
+    public static Surface SteelRoof => Set("SteelRoof", Src("roof_tin"), new Color(0.80f, 0.82f, 0.84f), 2f, 2f, smoothness: 0.5f);
     public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), "RoofingTiles014B", RoofTints[Wrap(variant)], 2f, 2f);
     // Town detail (#207): painted accents for shutters, awnings, signs and mailboxes, trim around openings, fences, wires, bins.
     public static Surface Accent(int variant) => Set("Accent" + Wrap(variant), "PaintedMetal014", AccentTints[Wrap(variant)], 1.5f, 1.5f, smoothness: 0.5f);
     public static Surface Trim(bool light) => light
-        ? Set("TrimLight", "PaintedPlaster017", new Color(0.90f, 0.89f, 0.85f), 3f, 1.5f)
-        : Set("TrimDark", "Planks039", new Color(0.42f, 0.32f, 0.24f), 1.2f, 0.6f);
-    public static Surface FenceWhite => Set("FenceWhite", "Planks039", new Color(0.88f, 0.85f, 0.78f), 1.4f, 0.7f);
+        ? Set("TrimLight", Src("wall_plaster"), new Color(0.90f, 0.89f, 0.85f), 3f, 1.5f)
+        : Set("TrimDark", Src("floor_wood"), new Color(0.42f, 0.32f, 0.24f), 1.2f, 0.6f);
+    public static Surface FenceWhite => Set("FenceWhite", Src("floor_wood"), new Color(0.88f, 0.85f, 0.78f), 1.4f, 0.7f);
     public static Surface Wire => Set("Wire", "PaintedMetal014", new Color(0.07f, 0.07f, 0.08f), 1f, 1f, smoothness: 0.3f);
     public static Surface BinGreen => Set("BinGreen", "PaintedMetal014", new Color(0.20f, 0.40f, 0.30f), 1f, 1f, smoothness: 0.4f);
-    public static Surface Planks => Set("Planks", "Planks039", Color.white, 2.4f, 1.2f);
-    public static Surface PlanksDark => Set("PlanksDark", "Planks039", new Color(0.72f, 0.64f, 0.55f), 1.6f, 0.8f);
-    public static Surface Shelving => Set("Shelving", "Planks039", new Color(0.62f, 0.60f, 0.56f), 1.2f, 0.6f);
-    public static Surface Crate => Set("Crate", "Planks039", new Color(0.92f, 0.86f, 0.74f), 1.2f, 0.6f);
-    public static Surface Bedding => Set("Bedding", "PaintedPlaster017", new Color(0.50f, 0.56f, 0.62f), 3f, 1.5f, smoothness: 0.4f, bumpScale: 0.5f);
+    public static Surface Planks => Set("Planks", Src("floor_wood"), Color.white, 2.4f, 1.2f);
+    public static Surface PlanksDark => Set("PlanksDark", Src("floor_wood"), new Color(0.72f, 0.64f, 0.55f), 1.6f, 0.8f);
+    public static Surface Shelving => Set("Shelving", Src("floor_wood"), new Color(0.62f, 0.60f, 0.56f), 1.2f, 0.6f);
+    public static Surface Crate => Set("Crate", Src("floor_wood"), new Color(0.92f, 0.86f, 0.74f), 1.2f, 0.6f);
+    public static Surface Bedding => Set("Bedding", Src("wall_plaster"), new Color(0.50f, 0.56f, 0.62f), 3f, 1.5f, smoothness: 0.4f, bumpScale: 0.5f);
     // Furniture parts (ADR-147): the same texture sets as the rest of the world, tinted so a room is not one colour.
     public static Surface Decor(DecorMat mat)
     {
         switch (mat)
         {
-            case DecorMat.Wood: return Set("DecorWood", "Planks039", new Color(0.78f, 0.62f, 0.46f), 0.9f, 0.45f);
-            case DecorMat.WoodDark: return Set("DecorWoodDark", "Planks039", new Color(0.50f, 0.36f, 0.26f), 0.9f, 0.45f);
-            case DecorMat.Fabric: return Set("DecorFabric", "PaintedPlaster017", new Color(0.36f, 0.45f, 0.55f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
-            case DecorMat.Fabric2: return Set("DecorFabric2", "PaintedPlaster017", new Color(0.62f, 0.30f, 0.26f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
-            case DecorMat.Metal: return Set("DecorMetal", "Metal022", new Color(0.62f, 0.64f, 0.66f), 0.8f, 0.8f, smoothness: 0.85f);
+            case DecorMat.Wood: return Set("DecorWood", Src("floor_wood"), new Color(0.78f, 0.62f, 0.46f), 0.9f, 0.45f);
+            case DecorMat.WoodDark: return Set("DecorWoodDark", Src("floor_wood"), new Color(0.50f, 0.36f, 0.26f), 0.9f, 0.45f);
+            case DecorMat.Fabric: return Set("DecorFabric", Src("wall_plaster"), new Color(0.36f, 0.45f, 0.55f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
+            case DecorMat.Fabric2: return Set("DecorFabric2", Src("wall_plaster"), new Color(0.62f, 0.30f, 0.26f), 1.2f, 0.6f, smoothness: 0.2f, bumpScale: 0.4f);
+            case DecorMat.Metal: return Set("DecorMetal", Src("metal_rust"), new Color(0.62f, 0.64f, 0.66f), 0.8f, 0.8f, smoothness: 0.85f);
             case DecorMat.Paint: return Set("DecorPaint", "PaintedMetal014", new Color(0.42f, 0.55f, 0.50f), 1f, 1f);
             case DecorMat.Warn: return Set("DecorWarn", "PaintedMetal014", new Color(0.95f, 0.72f, 0.12f), 1f, 1f);
-            case DecorMat.Ceramic: return Set("DecorCeramic", "PaintedPlaster017", new Color(0.93f, 0.93f, 0.90f), 2f, 1f, smoothness: 0.9f, bumpScale: 0.2f);
+            case DecorMat.Ceramic: return Set("DecorCeramic", Src("wall_plaster"), new Color(0.93f, 0.93f, 0.90f), 2f, 1f, smoothness: 0.9f, bumpScale: 0.2f);
             case DecorMat.Screen: return Set("DecorScreen", "PaintedMetal014", new Color(0.05f, 0.055f, 0.06f), 1f, 1f, smoothness: 1f, bumpScale: 0f);
-            case DecorMat.Crate: return Set("DecorCrate", "Planks039", new Color(0.88f, 0.76f, 0.58f), 0.8f, 0.4f);
+            case DecorMat.Crate: return Set("DecorCrate", Src("floor_wood"), new Color(0.88f, 0.76f, 0.58f), 0.8f, 0.4f);
             default:
                 {
-                    var lamp = Set("DecorLamp", "PaintedPlaster017", new Color(1f, 0.93f, 0.8f), 1f, 1f);
+                    var lamp = Set("DecorLamp", Src("wall_plaster"), new Color(1f, 0.93f, 0.8f), 1f, 1f);
                     lamp.Material.EnableKeyword("_EMISSION");
                     lamp.Material.SetColor("_EmissionColor", new Color(1f, 0.8f, 0.5f) * 2.4f);
                     lamp.Material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
@@ -252,27 +310,27 @@ public static class WorldMaterials
         }
     }
 
-    public static Surface Concrete => Set("Concrete", "Concrete047A", Color.white, 3f, 3f);
-    public static Surface ConcreteDark => Set("ConcreteDark", "Concrete047A", new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
+    public static Surface Concrete => Set("Concrete", Src("pavement_alt"), Color.white, 3f, 3f);
+    public static Surface ConcreteDark => Set("ConcreteDark", Src("pavement_alt"), new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
     // Elevator shaft walls (ADR-065 (1)): the same concrete, much darker, so the shaft reads as underground under
     // the sky's ambient light.
-    public static Surface ShaftConcrete => Set("ShaftConcrete", "Concrete047A", new Color(0.40f, 0.40f, 0.39f), 2f, 2f);
+    public static Surface ShaftConcrete => Set("ShaftConcrete", Src("pavement_alt"), new Color(0.40f, 0.40f, 0.39f), 2f, 2f);
     public static Surface PaintedMetal => Set("PaintedMetal", "PaintedMetal014", new Color(0.60f, 0.66f, 0.68f), 1.5f, 1.5f);
-    public static Surface RustyMetal => Set("RustyMetal", "Metal022", new Color(0.55f, 0.60f, 0.62f), 1.5f, 1.5f, smoothness: 0.8f);
-    public static Surface Asphalt => Set("Asphalt", "Asphalt015", new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
-    public static Surface DirtRoad => Set("DirtRoad", "Ground081", new Color(0.88f, 0.86f, 0.82f), 5f, 2.5f);
+    public static Surface RustyMetal => Set("RustyMetal", Src("metal_rust"), new Color(0.55f, 0.60f, 0.62f), 1.5f, 1.5f, smoothness: 0.8f);
+    public static Surface Asphalt => Set("Asphalt", Src("asphalt"), new Color(0.82f, 0.82f, 0.82f), 3f, 3f);
+    public static Surface DirtRoad => Set("DirtRoad", Src("dirt_road"), new Color(0.88f, 0.86f, 0.82f), 5f, 2.5f);
 
     // Road strips (Game/WorldRoad): ragged alpha edge, wear and paint on top of the same scanned sets as the old Lit roads.
     public static Material Road(bool paved)
     {
         var mat = Asset(paved ? "World_RoadPaved" : "World_RoadDirt", "Game/WorldRoad");
         var surface = paved ? Asphalt : DirtRoad;
-        var id = paved ? "Asphalt015" : "Ground081";
+        var id = Src(paved ? "asphalt" : "dirt_road");
         mat.SetTexture("_BaseMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg"));
         mat.SetTexture("_BumpMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg"));
         mat.SetTexture("_MaskMap", SceneLook.Load<Texture2D>(MaskPath(id)));
         // Dirt matches the terrain's own dirt layer (tinted 0.46) so a track does not glow against its verge.
-        mat.SetColor("_BaseColor", paved ? surface.Material.GetColor("_BaseColor") : new Color(0.74f, 0.68f, 0.58f));
+        mat.SetColor("_BaseColor", paved ? surface.Material.GetColor("_BaseColor") : new Color(0.74f, 0.68f, 0.58f) * Match(id));
         mat.SetFloat("_Smoothness", paved ? 0.55f : 0.25f);
         mat.SetFloat("_Paved", paved ? 1f : 0f);
         mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent - 100;
@@ -297,8 +355,8 @@ public static class WorldMaterials
 
     public static TerrainLayer[] TerrainLayers() => new[]
     {
-        Layer("Grass", "Ground037", new Vector2(11f, 11f), 0.12f, new Color(0.38f, 0.52f, 0.31f)),
-        Layer("Dirt", "Ground081", new Vector2(6.4f, 3.2f), 0.15f, new Color(0.46f, 0.43f, 0.38f)),
+        Layer("Grass", Src("grass"), new Vector2(7f, 7f), 0.12f, new Color(0.38f, 0.52f, 0.31f)),
+        Layer("Dirt", Src("dirt_road"), new Vector2(4.5f, 2.25f), 0.15f, new Color(0.46f, 0.43f, 0.38f)),
         Layer("Rock", "Rock051", new Vector2(RockTile, RockTile), 0.2f, new Color(0.50f, 0.50f, 0.49f)),
         Layer("Mud", "Ground054", new Vector2(8.6f, 8.6f), 0.3f, new Color(0.30f, 0.30f, 0.26f)),
     };
@@ -315,11 +373,13 @@ public static class WorldMaterials
         layer.diffuseTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg");
         layer.normalMapTexture = SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg");
         layer.maskMapTexture = null;
-        layer.tileSize = tileSize;
+        var aspect = AspectOf(id);
+        layer.tileSize = aspect > 0f ? new Vector2(tileSize.x, tileSize.x * aspect) : tileSize;
         layer.tileOffset = Vector2.zero;
         layer.normalScale = 1f;
         layer.diffuseRemapMin = new Vector4(0f, 0f, 0f, 0f);
-        layer.diffuseRemapMax = new Vector4(tint.r, tint.g, tint.b, 1f);
+        var matched = tint * Match(id);
+        layer.diffuseRemapMax = new Vector4(matched.r, matched.g, matched.b, 1f);
         // Ground is never glossy: the scanned roughness reads as wet under the fill light.
         layer.maskMapRemapMin = new Vector4(0f, 0f, 0f, 0f);
         layer.maskMapRemapMax = new Vector4(0f, 1f, 1f, 0.45f);

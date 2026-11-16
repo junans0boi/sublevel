@@ -51,9 +51,10 @@ public static partial class WorldBuilder
     static float FarClip => Cfg.FarClip;
     static float FogStart => Cfg.FogStart;
     static float FogEnd => Cfg.FogEnd;
-    static readonly Color FogColor = new Color(0.60f, 0.62f, 0.64f); // the overcast HDRI's horizon
+    static readonly Color FogColor = new Color(0.70f, 0.77f, 0.86f); // the clear Kloofendal horizon haze (ADR-193; was the overcast grey 0.60/0.62/0.64)
 
-    const float OutdoorAmbient = 0.8f, SunIntensity = 1.25f, SunShadowStrength = 0.8f;
+    // ADR-193 starting values for a clear day (were 0.8 / 1.25 / 0.8 under the overcast sky): more sun, less flat sky light.
+    const float OutdoorAmbient = 0.6f, SunIntensity = 1.5f, SunShadowStrength = 0.9f;
 
     // The player's CharacterController (radius, height, step); the slope is WorldRules.WalkSlopeDeg.
     const float AgentRadius = 0.35f, AgentHeight = 1.8f, AgentStepHeight = 0.3f;
@@ -198,7 +199,7 @@ public static partial class WorldBuilder
         SceneLook.SetupSky();
         SceneLook.AddLights();
         SceneLook.AddPostVolume(postProfile);
-        // Outdoors under an overcast sky: more sky light and softer sun shadows than the indoor test scenes.
+        // Outdoors under a clear sky: a strong sun with shadows, the sky as fill.
         RenderSettings.ambientIntensity = OutdoorAmbient;
         var sun = GameObject.Find("Sun");
         if (sun != null)
