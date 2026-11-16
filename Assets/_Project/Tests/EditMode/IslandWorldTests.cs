@@ -30,10 +30,23 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Twenty_elevator_stations_three_four_three_three_four_three_per_region()
+        public void Twenty_stations_of_four_elevators_make_80_slots_and_the_bays_do_not_touch()
         {
-            Assert.AreEqual(20, Plan.Elevators.Count);
-            CollectionAssert.AreEqual(new[] { 3, 4, 3, 3, 4, 3 }, Enumerable.Range(0, 6).Select(r => Plan.Elevators.Count(e => e.Region == r)).ToArray());
+            Assert.AreEqual(80, Plan.Elevators.Count, "deployment slots (one player an elevator)");
+            Assert.AreEqual(20, Plan.Elevators.Select(e => e.Bank).Distinct().Count());
+            CollectionAssert.AreEqual(new[] { 3, 4, 3, 3, 4, 3 }, Enumerable.Range(0, 6).Select(r => Plan.Elevators.Where(e => e.Region == r).Select(e => e.Bank).Distinct().Count()).ToArray());
+            Assert.IsTrue(Plan.Elevators.GroupBy(e => e.Bank).All(g => g.Count() == 4));
+            for (int i = 0; i < Plan.Elevators.Count; i++)
+                for (int j = i + 1; j < Plan.Elevators.Count; j++)
+                {
+                    var a = Plan.Elevators[i]; var b = Plan.Elevators[j];
+                    var fa = new BuildingLot { X = a.X, Z = a.Z, SizeX = WorldElevator.StationWidth, SizeZ = WorldElevator.StationDepth, YawDeg = a.FacingDeg };
+                    var fb = new BuildingLot { X = b.X, Z = b.Z, SizeX = WorldElevator.StationWidth, SizeZ = WorldElevator.StationDepth, YawDeg = b.FacingDeg };
+                    Assert.IsFalse(BuildingLot.Overlap(fa, fb, 0f), $"{a.Name} and {b.Name} overlap");
+                }
+            foreach (var e in Plan.Elevators)
+                foreach (var l in Plan.Lots)
+                    Assert.IsFalse(BuildingLot.Overlap(new BuildingLot { X = e.X, Z = e.Z, SizeX = WorldElevator.StationWidth, SizeZ = WorldElevator.StationDepth, YawDeg = e.FacingDeg }, l, 0f), $"{e.Name} stands on {l.Name}");
         }
 
         [Test]

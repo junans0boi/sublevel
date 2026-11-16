@@ -67,3 +67,6 @@
 **바닥 박힘(확인 못 함)**: 빌드된 World 씬 콜라이더로 1262점 전부 점 아래 0.2~0.4 m에 바닥이 있다(1261점은 0.3±0.05, `WorldLootFloorTests`·`WorldBuilder.CheckLoot`). 즉 점 높이는 맞다. 플레이어 빌드의 '박힘'은 재현하지 못했다: 가설은 ①런타임에 `LootView.PlaceOnFloor`가 레이캐스트할 때 건물 MeshCollider(ADR-209로 `WorldMeshBank`가 씬 로드 때 채움)가 아직 없는 경우(아니면 바닥 못 찾아 점 중심에 떠 있음), ②아이템 모델 피벗·바운드. 소리 없이 재현할 방법이 없어 **플레이어 빌드 확인은 못 했다**(제안: `PerfCapture` 계열에 루팅 스폰 직후 `LootView` 하단~바닥 거리 로그 + `AudioListener.volume=0`).
 **옥상 캡처**: `Logs/world/loot_roof.png`·`loot_indoor.png`(저장소 밖)는 루팅점에 색 상자를 올린 에디터 캡처(실제 아이템은 매치 중에만 생김). 옥상 데크 위에 점이 놓인 것을 확인.
 **미니맵(MapBaker)**: 원인 1순위는 **저장소의 `world_map.png`가 옛 1024 m 섬 그림 그대로였다**(신맵으로 다시 굽지 않음). 다시 굽고 개선: 그림 2048→**4096**(0.59 m/픽셀), 분석 격자 1024→2048(릴리프 면 깨짐 감소), 도로 최소 폭 3 px·윤곽 두껍게, 건물 외곽선 1.5 m, 강(수면) 추가, 밉맵+`CompressedHQ`(PNG 8.1 MB, GPU 약 16 MB; 이전 비압축 4096이면 64 MB). 전/후: 이전은 옛 섬 그림 2048(해상도 0.85 m/px, 신맵과 무관), 이후 청람읍이 블록·거리·건물 윤곽으로 선명(스크래치 `crop_before/after`). `MapProjection.PictureSize` 2048→4096(Core). EditMode 지도·월드 40/40.
+
+## 5차: 승강장당 승강기 4기 (80슬롯, ADR-257)
+승강장 20곳 × 4칸 = 승강기 80. 칸 간격 5.2 m, 칸마다 문·샤프트·차·투입 지점·NavMesh 소스·콜라이더(기존 승강장 건물 그대로 4개). 측정: 빌드 씬 샤프트 80, `MatchDirector._playerSpawns` 80, 칸 중심 간격 3.5 m 초과·발판 겹침 0, NavMesh 칸→도로 링크 포함 홉 622/622 완료, 규칙 위반 0, 관련 EditMode 76/76. 열린 점: 다른 트랙이 `WorldInfo.Elevators` 개수를 '승강장 수'로 쓰면 80으로 읽힘(`WorldElevator.Bank`로 뱅크 구분). 칸 4개 묶음의 게임 안 캡처는 못 찍음.
