@@ -6,3 +6,5 @@
 - [애니] 격차 클립 시트(Mixamo/UAL): 스프린트 로우레디, 점프 3단, 방향 이동 8방향(전·후 대각), 제자리 회전, 기어가기·눕기·일어나기, 피격 4방향, 권총 세트, 수영, 난간, 앉기, 펀치 — 도착하면 `CharacterControllerBuilder`·`ProceduralClips`의 임시를 교체 (ADR-234)
 - [애니] 발 IK 계단(단차) 측정, 장전 중 마그 모델(`ShowMag`)을 Action 클립 손에 붙이기, `Animator.cullingMode` 서버 전용 CullCompletely 측정 (ADR-232·233)
 - [애니] 플레이어 모델 선택(로비→`Visual` 교체): 지금 플레이어 프리팹은 MixamoSwat 하나, 봇만 12모델 (ADR-230, UI 트랙)
+
+- [S5] 환경음 베드(AmbientBeds 합성 바람·새·귀뚜라미)를 승인된 Freesound 실녹음(527499·683420·683433·522299·826326)으로 교체, 폭발·사이렌·가이거·방송 연결(S6 훅 이후)

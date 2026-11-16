@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &239400370479594541
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4298247929456370174}
+  m_Layer: 0
+  m_Name: Head
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4298247929456370174
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 239400370479594541}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.468431e-13, y: 0.05188366, z: 9.313226e-10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5628258494182091596}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1441216035829228527
 GameObject:
   m_ObjectHideFlags: 0
@@ -132,78 +163,33 @@ MonoBehaviour:
     - {fileID: 2100000, guid: b25444d4c9c824a6781662ce7da74927, type: 2}
     - {fileID: 2100000, guid: b25444d4c9c824a6781662ce7da74927, type: 2}
     - {fileID: 2100000, guid: b25444d4c9c824a6781662ce7da74927, type: 2}
-  - Name: Olive
+  - Name: Moss
     Materials:
-    - {fileID: 2100000, guid: 97d8a122a09fe448cb686957c69c1acf, type: 2}
-    - {fileID: 2100000, guid: 80081c788b0e646d3bcb03e7f413ff42, type: 2}
-    - {fileID: 2100000, guid: 80081c788b0e646d3bcb03e7f413ff42, type: 2}
-    - {fileID: 2100000, guid: 97d8a122a09fe448cb686957c69c1acf, type: 2}
-    - {fileID: 2100000, guid: 97d8a122a09fe448cb686957c69c1acf, type: 2}
-    - {fileID: 2100000, guid: 97d8a122a09fe448cb686957c69c1acf, type: 2}
-    - {fileID: 2100000, guid: 97d8a122a09fe448cb686957c69c1acf, type: 2}
-  - Name: Coyote
+    - {fileID: 2100000, guid: 5f4cfb8e9b90d41fa82c743d28514ad5, type: 2}
+    - {fileID: 2100000, guid: c10a52bc458b748b781397c7bd235206, type: 2}
+    - {fileID: 2100000, guid: c10a52bc458b748b781397c7bd235206, type: 2}
+    - {fileID: 2100000, guid: 5f4cfb8e9b90d41fa82c743d28514ad5, type: 2}
+    - {fileID: 2100000, guid: 5f4cfb8e9b90d41fa82c743d28514ad5, type: 2}
+    - {fileID: 2100000, guid: 5f4cfb8e9b90d41fa82c743d28514ad5, type: 2}
+    - {fileID: 2100000, guid: 5f4cfb8e9b90d41fa82c743d28514ad5, type: 2}
+  - Name: Dusk
     Materials:
-    - {fileID: 2100000, guid: 63d164e1e14844b4d97b54f6e47069db, type: 2}
-    - {fileID: 2100000, guid: 2fec575f7def0477591f964c1a254c70, type: 2}
-    - {fileID: 2100000, guid: 2fec575f7def0477591f964c1a254c70, type: 2}
-    - {fileID: 2100000, guid: 63d164e1e14844b4d97b54f6e47069db, type: 2}
-    - {fileID: 2100000, guid: 63d164e1e14844b4d97b54f6e47069db, type: 2}
-    - {fileID: 2100000, guid: 63d164e1e14844b4d97b54f6e47069db, type: 2}
-    - {fileID: 2100000, guid: 63d164e1e14844b4d97b54f6e47069db, type: 2}
-  - Name: Charcoal
+    - {fileID: 2100000, guid: ec44c631c6c2f4459abf932240951423, type: 2}
+    - {fileID: 2100000, guid: eb61deef404f24671a4cdcd16d2cdcc2, type: 2}
+    - {fileID: 2100000, guid: eb61deef404f24671a4cdcd16d2cdcc2, type: 2}
+    - {fileID: 2100000, guid: ec44c631c6c2f4459abf932240951423, type: 2}
+    - {fileID: 2100000, guid: ec44c631c6c2f4459abf932240951423, type: 2}
+    - {fileID: 2100000, guid: ec44c631c6c2f4459abf932240951423, type: 2}
+    - {fileID: 2100000, guid: ec44c631c6c2f4459abf932240951423, type: 2}
+  - Name: Rust
     Materials:
-    - {fileID: 2100000, guid: f945f288e24484addb235b62be59c2af, type: 2}
-    - {fileID: 2100000, guid: b52448fb41042481d873a3bc3d6d4d97, type: 2}
-    - {fileID: 2100000, guid: b52448fb41042481d873a3bc3d6d4d97, type: 2}
-    - {fileID: 2100000, guid: f945f288e24484addb235b62be59c2af, type: 2}
-    - {fileID: 2100000, guid: f945f288e24484addb235b62be59c2af, type: 2}
-    - {fileID: 2100000, guid: f945f288e24484addb235b62be59c2af, type: 2}
-    - {fileID: 2100000, guid: f945f288e24484addb235b62be59c2af, type: 2}
-  - Name: Navy
-    Materials:
-    - {fileID: 2100000, guid: b6d72eab5d68348f79788c2dc7dff8b3, type: 2}
-    - {fileID: 2100000, guid: 772ea4cbb91d94f29844fe7318df72b1, type: 2}
-    - {fileID: 2100000, guid: 772ea4cbb91d94f29844fe7318df72b1, type: 2}
-    - {fileID: 2100000, guid: b6d72eab5d68348f79788c2dc7dff8b3, type: 2}
-    - {fileID: 2100000, guid: b6d72eab5d68348f79788c2dc7dff8b3, type: 2}
-    - {fileID: 2100000, guid: b6d72eab5d68348f79788c2dc7dff8b3, type: 2}
-    - {fileID: 2100000, guid: b6d72eab5d68348f79788c2dc7dff8b3, type: 2}
-  - Name: Forest
-    Materials:
-    - {fileID: 2100000, guid: 8d6e96bdbbb8c414da672763c7f283cb, type: 2}
-    - {fileID: 2100000, guid: 504bc11ea1f4747148c70219a8eda6e1, type: 2}
-    - {fileID: 2100000, guid: 504bc11ea1f4747148c70219a8eda6e1, type: 2}
-    - {fileID: 2100000, guid: 8d6e96bdbbb8c414da672763c7f283cb, type: 2}
-    - {fileID: 2100000, guid: 8d6e96bdbbb8c414da672763c7f283cb, type: 2}
-    - {fileID: 2100000, guid: 8d6e96bdbbb8c414da672763c7f283cb, type: 2}
-    - {fileID: 2100000, guid: 8d6e96bdbbb8c414da672763c7f283cb, type: 2}
-  - Name: Slate
-    Materials:
-    - {fileID: 2100000, guid: 46cbf7d1225304e8e99477e1d3af18bb, type: 2}
-    - {fileID: 2100000, guid: 3ab19e2a0fbca445c85e7bc140239bc4, type: 2}
-    - {fileID: 2100000, guid: 3ab19e2a0fbca445c85e7bc140239bc4, type: 2}
-    - {fileID: 2100000, guid: 46cbf7d1225304e8e99477e1d3af18bb, type: 2}
-    - {fileID: 2100000, guid: 46cbf7d1225304e8e99477e1d3af18bb, type: 2}
-    - {fileID: 2100000, guid: 46cbf7d1225304e8e99477e1d3af18bb, type: 2}
-    - {fileID: 2100000, guid: 46cbf7d1225304e8e99477e1d3af18bb, type: 2}
-  - Name: Sand
-    Materials:
-    - {fileID: 2100000, guid: b815434718d814d16afcfdcbb2e8488b, type: 2}
-    - {fileID: 2100000, guid: 9d18116d883f8444d86a264f30694014, type: 2}
-    - {fileID: 2100000, guid: 9d18116d883f8444d86a264f30694014, type: 2}
-    - {fileID: 2100000, guid: b815434718d814d16afcfdcbb2e8488b, type: 2}
-    - {fileID: 2100000, guid: b815434718d814d16afcfdcbb2e8488b, type: 2}
-    - {fileID: 2100000, guid: b815434718d814d16afcfdcbb2e8488b, type: 2}
-    - {fileID: 2100000, guid: b815434718d814d16afcfdcbb2e8488b, type: 2}
-  - Name: Maroon
-    Materials:
-    - {fileID: 2100000, guid: bd36bc06c0af5494d811a7fc62d81ea0, type: 2}
-    - {fileID: 2100000, guid: d01e2b5c8d8204041948cf3009af61d8, type: 2}
-    - {fileID: 2100000, guid: d01e2b5c8d8204041948cf3009af61d8, type: 2}
-    - {fileID: 2100000, guid: bd36bc06c0af5494d811a7fc62d81ea0, type: 2}
-    - {fileID: 2100000, guid: bd36bc06c0af5494d811a7fc62d81ea0, type: 2}
-    - {fileID: 2100000, guid: bd36bc06c0af5494d811a7fc62d81ea0, type: 2}
-    - {fileID: 2100000, guid: bd36bc06c0af5494d811a7fc62d81ea0, type: 2}
+    - {fileID: 2100000, guid: 011c9782b4a88433394dacda7f1592ed, type: 2}
+    - {fileID: 2100000, guid: ed3419186c0a34578a26620475ad2a53, type: 2}
+    - {fileID: 2100000, guid: ed3419186c0a34578a26620475ad2a53, type: 2}
+    - {fileID: 2100000, guid: 011c9782b4a88433394dacda7f1592ed, type: 2}
+    - {fileID: 2100000, guid: 011c9782b4a88433394dacda7f1592ed, type: 2}
+    - {fileID: 2100000, guid: 011c9782b4a88433394dacda7f1592ed, type: 2}
+    - {fileID: 2100000, guid: 011c9782b4a88433394dacda7f1592ed, type: 2}
 --- !u!205 &4082283424402744363
 LODGroup:
   m_ObjectHideFlags: 0
@@ -255,6 +241,37 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0.0000000018626451, y: -1.6400527e-12, z: -3.3093383e-12, w: 1}
   m_LocalPosition: {x: -0.00012778415, y: 0.0038846806, z: -0.116972096}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6055124660894668085}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &7503334720165528337
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8823025722541912132}
+  m_Layer: 0
+  m_Name: Chest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8823025722541912132
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7503334720165528337}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.6533558e-12, y: 0.000000022351742, z: 0.000000001225473}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -452,12 +469,18 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3155445268006459287, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6018126543768118361}
+    - targetCorrespondingSourceObject: {fileID: 3155445268006459287, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8823025722541912132}
     - targetCorrespondingSourceObject: {fileID: -5631210051492402706, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6112557671022626562}
     - targetCorrespondingSourceObject: {fileID: -5631210051492402706, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2900084732424217888}
+    - targetCorrespondingSourceObject: {fileID: -5631210051492402706, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4298247929456370174}
     - targetCorrespondingSourceObject: {fileID: 5137736268359336346, guid: dba504321937d4b7b875c7e833d5c836, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1870353304116505721}

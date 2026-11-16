@@ -52,6 +52,7 @@ namespace Game.Gameplay
         GameObject _doorNoticeRoot;
         int _doorShown = -1;
         HudStatus _status;
+        HudHazardSlot _hazard; // pollution warning, keys, chip (ADR-246)
         WeaponStrip _strip;
         MinimapView _minimap;
         WorldMarkerView _worldMarker;
@@ -142,6 +143,7 @@ namespace Game.Gameplay
         public RegionCard Region => _region;
         public ElevatorPanel Elevator => _elevator;
         public HudStatus Status => _status;
+        public HudHazardSlot Hazard => _hazard;
         public WeaponStrip Strip => _strip;
         public MinimapView Minimap => _minimap;
         public WorldMarkerView WorldMarker => _worldMarker;
@@ -192,6 +194,7 @@ namespace Game.Gameplay
             _doorNotice = UiKit.Label(UiKit.Fill("Text", door), "", 26, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             _doorNoticeRoot = door.gameObject;
             _doorNoticeRoot.SetActive(false);
+            _hazard = HudHazardSlot.Build(root, new Vector2(0.5f, 1f), new Vector2(0f, -TopMargin - 96f));
             BuildHealthAndWeapon(root);
             BuildBottomSides(root);
             // The map marker in the world, under the crosshair (not a fixed area: it follows the marked point).

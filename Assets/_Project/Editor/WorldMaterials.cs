@@ -29,7 +29,7 @@ public static class WorldMaterials
 
     // Sets no table row picks (rock and mud layers, painted metal); the rest come from materials.json (ADR-185).
     static readonly string[] OwnSets = { "Rock051", "Ground054", "PaintedMetal014" };
-    static readonly string[] TableIds = { "grass", "dirt_road", "asphalt", "wall_brick", "wall_plaster", "roof_tin", "roof_tile", "floor_wood", "pavement_alt", "metal_rust" };
+    static readonly string[] TableIds = { "grass", "dirt_road", "asphalt", "wall_brick", "wall_plaster", "roof_tin", "roof_tile", "floor_wood", "pavement_alt", "metal_rust", "pavement", "school_wall", "floor_lino" };
     static string[] SurfaceSets => OwnSets.Concat(TableIds.Select(Src)).Distinct().ToArray();
 
     static MaterialTable _table;
@@ -67,7 +67,7 @@ public static class WorldMaterials
 
     static readonly Dictionary<string, float> MetalScale = new Dictionary<string, float>
     {
-        { "CorrugatedSteel005", 0.15f }, { "Metal022", 0.35f }, { "PaintedMetal014", 0.35f },
+        { "CorrugatedSteel005", 0.15f }, { "rusty_corrugated_iron", 0.15f }, { "rusty_metal_sheet", 0.35f }, { "Metal022", 0.35f }, { "PaintedMetal014", 0.35f },
     };
 
     // (folder, file prefix) of the rock models.
@@ -114,7 +114,7 @@ public static class WorldMaterials
     {
         var outPath = MaskPath(id);
         if (File.Exists(outPath)) return;
-        if (File.Exists($"{ArtMaterials}/{id}/{id}_arm.jpg")) { PackArm($"{ArtMaterials}/{id}/{id}_arm.jpg", outPath); return; }
+        if (File.Exists($"{ArtMaterials}/{id}/{id}_arm.jpg")) { PackArm($"{ArtMaterials}/{id}/{id}_arm.jpg", outPath, MetalScale.TryGetValue(id, out float armScale) ? armScale : 1f); return; }
         var rough = LoadFile($"{ArtMaterials}/{id}/{id}_roughness.jpg");
         if (rough == null) throw new FileNotFoundException("roughness map missing for " + id);
         var ao = LoadFile($"{ArtMaterials}/{id}/{id}_ao.jpg");
@@ -139,14 +139,14 @@ public static class WorldMaterials
         PackArm($"{ArtModels}/{folder}/{file}_arm.jpg", outPath);
     }
 
-    static void PackArm(string armPath, string outPath)
+    static void PackArm(string armPath, string outPath, float metalScale = 1f)
     {
         var arm = LoadFile(armPath);
         if (arm == null) throw new FileNotFoundException("arm map missing: " + armPath);
         var p = arm.GetPixels32();
         var packed = new Color32[p.Length];
         for (int i = 0; i < p.Length; i++)
-            packed[i] = new Color32(p[i].b, p[i].r, 128, (byte)(255 - p[i].g));
+            packed[i] = new Color32((byte)(p[i].b * metalScale), p[i].r, 128, (byte)(255 - p[i].g));
         WritePng(outPath, arm.width, arm.height, packed);
         Destroy(arm);
     }
@@ -245,7 +245,7 @@ public static class WorldMaterials
     static int Wrap(int variant) => ((variant % Variants) + Variants) % Variants;
 
     // Tinted variants so a street is not one colour. Bricks, plaster and planks are 2:1 sets.
-    public static Surface Brick(int variant) => Set("Brick" + Wrap(variant), "Bricks097", BrickTints[Wrap(variant)], 2.4f, 1.2f);
+    public static Surface Brick(int variant) => Set("Brick" + Wrap(variant), Src("wall_brick"), BrickTints[Wrap(variant)], 2.4f, 1.2f);
     public static Surface Plaster(int variant) => Set("Plaster" + Wrap(variant), "PaintedPlaster017", PlasterTints[Wrap(variant)], 3f, 1.5f);
     // Interior walls and the plastered ceilings under floors: plain light paint, no texture. A scanned plaster map shows its
     // stains as black blotches on a ceiling lit only by ambient (S1 captures of the 3-storey blocks).
@@ -267,9 +267,9 @@ public static class WorldMaterials
             return new Surface { Material = mat, Tile = new Vector2(3f, 1.5f) };
         }
     }
-    public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), "CorrugatedSteel005", SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.5f);
+    public static Surface Steel(int variant) => Set("Steel" + Wrap(variant), Src("roof_tin"), SteelTints[Wrap(variant)], 2f, 2f, smoothness: 0.5f);
     public static Surface SteelRoof => Set("SteelRoof", Src("roof_tin"), new Color(0.80f, 0.82f, 0.84f), 2f, 2f, smoothness: 0.5f);
-    public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), "RoofingTiles014B", RoofTints[Wrap(variant)], 2f, 2f);
+    public static Surface RoofTiles(int variant) => Set("RoofTiles" + Wrap(variant), Src("roof_tile"), RoofTints[Wrap(variant)], 2f, 2f);
     // Town detail (#207): painted accents for shutters, awnings, signs and mailboxes, trim around openings, fences, wires, bins.
     public static Surface Accent(int variant) => Set("Accent" + Wrap(variant), "PaintedMetal014", AccentTints[Wrap(variant)], 1.5f, 1.5f, smoothness: 0.5f);
     public static Surface Trim(bool light) => light
@@ -310,6 +310,10 @@ public static class WorldMaterials
         }
     }
 
+    // Table picks the map track's buildings and sidewalks take (ADR-184): public pavement, school walls, indoor linoleum.
+    public static Surface Pavement => Set("Pavement", Src("pavement"), Color.white, 1.8f, 1.8f);
+    public static Surface SchoolWall => Set("SchoolWall", Src("school_wall"), Color.white, 3f, 3f);
+    public static Surface FloorLino => Set("FloorLino", Src("floor_lino"), Color.white, 2f, 2f);
     public static Surface Concrete => Set("Concrete", Src("pavement_alt"), Color.white, 3f, 3f);
     public static Surface ConcreteDark => Set("ConcreteDark", Src("pavement_alt"), new Color(0.74f, 0.74f, 0.72f), 3f, 3f);
     // Elevator shaft walls (ADR-065 (1)): the same concrete, much darker, so the shaft reads as underground under

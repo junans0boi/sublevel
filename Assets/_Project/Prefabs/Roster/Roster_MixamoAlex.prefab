@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &374205502821614576
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8318722559205229096}
+  m_Layer: 0
+  m_Name: Chest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8318722559205229096
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 374205502821614576}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.9393662e-13, y: -0.000000014901161, z: 0.000000002440614}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4925476867286088539}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &599111419402838398
 GameObject:
   m_ObjectHideFlags: 0
@@ -88,6 +119,37 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0.000000014901161, y: 0.0005725605, z: -7.275958e-12, w: 0.9999999}
   m_LocalPosition: {x: -1.39584065e-11, y: 0.03209901, z: -0.0000000055879354}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1200225755513593436}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4851141502995339141
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4676138845988640164}
+  m_Layer: 0
+  m_Name: Head
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4676138845988640164
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4851141502995339141}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.5217242e-11, y: 0.071582235, z: -0.000000013038516}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -182,30 +244,15 @@ MonoBehaviour:
   - Name: Base
     Materials:
     - {fileID: 2100000, guid: 136c96ba6f99147648c8146c7e436b20, type: 2}
-  - Name: Olive
+  - Name: Moss
     Materials:
-    - {fileID: 2100000, guid: 7b853bc82ebf2469f991c8136ac22252, type: 2}
-  - Name: Coyote
+    - {fileID: 2100000, guid: 15092f40efb96430a88dd751e08ef77d, type: 2}
+  - Name: Dusk
     Materials:
-    - {fileID: 2100000, guid: a70379c47355c43458665b4dfc350055, type: 2}
-  - Name: Charcoal
+    - {fileID: 2100000, guid: f2dea10cb4fb84d00a58b5faa7071c19, type: 2}
+  - Name: Rust
     Materials:
-    - {fileID: 2100000, guid: ced99048545ea4dfca87a9f05468c19c, type: 2}
-  - Name: Navy
-    Materials:
-    - {fileID: 2100000, guid: 603c6925abc1a4f72be975035e3365a1, type: 2}
-  - Name: Forest
-    Materials:
-    - {fileID: 2100000, guid: a70e10c30703f4d58bc13ad70bc2ae20, type: 2}
-  - Name: Slate
-    Materials:
-    - {fileID: 2100000, guid: 28acee429bb4c4b8aa7756c2cb813bb2, type: 2}
-  - Name: Sand
-    Materials:
-    - {fileID: 2100000, guid: 045eb569447bb450e88421602b88f89c, type: 2}
-  - Name: Maroon
-    Materials:
-    - {fileID: 2100000, guid: b1cd5d5f89f0748cfab6895482d2ecd9, type: 2}
+    - {fileID: 2100000, guid: 546ba683b6c314c3ba79f44c92eea332, type: 2}
 --- !u!205 &8554772524284353465
 LODGroup:
   m_ObjectHideFlags: 0
@@ -338,12 +385,18 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 366175167995203695, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1003724487887230067}
+    - targetCorrespondingSourceObject: {fileID: 366175167995203695, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8318722559205229096}
     - targetCorrespondingSourceObject: {fileID: -3321919801592875672, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
       insertIndex: -1
       addedObject: {fileID: 188235109325168844}
     - targetCorrespondingSourceObject: {fileID: -3321919801592875672, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3791708627166777271}
+    - targetCorrespondingSourceObject: {fileID: -3321919801592875672, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4676138845988640164}
     - targetCorrespondingSourceObject: {fileID: 1852576806548013000, guid: ac315d035c8044d7593841ae53e719ca, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1168826215694366258}

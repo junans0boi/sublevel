@@ -105,5 +105,23 @@ namespace Game.Tests
             // Two peers with the same seed and the same match time see the same hour and weather.
             Assert.AreEqual(WorldSky.PickWeather(WeatherChoice.Random, 99), WorldSky.PickWeather(WeatherChoice.Random, 99));
         }
+
+        // ADR-210 (ADR-193 intent): out of the box the match is a clear day, not a random hour that is night a quarter of the time.
+        [Test]
+        public void Defaults_AreClearDay_AndThatLookIsBright()
+        {
+            foreach (var def in Game.Gameplay.SettingsCatalog.All)
+            {
+                if (def.Key == "settings.dayTime") Assert.AreEqual((float)DayTimeChoice.Day, def.Default);
+                if (def.Key == "settings.weather") Assert.AreEqual((float)WeatherChoice.Clear, def.Default);
+            }
+            var look = WorldSky.At(WorldSky.StartHour(DayTimeChoice.Day, 1), WeatherKind.Clear);
+            Assert.GreaterOrEqual(look.SunElevationDeg, 40f);
+            Assert.GreaterOrEqual(look.SunIntensity, 1.5f);
+            Assert.GreaterOrEqual(look.Ambient, 1f);
+            Assert.AreEqual(1f, look.SkyExposure, 1e-3f);
+            Assert.AreEqual(0f, look.RainPerSecond);
+            Assert.AreEqual(0f, look.FogEnd, "clear keeps the scene's own fog (the ADR-193 haze colour)");
+        }
     }
 }

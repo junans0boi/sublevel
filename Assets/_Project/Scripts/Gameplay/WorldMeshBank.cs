@@ -41,7 +41,12 @@ namespace Game.Gameplay
                 for (int i = 0; i < records.Count; i++) _built[i] = Build(records[i]);
             }
             for (int i = 0; i < _filters.Length; i++)
-                if (_filters[i] != null) _filters[i].sharedMesh = _built[_meshIndex[i]];
+                if (_filters[i] != null)
+                {
+                    _filters[i].sharedMesh = _built[_meshIndex[i]];
+                    var collider = _filters[i].GetComponent<MeshCollider>();   // building collision stand-ins (ADR-209)
+                    if (collider != null) collider.sharedMesh = _built[_meshIndex[i]];
+                }
         }
 
         public static Mesh Build(MeshRecord r)

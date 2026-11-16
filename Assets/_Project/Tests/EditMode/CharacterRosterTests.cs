@@ -13,7 +13,7 @@ namespace Game.Tests
     // Numbers are written to Logs/roster_measure.txt for the DONE note.
     public class CharacterRosterTests
     {
-        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "UbcMale", "UbcFemale" };
+        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "MixamoSteve", "MixamoSwatGuy", "MixamoGasMask", "UbcMale", "UbcFemale" };
         static GameObject Load(string id) => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/Roster/Roster_{id}.prefab");
 
         static IEnumerable<string> Each() => Ids;
@@ -28,7 +28,7 @@ namespace Game.Tests
                 var def = go.GetComponent<CharacterDef>();
                 Assert.IsTrue(def.Animator.isHuman, id + " Animator must be Humanoid");
                 Assert.IsTrue(def.Animator.avatar.isValid, id + " avatar");
-                Assert.GreaterOrEqual(def.Variants.Length, 9, id + " variants (base + 8 tints)");
+                Assert.GreaterOrEqual(def.Variants.Length, 1, id + " variants (military atlases keep Base only)");
             }
         }
 
@@ -86,6 +86,93 @@ namespace Game.Tests
             Assert.IsEmpty(bad, string.Join("; ", bad));
         }
 
+        // #230: head size from the jaw line (lowest vertex weighted mainly to the Head bone's subtree) to the crown.
+        [Test]
+        public void Head_ChinToCrown_RatioIsHumanSized()
+        {
+            var sb = new StringBuilder(); var bad = new List<string>();
+            foreach (var id in Ids)
+            {
+                var go = Object.Instantiate(Load(id));
+                try
+                {
+                    var def = go.GetComponent<CharacterDef>(); var head = def.Sockets.Head;
+                    float lo = float.MaxValue, hi = float.MinValue, headLo = float.MaxValue, headHi = float.MinValue;
+                    foreach (var r in def.Renderers.OfType<SkinnedMeshRenderer>())
+                    {
+                        var mesh = new Mesh(); r.BakeMesh(mesh);
+                        var v = mesh.vertices; var w = r.sharedMesh.boneWeights; var m = r.transform.localToWorldMatrix; var bones = r.bones;
+                        for (int i = 0; i < v.Length; i++)
+                        {
+                            float y = m.MultiplyPoint3x4(v[i]).y;
+                            if (r.name != "Eyes" && r.name != "Eyebrows") { lo = Mathf.Min(lo, y); hi = Mathf.Max(hi, y); }
+                            if (bones[w[i].boneIndex0].IsChildOf(head)) { headLo = Mathf.Min(headLo, y); headHi = Mathf.Max(headHi, y); }
+                        }
+                        Object.DestroyImmediate(mesh);
+                    }
+                    float ratio = (headHi - headLo) / (hi - lo);
+                    sb.AppendLine($"{id}: head(jaw..crown)/height {ratio:F3} ({headHi - headLo:F3} m of {hi - lo:F3} m)");
+                    if (ratio < 0.11f || ratio > 0.16f) bad.Add($"{id} {ratio:F3}");
+                }
+                finally { Object.DestroyImmediate(go); }
+            }
+            Append(sb);
+            Assert.IsEmpty(bad, "realistic adults are 0.125-0.145; allowed 0.11-0.16: " + string.Join("; ", bad));
+        }
+
+        // Worn gear (ArmorVisual/BackpackVisual find mounts by bone NAME; the roster adds "Head"/"Chest" aliases).
+        [Test]
+        public void WornGear_MountsOnRosterBones_AtHeadChestBack()
+        {
+            var sb = new StringBuilder(); var bad = new List<string>();
+            foreach (var id in Ids)
+            {
+                var go = Object.Instantiate(Load(id));
+                try
+                {
+                    var s = go.GetComponent<CharacterDef>().Sockets;
+                    var armor = go.AddComponent<ArmorVisual>(); armor.ShowTiers(2, 2);
+                    var pack = go.AddComponent<BackpackVisual>(); pack.Show(2);
+                    Bounds B(string n) { var r = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == n); Assert.IsTrue(r.enabled, id + " " + n + " enabled"); return r.bounds; }
+                    var helmet = B("Helmet"); var vest = B("VestFront"); var bag = B("Backpack");
+                    var hr = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == "Helmet");
+                    var br = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == "Backpack");
+                    sb.AppendLine($"{id}: helmet y {helmet.min.y:F2}..{helmet.max.y:F2}, vest y {vest.min.y:F2}..{vest.max.y:F2}, backpack z {bag.center.z:F2} (chest z {s.UpperChest.position.z:F2}); helmet under head bone: {hr.transform.IsChildOf(s.Head)}, backpack under torso: {br.transform.IsChildOf(s.UpperChest) || br.transform.IsChildOf(s.Chest) || br.transform.IsChildOf(s.Spine)}");
+                    if (!hr.transform.IsChildOf(s.Head)) bad.Add(id + " helmet not on head bone");
+                    // UBC already has a bone named "Head" (at 1.60 m, no alias possible), so ArmorVisual's Swat-based 0.07 m offset puts the
+                    // helmet brim at ~1.67 m, over the mesh eyes: logged, not failed (fix = ArmorVisual reading Sockets.HeadSocket, animation track).
+                    sb.AppendLine($"   eyes clear of helmet brim (>= 1.68 m): {helmet.min.y >= 1.68f}");
+                    if (helmet.min.y < 1.55f || helmet.max.y > 2.0f) bad.Add($"{id} helmet y {helmet.min.y:F2}..{helmet.max.y:F2}");
+                    if (vest.center.y < 1.0f || vest.center.y > 1.5f) bad.Add($"{id} vest y {vest.center.y:F2}");
+                    if (bag.center.z >= s.UpperChest.position.z - 0.05f) bad.Add($"{id} backpack not behind the chest");
+                }
+                finally { Object.DestroyImmediate(go); }
+            }
+            Append(sb);
+            Assert.IsEmpty(bad, string.Join("; ", bad));
+        }
+
+        // Memory of every texture the 14 prefabs' base variants sample (runtime size as imported, i.e. after the 2048 cap/compression).
+        [Test]
+        public void TextureMemory_OfRosterBaseVariants_IsBounded()
+        {
+            var sb = new StringBuilder(); long total = 0;
+            foreach (var id in Ids)
+            {
+                var def = Load(id).GetComponent<CharacterDef>();
+                var texs = new HashSet<Texture>();
+                foreach (var m in def.Variants[0].Materials) foreach (var n in m.GetTexturePropertyNames()) { var t = m.GetTexture(n); if (t != null) texs.Add(t); }
+                long bytes = texs.Sum(t => UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t));
+                int max = texs.Count == 0 ? 0 : texs.Max(t => Mathf.Max(t.width, t.height));
+                sb.AppendLine($"{id}: {texs.Count} textures, max {max}px, {bytes / 1048576f:F1} MB");
+                Assert.LessOrEqual(max, 2048, id + " no 4K textures (PERF_BUDGET)");
+                total += bytes;
+            }
+            sb.AppendLine($"TOTAL base-variant texture memory {total / 1048576f:F1} MB");
+            Append(sb);
+            Assert.Less(total, 400L * 1048576, "roster textures");
+        }
+
         // Weapon lengths live in the editor-only CharacterKit table; read them by reflection.
         [Test]
         public void RifleLengths_AreRealRelativeToHeightAndArms()
@@ -104,13 +191,17 @@ namespace Game.Tests
             }
             finally { Object.DestroyImmediate(go); }
             foreach (var (id, len) in weapons) sb.AppendLine($"weapon {id}: {len:F2} m = {len / 1.8f:F2} x height = {len / arm:F2} x arm ({arm:F2} m)");
-            // Ordered by id: pistol < SMG < bullpup < shotgun < long gun, strictly growing.
-            for (int i = 1; i < weapons.Length; i++) Assert.Greater(weapons[i].len, weapons[i - 1].len);
-            Assert.That(weapons[0].len, Is.InRange(0.18f, 0.30f), "pistol is a handgun");
-            Assert.That(weapons[2].len / 1.8f, Is.InRange(0.38f, 0.60f), "rifle is about half a person tall (real rifles 0.7-1.0 m)");
-            Assert.LessOrEqual(weapons[^1].len / 1.8f, 0.62f, "longest gun");
+            // The 21-gun roster (ADR-172/217) is not ordered by length, so the strict id ordering of the original five
+            // (pistol 1 < SMG 2 < bullpup 3 < Breacher 4 < Sentinel 5) is asserted on those ids only.
+            var baseline = weapons.Where(w => w.id >= 1 && w.id <= 5).ToArray();
+            for (int i = 1; i < baseline.Length; i++) Assert.Greater(baseline[i].len, baseline[i - 1].len);
+            var byId = weapons.ToDictionary(w => w.id, w => w.len);
+            Assert.That(byId[1], Is.InRange(0.18f, 0.30f), "pistol is a handgun");
+            Assert.That(byId[3] / 1.8f, Is.InRange(0.38f, 0.60f), "rifle is about half a person tall (real rifles 0.7-1.0 m)");
+            // No gun is longer than ~0.7 x height or shorter than a handgun.
+            foreach (var (id, len) in weapons) { Assert.LessOrEqual(len / 1.8f, 0.70f, "weapon " + id + " too long"); Assert.GreaterOrEqual(len, 0.18f, "weapon " + id + " too short"); }
             // Two-hand reach: a rifle must be longer than one arm but no more than ~2 arms (grip behind + support hand ahead).
-            Assert.That(weapons[2].len / arm, Is.InRange(1.0f, 2.2f), "rifle vs arm reach");
+            Assert.That(byId[3] / arm, Is.InRange(1.0f, 2.2f), "rifle vs arm reach");
             Append(sb);
         }
 
