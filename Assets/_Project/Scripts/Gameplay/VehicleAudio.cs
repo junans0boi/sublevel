@@ -150,13 +150,13 @@ namespace Game.Gameplay
 
         // ---- Synthesis ----
 
-        static AudioClip Engine => _engine != null ? _engine : (_engine = Make("VehicleEngine", SynthEngine()));
+        static AudioClip Engine => _engine != null ? _engine : (_engine = Resources.Load<AudioClip>("Sfx/veh_engine_idle") ?? Make("VehicleEngine", SynthEngine()));
         static AudioClip Whine => _whine != null ? _whine : (_whine = Make("VehicleWhine", SynthWhine()));
-        static AudioClip Screech => _screech != null ? _screech : (_screech = Make("TyreScreech", SynthScreech()));
+        static AudioClip Screech => _screech != null ? _screech : (_screech = Resources.Load<AudioClip>("Sfx/veh_tyre_squeal") ?? Make("TyreScreech", SynthScreech()));
         static AudioClip Wind => _wind != null ? _wind : (_wind = Make("VehicleWind", SynthWind()));
-        static AudioClip Crunch => _crunch != null ? _crunch : (_crunch = Make("VehicleCrunch", SynthCrunch()));
+        static AudioClip Crunch => _crunch != null ? _crunch : (_crunch = Resources.Load<AudioClip>("Sfx/veh_crash_01") ?? Make("VehicleCrunch", SynthCrunch()));
         static AudioClip Clunk => _clunk != null ? _clunk : (_clunk = Make("GearClunk", SynthClunk()));
-        static AudioClip Horn => _horn != null ? _horn : (_horn = Make("VehicleHorn", SynthHorn()));
+        static AudioClip Horn => _horn != null ? _horn : (_horn = Resources.Load<AudioClip>("Sfx/veh_horn") ?? Make("VehicleHorn", SynthHorn()));
 
         static AudioClip Make(string name, float[] samples)
         {
