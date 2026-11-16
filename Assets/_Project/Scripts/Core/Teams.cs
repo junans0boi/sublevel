@@ -105,8 +105,9 @@ namespace Game.Core
         public static int[] Deploy(int participants, int size, IReadOnlyList<ElevatorSlot> elevators, int seed)
         {
             size = Math.Max(1, size);
-            if (size == 1) return Deployment.Assign(participants, elevators, seed);
-            var perTeam = Deployment.Assign(TeamCount(participants, size), elevators, seed);
+            // Teams never share a car with another team (ADR-252): a surplus team gets -1.
+            if (size == 1) return Deployment.Assign(participants, elevators, seed, false);
+            var perTeam = Deployment.Assign(TeamCount(participants, size), elevators, seed, false);
             var result = new int[Math.Max(0, participants)];
             for (int i = 0; i < result.Length; i++) result[i] = perTeam[TeamOf(i, size) - 1];
             return result;

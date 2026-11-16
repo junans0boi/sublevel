@@ -115,7 +115,7 @@ namespace Game.Tests
         public void Deploy_Solo_IsThePlainAssignment()
         {
             for (int seed = 0; seed < 20; seed++)
-                Assert.AreEqual(Deployment.Assign(16, World, seed), Teams.Deploy(16, 1, World, seed));
+                Assert.AreEqual(Deployment.Assign(16, World, seed, false), Teams.Deploy(16, 1, World, seed)); // ADR-252: strangers never share a car
         }
 
         [Test]

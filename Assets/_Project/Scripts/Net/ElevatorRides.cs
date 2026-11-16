@@ -174,6 +174,8 @@ namespace Game.Net
 
         // Rides only after the deployment doors opened on this peer (ElevatorDoors.DoorsClosed covers the wait).
         public bool Running => _doors != null && !_doors.DoorsClosed;
+        // The same on the server, which has no client of its own (DoorsClosed is the client's schedule and stays true there).
+        public bool ServerRunning => _doors != null && _doors.ServerScheduled && !_doors.ServerDoorsClosed;
 
         // A station whose doors and car are in a ride cycle right now: which kind and seconds since it began.
         public bool StationCycle(int station, out ElevatorCycleKind kind, out double t)

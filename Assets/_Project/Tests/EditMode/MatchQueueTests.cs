@@ -158,20 +158,36 @@ namespace Game.Tests
             Assert.AreEqual(4, slice.TargetParticipants);
         }
 
-        // 80 participants over 20 stations x 3 cars = 60 elevators: the cars are shared (ADR-251), never more than a team in one.
+        // ADR-252: one car per solo participant; with 80 slots (20 stations x 4) everybody has their own, with 60 the surplus has none.
+        [TestCase(80, 80, 0)]
+        [TestCase(80, 60, 20)]
+        public void SoloDeployment_OneToACar_SurplusGetsNone(int participants, int cars, int unplaced)
+        {
+            var elevators = new List<ElevatorSlot>();
+            for (int i = 0; i < cars; i++) elevators.Add(new ElevatorSlot(i % 6));
+            var car = Game.Core.Teams.Deploy(participants, 1, elevators, 1234);
+            var load = new int[cars];
+            int none = 0;
+            foreach (int e in car) { if (e < 0) none++; else load[e]++; }
+            Assert.AreEqual(unplaced, none, "participants without a car");
+            foreach (int n in load) Assert.LessOrEqual(n, 1, "never two strangers in one car");
+        }
+
         [Test]
-        public void EightyParticipants_ShareSixtyElevators_NoCarBeyondTheBay()
+        public void SquadDeployment_TeamsRideTogether_NeverWithAnotherTeam()
         {
             var elevators = new List<ElevatorSlot>();
             for (int i = 0; i < 60; i++) elevators.Add(new ElevatorSlot(i % 6));
-            var car = Deployment.Assign(80, elevators, 1234);
-            var load = new int[60];
-            foreach (int e in car) { Assert.GreaterOrEqual(e, 0); load[e]++; }
-            Assert.AreEqual(80, car.Length);
-            int max = 0, shared = 0;
-            foreach (int n in load) { max = System.Math.Max(max, n); if (n > 1) shared++; }
-            Assert.LessOrEqual(max, 2, "at most two to a car (the bay holds nine, a team is four)");
-            Assert.AreEqual(20, shared, "20 cars carry two");
+            var car = Game.Core.Teams.Deploy(80, 4, elevators, 99);
+            var teamsInCar = new Dictionary<int, HashSet<int>>();
+            for (int i = 0; i < car.Length; i++)
+            {
+                Assert.GreaterOrEqual(car[i], 0);
+                if (!teamsInCar.TryGetValue(car[i], out var set)) teamsInCar[car[i]] = set = new HashSet<int>();
+                set.Add(Game.Core.Teams.TeamOf(i, 4));
+            }
+            foreach (var set in teamsInCar.Values) Assert.AreEqual(1, set.Count, "one team per car");
+            Assert.AreEqual(20, teamsInCar.Count, "20 teams, 20 cars");
         }
     }
 }

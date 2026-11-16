@@ -271,15 +271,22 @@ namespace Game.Net
 
         // How many bots this match has: by data on a map with elevators (16-24 combatants, #77), otherwise one per
         // scene spawn point.
+        bool _slotWarned;
         public int BotCount
         {
             get
             {
                 if (_botPrefab == null) return 0;
                 if (HasElevators)
-                    return NetSession.Role == NetSession.RoleKind.Host && NetSession.Bots >= 0
+                {
+                    int wanted = NetSession.Role == NetSession.RoleKind.Host && NetSession.Bots >= 0
                         ? LobbyRules.ClampBots(NetSession.Bots, NetSession.Players)
                         : (MatchRules.Current ?? new MatchRules()).BotsFor(Mathf.Max(1, NetSession.Players));
+                    // One car per team (ADR-252): the map's elevators are the slots, so a match never has more bots than they hold.
+                    int slots = Elevators.Sites.Count * Mathf.Max(1, TeamMatch.TeamSize) - Mathf.Max(1, NetSession.Players);
+                    if (wanted > slots && !_slotWarned) { _slotWarned = true; Debug.LogWarning($"[MatchDirector] {wanted} bots wanted but the {Elevators.Sites.Count} elevators hold {slots} beside the people: capped"); }
+                    return Mathf.Max(0, Mathf.Min(wanted, slots));
+                }
                 if (_botSpawns == null) return 0;
                 int count = 0;
                 foreach (var point in _botSpawns) if (point != null) count++;

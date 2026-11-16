@@ -832,9 +832,9 @@ namespace Game.AI
             target = default;
             var net = KeyElevatorNet.Instance;
             var rides = ElevatorRides.Instance;
-            if (_keys == null || net == null || rides == null || !rides.Running)
+            if (_keys == null || net == null || rides == null || !rides.ServerRunning)
             {
-                if (!_keyGateLogged) { _keyGateLogged = true; Debug.Log($"[BotStat] key-gate keys={_keys != null} net={net != null} rides={rides != null} running={(rides != null && rides.Running)}"); }
+                if (!_keyGateLogged) { _keyGateLogged = true; Debug.Log($"[BotStat] key-gate keys={_keys != null} net={net != null} rides={rides != null} running={(rides != null && rides.ServerRunning)}"); }
                 return false;
             }
             var sys = net.System;
