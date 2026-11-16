@@ -35,6 +35,15 @@ namespace Game.Tests
         }
 
         [Test]
+        public void PerfGatherArg_IsRead_AndBadValueIsAnError()
+        {
+            var o = ServerArgs.Parse(new[] { "--perf", "p3", "--perf-gather", "120.5,-80" });
+            Assert.AreEqual(120.5f, o.GatherX);
+            Assert.AreEqual(-80f, o.GatherZ);
+            Assert.IsNotNull(ServerArgs.Parse(new[] { "--perf-gather", "12" }).Error);
+        }
+
+        [Test]
         public void PerfArg_IsRead()
         {
             Assert.AreEqual("p0", ServerArgs.Parse(new[] { "--dedicated", "--perf", "p0" }).Perf);

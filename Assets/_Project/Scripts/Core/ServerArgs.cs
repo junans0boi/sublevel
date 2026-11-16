@@ -20,6 +20,7 @@ namespace Game.Core
         public string Region;       // null = random
         public int MaxPlayers;      // 0 = rules.json
         public int Participants;    // 0 = rules.json
+        public float GatherX, GatherZ; // --perf-gather X,Z: where the P3 crowd meets
         public string Perf;         // null = off; else the scenario name for Logs/perf/s8_server_<name>.csv
         public float StartSeconds;
         public string Error;        // null when everything parsed
@@ -38,7 +39,7 @@ namespace Game.Core
             {
                 string a = args[i];
                 if (a == "--dedicated" || a == "-dedicated") { o.Dedicated = true; continue; }
-                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--participants" || a == "--perf" || a == "--start-seconds";
+                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--participants" || a == "--perf" || a == "--perf-gather" || a == "--start-seconds";
                 if (!known) continue;
                 if (i + 1 >= args.Count) { o.Error = a + " needs a value"; return o; }
                 string v = args[++i];
@@ -68,6 +69,10 @@ namespace Game.Core
                     case "--perf":
                         if (string.IsNullOrWhiteSpace(v)) { o.Error = "--perf is empty"; return o; }
                         o.Perf = v.Trim();
+                        break;
+                    case "--perf-gather":
+                        var xz = v.Split(',');
+                        if (xz.Length != 2 || !float.TryParse(xz[0], NumberStyles.Float, CultureInfo.InvariantCulture, out o.GatherX) || !float.TryParse(xz[1], NumberStyles.Float, CultureInfo.InvariantCulture, out o.GatherZ)) { o.Error = "--perf-gather must be X,Z, got '" + v + "'"; return o; }
                         break;
                     case "--start-seconds":
                         if (!float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float secs) || secs < 0f) { o.Error = "--start-seconds must be 0 or more, got '" + v + "'"; return o; }
