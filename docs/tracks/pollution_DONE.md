@@ -11,12 +11,11 @@
 | WP8 `ChipBoard`(드롭·운반자 사망·입금·만료·보관함 파괴·부활·팀 상태) | `Core/ChipBoard.cs` | 테스트 2건 |
 | WP7 `KeyElevatorSystem`(승강장 N개·팀 쿨다운·도착 재배정·무효 반환·충전) | `Core/KeyElevatorSystem.cs` | 테스트 2건 |
 | ADR-235~239 | `docs/DECISIONS.md` | |
-| 서버 `PollutionDirector`(방송·늦은 접속·피해 적용·방독 API) | `Net/PollutionDirector.cs` | **미커밋: 컴파일 미확인**(Unity 필요) |
+| 서버 `PollutionDirector`(방송·늦은 접속·피해 적용·방독 API) | `Net/PollutionDirector.cs` | Unity 컴파일 확인·커밋(2026-11-16) |
 
-수치: dotnet 하네스 17/17 통과(새 테스트 포함 전체가 아니라 `PollutionWiringTests` 단독; 기존 41건은 S6에서 Unity 통과).
+수치: **Unity EditMode 전체 1232/1232 통과**(62초). dotnet 하네스 17/17 통과(새 테스트 포함 전체가 아니라 `PollutionWiringTests` 단독; 기존 41건은 S6에서 Unity 통과).
 
 ## 못 한 것 (Unity 순번 필요)
-- Unity EditMode 전체 통과 확인, `PollutionDirector` 컴파일 확인·커밋
 - 연출(붉은 안개·가이거 훅·지도 점멸·HUD 그리기)과 게임 안 캡처, PlayMode 멀티 복제 테스트
 - 방독 아이템(루팅·인벤토리), 열쇠 아이템 배치(루팅 점·보급상자), 칩 드롭·보관함 오브젝트와 Net 연결(`Combatant`·`ElevatorRides`·`KeyHolder` 수정)
 - T10 기존 Lockdown/통로 제거(맵 병합 뒤)
