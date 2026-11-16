@@ -15,7 +15,8 @@ namespace Game.Gameplay
         // Reference sizes the visuals scale from (a 1.8 m adult).
         public const float HeadRise = 0.215f, ShoulderWidth = 0.37f;
         static readonly Dictionary<int, Mesh> Cache = new Dictionary<int, Mesh>();
-        static readonly Color[] Tones = { new Color(0.50f, 0.46f, 0.34f), new Color(0.30f, 0.34f, 0.22f), new Color(0.13f, 0.14f, 0.15f) };
+        // Tier 3 "black" is a dark grey so it still separates from a black bodysuit; the Accent lines carry the edges.
+        static readonly Color[] Tones = { new Color(0.50f, 0.46f, 0.34f), new Color(0.30f, 0.34f, 0.22f), new Color(0.31f, 0.32f, 0.33f) };
         static readonly Color DarkColor = new Color(0.09f, 0.09f, 0.10f);
 
         public static void Colors(LootKind kind, int tier, Color[] into)
@@ -23,7 +24,7 @@ namespace Game.Gameplay
             var tone = Tones[Mathf.Clamp(tier, 1, 3) - 1];
             into[Body] = tone;
             into[Dark] = DarkColor;
-            into[Accent] = Color.Lerp(tone, new Color(0.45f, 0.42f, 0.33f), 0.45f); // pouches: a step lighter than the shell
+            into[Accent] = Color.Lerp(tone, new Color(0.82f, 0.79f, 0.68f), 0.62f); // edge highlight lines and pockets: clearly lighter than the shell
         }
 
         public static bool Handles(LootKind kind) => kind == LootKind.Helmet || kind == LootKind.Vest || kind == LootKind.Backpack;
@@ -134,7 +135,8 @@ namespace Game.Gameplay
             return true;
         }
 
-        // ---- Helmet: a dome (superellipse rings), brim, chin strap; tier 2 adds ear guards and mounts, tier 3 a face guard.
+        // ---- Helmet: a dome (superellipse rings) with a brim and an edge highlight line, chin strap; tier 2 adds ear guards and
+        // mounts, tier 3 a curved face shield with a dark visor band and one highlight line.
         static void BuildHelmet(MeleeMeshes.Draft d, int tier)
         {
             const float rx = 0.093f, rz = 0.108f;
@@ -142,15 +144,15 @@ namespace Game.Gameplay
             var rings = new List<Ring>
             {
                 new Ring(-0.004f, rx + 0.014f, rz + 0.014f, 0f), // brim
-                new Ring(0.006f, rx + 0.004f, rz + 0.004f, 0f),
                 new Ring(h * 0.20f, rx, rz, 0f),
                 new Ring(h * 0.45f, rx * 0.95f, rz * 0.95f, 0f),
                 new Ring(h * 0.70f, rx * 0.80f, rz * 0.80f, 0f),
                 new Ring(h * 0.90f, rx * 0.52f, rz * 0.52f, 0f),
                 new Ring(h, rx * 0.20f, rz * 0.20f, 0f),
             };
-            Loft(d, rings, 14, 2.4f, Body, true, false);
-            d.Disc(new Vector3(0f, -0.003f, 0f), rx + 0.01f, Vector3.down, Dark, 14); // liner seen from below
+            Loft(d, rings, 12, 2.4f, Body, true, false);
+            d.Disc(new Vector3(0f, -0.003f, 0f), rx + 0.01f, Vector3.down, Dark, 12); // liner seen from below
+            Band(d, 0.0f, 0.009f, rx + 0.0165f, rz + 0.0165f, 0f, 360f, 12, Accent);   // brim edge highlight
             // Chin strap: two straps down the cheeks and a band under the chin.
             foreach (float s in new[] { -1f, 1f })
                 d.Box(new Vector3(s * (rx - 0.004f), -0.055f, 0.03f), new Vector3(0.012f, 0.11f, 0.02f), Dark);
@@ -167,84 +169,97 @@ namespace Game.Gameplay
                 d.Box(new Vector3(s * (rx * 0.97f), h * 0.50f, 0.0f), new Vector3(0.012f, 0.018f, 0.09f), Dark);
             }
             d.Box(new Vector3(0f, h * 0.62f, rz * 0.90f), new Vector3(0.045f, 0.04f, 0.035f), Dark); // front mount
-            d.Box(new Vector3(0f, h * 0.30f, -rz * 0.92f), new Vector3(0.075f, 0.05f, 0.03f), Accent); // rear pouch
+            d.Box(new Vector3(0f, h * 0.30f, -rz * 0.92f), new Vector3(0.075f, 0.05f, 0.03f), Dark); // rear pouch
             d.Box(new Vector3(0f, -0.04f, -rz * 0.85f), new Vector3(0.12f, 0.07f, 0.02f), Body); // neck drop
             if (tier == 2) return;
-            // Tier 3: full cover, a face guard over the brow and cheeks and a visor slot.
-            d.Box(new Vector3(0f, -0.04f, rz + 0.006f), new Vector3(rx * 1.5f, 0.09f, 0.022f), Body);
-            d.Box(new Vector3(0f, -0.02f, rz + 0.019f), new Vector3(rx * 1.3f, 0.022f, 0.006f), Accent); // visor slot
-            d.Box(new Vector3(0f, -0.115f, rz * 0.55f), new Vector3(rx * 1.5f, 0.03f, 0.11f), Body); // jaw guard
+            // Tier 3: a curved shield round the face (part of a cylinder, like the skull), a dark visor band cut into it and
+            // a highlight line along its top edge; a curved jaw guard below.
+            const float sr = 0.012f;
+            Shell(d, -0.035f, 0.085f, rx + sr, rz + sr, -60f, 60f, 8, 0.012f, Body);
+            Band(d, -0.026f, 0.034f, rx + sr + 0.0145f, rz + sr + 0.0145f, -52f, 52f, 8, Dark);  // visor
+            Band(d, 0.0f, 0.012f, rx + sr + 0.0145f, rz + sr + 0.0145f, -60f, 60f, 8, Accent);    // top-edge highlight
+            Shell(d, -0.1f, 0.045f, rx + sr, rz + sr, -80f, 80f, 4, 0.012f, Body);
         }
 
-        // ---- Vest: curved front and back plates, cummerbund, shoulder straps; tier 2 adds pouches, tier 3 side plates and pads.
+        // ---- Vest: curved front and back plates (parts of a cylinder round the torso) with a thin outline where the
+        // plate window is, cummerbund, shoulder straps; tier 2 adds pouches, tier 3 side plates and pads.
+        // Highlight lines (Accent, a lighter tone) trace the plate edges so dark tiers do not melt into a dark body.
         static void BuildVest(MeleeMeshes.Draft d, int tier)
         {
             const float rx = 0.178f, rz = 0.122f; // outside the torso (a chest ~0.165 x 0.11)
             float ph = tier == 1 ? 0.30f : 0.34f;
-            Arc(d, 0f, ph, rx, rz, -62f, 62f, 8, 0.016f, Body);                // front plate
-            Arc(d, 0f, ph, rx, rz, 118f, 242f, 8, 0.016f, Body);               // back plate
-            Arc(d, -0.13f, 0.12f, rx - 0.004f, rz - 0.004f, 62f, 118f, 3, 0.012f, Dark);   // cummerbund, left side
-            Arc(d, -0.13f, 0.12f, rx - 0.004f, rz - 0.004f, 242f, 298f, 3, 0.012f, Dark);  // right side
+            const float th = 0.016f;
+            Shell(d, 0f, ph, rx, rz, -62f, 62f, 10, th, Body);                  // front plate
+            Shell(d, 0f, ph, rx, rz, 118f, 242f, 8, th, Body);                 // back plate
+            Shell(d, -0.13f, 0.12f, rx - 0.004f, rz - 0.004f, 62f, 118f, 2, 0.012f, Dark);   // cummerbund, left side
+            Shell(d, -0.13f, 0.12f, rx - 0.004f, rz - 0.004f, 242f, 298f, 2, 0.012f, Dark);  // right side
+            float k = th + 0.003f;
+            Band(d, ph * 0.5f - 0.008f, 0.014f, rx + k, rz + k, -62f, 62f, 10, Accent);       // front top edge
+            Band(d, -ph * 0.5f + 0.008f, 0.014f, rx + k, rz + k, -62f, 62f, 10, Accent);      // front bottom edge
+            // Plate window: a thin outline, not a filled rectangle.
+            float wy = ph * 0.5f - 0.05f, wh = ph - 0.11f, wk = th + 0.002f;
+            Band(d, wy - 0.003f, 0.011f, rx + wk, rz + wk, -26f, 26f, 4, Accent);
+            Band(d, wy - wh, 0.011f, rx + wk, rz + wk, -26f, 26f, 4, Accent);
+            Band(d, wy - wh * 0.5f - 0.003f, wh, rx + wk, rz + wk, -28.5f, -24.5f, 1, Accent);
+            Band(d, wy - wh * 0.5f - 0.003f, wh, rx + wk, rz + wk, 24.5f, 28.5f, 1, Accent);
+            Band(d, ph * 0.5f - 0.008f, 0.014f, rx + k, rz + k, 118f, 242f, 8, Accent);      // back top edge
             foreach (float s in new[] { -1f, 1f })                              // shoulder straps over the top
             {
                 d.Box(new Vector3(s * 0.095f, ph * 0.5f + 0.012f, 0f), new Vector3(0.055f, 0.016f, rz * 2f + 0.02f), Dark);
                 d.Box(new Vector3(s * 0.095f, ph * 0.5f - 0.03f, rz + 0.012f), new Vector3(0.05f, 0.06f, 0.012f), Dark);
-                d.Box(new Vector3(s * 0.095f, ph * 0.5f - 0.03f, -rz - 0.012f), new Vector3(0.05f, 0.06f, 0.012f), Dark);
             }
-            d.Box(new Vector3(0f, 0.01f, rz + 0.018f), new Vector3(0.20f, 0.12f, 0.016f), Dark); // plate pocket seam
             if (tier == 1) return;
             // Tier 2+: three magazine pouches on the lower front, a chest rig strip, a drag handle behind.
             for (int i = -1; i <= 1; i++)
-                d.Box(new Vector3(i * 0.065f, -ph * 0.5f + 0.045f, rz + 0.03f), new Vector3(0.055f, 0.09f, 0.04f), Accent);
-            d.Box(new Vector3(0f, ph * 0.5f - 0.03f, rz + 0.022f), new Vector3(0.20f, 0.03f, 0.014f), Dark);
+                d.Box(new Vector3(i * 0.065f, -ph * 0.5f + 0.045f, rz + 0.03f), new Vector3(0.055f, 0.09f, 0.04f), Dark);
             d.Box(new Vector3(0f, ph * 0.5f - 0.015f, -rz - 0.02f), new Vector3(0.09f, 0.03f, 0.016f), Dark);
             if (tier == 2) return;
             // Tier 3: side plates, shoulder pads and a collar guard.
             foreach (float s in new[] { -1f, 1f })
             {
-                Arc(d, 0.02f, 0.2f, rx + 0.012f, rz + 0.012f, s > 0 ? 70f : 250f, s > 0 ? 110f : 290f, 2, 0.014f, Body);
+                Shell(d, 0.02f, 0.2f, rx + 0.012f, rz + 0.012f, s > 0 ? 70f : 250f, s > 0 ? 110f : 290f, 2, 0.014f, Body);
                 d.Box(new Vector3(s * 0.185f, ph * 0.5f + 0.01f, 0f), new Vector3(0.09f, 0.03f, 0.13f), Body);
             }
             d.Box(new Vector3(0f, ph * 0.5f + 0.02f, rz * 0.3f), new Vector3(0.12f, 0.035f, 0.08f), Body);
         }
 
-        // ---- Backpack: a rounded pack with lid, front pocket, side pockets and straps; bigger and heavier per tier.
+        // ---- Backpack: a rounded pack (soft superellipse) with a domed lid, a front pocket, side pockets and flat straps;
+        // bigger and heavier per tier. Nothing sticks out as a box: the old side strap boxes are gone.
         static void BuildBackpack(MeleeMeshes.Draft d, int tier)
         {
             float w = 0.24f + 0.035f * tier, h = 0.26f + 0.055f * tier, l = 0.11f + 0.035f * tier;
             float rx = w * 0.5f, zc = -l * 0.5f; // the back panel is the plane z = 0
             var rings = new List<Ring>
             {
-                new Ring(0f, rx * 0.86f, l * 0.46f, zc), new Ring(h * 0.06f, rx * 0.98f, l * 0.5f, zc),
-                new Ring(h * 0.50f, rx, l * 0.5f, zc), new Ring(h * 0.90f, rx * 0.95f, l * 0.48f, zc),
-                new Ring(h, rx * 0.78f, l * 0.42f, zc),
+                new Ring(0f, rx * 0.80f, l * 0.42f, zc), new Ring(h * 0.05f, rx * 0.95f, l * 0.49f, zc),
+                new Ring(h * 0.45f, rx, l * 0.5f, zc), new Ring(h * 0.82f, rx * 0.97f, l * 0.49f, zc),
+                new Ring(h * 0.95f, rx * 0.84f, l * 0.44f, zc), new Ring(h, rx * 0.62f, l * 0.36f, zc),
             };
-            Loft(d, rings, 12, 3.2f, Body, true, true);
-            // Lid (a shallow cap) with a strap, zip line and a carry loop.
-            var lid = new List<Ring> { new Ring(h * 0.78f, rx * 1.02f, l * 0.52f, zc), new Ring(h * 0.93f, rx * 1.0f, l * 0.51f, zc), new Ring(h * 1.01f, rx * 0.78f, l * 0.43f, zc) };
-            Loft(d, lid, 12, 3.2f, Dark, true, false);
-            d.Box(new Vector3(0f, h * 0.62f, zc - l * 0.5f - 0.006f), new Vector3(0.05f, h * 0.30f, 0.012f), Dark);
-            d.Box(new Vector3(0f, h + 0.012f, zc), new Vector3(0.08f, 0.02f, 0.025f), Dark);
-            // Front pocket (outside, away from the body).
-            var pocket = new List<Ring> { new Ring(h * 0.10f, rx * 0.72f, l * 0.20f, zc - l * 0.55f), new Ring(h * 0.32f, rx * 0.76f, l * 0.22f, zc - l * 0.56f), new Ring(h * 0.40f, rx * 0.66f, l * 0.18f, zc - l * 0.54f) };
-            Loft(d, pocket, 10, 3.2f, Accent, true, true);
-            // Shoulder straps and a waist anchor on the back panel.
+            Loft(d, rings, 10, 2.6f, Body, true, true);
+            // Domed lid in the dark tone with a highlight line along its lower edge and a strap over the front.
+            var lid = new List<Ring> { new Ring(h * 0.72f, rx * 1.03f, l * 0.53f, zc), new Ring(h * 0.88f, rx * 1.04f, l * 0.52f, zc), new Ring(h * 0.98f, rx * 0.90f, l * 0.46f, zc), new Ring(h * 1.05f, rx * 0.6f, l * 0.34f, zc) };
+            Loft(d, lid, 10, 2.6f, Dark, true, false);
+            Band(d, h * 0.725f, 0.012f, rx * 1.045f, l * 0.535f, 0f, 360f, 10, Accent, zc); // lid edge highlight (centred on the pack)
+            d.Box(new Vector3(0f, h * 0.60f, zc - l * 0.5f - 0.004f), new Vector3(0.045f, h * 0.30f, 0.01f), Dark); // strap down the front
+            d.Box(new Vector3(0f, h + 0.01f, zc), new Vector3(0.07f, 0.016f, 0.02f), Dark);                         // carry loop
+            // Front pocket, rounded.
+            var pocket = new List<Ring> { new Ring(h * 0.08f, rx * 0.70f, l * 0.18f, zc - l * 0.5f), new Ring(h * 0.30f, rx * 0.76f, l * 0.21f, zc - l * 0.53f), new Ring(h * 0.40f, rx * 0.62f, l * 0.16f, zc - l * 0.5f) };
+            Loft(d, pocket, 8, 2.6f, Body, true, true);
+            // Flat shoulder straps on the back panel.
             foreach (float s in new[] { -1f, 1f })
-            {
-                d.Box(new Vector3(s * rx * 0.55f, h * 0.55f, 0.012f), new Vector3(0.055f, h * 0.85f, 0.024f), Dark);
-                d.Box(new Vector3(s * (rx + 0.01f), h * 0.35f, zc), new Vector3(0.02f, h * 0.35f, l * 0.6f), Dark); // compression strap
-            }
+                d.Box(new Vector3(s * rx * 0.52f, h * 0.55f, 0.012f), new Vector3(0.05f, h * 0.85f, 0.022f), Dark);
             if (tier == 1) return;
-            // Tier 2+: two side pockets.
+            // Tier 2+: two rounded side pockets set flush against the body.
             foreach (float s in new[] { -1f, 1f })
             {
-                var side = new List<Ring> { new Ring(h * 0.04f, 0.026f, l * 0.30f, zc), new Ring(h * 0.28f, 0.032f, l * 0.34f, zc), new Ring(h * 0.34f, 0.024f, l * 0.26f, zc) };
-                Loft(d, side, 8, 3f, Accent, true, true, s * (rx + 0.034f));
+                var side = new List<Ring> { new Ring(h * 0.05f, 0.024f, l * 0.30f, zc), new Ring(h * 0.26f, 0.030f, l * 0.35f, zc), new Ring(h * 0.34f, 0.022f, l * 0.26f, zc) };
+                Loft(d, side, 6, 2.6f, Body, true, true, s * (rx + 0.004f));
             }
             if (tier == 2) return;
             // Tier 3: a rolled mat on top and a second front pouch.
-            d.Tube(new Vector3(-rx * 0.8f, h + 0.06f, zc), new Vector3(rx * 0.8f, h + 0.06f, zc), 0.045f, Accent, 10);
-            d.Box(new Vector3(0f, h * 0.62f, zc - l * 0.5f - 0.02f), new Vector3(rx * 1.1f, h * 0.2f, 0.045f), Accent);
+            d.Tube(new Vector3(-rx * 0.8f, h + 0.06f, zc), new Vector3(rx * 0.8f, h + 0.06f, zc), 0.045f, Body, 8);
+            var pouch = new List<Ring> { new Ring(h * 0.50f, rx * 0.58f, l * 0.12f, zc - l * 0.55f), new Ring(h * 0.66f, rx * 0.6f, l * 0.14f, zc - l * 0.57f), new Ring(h * 0.74f, rx * 0.5f, l * 0.10f, zc - l * 0.55f) };
+            Loft(d, pouch, 6, 2.6f, Body, true, true);
         }
 
         // ---- Shape helpers ----
@@ -280,9 +295,8 @@ namespace Game.Gameplay
             if (capBottom) Cap(rings[0], Vector3.down);
         }
 
-        // A band round an ellipse (half-axes rx, rz) from angle a0 to a1 degrees (0 = +z front, 90 = +x), `h` tall, centred at
-        // y, with an inner and outer skin `thick` apart and rims, so it reads as a plate rather than a sheet.
-        static void Arc(MeleeMeshes.Draft d, float y, float h, float rx, float rz, float a0, float a1, int segs, float thick, int sub)
+        // A curved plate: part of a cylinder (outer skin plus the top and bottom rims), angles in degrees from +z.
+        static void Shell(MeleeMeshes.Draft d, float y, float h, float rx, float rz, float a0, float a1, int segs, float thick, int sub)
         {
             Vector3 P(float deg, float yy, float k)
             {
@@ -295,9 +309,19 @@ namespace Game.Gameplay
                 float t0 = Mathf.Lerp(a0, a1, i / (float)segs), t1 = Mathf.Lerp(a0, a1, (i + 1) / (float)segs), tm = (t0 + t1) * 0.5f * Mathf.Deg2Rad;
                 var outward = new Vector3(Mathf.Sin(tm), 0f, Mathf.Cos(tm));
                 d.Quad(P(t0, yb, thick), P(t1, yb, thick), P(t1, yt, thick), P(t0, yt, thick), outward, sub);
-                d.Quad(P(t0, yb, 0), P(t1, yb, 0), P(t1, yt, 0), P(t0, yt, 0), -outward, sub);
                 d.Quad(P(t0, yt, 0), P(t1, yt, 0), P(t1, yt, thick), P(t0, yt, thick), Vector3.up, sub);
                 d.Quad(P(t0, yb, 0), P(t1, yb, 0), P(t1, yb, thick), P(t0, yb, thick), Vector3.down, sub);
+            }
+        }
+
+        // A thin one-sided strip on a cylinder surface (an outline or highlight line), radii already include its offset.
+        static void Band(MeleeMeshes.Draft d, float y, float h, float rx, float rz, float a0, float a1, int segs, int sub, float cz = 0f)
+        {
+            for (int i = 0; i < segs; i++)
+            {
+                float t0 = Mathf.Lerp(a0, a1, i / (float)segs) * Mathf.Deg2Rad, t1 = Mathf.Lerp(a0, a1, (i + 1) / (float)segs) * Mathf.Deg2Rad, tm = (t0 + t1) * 0.5f;
+                Vector3 P(float t, float yy) => new Vector3(Mathf.Sin(t) * rx, yy, cz + Mathf.Cos(t) * rz);
+                d.Quad(P(t0, y - h * 0.5f), P(t1, y - h * 0.5f), P(t1, y + h * 0.5f), P(t0, y + h * 0.5f), new Vector3(Mathf.Sin(tm), 0f, Mathf.Cos(tm)), sub);
             }
         }
     }
