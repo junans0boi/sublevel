@@ -553,13 +553,21 @@ public static class VehicleBuilder
     {
         try
         {
-            EditorSceneManager.OpenScene(WorldBuilder.ScenePath, OpenSceneMode.Single);
-            var old = GameObject.Find(PropRootName);
-            if (old != null) Object.DestroyImmediate(old);
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);   // the plan's own ground, no saved scene
             var plan = WorldGenerator.Generate(LoadWorldSpec());
-            var terrain = Object.FindAnyObjectByType<Terrain>();
-            Func<float, float, float> height = (x, z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
-            int n = PlaceProps(plan, height, new List<ParkingSpot>());
+            Func<float, float, float> height = plan.Height;
+            var taken = VehicleSpread.Pick(VehicleParking.Candidates(plan), c => plan.RegionAt(c.X, c.Z), plan.Regions.Count, 20, 40f);
+            int n = PlaceProps(plan, height, taken);
+            Debug.Log($"[MeasureProps] drivable spots {taken.Count}, regions {plan.Regions.Count}, spots per region {string.Join("/", Enumerable.Range(0, plan.Regions.Count).Select(r => taken.Count(t => plan.RegionAt(t.X, t.Z) == r)))}");
+            var rends = GameObject.Find(PropRootName).GetComponentsInChildren<MeshRenderer>().Select(r => r.bounds).ToList();
+            int overlaps = 0;
+            for (int i = 0; i < rends.Count; i++)
+                for (int j = i + 1; j < rends.Count; j++)
+                    if (rends[i].Intersects(rends[j])) overlaps++;
+            foreach (var t in taken)
+                foreach (var b in rends)
+                    if (new Bounds(new Vector3(t.X, b.center.y, t.Z), new Vector3(2f * VehicleParking.HalfWidth, 1f, 2f * VehicleParking.HalfLength)).Intersects(b)) overlaps++;
+            Debug.Log($"[MeasureProps] prop/prop and prop/spot bounds overlaps (AABB, conservative): {overlaps}");
             float worst = 0f; int wrecks = 0;
             foreach (Transform t in GameObject.Find(PropRootName).transform)
             {
