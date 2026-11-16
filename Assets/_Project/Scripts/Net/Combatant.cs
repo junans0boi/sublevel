@@ -292,6 +292,7 @@ namespace Game.Net
             // Swimming and the breath (ADR-112): every peer reads the body against the water.
             if (GetComponent<CombatantSwim>() == null) gameObject.AddComponent<CombatantSwim>();
             HookCarry();
+            HookStagger();
         }
 
         public override void OnStopNetwork()
@@ -560,8 +561,9 @@ namespace Game.Net
             float applied = _health.ApplyDamage(dealt.Amount);
             if (applied <= 0f) return;
             ServerDamaged?.Invoke(this, dealt, applied);
+            ServerStaggerOnDamage(dealt); // stopping power (ADR-182): bullets only, cleared on death
             // A lethal hit knocks down instead while a teammate stands (ADR-072).
-            if (_health.IsDead && ServerTryKnock(dealt)) return;
+            if (_health.IsDead && ServerTryKnock(dealt)) { ServerStaggerClear(); return; }
             Push();
             // The dead take no further damage, so this happens once per life.
             if (_health.IsDead) ServerDied?.Invoke(this, dealt);
