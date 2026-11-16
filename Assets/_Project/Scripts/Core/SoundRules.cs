@@ -47,7 +47,7 @@ namespace Game.Core
         // steel stairs and machines, concrete stations).
         public static FootSurface BuildingSurface(BuildingKind building, SurfaceKind piece)
         {
-            switch (building)
+            switch (BuildingKinds.Family(building))
             {
                 case BuildingKind.House:
                     return piece == SurfaceKind.Roof || piece == SurfaceKind.WallOuter ? FootSurface.Concrete : FootSurface.Wood;

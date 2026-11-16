@@ -133,7 +133,7 @@ public static partial class WorldBuilder
                 var parent = Region(pair.Key.region);
                 var go = new GameObject("Dressing_" + pair.Key.material.name);
                 go.transform.SetParent(parent, false);
-                go.AddComponent<MeshFilter>().sharedMesh = store.Add(pair.Value.ToMesh($"Dressing_{parent.name}_{pair.Key.material.name}"));
+                go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(pair.Value.ToMesh($"Dressing_{parent.name}_{pair.Key.material.name}"));
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = pair.Key.material;
                 renderer.shadowCastingMode = ShadowCastingMode.On;
@@ -147,7 +147,7 @@ public static partial class WorldBuilder
                 var name = $"Detail_{pair.Key.cx}_{pair.Key.cz}_{pair.Key.material.name}{(pair.Key.shadow ? "" : "_NoShadow")}";
                 var go = new GameObject(name);
                 go.transform.SetParent(parent, false);
-                go.AddComponent<MeshFilter>().sharedMesh = store.Add(pair.Value.ToMesh($"{parent.name}_{name}"));
+                go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(pair.Value.ToMesh($"{parent.name}_{name}"));
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = pair.Key.material;
                 renderer.shadowCastingMode = pair.Key.shadow ? ShadowCastingMode.On : ShadowCastingMode.Off;
@@ -181,7 +181,7 @@ public static partial class WorldBuilder
         var building = placed.Plan;
         float hx = building.Width * 0.5f, hz = building.Depth * 0.5f;
         int region = lot.Region;
-        bool house = lot.Kind == BuildingKind.House;
+        bool house = BuildingKinds.Family(lot.Kind) == BuildingKind.House;
         Vector3 World(float lx, float lz)
         {
             var p = placed.Origin + placed.Rotation * new Vector3(lx, 0f, lz);
@@ -190,7 +190,7 @@ public static partial class WorldBuilder
         float yaw = lot.YawDeg;
 
         // Low wall: the back, and one side as far as the middle of the house, with a gap to walk through.
-        if (lot.Kind != BuildingKind.Shed && Unit(h, 0) < (house ? 0.7f : 0.45f))
+        if (BuildingKinds.Family(lot.Kind) != BuildingKind.Shed && Unit(h, 0) < (house ? 0.7f : 0.45f))
         {
             var surface = house ? (Unit(h, 3) < 0.5f ? WorldMaterials.Brick((int)(h % 3u)) : WorldMaterials.Concrete) : WorldMaterials.ConcreteDark;
             float bx = hx + LowWallOffset, bz = hz + LowWallOffset;

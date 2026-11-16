@@ -20,4 +20,6 @@
 *.mp3 filter=lfs diff=lfs merge=lfs -text
 # generated vehicle meshes (#89): large mesh assets
 Assets/_Project/Prefabs/M1/Vehicles/*_Meshes.asset filter=lfs diff=lfs merge=lfs -text
+# generated world meshes (#240): binary blob, tracked from now on (history untouched)
+Assets/_Project/Prefabs/World/World_Meshes.bytes filter=lfs diff=lfs merge=lfs -text
 *.unity filter=lfs diff=lfs merge=lfs -text

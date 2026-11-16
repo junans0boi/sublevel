@@ -24,12 +24,17 @@ public static partial class WorldBuilder
     const string TerrainDataPath = WorldMaterials.GeneratedDir + "/World_Terrain.asset";
     const string NavMeshPath = WorldMaterials.GeneratedDir + "/World_NavMesh.asset";
     const string MeshPath = WorldMaterials.GeneratedDir + "/World_Meshes.asset";
+    const string MeshBlobPath = WorldMaterials.GeneratedDir + "/World_Meshes.bytes";
     const string OverviewDir = "Logs/world";
 
     // Terrain (docs/research/open-world-tech.md 2-2, 4): one sample per metre; the pixel error and base map
     // distance trade distant detail for draw cost.
-    const int HeightmapResolution = 1025;
-    const int AlphamapResolution = 1024;
+    // Numbers from world.json (WorldSpec.Build, #244): caps, far clip, fog and the terrain map resolutions.
+    static WorldBuildSpec _cfg;
+    static float _size = 1024f;
+    static WorldBuildSpec Cfg => _cfg ?? (_cfg = LoadSpec().Build ?? new WorldBuildSpec());
+    static int HeightmapResolution => Cfg.HeightmapResolution(_size);
+    static int AlphamapResolution => Cfg.AlphamapResolution(_size);
     const int BaseMapResolution = 2048;
     const float TerrainPixelError = 4f; // was 8: ridges at a distance showed saw teeth (#192)
     const float TerrainBaseMapDistance = 110f;
@@ -43,8 +48,9 @@ public static partial class WorldBuilder
     const float BarrierCell = 8f, BarrierHeight = 8f, BarrierThickness = 0.6f;
     const int IgnoreRaycastLayer = 2;       // built-in layer: shots, sight lines and the camera pass through
 
-    const float FarClip = 700f;
-    const float FogStart = 90f, FogEnd = 640f;
+    static float FarClip => Cfg.FarClip;
+    static float FogStart => Cfg.FogStart;
+    static float FogEnd => Cfg.FogEnd;
     static readonly Color FogColor = new Color(0.60f, 0.62f, 0.64f); // the overcast HDRI's horizon
 
     const float OutdoorAmbient = 0.8f, SunIntensity = 1.25f, SunShadowStrength = 0.8f;
@@ -57,7 +63,7 @@ public static partial class WorldBuilder
     const int NavTileSize = 256;
     const int NotWalkableArea = 1;          // built-in navmesh area
 
-    const int MaxLootSpawns = 250;
+    static int MaxLootSpawns => Cfg.MaxLootSpawns;
     const float LootLift = 0.3f;            // loot points give the surface an item lies on
     const float SpawnLift = 0.1f;
 
@@ -81,6 +87,8 @@ public static partial class WorldBuilder
     {
         var total = Stopwatch.StartNew();
         var spec = LoadSpec();
+        _cfg = spec.Build ?? new WorldBuildSpec();
+        _size = spec.Size;
         var plan = WorldGenerator.Generate(spec);
         var violations = WorldRules.Validate(plan);
         if (violations.Count > 0)
@@ -94,7 +102,7 @@ public static partial class WorldBuilder
         var postProfile = RenderSetup.Apply();
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         WorldMaterials.Prepare();
-        var store = new WorldMeshes.Store(MeshPath);
+        var store = new WorldMeshes.Store(MeshPath, MeshBlobPath);
 
         var heights01 = new float[HeightmapResolution, HeightmapResolution];
         plan.FillHeights(heights01, 1f / plan.MaxHeight);
@@ -144,6 +152,7 @@ public static partial class WorldBuilder
                 GameObjectUtility.SetStaticEditorFlags(t.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
         }
 
+        store.Finish(world);
         EditorSceneManager.SaveScene(scene, ScenePath);
         RegisterScene();
         AssetDatabase.SaveAssets();
@@ -331,7 +340,7 @@ public static partial class WorldBuilder
         go.transform.SetParent(parent, false);
         go.transform.position = new Vector3(plan.Size * 0.5f, plan.SeaLevel, plan.Size * 0.5f);
         float side = plan.Size + 2f * SeaMargin;
-        go.AddComponent<MeshFilter>().sharedMesh = store.Add(WorldMeshes.Quad("Sea", side, side));
+        go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(WorldMeshes.Quad("Sea", side, side));
         var renderer = go.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = WorldMaterials.Water(normals, depthMap, plan.Size, WaterDepthRange);
         renderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -414,7 +423,7 @@ public static partial class WorldBuilder
         var settings = NavMesh.GetSettingsByID(0);
         settings.agentRadius = AgentRadius;
         settings.agentHeight = AgentHeight;
-        settings.agentSlope = WorldRules.WalkSlopeDeg;
+        settings.agentSlope = plan.Rules.WalkSlopeDeg;
         settings.agentClimb = AgentStepHeight;
         settings.overrideVoxelSize = true;
         settings.voxelSize = NavVoxelSize;

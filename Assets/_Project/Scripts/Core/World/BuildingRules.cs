@@ -39,6 +39,7 @@ namespace Game.Core
         // Boxes per building, so a building stays a handful of draw calls after combining by material.
         public static int MaxPieces(BuildingKind kind)
         {
+            kind = BuildingKinds.Family(kind);
             switch (kind)
             {
                 case BuildingKind.House: return 140;
@@ -52,6 +53,7 @@ namespace Game.Core
         // Visual furniture boxes and lamps per building: interior meshes are batched, but the triangles still count.
         public static int MaxDecor(BuildingKind kind)
         {
+            kind = BuildingKinds.Family(kind);
             switch (kind)
             {
                 case BuildingKind.House: return 2200;
@@ -65,7 +67,7 @@ namespace Game.Core
         public const int MaxLamps = 12;
 
         public static int MinExteriorDoors(BuildingKind kind) =>
-            kind == BuildingKind.Shed || kind == BuildingKind.ElevatorStation ? 1 : 2;
+            BuildingKinds.Family(kind) == BuildingKind.Shed || kind == BuildingKind.ElevatorStation ? 1 : 2;
 
         public static List<BuildingViolation> Validate(BuildingPlan plan)
         {
@@ -147,7 +149,8 @@ namespace Game.Core
             if (minDoors >= 2 && sides.Count < 2) Add(BuildingRule.ExteriorDoorSides, "all exterior doors are on one side");
 
             // ---- rooms ----
-            bool needsWindows = plan.Kind == BuildingKind.House || plan.Kind == BuildingKind.Shed;
+            var family = BuildingKinds.Family(plan.Kind);
+            bool needsWindows = family == BuildingKind.House || family == BuildingKind.Shed;
             foreach (var room in plan.Rooms)
             {
                 if (!grid.ReachedInRect(room.MinX, room.MaxX, room.MinZ, room.MaxZ, room.FloorY))

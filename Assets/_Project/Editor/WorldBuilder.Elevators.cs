@@ -69,7 +69,7 @@ public static partial class WorldBuilder
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
-        go.AddComponent<MeshFilter>().sharedMesh = store.Add(batch.ToMesh(name));
+        go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(batch.ToMesh(name));
         var renderer = go.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = material;
         renderer.shadowCastingMode = shadows;

@@ -37,7 +37,7 @@ namespace Game.Tests
         public void WeaponTable_IdsAreUnique_AndTheOtherFourAreUntouched()
         {
             var table = Weapons();
-            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 21, 22, 23, 24 }, table.Weapons.Select(w => w.Id).ToArray());
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 21, 22, 23, 24, 31, 32, 33, 34, 35 }, table.Weapons.Select(w => w.Id).ToArray());
             Assert.AreEqual(40f, table.Find(3).Damage, 1e-4f, "ADR-089: three body shots");
             Assert.AreEqual(AmmoType.Rifle556, table.Find(3).Ammo);
         }

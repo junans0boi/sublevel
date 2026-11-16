@@ -115,7 +115,7 @@ namespace Game.Tests
         public void WeaponData_EachAmmoIsAValidCaliber_AndMatchesAdr054()
         {
             var table = JsonUtility.FromJson<WeaponTable>(File.ReadAllText(DataFolder + "weapons.json"));
-            Assert.AreEqual(5, System.Array.FindAll(table.Weapons, w => !w.IsMelee).Length, "guns (melee weapons: ADR-073)");
+            Assert.AreEqual(21, System.Array.FindAll(table.Weapons, w => !w.IsMelee).Length, "guns: 16 ordinary + 5 supply (ADR-172, ADR-182; melee: ADR-073)");
             foreach (var weapon in table.Weapons) Assert.IsTrue(AmmoNames.IsValid(weapon.Ammo), weapon.Name);
             Assert.AreEqual(AmmoType.Pistol9, table.Find(1).Ammo, "VK-9");
             Assert.AreEqual(AmmoType.Pistol9, table.Find(2).Ammo, "Ordo");

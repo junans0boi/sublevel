@@ -57,6 +57,7 @@ namespace Game.Core
             {
                 Size = spec.Size, SeaLevel = spec.SeaLevel, MaxHeight = spec.MaxHeight,
                 MaxRoadSlopeDeg = spec.MaxRoadSlopeDeg, Seed = spec.Seed,
+                Rules = spec.Rules ?? new WorldRuleSpec(), Build = spec.Build ?? new WorldBuildSpec(),
             };
             var regions = spec.Regions ?? new RegionSpec[0];
             var terrain = new WorldTerrain(spec);

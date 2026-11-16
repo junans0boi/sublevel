@@ -27,7 +27,8 @@ public static partial class WorldBuilder
     const float RockWidth = 2.4f, RockSink = 0.22f;
     // Triangle budget: rocks with LODs cost little far away, so the cap is on the count; the moss set has no LODs
     // (5k-16.5k triangles each), so few of them are placed and they are culled early.
-    const int MaxRocks = 900, MaxSingleLodRocks = 80;
+    static int MaxRocks => Cfg.MaxRocks;
+    static int MaxSingleLodRocks => Cfg.MaxSingleLodRocks;
     const int SingleLodPercent = 12;
     const float FirstLodHeight = 0.8f, LastLodHeight = 0.035f, SingleLodCullHeight = 0.045f;
 
@@ -106,7 +107,7 @@ public static partial class WorldBuilder
             var name = (paved ? "Asphalt" : "Dirt") + (region >= 0 ? "_Region" + region : "_Links");
             var go = new GameObject(name);
             go.transform.SetParent(root, false);
-            go.AddComponent<MeshFilter>().sharedMesh = store.Add(pair.Value.ToMesh("Road_" + name));
+            go.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(pair.Value.ToMesh("Road_" + name));
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = WorldMaterials.Road(paved);
             renderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -259,7 +260,7 @@ public static partial class WorldBuilder
                     Batch(SurfaceFor(kind, piece, style), interior, part.center).Add(part.center, part.size, skipBottom: piece.MinY <= 0.001f);
             // A house's rooms get a plastered ceiling: without it the underside of the roof shows roof tiles and
             // the underside of an upper floor shows floor boards.
-            if (kind == BuildingKind.House && piece.MinY > 1.5f && (piece.Kind == SurfaceKind.Roof || piece.Kind == SurfaceKind.Floor)
+            if (BuildingKinds.Family(kind) == BuildingKind.House && piece.MinY > 1.5f && (piece.Kind == SurfaceKind.Roof || piece.Kind == SurfaceKind.Floor)
                 && size.x > 0.7f && size.z > 0.7f)
                 Batch(WorldMaterials.PlasterInner, true, new Vector3(piece.X, piece.MinY, piece.Z)).Add(new Vector3(piece.X, piece.MinY, piece.Z), new Vector3(size.x - 0.5f, 0.03f, size.z - 0.5f));
 
@@ -312,7 +313,7 @@ public static partial class WorldBuilder
         {
             var part = new GameObject((key.interior ? "Inside_" : "Shell_") + key.material.name + (key.interior ? "_" + key.cell : ""));
             part.transform.SetParent(go.transform, false);
-            part.AddComponent<MeshFilter>().sharedMesh = store.Add(batches[key].ToMesh($"{name}_{part.name}"));
+            part.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(batches[key].ToMesh($"{name}_{part.name}"));
             var renderer = part.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = key.material;
             renderer.shadowCastingMode = key.interior ? ShadowCastingMode.Off : ShadowCastingMode.On;
@@ -452,7 +453,7 @@ public static partial class WorldBuilder
             light.type = LightType.Point;
             light.range = lamp.Range;
             light.intensity = lamp.Intensity;
-            light.color = plan.Kind == BuildingKind.House ? new Color(1f, 0.82f, 0.6f) : new Color(0.92f, 0.96f, 1f);
+            light.color = BuildingKinds.Family(plan.Kind) == BuildingKind.House ? new Color(1f, 0.82f, 0.6f) : new Color(0.92f, 0.96f, 1f);
             light.shadows = LightShadows.None;
             light.lightmapBakeType = LightmapBakeType.Realtime;
             light.enabled = false;
@@ -499,7 +500,7 @@ public static partial class WorldBuilder
             }
         }
 
-        switch (kind)
+        switch (BuildingKinds.Family(kind))
         {
             case BuildingKind.House:
                 switch (piece.Kind)

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    public enum BuildingKind { House, Warehouse, FactoryHall, Shed, ElevatorStation }
+    // The first five keep their numbers (saved plans, tests). The rest are built with the shape of their family until they get
+    // generators of their own (BuildingKinds.Family).
+    public enum BuildingKind { House, Warehouse, FactoryHall, Shed, ElevatorStation, Shop, Villa, Apartment, School, Barracks, Market, Stall, WatchTower }
 
     // What a box is, so the builder can pick a material per surface kind and per building kind.
     public enum SurfaceKind { Floor, WallOuter, WallInner, Roof, Trim, Stairs, Prop }

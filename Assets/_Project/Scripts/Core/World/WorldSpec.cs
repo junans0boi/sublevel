@@ -28,6 +28,42 @@ namespace Game.Core
         public RegionKind KindValue => Enum.TryParse(Kind, true, out RegionKind kind) ? kind : RegionKind.Town;
     }
 
+    // The limits WorldRules checks a plan against (#244: they were constants).
+    [Serializable]
+    public class WorldRuleSpec
+    {
+        public int MinElevators = 3, MaxElevators = 4;   // per region
+        public float MinElevatorSpacing = 80f;
+        public int MinLotsNearElevator = 2;
+        public float LotRange = 60f;                     // buildings to run to straight out of the elevator
+        public float DoorstepRange = 35f;                // ...and at least one of them practically at the door
+        public float MaxLotGroundSlopeDeg = 20f;
+        public float WalkSlopeDeg = 40f;
+        public float MinLandKm2 = 0.5f, MaxLandKm2 = 0.8f;
+    }
+
+    // What the world builder (editor) used to hard-code: caps, far clip and fog, and the terrain map resolutions.
+    [Serializable]
+    public class WorldBuildSpec
+    {
+        public int MaxLootSpawns = 250;
+        public int MaxRocks = 900, MaxSingleLodRocks = 80;
+        public float FarClip = 700f, FogStart = 90f, FogEnd = 640f;
+        public float AlphamapMetersPerPixel = 1f;
+        public float HeightmapMetersPerSample = 1f;
+
+        // Unity wants a power of two (16..4096) for the alphamap and 2^n + 1 (33..4097) for the heightmap.
+        public int AlphamapResolution(float size) => NearestPowerOfTwo(size / AlphamapMetersPerPixel, 16, 4096);
+        public int HeightmapResolution(float size) => NearestPowerOfTwo(size / HeightmapMetersPerSample, 32, 4096) + 1;
+
+        static int NearestPowerOfTwo(float value, int min, int max)
+        {
+            int p = min;
+            while (p < max && value > p * 1.4142135f) p *= 2;
+            return p;
+        }
+    }
+
     // The world as data: world.json is this class (JsonUtility). The generator adds no randomness beyond Seed.
     [Serializable]
     public class WorldSpec
@@ -47,6 +83,8 @@ namespace Game.Core
         public float SpurWidth = 4.5f;
         public float PathWidth = 2.5f;
         public float MaxRoadSlopeDeg = 12f;
+        public WorldRuleSpec Rules = new WorldRuleSpec();
+        public WorldBuildSpec Build = new WorldBuildSpec();
         public RegionSpec[] Regions = new RegionSpec[0];
 
         // Same values as Resources/GameData/world.json (Game.Core cannot read Resources).

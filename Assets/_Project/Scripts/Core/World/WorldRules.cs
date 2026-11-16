@@ -24,22 +24,17 @@ namespace Game.Core
     // Open-world design rules (ADR-050, ADR-052) as checks over a generated plan. Reports, never throws.
     public static class WorldRules
     {
-        public const int MinElevators = 3, MaxElevators = 4;
-        public const float MinElevatorSpacing = 80f;
-        public const int MinLotsNearElevator = 2;
-        public const float LotRange = 60f;                 // buildings to run to straight out of the elevator
-        public const float DoorstepRange = 35f;            // ...and at least one of them practically at the door
         public const float MaxElevatorRoadDistance = 12f;
         public const float MinClearRadius = 8f;
         public const float MinAboveSea = 0.3f;
         public const float FlatTolerance = 0.35f;
-        public const float MaxLotGroundSlopeDeg = 20f;
-        public const float WalkSlopeDeg = 40f;
         public const float WadeDepth = 0.6f;
-        public const float MinLandKm2 = 0.5f, MaxLandKm2 = 0.8f;
         public const float WalkCell = 2f;
         const float PassBlockMargin = 4f;
         const float RoadJoin = 1.5f;
+
+        // The limits come from the plan (world.json); a plan built by hand without them is checked with the defaults.
+        static WorldRuleSpec R(WorldPlan plan) => plan.Rules ?? new WorldRuleSpec();
 
         public static List<WorldViolation> Validate(WorldPlan plan)
         {
@@ -71,16 +66,17 @@ namespace Game.Core
 
         static void Counts(WorldPlan plan, List<WorldViolation> found)
         {
+            var rules = R(plan);
             foreach (var region in plan.Regions)
             {
                 int elevators = 0, lots = 0, points = 0;
                 foreach (var e in plan.Elevators) if (e.Region == region.Index) elevators++;
                 foreach (var l in plan.Lots) if (l.Region == region.Index) lots++;
                 foreach (var p in plan.ConvergencePoints) if (p.Region == region.Index) points++;
-                if (elevators < MinElevators || elevators > MaxElevators)
-                    Add(found, WorldRule.ElevatorCount, $"region {region.Id} has {elevators} elevators, expected {MinElevators}-{MaxElevators}");
-                if (lots < region.Lots || lots < MinLotsNearElevator * MinElevators)
-                    Add(found, WorldRule.LotCount, $"region {region.Id} has {lots} building lots, expected {Math.Max(region.Lots, MinLotsNearElevator * MinElevators)}");
+                if (elevators < rules.MinElevators || elevators > rules.MaxElevators)
+                    Add(found, WorldRule.ElevatorCount, $"region {region.Id} has {elevators} elevators, expected {rules.MinElevators}-{rules.MaxElevators}");
+                if (lots < region.Lots || lots < rules.MinLotsNearElevator * rules.MinElevators)
+                    Add(found, WorldRule.LotCount, $"region {region.Id} has {lots} building lots, expected {Math.Max(region.Lots, rules.MinLotsNearElevator * rules.MinElevators)}");
                 if (points != region.ConvergencePoints)
                     Add(found, WorldRule.ConvergenceCount, $"region {region.Id} has {points} convergence points, expected {region.ConvergencePoints}");
                 bool hasPass = plan.Regions.Count < 2;
@@ -93,6 +89,7 @@ namespace Game.Core
 
         static void Placement(WorldPlan plan, List<WorldViolation> found)
         {
+            var rules = R(plan);
             float sea = plan.SeaLevel;
             bool Inside(float x, float z) => x >= 0f && z >= 0f && x <= plan.Size && z <= plan.Size;
             // Are all these spots dry and level with the pad height?
@@ -115,16 +112,16 @@ namespace Game.Core
                 var e = elevators[i];
                 if (!Inside(e.X, e.Z)) Add(found, WorldRule.InsideMap, e.Name);
                 for (int j = i + 1; j < elevators.Count; j++)
-                    if (Distance(e.X, e.Z, elevators[j].X, elevators[j].Z) < MinElevatorSpacing)
+                    if (Distance(e.X, e.Z, elevators[j].X, elevators[j].Z) < rules.MinElevatorSpacing)
                         Add(found, WorldRule.ElevatorSpacing, $"{e.Name} and {elevators[j].Name}");
                 int near = 0;
                 foreach (var lot in plan.Lots)
-                    if (lot.Distance(e.X, e.Z) <= LotRange) near++;
-                if (near < MinLotsNearElevator)
-                    Add(found, WorldRule.ElevatorNearLots, $"{e.Name} has {near} building lots within {LotRange} m, expected {MinLotsNearElevator}+");
+                    if (lot.Distance(e.X, e.Z) <= rules.LotRange) near++;
+                if (near < rules.MinLotsNearElevator)
+                    Add(found, WorldRule.ElevatorNearLots, $"{e.Name} has {near} building lots within {rules.LotRange} m, expected {rules.MinLotsNearElevator}+");
                 bool doorstep = false;
-                foreach (var lot in plan.Lots) doorstep |= lot.Distance(e.X, e.Z) <= DoorstepRange;
-                if (!doorstep) Add(found, WorldRule.ElevatorDoorstepLot, $"{e.Name} has no building lot within {DoorstepRange} m");
+                foreach (var lot in plan.Lots) doorstep |= lot.Distance(e.X, e.Z) <= rules.DoorstepRange;
+                if (!doorstep) Add(found, WorldRule.ElevatorDoorstepLot, $"{e.Name} has no building lot within {rules.DoorstepRange} m");
                 Pad(e.Name, e.Y, new[] { e.X, e.X + 3f, e.X - 3f, e.X, e.X }, new[] { e.Z, e.Z, e.Z, e.Z + 3f, e.Z - 3f });
             }
 
@@ -146,7 +143,7 @@ namespace Game.Core
                 if (lot.Kind == BuildingKind.ElevatorStation || lot.SizeX < minX - 0.01f || lot.SizeZ < minZ - 0.01f || lot.SizeX > maxX + 0.01f || lot.SizeZ > maxZ + 0.01f)
                     Add(found, WorldRule.LotFootprint, $"{lot.Name}: a {lot.Kind} cannot be built on {lot.SizeX:F1} x {lot.SizeZ:F1} m");
                 Pad(lot.Name, lot.Y, xs, zs);
-                if (lot.GroundSlopeDeg > MaxLotGroundSlopeDeg)
+                if (lot.GroundSlopeDeg > rules.MaxLotGroundSlopeDeg)
                     Add(found, WorldRule.LotGroundSlope, $"{lot.Name} was cut into a {lot.GroundSlopeDeg:F0} degree slope");
                 for (int j = i + 1; j < lots.Count; j++)
                     if (BuildingLot.Overlap(lot, lots[j], 0f)) Add(found, WorldRule.LotOverlap, $"{lot.Name} and {lots[j].Name}");
@@ -309,6 +306,7 @@ namespace Game.Core
 
         static void Ground(WorldPlan plan, List<WorldViolation> found)
         {
+            var rules = R(plan);
             int n = (int)(plan.Size / WalkCell) + 1;
             if (n < 3) return;
             var height = new float[n * n];
@@ -317,7 +315,7 @@ namespace Game.Core
                     height[gz * n + gx] = plan.Height(gx * WalkCell, gz * WalkCell);
 
             int land = 0;
-            float maxTan = (float)Math.Tan(WalkSlopeDeg * Math.PI / 180.0);
+            float maxTan = (float)Math.Tan(rules.WalkSlopeDeg * Math.PI / 180.0);
             var walkable = new bool[n * n];
             for (int gz = 0; gz < n; gz++)
                 for (int gx = 0; gx < n; gx++)
@@ -331,8 +329,8 @@ namespace Game.Core
                     walkable[gz * n + gx] = sx * sx + sz * sz <= maxTan * maxTan;
                 }
             float km2 = land * WalkCell * WalkCell / 1000000f;
-            if (km2 < MinLandKm2 || km2 > MaxLandKm2)
-                Add(found, WorldRule.LandArea, $"{km2:F2} km2 of land, expected {MinLandKm2}-{MaxLandKm2}");
+            if (km2 < rules.MinLandKm2 || km2 > rules.MaxLandKm2)
+                Add(found, WorldRule.LandArea, $"{km2:F2} km2 of land, expected {rules.MinLandKm2}-{rules.MaxLandKm2}");
 
             var label = new int[n * n];
             var queue = new int[n * n];

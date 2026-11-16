@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Game.Core;
+using Game.Gameplay;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -49,20 +51,25 @@ public static class WorldMeshes
         }
     }
 
-    // Generated meshes live in one asset file instead of in the scene, which would otherwise carry every vertex as text.
-    // (The project serializes assets as YAML, so every vertex byte is two hex characters in this file: the vertex format
-    // of BoxBatch is therefore compact and hidden faces are left out, see BoxBatch.)
+    // Generated meshes live outside the scene (which would otherwise carry every vertex as text). Meshes added with Add go
+    // into one YAML asset (the few vegetation meshes that components reference directly). Meshes added with AddBlob, the
+    // ones that only fill MeshFilters (buildings, roads, elevators, sea), go into World_Meshes.bytes (#240): Finish writes
+    // that file and empties those filters, and WorldMeshBank builds the meshes again when the scene loads.
+    // (The project serializes assets as YAML, so every vertex byte in an asset is two hex characters; ADR-160.)
     public sealed class Store
     {
-        readonly string _path;
+        readonly string _path, _blobPath;
         bool _created;
+        readonly List<Mesh> _blobMeshes = new List<Mesh>();
 
         public int Count { get; private set; }
         public long Triangles { get; private set; }
+        public int BlobCount => _blobMeshes.Count;
 
-        public Store(string path)
+        public Store(string path, string blobPath)
         {
             _path = path;
+            _blobPath = blobPath;
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
         }
 
@@ -77,6 +84,73 @@ public static class WorldMeshes
             Count++;
             for (int i = 0; i < mesh.subMeshCount; i++) Triangles += mesh.GetIndexCount(i) / 3;
             return mesh;
+        }
+
+        // For a mesh that is only ever assigned to a MeshFilter below the root given to Finish.
+        public Mesh AddBlob(Mesh mesh)
+        {
+            _blobMeshes.Add(mesh);
+            Count++;
+            for (int i = 0; i < mesh.subMeshCount; i++) Triangles += mesh.GetIndexCount(i) / 3;
+            return mesh;
+        }
+
+        // Writes the blob file, empties the filters that use its meshes and puts a WorldMeshBank on `root`. Call just before saving the scene.
+        public void Finish(GameObject root)
+        {
+            var index = new Dictionary<Mesh, int>();
+            var records = new List<MeshRecord>(_blobMeshes.Count);
+            foreach (var mesh in _blobMeshes) { index[mesh] = records.Count; records.Add(ToRecord(mesh)); }
+            var bytes = WorldMeshBlob.Write(records);
+            System.IO.File.WriteAllBytes(_blobPath, bytes);
+            AssetDatabase.ImportAsset(_blobPath, ImportAssetOptions.ForceSynchronousImport);
+            var blob = AssetDatabase.LoadAssetAtPath<TextAsset>(_blobPath);
+
+            var filters = new List<MeshFilter>();
+            var meshIndex = new List<int>();
+            foreach (var f in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (f.sharedMesh == null || !index.TryGetValue(f.sharedMesh, out int i)) continue;
+                filters.Add(f); meshIndex.Add(i);
+                f.sharedMesh = null;
+            }
+            var bank = root.GetComponent<WorldMeshBank>() ?? root.AddComponent<WorldMeshBank>();
+            bank.Set(blob, filters.ToArray(), meshIndex.ToArray());
+            Debug.Log($"[WorldMeshes] {records.Count} meshes in {_blobPath}: {bytes.Length / 1048576.0:F1} MB, {filters.Count} mesh filters left empty for WorldMeshBank");
+        }
+
+        static MeshRecord ToRecord(Mesh mesh)
+        {
+            var attrs = mesh.GetVertexAttributes();
+            var record = new MeshRecord
+            {
+                Name = mesh.name, VertexCount = mesh.vertexCount, Index32 = mesh.indexFormat == IndexFormat.UInt32,
+                Attributes = new int[attrs.Length * 4],
+            };
+            int streams = 0;
+            for (int i = 0; i < attrs.Length; i++)
+            {
+                record.Attributes[i * 4] = (int)attrs[i].attribute; record.Attributes[i * 4 + 1] = (int)attrs[i].format;
+                record.Attributes[i * 4 + 2] = attrs[i].dimension; record.Attributes[i * 4 + 3] = attrs[i].stream;
+                streams = Mathf.Max(streams, attrs[i].stream + 1);
+            }
+            using (var data = Mesh.AcquireReadOnlyMeshData(mesh))
+            {
+                var d = data[0];
+                record.Streams = new byte[streams][];
+                for (int s = 0; s < streams; s++) record.Streams[s] = d.GetVertexData<byte>(s).ToArray();
+                record.Indices = d.GetIndexData<byte>().ToArray();
+            }
+            record.SubMeshes = new int[mesh.subMeshCount * 6];
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                var sub = mesh.GetSubMesh(i);
+                record.SubMeshes[i * 6] = sub.indexStart; record.SubMeshes[i * 6 + 1] = sub.indexCount; record.SubMeshes[i * 6 + 2] = (int)sub.topology;
+                record.SubMeshes[i * 6 + 3] = sub.baseVertex; record.SubMeshes[i * 6 + 4] = sub.firstVertex; record.SubMeshes[i * 6 + 5] = sub.vertexCount;
+            }
+            var b = mesh.bounds;
+            record.Bounds = new[] { b.center.x, b.center.y, b.center.z, b.size.x, b.size.y, b.size.z };
+            return record;
         }
     }
 

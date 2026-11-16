@@ -154,6 +154,8 @@ namespace Game.Core
     {
         public float Size, SeaLevel, MaxHeight, MaxRoadSlopeDeg;
         public int Seed;
+        public WorldRuleSpec Rules = new WorldRuleSpec();   // the limits WorldRules checks (null = defaults)
+        public WorldBuildSpec Build = new WorldBuildSpec();
         public List<WorldRegion> Regions = new List<WorldRegion>();
         public List<WorldPass> Passes = new List<WorldPass>();
         public List<WorldRoad> Roads = new List<WorldRoad>();

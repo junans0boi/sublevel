@@ -261,7 +261,7 @@ namespace Game.Tests
         {
             var plan = Fresh();
             var e = plan.Elevators[0];
-            plan.Lots.RemoveAll(l => l.Distance(e.X, e.Z) <= WorldRules.DoorstepRange);
+            plan.Lots.RemoveAll(l => l.Distance(e.X, e.Z) <= plan.Rules.DoorstepRange);
             Assert.IsTrue(Violates(plan, WorldRule.ElevatorDoorstepLot));
         }
 
@@ -327,7 +327,7 @@ namespace Game.Tests
         public void LotCutIntoASteepSlope_IsAViolation()
         {
             var plan = Fresh();
-            plan.Lots[0].GroundSlopeDeg = WorldRules.MaxLotGroundSlopeDeg + 5f;
+            plan.Lots[0].GroundSlopeDeg = plan.Rules.MaxLotGroundSlopeDeg + 5f;
             Assert.IsTrue(Violates(plan, WorldRule.LotGroundSlope));
         }
 

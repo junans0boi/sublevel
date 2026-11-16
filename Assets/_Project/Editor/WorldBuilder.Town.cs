@@ -17,7 +17,8 @@ public static partial class WorldBuilder
         var b = placed.Plan;
         int region = lot.Region;
         float hx = b.Width * 0.5f, hz = b.Depth * 0.5f;
-        bool house = lot.Kind == BuildingKind.House, shed = lot.Kind == BuildingKind.Shed;
+        var family = BuildingKinds.Family(lot.Kind);
+        bool house = family == BuildingKind.House, shed = family == BuildingKind.Shed;
         uint style = Hash(seed, 7);
         int accent = (int)(Hash((int)h, 91) % 5u);
         bool lightTrim = R(2) < 0.65f;

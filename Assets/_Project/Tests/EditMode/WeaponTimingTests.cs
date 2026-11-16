@@ -58,9 +58,10 @@ namespace Game.Tests
         [Test]
         public void Shotgun_LoadsOneShellAtATime_AndAShotStopsIt()
         {
-            var table = Weapons();
-            var shotgun = table.Find(Shotgun);
-            var l = With(table, Shotgun, 2, 10);
+            // No shipped weapon loads shell by shell any more (ADR-182): the rule is kept, tested on a made-up tube gun.
+            var shotgun = new WeaponDef { Id = 90, Name = "tube", Category = WeaponCategory.Primary, Ammo = AmmoType.Shotgun12, FireInterval = 0.8f, MagSize = 6, ReloadTime = 1f, ShellReloadSeconds = 0.5f };
+            var table = new WeaponTable { Weapons = new[] { shotgun } };
+            var l = With(table, 90, 2, 10);
             Assert.IsTrue(l.TryStartReload(0));
             l.Tick(shotgun.ShellReloadSeconds + 0.01);
             Assert.AreEqual(3, l.MagInSlot(0), "one shell");

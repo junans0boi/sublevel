@@ -310,10 +310,11 @@ namespace Game.Tests
         [Test]
         public void ShellLoadedShotgun_IgnoresAMagazineFactor()
         {
-            var l = new Loadout(Weapons());
-            l.AddWeapon(Shotgun, 0);
-            int slot = l.WeaponInSlot(0) == Shotgun ? 0 : 1;
-            var w = Weapons().Find(Shotgun);
+            // No shipped weapon loads shell by shell any more (ADR-182): the rule is kept, tested on a made-up tube gun.
+            var w = new WeaponDef { Id = 90, Name = "tube", Category = WeaponCategory.Primary, Ammo = AmmoType.Shotgun12, FireInterval = 0.8f, MagSize = 6, ReloadTime = 1f, ShellReloadSeconds = 0.5f };
+            var l = new Loadout(new WeaponTable { Weapons = new[] { w } });
+            l.AddWeapon(90, 0);
+            int slot = 0;
             l.SetSlotMods(slot, 1.33f, 1.1f);
             Assert.AreEqual(w.MagSize, l.MagCapacity(slot));
         }

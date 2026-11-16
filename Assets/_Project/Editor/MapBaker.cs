@@ -175,7 +175,8 @@ public static class MapBaker
         foreach (var lot in plan.Lots)
         {
             if (lot.Kind == BuildingKind.ElevatorStation) continue;
-            bool hall = lot.Kind == BuildingKind.Warehouse || lot.Kind == BuildingKind.FactoryHall;
+            var family = BuildingKinds.Family(lot.Kind);
+            bool hall = family == BuildingKind.Warehouse || family == BuildingKind.FactoryHall;
             DrawFootprint(pixels, plan, lot, hall ? HallFill : BuildingFill);
         }
         foreach (var elevator in plan.Elevators)

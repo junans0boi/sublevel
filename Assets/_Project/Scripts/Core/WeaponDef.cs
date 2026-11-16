@@ -72,6 +72,11 @@ namespace Game.Core
         // HeadFactor from above, plus these two. They have no magazine, calibre or spread.
         public float ConeDeg = 60f;       // full opening angle of the swing's cone
         public MeleeSwingStyle Swing;
+        // Stopping power (ADR-182): 1-10, how hard a hit shakes the victim's aim and slows them (WeaponStopping).
+        // 0 = none (melee, legacy data).
+        public int Stopping;
+        // Only found in supply crates, never in ordinary loot (ADR-172, ADR-182).
+        public bool SupplyOnly;
 
         public bool IsMelee => Category == WeaponCategory.Melee;
         public bool ReloadsByShell => ShellReloadSeconds > 0f;

@@ -28,6 +28,7 @@ namespace Game.Core
 
         public static void FootprintLimits(BuildingKind kind, out float minWidth, out float minDepth, out float maxWidth, out float maxDepth)
         {
+            kind = BuildingKinds.Family(kind);
             switch (kind)
             {
                 case BuildingKind.House: minWidth = 8f; minDepth = 7f; maxWidth = 18f; maxDepth = 14f; break;
@@ -42,7 +43,7 @@ namespace Game.Core
         public static BuildingPlan Generate(BuildingKind kind, float width, float depth, int seed)
         {
             var d = new Draft(kind, width, depth, seed);
-            switch (kind)
+            switch (BuildingKinds.Family(kind))
             {
                 case BuildingKind.House: House(d); break;
                 case BuildingKind.Warehouse: Warehouse(d); break;
@@ -787,8 +788,8 @@ namespace Game.Core
                 var piece = Plan.Pieces[Plan.Pieces.Count - 1];
                 piece.Facing = facing;
                 Plan.Pieces[Plan.Pieces.Count - 1] = piece;
-                Furniture.Build(prop, name + _props, r.X0, r.X1, r.Z0, r.Z1, y0, height, facing, _props, Plan.Kind != BuildingKind.House,
-                    Plan.Decor, out float lootX, out float lootZ, Plan.Kind == BuildingKind.House && !WindowNear(r));
+                Furniture.Build(prop, name + _props, r.X0, r.X1, r.Z0, r.Z1, y0, height, facing, _props, BuildingKinds.Family(Plan.Kind) != BuildingKind.House,
+                    Plan.Decor, out float lootX, out float lootZ, BuildingKinds.Family(Plan.Kind) == BuildingKind.House && !WindowNear(r));
                 _props++;
                 Blockers[level].Add(r);
                 if (height <= LootTopMax && Furniture.HoldsLoot(prop))
