@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>로비 시안 vs 구현</title>
+<link rel="stylesheet" href="ui.css"><style>body{background:#06090d;color:#e6ecf2;font:16px system-ui;margin:0;padding:16px}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}figure{margin:0}figcaption{padding:6px 0;color:#98a5b3}img{width:100%;display:block}.fit{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden}</style></head>
+<body><h1>로비: 확정 시안(왼쪽, 라이브) vs Unity 구현 캡처(오른쪽, 1920×1080)</h1><p>같은 상태끼리. 수치 대조표는 LOBBY_COMPARE.md.</p><div id="list"></div>
+<script src="ui.js"></script><script src="adopted.js"></script><script>
+(function(){const U=UI,L=document.getElementById('list');
+const pairs=[['lobby-squad','lobby_squad','스쿼드 대기(파티장)'],['lobby-solo','lobby_solo','솔로'],['lobby-search','lobby_search','매칭 중'],['lobby-member','lobby_member','파티원']];
+pairs.forEach(p=>{const e=U.AENTRIES.find(x=>x.id===p[0]);const row=document.createElement('div');row.className='row';
+row.innerHTML='<figure><figcaption>시안 · '+p[2]+'</figcaption><div class="fit"></div></figure><figure><figcaption>구현 · '+p[2]+'</figcaption><img src="../../bible/img/ui/'+p[1]+'_1920x1080.png"></figure>';
+L.appendChild(row);U.mountEntry(row.querySelector('.fit'),e,'b','dark',true);});
+function refit(){document.querySelectorAll('.fit').forEach(f=>U.fit(f));}addEventListener('resize',refit);setTimeout(refit,80);})();
+</script></body></html>

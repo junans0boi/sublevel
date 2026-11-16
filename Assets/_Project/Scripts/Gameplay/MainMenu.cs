@@ -87,6 +87,7 @@ namespace Game.Gameplay
 
         void Update()
         {
+            if (_lobbyPanel != null && !IsLoading && _main != null && _main.activeSelf) _lobbyPanel.Tick(Time.unscaledDeltaTime);
             var keyboard = Keyboard.current;
             if (SettingsScreen.KeyCaptureActive) return; // Esc while choosing a key only cancels that
             // Esc in the settings = 뒤로 가기 (drops unapplied changes).
@@ -224,11 +225,8 @@ namespace Game.Gameplay
             _credits.SetActive(false);
             _lobbyScreen = LobbyScreen.Build(this, _root.transform);
 
-            var hint = UiKit.Rect("ControlsHint", _root.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 352f), new Vector2(1400f, 30f));
-            _hint = hint.gameObject;
-            UiKit.Label(hint, ControlsHint, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
-            var version = UiKit.Rect("Version", _root.transform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-24f, 20f), new Vector2(400f, 26f));
-            UiKit.Label(version, "v" + Application.version, 18, UiKit.TextDim, TextAnchor.MiddleRight);
+            var version = UiKit.Rect("Version", _root.transform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(24f, 20f), new Vector2(400f, 26f));
+            UiKit.Label(version, "v" + Application.version, 18, UiKit.TextDim, TextAnchor.MiddleLeft);
         }
 
         void BuildMain(Transform parent)
@@ -236,8 +234,6 @@ namespace Game.Gameplay
             // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
             _lobbyPanel = LobbyPanel.Build(this, parent, StartTraining, ShowCustom, ShowSettings, ShowCredits, Quit);
             _main = _lobbyPanel.Root.gameObject;
-            var studio = UiKit.Rect("Studio", _lobbyPanel.Root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -78f), new Vector2(1000f, 30f));
-            UiKit.Label(studio, Studio, 20, UiKit.TextDim, TextAnchor.MiddleCenter);
 
             // 커스텀 모드: the host/join entries of the room lobby.
             var panel = UiKit.CenteredPanel("Custom", parent, MainWidth);

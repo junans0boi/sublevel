@@ -17,7 +17,7 @@ namespace Game.Tests
     [Explicit, Category("Capture")]
     public class UiCaptureTests
     {
-        static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 1920, 1200 }, new[] { 3440, 1440 } };
+        static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 1366, 768 }, new[] { 1920, 1200 }, new[] { 3440, 1440 } };
 
         static string Folder()
         {
@@ -50,6 +50,35 @@ namespace Game.Tests
                 yield return UiShot.Save(Path.Combine(folder, name + "_" + s[0] + "x" + s[1] + ".png"), s[0], s[1]);
         }
 
+        // Every element's rect in stage pixels (top-left origin) with its text, to compare against the measured mockup.
+        static void DumpRects(LobbyPanel panel, string path)
+        {
+            var sb = new System.Text.StringBuilder();
+            var stage = panel.Stage;
+            var corners = new Vector3[4];
+            foreach (var r in stage.GetComponentsInChildren<RectTransform>(false))
+            {
+                if (r == stage) continue;
+                r.GetWorldCorners(corners);
+                var tl = stage.InverseTransformPoint(corners[1]); var br = stage.InverseTransformPoint(corners[3]);
+                float x = tl.x + 960f, y = 540f - tl.y, w = br.x - tl.x, h = tl.y - br.y;
+                var text = r.GetComponent<UnityEngine.UI.Text>();
+                var img = r.GetComponent<UnityEngine.UI.Image>();
+                string col = text != null ? ColorUtility.ToHtmlStringRGBA(text.color) : img != null ? ColorUtility.ToHtmlStringRGBA(img.color) : "";
+                // Text: the glyph box (preferred size placed by the alignment), which is what the mockup's text rects measure.
+                if (text != null)
+                {
+                    float pw = Mathf.Min(text.preferredWidth, text.horizontalOverflow == HorizontalWrapMode.Wrap ? w : float.MaxValue), ph = text.preferredHeight;
+                    string a = text.alignment.ToString();
+                    float gx = a.EndsWith("Left") ? x : a.EndsWith("Right") ? x + w - pw : x + (w - pw) * 0.5f;
+                    float gy = a.StartsWith("Upper") ? y : a.StartsWith("Lower") ? y + h - ph : y + (h - ph) * 0.5f;
+                    x = gx; y = gy; w = pw; h = ph;
+                }
+                sb.AppendLine(string.Join("|", r.name, Mathf.Round(x), Mathf.Round(y), Mathf.Round(w), Mathf.Round(h), text != null ? text.text.Replace("\n", " ") : "", text != null ? text.fontSize + "/" + text.fontStyle : "", col));
+            }
+            File.WriteAllText(path, sb.ToString());
+        }
+
         [UnityTest, Timeout(240000)]
         public IEnumerator Lobby_Solo_And_Squad_AndTheOtherScreens()
         {
@@ -62,14 +91,28 @@ namespace Game.Tests
             StringAssert.Contains("솔로", panel.LedText);
             yield return Shots(folder, "lobby_solo");
 
-            panel.Party.SetMode(LobbyPanel.SelfId, TeamMode.Squad);
-            panel.Refresh();
+            // Squad as leader: 도윤 ready, 서아 not yet (the mockup's sample party).
+            var squad = new PartyLobby(0, "해무"); squad.Join(2, "도윤"); squad.Join(3, "서아"); squad.SetReady(2, true);
+            panel.SetParty(squad, 0);
             StringAssert.Contains("스쿼드", panel.LedText);
-            StringAssert.Contains("팀 규칙", panel.ReasonText, "squad cannot start yet and says why");
+            Assert.AreEqual("파티 시작", panel.StatusLabel);
+            StringAssert.Contains("서아 님이 준비 중입니다", panel.ReasonText);
+            DumpRects(panel, Path.Combine(folder, "lobby_squad_rects.txt"));
             yield return Shots(folder, "lobby_squad");
 
-            panel.Party.SetMode(LobbyPanel.SelfId, TeamMode.Solo);
-            panel.Refresh();
+            // Matching.
+            squad.SetReady(3, true); squad.Start(0);
+            panel.SetParty(squad, 0);
+            StringAssert.Contains("매칭 취소", panel.StatusLabel);
+            yield return Shots(folder, "lobby_search");
+
+            // Member view: 서아 leads, I (해무) have not readied.
+            var member = new PartyLobby(10, "서아"); member.Join(0, "해무"); member.Join(2, "도윤"); member.SetReady(2, true);
+            panel.SetParty(member, 0);
+            Assert.AreEqual("준비", panel.StatusLabel);
+            yield return Shots(folder, "lobby_member");
+
+            panel.SetParty(new PartyLobby(0, "해무"), 0);
             menu.ShowCustom();
             Assert.IsTrue(menu.CustomShown);
             yield return Shots(folder, "custom");
