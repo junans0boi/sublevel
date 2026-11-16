@@ -775,6 +775,12 @@ namespace Game.AI
 
             int skip = Time.time < _skipPassUntil ? _skipPass : -1;
             // A warning on the region it stands in: leave after a reaction delay by difficulty, before the front comes (ADR-245).
+            if (TryKeyElevator(zones, at, out target))
+            {
+                urgent = true;
+                _goalPass = -1;
+                return ZoneGoal.Elevator;
+            }
             if (TryWarnedLeaveTarget(zones, at, out target, out urgent))
             {
                 _warnedLeaves++;
@@ -799,7 +805,8 @@ namespace Game.AI
                 if (_escapeOnward) target = zones.RegionCentre(toRegion);
                 return ZoneGoal.Escape;
             }
-            int final = zones.FinalRegion;
+            // A player learns the final region only when enough regions are warned or lost (M7); the bot reads the same map.
+            int final = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
             if (final < 0) return ZoneGoal.None;
             if (zones.RegionIndexAt(at) != final)
             {
@@ -809,6 +816,74 @@ namespace Game.AI
             // Only the final region is left: nobody may hide until the end, the bots go looking for each other.
             if (zones.OnlyFinalRegionLeft && TryNearestEnemy(at, out target)) return ZoneGoal.Hunt;
             return ZoneGoal.None;
+        }
+
+        // ---- Key elevator (ADR-246): walk to a station of the region, insert the key, wait for company, pick a destination ----
+        public static int KeyInsertOk, KeyInsertFail, KeyRides;   // statistics for the success rate
+        const float KeyBoardWaitSeconds = 6f;   // doors open 30 s: a few seconds for the team to step in, then close
+        const float KeyStationMaxMeters = 400f;
+        int _keyStation = -1, _keyDecision;
+        float _keyAt, _keyTryAt;
+
+        bool TryKeyElevator(PollutionDirector zones, Vector3 at, out Vector3 target)
+        {
+            target = default;
+            var net = KeyElevatorNet.Instance;
+            var rides = ElevatorRides.Instance;
+            if (_keys == null || net == null || rides == null || !rides.Running) return false;
+            var sys = net.System;
+            if (_keyStation >= 0)
+            {
+                if (sys == null || _keyStation >= sys.Count || sys.Station(_keyStation).HolderId != _self.ObjectId) { _keyStation = -1; return false; }
+                var st = sys.Station(_keyStation);
+                target = rides.StationSpawn(_keyStation);
+                switch (st.Phase)
+                {
+                    case KeyPhase.DoorOpen:
+                        if (Time.time - _keyAt >= KeyBoardWaitSeconds) net.ServerClose(_self);
+                        return true;
+                    case KeyPhase.Selecting:
+                    {
+                        var states = zones.States;
+                        int from = sys.RegionOf(_keyStation);
+                        int known = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
+                        int dest = KeyElevatorTravel.BotDestination(from, states, known);
+                        if (dest >= 0 && net.ServerSelect(_self, dest)) KeyRides++;
+                        return true;
+                    }
+                    default: _keyStation = -1; return false;
+                }
+            }
+            if (_keys.Keys.Value <= 0 || !_self.Standing) return false;
+            int own = zones.RegionIndexAt(at);
+            if (own < 0 || !(zones.StateOf(own) == ZoneState.Warning || zones.IsDoomed(at))) return false;
+            if (_keyDecision == 0) _keyDecision = BotPollutionPlan.WantsKey(_level, unchecked(_botIndex * 7919 + _self.ObjectId)) ? 1 : -1;
+            if (_keyDecision < 0) return false;
+            int best = -1;
+            float bestMeters = KeyStationMaxMeters;
+            for (int i = 0; i < rides.StationCount; i++)
+            {
+                if (rides.RegionOfStation(i) != own) continue;
+                float m = Flat(rides.StationSpawn(i) - at);
+                if (m < bestMeters) { bestMeters = m; best = i; }
+            }
+            if (best < 0) return false;
+            target = rides.StationSpawn(best);
+            if (rides.StationAt(at) == best && Time.time >= _keyTryAt)
+            {
+                _keyTryAt = Time.time + 1f;
+                if (net.ServerInsert(_self, best)) { _keyStation = best; _keyAt = Time.time; KeyInsertOk++; }
+                else KeyInsertFail++;
+            }
+            return true;
+        }
+
+        // How many regions are warned or lost (what a player can read off the map).
+        static int KnownRegions(PollutionDirector zones)
+        {
+            int n = 0;
+            for (int r = 0; r < zones.RegionCount; r++) if (zones.StateOf(r) != ZoneState.Safe) n++;
+            return n;
         }
 
         // Counts the legs this bot started because of a warning, for the statistics (BotStats).

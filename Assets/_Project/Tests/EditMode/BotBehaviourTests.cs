@@ -67,5 +67,17 @@ namespace Game.Tests
             Assert.IsTrue(BotPollutionPlan.KnowsFinal(4, 6));
             Assert.AreEqual(2, BotPollutionPlan.KnownFinalThreshold(3), "slice with fewer regions");
         }
+
+        [TestCase(BotDifficulty.Easy, 0.5f)]
+        [TestCase(BotDifficulty.Normal, 0.8f)]
+        [TestCase(BotDifficulty.Hard, 1f)]
+        public void KeyUse_ShareFollowsTheDifficultyChance(BotDifficulty level, float chance)
+        {
+            int use = 0;
+            const int bots = 20000;
+            for (int s = 0; s < bots; s++) if (BotPollutionPlan.WantsKey(level, s)) use++;
+            Assert.AreEqual(chance, use / (float)bots, 0.02f);
+            Assert.AreEqual(BotPollutionPlan.WantsKey(level, 5), BotPollutionPlan.WantsKey(level, 5), "fixed per bot");
+        }
     }
 }

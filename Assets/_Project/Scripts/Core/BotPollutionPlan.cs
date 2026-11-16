@@ -24,6 +24,13 @@ namespace Game.Core
             return secondsToConfirm <= MinimumWalkSeconds || sinceWarning >= ReactionSeconds(level, botSeed);
         }
 
+        // Chance that a bot with a key and a warning on its region uses the key (S8-A9 KeyUseChance; the dial that tunes the key
+        // dropout toward the simulation's 25-28%). Fixed per bot.
+        public static float KeyUseChance(BotDifficulty level) => level == BotDifficulty.Easy ? 0.5f : level == BotDifficulty.Hard ? 1f : 0.8f;
+
+        public static bool WantsKey(BotDifficulty level, int botSeed) =>
+            new Random(unchecked(botSeed * 197 + 3)).NextDouble() < KeyUseChance(level);
+
         // The final region is known to a player once this many regions are warned or contaminated: ceil(2/3 of the regions) (M7).
         public static int KnownFinalThreshold(int regionCount) => Math.Max(1, (int)Math.Ceiling(regionCount * 2.0 / 3.0));
 

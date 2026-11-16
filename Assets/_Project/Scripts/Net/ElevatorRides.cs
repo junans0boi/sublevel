@@ -168,6 +168,7 @@ namespace Game.Net
             return -1;
         }
 
+        public Vector3 StationSpawn(int station) => _doors != null && station >= 0 && station < _doors.Sites.Count ? _doors.Sites[station].Spawn : Vector3.zero;
         public int StationCount => _doors != null ? _doors.Sites.Count : 0;
         public int RegionOfStation(int station) => _doors != null && station >= 0 && station < _doors.Sites.Count ? _doors.Sites[station].Region : -1;
 
