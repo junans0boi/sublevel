@@ -542,6 +542,46 @@ public static class VehicleBuilder
         EditorApplication.Exit(0);
     }
 
+    // ADR-201 probe (nothing is saved): re-place the World's props in memory and log how far each stands from the ground.
+    // tools/unity.sh run VehicleBuilder.MeasureProps -> Logs/run-VehicleBuilder_MeasureProps.log
+    public static void MeasureProps()
+    {
+        try
+        {
+            EditorSceneManager.OpenScene(WorldBuilder.ScenePath, OpenSceneMode.Single);
+            var old = GameObject.Find(PropRootName);
+            if (old != null) Object.DestroyImmediate(old);
+            var plan = WorldGenerator.Generate(LoadWorldSpec());
+            var terrain = Object.FindAnyObjectByType<Terrain>();
+            Func<float, float, float> height = (x, z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
+            int n = PlaceProps(plan, height, new List<ParkingSpot>());
+            float worst = 0f; int wrecks = 0;
+            foreach (Transform t in GameObject.Find(PropRootName).transform)
+            {
+                var mf = t.GetComponentInChildren<MeshFilter>();
+                float localMin = mf != null ? mf.sharedMesh.bounds.min.y : float.NaN;
+                if (t.name.Contains("_Wreck"))
+                {
+                    wrecks++;
+                    var b = t.GetComponentInChildren<MeshRenderer>().bounds;
+                    Debug.Log($"[MeasureProps] {t.name} wreck localMinY {localMin:F3} boundsMin-ground {b.min.y - height(b.center.x, b.center.z):F3}");
+                    continue;
+                }
+                float e = 0f;
+                foreach (var (l, r) in new[] { (0f, 0f), (VehicleParking.HalfLength, 0f), (-VehicleParking.HalfLength, 0f), (0f, VehicleParking.HalfWidth), (0f, -VehicleParking.HalfWidth) })
+                {
+                    var w = t.TransformPoint(new Vector3(r, 0f, l));
+                    e = Mathf.Max(e, Mathf.Abs(w.y - height(w.x, w.z)));
+                }
+                worst = Mathf.Max(worst, e);
+                Debug.Log($"[MeasureProps] {t.name} localMinY {localMin:F3} pitch/roll {t.eulerAngles.x:F1}/{t.eulerAngles.z:F1} worstFootErr {e:F3}");
+            }
+            Debug.Log($"[MeasureProps] props {n} (wrecks {wrecks}) worst foot error {worst:F3} m");
+        }
+        catch (Exception e) { Debug.LogException(e); EditorApplication.Exit(1); return; }
+        EditorApplication.Exit(0);
+    }
+
     // Prefabs only (no scenes): tools/unity.sh run VehicleBuilder.BuildPrefabsOnly
     public static void BuildPrefabsOnly()
     {
