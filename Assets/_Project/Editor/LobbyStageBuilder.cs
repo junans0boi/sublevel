@@ -94,7 +94,8 @@ public static class LobbyStageBuilder
             var r = go.AddComponent<MeshRenderer>();
             r.sharedMaterial = m;
             r.shadowCastingMode = shadows;
-            go.isStatic = true;
+            go.isStatic = false; // static batching / baked-GI paths add nothing here and only player-build risk
+            r.receiveGI = ReceiveGI.LightProbes; // ambient from the flat ambient, never from lightmaps that were not baked
         }
         // Wall: a plain URP Lit with a hand-made tileable noise (value noise, our own) so the steel is not one flat colour.
         // (The game's concrete on tiled boxes shows facets with the pipeline's per-vertex lights, so it is not used here.)
