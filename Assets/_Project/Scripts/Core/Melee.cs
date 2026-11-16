@@ -11,12 +11,12 @@ namespace Game.Core
         public static MeleeRules Current = new MeleeRules();
 
         public float PunchDamage = 12f;
-        public float PunchRange = 1.6f;     // metres from the eyes to the target's chest (ADR-218)
+        public float PunchRange = 1.35f;     // metres from the eyes to the target's chest (ADR-218)
         public float PunchConeDeg = 60f;    // full opening angle of the cone around where the punch is aimed
         public float PunchInterval = 0.55f; // seconds between punches
         public float HeadMultiplier = 1.5f; // a punch that lands in the head zone
         public float ChestFraction = 0.61f; // the chest's height as a share of the target's current height
-        public float BotPunchMeters = 1.5f; // an unarmed bot punches an enemy this close (feet to feet)
+        public float BotPunchMeters = 1.2f; // an unarmed bot punches an enemy this close (feet to feet)
         // A bot with a melee weapon swings at an enemy within the weapon's reach plus this (feet to feet), and runs
         // at one that is within BotChargeMeters instead of backing off.
         public float BotReachMargin = 0.2f;

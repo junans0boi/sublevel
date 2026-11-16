@@ -13,7 +13,7 @@ namespace Game.Tests
         public void Defaults_MatchTheDecision()
         {
             Assert.AreEqual(12f, Rules.PunchDamage, 1e-5f);
-            Assert.AreEqual(1.6f, Rules.PunchRange, 1e-5f);
+            Assert.AreEqual(1.35f, Rules.PunchRange, 1e-5f);
             Assert.AreEqual(60f, Rules.PunchConeDeg, 1e-5f);
             Assert.AreEqual(0.55f, Rules.PunchInterval, 1e-5f);
             Assert.AreEqual(1.5f, Rules.HeadMultiplier, 1e-5f);
