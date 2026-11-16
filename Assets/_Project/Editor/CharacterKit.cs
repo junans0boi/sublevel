@@ -43,7 +43,7 @@ public static class CharacterKit
         new WeaponModel { Id = 15, File = "Roster/Wpn15_Obelisk.fbx", Length = 1.25f, MuzzleAlongMinusX = true, Forward = 0.3f, Up = 0.03f },  // Obelisk (provisional fit, ADR-217)
         new WeaponModel { Id = 16, File = "Roster/Wpn16_Duo.fbx", Length = 0.85f, MuzzleAlongMinusX = true, Forward = 0.28f, Up = 0.03f },  // Duo (provisional fit, ADR-217)
         new WeaponModel { Id = 31, File = "Roster/Wpn31_Bastion.fbx", Length = 1.05f, MuzzleAlongMinusX = true, Forward = 0.22f, Up = 0.02f },  // Bastion (provisional fit, ADR-217)
-        new WeaponModel { Id = 32, File = "Roster/Wpn32_Anvil.fbx", Length = 1.15f, MuzzleAlongMinusX = true, Forward = 0.25f, Up = 0.02f },  // Anvil (provisional fit, ADR-217)
+        new WeaponModel { Id = 32, File = "Roster/Wpn32_Anvil.fbx", Length = 0.9f, MuzzleAlongMinusX = true, Forward = 0.25f, Up = 0.02f },  // Anvil (provisional fit, ADR-217)
         new WeaponModel { Id = 33, File = "Roster/Wpn33_Marshal.fbx", Length = 1.15f, MuzzleAlongMinusX = true, Forward = 0.25f, Up = 0.03f },  // Marshal (provisional fit, ADR-217)
         new WeaponModel { Id = 34, File = "Roster/Wpn34_Fang.fbx", Length = 0.8f, MuzzleAlongMinusX = true, Forward = 0.12f, Up = 0.01f },  // Fang (provisional fit, ADR-217)
         new WeaponModel { Id = 35, File = "Roster/Wpn35_Hornet.fbx", Length = 0.35f, MuzzleAlongMinusX = true, Forward = 0.1f, Up = 0.02f },  // Hornet (provisional fit, ADR-217)

@@ -33,5 +33,6 @@ Unity 순번에서 할 일(순차 1회): ① FBX 복사·임포트(삼각형 수
 - 반입: `Art/Weapons/Roster/` FBX 18 + 부착물 3(Scope 2·Bipod, 미장착). 삼각형 646~2528/총(최대 Tracer 2528), 서브메시(머티리얼) 3~6개, 용량 합 약 1MB.
 - 등록: `CharacterKit.Weapons`(+아이콘 자동), `rules.json` MuzzleFlashSize 36칸, `ItemIcons.KnownKeys`·테스트 기대값. 아이콘 PNG 16개 생성(Resources/Icons).
 - 변경 사항: Poly Pizza 3종은 시험 결과 쓸 수 없어(skinned 0 tris·축 불일치, Duo는 총열만) Quaternius 변형으로 대체 → ledger에 "미사용" 기록.
-- **안 한 것**: 키트배시(스코프·바이포드 장착), 게임 안 캡처(PlayMode 금지라 아이콘 시트만 확인), PERF 정량 판정(드로우콜 측정 안 함; 삼각형·머티리얼 수만 기록), Breacher는 펌프형 그대로(박스 탄창 윤곽 변경 안 함), 손 위치 `Forward/Up`·길이는 눈대중이라 게임 안에서 조정 필요, 신규 총 소리 없음(`CombatantAudio` 배열, 사운드 트랙).
+- 캡처: `WeaponProbe.RenderHold`로 캐릭터가 21종을 조준 자세로 든 모습 3장 `docs/tracks/guns_shots/guns_hold_0~2.png`(전 총 손에 맞게 들림, Anvil 길이 1.15→0.9로 조정). PlayMode 실제 게임 장면은 아님.
+- **안 한 것**: 키트배시(스코프·바이포드 장착), PERF 정량 판정(드로우콜 측정 안 함; 삼각형·머티리얼 수만 기록), Breacher는 펌프형 그대로(박스 탄창 윤곽 변경 안 함), 손 위치 `Forward/Up`·길이는 눈대중이라 게임 안에서 조정 필요, 신규 총 소리 없음(`CombatantAudio` 배열, 사운드 트랙).
 - 위험: Vanguard·Hauler가 AK형으로 보임(실총 연상) → 상표/디자인 검토 목록에 추가 필요.
