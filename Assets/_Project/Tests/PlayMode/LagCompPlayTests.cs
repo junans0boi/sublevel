@@ -25,7 +25,6 @@ namespace Game.Tests
         public IEnumerator SetUp()
         {
             _log.Clear();
-            Time.captureDeltaTime = 1f / 60f; // no editor frame jitter: ticks, interpolation and Time.time advance evenly (ADR-244)
             _net = new MultiHarness { Log = Log };
             yield return _net.StartHost("TestBox");
         }
@@ -35,7 +34,6 @@ namespace Game.Tests
         {
             Directory.CreateDirectory(LogDir);
             File.WriteAllText(Path.Combine(LogDir, "lagcomp-" + TestContext.CurrentContext.Test.Name + ".log"), _log.ToString());
-            Time.captureDeltaTime = 0f;
             yield return _net.Teardown();
         }
 
