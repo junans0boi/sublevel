@@ -384,7 +384,7 @@ public static class VehicleBuilder
         const float cellSize = 4f;
         var car = new VehicleRules();
         var bike = VehicleRules.MotorcycleDefaults();
-        var picked = VehicleParking.Pick(plan, car.SpawnCount + bike.SpawnCount, car.ParkingSpacingMeters);
+        var picked = VehicleSpread.Pick(VehicleParking.Candidates(plan), c => plan.RegionAt(c.X, c.Z), plan.Regions.Count, car.SpawnCount + bike.SpawnCount, car.ParkingSpacingMeters);
         var spots = new List<Transform>();
         var models = new List<int>();
         int cars = 0, bikes = 0;
