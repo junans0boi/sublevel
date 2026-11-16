@@ -1042,6 +1042,22 @@ namespace Game.Core
                 }
             }
 
+            // Loot on a roof deck (ADR-256): free deck, a body's width from the parapet and from the stair house, one point every 2 m or more.
+            public void RoofLoot(float y, float x0, float x1, float z0, float z1, int count, Rect exclude)
+            {
+                int placed = 0;
+                for (int attempt = 0; placed < count && attempt < 200; attempt++)
+                {
+                    float x = Rng.Range(x0 + 1.2f, x1 - 1.2f), z = Rng.Range(z0 + 1.2f, z1 - 1.2f);
+                    if (exclude.X0 - 1f < x && x < exclude.X1 + 1f && exclude.Z0 - 1f < z && z < exclude.Z1 + 1f) continue;
+                    bool crowded = false;
+                    foreach (var p in Plan.LootPoints) if (p.Room == "Roof" && Math.Abs(p.X - x) < 2f && Math.Abs(p.Z - z) < 2f) crowded = true;
+                    if (crowded) continue;
+                    AddLoot(x, y, z, "Roof", false);
+                    placed++;
+                }
+            }
+
             void AddLoot(float x, float y, float z, string room, bool onProp) =>
                 Plan.LootPoints.Add(new BuildingPoint { Name = "Loot" + Plan.LootPoints.Count, X = x, Y = y, Z = z, Room = room, OnProp = onProp });
 

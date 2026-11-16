@@ -33,6 +33,38 @@ namespace Game.Core
             }
         }
 
+        // Weapons every building of the kind holds at least (ADR-256): one for every place a player can walk into and look around, none for sheds and stalls;
+        // the barracks armoury and the apartment blocks hold more.
+        public static int MinWeapons(BuildingKind kind)
+        {
+            switch (kind)
+            {
+                case BuildingKind.Barracks: return 3;
+                case BuildingKind.Apartment: case BuildingKind.FactoryHall: case BuildingKind.School: return 2;
+                case BuildingKind.Shed: case BuildingKind.Stall: case BuildingKind.ElevatorStation: return 0;
+                default: return 1;
+            }
+        }
+
+        // Role letter of each of `count` points of a building (LootTable.Fits): the weapons first, then the rest by the kind's mix. A roof point (if any) is
+        // given a better role than the rest: roofs are exposed and hard to reach, so they pay with a weapon or armour.
+        public static char[] Roles(BuildingKind kind, int count, int seed)
+        {
+            var roles = new char[count];
+            var rng = new Random(seed);
+            int weapons = Math.Min(count, MinWeapons(kind));
+            for (int i = 0; i < count; i++)
+            {
+                if (i < weapons) { roles[i] = 'W'; continue; }
+                double r = rng.NextDouble();
+                bool heavy = kind == BuildingKind.Barracks || kind == BuildingKind.FactoryHall || kind == BuildingKind.School || kind == BuildingKind.Market;
+                // ammunition 35%, healing 25%, protection 15% (30% in the heavy kinds), the rest anything (a second weapon, throwables, keys)
+                double gear = heavy ? 0.30 : 0.15;
+                roles[i] = r < 0.35 ? 'A' : r < 0.60 ? 'H' : r < 0.60 + gear ? 'G' : 'X';
+            }
+            return roles;
+        }
+
         // Points to use in each building, in the order given. Never more than a building has, never more than spec.MaxLootSpawns in all.
         public static int[] Allocate(IReadOnlyList<LootBuilding> buildings, WorldBuildSpec spec)
         {
