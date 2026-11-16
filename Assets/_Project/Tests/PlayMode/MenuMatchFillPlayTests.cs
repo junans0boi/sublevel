@@ -9,7 +9,7 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // ADR-250: the solo start of the menu is a match of 50 (the player and 49 bots) when the data says so.
+    // ADR-250: the solo start of the menu is a match of 80 (the player and 79 bots) when the data says so.
     public class MenuMatchFillPlayTests
     {
         MatchRules _saved;
@@ -33,16 +33,16 @@ namespace Game.Tests
         }
 
         [UnityTest, Timeout(240000)]
-        public IEnumerator SoloStart_FillsTheMatchToFifty_WithBots()
+        public IEnumerator SoloStart_FillsTheMatchToEighty_WithBots()
         {
             SceneManager.LoadScene("World");
             float end = Time.realtimeSinceStartup + 120f;
-            while (Combatant.All.Count < 50 && Time.realtimeSinceStartup < end) yield return null;
+            while (Combatant.All.Count < 80 && Time.realtimeSinceStartup < end) yield return null;
             int people = 0, bots = 0;
             foreach (var c in Combatant.All) if (c != null) { if (c.IsPlayer) people++; else bots++; }
             Debug.Log($"[MenuFill] combatants {Combatant.All.Count}: {people} people, {bots} bots");
             Assert.AreEqual(1, people, "one person");
-            Assert.AreEqual(49, bots, "the rest are bots");
+            Assert.AreEqual(79, bots, "the rest are bots");
         }
     }
 }

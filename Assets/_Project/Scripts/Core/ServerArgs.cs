@@ -8,8 +8,8 @@ namespace Game.Core
     //   --port N               lobby port, default 7770 (the match listens on N+1)
     //   --bots N               bots that fill the match; default: fill up to the usual size beside the people
     //   --region ID            the match's final region, by id or index; default random
-    //   --max-players N        people in one room (1..40), default from rules.json
-    //   --participants N       people + bots in the match (2..50), default rules.json Match.Participants (slice and measurement runs)
+    //   --max-players N        people in one room (1..64), default from rules.json
+    //   --participants N       people + bots in the match (2..80), default rules.json Match.Participants (slice and measurement runs)
     //   --perf NAME            write server frame-time stats to Logs/perf/s8_server_NAME.csv (ADR-242)
     //   --start-seconds N      start this long after the first person joined even if not all are ready (0 = never), default 60
     public struct ServerOptions

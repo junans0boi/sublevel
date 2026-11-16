@@ -113,8 +113,8 @@ namespace Game.Core
     [Serializable]
     public class MatchRules
     {
-        public const int MaxParticipantsLimit = 50; // the cap of a match, humans and bots together (ADR-168, ADR-241)
-        public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 49 with one person
+        public const int MaxParticipantsLimit = 80; // the cap of a match, humans and bots together (ADR-168, ADR-241, ADR-251)
+        public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 79 with one person
 
         // Set from data when there is any; tests may replace it.
         public static MatchRules Current = new MatchRules();
@@ -123,7 +123,7 @@ namespace Game.Core
         public int MaxBots = MaxBotsLimit;
         // A full match (ADR-168). Bots fill what people leave empty, never fewer than MinBots; so people are at most Participants - MinBots.
         public int Participants = MaxParticipantsLimit;
-        public int MinBots = 10;
+        public int MinBots = 16;
         // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
         public float QueueWindowSeconds = 30f;
         // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-250).
