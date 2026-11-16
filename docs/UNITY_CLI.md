@@ -59,3 +59,5 @@ UNITY="/Applications/Unity/Hub/Editor/<6000.3.x>/Unity.app/Contents/MacOS/Unity"
 2. EditMode/PlayMode 테스트 헤드리스 통과
 3. mac/win 빌드 헤드리스 성공
 4. 에이전트가 스크린샷/프레임타임을 파일로 얻어 스스로 검증 가능
+
+- **PlayMode 중 macOS 기본 오디오 장치를 바꾸지 않는다**(ADR-203): 차량 소리 PlayMode 테스트가 장치 변경 시 실패한다. 소리 나는 PlayMode는 master가 허락할 때만 실행한다.
