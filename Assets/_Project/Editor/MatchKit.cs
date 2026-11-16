@@ -37,6 +37,8 @@ public static class MatchKit
 
         Set(director, "_networkManager", p => p.objectReferenceValue = nm);
         Set(director, "_playerPrefab", p => p.objectReferenceValue = Prefab("Player"));
+        var playerVariants = CharacterRoster.Entries.Select(e => AssetDatabase.LoadAssetAtPath<NetworkObject>($"{TestBoxBuilder.PrefabDir}/Player_{e.Id}.prefab")).Where(v => v != null).ToArray();
+        if (playerVariants.Length > 0) SetArray(director, "_playerVariants", playerVariants);
         Set(director, "_lootPrefab", p => p.objectReferenceValue = Prefab("LootItem"));
         Set(director, "_dummyPrefab", p => p.objectReferenceValue = Prefab("TrainingDummy"));
         SetArray(director, "_playerSpawns", Points(go.transform, "PlayerSpawn", players));

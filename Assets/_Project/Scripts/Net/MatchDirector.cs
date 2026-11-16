@@ -27,6 +27,11 @@ namespace Game.Net
         [SerializeField] NetworkObject _botPrefab;
         // Bots with the other roster models (ADR-230); bot n uses variant n mod length. Empty = every bot is _botPrefab.
         [SerializeField] NetworkObject[] _botVariants;
+        // One player prefab per roster model, named Player_<ModelId> (ADR-235): the spawn picks the one the client asked for.
+        [SerializeField] NetworkObject[] _playerVariants;
+        // The local player's saved look as text; set by Game.Gameplay (PlayerAppearanceStore). Sent to the server on connect.
+        public static System.Func<string> LocalLookSource;
+        readonly System.Collections.Generic.Dictionary<int, string> _looks = new System.Collections.Generic.Dictionary<int, string>();
         [SerializeField] Transform[] _botSpawns = new Transform[0];
         [SerializeField] int _seed = 12345;
         [SerializeField] bool _startAsHost = true;
@@ -120,6 +125,8 @@ namespace Game.Net
             sky.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
+            _networkManager.ServerManager.RegisterBroadcast<LookBroadcast>(OnLook, false);
+            _networkManager.ClientManager.OnClientConnectionState += SendLook;
             if (_startAsHost && NetSession.Role == NetSession.RoleKind.Client)
             {
                 // A guest of a lobby's match (#160): no server here, only the connection to the host.
@@ -185,6 +192,8 @@ namespace Game.Net
             if (_networkManager == null) return;
             _networkManager.ServerManager.OnServerConnectionState -= OnServerState;
             _networkManager.SceneManager.OnClientLoadedStartScenes -= OnClientLoaded;
+            _networkManager.ServerManager.UnregisterBroadcast<LookBroadcast>(OnLook);
+            _networkManager.ClientManager.OnClientConnectionState -= SendLook;
             _networkManager.ClientManager.OnClientConnectionState -= OnGuestState;
         }
 
@@ -376,6 +385,31 @@ namespace Game.Net
             _networkManager.ServerManager.Spawn(item);
         }
 
+        void OnLook(NetworkConnection connection, LookBroadcast message, FishNet.Transporting.Channel channel) => _looks[connection.ClientId] = message.Look;
+
+        void SendLook(ClientConnectionStateArgs args)
+        {
+            if (args.ConnectionState != LocalConnectionState.Started || LocalLookSource == null) return;
+            _networkManager.ClientManager.Broadcast(new LookBroadcast { Look = LocalLookSource() });
+        }
+
+        // The prefab for this connection's chosen model (the default player prefab when it sent none or the model has no prefab) and its look text.
+        NetworkObject PlayerPrefabFor(NetworkConnection connection, out string look)
+        {
+            look = "";
+            if (_playerVariants == null || _playerVariants.Length == 0 || !_looks.TryGetValue(connection.ClientId, out look)) return _playerPrefab;
+            string model = look.Split(':')[0];
+            foreach (var variant in _playerVariants)
+                if (variant != null && variant.name == "Player_" + model) return variant;
+            return _playerPrefab;
+        }
+
+        static void SetLook(NetworkObject player, string look)
+        {
+            var component = player.GetComponent<CombatantLook>();
+            if (component != null) component.ServerSet(look);
+        }
+
         void OnClientLoaded(NetworkConnection connection, bool asServer)
         {
             if (!asServer) return;
@@ -393,7 +427,8 @@ namespace Game.Net
             if (TryElevatorFor(index, out var position, out var rotation, out _))
             {
                 _playersPlaced++;
-                var deployed = Instantiate(_playerPrefab, position, rotation);
+                var deployed = Instantiate(PlayerPrefabFor(connection, out var deployedLook), position, rotation);
+                SetLook(deployed, deployedLook);
                 _networkManager.ServerManager.Spawn(deployed, connection);
                 ServerProtect(deployed.GetComponent<Combatant>());
                 // The match starts with its first player: the doors open DoorDelaySeconds later, for everyone.
@@ -403,7 +438,8 @@ namespace Game.Net
                 return;
             }
             var point = _playerSpawns[_nextPlayerSpawn++ % _playerSpawns.Length];
-            var player = Instantiate(_playerPrefab, point.position, point.rotation);
+            var player = Instantiate(PlayerPrefabFor(connection, out var look), point.position, point.rotation);
+            SetLook(player, look);
             _networkManager.ServerManager.Spawn(player, connection);
         }
 

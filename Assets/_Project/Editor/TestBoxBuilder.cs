@@ -40,6 +40,7 @@ public static class TestBoxBuilder
         // spawnable prefab list is rebuilt below.
         var gear = BuildGearAssets(glowMat, dustMat);
         var player = BuildPlayerPrefab(gear);
+        BuildPlayerVariants(gear);
         var dummy = BuildDummyPrefab(gear);
         var bot = BuildBotPrefab(gear);
         BuildBotVariants(gear);
@@ -326,9 +327,15 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    static NetworkObject BuildPlayerPrefab(GearAssets gear)
+    // One player prefab per roster model (Player_<id>, ADR-235): MatchDirector spawns the one the client chose. "Player" is the default model.
+    static void BuildPlayerVariants(GearAssets gear)
     {
-        var go = new GameObject("Player");
+        foreach (var e in CharacterRoster.Entries) BuildPlayerPrefab(gear, e.Id, "Player_" + e.Id);
+    }
+
+    static NetworkObject BuildPlayerPrefab(GearAssets gear, string rosterId = CharacterKit.DefaultRoster, string prefabName = "Player")
+    {
+        var go = new GameObject(prefabName);
         var cc = go.AddComponent<CharacterController>();
         cc.height = 1.8f; cc.radius = 0.35f; cc.center = new Vector3(0, 0.9f, 0);
         cc.slopeLimit = 40f; // ADR-195: hard walk limit = WorldSpec.WalkSlopeDeg (Unity default is 45)
@@ -338,7 +345,9 @@ public static class TestBoxBuilder
         go.AddComponent<CombatantStance>();
         var controller = go.AddComponent<PlayerController>();
         var view = go.AddComponent<CombatantView>();
-        var renderers = AddCharacter(go);
+        var renderers = AddCharacter(go, rosterId);
+        go.AddComponent<CombatantLook>();
+        go.AddComponent<CombatantLookView>();
         Set(combatant, "_isPlayer", p => p.boolValue = true);
         SetArray(controller, "_bodyRenderers", renderers);
         WireShotFx(view, go, gear.Glow, gear.Dust);
@@ -351,7 +360,7 @@ public static class TestBoxBuilder
         // [VEHICLE HOOK] ADR-065 (5): vehicle keys and camera for the local player.
         go.AddComponent<VehicleInput>();
         go.AddComponent<VehicleCamera>();
-        return SavePrefab(go, "Player");
+        return SavePrefab(go, prefabName);
     }
 
     static NetworkObject BuildDummyPrefab(GearAssets gear)
