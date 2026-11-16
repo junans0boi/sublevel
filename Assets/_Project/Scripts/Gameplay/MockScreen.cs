@@ -31,19 +31,21 @@ namespace Game.Gameplay
         public readonly Dictionary<string, Button> ById = new Dictionary<string, Button>();
 
         // `skip` drops items that the caller draws itself (live data). `onAct` gets the clickable item.
-        public static MockScreen Build(Transform parent, string name, Action<Item> onAct, Func<Item, bool> skip = null, bool scrimOnly = false)
+        public static MockScreen Build(Transform parent, string name, Action<Item> onAct, Func<Item, bool> skip = null, bool scrimOnly = false, float dim = 0.84f)
         {
             var asset = Resources.Load<TextAsset>("Ui/Screens/" + name);
             if (asset == null) { Debug.LogError("[MockScreen] missing Ui/Screens/" + name); return null; }
             var doc = JsonUtility.FromJson<Doc>(asset.text);
             var s = new MockScreen();
             s.Root = UiKit.Fill("Mock_" + name, parent);
-            if (!scrimOnly) UiKit.Box(s.Root, UiPaint.Bg, true);
+            // The mockup's backdrop art is replaced by the real 3D lobby behind; non-lobby screens dim it as the mockup does (.84).
+            if (!scrimOnly && dim > 0f) UiKit.Box(s.Root, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, dim), true);
             s.Stage = UiKit.Rect("Stage", s.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(LobbyPanel.StageW, LobbyPanel.StageH));
             s.Root.gameObject.AddComponent<StageFit>().Stage = s.Stage;
             foreach (var item in doc.items)
             {
                 if (skip != null && skip(item)) continue;
+                if (item.k == "img" && item.r[2] >= 1900f && item.r[3] >= 1000f) continue; // backdrop art and scene drawing: the 3D lobby is behind
                 // The mockup blurs what is behind a modal card (backdrop-filter); without blur the card is drawn near-opaque.
                 if (scrimOnly && item.k == "box" && item.bg != null && item.bg.Length == 4 && item.bg[3] < 255 && item.r[2] >= 800f && item.r[2] < 1900f) item.bg[3] = 255;
                 s.Add(item, onAct);
@@ -65,11 +67,25 @@ namespace Game.Gameplay
             return r;
         }
 
-        static Color C(int[] c) => c == null || c.Length < 4 ? Color.clear : new Color32((byte)c[0], (byte)c[1], (byte)c[2], (byte)c[3]);
+        // The measured mockup colours, mapped onto the reduced palette (art-direction pass): one orange accent, green/red for
+        // status only, #10151C panels at 82 %, #2A3340 borders.
+        static Color C(int[] c)
+        {
+            if (c == null || c.Length < 4) return Color.clear;
+            if (c[0] == 106 && c[1] == 169 && c[2] == 221) { var a = UiPaint.Ac; a.a = c[3] / 255f; return a; }
+            if (c[0] == 108 && c[1] == 207 && c[2] == 156) { var a = UiPaint.Ok; a.a = c[3] / 255f; return a; }
+            if (c[0] == 240 && c[1] == 138 && c[2] == 118) { var a = UiPaint.Wr; a.a = c[3] / 255f; return a; }
+            if (c[0] == 10 && c[1] == 14 && c[2] == 20 && c[3] > 100 && c[3] < 255) return UiPaint.Pn;
+            if (c[0] == 13 && c[1] == 18 && c[2] == 24) return UiPaint.Sf;
+            if (c[0] == 6 && c[1] == 9 && c[2] == 13) return UiPaint.Bg;
+            if (c[0] == 255 && c[1] == 255 && c[2] == 255 && c[3] > 20 && c[3] < 90) return UiPaint.Ln;
+            return new Color32((byte)c[0], (byte)c[1], (byte)c[2], (byte)c[3]);
+        }
 
         static void DrawBox(Item it, RectTransform r, Action<Item> onAct)
         {
             float rad = Mathf.Min(it.rad, Mathf.Min(it.r[2], it.r[3]) * 0.5f);
+            if (it.rad >= 12 && it.rad < Mathf.Min(it.r[2], it.r[3]) * 0.5f - 1f) rad = 8f; // cards: radius 8, buttons keep their pill
             Image img;
             if (it.gt != null && it.gt.Length == 4 && it.gb != null && it.gb.Length == 4)
             {
@@ -92,7 +108,8 @@ namespace Game.Gameplay
                 var colors = b.colors;
                 colors.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
                 colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
-                colors.fadeDuration = 0.05f;
+                colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+                colors.fadeDuration = 0.15f;
                 b.colors = colors;
                 b.navigation = new Navigation { mode = Navigation.Mode.None };
                 b.interactable = !it.dis;

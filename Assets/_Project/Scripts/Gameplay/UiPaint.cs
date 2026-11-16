@@ -10,14 +10,14 @@ namespace Game.Gameplay
     {
         public static readonly Color Tx = new Color32(230, 236, 242, 255);
         public static readonly Color T2 = new Color32(152, 165, 179, 255);
-        public static readonly Color Ac = new Color32(106, 169, 221, 255);
-        public static readonly Color AcS = new Color32(106, 169, 221, 61);   // rgba(106,169,221,.24)
-        public static readonly Color Ok = new Color32(108, 207, 156, 255);
-        public static readonly Color Wr = new Color32(240, 138, 118, 255);
-        public static readonly Color Bg = new Color32(6, 9, 13, 255);
-        public static readonly Color Sf = new Color32(13, 18, 24, 255);
-        public static readonly Color Ln = new Color(1f, 1f, 1f, 0.2f);
-        public static readonly Color Pn = new Color32(10, 14, 20, 184);      // rgba(10,14,20,.72)
+        public static readonly Color Ac = new Color32(255, 106, 43, 255);      // #FF6A2B: the one accent (actions and selection)
+        public static readonly Color AcS = new Color32(255, 106, 43, 61);      // the accent at 24 %
+        public static readonly Color Ok = new Color32(61, 220, 132, 255);      // #3DDC84 status only
+        public static readonly Color Wr = new Color32(255, 77, 77, 255);       // #FF4D4D status only
+        public static readonly Color Bg = new Color32(11, 15, 20, 255);        // #0B0F14
+        public static readonly Color Sf = new Color32(16, 21, 28, 255);        // #10151C
+        public static readonly Color Ln = new Color32(42, 51, 64, 255);        // #2A3340 1 px border
+        public static readonly Color Pn = new Color32(16, 21, 28, 209);        // panel: #10151C at 82 %
 
         // A rect placed by top-left corner and size in stage pixels.
         public static RectTransform At(Transform parent, string name, float x, float y, float w, float h)
@@ -170,7 +170,8 @@ namespace Game.Gameplay
             colors.normalColor = Color.white;
             colors.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
             colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
-            colors.fadeDuration = 0.05f;
+            colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+            colors.fadeDuration = 0.15f;
             b.colors = colors;
             b.navigation = new Navigation { mode = Navigation.Mode.None };
             if (onClick != null) b.onClick.AddListener(onClick);

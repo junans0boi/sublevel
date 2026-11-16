@@ -13,6 +13,9 @@ namespace Game.Gameplay
     public class LobbyPanel
     {
         public const float StageW = 1920f, StageH = 1080f;
+        // The 3D scene is the hero (ui art-direction pass): a slim control bar and two small cards instead of the mockup's
+        // full-width console. false = the mockup's own console layout (kept for the before/after comparison).
+        public const bool Compact = true;
         static readonly float[] SlotX = { 640f, 820f, 1000f, 1180f };
         static readonly Color32[] PersonColors = { new Color32(111, 143, 122, 255), new Color32(169, 130, 80, 255), new Color32(95, 118, 134, 255), new Color32(120, 120, 140, 255) };
         const float TileY = 575f;
@@ -27,7 +30,7 @@ namespace Game.Gameplay
         public bool Matching => Party.Matching;
 
         MainMenu _menu;
-        float _matchSeconds;
+        float _matchSeconds, _placeTimer;
         Text _led, _statusLabel, _reason, _seven, _callLabel, _fillText, _lockText, _kbd, _ledCaption;
         Image _statusFill, _statusRing, _kbdBox, _lamp1, _lamp2;
         Image[] _lvrFill = new Image[2], _lvrRing = new Image[2];
@@ -40,11 +43,10 @@ namespace Game.Gameplay
 
         class Slot
         {
-            public GameObject Tile, Figure, Dashed, Name, Invite;
-            public Image TileFill, TileStroke;
+            public GameObject Tile, Name, Invite;
+            public Image TileFill, TileStroke, Dot;
             public Sprite TileDash, TileSolid;
             public Text TileLabel, NameText;
-            public Image[] Body;
         }
 
         public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
@@ -53,13 +55,14 @@ namespace Game.Gameplay
             p.Party = new PartyLobby(0, "플레이어");
             p.Party.SetView(0, GameSettings.DefaultViewFirstPerson ? Perspective.First : Perspective.Third);
             p.Root = UiKit.Fill("Lobby", parent);
-            UiKit.Box(p.Root, UiPaint.Bg);
             p.Stage = UiKit.Rect("Stage", p.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(StageW, StageH));
-            p.Root.gameObject.AddComponent<StageFit>().Stage = p.Stage;
+            var fit = p.Root.gameObject.AddComponent<StageFit>();
+            fit.Stage = p.Stage;
+            fit.OnFit = p.PlaceAll; // the camera may move (외형 closeup) and the canvas may resize: keep the labels on the characters
             p.BuildScene();
             p.BuildTop(training, custom, settings, credits, quit, character, bell);
-            p.BuildPlates();
-            p.BuildConsole();
+            if (Compact) { p.BuildPlatesCompact(); p.BuildConsoleCompact(); }
+            else { p.BuildPlates(); p.BuildConsole(); }
             p.Refresh();
             return p;
         }
@@ -113,34 +116,41 @@ namespace Game.Gameplay
         // ---------------------------------------------------------------- scene: wall, door, platform, party
         void BuildScene()
         {
-            UiPaint.Pic(Stage, "Scene", "lobby_scene", 0, 0, StageW, StageH);
+            // The scene is the 3D elevator (LobbyStage) behind this overlay; only the party's tiles, state badges, names and
+            // the empty slots' 초대 buttons are drawn here, at the projected positions of the characters' feet.
             for (int i = 0; i < PartyLobby.SquadSize; i++) _slots[i] = BuildSlot(SlotX[i], i);
+            // The door sign of the mockup ("B3 ▼ 투입 대기") above the car opening.
+            if (Compact) return;
+            var sign = UiPaint.At(Stage, "DoorSign", 760, 180, 400, 28);
+            UiPaint.Box(sign, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.85f), 2, UiPaint.Ac, 2);
+            UiPaint.Label(sign, "Text", 0, 0, 400, 28, "B3 ▼ 투입 대기", 22, UiPaint.Ac, TextAnchor.MiddleCenter, FontStyle.Bold);
         }
 
         Slot BuildSlot(float x, int i)
         {
             var s = new Slot();
-            // Platform tile: trapezoid -70,40 .. 70,40 .. 86,96 .. -86,96 (centre x, base y 575); drawn as a rounded box stand-in
-            // with the mockup's width at the front edge, 3 px stroke.
+            if (Compact)
+            {
+                // A name card: 220 x 56, panel with a 1 px border, a status dot, the name (22) and the state in words (14).
+                var card = UiPaint.At(Stage, "Tile" + i, x - 110, 864, 220, 56);
+                s.Tile = card.gameObject;
+                s.TileFill = UiPaint.Box(card, UiPaint.Pn, 8, UiPaint.Ln);
+                s.TileStroke = card.Find("Ring").GetComponent<Image>();
+                s.Dot = UiPaint.Circle(card, "Dot", 20, 28, 12, UiPaint.Ok);
+                s.Dot.sprite = UiPaint.Round(6);
+                s.NameText = UiPaint.Label(card, "Name", 36, 6, 176, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+                s.Name = s.NameText.gameObject;
+                s.TileLabel = UiPaint.Label(card, "State", 36, 32, 176, 20, "", 14, UiPaint.T2, TextAnchor.MiddleLeft);
+                var invite = UiPaint.Btn(Stage, "Invite" + i, x - 110, 864, 220, 56, "+ 초대", 20, 4, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
+                s.Invite = invite.gameObject;
+                return s;
+            }
             var tile = UiPaint.At(Stage, "Tile" + i, x - 86, TileY + 40, 172, 56);
             s.Tile = tile.gameObject;
             s.TileFill = UiPaint.Shape(tile, UiPaint.Trapezoid(false), Color.clear);
             s.TileStroke = UiPaint.Shape(UiKit.Fill("Edge", tile), UiPaint.Trapezoid(true), UiPaint.Ac);
             s.TileDash = UiPaint.Trapezoid(true, true); s.TileSolid = s.TileStroke.sprite;
             s.TileLabel = UiPaint.Label(tile, "State", 0, 14, 172, 30, "", 24, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
-            // Person figure (scale 1.25 for the local player, 1.05 for others; feet at y 605).
-            var fig = UiKit.Rect("Figure" + i, Stage, new Vector2(0f, 1f), new Vector2(0.5f, 0f), new Vector2(x, -(TileY + 30f)), new Vector2(1f, 1f));
-            s.Figure = fig.gameObject;
-            s.Body = new Image[4];
-            s.Body[0] = Part(fig, "Legs", -13, 0, 26, 72, 4);
-            s.Body[1] = Part(fig, "Torso", -19, 68, 38, 74, 8);
-            s.Body[2] = Part(fig, "Head", -16, 144, 32, 32, 16);
-            var stripe = Part(fig, "Stripe", -19, 111, 38, 7, 1);
-            stripe.color = UiPaint.Ac;
-            s.Body[3] = stripe;
-            var dashed = UiKit.Rect("Dashed" + i, Stage, new Vector2(0f, 1f), new Vector2(0.5f, 0f), new Vector2(x, -(TileY + 30f)), new Vector2(1f, 1f));
-            s.Dashed = dashed.gameObject;
-            Part(dashed, "Legs", -13, 0, 26, 72, 4, true); Part(dashed, "Torso", -19, 68, 38, 74, 8, true); Part(dashed, "Head", -16, 144, 32, 32, 16, true);
             s.Name = UiPaint.Label(Stage, "Name" + i, x - 100, TileY + 102, 200, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold).gameObject;
             s.NameText = s.Name.GetComponent<Text>();
             var inv = UiPaint.Btn(Stage, "Invite" + i, x - 60, TileY + 104, 120, 44, "+ 초대", 18, 22, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
@@ -148,12 +158,37 @@ namespace Game.Gameplay
             return s;
         }
 
-        // A body part of the figure: x from the centre, `bottom` = height of its bottom edge above the feet, y up.
-        static Image Part(RectTransform fig, string name, float x, float bottom, float w, float h, int radius, bool dashedLook = false)
+        // Moves a slot's overlay to where its character stands in the view (3D -> viewport -> stage pixels), so it also
+        // holds at any resolution and aspect (the stage is scaled by StageFit inside the canvas).
+        void PlaceSlot(int i)
         {
-            var r = UiKit.Rect(name, fig, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(x, bottom), new Vector2(w, h));
-            if (dashedLook) { UiPaint.Box(r, Color.clear, radius, UiPaint.T2, 2, true); return null; }
-            return UiPaint.Box(r, UiPaint.T2, radius, UiPaint.Ln, 2);
+            var stage = _menu != null ? _menu.Stage : null;
+            if (stage == null || Root == null) return;
+            var size = Root.rect.size;
+            if (size.y <= 0f || !stage.ViewportPoints(i, size.x / size.y, out var feetVp, out var headVp)) return;
+            float s = Stage.localScale.x > 0f ? Stage.localScale.x : 1f;
+            Vector2 f = new Vector2((feetVp.x - 0.5f) * size.x, (feetVp.y - 0.5f) * size.y) / s;
+            Vector2 h = new Vector2((headVp.x - 0.5f) * size.x, (headVp.y - 0.5f) * size.y) / s;
+            float k = Mathf.Clamp(Mathf.Abs(h.y - f.y) / 185f, 0.4f, 3f) * 0.5f; // the tile is a floor mark smaller than the spacing between people
+            float cx = f.x + StageW * 0.5f, cy = StageH * 0.5f - f.y;
+            var slot = _slots[i];
+            if (Compact)
+            {
+                // Cards sit on one line above the bottom bar, under their characters.
+                float x = Mathf.Clamp(cx - 110f, 48f, StageW - 48f - 220f);
+                ((RectTransform)slot.Tile.transform).anchoredPosition = new Vector2(x, -864f);
+                ((RectTransform)slot.Invite.transform).anchoredPosition = new Vector2(x, -864f);
+                return;
+            }
+            var tile = (RectTransform)slot.Tile.transform;
+            tile.pivot = new Vector2(0f, 1f);
+            tile.sizeDelta = new Vector2(172f, 56f);
+            tile.localScale = new Vector3(k, k, 1f);
+            tile.anchoredPosition = new Vector2(cx - 86f * k, -(cy - 14f * k));
+            var name = (RectTransform)slot.Name.transform;
+            name.anchoredPosition = new Vector2(cx - 100f, -(cy + 44f * k));
+            var inv = (RectTransform)slot.Invite.transform;
+            inv.anchoredPosition = new Vector2(cx - 60f, -(cy + 56f * k));
         }
 
         // ---------------------------------------------------------------- plates
@@ -171,6 +206,105 @@ namespace Game.Gameplay
             UiPaint.Label(Stage, "KeyTitle", 1579, 163, 200, 32, "열쇠 안내", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
             var body = UiPaint.Label(Stage, "KeyBody", 1547, 203, 310, 52, "닫히는 지역에서 벗어나려면 <b>열쇠 승강기</b>를 찾으세요. 팀이 함께 타야 작동합니다.", 16, UiPaint.Tx, TextAnchor.UpperLeft);
             body.horizontalOverflow = HorizontalWrapMode.Wrap;
+        }
+
+
+        // ---------------------------------------------------------------- compact layout (3D is the hero)
+        RectTransform _unused;
+
+        // Objects the logic still writes to but the compact layout does not show.
+        T Hidden<T>(T t) where T : Component
+        {
+            if (_unused == null)
+            {
+                _unused = UiKit.Rect("Unused", Stage, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+                _unused.gameObject.SetActive(false);
+            }
+            t.transform.SetParent(_unused, false);
+            return t;
+        }
+
+        void BuildPlatesCompact()
+        {
+            // Two small cards at the top corners: a line of text each, no boxes inside boxes.
+            var a = UiPaint.At(Stage, "PlateRad", 48, 112, 332, 78);
+            UiPaint.Box(a, UiPaint.Pn, 14, UiPaint.Ln);
+            UiPaint.Pic(Stage, "Rad", "ico_rad", 64, 126, 22, 22);
+            UiPaint.Label(Stage, "RadTitle", 94, 122, 200, 28, "오염 브리핑", 20, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiPaint.Label(Stage, "RadLine1", 64, 152, 310, 26, "<color=#6ccfa0>✓ 전 지역 안전</color> · 첫 경고 05:00 후", 16, UiPaint.T2);
+            var b = UiPaint.At(Stage, "PlateKey", 1540, 112, 332, 78);
+            UiPaint.Box(b, UiPaint.Pn, 14, UiPaint.Ln);
+            UiPaint.Pic(Stage, "Key", "ico_key", 1556, 126, 22, 22);
+            UiPaint.Label(Stage, "KeyTitle", 1586, 122, 200, 28, "열쇠 안내", 20, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UiPaint.Label(Stage, "KeyBody", 1556, 152, 310, 26, "열쇠 승강기는 팀이 함께 타야 작동합니다", 16, UiPaint.T2);
+        }
+
+        void BuildConsoleCompact()
+        {
+            // A solid bar along the bottom (48 px margins, 24 px gutters), two rows: controls, then the one line of advice.
+            //   row 1: [mode pills] [setting] [view + map] .................... [the state button]
+            var fade = UiPaint.At(Stage, "ConsoleFade", 0, 880, StageW, 40);
+            UiPaint.GradientOpaque(fade, new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0f), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.96f));
+            UiKit.Box(UiPaint.At(Stage, "Console", 0, 920, StageW, 160), new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.96f));
+            const float row = 944f;
+
+            BuildPill(0, 48f, row + 8f, "솔로", () => { Party.SetMode(Self, TeamMode.Solo); Refresh(); });
+            BuildPill(1, 208f, row + 8f, "스쿼드", () => { Party.SetMode(Self, TeamMode.Squad); Refresh(); });
+            _knob = Hidden(UiPaint.At(Stage, "LeverKnob", 0, 0, 1, 1));
+
+            var led = UiPaint.At(Stage, "Led", 384f, row, 296, 72);
+            _led = UiPaint.Label(led, "Text", 0, 0, 296, 72, "", 40, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _ledCaption = Hidden(UiPaint.Label(Stage, "LedCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
+
+            UiPaint.Box(UiPaint.At(Stage, "ViewSeg", 704f, row + 8f, 256, 56), Color.clear, 28, UiPaint.Ln);
+            _tpp = UiPaint.Btn(Stage, "Tpp", 706f, row + 10f, 128, 52, "TPP 3인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.Third); Refresh(); });
+            _fpp = UiPaint.Btn(Stage, "Fpp", 834f, row + 10f, 124, 52, "FPP 1인칭", 18, 26, Color.clear, Color.clear, UiPaint.Tx, () => { Party.SetView(Self, Perspective.First); Refresh(); });
+            _tppFill = _tpp.targetGraphic as Image; _fppFill = _fpp.targetGraphic as Image;
+            _tppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "TppBar", 0, 0, 1, 1), Color.clear, 1));
+            _fppBar = Hidden(UiPaint.Box(UiPaint.At(Stage, "FppBar", 0, 0, 1, 1), Color.clear, 1));
+
+            var map = UiPaint.At(Stage, "MapWin", 984f, row + 8f, 304, 56);
+            var mapImg = UiPaint.Box(map, UiPaint.Sf, 8, UiPaint.Ln);
+            mapImg.raycastTarget = true;
+            map.gameObject.AddComponent<Button>().onClick.AddListener(() => _menu.ShowModeModal());
+            UiPaint.Label(map, "Name", 16, 0, 272, 56, "청람도 · 6개 지역 · 약 20~25분", 16, UiPaint.Tx, TextAnchor.MiddleLeft);
+
+            // The advice line sits inside the bar, under the controls.
+            _reason = UiPaint.Label(Stage, "Reason", 48f, row + 84f, 1240, 28, "", 16, UiPaint.T2, TextAnchor.MiddleLeft);
+            _reason.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _reason.verticalOverflow = VerticalWrapMode.Truncate;
+
+            // The state button: the only filled accent on the screen. Opaque, so nothing shows through it.
+            _status = UiPaint.Btn(Stage, "State", 1512f, row, 360, 72, "", 28, 36, UiPaint.Ac, UiPaint.Ac, UiPaint.Bg, OnStatus, FontStyle.Bold, 1);
+            _statusFill = _status.targetGraphic as Image;
+            _statusRing = _status.transform.Find("Ring").GetComponent<Image>();
+            _statusLabel = _status.GetComponentInChildren<Text>();
+            var kbd = UiPaint.At(_status.transform, "Kbd", 280, 20, 64, 32);
+            _kbdBox = UiPaint.Box(kbd, UiPaint.Sf, 8, UiPaint.Ln);
+            _kbd = UiPaint.Label(kbd, "Key", 0, 0, 64, 32, "Enter", 15, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
+
+            _callLabel = Hidden(UiPaint.Label(Stage, "CallCap", 0, 0, 10, 10, "", 12, UiPaint.T2));
+            _seven = Hidden(UiPaint.Label(Stage, "Seven", 0, 0, 10, 10, "--:--", 12, UiPaint.T2));
+            _fillText = Hidden(UiPaint.Label(Stage, "FillText", 0, 0, 10, 10, "", 12, UiPaint.T2));
+            for (int i = 0; i < 50; i++)
+            {
+                var c = UiPaint.At(_unused != null ? _unused : Stage, "Cell" + i, 0, 0, 1, 1);
+                _cells[i] = UiPaint.Box(c, Color.clear, 1, UiPaint.Ln, 1);
+                _cellRing[i] = c.Find("Ring").GetComponent<Image>();
+            }
+        }
+
+        void BuildPill(int i, float x, float y, string name, UnityEngine.Events.UnityAction act)
+        {
+            var b = UiPaint.Btn(Stage, "Pill" + i, x, y, 136, 56, name, 20, 28, Color.clear, UiPaint.Ln, UiPaint.Tx, act);
+            _lvrFill[i] = b.targetGraphic as Image;
+            _lvrRing[i] = b.transform.Find("Ring").GetComponent<Image>();
+            _lvrName[i] = b.GetComponentInChildren<Text>();
+            ((RectTransform)_lvrName[i].transform).offsetMin = new Vector2(24f, 0f);
+            var lamp = UiPaint.Circle(b.transform, "Lamp", 20, 28, 10, UiPaint.Ok);
+            lamp.sprite = UiPaint.Round(5);
+            if (i == 0) _lamp1 = lamp; else _lamp2 = lamp;
+            _lvrMs[i] = Hidden(UiPaint.Label(b.transform, "Ms", 0, 0, 10, 10, "", 12, UiPaint.T2));
         }
 
         // ---------------------------------------------------------------- console
@@ -252,6 +386,25 @@ namespace Game.Gameplay
             _lvrMs[i] = UiPaint.Label(b.transform, "Ms", 0, 61, 120, 19, "", 15, UiPaint.T2, TextAnchor.MiddleCenter);
         }
 
+        // The 3D characters follow the party: the local player shows the saved PlayerAppearance, the others their member look.
+        public void SyncStage()
+        {
+            var stage = _menu != null ? _menu.Stage : null;
+            if (stage == null) return;
+            int local = 0;
+            for (int i = 0; i < Party.Count; i++) if (Party.Members[i].Id == Self) local = i;
+            stage.LocalSlot = local;
+            for (int i = 0; i < PartyLobby.SquadSize; i++)
+            {
+                if (i >= Party.Count) { stage.SetSlot(i, null); continue; }
+                var m = Party.Members[i];
+                stage.SetSlot(i, m.Id == Self ? PlayerAppearanceStore.Load() : m.Appearance);
+            }
+            PlaceAll();
+        }
+
+        public void PlaceAll() { for (int i = 0; i < PartyLobby.SquadSize; i++) PlaceSlot(i); }
+
         // ---------------------------------------------------------------- behaviour
         // The state button's action. Squad matches wait for the team flow, so only solo starts today.
         void OnStatus()
@@ -276,6 +429,7 @@ namespace Game.Gameplay
 
         public void Tick(float dt)
         {
+
             if (Party.Matching) { _matchSeconds += dt; _seven.text = PartyLobby.Clock((int)_matchSeconds); }
             var kb = Keyboard.current;
             if (kb != null && Root.gameObject.activeInHierarchy && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) OnStatus();
@@ -298,14 +452,15 @@ namespace Game.Gameplay
                 _lvrMs[i].text = member ? "잠김" : on ? "✓ 선택됨" : i == 0 ? "1명" : "4인";
                 _lvrMs[i].color = on ? UiPaint.Tx : UiPaint.T2;
             }
-            _lamp1.color = solo ? UiPaint.Ac : UiPaint.Ok;
-            _lamp2.color = solo ? UiPaint.Ok : UiPaint.Ac;
-            _led.text = solo ? "솔로 · 1인" : "스쿼드 · 4인";
+            _lamp1.color = solo ? UiPaint.Ac : UiPaint.T2;
+            _lamp2.color = solo ? UiPaint.T2 : UiPaint.Ac;
+            UiFx.Swap(_led, solo ? "솔로 · 1인" : "스쿼드 · 4인");
             bool tpp = Party.View == Perspective.Third;
             _tpp.GetComponentInChildren<Text>().text = (tpp ? "✓ " : "") + "TPP 3인칭";
             _fpp.GetComponentInChildren<Text>().text = (tpp ? "" : "✓ ") + "FPP 1인칭";
-            _tppFill.color = tpp ? UiPaint.AcS : Color.clear; _tppBar.gameObject.SetActive(tpp);
-            _fppFill.color = tpp ? Color.clear : UiPaint.AcS; _fppBar.gameObject.SetActive(!tpp);
+            var sel = Compact ? new Color(1f, 1f, 1f, 0.14f) : UiPaint.AcS; // one accent on the screen: the view switch is neutral
+            _tppFill.color = tpp ? sel : Color.clear; _tppBar.gameObject.SetActive(tpp);
+            _fppFill.color = tpp ? Color.clear : sel; _fppBar.gameObject.SetActive(!tpp);
 
             // Party on the platform.
             for (int i = 0; i < PartyLobby.SquadSize; i++)
@@ -314,21 +469,21 @@ namespace Game.Gameplay
                 bool hasMember = i < n;
                 bool empty = !solo && i == n && n < PartyLobby.SquadSize;
                 bool shown = hasMember || empty;
-                s.Tile.SetActive(shown); s.Figure.SetActive(hasMember); s.Dashed.SetActive(empty);
+                s.Tile.SetActive(Compact ? hasMember : shown);
                 s.Name.SetActive(hasMember); s.Invite.SetActive(empty);
-                if (empty) { SetTile(s, Color.clear, UiPaint.T2, ""); s.TileStroke.sprite = s.TileDash; }
-                else s.TileStroke.sprite = s.TileSolid;
+                if (!Compact)
+                {
+                    if (empty) { SetTile(s, Color.clear, UiPaint.T2, ""); s.TileStroke.sprite = s.TileDash; }
+                    else s.TileStroke.sprite = s.TileSolid;
+                }
                 if (!hasMember) continue;
                 var m = Party.Members[i];
                 bool lead = Party.IsLeader(m.Id), ready = m.Ready;
                 Color tint = lead ? UiPaint.Ac : ready ? UiPaint.Ok : UiPaint.Wr;
-                SetTile(s, lead || ready ? UiPaint.AcS : UiPaint.Bg, tint, lead ? "★ 파티장" : ready ? "✓ 준비 완료" : "… 준비 중");
+                SetTile(s, lead || ready ? UiPaint.AcS : UiPaint.Bg, tint, Compact ? (lead ? "파티장" : ready ? "준비 완료" : "준비 중") : (lead ? "★ 파티장" : ready ? "✓ 준비 완료" : "… 준비 중"));
                 s.NameText.text = m.Name + (m.Id == Self ? " (나)" : "");
-                var color = (Color)PersonColors[i % PersonColors.Length];
-                var fig = (RectTransform)s.Figure.transform;
-                fig.localScale = Vector3.one * (m.Id == Self ? 1.25f : 1.05f);
-                for (int k = 0; k < 3; k++) s.Body[k].color = color;
             }
+            SyncStage();
 
             // Reason line, call panel, state button.
             string waiting = Party.WaitingLine();
@@ -351,15 +506,16 @@ namespace Game.Gameplay
             var btn = Party.ButtonFor(Self, (int)_matchSeconds);
             bool primary = btn.Action == LobbyAction.Start || btn.Action == LobbyAction.Ready;
             bool enabled = btn.Enabled;
-            _statusLabel.text = btn.Label;
-            _statusFill.color = primary && enabled ? UiPaint.AcS : UiPaint.Pn;
-            _statusRing.color = primary && enabled ? UiPaint.Ac : UiPaint.Ln;
-            _statusLabel.color = enabled ? UiPaint.Tx : UiPaint.T2;
+            UiFx.Swap(_statusLabel, btn.Label);
+            // Compact: the one solid accent on the screen, dark text for contrast; the mockup layout keeps its tinted button.
+            _statusFill.color = Compact ? (primary && enabled ? UiPaint.Ac : UiPaint.Sf) : (primary && enabled ? UiPaint.AcS : UiPaint.Pn);
+            _statusRing.color = Compact ? (primary && enabled ? Color.clear : UiPaint.Ln) : (primary && enabled ? UiPaint.Ac : UiPaint.Ln);
+            _statusLabel.color = Compact ? (primary && enabled ? UiPaint.Bg : UiPaint.Tx) : (enabled ? UiPaint.Tx : UiPaint.T2);
             _kbd.text = btn.Action == LobbyAction.CancelMatch ? "Esc" : "Enter";
-            _kbd.gameObject.transform.parent.gameObject.SetActive(btn.Action != LobbyAction.LeaveParty);
+            _kbd.gameObject.transform.parent.gameObject.SetActive(!Compact && btn.Action != LobbyAction.LeaveParty);
             _status.interactable = enabled;
             var kr = (RectTransform)_kbd.transform.parent;
-            kr.anchoredPosition = new Vector2(btn.Action == LobbyAction.CancelMatch ? 300f : 285f, kr.anchoredPosition.y);
+            if (!Compact) kr.anchoredPosition = new Vector2(btn.Action == LobbyAction.CancelMatch ? 300f : 285f, kr.anchoredPosition.y);
         }
 
         int IndexOf(int id)
@@ -370,6 +526,13 @@ namespace Game.Gameplay
 
         static void SetTile(Slot s, Color fill, Color stroke, string label)
         {
+            if (Compact)
+            {
+                // The card stays a quiet panel; the state is a dot (leader white, ready green, waiting red) and words.
+                if (s.Dot != null) s.Dot.color = stroke == UiPaint.Ac ? UiPaint.Tx : stroke;
+                s.TileLabel.text = label;
+                return;
+            }
             s.TileFill.color = fill;
             s.TileStroke.color = stroke;
             s.TileLabel.text = label;
@@ -382,6 +545,7 @@ namespace Game.Gameplay
     public class StageFit : MonoBehaviour
     {
         public RectTransform Stage;
+        public System.Action OnFit;
 
         void OnRectTransformDimensionsChange() => Fit();
         void LateUpdate() => Fit();
@@ -393,6 +557,7 @@ namespace Game.Gameplay
             if (Stage == null || w <= 0f || h <= 0f) return;
             float s = Mathf.Min(1f, Mathf.Min(w / LobbyPanel.StageW, h / LobbyPanel.StageH));
             Stage.localScale = new Vector3(s, s, 1f);
+            OnFit?.Invoke();
         }
     }
 }
