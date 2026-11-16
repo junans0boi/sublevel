@@ -60,6 +60,8 @@ namespace Game.Core
         public int Id;
         public string Name;
         public bool Ready;
+        // The member's chosen look (ADR-247). The party sync sends Appearance.Serialize(); default = the default model.
+        public PlayerAppearance Appearance;
     }
 
     // The people in a room. The host counts as ready; the match can start when everyone is.

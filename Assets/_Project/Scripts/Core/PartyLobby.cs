@@ -34,13 +34,21 @@ namespace Game.Core
         public int Count => _members.Count;
         public bool IsLeader(int id) => id == LeaderId;
 
-        public PartyLobby(int selfId, string selfName) { _members.Add(new LobbyMember { Id = selfId, Name = selfName }); LeaderId = selfId; }
+        public PartyLobby(int selfId, string selfName, PlayerAppearance appearance = default) { _members.Add(new LobbyMember { Id = selfId, Name = selfName, Appearance = appearance.Normalized() }); LeaderId = selfId; }
+
+        // A member's look changed (their sync message arrived, or the local player edited theirs).
+        public void SetAppearance(int id, PlayerAppearance appearance)
+        {
+            int i = Index(id);
+            if (i < 0) return;
+            var m = _members[i]; m.Appearance = appearance.Normalized(); _members[i] = m;
+        }
 
         // Someone joins: the party becomes a squad (mode locks for members). Refused when full or matching.
-        public bool Join(int id, string name)
+        public bool Join(int id, string name, PlayerAppearance appearance = default)
         {
             if (Matching || _members.Count >= SquadSize || Index(id) >= 0) return false;
-            _members.Add(new LobbyMember { Id = id, Name = string.IsNullOrWhiteSpace(name) ? "플레이어" : name.Trim() });
+            _members.Add(new LobbyMember { Id = id, Name = string.IsNullOrWhiteSpace(name) ? "플레이어" : name.Trim(), Appearance = appearance.Normalized() });
             Mode = TeamMode.Squad;
             return true;
         }
