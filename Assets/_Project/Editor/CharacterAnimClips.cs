@@ -30,8 +30,8 @@ public static class CharacterAnimClips
     static string UalSource() => System.Environment.GetEnvironmentVariable("SUBLEVEL_UAL_DIR")
         ?? "/Volumes/WorkSpace/Project/sublevel_staging/QuaterniusUniversal/UAL1";
     // Source clip name in the file -> our clip name (prefix U_). Loops: walk/jog/idle only. Hit_Chest is read as an additive pose (frame 0 = reference).
-    public static readonly string[] UalNames = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Punch_Jab", "Punch_Cross", "Hit_Chest" };
-    static readonly string[] UalLoops = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop" };
+    public static readonly string[] UalNames = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Punch_Jab", "Punch_Cross", "Hit_Chest", "Crouch_Idle_Loop", "Crouch_Fwd_Loop" };
+    static readonly string[] UalLoops = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Crouch_Idle_Loop", "Crouch_Fwd_Loop" };
 
     public static void SyncUal()
     {

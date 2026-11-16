@@ -269,7 +269,7 @@ namespace Game.Tests
         public IEnumerator Hit_TheBodyFlinchesOnTheAdditiveLayer_WithoutLosingItsPose()
         {
             yield return Load();
-            _me.ServerDamageFilter = a => a;
+            _me.ServerDamageFilter = a => a.Amount;
             yield return GiveRifle();
             yield return new WaitForSeconds(0.5f);
             float Chest() { var f = _pc.transform.InverseTransformDirection(B(HumanBodyBones.Chest).up); return Mathf.Atan2(f.z, f.y) * Mathf.Rad2Deg; }
@@ -375,6 +375,23 @@ namespace Game.Tests
             Assert.LessOrEqual(Mathf.Abs(err[0]), tolerance, "left foot on the slope (m)");
             Assert.LessOrEqual(Mathf.Abs(err[1]), tolerance, "right foot on the slope (m)");
             UnityEngine.Object.Destroy(slope);
+        }
+
+        [UnityTest]
+        public IEnumerator Crouch_BareHands_HeadComesDownToTheCapsule()
+        {
+            yield return Load();
+            _input.Frame.Crouch = true;
+            yield return WaitUntil(() => _me.GetComponent<CombatantStance>().CrouchAmount >= 0.999f, 2f, "crouched");
+            yield return new WaitForSeconds(0.8f);
+            var rows = new List<float[]>();
+            Shot("crouch_bare_side", 3f, 1.0f, 0.8f);
+            yield return Record("crouch_bare", 0.4f, rows);
+            var r = rows[rows.Count - 1];
+            Debug.Log($"[AnimMetrics] crouch bare hands: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} drop {_anim.ModelDrop:F3} footfix {_anim.FootFix:F3}");
+            Assert.That(r[3], Is.InRange(0.8f, 1.2f), "head joint height crouched, the UAL crouch (m)");
+            Assert.Less(Mathf.Abs(_anim.ModelDrop) + Mathf.Abs(_anim.FootFix), 0.03f, "the clip is the crouch: no code knee bend or foot fix");
+            Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");
         }
 
         [UnityTest]

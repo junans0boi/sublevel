@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "UnarmedCrouch", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]
@@ -186,14 +186,15 @@ namespace Game.Tests
         }
 
         [Test]
-        public void AdditiveFlinch_TipsTheChestByAFewDegrees_ThenSettles()
+        public void AdditiveFlinch_FirstPart_TipsTheChestByAFewDegrees()
         {
             Pose(Base, "Locomotion", 0f);
             float rest = TrunkAngleOfChest(), peak = 0f;
-            for (int i = 1; i <= 10; i++) { Pose(Additive, "Flinch", i / 10f); peak = Mathf.Max(peak, Mathf.Abs(TrunkAngleOfChest() - rest)); }
-            Assert.That(peak, Is.InRange(1.0f, 25f), "flinch size in degrees (the hit-chest pose added on top)");
-            Pose(Additive, "Flinch", 1f);
-            Assert.Less(Mathf.Abs(TrunkAngleOfChest() - rest), 1.5f, "back near the rest pose at the end of the clip");
+            // The game plays the first 40% of the hit clip (CombatantAnimation.FlinchShare) and fades out; the rest of the clip staggers on.
+            for (int i = 1; i <= 8; i++) { Pose(Additive, "Flinch", i * 0.05f); peak = Mathf.Max(peak, Mathf.Abs(TrunkAngleOfChest() - rest)); }
+            Assert.That(peak, Is.InRange(4f, 20f), "flinch size in degrees (the hit-chest pose added on top)");
+            Pose(Additive, "Flinch", 0f);
+            Assert.Less(Mathf.Abs(TrunkAngleOfChest() - rest), 1.5f, "the additive reference frame leaves the pose alone");
         }
 
         // The chest's pitch in the character frame (rotation of its forward about the right axis), degrees.
@@ -225,7 +226,9 @@ namespace Game.Tests
             {
                 Pose(Base, "Locomotion", 0f);
                 float rest = HandAhead(hand), peak = float.MinValue;
-                for (int i = 0; i <= 20; i++) { Pose(Upper, state, i / 20f, upper: 1f); peak = Mathf.Max(peak, HandAhead(hand)); }
+                var series = new System.Text.StringBuilder();
+                for (int i = 0; i <= 20; i++) { Pose(Upper, state, i / 20f, upper: 1f); series.Append(HandAhead(hand).ToString("F2") + " "); peak = Mathf.Max(peak, HandAhead(hand)); }
+                Debug.Log($"[AnimTest] {state} hand ahead of chest by twentieths (rest {rest:F2}): {series}");
                 Assert.Greater(peak - rest, 0.3f, state + ": fist reach over the rest pose (m)");
                 Pose(Upper, state, 1f, upper: 1f);
                 Assert.Less(Mathf.Abs(HandAhead(hand) - rest), 0.25f, state + ": the hand is back near its rest at the end");

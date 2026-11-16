@@ -26,7 +26,7 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed", UnarmedCrouch = "UnarmedCrouch";
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
         public const string BreathState = "Breath", FlinchState = "Flinch";
@@ -40,10 +40,11 @@ namespace Game.Gameplay
         const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
         const float ProneFade = 0.35f;
+        const float ClipCrouchPerSecond = 5f;
         const float ProneLookMaxDeg = 35f, ProneLookShare = 0.8f;
         const float ProneHeadAheadOfEyes = 0.15f; // lying, the head joint ends this far ahead of the capsule / eyes
         const float BlendDamp = 0.08f;
-        const float FlinchSeconds = 0.6f;
+        const float FlinchShare = 0.4f; // of the hit clip: it carries on into a stagger past this, the flinch is only its first part
         const float ShootHold = 0.22f;
         const float AimAfterShot = 0.9f;       // the weapon stays up this long after the last shot
         const float UpperWeightPerSecond = 7f;
@@ -77,7 +78,7 @@ namespace Game.Gameplay
         [SerializeField] float _backClipSpeed = 4f;
         [SerializeField] float _walkClipSpeed = 1.3f; // the walk clip alone (the slow walk plays it, sped up)
         // The bare-handed walk and jog clips' ground speed (ADR-235), and the second in each punch clip when the fist is furthest out (the hit).
-        [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f;
+        [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f, _unarmedCrouchSpeed = 1.2f;
         [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
         // Foot height above the character's origin: planted below the first, in the air above the second.
         [SerializeField] float _footPlantHeight = 0.12f;
@@ -105,6 +106,7 @@ namespace Game.Gameplay
         float _footFixTotal;      // how far GroundCrouchedFeet has the crouched model moved down (carried into next frame's placement)
         float _footRestHeight;    // the lower foot's height over the character's origin in the saved (standing) pose
         float _crouch;            // 0..1: how much of the crouch is shown
+        float _clipCrouch;        // 0..1: bare-handed crouch is the UAL crouch clips (ADR-235); the code knee bend fades out by this much
         float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
         float _prone;             // 0..1: how much of the lying pose is shown
         float _proneClip;         // the share of it that is the prone clip (all of it unless swimming)
@@ -299,6 +301,8 @@ namespace Game.Gameplay
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
+            // The bare-handed crouch clips have their own cadence: pace by their ground speed.
+            if (_clipCrouch > 0.01f) pace = Mathf.Lerp(pace, Game.Core.Locomotion.LegPace(speed, _unarmedCrouchSpeed, GameData.Rules.Gait), _clipCrouch);
             // Crawling is the walk clip at a slow pace; at the crawl's low speed the blend also shows only a part of the stride.
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
@@ -312,7 +316,7 @@ namespace Game.Gameplay
             else
             {
                 // The flinch is an additive layer on top of whatever plays, so a hit no longer replaces the pose.
-                if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchSeconds; }
+                if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchShare * FlinchClipLength(); }
                 SetBase(_proneClip > 0.5f && !showAir ? Prone : showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
@@ -399,7 +403,8 @@ namespace Game.Gameplay
             var v = dead ? Vector3.zero : _motion.LocalVelocity;
             float walk = rules.CrouchWalkFullSpeed <= 0f ? 0f : Mathf.Clamp01(new Vector2(v.x, v.z).magnitude / rules.CrouchWalkFullSpeed);
             _crouchWalk = Mathf.MoveTowards(_crouchWalk, walk, CrouchWalkBlendPerSecond * Time.deltaTime);
-            float scale = _crouch * Stances.CrouchBendScale(_crouchWalk, rules.CrouchWalkBend);
+            _clipCrouch = Mathf.MoveTowards(_clipCrouch, _unarmedBody && _crouch > 0.5f ? 1f : 0f, ClipCrouchPerSecond * Time.deltaTime);
+            float scale = _crouch * (1f - _clipCrouch) * Stances.CrouchBendScale(_crouchWalk, rules.CrouchWalkBend);
             // Lowered by exactly what the bent knees take off the legs, so the feet stay on the ground.
             _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
             // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
@@ -453,17 +458,28 @@ namespace Game.Gameplay
             if (_animator.cullingMode != mode) _animator.cullingMode = mode;
         }
 
-        bool _unarmedBody, _unarmedShown;
+        bool _unarmedBody;
 
         // `_base` is the logical state (Locomotion covers both trees); the animator plays Unarmed or Locomotion for it.
         void SetBase(string state)
         {
             bool tree = state == Locomotion;
-            if (_base == state && (!tree || _unarmedShown == _unarmedBody)) return;
-            _unarmedShown = tree && _unarmedBody;
+            string wanted = !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Locomotion;
+            if (_base == state && _baseShown == wanted) return;
             // Down to and up from the ground is slower than a step.
-            _animator.CrossFadeInFixedTime(tree && _unarmedBody ? Unarmed : state, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
+            _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
             _base = state;
+            _baseShown = wanted;
+        }
+
+        string _baseShown = Locomotion; // the animator state actually playing for _base
+        float _flinchLength;
+        float FlinchClipLength()
+        {
+            if (_flinchLength <= 0f)
+                foreach (var c in _animator.runtimeAnimatorController.animationClips)
+                    if (c.name == "U_Hit_Chest") _flinchLength = c.length;
+            return _flinchLength > 0f ? _flinchLength : 0.5f;
         }
 
         void SetAdditive(string state)
@@ -543,11 +559,11 @@ namespace Game.Gameplay
             var jump = GameData.Rules.Jump;
             var stanceRules = StanceRules.Current;
             // Thigh forward and shin back, each measured from vertical; the same scale as the model drop uses.
-            float crouchScale = _crouch * Stances.CrouchBendScale(_crouchWalk, stanceRules.CrouchWalkBend);
+            float crouchScale = _crouch * (1f - _clipCrouch) * Stances.CrouchBendScale(_crouchWalk, stanceRules.CrouchWalkBend);
             float crouchThigh = stanceRules.CrouchThighDeg * crouchScale;
             float crouchShin = stanceRules.CrouchShinDeg * crouchScale;
             // A weapon pose keeps the weapon level, so only empty hands hunch forward in a crouch.
-            float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _upperWeight);
+            float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _clipCrouch) * (1f - _upperWeight);
             var parkourRules = ParkourRules.Current;
             Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch
                 + parkourRules.PoseTorsoPitchDeg * _parkour, transform.right);
@@ -596,7 +612,7 @@ namespace Game.Gameplay
         // The correction is carried into the next frame's placement (Update) so anything drawn between frames agrees.
         void GroundCrouchedFeet()
         {
-            if (_crouch <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
+            if (_crouch * (1f - _clipCrouch) <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
             float low = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
             low += _plantDrop; // the pelvis drop of the foot plant (a slope) is not the crouch's to undo
             float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);

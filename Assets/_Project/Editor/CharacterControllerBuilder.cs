@@ -60,6 +60,17 @@ public static class CharacterControllerBuilder
         unarmedTree.AddChild(Clip("U_Jog_Fwd_Loop"), gait.UnarmedRunSpeed);
         unarmed.speedParameter = CombatantAnimation.Pace;
         unarmed.speedParameterActive = true;
+        // Bare-handed crouch (UAL): a real crouch at the capsule's height, so the code knee bend is not used (CombatantAnimation._clipCrouch).
+        var crouch = controller.CreateBlendTreeInController(CombatantAnimation.UnarmedCrouch, out var crouchTree, 0);
+        crouchTree.blendType = BlendTreeType.Simple1D;
+        crouchTree.blendParameter = CombatantAnimation.Move;
+        crouchTree.useAutomaticThresholds = false;
+        crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), -gait.UnarmedCrouchSpeed);
+        crouchTree.children = crouchTree.children.Select((c, i) => { if (i == 0) c.timeScale = -1f; return c; }).ToArray();
+        crouchTree.AddChild(Clip("U_Crouch_Idle_Loop"), 0f);
+        crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), gait.UnarmedCrouchSpeed);
+        crouch.speedParameter = CombatantAnimation.Pace;
+        crouch.speedParameterActive = true;
         // No jump clip yet (gap sheet, ADR-187): the air state holds a still moment of the idle and CombatantAnimation poses the jump on top (ADR-048).
         var air = baseMachine.AddState(CombatantAnimation.Air);
         air.motion = Clip("RifleIdle");
@@ -77,12 +88,13 @@ public static class CharacterControllerBuilder
         upper.defaultState = lowered;
         upper.AddState(CombatantAnimation.Aim).motion = Clip("Swat_RifleAimingIdle_skin");
         upper.AddState(CombatantAnimation.Shoot).motion = Clip("FiringRifleStand");
-        // Punches (UAL Jab / Cross): PunchRight plays the clip whose fist is the right hand, PunchLeft the left-handed one (or the same clip mirrored).
+        // Punches (UAL Jab / Cross): CharacterKit.Prepare reads which hand each state ends up using and swaps or mirrors until the right state throws the right fist.
         var left = upper.AddState(CombatantAnimation.PunchLeft);
         var right = upper.AddState(CombatantAnimation.PunchRight);
-        right.motion = Clip(PunchClip(gait, true));
-        left.motion = Clip(PunchClip(gait, false));
-        left.mirror = gait.PunchRightHand[PunchIndex(gait, false)];
+        right.motion = Clip(gait.PunchSwap ? "U_Punch_Cross" : "U_Punch_Jab");
+        left.motion = Clip(gait.PunchSwap ? "U_Punch_Jab" : "U_Punch_Cross");
+        right.mirror = gait.MirrorRight;
+        left.mirror = gait.MirrorLeft;
 
         // 2 Action: reload clips by stance. The empty default state lets the layer rest at weight 0.
         AddMaskedLayer(controller, "Action", mask, AnimatorLayerBlendingMode.Override);
@@ -113,15 +125,6 @@ public static class CharacterControllerBuilder
         AssetDatabase.SaveAssets();
         return controller;
     }
-
-    // Which of the two punch clips (0 = Jab, 1 = Cross) a hand uses: a clip whose fist is that hand, else the other one mirrored.
-    public static int PunchIndex(CharacterKit.GaitProfile gait, bool right)
-    {
-        int rightClip = gait.PunchRightHand[1] ? 1 : 0;
-        if (right) return rightClip;
-        return gait.PunchRightHand[1 - rightClip] ? rightClip : 1 - rightClip;
-    }
-    public static string PunchClip(CharacterKit.GaitProfile gait, bool right) => PunchIndex(gait, right) == 0 ? "U_Punch_Jab" : "U_Punch_Cross";
 
     static void AddMaskedLayer(AnimatorController controller, string name, AvatarMask mask, AnimatorLayerBlendingMode mode)
     {

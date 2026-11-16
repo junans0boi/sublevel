@@ -17,7 +17,7 @@ public static class CharacterAnimProbe
             var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{CharacterRoster.PrefabDir}/Roster_{id}.prefab"));
             var def = go.GetComponent<CharacterDef>();
             var s = def.Sockets;
-            foreach (var name in CharacterAnimClips.Names)
+            foreach (var name in CharacterAnimClips.Names.Concat(CharacterAnimClips.UalNames.Select(n => "U_" + n)))
             {
                 var clip = CharacterAnimClips.LoadClip(name);
                 if (clip == null) continue;
