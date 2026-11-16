@@ -83,6 +83,20 @@ namespace Game.Tests
         }
 
         [Test]
+        public void ServerHit_NinePelletsMixedZones_KeepTheStrongestOnly()
+        {
+            var st = new StaggerState();
+            var gun = Gun(8);
+            for (int i = 0; i < 9; i++) st.Hit(gun, i < 4 ? HitZone.Limb : HitZone.Body, 1.0, R);
+            var body = WeaponStopping.Of(gun, HitZone.Body, R);
+            Assert.AreEqual(body.ShakeDeg, st.ShakeDeg(1.1), 1e-5f, "limb pellets neither add nor lower it");
+            Assert.AreEqual(1f - body.Slow, st.SpeedFactor(1.1), 1e-5f);
+            Assert.AreEqual(1f, st.SpeedFactor(1.0 + R.Seconds + 0.01), 1e-6f, "over after the hit time");
+            st.Hit(null, HitZone.Body, 2.0, R);
+            Assert.IsFalse(st.Active(2.0), "no weapon, no effect");
+        }
+
+        [Test]
         public void ShippedRoster_StoppingScalesWithTheHardestHitters()
         {
             var t = JsonUtility.FromJson<WeaponTable>(File.ReadAllText("Assets/_Project/Data/Resources/GameData/weapons.json"));
