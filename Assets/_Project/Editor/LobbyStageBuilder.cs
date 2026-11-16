@@ -4,6 +4,7 @@ using Game.Gameplay;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 // The lobby's 3D stage inside the MainMenu scene (ADR-247): an elevator car built with the same recipe and the same
 // WorldMaterials as Editor/WorldBuilder.Elevators.cs (shell, floor, rusty trim, ceiling lamp, steel door frame), made wide
@@ -47,11 +48,13 @@ public static class LobbyStageBuilder
         Box(shell, x0, -DoorHalf, 0f, h, z1 - s, z1);
         Box(shell, DoorHalf, x1, 0f, h, z1 - s, z1);
         Box(shell, x0, x1, DoorTop, h, z1 - s, z1);
-        Box(trim, -1.6f, 1.6f, 0.92f, 0.97f, z0 + s, z0 + s + 0.05f);
         Box(trim, x0 + s, x0 + s + 0.05f, 0.92f, 0.97f, -1.2f, 0.6f);
         Box(trim, x1 - s - 0.05f, x1 - s, 0.92f, 0.97f, -1.2f, 0.6f);
         Box(trim, -1.6f, 1.6f, h + CeilThick, h + CeilThick + 0.15f, -0.1f, 0.1f);
         Box(lamp, -0.9f, 0.9f, h - 0.03f, h, -0.9f, 0.4f);
+        // Floor indicator lamps over the opening and a thin strip of light in the door gap on the floor.
+        for (int i = -2; i <= 2; i++) Box(lamp, i * 0.22f - 0.06f, i * 0.22f + 0.06f, DoorTop + 0.12f, DoorTop + 0.2f, z1 - s - 0.02f, z1 - s);
+        Box(lamp, -DoorHalf, DoorHalf, 0f, 0.012f, z1 - s - 0.16f, z1 - s - 0.1f);
         // The door frame's amber stripe along the opening's top and sides (the game's DoorStripe material).
         Box(stripe, -DoorHalf, DoorHalf, DoorTop - 0.05f, DoorTop, z1 - s - 0.006f, z1 - s);
         Box(stripe, -DoorHalf, -DoorHalf + 0.05f, 0f, DoorTop, z1 - s - 0.006f, z1 - s);
@@ -96,6 +99,11 @@ public static class LobbyStageBuilder
         AddLamp(root.transform, "FillLeft", new Vector3(-2.6f, 2.2f, 3.4f), 9f, 1.6f);
         AddLamp(root.transform, "FillRight", new Vector3(2.6f, 2.2f, 3.4f), 9f, 1.6f);
         AddLamp(root.transform, "Rim", new Vector3(0f, 2.4f, -1.2f), 5f, 1.4f);
+        // A soft key from the hall (the only shadow caster), a wash down onto the floor and warm rims from behind each side.
+        AddSpot(root.transform, "Key", new Vector3(3.4f, 3.6f, 7.5f), new Vector3(0f, 1.0f, 0.2f), 38f, 16f, 7f, true);
+        AddSpot(root.transform, "FloorWash", new Vector3(0f, h - 0.1f, 0.4f), new Vector3(0f, 0f, 0.4f), 120f, 4f, 3.2f, false);
+        AddSpot(root.transform, "RimLeft", new Vector3(2.0f, 2.5f, -1.3f), new Vector3(0.6f, 1.4f, 0.8f), 60f, 6f, 5f, false);
+        AddSpot(root.transform, "RimRight", new Vector3(-2.0f, 2.5f, -1.3f), new Vector3(-0.6f, 1.4f, 0.8f), 60f, 6f, 5f, false);
 
         // Roster prefabs in PlayerAppearance.ModelIds order and the rifle template.
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
@@ -106,6 +114,9 @@ public static class LobbyStageBuilder
         rifle.transform.SetParent(root.transform, false);
         rifle.SetActive(false);
         stage.RifleTemplate = rifle;
+        stage.IdleController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/_Project/Prefabs/M1_5/Character.controller");
+        AddPost(root.transform);
+        AddDust(root.transform);
 
         // Cameras: the party seen from the front (in the hall, looking into the car), and a closeup for the 외형 screen.
         var lobby = new GameObject("CameraLobby").transform;
@@ -129,6 +140,64 @@ public static class LobbyStageBuilder
         RenderSettings.ambientLight = new Color(0.10f, 0.11f, 0.13f);
         RenderSettings.fog = false;
         return stage;
+    }
+
+    static void AddSpot(Transform parent, string name, Vector3 pos, Vector3 target, float angle, float range, float intensity, bool shadows)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.rotation = Quaternion.LookRotation(target - pos);
+        var l = go.AddComponent<Light>();
+        l.type = LightType.Spot; l.spotAngle = angle; l.innerSpotAngle = angle * 0.5f; l.range = range * 4f; l.intensity = intensity;
+        l.color = new Color(1f, 0.93f, 0.82f);
+        l.shadows = shadows ? LightShadows.Soft : LightShadows.None;
+    }
+
+    // The lobby's own post: bloom on the lamps, a gentle vignette, a touch more contrast, ACES.
+    static void AddPost(Transform parent)
+    {
+        var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        var bloom = profile.Add<Bloom>(true); bloom.threshold.Override(0.85f); bloom.intensity.Override(0.7f); bloom.scatter.Override(0.6f);
+        var vig = profile.Add<Vignette>(true); vig.intensity.Override(0.32f); vig.smoothness.Override(0.5f);
+        var ca = profile.Add<ColorAdjustments>(true); ca.contrast.Override(14f); ca.saturation.Override(-6f); ca.postExposure.Override(0.1f);
+        var tm = profile.Add<Tonemapping>(true); tm.mode.Override(TonemappingMode.ACES);
+        string path = MeshDir + "/LobbyPost.asset";
+        AssetDatabase.DeleteAsset(path);
+        AssetDatabase.CreateAsset(profile, path);
+        var go = new GameObject("LobbyPost");
+        go.transform.SetParent(parent, false);
+        var volume = go.AddComponent<Volume>();
+        volume.isGlobal = true; volume.priority = 10f; volume.weight = 1f;
+        volume.sharedProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+    }
+
+    // A few slow motes of dust in the hall light.
+    static void AddDust(Transform parent)
+    {
+        var go = new GameObject("Dust");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = new Vector3(0f, 1.6f, 2.5f);
+        var ps = go.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.loop = true; main.startLifetime = 9f; main.startSpeed = 0.03f; main.startSize = 0.018f; main.maxParticles = 140;
+        main.startColor = new Color(1f, 0.93f, 0.8f, 0.4f); main.simulationSpace = ParticleSystemSimulationSpace.World;
+        var em = ps.emission; em.rateOverTime = 14f;
+        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(6f, 3f, 5f);
+        var vel = ps.velocityOverLifetime; vel.enabled = true; vel.space = ParticleSystemSimulationSpace.World;
+        vel.x = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f); vel.y = new ParticleSystem.MinMaxCurve(0.0f, 0.04f); vel.z = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f);
+        var col = ps.colorOverLifetime; col.enabled = true;
+        var grad = new Gradient();
+        grad.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) }, new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.2f), new GradientAlphaKey(1f, 0.8f), new GradientAlphaKey(0f, 1f) });
+        col.color = grad;
+        var r = go.GetComponent<ParticleSystemRenderer>();
+        var mat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+        mat.SetFloat("_Surface", 1f); mat.SetFloat("_Blend", 0f); mat.SetFloat("_SrcBlend", 5f); mat.SetFloat("_DstBlend", 10f); mat.SetFloat("_ZWrite", 0f);
+        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); mat.renderQueue = 3000;
+        string path = MeshDir + "/LobbyDust.mat";
+        AssetDatabase.DeleteAsset(path);
+        AssetDatabase.CreateAsset(mat, path);
+        r.sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(path);
     }
 
     static void AddLamp(Transform parent, string name, Vector3 pos, float range, float intensity)

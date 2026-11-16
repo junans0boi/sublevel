@@ -11,7 +11,7 @@ namespace Game.Gameplay
     {
         public const int Slots = PartyLobby.SquadSize;
         // Local x of the four places across the car (slot 0, the local player, stands left and a little forward).
-        static readonly Vector3[] SlotPos = { new Vector3(1.35f, 0f, 0f), new Vector3(0.45f, 0f, 0f), new Vector3(-0.45f, 0f, 0f), new Vector3(-1.35f, 0f, 0f) }; // the camera looks down -Z, so +X is on screen left (slot 0 = leftmost)
+        static readonly Vector3[] SlotPos = { new Vector3(1.7f, 0f, 0f), new Vector3(0.58f, 0f, -0.1f), new Vector3(-0.58f, 0f, -0.1f), new Vector3(-1.7f, 0f, 0f) }; // the camera looks down -Z, so +X is on screen left (slot 0 = leftmost)
 
         // The slot of the local player (a step forward, so he is the biggest); set by the lobby panel.
         public int LocalSlot { get; set; }
@@ -20,10 +20,12 @@ namespace Game.Gameplay
 
         public GameObject[] RosterPrefabs;      // in PlayerAppearance.ModelIds order (set by the builder)
         public GameObject RifleTemplate;        // inactive model with its grip at its origin (set by the builder)
+        public RuntimeAnimatorController IdleController; // the game's Character.controller: Humanoid rifle idle + breathing (set by the builder)
         public Camera Camera;
         public Transform CameraLobby, CameraCloseup;
 
         readonly GameObject[] _chars = new GameObject[Slots];
+        readonly bool[] _animated = new bool[Slots];
         readonly PlayerAppearance?[] _looks = new PlayerAppearance?[Slots];
         bool _closeup;
         float _t;
@@ -57,8 +59,22 @@ namespace Game.Gameplay
             if (def != null)
             {
                 def.ApplyVariant(a.Variant);
-                if (def.Animator != null) def.Animator.enabled = false; // the pose below is set by hand
-                PoseLowReady(def);
+                if (def.Animator != null && IdleController != null)
+                {
+                    // The game's own Humanoid rifle idle (shared clips, breathing layer), each person a little out of step.
+                    def.Animator.runtimeAnimatorController = IdleController;
+                    def.Animator.applyRootMotion = false;
+                    def.Animator.speed = 0.92f + 0.05f * ((slot * 7) % 4);
+                    def.Animator.Update(0f);
+                    def.Animator.Play(def.Animator.GetCurrentAnimatorStateInfo(0).fullPathHash, 0, (slot * 0.27f) % 1f);
+                    _animated[slot] = true;
+                }
+                else
+                {
+                    if (def.Animator != null) def.Animator.enabled = false; // no controller: a held low-ready pose
+                    PoseLowReady(def);
+                    _animated[slot] = false;
+                }
                 AttachRifle(def, go);
             }
             if (a.Helmet > 0 || a.Vest > 0) go.AddComponent<ArmorVisual>().ShowTiers(a.Helmet, a.Vest);
@@ -100,15 +116,18 @@ namespace Game.Gameplay
             var to = _closeup ? CameraCloseup : CameraLobby;
             if (Camera != null && to != null)
             {
+                // A very slow drift (parallax) around the framing; none with reduced motion.
+                var drift = UiFx.ReducedMotion ? Vector3.zero : new Vector3(Mathf.Sin(_t * 0.16f) * 0.14f, Mathf.Sin(_t * 0.11f) * 0.05f, 0f);
+                var pos = to.position + to.rotation * drift;
                 float k = 1f - Mathf.Exp(-6f * Time.unscaledDeltaTime);
-                Camera.transform.SetPositionAndRotation(Vector3.Lerp(Camera.transform.position, to.position, k), Quaternion.Slerp(Camera.transform.rotation, to.rotation, k));
+                Camera.transform.SetPositionAndRotation(Vector3.Lerp(Camera.transform.position, pos, k), Quaternion.Slerp(Camera.transform.rotation, to.rotation, k));
             }
             // A slow breath so nobody stands like a statue: chest and head sway a few millimetres.
             for (int i = 0; i < Slots; i++)
             {
                 if (_chars[i] == null) continue;
                 var def = _chars[i].GetComponent<CharacterDef>();
-                if (def == null || def.Sockets.Spine == null) continue;
+                if (def == null || def.Sockets.Spine == null || _animated[i]) continue;
                 float s = Mathf.Sin(_t * 1.6f + i * 1.3f) * 0.6f;
                 def.Sockets.Spine.localRotation *= Quaternion.Euler(s * 0.02f, 0f, 0f);
             }

@@ -38,6 +38,7 @@ namespace Game.Tests
 
         static IEnumerator Menu()
         {
+            PlayerPrefs.SetInt(UiFx.ReducedKey, 1); // captures are taken after the motion, so they show the settled screen
             SceneManager.LoadScene(MainMenu.SceneName);
             yield return NetHarness.WaitUntil(() => MainMenu.Instance != null, "main menu", null, 20f);
             yield return null;

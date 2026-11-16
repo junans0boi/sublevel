@@ -149,7 +149,7 @@ namespace Game.Gameplay
             float s = Stage.localScale.x > 0f ? Stage.localScale.x : 1f;
             Vector2 f = new Vector2((feetVp.x - 0.5f) * size.x, (feetVp.y - 0.5f) * size.y) / s;
             Vector2 h = new Vector2((headVp.x - 0.5f) * size.x, (headVp.y - 0.5f) * size.y) / s;
-            float k = Mathf.Clamp(Mathf.Abs(h.y - f.y) / 185f, 0.4f, 3f) * 0.62f; // the tile is a floor mark smaller than the spacing between people
+            float k = Mathf.Clamp(Mathf.Abs(h.y - f.y) / 185f, 0.4f, 3f) * 0.5f; // the tile is a floor mark smaller than the spacing between people
             float cx = f.x + StageW * 0.5f, cy = StageH * 0.5f - f.y;
             var slot = _slots[i];
             var tile = (RectTransform)slot.Tile.transform;
@@ -327,7 +327,7 @@ namespace Game.Gameplay
             }
             _lamp1.color = solo ? UiPaint.Ac : UiPaint.Ok;
             _lamp2.color = solo ? UiPaint.Ok : UiPaint.Ac;
-            _led.text = solo ? "솔로 · 1인" : "스쿼드 · 4인";
+            UiFx.Swap(_led, solo ? "솔로 · 1인" : "스쿼드 · 4인");
             bool tpp = Party.View == Perspective.Third;
             _tpp.GetComponentInChildren<Text>().text = (tpp ? "✓ " : "") + "TPP 3인칭";
             _fpp.GetComponentInChildren<Text>().text = (tpp ? "" : "✓ ") + "FPP 1인칭";
@@ -375,7 +375,7 @@ namespace Game.Gameplay
             var btn = Party.ButtonFor(Self, (int)_matchSeconds);
             bool primary = btn.Action == LobbyAction.Start || btn.Action == LobbyAction.Ready;
             bool enabled = btn.Enabled;
-            _statusLabel.text = btn.Label;
+            UiFx.Swap(_statusLabel, btn.Label);
             _statusFill.color = primary && enabled ? UiPaint.AcS : UiPaint.Pn;
             _statusRing.color = primary && enabled ? UiPaint.Ac : UiPaint.Ln;
             _statusLabel.color = enabled ? UiPaint.Tx : UiPaint.T2;

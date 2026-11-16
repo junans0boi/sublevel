@@ -174,10 +174,11 @@ namespace Game.Gameplay
             if (_name != null) _name.text = PlayerAppearance.ModelNames[idx];
             if (_desc != null)
             {
-                _desc.text = "로스터 " + (idx + 1) + "번 · 키 1.8 m. 고르면 로비의 내 캐릭터와 게임 속 내 캐릭터가 같이 바뀝니다.";
+                _desc.text = "고르면 로비와 게임 속 내 캐릭터가 같이 바뀝니다.";
                 _desc.horizontalOverflow = HorizontalWrapMode.Wrap;
                 _desc.alignment = TextAnchor.UpperLeft;
-                ((RectTransform)_desc.transform).sizeDelta = new Vector2(470f, 52f);
+                ((RectTransform)_desc.transform).sizeDelta = new Vector2(470f, 30f);
+                _desc.fontSize = 17;
             }
             BuildVariants(idx);
             for (int g = 0; g < 3; g++)
@@ -207,7 +208,7 @@ namespace Game.Gameplay
             VariantCount = variants != null ? variants.Length : 1;
             int cur = Mathf.Clamp(Look.Variant, 0, VariantCount - 1);
             if (_colorLabel != null)
-                _colorLabel.text = "색 변형 · " + (variants != null && cur < variants.Length && !string.IsNullOrEmpty(variants[cur].Name) ? variants[cur].Name : "기본") + "  (" + (cur + 1) + "/" + VariantCount + ")";
+                _colorLabel.text = "색 변형 · " + (variants != null && cur < variants.Length && !string.IsNullOrEmpty(variants[cur].Name) ? variants[cur].Name : "기본");
             for (int v = 0; v < VariantCount; v++)
             {
                 int vi = v;
@@ -230,8 +231,9 @@ namespace Game.Gameplay
             {
                 if (m == null) continue;
                 var tex = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : m.mainTexture;
-                if (tex != null) return Average(tex);
-                if (m.HasProperty("_BaseColor")) { var c = m.GetColor("_BaseColor"); if (c.a > 0.5f) return new Color(c.r, c.g, c.b, 1f); }
+                var tint = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : Color.white;
+                if (tex != null) { var a = Average(tex); return new Color(a.r * tint.r, a.g * tint.g, a.b * tint.b, 1f); }
+                if (tint.a > 0.5f) return new Color(tint.r, tint.g, tint.b, 1f);
             }
             return UiPaint.T2;
         }
