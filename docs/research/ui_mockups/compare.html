@@ -1,0 +1,24 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>나란히 비교</title><link rel="stylesheet" href="ui.css">
+<style>#cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}#cmp.l6{grid-template-columns:repeat(2,1fr)}@media (max-width:1100px){#cmp,#cmp.l6{grid-template-columns:1fr}}.cc{font-size:14px;margin:4px 0 0}</style></head>
+<body class="hub"><header class="bar2"><a class="nv" href="index.html">허브·결정 시트</a><a class="nv" href="proto.html">프로토타입</a><a class="nv on" href="compare.html">나란히 비교</a><a class="nv" href="flow.html">흐름도</a>
+<label>모드 <select id="cm" style="font:inherit;padding:6px"><option value="dir">방향 A·B·C 비교</option><option value="lobby">로비 6안 비교 (2×3)</option></select></label>
+<label id="l1">화면 <select id="sel" style="font:inherit;padding:6px"></select></label><button class="hb" id="prev" type="button">← 이전</button><button class="hb" id="next" type="button">다음 →</button>
+<label id="l2">방향 <select id="ld" style="font:inherit;padding:6px"><option value="b">B 클린 모던</option><option value="a">A 시설 관제실</option><option value="c">C 80년대 레트로</option></select></label>
+<label id="l3">상태 <select id="ls" style="font:inherit;padding:6px"><option value="squad">스쿼드 대기</option><option value="search">매칭 중</option><option value="member">파티원</option><option value="solo">솔로</option><option value="mode">모드 선택 창</option></select></label>
+<span style="flex:1"></span><button class="hb" id="tb" type="button">라이트로 보기</button></header>
+<main><div id="cmp"></div></main>
+<script src="ui.js"></script><script>
+(function(){const U=UI,sel=document.getElementById('sel'),cmp=document.getElementById('cmp'),body=document.body,cm=document.getElementById('cm'),ld=document.getElementById('ld'),ls=document.getElementById('ls');
+let t='dark',qs=new URLSearchParams(location.search);if(qs.get('t'))t=qs.get('t');
+U.ENTRIES.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.l;sel.appendChild(o);});
+if(qs.get('e')){const k=U.ENTRIES.findIndex(e=>e.id===qs.get('e'));if(k>=0)sel.value=k;}
+if(qs.get('lobby')){cm.value='lobby';}
+function show(){const L=cm.value==='lobby';['l1','prev','next'].forEach(i=>{const e=document.getElementById(i);if(e)e.style.display=L?'none':'';});['l2','l3'].forEach(i=>document.getElementById(i).style.display=L?'':'none');}
+function draw(){body.dataset.t=t;show();document.getElementById('tb').textContent=t==='dark'?'라이트로 보기':'다크로 보기';cmp.innerHTML='';cmp.className=cm.value==='lobby'?'l6':'';
+ if(cm.value==='lobby'){Object.keys(U.LOBBY_INFO).filter(k=>k!=='ref').concat(['ref']).forEach(k=>{const e=U.ENTRIES.find(x=>x.id==='lobby-'+k+'-'+ls.value)||U.ENTRIES.find(x=>x.id==='lobby-ref-squad');const info=U.LOBBY_INFO[k];const f=document.createElement('figure');f.innerHTML='<figcaption>'+info.n+'</figcaption><div class="fit"></div><div class="cc"><b>컨셉</b> '+info.c+'<br><b>장점</b> '+info.p+' · <b>단점</b> '+info.x+'</div>';cmp.appendChild(f);U.mountEntry(f.querySelector('.fit'),e,ld.value,t,true);});return;}
+ const e=U.ENTRIES[+sel.value];
+ ['a','b','c'].forEach(d=>{const f=document.createElement('figure');f.innerHTML='<figcaption>'+U.DIRS[d]+'</figcaption><div class="fit"></div>';cmp.appendChild(f);U.mountEntry(f.querySelector('.fit'),e,d,t,true);});}
+[sel,cm,ld,ls].forEach(x=>x.onchange=draw);document.getElementById('prev').onclick=()=>{sel.selectedIndex=(sel.selectedIndex+sel.length-1)%sel.length;draw();};document.getElementById('next').onclick=()=>{sel.selectedIndex=(sel.selectedIndex+1)%sel.length;draw();};
+document.getElementById('tb').onclick=()=>{t=t==='dark'?'light':'dark';draw();};
+addEventListener('resize',()=>cmp.querySelectorAll('.fit').forEach(f=>U.fit(f)));draw();setTimeout(()=>cmp.querySelectorAll('.fit').forEach(f=>U.fit(f)),50);})();
+</script></body></html>

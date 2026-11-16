@@ -1,0 +1,44 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>인게임 외 UI/UX 시안 허브</title><link rel="stylesheet" href="ui.css"></head>
+<body class="hub"><header class="bar2"><a class="nv on" href="index.html">허브·결정 시트</a><a class="nv" href="proto.html">프로토타입</a><a class="nv" href="compare.html">나란히 비교</a><a class="nv" href="flow.html">흐름도</a><a class="nv" href="#sheet">결정 시트</a><span style="flex:1"></span><button class="hb" id="tb" type="button">테마 전환</button></header>
+<main>
+<h1>[게임 이름] 비(非)인게임 UI/UX 시안</h1>
+<p class="mu">실행부터 매치 시작 전, 매치 종료 후까지의 화면 시안입니다. 세 가지 시각 방향(A·B·C)과, 레이아웃 선택지가 있는 화면의 변형을 비교해서 고르세요. 게임 이름·로고는 자리표시입니다. 모든 문구는 존댓말(~합니다)입니다. 5차 수정: 배그형 로비를 폐기하고 서로 다른 로비 6안(① 투입 지휘 테이블 ~ ⑥ 풀스크린 지도) 제시, 메인 메뉴는 로비로 통합. 2차 수정: 전체를 훨씬 어둡게 조정했고, 방 만들기를 커스텀 모드로 옮겼으며, 파티·매칭·대기 구역 흐름을 넣었습니다.</p>
+<div class="grid3" id="thumbs"></div>
+<h2>볼 곳</h2>
+<div class="grid3">
+<div class="card2"><b><a href="proto.html">클릭 가능한 프로토타입</a></b><p class="mu">버튼으로 화면 이동, Esc 뒤로, 포커스 링, 키 변경, 매칭·카운트다운 진행. 위쪽 막대에서 방향·테마·레이아웃 변형을 바꿉니다.</p></div>
+<div class="card2"><b><a href="compare.html">세 방향 나란히 비교</a></b><p class="mu">같은 화면을 A·B·C로 나란히 놓고 화면을 넘겨 가며 봅니다.</p></div>
+<div class="card2"><b><a href="flow.html">흐름도</a></b><p class="mu">실행 → 로딩 → 메인 → 로비 → 매칭 → 투입 → 인게임 → 결과와 실패 분기, Esc 규칙.</p></div>
+<div class="card2"><b><a href="direction_a.html">방향 A 시설 관제실</a></b><p class="mu">토큰·컴포넌트·명암비 + 화면 52장.</p></div>
+<div class="card2"><b><a href="direction_b.html">방향 B 클린 모던</a></b><p class="mu">토큰·컴포넌트·명암비 + 화면 52장.</p></div>
+<div class="card2"><b><a href="direction_c.html">방향 C 80년대 레트로</a></b><p class="mu">토큰·컴포넌트·명암비 + 화면 52장.</p></div></div>
+<h2 id="sheet">결정 시트</h2>
+<p class="mu">화면마다 방향과 레이아웃을 고르고 맨 아래 “내 선택 복사”를 누른 뒤 대화에 붙여넣으세요. 선택은 이 브라우저에 자동 저장됩니다.</p>
+<form id="f" onsubmit="return false"></form>
+<fieldset><legend>전체</legend><div id="glob"></div></fieldset>
+<p><button class="hb" id="cp" type="button">내 선택 복사</button> <button class="hb" id="rs" type="button">선택 지우기</button> <span id="msg" role="status" class="mu"></span></p>
+<label for="out"><b>복사될 내용</b></label><textarea id="out" readonly></textarea>
+</main>
+<script src="ui.js"></script><script>
+(function(){const U=UI,body=document.body;
+function th(t){body.dataset.t=t;}
+document.getElementById('tb').onclick=()=>{const c=body.dataset.t||'dark';th(c==='dark'?'light':'dark');draw();};
+const T=document.getElementById('thumbs');
+function draw(){const t=body.dataset.t||'dark';T.innerHTML='';['a','b','c'].forEach(d=>{const f=document.createElement('figure');f.innerHTML='<figcaption>'+U.DIRS[d]+' · 메인 메뉴</figcaption><div class="fit"></div>';T.appendChild(f);U.mountEntry(f.querySelector('.fit'),U.ENTRIES[2],d,t,true);});}
+draw();addEventListener('resize',()=>T.querySelectorAll('.fit').forEach(f=>U.fit(f)));
+const LB=Object.entries(U.LOBBY_INFO).filter(e=>e[0]!=='ref');
+const ROWS=[['load','1 시작·로딩','splash',null],['lobby','3 로비 방향 (색·질감·타이포)','lobby-order-squad',null],['custom','3 커스텀 모드 (방 만들기)','custom',null],['char','4 캐릭터/외형','char-grid','char'],['set','5 설정','set-gfx','settings'],['deploy','6 인게임 로딩·대기 구역·엘리베이터 투입','assembly-count',null],['result','7 매치 결과','result-table','result'],['cred','8 크레딧','credits',null],['pop','9 종료·오류·끊김 팝업','pop-err',null],['tut','10 훈련장·튜토리얼','tutorial',null]];
+const f=document.getElementById('f');let SV={};try{SV=JSON.parse(localStorage.getItem('ui.sheet')||'{}')}catch(e){}
+const rad=(name,opts)=>opts.map(o=>`<label style="margin-right:18px;display:inline-flex;gap:6px;align-items:center"><input type="radio" name="${name}" value="${o[0]}"${SV[name]===o[0]?' checked':''}>${o[1]}</label>`).join('');
+const lobbyBox=`<fieldset><legend>3 로비 레이아웃 ①~⑥ (단일 선택) <a href="compare.html?lobby=1" style="font-weight:400">· 6안 한 화면 비교</a></legend><ul style="margin:4px 0 10px;padding-left:18px">${LB.map(e=>`<li style="margin:4px 0"><label><input type="radio" name="l_lobby6" value="${e[0]}"${SV.l_lobby6===e[0]?' checked':''}> <b>${e[1].n}</b></label> <a href="compare.html?lobby=1&e=${e[0]}" style="font-weight:400">보기</a><div class="mu" style="font-size:15px">한 줄 컨셉: ${e[1].c}<br>장점: ${e[1].p} · 단점: ${e[1].x}</div></li>`).join('')}</ul><label>마음에 드는 점 / 바꿀 점 메모<br><textarea id="lobbynote" style="min-height:90px">${(SV.lobbynote||'').replace(/</g,'&lt;')}</textarea></label></fieldset>`;
+f.innerHTML=lobbyBox+ROWS.map(r=>{const ev=r[3]?Object.entries(U.VARIANTS[r[3]]):null;return `<fieldset><legend>${r[1]} <a href="compare.html?e=${r[2]}" style="font-weight:400">· 비교해서 보기</a></legend><div>방향: ${rad('d_'+r[0],[['A','A 시설 관제실'],['B','B 클린 모던'],['C','C 80년대 레트로'],['-','잘 모르겠음']])}</div>${ev?`<div style="margin-top:6px">레이아웃: ${rad('l_'+r[0],ev.map(x=>[x[0],x[1]]).concat([['-','상관없음']]))}</div>`:''}</fieldset>`;}).join('');
+document.getElementById('glob').innerHTML=`<div>전체 통일: ${rad('g_dir',[['A','전부 A'],['B','전부 B'],['C','전부 C'],['mix','화면마다 위 선택대로']])}</div><div style="margin-top:6px">파티·매칭 흐름 확인: ${rad('g_flow',[['ok','이대로 좋음'],['fix','수정 필요(의견란에 적기)']])}</div><div style="margin-top:6px">모드 상시 패널 위치/구성 확인(시작 버튼 바로 위, 시점·솔로/스쿼드·맵·버튼): ${rad('g_dock',[['ok','이대로 좋음'],['fix','수정 필요(의견란에 적기)']])}</div><div style="margin-top:6px">어두움 정도: ${rad('g_dark',[['cur','현재 정도'],['darker','더 어둡게'],['lighter','덜 어둡게']])}</div><div style="margin-top:6px">기본 테마: ${rad('g_th',[['dark','다크 기본'],['light','라이트 기본'],['both','둘 다 지원(시스템 설정 따름)']])}</div><div style="margin-top:6px">플레이 중 메뉴(Esc)도 같은 방향: ${rad('g_esc',[['same','같은 방향'],['sep','따로 정함']])}</div><div style="margin-top:10px"><label>자유 의견<br><textarea id="note" style="min-height:90px">${(SV.note||'').replace(/</g,'&lt;')}</textarea></label></div>`;
+function build(){const o=[];o.push('[UI 시안 선택] 가칭 [게임 이름]');ROWS.forEach(r=>{const d=SV['d_'+r[0]],l=SV['l_'+r[0]];const L=r[3]&&l&&l!=='-'?' / '+U.VARIANTS[r[3]][l]:'';o.push(r[1]+': '+(d?(d==='-'?'미정':d+' '+({A:'시설 관제실',B:'클린 모던',C:'80년대 레트로'}[d])):'(미선택)')+L);});
+ o.push('로비 레이아웃: '+(SV.l_lobby6?U.LOBBY_INFO[SV.l_lobby6].n:'(미선택)')+(SV.lobbynote?' / 메모: '+SV.lobbynote:''));o.push('전체 통일: '+(SV.g_dir||'(미선택)')+' / 기본 테마: '+(SV.g_th||'(미선택)')+' / Esc 메뉴: '+(SV.g_esc||'(미선택)')+' / 파티·매칭 흐름: '+(SV.g_flow||'(미선택)')+' / 어두움: '+(SV.g_dark||'(미선택)')+' / 모드 상시 패널: '+(SV.g_dock||'(미선택)'));if(SV.note)o.push('의견: '+SV.note);return o.join('\n');}
+function upd(){document.getElementById('out').value=build();try{localStorage.setItem('ui.sheet',JSON.stringify(SV))}catch(e){}}
+document.querySelector('main').addEventListener('change',e=>{if(e.target.type==='radio'){SV[e.target.name]=e.target.value;upd();}});
+document.addEventListener('input',e=>{if(e.target.id==='note'){SV.note=e.target.value;upd();}if(e.target.id==='lobbynote'){SV.lobbynote=e.target.value;upd();}});
+document.getElementById('cp').onclick=async()=>{upd();const t=document.getElementById('out');try{await navigator.clipboard.writeText(t.value);document.getElementById('msg').textContent='복사했습니다. 대화에 붙여넣어 주세요.';}catch(e){t.removeAttribute('readonly');t.select();document.execCommand('copy');t.setAttribute('readonly','');document.getElementById('msg').textContent='복사했습니다. (안 되면 아래 내용을 직접 선택해 복사하세요.)';}};
+document.getElementById('rs').onclick=()=>{SV={};try{localStorage.removeItem('ui.sheet')}catch(e){}document.querySelectorAll('input[type=radio]').forEach(r=>r.checked=false);document.getElementById('note').value='';upd();};
+upd();})();
+</script></body></html>

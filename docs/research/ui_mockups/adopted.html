@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>채택 시안 · 승강기 조작반 + 클린 모던</title><link rel="stylesheet" href="ui.css"></head>
+<body class="hub" data-t="dark"><header class="bar2"><a class="nv on" href="adopted.html">채택 시안</a><a class="nv" href="design_system.html">디자인 시스템</a><a class="nv" href="adopted_proto.html">채택 프로토타입</a><a class="nv" href="NOTES.md">NOTES (구현 연결)</a><span style="flex:1"></span><a class="nv" href="index.html">아카이브: 기존 6안·A/C 방향</a></header>
+<main><h1>채택 시안: ② 승강기 조작반 + B 클린 모던 (다크 기본)</h1>
+<p class="mu">확정 사항: 로비 = 승강기 조작반, 방향 = B(다크 기본, 라이트 보조), 중간 화면(로딩·투입·집결)은 로고만, 결과 화면에만 층 표시기 메뉴, 모드 스위치는 즉시 전환·맵 창은 모드 선택 창, 집결 최소 30명 / 30초 / 최대 2분, 파티장 이탈 시 다음 파티원이 파티장이 되고 매칭 유지. 기존 6안과 A·C 방향은 아카이브로만 남깁니다.</p>
+<h2>다크 (기본) 24장</h2><div id="list"></div><h2>라이트 (보조) 대표 3장</h2><div id="light"></div></main>
+<script src="ui.js"></script><script src="adopted.js"></script><script>
+(function(){const U=UI,L=document.getElementById('list'),G=document.getElementById('light');
+function add(host,e,t){const f=document.createElement('figure');f.innerHTML='<figcaption>'+e.l+'</figcaption><div class="fit"></div>';host.appendChild(f);U.mountEntry(f.querySelector('.fit'),e,'b',t,true);}
+U.AENTRIES.forEach(e=>add(L,e,'dark'));U.AENTRIES.filter(e=>U.ALIGHT.indexOf(e.id)>=0).forEach(e=>add(G,e,'light'));
+function refit(){document.querySelectorAll('.fit').forEach(f=>U.fit(f));}addEventListener('resize',refit);setTimeout(refit,50);})();
+</script></body></html>

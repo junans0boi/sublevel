@@ -1,0 +1,9 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>채택 프로토타입</title><link rel="stylesheet" href="ui.css">
+<style>html,body{height:100%;overflow:hidden}#wrap{display:flex;flex-direction:column;height:100vh}#view{flex:1;min-height:0;display:grid;place-items:center;background:#000}#host{position:relative;overflow:hidden}.devs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.devs select{font:inherit;padding:6px;font-size:14px}.devs .sep{width:1px;height:24px;background:rgba(128,128,128,.6)}.tip{font-size:13px;opacity:.8}</style></head>
+<body class="hub"><div id="wrap"><header class="bar2" style="position:static"><a class="nv" href="adopted.html">채택 허브</a><a class="nv" href="design_system.html">디자인 시스템</a><a class="nv" href="flow.html">흐름도</a>
+
+<button class="hb" id="tb" type="button">테마</button><span class="sep"></span>
+<div class="devs"><label class="tip">시점 <select id="role"><option value="solo">솔로</option><option value="leader">파티장</option><option value="member">파티원</option></select></label><label class="tip">화면 <select id="jump"></select></label></div>
+<span class="sep"></span><div class="devs"><span class="tip">시험:</span><button class="hb" data-sim="err" type="button">연결 오류</button><button class="hb" data-sim="dc" type="button">연결 끊김</button><button class="hb" data-sim="quit" type="button">종료 확인</button><button class="hb" data-sim="leader" type="button">파티장 이탈</button></div></header>
+<div id="view"><div id="host"></div></div></div>
+<script src="ui.js"></script><script src="adopted.js"></script><script>if(!/[?&]d=/.test(location.search))history.replaceState(null,"",location.pathname+"?d=b"+(location.search?"&"+location.search.slice(1):""));</script><script src="proto.js"></script></body></html>
