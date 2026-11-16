@@ -16,7 +16,7 @@ public static partial class WorldBuilder
 
     // Roads: sampled finer than the 4 m of the first sketch so the strip follows the 1 m heightmap; lifted just
     // clear of the ground. Overlapping strips get slightly different lifts so they do not flicker at junctions.
-    const float RoadStep = 2f, RoadLift = 0.03f;
+    const float RoadStep = 2f, RoadLift = 0.03f, TinyDecor = 0.36f;
 
     // Buildings: a skirt under the footprint hides gaps where the pad is not perfectly level.
     const float FoundationDepth = 1.2f;
@@ -238,6 +238,7 @@ public static partial class WorldBuilder
         go.isStatic = true;
         // One "Colliders" object per surface (all named alike, as the old name checks expect), each tagged with its SurfaceId.
         var colliderGroups = new Dictionary<SurfaceId, GameObject>();
+        var colliderBoxes = new Dictionary<SurfaceId, List<(Vector3 center, Vector3 size)>>();
         GameObject Colliders(SurfaceId surface)
         {
             if (!colliderGroups.TryGetValue(surface, out var group))
@@ -286,9 +287,11 @@ public static partial class WorldBuilder
 
             foreach (var part in parts)
             {
-                var box = Colliders(SurfaceRules.ForBuilding(kind, piece.Kind)).AddComponent<BoxCollider>();
-                box.center = part.center;
-                box.size = part.size;
+                // ADR-209: the boxes of one surface become one collision mesh (below) instead of one BoxCollider component each
+                var surfaceId = SurfaceRules.ForBuilding(kind, piece.Kind);
+                Colliders(surfaceId);
+                if (!colliderBoxes.TryGetValue(surfaceId, out var list)) colliderBoxes[surfaceId] = list = new List<(Vector3, Vector3)>();
+                list.Add((part.center, part.size));
             }
 
             // Floors and stairs are walked on; walls, roofs, trim and props only get in the way (a roof nobody
@@ -307,6 +310,7 @@ public static partial class WorldBuilder
         for (int di = 0; di < plan.Decor.Count; di++)
         {
             var decor = plan.Decor[di];
+            if (Mathf.Max(decor.SizeX, Mathf.Max(decor.SizeY, decor.SizeZ)) < TinyDecor && decor.Mat != DecorMat.Lamp) continue;   // ADR-209: parts under 36 cm (not lamps) are not worth their vertices
             var at = new Vector3(decor.X, decor.Y, decor.Z);
             int skip = HiddenFaces(plan, decor) | HiddenByNeighbours(plan.Decor, di);
             for (int f = 0; f < 6; f++) hiddenFaces += skip >> f & 1;
@@ -333,17 +337,30 @@ public static partial class WorldBuilder
 
         var all = new List<Renderer>();
         var shell = new List<Renderer>();
-        foreach (var key in order)
+        // One renderer per (inside cell | shell): all materials of the group go in as sub-meshes of one mesh (ADR-209). The draw calls stay one per
+        // material, but the scene holds a fraction of the renderers and objects.
+        var groups = new List<(bool interior, int cell)>();
+        foreach (var key in order) if (!groups.Contains((key.interior, key.cell))) groups.Add((key.interior, key.cell));
+        foreach (var group in groups)
         {
-            var part = new GameObject((key.interior ? "Inside_" : "Shell_") + key.material.name + (key.interior ? "_" + key.cell : ""));
+            var parts = new List<WorldMeshes.BoxBatch>();
+            var materials = new List<Material>();
+            foreach (var key in order)
+            {
+                if (key.interior != group.interior || key.cell != group.cell) continue;
+                parts.Add(batches[key]);
+                materials.Add(key.material);
+            }
+            var merged = WorldMeshes.BoxBatch.ToCompactMesh($"{name}_{(group.interior ? "Inside_" + group.cell : "Shell")}", parts);
+            var part = new GameObject(group.interior ? "Inside_" + group.cell : "Shell_All");
             part.transform.SetParent(go.transform, false);
-            part.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(batches[key].ToMesh($"{name}_{part.name}"));
+            part.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(merged);
             var renderer = part.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = key.material;
-            renderer.shadowCastingMode = key.interior ? ShadowCastingMode.Off : ShadowCastingMode.On;
+            renderer.sharedMaterials = materials.ToArray();
+            renderer.shadowCastingMode = group.interior ? ShadowCastingMode.Off : ShadowCastingMode.On;
             part.isStatic = true;
             all.Add(renderer);
-            if (!key.interior) shell.Add(renderer);
+            if (!group.interior) shell.Add(renderer);
         }
         rendererCount += all.Count;
         if (all.Count > 0)
@@ -353,6 +370,13 @@ public static partial class WorldBuilder
                 ? new[] { new LOD(InteriorLodHeight, all.ToArray()), new LOD(ShellLodHeight, shell.ToArray()) }
                 : new[] { new LOD(ShellLodHeight, all.ToArray()) });
             group.RecalculateBounds();
+        }
+
+        foreach (var pair in colliderBoxes)
+        {
+            var group = colliderGroups[pair.Key];
+            group.AddComponent<MeshFilter>().sharedMesh = store.AddBlob(WorldMeshes.BoxCollisionMesh($"{name}_Collision_{pair.Key}", pair.Value));
+            group.AddComponent<MeshCollider>();      // the mesh arrives with the filter's (WorldMeshBank)
         }
 
         AddWindowGlass(go.transform, plan, seed);

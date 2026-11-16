@@ -223,4 +223,74 @@ public static partial class WorldBuilder
         Debug.Log($"[CheckNav] {total - bad}/{total} hops and station links complete");
         EditorApplication.Exit(bad == 0 ? 0 : 1);
     }
+
+    // Renderer / material / triangle census of the built World scene, split by building part (tools/unity.sh run WorldBuilder.PerfStats).
+    public static void PerfStats()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        var byName = new Dictionary<string, (int n, long tris)>();
+        int total = 0, sub = 0; long triTotal = 0; var mats = new HashSet<Material>(); int colliders = 0, objects = 0;
+        foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+        {
+            total++;
+            var mf = r.GetComponent<MeshFilter>();
+            long tris = mf != null && mf.sharedMesh != null ? mf.sharedMesh.triangles.Length / 3 : 0;
+            triTotal += tris;
+            foreach (var m in r.sharedMaterials) { mats.Add(m); sub++; }
+            string key = r.name.StartsWith("Inside_") ? "Inside" : r.name.StartsWith("Shell_") ? "Shell" : r.transform.parent != null ? r.transform.parent.name.Split('_')[0] : r.name;
+            if (key.Length > 14) key = key.Substring(0, 14);
+            byName.TryGetValue(key, out var v); byName[key] = (v.n + 1, v.tris + tris);
+        }
+        colliders = Object.FindObjectsByType<Collider>(FindObjectsSortMode.None).Length;
+        objects = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None).Length;
+        Debug.Log($"[PerfStats] mesh renderers {total}, triangles {triTotal}, distinct materials {mats.Count}, material slots {sub}, colliders {colliders}, transforms {objects}");
+        foreach (var kv in byName) if (kv.Value.n > 50) Debug.Log($"[PerfStats]   {kv.Key}: {kv.Value.n} renderers, {kv.Value.tris} tris");
+        var interiorMats = new Dictionary<string, int>();
+        foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            if (r.name.StartsWith("Inside_")) { var k = r.sharedMaterial != null ? r.sharedMaterial.name : "?"; interiorMats.TryGetValue(k, out int c); interiorMats[k] = c + 1; }
+        foreach (var kv in interiorMats) Debug.Log($"[PerfStats]   inside material {kv.Key}: {kv.Value}");
+        var top = new Dictionary<string, (int t, int r)>();
+        foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+        {
+            var cur = t; string path = "";
+            while (cur.parent != null && cur.parent.parent != null) cur = cur.parent;
+            path = cur.parent != null ? cur.parent.name + "/" + cur.name : cur.name;
+            if (path.Length > 30) path = path.Substring(0, 30);
+            top.TryGetValue(path, out var v); top[path] = (v.t + 1, v.r + (t.GetComponent<MeshRenderer>() != null ? 1 : 0));
+        }
+        foreach (var kv in top) if (kv.Value.t > 100) Debug.Log($"[PerfStats]   tree {kv.Key}: {kv.Value.t} objects, {kv.Value.r} renderers");
+        EditorApplication.Exit(0);
+    }
+
+    // Town views for before/after comparison (tools/unity.sh run-gfx WorldBuilder.CaptureTown; TOWN_TAG names the files): the capital from above, along
+    // its avenue at eye height, from a roof, and a small town. Needs a graphics device.
+    public static void CaptureTown()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        var info = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+        string tag = System.Environment.GetEnvironmentVariable("TOWN_TAG") ?? "now";
+        Directory.CreateDirectory(OverviewDir);
+        DynamicGI.UpdateEnvironment();
+        var terrain = Object.FindFirstObjectByType<Terrain>();
+        Vector3 At(float x, float z, float up) => new Vector3(x, terrain.SampleHeight(new Vector3(x, 0f, z)) + up, z);
+        var cam = new GameObject("TownCamera").AddComponent<Camera>();
+        cam.nearClipPlane = 0.1f; cam.farClipPlane = 1500f; cam.fieldOfView = 60f;
+        SceneLook.EnablePost(cam);
+        UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(cam).SetRenderer(info.RendererIndex);
+        var spec = LoadSpec();
+        foreach (var t in spec.Island.Towns)
+        {
+            if (t.Id != "C" && t.Id != "M1") continue;
+            double r = t.RotDeg * System.Math.PI / 180.0, c = System.Math.Cos(r), sn = System.Math.Sin(r);
+            Vector3 Local(float lx, float lz, float up) => At(t.X + (float)(lx * c - lz * sn), t.Z + (float)(lx * sn + lz * c), up);
+            float hw = t.Width * 0.5f;
+            cam.fieldOfView = 55f;
+            SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_air.png", Local(-hw * 0.9f, -t.Depth * 0.9f, 140f), Local(0f, 0f, 0f));
+            cam.fieldOfView = 70f;
+            SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_street.png", Local(-hw * 0.7f, 0f, 1.7f), Local(hw * 0.3f, 0f, 3f));
+            SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_side.png", Local(-hw * 0.3f, t.Depth * 0.18f, 1.7f), Local(hw * 0.1f, t.Depth * 0.3f, 3f));
+            SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_roof.png", Local(0f, 0f, 22f), Local(hw * 0.5f, t.Depth * 0.2f, 6f));
+        }
+        EditorApplication.Exit(0);
+    }
 }
