@@ -24,3 +24,30 @@
 ## 운영 메모
 - Unity 실행 뒤 Roster_Swat `.meta`가 지워진다(캐릭터 FBX가 워크트리에 없음) → 매번 `git restore -- Assets/_Project/Art/Characters ProjectSettings Assets/_Project/Prefabs/M1/Vehicles`.
 - `WorldBuilder.Build`는 종료 시 Mono segfault가 날 때가 있으나 씬은 이미 저장돼 있다(`&&` 체인에 주의).
+
+## 맵 트랙용: `WorldMaterials` 슬롯·접근자 표 (재질 수 줄이기 작업 시 충돌 참고)
+`Set(name, sourceId, tint, tileX, tileY)`가 재질 1개(`World_<name>`)를 만든다. 소스는 `materials.json` 행(`Src("<table id>")`) 또는 고정 ID. **변주가 있는 것은 이름마다 별개 재질**이라 재질 수의 주원인이다(변주 5 × 종류).
+
+| 접근자 | 재질 이름 | 소스 | 변주 | 용도 |
+|---|---|---|---|---|
+| `Brick(v)` | World_Brick0~4 | wall_brick (brick_wall_001) | 5 | 벽돌 외벽 |
+| `Plaster(v)` | World_Plaster0~4 | PaintedPlaster017(고정) | 5 | 미장 외벽 |
+| `PlasterInner` | World_PlasterInner | 무텍스처 단색 | 1 | 실내 벽·천장 |
+| `Steel(v)` | World_Steel0~4 | roof_tin (rusty_corrugated_iron) | 5 | 창고·공장 외벽 |
+| `SteelRoof` | World_SteelRoof | roof_tin | 1 | 철판 지붕 |
+| `RoofTiles(v)` | World_RoofTiles0~4 | roof_tile (clay_roof_tiles_03) | 5 | 기와 지붕 |
+| `Accent(v)` | World_Accent0~4 | PaintedMetal014 | 5 | 덧문·차양·간판·우편함 |
+| `Trim(light)` | World_TrimLight / TrimDark | wall_plaster / floor_wood | 2 | 개구부 테두리·울타리 |
+| `FenceWhite` `Wire` `BinGreen` | 동명 | floor_wood / PaintedMetal014 | 1씩 | 울타리·전선·쓰레기통 |
+| `Planks` `PlanksDark` `Shelving` `Crate` | 동명 | floor_wood | 1씩 | 마루·선반·상자 |
+| `Bedding` | World_Bedding | wall_plaster | 1 | 침구 |
+| `Decor(DecorMat)` | World_Decor{Wood, WoodDark, Fabric, Fabric2, Metal, Paint, Warn, Ceramic, Screen, Crate, Lamp} | floor_wood / wall_plaster / metal_rust / PaintedMetal014 | 11 | 가구 부품(ADR-147) |
+| `Concrete` `ConcreteDark` `ShaftConcrete` | 동명 | pavement_alt (concrete_floor_worn_001) | 3 | 콘크리트·승강기 통로 |
+| `PaintedMetal` `RustyMetal` | 동명 | PaintedMetal014 / metal_rust | 2 | 금속 |
+| `Asphalt` `DirtRoad` | 동명 | asphalt / dirt_road | 2 | 도로 |
+| `Pavement` `SchoolWall` `FloorLino` | 동명 | pavement / school_wall / floor_lino | 1씩 | **신규, 호출처 없음**(맵 트랙이 사용) |
+| `Door()` `DoorStripe()` `DoorSeam()` `ShaftLamp()` `Road(paved)` `Rock(set)` `Terrain()` `Water(...)` | | 자체 | | 문·램프·도로 셰이더·바위·지형·물 |
+
+- 합계 개략: 변주 계열(Brick·Plaster·Steel·RoofTiles·Accent) 25 + 단일 약 30 = 건물 재질 슬롯 후보 55~60. 줄이려면 변주 수(`Variants = 5`)나 틴트를 머티리얼이 아니라 **정점 색/MaterialPropertyBlock**로 옮기는 쪽이 큰 효과(이 트랙 미구현, BACKLOG 후보).
+- 이 트랙이 바꾼 줄: `Brick`/`Steel`/`RoofTiles`의 소스 ID(고정 ambientCG → `Src(...)`), `Pavement/SchoolWall/FloorLino` 추가, `TableIds`에 3행, `MetalScale`에 arm 세트 2종, `PackArm` metalScale 인자. 맵 트랙이 위 시그니처를 유지하면 호출부는 충돌 없음.
+- 남은 항목: 위 "못 한 것" 절 참고(PlayMode 게임 안 확인, 신규 3종 배치 후 tint 조정, ADR-193 그림자·프로브).
