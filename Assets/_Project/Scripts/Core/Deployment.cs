@@ -113,7 +113,7 @@ namespace Game.Core
     [Serializable]
     public class MatchRules
     {
-        public const int MaxParticipantsLimit = 80; // the cap of a match, humans and bots together (ADR-168, ADR-241, ADR-251)
+        public const int MaxParticipantsLimit = 80; // the cap of a match, humans and bots together (ADR-168, ADR-241, ADR-259)
         public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 79 with one person
 
         // Set from data when there is any; tests may replace it.
@@ -126,7 +126,7 @@ namespace Game.Core
         public int MinBots = 16;
         // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
         public float QueueWindowSeconds = 30f;
-        // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-250).
+        // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-258).
         // Off in code so tests that set BotCount keep it.
         public bool FillToParticipants = false;
         // People in one room (#160, ADR-124); bots fill the rest of the match.
@@ -137,7 +137,7 @@ namespace Game.Core
         // The most people one room can hold: Participants - MinBots, within 1..Participants.
         public int MaxHumans => Math.Max(1, Math.Min(Participants, MaxParticipantsLimit) - Math.Max(0, MinBots));
 
-        // People plus bots a lobby/menu match aims for: the full match when data says so (ADR-250), else the slice size.
+        // People plus bots a lobby/menu match aims for: the full match when data says so (ADR-258), else the slice size.
         public int TargetParticipants => FillToParticipants ? Math.Min(Participants, MaxParticipantsLimit) : ClampedBotCount + 1;
 
         // Bots beside `humans` people: BotFill when data says so (a menu match: 1 person + 49 bots), else the slice's BotCount.
@@ -189,7 +189,7 @@ namespace Game.Core
             regions <= 0 ? Math.Max(0, participants) : (Math.Max(0, participants) + regions - 1) / regions + 1;
 
         // The elevator index (into `elevators`) for each participant; -1 for everyone when there are no elevators.
-        // `share` false (ADR-252): nobody shares a car with someone who is not on its team. When there are more participants than
+        // `share` false (ADR-260): nobody shares a car with someone who is not on its team. When there are more participants than
         // elevators the surplus gets -1 (no elevator) and the caller warns; the ones placed keep one car each.
         public static int[] Assign(int participants, IReadOnlyList<ElevatorSlot> elevators, int seed, bool share = true)
         {

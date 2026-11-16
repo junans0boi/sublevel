@@ -24,7 +24,7 @@ namespace Game.Net
         public int MaxPlayers;
         public MatchQueueState Queue; // matchmaking (ADR-249): who waits, how long is left
     }
-    // A client asks for a place in the matchmaking queue (ADR-250): the mode and how many people its party has (1..team size).
+    // A client asks for a place in the matchmaking queue (ADR-258): the mode and how many people its party has (1..team size).
     public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; }
     public struct LobbyQueueCancel : IBroadcast { }
     public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; public byte Mode; }
@@ -313,7 +313,7 @@ namespace Game.Net
             return true;
         }
 
-        // ---- Matchmaking queue (ADR-247, ADR-250) ----
+        // ---- Matchmaking queue (ADR-247, ADR-258) ----
 
         // Dedicated server: the queue of people who pressed start. Whoever asked is placed by the composer when the window ends;
         // clients that never asked stay in the room as before (ready/timer flow).

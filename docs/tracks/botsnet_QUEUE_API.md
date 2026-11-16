@@ -19,7 +19,7 @@ public struct MatchQueueState {
 
 솔로/스쿼드·파티 크기는 클라이언트가 시작을 누를 때 서버로 보내는 값(`QueueParty.Size` 1~4, 모드 솔로/듀오/스쿼드)이다. **그 전송(RPC/방송)은 아직 없다** — 대기열 흐름 연결(DedicatedServer)과 함께 후속. UI는 지금 `LobbyNet.Queue`만 읽도록 만들어 두면 된다.
 
-## UI가 부르는 함수·이벤트 (확정, ADR-250)
+## UI가 부르는 함수·이벤트 (확정, ADR-258)
 ```csharp
 // Game.Net.MatchmakingClient — 서버(전용 서버)에 접속한 LobbyNet(Join) 위에 만든다
 var mm = new MatchmakingClient(lobby);

@@ -3,7 +3,7 @@ using Game.Core;
 
 namespace Game.Net
 {
-    // The one entry point the lobby UI uses for matchmaking (ADR-250): connect a LobbyNet to a dedicated server (Join), then
+    // The one entry point the lobby UI uses for matchmaking (ADR-258): connect a LobbyNet to a dedicated server (Join), then
     // RequestStart(mode, partySize); the server's queue answers through State (matching N/target, seconds left) and finally the
     // lobby's start message (LobbyNet.MatchStarting). A host/single start does not queue: the menu starts at once with bots.
     public sealed class MatchmakingClient
