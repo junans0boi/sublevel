@@ -25,6 +25,7 @@ namespace Game.Tests
         public IEnumerator SetUp()
         {
             _log.Clear();
+            Time.captureDeltaTime = 1f / 60f; // no editor frame jitter: ticks, interpolation and Time.time advance evenly (ADR-244)
             _net = new MultiHarness { Log = Log };
             yield return _net.StartHost("TestBox");
         }
@@ -34,6 +35,7 @@ namespace Game.Tests
         {
             Directory.CreateDirectory(LogDir);
             File.WriteAllText(Path.Combine(LogDir, "lagcomp-" + TestContext.CurrentContext.Test.Name + ".log"), _log.ToString());
+            Time.captureDeltaTime = 0f;
             yield return _net.Teardown();
         }
 
@@ -70,6 +72,12 @@ namespace Game.Tests
                 var eye = a.Player.EyePosition;
                 var aim = seen.transform.position + Vector3.up * 0.9f;
                 uint view = compensated ? a.Player.ViewTick : uint.MaxValue; // MaxValue: a claim from the future = no rewind
+                // What the server rewinds by (tick model) against how far behind the real body the shown copy is: a miss with
+                // |needed - model| > ~90 ms (half the target width / 3.2 m/s) is the time model's; a miss inside it is hit-box/geometry.
+                var hostTime = _net.Host.TimeManager;
+                double modelSec = compensated ? LagComp.RewindSeconds(hostTime.Tick, view, hostTime.TickDelta) : 0.0;
+                double behind = (_net.HostPlayer.transform.position - seen.transform.position).magnitude;
+                Log($"shot {i} compensated={compensated}: {(compensated ? $"serverTick-viewTick={(int)hostTime.Tick - (int)view}" : "no rewind")} model {modelSec * 1000:F0} ms, copy behind real by {behind:F2} m");
                 a.Player.CmdFire((aim - eye).normalized, view);
                 dir = -dir;
             }
@@ -80,7 +88,7 @@ namespace Game.Tests
             result(hits);
         }
 
-        IEnumerator Arm(System.Action<RemoteClient> done, Vector3 shooterAt, Vector3 lookAt, int weapon = Rifle, int mag = 30, AmmoType ammo = AmmoType.Rifle556)
+        IEnumerator Arm(System.Action<RemoteClient> done, Vector3 shooterAt, Vector3 lookAt, int weapon = Rifle, int mag = 30, AmmoType ammo = AmmoType.Rifle556, double loss = 0.0)
         {
             RemoteClient a = null;
             yield return _net.AddClient(c => a = c);
@@ -93,7 +101,7 @@ namespace Game.Tests
             a.Controller.LookAt(lookAt);
             yield return NetHarness.WaitUntil(() => a.Player.ActiveWeaponId == weapon, "weapon in hand", Log, 5f);
             yield return Frames(1.5f);
-            _net.Simulate(a);
+            _net.Simulate(a, MultiHarness.BadRoundTripMs, loss); // 100 ms stays; loss is the caller's choice (0 for the accuracy tests)
             yield return Frames(1.5f);
 
             done(a);
@@ -111,7 +119,7 @@ namespace Game.Tests
             yield return Duel(a, shots, true, near, h => withComp = h);
             int rewinds = LagCompensation.Rewinds - rewindsBefore;
             yield return Duel(a, shots, false, near, h => without = h);
-            Log($"strafing target at 100 ms / 2 %: {withComp}/{shots} hits with compensation (server rewound bodies in {rewinds} ray tests, rewind cap {LagComp.MaxRewindSeconds:F2} s), {without}/{shots} without");
+            Log($"strafing target at 100 ms / no loss: {withComp}/{shots} hits with compensation (server rewound bodies in {rewinds} ray tests, rewind cap {LagComp.MaxRewindSeconds:F2} s), {without}/{shots} without");
             Assert.GreaterOrEqual(withComp, shots - 1, "an aimed shot at what the shooter sees hits");
             Assert.Greater(rewinds, 0, "the server really rewound");
             Assert.Less(without, withComp, "without compensation the same shots mostly miss (the test can tell the difference)");
