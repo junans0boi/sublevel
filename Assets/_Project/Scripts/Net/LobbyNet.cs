@@ -22,6 +22,7 @@ namespace Game.Net
         public int HostId;
         public int Bots;
         public int MaxPlayers;
+        public MatchQueueState Queue; // matchmaking (ADR-249): who waits, how long is left
     }
     public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; }
 
@@ -56,6 +57,9 @@ namespace Game.Net
         public ushort Port { get; private set; }
         public int Bots { get; private set; }
         public int MaxPlayers { get; private set; } = 16;
+        // The queue as the server last told this client (ADR-249); on the server it is what ServerSetQueue stored.
+        public MatchQueueState Queue { get; private set; }
+        public void ServerSetQueue(MatchQueueState state) { Queue = state; }
         // What this room shows: on a guest and on the host's own client it is rebuilt from the host's LobbyState messages.
         public readonly LobbyRoster Roster = new LobbyRoster();
         // Host only: the truth the messages are made from (kept apart so a late message never overwrites it).
@@ -218,6 +222,7 @@ namespace Game.Net
             for (int i = 0; i < state.Ids.Length; i++) Roster.Add(state.Ids[i], state.Names[i], state.Ready[i]);
             Bots = state.Bots;
             MaxPlayers = state.MaxPlayers;
+            Queue = state.Queue;
             if (Phase == PhaseKind.Connecting) Phase = PhaseKind.InLobby;
             Changed?.Invoke();
         }
@@ -347,7 +352,7 @@ namespace Game.Net
         void BroadcastState()
         {
             int n = _truth.Count;
-            var state = new LobbyState { Ids = new int[n], Names = new string[n], Ready = new bool[n], HostId = _truth.HostId, Bots = _truthBots, MaxPlayers = MaxPlayers };
+            var state = new LobbyState { Ids = new int[n], Names = new string[n], Ready = new bool[n], HostId = _truth.HostId, Bots = _truthBots, MaxPlayers = MaxPlayers, Queue = Queue };
             for (int i = 0; i < n; i++)
             {
                 var m = _truth.Members[i];

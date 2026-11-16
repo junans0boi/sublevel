@@ -124,6 +124,8 @@ namespace Game.Core
         // A full match (ADR-168). Bots fill what people leave empty, never fewer than MinBots; so people are at most Participants - MinBots.
         public int Participants = MaxParticipantsLimit;
         public int MinBots = 10;
+        // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
+        public float QueueWindowSeconds = 30f;
         // People in one room (#160, ADR-124); bots fill the rest of the match.
         public int MaxPlayers = 16;
         // A dropped player's combatant waits this many seconds for the same session to return, then a bot takes over (#166, ADR-125).

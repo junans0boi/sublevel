@@ -105,3 +105,7 @@
 - **열쇠 사용 성공률: 못 잼.** 모든 봇에 열쇠 1개를 준 실행(`--perf-keys`, "gave a key to 49 bots")에서도 `key-insert`·`key-ride` 0건, 자격 로그(`key-eligible`)도 0건 → 흐름이 그 이전 관문에서 막힘. 원인(`KeyElevatorNet`/`ElevatorRides.Running`/지역 상태 중 무엇)은 **미확인**: 진단 로그(`key-gate`)를 넣었으나 그 빌드·실행은 중단되어 결과 없음. 흐름 자체의 EditMode 확률 테스트만 통과(사용 확률 0.5/0.8/1.0).
 - **최종 지역 수렴 시간: 못 잼**(위와 같은 이유로 판 끝까지의 이동 지표를 남기지 않음).
 - **미구현(BACKLOG):** T9 팀 구성·칩 임무, 방독 사용, T10 도시 관심 지점, T4 이후 측정 자동화(T13), T5/T6(측정 게이트 미발동), T11 NavMesh 연결성, T12 통계 시나리오, LagComp 통계 테스트 임계. 열쇠 흐름의 막힘 원인 조사가 다음 첫 일.
+
+## 매칭 흐름 1차 (2026-11-17) — ADR-247~249
+- 구현: `Core/MatchQueue.cs`(`MatchQueue`·`QueueParty`·`MatchComposer`·`MatchPlan`·`MatchQueueState`), `MatchRules.QueueWindowSeconds`(rules.json), `LobbyState.Queue`·`LobbyNet.Queue/ServerSetQueue`(복제 필드), 계약 `docs/tracks/botsnet_QUEUE_API.md`, EditMode `MatchQueueTests`(사람 1/11/40/60 × 솔로/스쿼드 표, 파티 1~4, 창 만료·조기 시작, 퇴장, 상태).
+- **미구현:** DedicatedServer가 대기열로 판을 시작하는 연결과 시작 요청(모드·파티 크기) 전송 — 현재 로비 준비/타이머 흐름이 그대로다. PlayMode 없음.
