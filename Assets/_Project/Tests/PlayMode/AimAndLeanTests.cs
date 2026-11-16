@@ -203,12 +203,7 @@ namespace Game.Tests
             yield return GiveRifle();
             float EyeSide() => pc.transform.InverseTransformPoint(me.EyePosition).x;
             Assert.AreEqual(0f, EyeSide(), 0.01f);
-            Transform head = null, hips = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Head") head = t;
-                else if (t.name == "Hips") hips = t;
-            }
+            Transform head = RigBones.Bone(me, HumanBodyBones.Head), hips = RigBones.Bone(me, HumanBodyBones.Hips);
             Assert.IsNotNull(head, "Head bone");
             Assert.IsNotNull(hips, "Hips bone");
             float HeadSide() => pc.transform.InverseTransformPoint(head.position).x - pc.transform.InverseTransformPoint(hips.position).x;
@@ -277,7 +272,8 @@ namespace Game.Tests
             var me = Combatant.LocalPlayer;
             var pc = PlayerController.Local;
             var bones = new System.Collections.Generic.Dictionary<string, Transform>();
-            foreach (var t in me.GetComponentsInChildren<Transform>()) bones[t.name] = t;
+            bones["UpperLeg.L"] = RigBones.Bone(me, HumanBodyBones.LeftUpperLeg); bones["UpperLeg.R"] = RigBones.Bone(me, HumanBodyBones.RightUpperLeg);
+            bones["UpperArm.L"] = RigBones.Bone(me, HumanBodyBones.LeftUpperArm); bones["UpperArm.R"] = RigBones.Bone(me, HumanBodyBones.RightUpperArm);
             // Which way a left-right pair of joints faces, in degrees from the player's facing (right positive).
             float Facing(string left, string right)
             {
@@ -307,18 +303,32 @@ namespace Game.Tests
             float shouldersForward = 0f;
             yield return Average("UpperArm.L", "UpperArm.R", a => shouldersForward = a);
 
+            // The leg turn the code asked for, averaged over the same window as the hips line: the room's walls stop the forward
+            // part of the motion, which swings the direction (and the turn) towards the side, so the test compares the two
+            // measurements with each other instead of with a fixed angle.
+            float turn = 0f;
+            IEnumerator AverageTurn(Action<float> done)
+            {
+                float sum = 0f; int n = 0;
+                for (float end = Time.time + 0.8f; Time.time < end; n++) { yield return null; sum += me.GetComponent<CombatantAnimation>().LegTurnDeg; }
+                done(sum / n);
+            }
             _input.Frame.Move = new Vector2(1, 1);
             yield return new WaitForSeconds(0.6f);
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(45f, hips, 15f, "forward-right: the legs point where the body goes");
+            Assert.That(turn, Is.InRange(30f, 65f), "forward-right: the legs are turned towards the right");
+            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn: the legs point where the body goes");
             Assert.AreEqual(shouldersForward, shoulders, 12f, "the shoulders still face the aim");
 
             _input.Frame.Move = new Vector2(-1, 0);
             yield return new WaitForSeconds(0.6f);
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
+            yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(-60f, hips, 15f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(-60f, turn, 8f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn");
             Assert.AreEqual(shouldersForward, shoulders, 12f);
 
             // With the weapon up it must point where the player aims, moving or not.
@@ -386,12 +396,7 @@ namespace Game.Tests
             float ground = pc.transform.position.y;
             int steps = audio.FootstepsPlayed;
             // The knee is where the lower leg starts.
-            Transform knee = null, hips = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "LowerLeg.L") knee = t;
-                if (t.name == "Hips") hips = t;
-            }
+            Transform knee = RigBones.Bone(me, HumanBodyBones.LeftLowerLeg), hips = RigBones.Bone(me, HumanBodyBones.Hips);
             Assert.IsNotNull(knee, "knee bone");
             Assert.IsNotNull(hips, "hips bone");
             Assert.Less(animation.JumpTuck, 0.05f, "legs straight while standing");
@@ -454,12 +459,9 @@ namespace Game.Tests
             yield return GiveRifle();
             yield return WaitUntil(() => weapon.ShownWeaponId == 3, 2f, "rifle model shown");
             Renderer rifle = null;
-            Transform wrist = null;
+            Transform wrist = RigBones.Bone(me, HumanBodyBones.RightHand);
             foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Wrist.R") wrist = t;
-                else if (t.name == "Weapon3") rifle = t.GetComponentInChildren<Renderer>();
-            }
+                if (t.name == "Weapon3") rifle = t.GetComponentInChildren<Renderer>();
             Assert.IsNotNull(rifle, "rifle renderer");
             yield return null;
             Assert.IsFalse(weapon.AtEye, "third person: the weapon is in the hand");

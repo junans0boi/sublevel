@@ -101,8 +101,8 @@ namespace Game.Gameplay
             if (_subscribed) return;
             _subscribed = true;
             Combatant.ServerDied += OnDied;
-            ZoneDirector.ServerRegionStateChanged += OnRegion;
-            ZoneDirector.ServerFinalRevealed += OnFinal;
+            PollutionDirector.ServerRegionStateChanged += OnRegion;
+            PollutionDirector.ServerFinalRevealed += OnFinal;
         }
 
         void OnDisable()
@@ -110,8 +110,8 @@ namespace Game.Gameplay
             if (!_subscribed) return;
             _subscribed = false;
             Combatant.ServerDied -= OnDied;
-            ZoneDirector.ServerRegionStateChanged -= OnRegion;
-            ZoneDirector.ServerFinalRevealed -= OnFinal;
+            PollutionDirector.ServerRegionStateChanged -= OnRegion;
+            PollutionDirector.ServerFinalRevealed -= OnFinal;
         }
 
         void Update()
@@ -121,8 +121,8 @@ namespace Game.Gameplay
 
         void TryReadPlan()
         {
-            var zones = ZoneDirector.Instance;
-            var plan = zones != null ? zones.ServerPlan : null;
+            var zones = PollutionDirector.Instance;
+            var plan = zones != null && zones.Match != null ? zones.Match.Timeline : null;
             if (plan == null) return;
             PlanKnown = true;
             var director = MatchDirector.Instance;
@@ -145,7 +145,7 @@ namespace Game.Gameplay
 
         void OnRegion(int region, ZoneState state)
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             Log.regionEvents.Add(new MatchLog.RegionEvent { t = Round(Elapsed), region = zones != null ? zones.RegionIdOf(region) : region.ToString(), state = state.ToString() });
         }
 
@@ -157,7 +157,7 @@ namespace Game.Gameplay
         void OnDied(Combatant victim, DamageInfo info)
         {
             var state = MatchState.Instance;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             var killer = info.Attacker != null && info.Attacker != victim ? info.Attacker : null;
             int alive = 0;
             foreach (var c in Combatant.All)
@@ -186,7 +186,7 @@ namespace Game.Gameplay
         {
             if (!PlanKnown) TryReadPlan();
             var state = MatchState.Instance;
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             Log.over = state != null && state.IsOver;
             Log.participants = 0;
             Log.aliveAtEnd = 0;

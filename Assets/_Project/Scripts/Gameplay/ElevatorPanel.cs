@@ -193,7 +193,7 @@ namespace Game.Gameplay
             ElevatorTravel.Destinations(here, States, Choices);
             int selected = ElevatorTravel.KeepSelection(Selected, Choices);
             EnsureRows(States.Count);
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             for (int r = 0; r < States.Count; r++)
             {
                 var state = States[r];
@@ -228,7 +228,7 @@ namespace Game.Gameplay
 
         public static string RegionName(int region)
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones != null && zones.RegionNameOf(region).Length > 0) return zones.RegionNameOf(region);
             var world = WorldInfo.Current;
             return world != null && region >= 0 && region < world.Regions.Count ? world.Regions[region].Name : "지역 " + (region + 1);

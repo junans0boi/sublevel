@@ -101,6 +101,8 @@ namespace Game.Net
                 case LootKind.Drink: return HealRules.DrinkName;
                 case LootKind.Pill: return HealRules.PillName;
                 case LootKind.Syringe: return HealRules.SyringeName;
+                case LootKind.GasFilter: return PollutionRules.FilterName;
+                case LootKind.Antidote: return PollutionRules.AntidoteName;
                 case LootKind.Flash: return ThrowableRules.FlashName;
                 case LootKind.Molotov: return ThrowableRules.MolotovName;
                 case LootKind.Smoke: return ThrowableRules.SmokeName;
@@ -147,7 +149,8 @@ namespace Game.Net
         public static bool IsCounted(LootKind kind) =>
             kind == LootKind.Medkit || kind == LootKind.Grenade || kind == LootKind.Key ||
             kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Smoke || kind == LootKind.Jerrycan ||
-            kind == LootKind.Drink || kind == LootKind.Pill || kind == LootKind.Syringe || kind == LootKind.Flash || kind == LootKind.Molotov;
+            kind == LootKind.Drink || kind == LootKind.Pill || kind == LootKind.Syringe || kind == LootKind.Flash || kind == LootKind.Molotov ||
+            kind == LootKind.GasFilter || kind == LootKind.Antidote;
 
         // What a combatant wears in a slot, for an inventory row: "2단계  88 / 110", or "없음".
         public static string Worn(CombatantGear gear, ArmorSlot slot)

@@ -472,15 +472,12 @@ namespace Game.Tests
             var stance = StanceOf(me);
             var animation = me.GetComponent<CombatantAnimation>();
             var model = me.GetComponentInChildren<Animator>().transform;
-            Transform hips = null;
+            Transform hips = RigBones.Bone(me, HumanBodyBones.Hips);
             Renderer[] rifleParts = null;
             Give(me, Rifle, 30);
             yield return WaitUntil(() => me.ActiveWeaponId == Rifle, 2f, "rifle in hand");
             foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Hips") hips = t;
-                else if (t.name == "Weapon3") rifleParts = t.GetComponentsInChildren<Renderer>();
-            }
+                if (t.name == "Weapon3") rifleParts = t.GetComponentsInChildren<Renderer>();
             Assert.IsNotNull(hips, "Hips bone");
             Assert.IsNotNull(rifleParts, "rifle renderers");
             GoToTheQuietLane(pc);
@@ -493,11 +490,12 @@ namespace Game.Tests
             yield return new WaitForSeconds(0.8f); // the upper layer's weapon pose has settled
             Assert.AreEqual(1f, animation.PronePose, 0.01f);
 
-            // The model is pitched about the right axis: its up lies along the facing, its front faces the ground.
-            float pitch = StanceRules.Current.ProneModelPitchDeg;
-            Assert.AreEqual(pitch, Vector3.Angle(model.up, Vector3.up), 1.5f, "lying down");
-            Assert.Greater(Vector3.Dot(model.up, pc.transform.forward), 0.95f, "head toward where the player looks");
-            Assert.Greater(Vector3.Dot(model.forward, Vector3.down), 0.95f, "belly down");
+            // The Mixamo prone clip lies along the facing (ADR-231): hips to head runs along the ground, toward where the player looks.
+            var head = RigBones.Bone(me, HumanBodyBones.Head);
+            var trunk = head.position - hips.position;
+            Assert.Greater(Vector3.Angle(trunk, Vector3.up), 70f, "lying down: hips to head is close to horizontal");
+            Assert.Greater(Vector3.Dot(trunk.normalized, pc.transform.forward), 0.8f, "head toward where the player looks");
+            Assert.Less(head.position.y - floor, 0.6f, "head close to the ground");
             Assert.Less(hips.position.y - floor, 0.45f, "the hips are near the ground");
             Assert.Less(Vector3.Dot(hips.position - pc.transform.position, pc.transform.forward), -0.2f, "the body trails behind the capsule");
 

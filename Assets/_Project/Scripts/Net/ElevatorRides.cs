@@ -37,7 +37,7 @@ namespace Game.Net
 
     // Region-to-region elevator rides during the match (ADR-076, ADR-079). Lives next to ElevatorDoors (added by
     // it), so only scenes with elevators have rides. Rules are ElevatorTravel's; the region states come from
-    // ZoneDirector (all safe without a lockdown). The server decides; each ride runs a cycle at two stations
+    // PollutionDirector (all safe without a lockdown). The server decides; each ride runs a cycle at two stations
     // (ElevatorCycle): the departure doors close and the car goes down, the rider changes cars at the bottom, the
     // arrival car comes up and its doors open. ElevatorDoor and ElevatorCar read the cycles (StationCycle).
     // Movement is owner-authoritative for players (ADR-029): a player's own client keeps its body on the car floor
@@ -137,7 +137,7 @@ namespace Game.Net
         {
             get
             {
-                var zones = ZoneDirector.Instance;
+                var zones = PollutionDirector.Instance;
                 if (zones != null && zones.RegionCount > 0) return zones.RegionCount;
                 int n = 0;
                 if (_doors != null) foreach (var s in _doors.Sites) n = Mathf.Max(n, s.Region + 1);
@@ -149,7 +149,7 @@ namespace Game.Net
         public void States(List<ZoneState> result)
         {
             result.Clear();
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             for (int r = 0, n = RegionCount; r < n; r++) result.Add(zones != null ? zones.StateOf(r) : ZoneState.Safe);
         }
 
@@ -379,7 +379,7 @@ namespace Game.Net
             if (!_doors.ServerScheduled || _doors.ServerDoorsClosed) return false;
             var at = bot.transform.position;
             States(_states);
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             int here = zones != null ? zones.RegionIndexAt(at) : -1;
             int best = -1;
             float bestMeters = float.MaxValue;

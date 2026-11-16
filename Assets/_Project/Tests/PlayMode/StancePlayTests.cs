@@ -91,12 +91,7 @@ namespace Game.Tests
             var stance = StanceOf(me);
             var body = me.GetComponent<CharacterController>();
             var animation = me.GetComponent<CombatantAnimation>();
-            Transform hips = null, knee = null;
-            foreach (var t in me.GetComponentsInChildren<Transform>())
-            {
-                if (t.name == "Hips") hips = t;
-                else if (t.name == "LowerLeg.L") knee = t;
-            }
+            Transform hips = RigBones.Bone(me, HumanBodyBones.Hips), knee = RigBones.Bone(me, HumanBodyBones.LeftLowerLeg);
             Assert.IsNotNull(hips, "Hips bone");
             Assert.IsNotNull(knee, "knee bone");
             yield return new WaitForSeconds(0.5f); // settled on the floor
@@ -135,7 +130,8 @@ namespace Game.Tests
             float walkDrop = animation.ModelDrop;
             _input.Frame.Move = Vector2.zero;
             Assert.Less(walkDrop, crouchDrop - 0.05f, "walking crouched bends the knees less so the legs can still swing");
-            Assert.Greater(walkDrop, 0.1f, "but the body stays low");
+            // 0.0959 m measured on the Humanoid roster (hip-to-ankle 0.84 m, RifleCrouchWalk's own hips are 0.1 m lower than standing): 8 cm is the floor.
+            Assert.Greater(walkDrop, 0.08f, "but the body stays low");
             Assert.AreEqual(4.7f * 0.745f, speed, 0.3f, "walking 4.7 m/s with empty hands times the crouch factor 0.745 (ADR-095)");
 
             _input.Frame.Crouch = true;

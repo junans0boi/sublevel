@@ -69,8 +69,17 @@ namespace Game.Gameplay
             _renderer.enabled = _filter.sharedMesh != null;
         }
 
+        // A bone of the Humanoid rig under `root` (ADR-230); null for a rig without an avatar.
+        internal static Transform Humanoid(Transform root, HumanBodyBones bone)
+        {
+            var animator = root.GetComponentInChildren<Animator>();
+            return animator != null && animator.isHuman ? animator.GetBoneTransform(bone) : null;
+        }
+
         internal static Transform FindTorso(Transform root)
         {
+            var chest = Humanoid(root, HumanBodyBones.Chest);
+            if (chest != null) return chest;
             foreach (var name in TorsoNames)
             {
                 var found = Deep(root, name);

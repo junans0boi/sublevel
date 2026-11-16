@@ -40,7 +40,7 @@ namespace Game.Net
     // The crate is plain server state plus the static events below, not a network object; remote clients get the same
     // list through broadcasts (SupplyDropped / SupplyOpened, a late joiner is sent the crates still there, ADR-131) and
     // ask to open one with SupplyOpenRequest, so their views and map follow it the way the host's do.
-    // Installs itself under the ZoneDirector, so nothing in the scenes refers to it.
+    // Installs itself under the PollutionDirector, so nothing in the scenes refers to it.
     public class SupplyDirector : MonoBehaviour
     {
         const float GroundProbeUp = 3f, GroundProbeDown = 60f, ExitOffset = 3f;
@@ -60,11 +60,11 @@ namespace Game.Net
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook()
         {
-            ZoneDirector.Started -= Install;
-            ZoneDirector.Started += Install;
+            PollutionDirector.Started -= Install;
+            PollutionDirector.Started += Install;
         }
 
-        static void Install(ZoneDirector director)
+        static void Install(PollutionDirector director)
         {
             if (director != null && director.GetComponent<SupplyDirector>() == null) director.gameObject.AddComponent<SupplyDirector>();
         }
@@ -74,8 +74,8 @@ namespace Game.Net
         bool ServerActive => _network != null && _network.IsServerStarted;
 
         void Awake() => Instance = this;
-        void OnEnable() => ZoneDirector.ServerRegionStateChanged += OnRegionState;
-        void OnDisable() => ZoneDirector.ServerRegionStateChanged -= OnRegionState;
+        void OnEnable() => PollutionDirector.ServerRegionStateChanged += OnRegionState;
+        void OnDisable() => PollutionDirector.ServerRegionStateChanged -= OnRegionState;
 
         void OnDestroy()
         {
@@ -162,9 +162,9 @@ namespace Game.Net
 
         void OnRegionState(int region, ZoneState state)
         {
-            var zones = ZoneDirector.Instance;
-            if (state != ZoneState.Lockdown || zones == null || zones.ServerPlan == null) return;
-            int stage = zones.ServerPlan.ClosingIndexOf(region) + 1; // 1-based; 0 = not in the closing order
+            var zones = PollutionDirector.Instance;
+            if (state != ZoneState.Warning || zones == null || zones.Match == null) return; // a crate comes with each announcement
+            int stage = zones.Match.Timeline.ClosingIndexOf(region) + 1; // 1-based; 0 = not in the closing order
             if (stage < 1 || !SupplyPlan.DropAt(stage, SupplyRules.Current)) return;
             ServerDrop(stage);
         }
@@ -172,7 +172,7 @@ namespace Game.Net
         // Server: sends a crate down in a region that is still safe. Null when there is none (or no spot).
         public SupplyCrate ServerDrop(int stage)
         {
-            var zones = ZoneDirector.Instance;
+            var zones = PollutionDirector.Instance;
             if (zones == null) return null;
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.LockdownSeed : 1;
             int seed = unchecked(matchSeed * 131 + stage * 17 + 3);
@@ -194,7 +194,7 @@ namespace Game.Net
         }
 
         // In front of the region's elevator; the middle of the region when it has none (test scenes).
-        static Vector3 LandingSpot(ZoneDirector zones, int region)
+        static Vector3 LandingSpot(PollutionDirector zones, int region)
         {
             var from = zones.RegionCentre(region);
             var doors = ElevatorDoors.Instance;

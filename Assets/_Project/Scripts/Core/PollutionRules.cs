@@ -37,6 +37,7 @@ namespace Game.Core
         public float FilterFactor = 0.5f;
         public float AntidoteSeconds = 25f;  // antidote
         public float AntidoteFactor = 0.1f;
+        public const string FilterName = "방독 필터", AntidoteName = "해독제";
 
         // ---- Keys (ADR-170) ----
         public int KeysMin = 6;

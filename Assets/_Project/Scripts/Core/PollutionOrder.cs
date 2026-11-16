@@ -25,13 +25,14 @@ namespace Game.Core
         // Regions in confirmation order; the last entry is the final region. `adjacency[r]` lists the regions that
         // touch r by land. A map that is not connected still gets a full order (the connection rule is dropped
         // for steps where no region would keep it).
-        public static int[] Plan(int regionCount, IReadOnlyList<int[]> adjacency, int seed)
+        public static int[] Plan(int regionCount, IReadOnlyList<int[]> adjacency, int seed, int forcedFinal = -1)
         {
             int n = Math.Max(0, regionCount);
             var order = new int[n];
             if (n == 0) return order;
             uint rng = unchecked((uint)seed);
             int fin = (int)(Next(ref rng) * n);
+            if (forcedFinal >= 0 && forcedFinal < n) fin = forcedFinal; // a dedicated server's --region; the draw above still runs, so other seeds keep their order
             var open = new bool[n];
             for (int i = 0; i < n; i++) open[i] = true;
             bool wasConnected = IsConnected(n, adjacency, open);

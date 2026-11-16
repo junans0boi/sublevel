@@ -1165,50 +1165,30 @@ namespace Game.Gameplay
                 Debug.Log($"[FeelCapture] w4 smoke thrown {thrown}");
             }
 
-            // Lockdown: wait for the first announcement, then stand inside that region next to one of its passes.
-            var zones = ZoneDirector.Instance;
-            if (zones == null) { Debug.LogWarning("[FeelCapture] w4: no ZoneDirector"); yield break; }
+            // Pollution: wait for the first announcement, stand in that region, then in the gas.
+            var zones = PollutionDirector.Instance;
+            if (zones == null) { Debug.LogWarning("[FeelCapture] w4: no PollutionDirector"); yield break; }
             int region = -1;
-            float giveUp = Time.realtimeSinceStartup + 90f;
+            float giveUp = Time.realtimeSinceStartup + 240f;
             while (region < 0 && Time.realtimeSinceStartup < giveUp)
             {
                 for (int r = 0; r < zones.RegionCount; r++) if (zones.StateOf(r) != ZoneState.Safe) region = r;
                 yield return null;
             }
             if (region < 0) { Debug.LogWarning("[FeelCapture] w4: no region was announced"); yield break; }
-            var geo = zones.Geometry;
             Debug.Log($"[FeelCapture] w4 region {zones.RegionIdOf(region)} {zones.StateOf(region)} at {Time.realtimeSinceStartup - began:F0} s");
-            for (int p = 0; p < geo.PassCount; p++)
-            {
-                if (geo.PassA[p] != region && geo.PassB[p] != region) continue;
-                var at = new Vector3(geo.PassX[p], geo.PassY[p], geo.PassZ[p]);
-                float yaw = geo.PassYawDeg[p] * Mathf.Deg2Rad;
-                var along = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-                var inside = at + along * 7f;
-                if (zones.RegionIndexAt(inside) != region) inside = at - along * 7f;
-                if (UnityEngine.AI.NavMesh.SamplePosition(inside, out var hit, 4f, UnityEngine.AI.NavMesh.AllAreas)) inside = hit.position;
-                pc.Teleport(inside + Vector3.up * 0.2f);
-                yield return null;
-                pc.LookAt(at + Vector3.up * 1.4f);
-                break;
-            }
+            var inside = zones.RegionCentre(region);
+            if (UnityEngine.AI.NavMesh.SamplePosition(inside, out var hit, 30f, UnityEngine.AI.NavMesh.AllAreas)) inside = hit.position;
+            pc.Teleport(inside + Vector3.up * 0.2f);
             yield return new WaitForSeconds(1.0f);
             yield return Shot("s_lock_warning");
-            giveUp = Time.realtimeSinceStartup + 40f;
+            giveUp = Time.realtimeSinceStartup + 120f;
             while (zones.StateOf(region) == ZoneState.Warning && Time.realtimeSinceStartup < giveUp) yield return null;
             yield return new WaitForSeconds(1.5f);
-            yield return Shot("s_lock_barrier");
             float hpA = me.Hp.Value;
-            pc.LookAt(me.EyePosition - me.transform.forward * 10f + Vector3.up * 0.5f);
             yield return new WaitForSeconds(4f);
             yield return Shot("s_lock_fog");
-            Debug.Log($"[FeelCapture] w4 lockdown {zones.StateOf(region)}: hp {hpA:F0} -> {me.Hp.Value:F0} over 4 s, pass locked {zones.IsPassLocked(0)}");
-            giveUp = Time.realtimeSinceStartup + 40f;
-            while (zones.StateOf(region) == ZoneState.Lockdown && Time.realtimeSinceStartup < giveUp) yield return null;
-            me.ServerDamageFilter = _ => 0f;
-            yield return new WaitForSeconds(4f);
-            yield return Shot("s_lock_bombard");
-            Debug.Log($"[FeelCapture] w4 then {zones.StateOf(region)}, markers {zones.Markers.Count}, hp {me.Hp.Value:F0}");
+            Debug.Log($"[FeelCapture] w4 pollution {zones.StateOf(region)}: hp {hpA:F0} -> {me.Hp.Value:F0} over 4 s");
         }
 
         // Every optic (ADR-060, ADR-062) at 1920x1080 in the World: through the sights at a still bot ~40 m away with

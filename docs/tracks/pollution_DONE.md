@@ -33,3 +33,13 @@
 ## 확인 / 추정
 - 확인: 순수 로직(위 테스트). 판 길이·전선 시뮬 대조는 S6 결과(평균 22.1분 대조) 그대로.
 - 추정: 클라이언트 해시 일치(플랫폼 부동소수), 그리드 계산 시간(수십 ms), `IBroadcast`의 `int[]` 직렬화.
+
+## 시뮬 대조 차이 (확인 + 추정)
+- **확인**: 실제 섬(`WorldPlanTerrain`, 12 m 격자) 200시드 평균 **21.65분**(최소 19.84, 최대 23.39), 시뮬 평균 22.13분과 차이 0.48분. 앞의 21.0분은 6시드 표본이라 표본 편차였다.
+- **추정**: 남은 0.5분은 지형 차이 — 시뮬은 C2 시안 지형(경사·도로 래스터), 게임은 생성된 섬(경사 분포와 도로 연결이 다름)이라 평균 전선 속도가 약간 빠르다. 한 시드의 최소 19.84분은 20분 바로 아래이므로 병합 전 시드 1000개로 분포를 다시 보고, 20분 미만이 나오면 속도 조정(룰 변경이라 ADR 필요).
+
+## T10 진행 (ZoneDirector 제거) — 1~2a 단계 완료, 삭제는 botsnet 병합 뒤
+- 완료(Unity 컴파일 확인, 759b959): `PollutionDirector` 호환 읽기 API(`PollutionDirector.Compat.cs`: StateOf·SecondsLeft·지역 이름/ID/중심·FinalRegion·이벤트·`FinalRegionOverride`), `MatchDirector`가 `PollutionDirector`를 붙임(1줄), `AutoStart` 기본 켜짐. 소비자 이동: `SupplyDirector`(보급은 경보마다 1회), `ElevatorRides`, `MinimapView`, `ElevatorPanel`, `ZoneBanner`(오염 경보 문구, 폭격·통로 분기 삭제), `MatchRecorder`, `MatchAutoplay`, `FeelCapture`(w4 오염 캡처로 교체), `DedicatedServer`(--region), `ZoneFogView/RegionCard/ZoneStatus/Minimap/EnvironmentView`(이름 교체). `PollutionOrder.Plan`에 `forcedFinal` 인자(기본 -1, 다른 시드 결과 불변).
+- 현재 상태: 오염이 판을 돌린다. `ZoneDirector`는 지오메트리 소스가 없어 **작동하지 않음**(컴파일만 유지, `BotController` 5곳 때문). **봇은 아직 오염을 피하지 않는다**(botsnet 병합 뒤 `IsDoomed/TryEscapeTarget`을 전선 도달 시간 기반으로 이전).
+- 남음(삭제 대상): `ZoneDirector.cs`, `Lockdown.cs`(+`ZoneGeometry`는 별도 파일로 보존), `PassBarrier.cs`, `KeyHolder.ServerUseKey/CmdUseKey`, `Editor/MatchKit.cs`·`TestBoxBuilder.cs` 참조, `ZoneState.Lockdown/Bombardment`. 테스트: EditMode `LockdownTests`(Lockdown 삭제와 함께, `PollutionTests`가 순서·연결·전선·피해·경고를 이미 덮음 — 겹치지 않는 항목만 이전), PlayMode `ZoneDirectorTests`·`MinimapZoneTests`·`SupplyPlayTests`·`ElevatorTravelPlayTests`·`MatchSimulationTests`·`ReplicationWorldTests`·`MatchEndToEndTests`·`SupplyCaptureTests`는 `PollutionDirector.ServerStart` 기준으로 재작성(PlayMode는 소리 여부 확인 뒤 실행 — 이번엔 실행하지 않음).
+- 환경 이슈: 이 워크트리에는 Mixamo FBX가 없어 `CharacterRosterTests` 7건이 실패한다(오염과 무관, main 체크아웃에서는 통과해야 함).
