@@ -58,6 +58,7 @@ namespace Game.Core
         public float OverSpeedDecel = 3f;      // above the top speed of the surface (left the road fast)
         public float HandbrakeDecel = 7f;      // Space: the rear wheels lock
         public float HandbrakeRearGrip = 0.35f; // share of the rear wheels' side grip left with the handbrake on
+        public float HandbrakeSteerBoost = 1f;  // steering lock x this while the handbrake is on (a flick into the slide)
         public float AbandonedBrakeDecel = 4f; // nobody in the car: it rolls on with the brakes on
         public float NoDriverDecel = 0.5f;     // passengers but no driver (the driver moved seats): rolls on, slight drag
         public float HoldSpeed = 0.4f;         // below this (m/s) with no throttle the tyres hold the car still

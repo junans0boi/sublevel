@@ -463,7 +463,7 @@ namespace Game.Net
             float reverseTop = Vehicles.ReverseTopSpeed(_offRoad, r) * topFactor;
 
             float handsOn = Vehicles.SteerHandsFactor(input.Reloading, r);
-            float limit = Vehicles.SteerLimit(forwardSpeed, Vehicles.TopSpeed(false, r), r) * handsOn;
+            float limit = Vehicles.SteerLimit(forwardSpeed, Vehicles.TopSpeed(false, r), r) * handsOn * (handbrake ? r.HandbrakeSteerBoost : 1f);
             float target = input.Steer * limit + (_state != null ? _state.SteerPullDeg : 0f);
             bool returning = Mathf.Abs(target) < Mathf.Abs(_steerDeg) || target * _steerDeg < 0f;
             _steerDeg = Mathf.MoveTowards(_steerDeg, target, (returning ? r.SteerReturnDegPerSecond : r.SteerDegPerSecond) * handsOn * dt);
