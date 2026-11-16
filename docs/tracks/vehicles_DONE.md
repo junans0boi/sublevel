@@ -24,3 +24,24 @@
 ## 병합 영향
 - 새 파일 2(Core) + 테스트 2, 수정 VehicleBuilder·VehicleModels·DECISIONS. Core/ 새 파일은 소유 목록 밖이나 추가만(충돌 없음 예상).
 - 병합 후 `VehicleBuilder.BuildPrefabsOnly`로 소품 프리팹 재생성 필요(씬은 어차피 재생성).
+
+## 2차 (main 병합 2e3b0e8 이후, 순수 C#·데이터만 — Unity 미실행, **테스트 미확인**)
+- 수량 14+6 적용(rules.json·VehicleRules), 첫 6대는 지역별 차, 오토바이는 균등 분포.
+- 다리·여울 ±10m 후보 제외, 소품 비틀림 게이트 0.03m(ADR-221).
+- 새 EditMode 테스트: `VehicleWorldPlacementTests`(섬 plan에서 20대·지역별 1대·간격 40m·도로 옆·부지 겹침 0·다리/여울 10m), `FuelTests` 도로 16km 커버, `PropGroundingTests` 비틀림.
+- 연료 재산정은 계산(ADR-221). 제리캔 배치 보장은 맵 트랙 LootPlacement 소관(요청 필요).
+- 아직 Unity 확인 필요: 위 새 테스트(특히 20대 확보 여부 — 후보 부족이면 실패로 드러남), `MeasureProps` 신맵 재측정(오차 ≤0.03·겹침 0), 도로 경사 10° 구간 통행.
+
+## 이슈 상태 (GitHub 모두 OPEN, 확인함)
+- #90 차량 피해: 코어(ADR-074·157)는 마감 기록이 있고 잔여는 캡처 판정(T6). 이 트랙에서 닫지 않음.
+- #99 1인칭 실내 밝기: ADR-146·157에서 조명 보정 기록, 잔여는 캡처 판정(T7). 닫지 않음.
+- #237 1인칭 손: 애니 트랙(S4 #312) 소유, 이 트랙 범위 밖.
+
+## ADR-221 전제 (master 전달)
+지역별 제리캔 최소 1개(총 ≥6) 보장은 맵 트랙 `LootPlacement`에 확인·수정이 요청된 상태다. 이 보장이 없으면 연료 계산(시작 35%+제리캔 6개 ≥ 도로 16km×1.5)이 성립하지 않는다. 맵 쪽 반영 확인은 병합 때 master가 한다.
+
+## 3차: 신맵 Unity 확인 (확인함, main + track/map(LootGuarantee) 병합 3c77a60 기준)
+- EditMode 전체 1310/1317. 실패 7건은 전부 `CharacterRosterTests`(캐릭터 트랙 에셋·FBX 의존, 차량 무관). 신규 `VehicleWorldPlacementTests` 3, `PropGroundingTests` 7, `VehicleSpreadTests` 4, `LootGuaranteeTests` 6, `FuelTests` 16km 1 전부 통과. 로그 `Logs/test-editmode.xml`.
+- `MeasureProps`(섬 plan 높이, 씬 미사용): 도로 옆 지정 차량 20대(지역별 4/4/3/2/3/4, 6지역 모두 ≥1), 정상 소품 접지 오차 최대 **0.005m**(≤0.03), 소품·지정 차량 AABB 겹침 **0**(보수적). 로그 `Logs/measureprops_island.log`.
+- 폐차 바운드 하단 −0.066~−0.195는 **옛 프리팹 기준**(BuildPrefabsOnly 미실행, 생성물 복원). −0.22→−0.08 오프셋 효과는 이전 측정(−0.112)로 확인했고, 병합 뒤 master 재생성 때 반영.
+- 남은 것: 도로 경사 ≤10° 구간 통행(PlayMode 소리 있음 → 미실행), #90·#99 캡처 판정.

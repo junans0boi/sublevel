@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game.Core
 {
@@ -49,6 +50,40 @@ namespace Game.Core
                     if (e.Kind == LootKind.Weapon) { plan[0] = e; break; }
             }
             return plan;
+        }
+    }
+
+    // Regional guarantee on top of the random roll (ADR-210): a kind (the jerrycan, ADR-200/ADR-221) that every region must offer at least `minPerRegion` times.
+    public static class LootGuarantee
+    {
+        // Changes `plan` in place. regionOf[i] is the region of spawn point i (-1: none). Points holding a weapon (the farming guarantee, index 0) and points that
+        // already hold the kind are left alone; a region short of the kind gets random other points turned into it, chosen by the seed. Returns how many were turned.
+        public static int Apply(LootEntry[] plan, IReadOnlyList<int> regionOf, int regions, LootTable table, LootKind kind, int minPerRegion, int seed)
+        {
+            LootEntry entry = null;
+            foreach (var e in table.Entries) if (e.Kind == kind) { entry = e; break; }
+            if (entry == null || plan == null || regionOf == null || minPerRegion <= 0) return 0;
+            var rng = new Random(unchecked(seed + 7919));
+            int turned = 0;
+            for (int r = 0; r < regions; r++)
+            {
+                int have = 0;
+                var candidates = new List<int>();
+                for (int i = 0; i < plan.Length && i < regionOf.Count; i++)
+                {
+                    if (regionOf[i] != r) continue;
+                    if (plan[i] != null && plan[i].Kind == kind) have++;
+                    else if (plan[i] == null || plan[i].Kind != LootKind.Weapon) candidates.Add(i);
+                }
+                while (have < minPerRegion && candidates.Count > 0)
+                {
+                    int pick = rng.Next(candidates.Count);
+                    plan[candidates[pick]] = entry;
+                    candidates.RemoveAt(pick);
+                    have++; turned++;
+                }
+            }
+            return turned;
         }
     }
 

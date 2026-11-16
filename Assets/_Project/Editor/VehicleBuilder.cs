@@ -391,7 +391,9 @@ public static class VehicleBuilder
         for (int i = 0; i < picked.Count; i++)
         {
             var p = picked[i];
-            bool wantBike = bikes < bike.SpawnCount && (cars >= car.SpawnCount || i % 2 == 1);
+            // The first pick of each region (VehicleSpread) is a car (ADR-198); motorcycles are spread evenly over the rest.
+            int rest = i - plan.Regions.Count, restCount = picked.Count - plan.Regions.Count;
+            bool wantBike = bikes < bike.SpawnCount && (cars >= car.SpawnCount || (rest >= 0 && (rest + 1) * bike.SpawnCount / Math.Max(1, restCount) > bikes));
             models.Add(Model(wantBike ? Motorcycles[bikes % Motorcycles.Length] : Cars[cars % Cars.Length]));
             if (wantBike) bikes++; else cars++;
             spots.Add(Spot(director, i, new Vector3(p.X, GroundUnder(p, height) + 0.25f, p.Z), p.YawDeg));
@@ -458,6 +460,9 @@ public static class VehicleBuilder
         {
             if (chosen.Count >= limit) break;
             if (avoid.Any(o => Sq(o.X - c.X) + Sq(o.Z - c.Z) < PropSpacing * PropSpacing * (chosen.Contains(o) ? 1f : 0.35f))) continue;
+            // A standing car (not a wreck) must sit within PropMaxGroundError of the ground on all four corners (ADR-201).
+            bool willWreck = chosen.Count % 3 == 2 && wrecks.Count > 0;
+            if (!willWreck && PropGrounding.Place(height, c.X, c.Z, c.YawDeg, VehicleParking.HalfLength, VehicleParking.HalfWidth).ErrorM > PropGrounding.MaxErrorM) continue;
             chosen.Add(c);
             avoid.Add(c);
         }
@@ -548,13 +553,21 @@ public static class VehicleBuilder
     {
         try
         {
-            EditorSceneManager.OpenScene(WorldBuilder.ScenePath, OpenSceneMode.Single);
-            var old = GameObject.Find(PropRootName);
-            if (old != null) Object.DestroyImmediate(old);
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);   // the plan's own ground, no saved scene
             var plan = WorldGenerator.Generate(LoadWorldSpec());
-            var terrain = Object.FindAnyObjectByType<Terrain>();
-            Func<float, float, float> height = (x, z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
-            int n = PlaceProps(plan, height, new List<ParkingSpot>());
+            Func<float, float, float> height = plan.Height;
+            var taken = VehicleSpread.Pick(VehicleParking.Candidates(plan), c => plan.RegionAt(c.X, c.Z), plan.Regions.Count, 20, 40f);
+            int n = PlaceProps(plan, height, taken);
+            Debug.Log($"[MeasureProps] drivable spots {taken.Count}, regions {plan.Regions.Count}, spots per region {string.Join("/", Enumerable.Range(0, plan.Regions.Count).Select(r => taken.Count(t => plan.RegionAt(t.X, t.Z) == r)))}");
+            var rends = GameObject.Find(PropRootName).GetComponentsInChildren<MeshRenderer>().Select(r => r.bounds).ToList();
+            int overlaps = 0;
+            for (int i = 0; i < rends.Count; i++)
+                for (int j = i + 1; j < rends.Count; j++)
+                    if (rends[i].Intersects(rends[j])) overlaps++;
+            foreach (var t in taken)
+                foreach (var b in rends)
+                    if (new Bounds(new Vector3(t.X, b.center.y, t.Z), new Vector3(2f * VehicleParking.HalfWidth, 1f, 2f * VehicleParking.HalfLength)).Intersects(b)) overlaps++;
+            Debug.Log($"[MeasureProps] prop/prop and prop/spot bounds overlaps (AABB, conservative): {overlaps}");
             float worst = 0f; int wrecks = 0;
             foreach (Transform t in GameObject.Find(PropRootName).transform)
             {

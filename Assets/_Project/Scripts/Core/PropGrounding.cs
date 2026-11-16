@@ -5,7 +5,9 @@ namespace Game.Core
     // ADR-201: pivot height and tilt that make a parked prop car's four corners follow the ground (plane fit over the corner heights).
     public static class PropGrounding
     {
-        public struct Fit { public float Y, PitchDeg, RollDeg; }
+        public const float MaxErrorM = 0.03f;   // ADR-201: a standing prop car's corners stay this close to the ground
+
+        public struct Fit { public float Y, PitchDeg, RollDeg, ErrorM; }   // ErrorM: how far each corner is from the fitted plane (the ground's twist under the car)
 
         // yawDeg: car heading (forward = (sin, cos)). PitchDeg is nose-up positive, RollDeg is right-side-down positive.
         // In Unity apply as Quaternion.Euler(0, yaw, 0) * Quaternion.Euler(-PitchDeg, 0, -RollDeg) (Euler X+ is nose-down, Z+ lifts the right side).
@@ -19,6 +21,7 @@ namespace Game.Core
                 Y = (ff + fb + fr + fl) * 0.25f,
                 PitchDeg = (float)(Math.Atan2(ff - fb, 2f * halfLength) * 180.0 / Math.PI),
                 RollDeg = (float)(Math.Atan2(fl - fr, 2f * halfWidth) * 180.0 / Math.PI),
+                ErrorM = Math.Abs(ff + fb - fr - fl) * 0.25f,
             };
         }
     }
