@@ -60,6 +60,9 @@ public static class CharacterKit
     {
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
+        public float UnarmedWalkSpeed, UnarmedRunSpeed;                     // the bare-handed walk and jog clips (m/s)
+        // Punch clips (ADR-235): seconds into the clip when the fist is furthest out (the hit), and the hand it is. Index 0 = Jab, 1 = Cross.
+        public float[] PunchImpact; public bool[] PunchRightHand;
     }
 
     static GaitProfile _gait;
@@ -114,7 +117,31 @@ public static class CharacterKit
                 var b = go.transform.InverseTransformPoint(hips.position);
                 return Mathf.Abs(b.z - a.z) / clip.length;
             }
-            var gait = new GaitProfile { WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack") };
+            var gait = new GaitProfile
+            {
+                WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack"),
+                UnarmedWalkSpeed = Speed("U_Walk_Loop"), UnarmedRunSpeed = Speed("U_Jog_Fwd_Loop"),
+                PunchImpact = new float[2], PunchRightHand = new bool[2],
+            };
+            // The fist's furthest point forward of the chest marks the hit; the hand that travels further is the punching one.
+            for (int i = 0; i < 2; i++)
+            {
+                var punch = CharacterControllerBuilder.Clip(i == 0 ? "U_Punch_Jab" : "U_Punch_Cross");
+                float bestL = float.MinValue, bestR = float.MinValue, atL = 0f, atR = 0f, restL = 0f, restR = 0f;
+                for (int k = 0; k <= 120; k++)
+                {
+                    float t = punch.length * k / 120f;
+                    punch.SampleAnimation(def.Animator.gameObject, t);
+                    float l = go.transform.InverseTransformPoint(def.Sockets.LeftHand.position).z - go.transform.InverseTransformPoint(def.Sockets.Chest.position).z;
+                    float r = go.transform.InverseTransformPoint(def.Sockets.RightHand.position).z - go.transform.InverseTransformPoint(def.Sockets.Chest.position).z;
+                    if (k == 0) { restL = l; restR = r; }
+                    if (l > bestL) { bestL = l; atL = t; }
+                    if (r > bestR) { bestR = r; atR = t; }
+                }
+                gait.PunchRightHand[i] = bestR - restR > bestL - restL;
+                gait.PunchImpact[i] = gait.PunchRightHand[i] ? atR : atL;
+                Debug.Log($"[CharacterKit] punch {punch.name}: {(gait.PunchRightHand[i] ? "right" : "left")} hand, fist furthest at {gait.PunchImpact[i]:F3}s of {punch.length:F2}s");
+            }
             var walk = CharacterControllerBuilder.Clip("RifleWalk");
             float low = float.MaxValue, high = float.MinValue;
             for (int i = 0; i <= 48; i++)
@@ -129,6 +156,7 @@ public static class CharacterKit
             }
             gait.FootPlantHeight = low + (high - low) * 0.25f;
             gait.FootLiftHeight = low + (high - low) * 0.55f;
+            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} m/s");
             Debug.Log($"[CharacterKit] gait: walk {gait.WalkSpeed:F2} run {gait.RunSpeed:F2} back {gait.BackSpeed:F2} m/s, foot height {low:F3}..{high:F3} m");
             if (gait.RunSpeed < 1f || gait.WalkSpeed < 0.3f || gait.RunSpeed <= gait.WalkSpeed || high - low < 0.03f)
                 throw new System.Exception("gait measurement looks wrong; the locomotion clips may not carry root motion");

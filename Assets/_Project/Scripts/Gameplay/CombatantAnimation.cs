@@ -26,7 +26,7 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed";
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
         public const string BreathState = "Breath", FlinchState = "Flinch";
@@ -43,12 +43,15 @@ namespace Game.Gameplay
         const float ProneLookMaxDeg = 35f, ProneLookShare = 0.8f;
         const float ProneHeadAheadOfEyes = 0.15f; // lying, the head joint ends this far ahead of the capsule / eyes
         const float BlendDamp = 0.08f;
-        const float FlinchSeconds = 0.3f;
+        const float FlinchSeconds = 0.6f;
         const float ShootHold = 0.22f;
         const float AimAfterShot = 0.9f;       // the weapon stays up this long after the last shot
         const float UpperWeightPerSecond = 7f;
+        const float PunchLeadSeconds = 0.02f, PunchFade = 0.02f; // the fist is out about 40 ms after the punch event
+        // When the last punch's fist is furthest out (Time.time), for the timing tests.
+        public float PunchImpactAt { get; private set; } = -1f;
         const float PunchHold = 0.5f;          // the upper layer shows the punch this long
-        const float PunchWeightPerSecond = 20f; // a punch is quick: the layer comes up faster than for a weapon
+        const float PunchWeightPerSecond = 50f; // a punch is quick: the layer comes up faster than for a weapon
         const float StepMinSpeed = 0.6f;
         const float AirPhasePerSecond = 1.5f;  // how fast the jump pose moves between rise, fall and landing
         const float StepPauseAfterLanding = 0.15f;
@@ -73,6 +76,9 @@ namespace Game.Gameplay
         [SerializeField] float _forwardClipSpeed = 5f;
         [SerializeField] float _backClipSpeed = 4f;
         [SerializeField] float _walkClipSpeed = 1.3f; // the walk clip alone (the slow walk plays it, sped up)
+        // The bare-handed walk and jog clips' ground speed (ADR-235), and the second in each punch clip when the fist is furthest out (the hit).
+        [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f;
+        [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
         // Foot height above the character's origin: planted below the first, in the air above the second.
         [SerializeField] float _footPlantHeight = 0.12f;
         [SerializeField] float _footLiftHeight = 0.2f;
@@ -213,7 +219,11 @@ namespace Game.Gameplay
             }
             // Non-looping clips: restarting from the beginning lets the same hand punch twice in a row if it ever has to.
             var state = punch.Right ? PunchRight : PunchLeft;
-            _animator.CrossFadeInFixedTime(state, 0.05f, UpperLayer, 0f);
+            // The server judged this punch just now: start the clip so its fist is furthest out PunchLeadSeconds from here (the hit and the
+            // fist agree within a frame or two), skipping only the wind-up before that.
+            float impact = punch.Right ? _punchImpactRight : _punchImpactLeft;
+            _animator.CrossFadeInFixedTime(state, PunchFade, UpperLayer, Mathf.Max(0f, impact - PunchLeadSeconds - PunchFade));
+            PunchImpactAt = Time.time + Mathf.Min(impact, PunchLeadSeconds + PunchFade);
             _upper = state;
             _punchUntil = Time.time + PunchHold;
             _upperHoldUntil = _punchUntil;
@@ -281,7 +291,11 @@ namespace Game.Gameplay
             _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
-            float clipSpeed = _legs.Backward ? _backClipSpeed : slowWalk ? _walkClipSpeed : _forwardClipSpeed;
+            // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-235).
+            _unarmedBody = HeldId == 0 || HoldsMelee;
+            float clipSpeed = _unarmedBody
+                ? (_legs.Backward || slowWalk ? _unarmedWalkSpeed : _unarmedRunSpeed)
+                : _legs.Backward ? _backClipSpeed : slowWalk ? _walkClipSpeed : _forwardClipSpeed;
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
@@ -439,11 +453,16 @@ namespace Game.Gameplay
             if (_animator.cullingMode != mode) _animator.cullingMode = mode;
         }
 
+        bool _unarmedBody, _unarmedShown;
+
+        // `_base` is the logical state (Locomotion covers both trees); the animator plays Unarmed or Locomotion for it.
         void SetBase(string state)
         {
-            if (_base == state) return;
+            bool tree = state == Locomotion;
+            if (_base == state && (!tree || _unarmedShown == _unarmedBody)) return;
+            _unarmedShown = tree && _unarmedBody;
             // Down to and up from the ground is slower than a step.
-            _animator.CrossFadeInFixedTime(state, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
+            _animator.CrossFadeInFixedTime(tree && _unarmedBody ? Unarmed : state, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
             _base = state;
         }
 

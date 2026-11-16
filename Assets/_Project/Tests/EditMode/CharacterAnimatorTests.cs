@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]
@@ -98,10 +98,10 @@ namespace Game.Tests
                 }
             Assert.GreaterOrEqual(clips.Count, 15);
             foreach (var (state, clip) in clips) Assert.IsTrue(clip.isHumanMotion, $"{state}/{clip.name} must be a Humanoid clip so every roster model plays it");
-            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin" };
+            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop" };
             foreach (var (_, clip) in clips)
                 if (loops.Contains(clip.name)) Assert.IsTrue(clip.isLooping, clip.name + " loops");
-            foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "Flinch", "PunchRight", "PunchLeft" })
+            foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross" })
                 Assert.IsFalse(clips.First(c => c.clip.name == one).clip.isLooping, one + " plays once");
         }
 
@@ -186,16 +186,14 @@ namespace Game.Tests
         }
 
         [Test]
-        public void AdditiveFlinch_TipsTheChestBackByAFewDegrees_ThenSettles()
+        public void AdditiveFlinch_TipsTheChestByAFewDegrees_ThenSettles()
         {
             Pose(Base, "Locomotion", 0f);
-            float rest = TrunkAngleOfChest();
-            Pose(Additive, "Flinch", 0.2f);
-            float peak = TrunkAngleOfChest();
+            float rest = TrunkAngleOfChest(), peak = 0f;
+            for (int i = 1; i <= 10; i++) { Pose(Additive, "Flinch", i / 10f); peak = Mathf.Max(peak, Mathf.Abs(TrunkAngleOfChest() - rest)); }
+            Assert.That(peak, Is.InRange(1.0f, 25f), "flinch size in degrees (the hit-chest pose added on top)");
             Pose(Additive, "Flinch", 1f);
-            float after = TrunkAngleOfChest();
-            Assert.That(Mathf.Abs(peak - rest), Is.InRange(1.5f, 20f), "flinch size in degrees");
-            Assert.Less(Mathf.Abs(after - rest), 0.8f, "back to the rest pose");
+            Assert.Less(Mathf.Abs(TrunkAngleOfChest() - rest), 1.5f, "back near the rest pose at the end of the clip");
         }
 
         // The chest's pitch in the character frame (rotation of its forward about the right axis), degrees.
@@ -218,17 +216,39 @@ namespace Game.Tests
             Assert.Greater(Mathf.Abs(TrunkPitch()), 60f, "trunk is horizontal");
         }
 
+        float HandAhead(Transform hand) => Local(hand).z - Local(S.Chest).z;
+
         [Test]
-        public void PunchRight_ExtendsTheFistForwardAtLeast20Cm_AndComesBack()
+        public void Punches_ExtendTheirOwnFistForwardAtLeast30Cm_AndComeBack()
         {
-            Pose(Base, "Locomotion", 0f);
-            float rest = Local(S.RightHand).z;
-            Pose(Upper, "PunchRight", 0.3f, upper: 1f);
-            float peak = Local(S.RightHand).z;
-            Pose(Upper, "PunchRight", 1f, upper: 1f);
-            float after = Local(S.RightHand).z;
-            Assert.Greater(peak - rest, 0.2f, "fist reach");
-            Assert.Less(Mathf.Abs(after - rest), 0.08f, "hand returns");
+            foreach (var (state, hand) in new[] { ("PunchRight", S.RightHand), ("PunchLeft", S.LeftHand) })
+            {
+                Pose(Base, "Locomotion", 0f);
+                float rest = HandAhead(hand), peak = float.MinValue;
+                for (int i = 0; i <= 20; i++) { Pose(Upper, state, i / 20f, upper: 1f); peak = Mathf.Max(peak, HandAhead(hand)); }
+                Assert.Greater(peak - rest, 0.3f, state + ": fist reach over the rest pose (m)");
+                Pose(Upper, state, 1f, upper: 1f);
+                Assert.Less(Mathf.Abs(HandAhead(hand) - rest), 0.25f, state + ": the hand is back near its rest at the end");
+            }
+        }
+
+        [Test]
+        public void Unarmed_Jog_SwingsBothArmsPastTheHips_WhichTheRifleRunNeverDoes()
+        {
+            float Swing(string state, float move)
+            {
+                _animator.SetFloat("Move", move);
+                Pose(Base, state, 0f);
+                float behind = float.MaxValue;
+                for (int i = 0; i < 40; i++)
+                {
+                    _animator.Update(0.03f);
+                    behind = Mathf.Min(behind, Mathf.Min(Local(S.LeftHand).z, Local(S.RightHand).z) - Local(S.Hips).z);
+                }
+                return behind;
+            }
+            Assert.Less(Swing("Unarmed", 3.5f), -0.05f, "bare hands: an arm swings back past the hips");
+            Assert.Greater(Swing("Locomotion", 3f), 0.1f, "rifle run: both hands stay in front on the gun");
         }
     }
 }
