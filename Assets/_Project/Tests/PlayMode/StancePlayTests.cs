@@ -115,11 +115,12 @@ namespace Game.Tests
             yield return null; // a frame for LateUpdate to pose the legs and for the camera to follow
             yield return null;
             Assert.AreEqual(1f, animation.CrouchPose, 0.01f);
-            Assert.Greater(animation.ModelDrop, 0.2f, "the model is lowered");
-            Assert.Less(animation.ModelDrop, 0.5f, "not a kneel");
-            float crouchDrop = animation.ModelDrop;
-            Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.28f, "the hips came down");
-            Assert.Greater(knee.position.y - hips.position.y - standingKnee, 0.12f, "the knees are bent up toward the hips");
+            yield return new WaitForSeconds(0.4f); // the code bend fades out as the clip takes over
+            // Empty hands crouch with the UAL crouch clip (ADR-255): the model is not lowered in code, the clip's own hips are low.
+            Assert.Less(animation.ModelDrop, 0.03f, "the clip crouches, the model is not dropped");
+            Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.3f, "the hips came down");
+            Assert.Less(hips.position.y - pc.transform.position.y, 0.65f, "the hips are low (the UAL crouch kneels)");
+            Assert.Less(knee.position.y - pc.transform.position.y, 0.4f, "the legs are folded: the knee is close to the floor");
             Assert.AreEqual(0.65f, standingCamera - pc.Camera.transform.position.y, 0.1f, "the camera comes down with the eyes");
 
             _input.Frame.Move = new Vector2(0, 1);
@@ -127,11 +128,9 @@ namespace Game.Tests
             float z0 = pc.transform.position.z, t0 = Time.time;
             yield return new WaitForSeconds(0.5f);
             float speed = (pc.transform.position.z - z0) / (Time.time - t0);
-            float walkDrop = animation.ModelDrop;
+            float walkHips = standingHips - (hips.position.y - pc.transform.position.y);
             _input.Frame.Move = Vector2.zero;
-            Assert.Less(walkDrop, crouchDrop - 0.05f, "walking crouched bends the knees less so the legs can still swing");
-            // 0.0959 m measured on the Humanoid roster (hip-to-ankle 0.84 m, RifleCrouchWalk's own hips are 0.1 m lower than standing): 8 cm is the floor.
-            Assert.Greater(walkDrop, 0.08f, "but the body stays low");
+            Assert.Greater(walkHips, 0.25f, "crouch-walking, the hips stay low");
             Assert.AreEqual(4.7f * 0.745f, speed, 0.3f, "walking 4.7 m/s with empty hands times the crouch factor 0.745 (ADR-095)");
 
             _input.Frame.Crouch = true;

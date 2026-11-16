@@ -48,6 +48,29 @@ public static class CharacterControllerBuilder
         locomotion.speedParameterActive = true;
         var baseMachine = controller.layers[0].stateMachine;
         baseMachine.defaultState = locomotion;
+        // Bare hands (ADR-255): the UAL walk and jog. The armed tree above is all rifle poses; without a weapon the hands hang and swing.
+        var unarmed = controller.CreateBlendTreeInController(CombatantAnimation.Unarmed, out var unarmedTree, 0);
+        unarmedTree.blendType = BlendTreeType.Simple1D;
+        unarmedTree.blendParameter = CombatantAnimation.Move;
+        unarmedTree.useAutomaticThresholds = false;
+        unarmedTree.AddChild(Clip("U_Walk_Loop"), -gait.UnarmedWalkSpeed);
+        unarmedTree.children = unarmedTree.children.Select((c, i) => { if (i == 0) c.timeScale = -1f; return c; }).ToArray(); // back-pedal = the walk played backwards
+        unarmedTree.AddChild(Clip("U_Idle_Loop"), 0f);
+        unarmedTree.AddChild(Clip("U_Walk_Loop"), gait.UnarmedWalkSpeed);
+        unarmedTree.AddChild(Clip("U_Jog_Fwd_Loop"), gait.UnarmedRunSpeed);
+        unarmed.speedParameter = CombatantAnimation.Pace;
+        unarmed.speedParameterActive = true;
+        // Bare-handed crouch (UAL): a real crouch at the capsule's height, so the code knee bend is not used (CombatantAnimation._clipCrouch).
+        var crouch = controller.CreateBlendTreeInController(CombatantAnimation.UnarmedCrouch, out var crouchTree, 0);
+        crouchTree.blendType = BlendTreeType.Simple1D;
+        crouchTree.blendParameter = CombatantAnimation.Move;
+        crouchTree.useAutomaticThresholds = false;
+        crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), -gait.UnarmedCrouchSpeed);
+        crouchTree.children = crouchTree.children.Select((c, i) => { if (i == 0) c.timeScale = -1f; return c; }).ToArray();
+        crouchTree.AddChild(Clip("U_Crouch_Idle_Loop"), 0f);
+        crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), gait.UnarmedCrouchSpeed);
+        crouch.speedParameter = CombatantAnimation.Pace;
+        crouch.speedParameterActive = true;
         // No jump clip yet (gap sheet, ADR-187): the air state holds a still moment of the idle and CombatantAnimation poses the jump on top (ADR-048).
         var air = baseMachine.AddState(CombatantAnimation.Air);
         air.motion = Clip("RifleIdle");
@@ -65,8 +88,13 @@ public static class CharacterControllerBuilder
         upper.defaultState = lowered;
         upper.AddState(CombatantAnimation.Aim).motion = Clip("Swat_RifleAimingIdle_skin");
         upper.AddState(CombatantAnimation.Shoot).motion = Clip("FiringRifleStand");
-        upper.AddState(CombatantAnimation.PunchLeft).motion = ProceduralClips.Punch(false);
-        upper.AddState(CombatantAnimation.PunchRight).motion = ProceduralClips.Punch(true);
+        // Punches (UAL Jab / Cross): CharacterKit.Prepare reads which hand each state ends up using and swaps or mirrors until the right state throws the right fist.
+        var left = upper.AddState(CombatantAnimation.PunchLeft);
+        var right = upper.AddState(CombatantAnimation.PunchRight);
+        right.motion = Clip(gait.PunchSwap ? "U_Punch_Cross" : "U_Punch_Jab");
+        left.motion = Clip(gait.PunchSwap ? "U_Punch_Jab" : "U_Punch_Cross");
+        right.mirror = gait.MirrorRight;
+        left.mirror = gait.MirrorLeft;
 
         // 2 Action: reload clips by stance. The empty default state lets the layer rest at weight 0.
         AddMaskedLayer(controller, "Action", mask, AnimatorLayerBlendingMode.Override);
@@ -91,7 +119,7 @@ public static class CharacterControllerBuilder
         var breath = additive.AddState(CombatantAnimation.BreathState);
         breath.motion = ProceduralClips.Breath();
         additive.defaultState = breath;
-        additive.AddState(CombatantAnimation.FlinchState).motion = ProceduralClips.Flinch();
+        additive.AddState(CombatantAnimation.FlinchState).motion = Clip("U_Hit_Chest"); // an additive pose: frame 0 is the reference
 
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
@@ -161,73 +189,4 @@ public static class ProceduralClips
     public static AnimationClip Breath() => Make("Breath", true, 4f,
         ("Chest Front-Back", new[] { (0f, 0f), (2f, 0.05f), (4f, 0f) }),
         ("Spine Front-Back", new[] { (0f, 0f), (2f, 0.02f), (4f, 0f) }));
-
-    // Chest and head snap back and settle in 0.3 s.
-    public static AnimationClip Flinch() => Make("Flinch", false, 0.3f,
-        ("Chest Front-Back", new[] { (0f, 0f), (0.06f, 0.35f), (0.3f, 0f) }),
-        ("Spine Front-Back", new[] { (0f, 0f), (0.06f, 0.25f), (0.3f, 0f) }),
-        ("Head Nod Down-Up", new[] { (0f, 0f), (0.06f, 0.3f), (0.3f, 0f) }));
-
-    // Placeholder jab until a punch clip is chosen from the gap sheet (ADR-187): the arm's five Humanoid muscles are searched so the fist
-    // goes from a guard (in front of the chest) to full reach and back, all other muscles stay at the rifle-idle pose. Deterministic.
-    public static AnimationClip Punch(bool right)
-    {
-        string side = right ? "Right" : "Left";
-        string[] arm = { "Arm Down-Up", "Arm Front-Back", "Arm Twist In-Out", "Forearm Stretch", "Forearm Twist In-Out", "Shoulder Down-Up", "Shoulder Front-Back" };
-        var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{CharacterRoster.PrefabDir}/Roster_{CharacterKit.DefaultRoster}.prefab"));
-        try
-        {
-            var def = go.GetComponent<CharacterDef>();
-            var handler = new HumanPoseHandler(def.Animator.avatar, def.Animator.transform);
-            var pose = new HumanPose();
-            CharacterControllerBuilder.Clip("RifleIdle").SampleAnimation(def.Animator.gameObject, 0f);
-            handler.GetHumanPose(ref pose);
-            var baseline = (float[])pose.muscles.Clone();
-            var shoulder = right ? def.Sockets.RightUpperArm : def.Sockets.LeftUpperArm;
-            var hand = right ? def.Sockets.RightHand : def.Sockets.LeftHand;
-            var idx = arm.Select(a => System.Array.IndexOf(HumanTrait.MuscleName, $"{side} {a}")).ToArray();
-            handler.SetHumanPose(ref pose);
-            Vector3 Local(Transform t) => go.transform.InverseTransformPoint(t.position);
-            float[] Solve(Vector3 offsetFromShoulder, float[] start)
-            {
-                var target = Local(shoulder) + offsetFromShoulder;
-                var best = (float[])start.Clone();
-                float Cost(float[] v)
-                {
-                    for (int k = 0; k < idx.Length; k++) pose.muscles[idx[k]] = v[k];
-                    handler.SetHumanPose(ref pose);
-                    return (Local(hand) - target).sqrMagnitude;
-                }
-                pose.muscles = (float[])baseline.Clone();
-                float bestCost = Cost(best);
-                var rng = new System.Random(5);
-                for (float step = 0.5f; step > 0.01f; step *= 0.8f)
-                    for (int n = 0; n < 120; n++)
-                    {
-                        var c = (float[])best.Clone();
-                        for (int k = 0; k < c.Length; k++) c[k] = Mathf.Clamp(c[k] + ((float)rng.NextDouble() * 2f - 1f) * step, -1f, 1f);
-                        float cc = Cost(c);
-                        if (cc < bestCost) { bestCost = cc; best = c; }
-                    }
-                return best;
-            }
-            var rest = idx.Select(i => baseline[i]).ToArray();
-            var guard = Solve(new Vector3(right ? -0.05f : 0.05f, -0.10f, 0.30f), rest);
-            var reach = Solve(new Vector3(0f, -0.03f, 0.58f), guard);
-            var curves = new System.Collections.Generic.List<(string, (float, float)[])>();
-            for (int k = 0; k < idx.Length; k++)
-                curves.Add(($"{side} {arm[k]}", new[] { (0f, guard[k]), (0.1f, reach[k]), (0.18f, reach[k]), (0.4f, guard[k]) }));
-            // The rest of the body holds the rifle-idle pose (absolute values, this is an override layer).
-            for (int m = 0; m < baseline.Length; m++)
-            {
-                var name = HumanTrait.MuscleName[m];
-                if (name.StartsWith("Left Hand") || name.StartsWith("Right Hand") || name.Contains("Finger") || name.Contains("Thumb")) continue;
-                if (name.StartsWith($"{side} Arm") || name.StartsWith($"{side} Forearm") || name.StartsWith($"{side} Shoulder")) continue;
-                if (name.Contains("Leg") || name.Contains("Foot") || name.Contains("Toes")) continue;
-                curves.Add((name, new[] { (0f, baseline[m]), (0.4f, baseline[m]) }));
-            }
-            return Make(right ? "PunchRight" : "PunchLeft", false, 0.4f, curves.ToArray());
-        }
-        finally { Object.DestroyImmediate(go); }
-    }
 }

@@ -9,7 +9,7 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // ADR-235: the saved PlayerAppearance decides the spawned player's model and colour variant, and a remote client sees the same model.
+    // ADR-255: the saved PlayerAppearance decides the spawned player's model and colour variant, and a remote client sees the same model.
     // No sound. The host's saved look is set before the match starts; the remote client (MultiHarness) holds no look of its own.
     public class PlayerLookPlayTests
     {

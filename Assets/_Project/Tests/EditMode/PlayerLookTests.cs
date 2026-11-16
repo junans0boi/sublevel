@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Game.Tests
 {
-    // ADR-235: every roster model has a Player_<id> prefab with the look components (needs TestBoxBuilder.Build).
+    // ADR-255: every roster model has a Player_<id> prefab with the look components (needs TestBoxBuilder.Build).
     public class PlayerLookTests
     {
         [Test]

@@ -251,6 +251,11 @@ public static class TestBoxBuilder
         Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
         Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
         Set(animation, "_walkClipSpeed", p => p.floatValue = visual.Gait.WalkSpeed);
+        Set(animation, "_unarmedWalkSpeed", p => p.floatValue = visual.Gait.UnarmedWalkSpeed);
+        Set(animation, "_unarmedRunSpeed", p => p.floatValue = visual.Gait.UnarmedRunSpeed);
+        Set(animation, "_unarmedCrouchSpeed", p => p.floatValue = visual.Gait.UnarmedCrouchSpeed);
+        Set(animation, "_punchImpactLeft", p => p.floatValue = visual.Gait.PunchLeftImpact);
+        Set(animation, "_punchImpactRight", p => p.floatValue = visual.Gait.PunchRightImpact);
         Set(animation, "_proneHeadAhead", p => p.floatValue = visual.ProneHeadAhead);
         Set(animation, "_footPlantHeight", p => p.floatValue = visual.Gait.FootPlantHeight);
         Set(animation, "_footLiftHeight", p => p.floatValue = visual.Gait.FootLiftHeight);
@@ -327,7 +332,7 @@ public static class TestBoxBuilder
         return prefab.GetComponent<NetworkObject>();
     }
 
-    // One player prefab per roster model (Player_<id>, ADR-235): MatchDirector spawns the one the client chose. "Player" is the default model.
+    // One player prefab per roster model (Player_<id>, ADR-255): MatchDirector spawns the one the client chose. "Player" is the default model.
     static void BuildPlayerVariants(GearAssets gear)
     {
         foreach (var e in CharacterRoster.Entries) BuildPlayerPrefab(gear, e.Id, "Player_" + e.Id);

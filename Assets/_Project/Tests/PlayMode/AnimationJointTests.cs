@@ -207,6 +207,86 @@ namespace Game.Tests
             return Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg;
         }
 
+        Animator BodyAnimator => _me.GetComponentInChildren<Animator>();
+        float HandAhead(HumanBodyBones hand) => L(B(hand)).z - L(B(HumanBodyBones.Chest)).z;
+
+        [UnityTest]
+        public IEnumerator BareHands_MoveWithTheBareHandClips_AndTheRifleHoldComesOnlyWithAGun()
+        {
+            yield return Load();
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.8f);
+            float behind = float.MaxValue; bool unarmedState = true; float upperMax = 0f, aimedMax = 0f;
+            for (float end = Time.time + 1.2f; Time.time < end;)
+            {
+                yield return null;
+                float z = Mathf.Min(L(B(HumanBodyBones.LeftHand)).z, L(B(HumanBodyBones.RightHand)).z) - L(B(HumanBodyBones.Hips)).z;
+                behind = Mathf.Min(behind, z);
+                unarmedState &= BodyAnimator.GetCurrentAnimatorStateInfo(0).IsName("Unarmed") || BodyAnimator.GetNextAnimatorStateInfo(0).IsName("Unarmed");
+                upperMax = Mathf.Max(upperMax, BodyAnimator.GetLayerWeight(1));
+                aimedMax = Mathf.Max(aimedMax, _anim.RifleHoldShown);
+            }
+            Debug.Log($"[AnimMetrics] bare hands run: back-most hand {behind:F3} m behind the hips, upper layer weight max {upperMax:F2}, rifle hold max {aimedMax:F2}, unarmed state {unarmedState}, base {_anim.BaseState}");
+            Assert.IsTrue(unarmedState, "the animator plays the Unarmed tree");
+            Assert.AreEqual(CombatantAnimation.Locomotion, _anim.BaseState, "logically still locomotion");
+            Assert.AreEqual(0f, upperMax, 1e-3f, "no upper-layer weapon pose without a weapon");
+            Assert.AreEqual(0f, aimedMax, 1e-3f, "no rifle hold without a weapon");
+            Assert.Less(behind, -0.05f, "an arm swings back past the hips: bare-hand jog, not a rifle pose");
+            Shot("bare_run", 3f, 0.9f, 0.9f);
+
+            yield return GiveRifle();
+            yield return new WaitForSeconds(0.6f);
+            Assert.IsTrue(BodyAnimator.GetCurrentAnimatorStateInfo(0).IsName("Locomotion"), "with a gun the rifle tree plays");
+            Assert.Greater(_anim.RifleHoldShown, 0.9f, "the rifle hold shows with a gun");
+        }
+
+        [UnityTest]
+        public IEnumerator Punch_TheFistIsOutWithin50MsOfTheServersJudgement_AndTheVictimFlinches()
+        {
+            yield return Load();
+            float eventAt = -1f; bool right = false;
+            _me.Punched += (in Combatant.PunchResult p) => { eventAt = Time.time; right = p.Right; };
+            _input.Frame.FirePressed = true;
+            for (int i = 0; i < 600 && eventAt < 0f; i++) yield return null;
+            Assert.GreaterOrEqual(eventAt, 0f, "a punch was thrown with bare hands");
+            var hand = right ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand;
+            float bestAt = 0f, best = float.MinValue, rest = HandAhead(hand);
+            for (float end = eventAt + 0.5f; Time.time < end;)
+            {
+                yield return null;
+                float a = HandAhead(hand);
+                if (a > best) { best = a; bestAt = Time.time; }
+            }
+            float plan = _anim.PunchImpactAt - eventAt;
+            Debug.Log($"[AnimMetrics] punch ({(right ? "right" : "left")}): planned fist-out {plan * 1000f:F0} ms after the event, measured peak {(bestAt - eventAt) * 1000f:F0} ms, reach {best - rest:F2} m");
+            Assert.LessOrEqual(plan, 0.05f, "planned: the clip's fist-out frame follows the judgement within 50 ms");
+            Assert.LessOrEqual(Mathf.Abs(bestAt - eventAt), 0.05f + 0.034f, "measured: the fist peaks within 50 ms plus two frames (the pose is read a frame late)");
+            Assert.Greater(best - rest, 0.3f, "the fist reaches out");
+            Shot("punch_peak", 2.5f, 1.3f, 1.2f);
+        }
+
+        [UnityTest]
+        public IEnumerator Hit_TheBodyFlinchesOnTheAdditiveLayer_WithoutLosingItsPose()
+        {
+            yield return Load();
+            _me.ServerDamageFilter = a => a.Amount;
+            yield return GiveRifle();
+            yield return new WaitForSeconds(0.5f);
+            float Chest() { var f = _pc.transform.InverseTransformDirection(B(HumanBodyBones.Chest).up); return Mathf.Atan2(f.z, f.y) * Mathf.Rad2Deg; }
+            float rest = Chest(), peak = 0f; bool flinchState = false;
+            _me.ServerTakeDamage(5f);
+            for (float end = Time.time + 0.6f; Time.time < end;)
+            {
+                yield return null;
+                peak = Mathf.Max(peak, Mathf.Abs(Chest() - rest));
+                flinchState |= BodyAnimator.GetCurrentAnimatorStateInfo(3).IsName("Flinch") || BodyAnimator.GetNextAnimatorStateInfo(3).IsName("Flinch");
+            }
+            Debug.Log($"[AnimMetrics] hit flinch: chest moved up to {peak:F1} deg, additive state reached {flinchState}, upper state {_anim.UpperState}, rifle hold {_anim.RifleHoldShown:F2}");
+            Assert.IsTrue(flinchState, "the Flinch state on the Additive layer");
+            Assert.Greater(peak, 1f, "the chest tips by at least a degree");
+            Assert.Greater(_anim.RifleHoldShown, 0.9f, "the rifle hold is not interrupted by the hit");
+        }
+
         [UnityTest]
         public IEnumerator Reload_TheActionLayerCarriesBothHands_AndTheGripIsBackAfterwards()
         {
@@ -295,6 +375,23 @@ namespace Game.Tests
             Assert.LessOrEqual(Mathf.Abs(err[0]), tolerance, "left foot on the slope (m)");
             Assert.LessOrEqual(Mathf.Abs(err[1]), tolerance, "right foot on the slope (m)");
             UnityEngine.Object.Destroy(slope);
+        }
+
+        [UnityTest]
+        public IEnumerator Crouch_BareHands_HeadComesDownToTheCapsule()
+        {
+            yield return Load();
+            _input.Frame.Crouch = true;
+            yield return WaitUntil(() => _me.GetComponent<CombatantStance>().CrouchAmount >= 0.999f, 2f, "crouched");
+            yield return new WaitForSeconds(0.8f);
+            var rows = new List<float[]>();
+            Shot("crouch_bare_side", 3f, 1.0f, 0.8f);
+            yield return Record("crouch_bare", 0.4f, rows);
+            var r = rows[rows.Count - 1];
+            Debug.Log($"[AnimMetrics] crouch bare hands: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} drop {_anim.ModelDrop:F3} footfix {_anim.FootFix:F3}");
+            Assert.That(r[3], Is.InRange(0.8f, 1.2f), "head joint height crouched, the UAL crouch (m)");
+            Assert.Less(Mathf.Abs(_anim.ModelDrop) + Mathf.Abs(_anim.FootFix), 0.03f, "the clip is the crouch: no code knee bend or foot fix");
+            Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");
         }
 
         [UnityTest]

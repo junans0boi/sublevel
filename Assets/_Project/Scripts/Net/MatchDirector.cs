@@ -27,7 +27,7 @@ namespace Game.Net
         [SerializeField] NetworkObject _botPrefab;
         // Bots with the other roster models (ADR-230); bot n uses variant n mod length. Empty = every bot is _botPrefab.
         [SerializeField] NetworkObject[] _botVariants;
-        // One player prefab per roster model, named Player_<ModelId> (ADR-235): the spawn picks the one the client asked for.
+        // One player prefab per roster model, named Player_<ModelId> (ADR-255): the spawn picks the one the client asked for.
         [SerializeField] NetworkObject[] _playerVariants;
         // The local player's saved look as text; set by Game.Gameplay (PlayerAppearanceStore). Sent to the server on connect.
         public static System.Func<string> LocalLookSource;
