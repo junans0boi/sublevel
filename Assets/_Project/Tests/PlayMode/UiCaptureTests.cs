@@ -195,6 +195,15 @@ namespace Game.Tests
             StringAssert.Contains("CH-7K2Q", menu.ToastText);
             Assert.AreEqual("CH-7K2Q", GUIUtility.systemCopyBuffer);
             yield return Shots(folder, "toast_invite");
+            menu.ShowTrainingEntry();
+            Assert.IsTrue(menu.TrainingEntryShown);
+            menu.TrainingEntry.Select(2);
+            Assert.AreEqual(2, menu.TrainingEntry.Selected);
+            menu.TrainingEntry.Select(0);
+            yield return Shots(folder, "training");
+            menu.Back();
+            Assert.IsFalse(menu.TrainingEntryShown);
+
             menu.ShowSettings();
             yield return Shots(folder, "settings");
             menu.Back();
@@ -208,23 +217,50 @@ namespace Game.Tests
             Assert.IsFalse(menu.CreditsShown);
         }
 
-        // PERF: the lobby's frame time with the 3D party standing (the editor runs with graphics, no vsync).
-        [UnityTest, Timeout(120000)]
+        // PERF: the lobby (3D party + UI) rendered into a 1920x1080 target frame by frame, each frame forced to finish on the GPU
+        // with a 1-pixel read-back, so the numbers are real work (batch mode has no game-view render loop of its own).
+        [UnityTest, Timeout(180000)]
         public IEnumerator Lobby_FrameTime()
         {
+            PlayerPrefs.SetInt(UiFx.ReducedKey, 1);
             PlayerAppearanceStore.Save(PlayerAppearance.FromIndex(2, 1));
             yield return Menu();
             var panel = MainMenu.Instance.Panel;
             var squad = new PartyLobby(0, "a", PlayerAppearanceStore.Load()); squad.Join(2, "b", PlayerAppearance.FromIndex(5, 0)); squad.Join(3, "c", PlayerAppearance.FromIndex(8, 2)); squad.Join(4, "d", PlayerAppearance.FromIndex(12, 1));
             panel.SetParty(squad, 0);
             for (int i = 0; i < 30; i++) yield return null;
-            QualitySettings.vSyncCount = 0;
-            float t0 = Time.realtimeSinceStartup; int n = 120;
-            for (int i = 0; i < n; i++) yield return null;
-            float ms = (Time.realtimeSinceStartup - t0) / n * 1000f;
+            var cam = Camera.main;
+            var rt = new RenderTexture(1920, 1080, 24);
+            var canvases = new System.Collections.Generic.List<Canvas>();
+            foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+                if (c.isRootCanvas && c.renderMode == RenderMode.ScreenSpaceOverlay) { c.renderMode = RenderMode.ScreenSpaceCamera; c.worldCamera = cam; c.planeDistance = cam.nearClipPlane + 0.05f; canvases.Add(c); }
+            var oldTarget = cam.targetTexture;
+            cam.targetTexture = rt;
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            var times = new System.Collections.Generic.List<float>();
+            long draws = 0, tris = 0, batches = 0;
+            for (int i = 0; i < 180; i++)
+            {
+                yield return null;
+                float t0 = Time.realtimeSinceStartup;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, 1, 1), 0, 0); // waits for the GPU
+                RenderTexture.active = null;
+                if (i >= 20) times.Add((Time.realtimeSinceStartup - t0) * 1000f);
+#if UNITY_EDITOR
+                if (i == 100) { draws = UnityEditor.UnityStats.drawCalls; tris = UnityEditor.UnityStats.triangles; batches = UnityEditor.UnityStats.batches; }
+#endif
+            }
+            cam.targetTexture = oldTarget;
+            foreach (var c in canvases) c.renderMode = RenderMode.ScreenSpaceOverlay;
+            rt.Release();
+            times.Sort();
+            float avg = 0f; foreach (var x in times) avg += x; avg /= times.Count;
+            float p99 = times[Mathf.Min(times.Count - 1, (int)(times.Count * 0.99f))];
             string folder = Folder();
-            File.WriteAllText(Path.Combine(folder, "lobby_perf.txt"), "avg frame " + ms.ToString("0.00") + " ms over " + n + " frames, " + Screen.width + "x" + Screen.height + ", 4 characters\n");
-            Assert.Less(ms, 33f, "the lobby stays above 30 fps");
+            File.WriteAllText(Path.Combine(folder, "lobby_perf.txt"), $"lobby 1920x1080, 4 characters + UI, {times.Count} frames: avg {avg:0.00} ms, p99 {p99:0.00} ms, drawcalls {draws}, batches {batches}, triangles {tris}\n");
+            Assert.Less(avg, 33f, "the lobby stays above 30 fps");
             PlayerAppearanceStore.Clear();
         }
 
