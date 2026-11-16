@@ -18,7 +18,7 @@ public static partial class WorldBuilder
         int region = lot.Region;
         float hx = b.Width * 0.5f, hz = b.Depth * 0.5f;
         var family = BuildingKinds.Family(lot.Kind);
-        bool house = family == BuildingKind.House, shed = family == BuildingKind.Shed;
+        bool house = lot.Kind == BuildingKind.House, shed = family == BuildingKind.Shed;   // not Shop/Villa/Apartment: they have roof decks (the facade kinds), a gable would float over them
         uint style = Hash(seed, 7);
         int accent = (int)(Hash((int)h, 91) % 5u);
         bool lightTrim = R(2) < 0.65f;
@@ -73,7 +73,7 @@ public static partial class WorldBuilder
                     d.Visual(region, WorldMaterials.Wire, foot + Vector3.up * (1.5f + k * 0.4f), new Vector3(0.9f - k * 0.2f, 0.02f, 0.02f), ridgeRot * Quaternion.Euler(0f, 90f, 0f));
             }
         }
-        else if (!shed)
+        else if (!shed && !BuildingKinds.RoofAccess(lot.Kind))   // shops, villas and apartments have their own roof deck (parapet, stair house): no equipment at the wrong height
         {
             // Flat roof with equipment: air-conditioning units, vent pipes, a skylight, sometimes an antenna mast or a tank.
             float x0 = -hx + 1.2f, x1 = hx - 1.2f, z0 = -hz + 1.2f, z1 = hz - 1.2f;

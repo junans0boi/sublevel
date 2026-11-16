@@ -31,7 +31,7 @@ namespace Game.Tests
         {
             string path = Path.Combine(UnityEngine.Application.dataPath, "_Project/Data/Resources/GameData/world.json");
             var fromFile = UnityEngine.JsonUtility.FromJson<WorldSpec>(File.ReadAllText(path));
-            Assert.AreEqual(UnityEngine.JsonUtility.ToJson(WorldSpec.CreateDefault(), true), UnityEngine.JsonUtility.ToJson(fromFile, true));
+            Assert.AreEqual(UnityEngine.JsonUtility.ToJson(WorldSpec.CreateIsland(), true), UnityEngine.JsonUtility.ToJson(fromFile, true));   // world.json is the C2 island (ADR-204)
         }
 
         [Test]
