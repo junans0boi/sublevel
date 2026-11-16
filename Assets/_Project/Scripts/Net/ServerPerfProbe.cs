@@ -40,6 +40,13 @@ namespace Game.Net
         void Gather()
         {
             var rng = new System.Random(12345);
+            // No --perf-gather: meet at the hub of the match's final region (the crowd of the last circle).
+            if (GatherX == 0f && GatherZ == 0f && ZoneDirector.Instance != null)
+            {
+                var hub = ZoneDirector.Instance.RegionCentre(ZoneDirector.Instance.FinalRegion);
+                GatherX = hub.x; GatherZ = hub.z;
+                Debug.Log($"[Perf] P3 final region {ZoneDirector.Instance.FinalRegion}, hub ({hub.x:F0}, {hub.z:F0})");
+            }
             int moved = 0;
             foreach (var c in Combatant.All)
             {
