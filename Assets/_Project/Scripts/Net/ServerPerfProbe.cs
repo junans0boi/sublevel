@@ -37,6 +37,10 @@ namespace Game.Net
             return probe;
         }
 
+        // The bots add their NavMeshAgent only when they start walking (after the elevator): the crowd is formed then.
+        static int BotCount() { int n = 0; foreach (var c in Combatant.All) if (c != null && !c.IsPlayer) n++; return n; }
+        static int BotsWithAgent() { int n = 0; foreach (var c in Combatant.All) if (c != null && !c.IsPlayer && c.TryGetComponent(out NavMeshAgent _)) n++; return n; }
+
         void Gather()
         {
             var rng = new System.Random(12345);
@@ -71,7 +75,7 @@ namespace Game.Net
             if (_gather && !_gathered && Combatant.All.Count > 1)
             {
                 if (_matchStart < 0f) _matchStart = Time.realtimeSinceStartup;
-                else if (Time.realtimeSinceStartup - _matchStart >= GatherAfterSeconds) { _gathered = true; Gather(); }
+                else if (Time.realtimeSinceStartup - _matchStart >= GatherAfterSeconds && BotsWithAgent() >= 0.9f * BotCount()) { _gathered = true; Gather(); }
             }
             _frames.Add(Time.unscaledDeltaTime * 1000f);
             float now = Time.realtimeSinceStartup;
