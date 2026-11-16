@@ -135,6 +135,23 @@ namespace Game.Core
                 }
                 plan.Roads.Add(road);
                 tb.AvenueRoad = plan.Roads.Count - 1;
+                // the blocks' streets: parallel to the avenue and across it, flat at the plateau height
+                int k = 0;
+                foreach (var st in tb.Layout.Streets)
+                {
+                    if (st.Avenue) continue;
+                    bool alongX = st.X1 - st.X0 > st.Z1 - st.Z0;
+                    float len = alongX ? st.X1 - st.X0 : st.Z1 - st.Z0, mid = alongX ? (st.Z0 + st.Z1) * 0.5f : (st.X0 + st.X1) * 0.5f, from = alongX ? st.X0 : st.Z0;
+                    int n = Math.Max(1, (int)Math.Ceiling(len / RoadStep));
+                    var street = new WorldRoad { Name = $"Street-{t.Id}-{++k}", Kind = RoadKind.Trunk, Width = alongX ? st.Z1 - st.Z0 : st.X1 - st.X0, Region = t.Region, X = new float[n + 1], Y = new float[n + 1], Z = new float[n + 1] };
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float u = from + len * i / n;
+                        IslandMath.TownToWorld(t, alongX ? u : mid, alongX ? mid : u, out street.X[i], out street.Z[i]);
+                        street.Y[i] = tb.Y;
+                    }
+                    plan.Roads.Add(street);
+                }
             }
         }
 

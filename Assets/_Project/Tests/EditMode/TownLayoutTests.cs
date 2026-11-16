@@ -45,7 +45,8 @@ namespace Game.Tests
             var r = TownLayout.Place(440f, 300f, 12f, Capital, 7);
             foreach (var l in r.Lots)
             {
-                float fz = l.Z + (l.YawDeg == 180f ? -1f : 1f) * (l.Depth / 2f + (l.Row < 2 ? TownLayout.Sidewalk : 0f) + 0.5f);   // the rows beside the avenue stand back by the sidewalk
+                // the middle of the front edge, a sidewalk out, lies on a street (avenue, parallel street or cross street)
+                float fz = l.Z + (l.YawDeg == 180f ? -1f : 1f) * (l.Depth / 2f + TownLayout.Sidewalk + 0.5f);
                 Assert.IsTrue(r.Streets.Any(s => l.X >= s.X0 - 0.01f && l.X <= s.X1 + 0.01f && fz >= s.Z0 - 0.01f && fz <= s.Z1 + 0.01f), $"{l.Kind} at {l.X:F0}, {l.Z:F0}");
             }
         }
@@ -68,6 +69,7 @@ namespace Game.Tests
             Assert.AreEqual(-220f, avenue.X0); Assert.AreEqual(220f, avenue.X1);
             Assert.AreEqual(12f, avenue.Z1 - avenue.Z0, 0.001f);
             Assert.IsTrue(r.Lots.All(l => l.Z - l.Depth / 2f >= 6f - 0.01f || l.Z + l.Depth / 2f <= -6f + 0.01f), "nothing stands in the avenue");
+            Assert.Greater(r.Streets.Count(s => !s.Avenue), 4, "parallel and cross streets make blocks");
         }
 
         [Test]
