@@ -11,7 +11,7 @@ namespace Game.Core
         public static MeleeRules Current = new MeleeRules();
 
         public float PunchDamage = 12f;
-        public float PunchRange = 1.3f;     // metres from the eyes to the target's chest
+        public float PunchRange = 1.6f;     // metres from the eyes to the target's chest (ADR-218)
         public float PunchConeDeg = 60f;    // full opening angle of the cone around where the punch is aimed
         public float PunchInterval = 0.55f; // seconds between punches
         public float HeadMultiplier = 1.5f; // a punch that lands in the head zone

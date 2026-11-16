@@ -13,7 +13,7 @@ namespace Game.Tests
         public void Defaults_MatchTheDecision()
         {
             Assert.AreEqual(12f, Rules.PunchDamage, 1e-5f);
-            Assert.AreEqual(1.3f, Rules.PunchRange, 1e-5f);
+            Assert.AreEqual(1.6f, Rules.PunchRange, 1e-5f);
             Assert.AreEqual(60f, Rules.PunchConeDeg, 1e-5f);
             Assert.AreEqual(0.55f, Rules.PunchInterval, 1e-5f);
             Assert.AreEqual(1.5f, Rules.HeadMultiplier, 1e-5f);
@@ -60,6 +60,22 @@ namespace Game.Tests
             Assert.IsTrue(Melee.InReach(0f, chest - 1.6f, 1f, 0f, 0f, 1f, Rules.PunchRange, Rules.PunchConeDeg));
             // Two metres away it is out of range.
             Assert.IsFalse(Melee.InReach(0f, chest - 1.6f, 2f, 0f, 0f, 1f, Rules.PunchRange, Rules.PunchConeDeg));
+        }
+
+        // ADR-218: the punch used to reach only ~1.2 m along the ground (eye to chest 1.3 m), so a bot starting its swing at
+        // BotPunchMeters (feet to feet) and a player at arm's length both whiffed with no feedback. Chest or head must be in reach
+        // everywhere from body contact out to the bot's swing distance, aimed level at the target.
+        [Test]
+        public void Reach_CoversChestOrHead_FromContactToTheBotSwingDistance()
+        {
+            float chest = 1.8f * Rules.ChestFraction, head = 1.8f - 0.12f;
+            for (float d = 0.6f; d <= Rules.BotPunchMeters + 1e-4f; d += 0.1f)
+            {
+                bool chestIn = Melee.InReach(0f, chest - 1.6f, d, 0f, 0f, 1f, Rules.PunchRange, Rules.PunchConeDeg);
+                bool headIn = Melee.InReach(0f, head - 1.6f, d, 0f, 0f, 1f, Rules.PunchRange, Rules.PunchConeDeg);
+                Assert.IsTrue(chestIn || headIn, "a punch at " + d.ToString("F1") + " m should land");
+            }
+            Assert.IsFalse(Melee.InReach(0f, chest - 1.6f, 1.7f, 0f, 0f, 1f, Rules.PunchRange, Rules.PunchConeDeg), "still limited");
         }
 
         [Test]
