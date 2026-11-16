@@ -106,6 +106,7 @@ namespace Game.Net
                 return;
             }
             if (_lobby.HasStarted) return;
+            if (_lobby.QueueActive) return; // somebody asked for a match: the queue's window decides, not the ready/timer flow
             int people = _lobby.PlayerCount;
             if (people != _lastPeople) { Debug.Log($"[Server] lobby: {people} / {_lobby.MaxPlayers} players"); _lastPeople = people; }
             if (people == 0 && _options.Perf != null && Time.unscaledTime - _lobbyOpenedAt > 5f)
@@ -156,6 +157,7 @@ namespace Game.Net
         void OnMatchStarting()
         {
             var start = _lobby.StartInfo;
+            if (_lobby.StartMode != TeamMode.Solo || _lobby.QueueMode != TeamMode.Solo) TeamMatch.Mode = _lobby.StartMode;
             Debug.Log($"[Server] match starting: {start.Players} players, {start.Bots} bots, port {start.MatchPort}");
             NetSession.Begin(_lobby);
             NetSession.Dedicated = true;
