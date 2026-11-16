@@ -6,7 +6,7 @@ namespace Game.Core
     // Enterable buildings assembled from boxes (ADR-052 point 7). Pure and deterministic: the same kind, size and
     // seed always give the same plan. Walls are built around their door and window holes, so nothing has to be
     // cut out of a mesh afterwards. The plan is in the building's local frame; BuildingRules.Validate checks it.
-    public static class Buildings
+    public static partial class Buildings
     {
         public const float FloorTop = 0.15f;                 // the step up from the ground into every building
         public const float StoreyClear = 3.0f;               // third-person camera head room
@@ -28,6 +28,12 @@ namespace Game.Core
 
         public static void FootprintLimits(BuildingKind kind, out float minWidth, out float minDepth, out float maxWidth, out float maxDepth)
         {
+            switch (kind)
+            {
+                case BuildingKind.Shop: minWidth = 10f; minDepth = 9f; maxWidth = 16f; maxDepth = 13f; return;
+                case BuildingKind.Villa: minWidth = 11f; minDepth = 10f; maxWidth = 16f; maxDepth = 14f; return;
+                case BuildingKind.Apartment: minWidth = 14f; minDepth = 11f; maxWidth = 22f; maxDepth = 15f; return;
+            }
             kind = BuildingKinds.Family(kind);
             switch (kind)
             {
@@ -43,6 +49,7 @@ namespace Game.Core
         public static BuildingPlan Generate(BuildingKind kind, float width, float depth, int seed)
         {
             var d = new Draft(kind, width, depth, seed);
+            if (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment) { Block(d, kind); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
             switch (BuildingKinds.Family(kind))
             {
                 case BuildingKind.House: House(d); break;
@@ -560,8 +567,9 @@ namespace Game.Core
             public readonly Rng Rng;
             public readonly float Hw, Hd;
             // Per level (0 = ground, 1 = upper floor or mezzanine): where props may not stand, and what they keep away from.
-            public readonly List<Rect>[] Clear = { new List<Rect>(), new List<Rect>() };
-            public readonly List<Rect>[] Blockers = { new List<Rect>(), new List<Rect>() };
+            public readonly List<Rect>[] Clear = NewLevels();
+            public readonly List<Rect>[] Blockers = NewLevels();
+            static List<Rect>[] NewLevels() { var l = new List<Rect>[6]; for (int i = 0; i < l.Length; i++) l[i] = new List<Rect>(); return l; }
             readonly List<LootTop> _tops = new List<LootTop>();
             readonly bool _mirror;
             int _props;

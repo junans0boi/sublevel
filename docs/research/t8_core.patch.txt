@@ -1,0 +1,129 @@
+--- a/Assets/_Project/Scripts/Core/World/Buildings.cs
++++ b/Assets/_Project/Scripts/Core/World/Buildings.cs
+@@ -6,7 +6,7 @@
+     // Enterable buildings assembled from boxes (ADR-052 point 7). Pure and deterministic: the same kind, size and
+     // seed always give the same plan. Walls are built around their door and window holes, so nothing has to be
+     // cut out of a mesh afterwards. The plan is in the building's local frame; BuildingRules.Validate checks it.
+-    public static class Buildings
++    public static partial class Buildings
+     {
+         public const float FloorTop = 0.15f;                 // the step up from the ground into every building
+         public const float StoreyClear = 3.0f;               // third-person camera head room
+@@ -28,6 +28,12 @@
+ 
+         public static void FootprintLimits(BuildingKind kind, out float minWidth, out float minDepth, out float maxWidth, out float maxDepth)
+         {
++            switch (kind)
++            {
++                case BuildingKind.Shop: minWidth = 10f; minDepth = 9f; maxWidth = 16f; maxDepth = 13f; return;
++                case BuildingKind.Villa: minWidth = 11f; minDepth = 10f; maxWidth = 16f; maxDepth = 14f; return;
++                case BuildingKind.Apartment: minWidth = 14f; minDepth = 11f; maxWidth = 22f; maxDepth = 15f; return;
++            }
+             kind = BuildingKinds.Family(kind);
+             switch (kind)
+             {
+@@ -43,6 +49,7 @@
+         public static BuildingPlan Generate(BuildingKind kind, float width, float depth, int seed)
+         {
+             var d = new Draft(kind, width, depth, seed);
++            if (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment) { Block(d, kind); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
+             switch (BuildingKinds.Family(kind))
+             {
+                 case BuildingKind.House: House(d); break;
+@@ -560,8 +567,9 @@
+             public readonly Rng Rng;
+             public readonly float Hw, Hd;
+             // Per level (0 = ground, 1 = upper floor or mezzanine): where props may not stand, and what they keep away from.
+-            public readonly List<Rect>[] Clear = { new List<Rect>(), new List<Rect>() };
+-            public readonly List<Rect>[] Blockers = { new List<Rect>(), new List<Rect>() };
++            public readonly List<Rect>[] Clear = NewLevels();
++            public readonly List<Rect>[] Blockers = NewLevels();
++            static List<Rect>[] NewLevels() { var l = new List<Rect>[6]; for (int i = 0; i < l.Length; i++) l[i] = new List<Rect>(); return l; }
+             readonly List<LootTop> _tops = new List<LootTop>();
+             readonly bool _mirror;
+             int _props;
+--- a/Assets/_Project/Scripts/Core/World/BuildingRules.cs
++++ b/Assets/_Project/Scripts/Core/World/BuildingRules.cs
+@@ -8,7 +8,7 @@
+         ExteriorDoorCount, ExteriorDoorSides, DoorSize, DoorBlocked, RoomUnreachable, RoomWithoutWindow, WindowSill,
+         StairMissing, StairStep, StairTop, LootOutside, LootUnsupported, LootInsidePiece, LootUnreachable,
+         PieceOutsideFootprint, CeilingClearance, WallThickness, FloorStep, SpawnPoint, PieceBudget,
+-        DecorBudget, DecorOutside, LampMissing, LampBudget, DecorBlocksDoor,
++        DecorBudget, DecorOutside, LampMissing, LampBudget, DecorBlocksDoor, RoofUnreachable,
+     }
+ 
+     public struct BuildingViolation
+@@ -39,6 +39,9 @@
+         // Boxes per building, so a building stays a handful of draw calls after combining by material.
+         public static int MaxPieces(BuildingKind kind)
+         {
++            if (kind == BuildingKind.Shop) return 260;
++            if (kind == BuildingKind.Villa) return 320;
++            if (kind == BuildingKind.Apartment) return 420;
+             kind = BuildingKinds.Family(kind);
+             switch (kind)
+             {
+@@ -53,6 +56,9 @@
+         // Visual furniture boxes and lamps per building: interior meshes are batched, but the triangles still count.
+         public static int MaxDecor(BuildingKind kind)
+         {
++            if (kind == BuildingKind.Shop) return 2600;
++            if (kind == BuildingKind.Villa) return 3000;
++            if (kind == BuildingKind.Apartment) return 3600;
+             kind = BuildingKinds.Family(kind);
+             switch (kind)
+             {
+@@ -184,6 +190,12 @@
+                 if (room.FloorY > plan.FloorY + 1f) raised = true;
+             if (raised && plan.Stairs.Count == 0) Add(BuildingRule.StairMissing, "an upper floor without stairs");
+             foreach (var stair in plan.Stairs) CheckStair(plan, stair, Add);
++            // A flight that climbs above the top room leads to a roof deck: its middle must be a standing place that can be walked to.
++            float topRoom = plan.FloorY;
++            foreach (var room in plan.Rooms) topRoom = Math.Max(topRoom, room.FloorY);
++            foreach (var stair in plan.Stairs)
++                if (stair.TopY > topRoom + 0.5f && !grid.ReachedInRect(-0.6f, 0.6f, -0.6f, 0.6f, stair.TopY))
++                    Add(BuildingRule.RoofUnreachable, $"{stair.Name} leads to a roof that cannot be walked on");
+ 
+             // ---- loot ----
+             foreach (var loot in plan.LootPoints)
+@@ -228,6 +240,22 @@
+             return found;
+         }
+ 
++        // Furniture can leave a pocket between a prop and a wall that nobody fits into: loot on a prop in such a pocket cannot be picked up.
++        // The generators of the tall kinds drop those points instead of leaving them for the validator. Returns how many were dropped.
++        public static int DropUnreachableLoot(BuildingPlan plan)
++        {
++            var grid = new WalkGrid(plan);
++            float hw = plan.Width * 0.5f, hd = plan.Depth * 0.5f;
++            int dropped = plan.LootPoints.RemoveAll(loot =>
++            {
++                float x0 = -hw, x1 = hw, z0 = -hd, z1 = hd;
++                foreach (var room in plan.Rooms)
++                    if (room.Name == loot.Room) { x0 = room.MinX; x1 = room.MaxX; z0 = room.MinZ; z1 = room.MaxZ; }
++                return !grid.ReachedNear(loot.X, loot.Z, 1.5f, loot.Y - 1.5f, loot.Y + 0.3f, x0, x1, z0, z1);
++            });
++            return dropped;
++        }
++
+         // Name of a piece that reaches into a door's opening, or null.
+         static string PieceInOpening(BuildingPlan plan, BuildingOpening door)
+         {
+@@ -279,7 +307,7 @@
+                 add(BuildingRule.StairTop, $"{stair.Name} ends {stair.TopY - below:F2} m below its upper floor");
+             bool lands = false;
+             foreach (var p in plan.Pieces)
+-                if (p.Kind == SurfaceKind.Floor && Math.Abs(p.MaxY - stair.TopY) <= 0.01f) lands = true;
++                if ((p.Kind == SurfaceKind.Floor || p.Kind == SurfaceKind.Roof) && Math.Abs(p.MaxY - stair.TopY) <= 0.01f) lands = true;
+             if (!lands) add(BuildingRule.StairTop, $"{stair.Name} leads to no floor");
+         }
+ 
+@@ -320,7 +348,7 @@
+                             float distance = p.FootprintDistance(x, z);
+                             if (distance >= CapsuleRadius) continue;
+                             near.Add(k);
+-                            if (distance <= 0f && (p.Kind == SurfaceKind.Floor || p.Kind == SurfaceKind.Stairs)) candidates.Add(p.MaxY);
++                            if (distance <= 0f && (p.Kind == SurfaceKind.Floor || p.Kind == SurfaceKind.Stairs || p.Kind == SurfaceKind.Roof)) candidates.Add(p.MaxY);
+                         }
+                         foreach (float h in candidates)
+                         {

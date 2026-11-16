@@ -1,0 +1,71 @@
+--- a/Assets/_Project/Scripts/Core/World/Buildings.cs
++++ b/Assets/_Project/Scripts/Core/World/Buildings.cs
+@@ -33,6 +33,7 @@
+                 case BuildingKind.Shop: minWidth = 10f; minDepth = 9f; maxWidth = 16f; maxDepth = 13f; return;
+                 case BuildingKind.Villa: minWidth = 11f; minDepth = 10f; maxWidth = 16f; maxDepth = 14f; return;
+                 case BuildingKind.Apartment: minWidth = 14f; minDepth = 11f; maxWidth = 22f; maxDepth = 15f; return;
++                case BuildingKind.School: minWidth = 24f; minDepth = 11f; maxWidth = 34f; maxDepth = 13f; return;
+             }
+             kind = BuildingKinds.Family(kind);
+             switch (kind)
+@@ -49,6 +50,7 @@
+         public static BuildingPlan Generate(BuildingKind kind, float width, float depth, int seed)
+         {
+             var d = new Draft(kind, width, depth, seed);
++            if (kind == BuildingKind.School) { School(d); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
+             if (kind == BuildingKind.Shop || kind == BuildingKind.Villa || kind == BuildingKind.Apartment) { Block(d, kind); d.Finish(); BuildingRules.DropUnreachableLoot(d.Plan); return d.Plan; }
+             switch (BuildingKinds.Family(kind))
+             {
+--- a/Assets/_Project/Scripts/Core/World/BuildingRules.cs
++++ b/Assets/_Project/Scripts/Core/World/BuildingRules.cs
+@@ -30,6 +30,9 @@
+         public const float MinSill = 0.9f, MaxSill = 1.1f;
+         public const float MaxRise = 0.2f, MinRun = 0.28f, MinStairWidth = 1.1f;
+         public const float MaxRoofOverhang = 0.5f;
++        public const float MaxAttachment = 1.5f;               // balconies, canopies, awnings and sign panels stand out from the wall this far
++        static bool IsAttachment(string name) => name.StartsWith("Balcony", StringComparison.Ordinal) || name.StartsWith("Canopy", StringComparison.Ordinal)
++            || name.StartsWith("Awning", StringComparison.Ordinal) || name.StartsWith("Sign", StringComparison.Ordinal);
+         public const float Cell = 0.25f;
+         const float GridMargin = 2f;
+         // The rounded foot of the capsule rides over anything this low beside it (the next two steps of a flight).
+@@ -39,9 +42,10 @@
+         // Boxes per building, so a building stays a handful of draw calls after combining by material.
+         public static int MaxPieces(BuildingKind kind)
+         {
+-            if (kind == BuildingKind.Shop) return 260;
+-            if (kind == BuildingKind.Villa) return 320;
+-            if (kind == BuildingKind.Apartment) return 420;
++            if (kind == BuildingKind.School) return 900;
++            if (kind == BuildingKind.Shop) return 380;
++            if (kind == BuildingKind.Villa) return 450;
++            if (kind == BuildingKind.Apartment) return 620;
+             kind = BuildingKinds.Family(kind);
+             switch (kind)
+             {
+@@ -56,6 +60,7 @@
+         // Visual furniture boxes and lamps per building: interior meshes are batched, but the triangles still count.
+         public static int MaxDecor(BuildingKind kind)
+         {
++            if (kind == BuildingKind.School) return 5000;
+             if (kind == BuildingKind.Shop) return 2600;
+             if (kind == BuildingKind.Villa) return 3000;
+             if (kind == BuildingKind.Apartment) return 3600;
+@@ -87,7 +92,7 @@
+             float lowestFloor = float.MaxValue;
+             foreach (var p in plan.Pieces)
+             {
+-                float allowed = p.Kind == SurfaceKind.Roof || p.Kind == SurfaceKind.Trim ? MaxRoofOverhang : 0f;
++                float allowed = p.Kind == SurfaceKind.Trim && IsAttachment(p.Name) ? MaxAttachment : p.Kind == SurfaceKind.Roof || p.Kind == SurfaceKind.Trim ? MaxRoofOverhang : 0f;
+                 if (p.MinX < -hw - allowed - Eps || p.MaxX > hw + allowed + Eps || p.MinZ < -hd - allowed - Eps || p.MaxZ > hd + allowed + Eps || p.MinY < -Eps)
+                     Add(BuildingRule.PieceOutsideFootprint, p.Name);
+                 if (p.Kind == SurfaceKind.WallOuter || p.Kind == SurfaceKind.WallInner)
+@@ -120,7 +125,8 @@
+                         Add(BuildingRule.DecorBlocksDoor, $"{dc.Name} at {door.Name}");
+                 }
+             }
+-            if (plan.Lamps.Count > MaxLamps) Add(BuildingRule.LampBudget, $"{plan.Lamps.Count} lamps > {MaxLamps}");
++            int lampLimit = plan.Kind == BuildingKind.School ? 60 : MaxLamps;
++            if (plan.Lamps.Count > lampLimit) Add(BuildingRule.LampBudget, $"{plan.Lamps.Count} lamps > {lampLimit}");
+             if (plan.Kind != BuildingKind.ElevatorStation)
+                 foreach (var room in plan.Rooms)
+                 {
