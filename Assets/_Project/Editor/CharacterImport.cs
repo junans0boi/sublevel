@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -30,7 +31,41 @@ public static class CharacterImport
             Configure(dest, sb);
             Stats(dest, sb);
         }
+        SyncUniversal(sb);
         Finish(sb, 0);
+    }
+
+    // Quaternius Universal Base Characters (CC0, ledger C-0003): Humanoid-compatible FBX with separate texture files.
+    // Source folder is outside the repo (sublevel_staging); override with SUBLEVEL_UBC_DIR. Same rule as Mixamo:
+    // the FBX/PNG stay untracked, their .meta (stable GUIDs) are committed.
+    public const string UbcRosterDir = "Assets/_Project/Art/Characters/Ubc";
+    static string UbcSource() => System.Environment.GetEnvironmentVariable("SUBLEVEL_UBC_DIR")
+        ?? "/Volumes/WorkSpace/Project/sublevel_staging/QuaterniusUniversal/BaseCharacters";
+
+    static void SyncUniversal(StringBuilder sb)
+    {
+        var dir = UbcSource();
+        if (!Directory.Exists(dir)) { sb.AppendLine("UBC source missing (skipped): " + dir); return; }
+        Directory.CreateDirectory(UbcRosterDir);
+        var copied = false;
+        foreach (var src in Directory.GetFiles(dir, "*.fbx").Concat(Directory.GetFiles(dir + "/Textures", "*.png")))
+        {
+            var name = Path.GetFileName(src);
+            var dest = UbcRosterDir + "/" + (name.StartsWith("T_") ? Prefix + name.Substring(2) : Prefix + name.Replace("_FullBody", ""));
+            if (!File.Exists(dest) || new FileInfo(dest).Length != new FileInfo(src).Length) { File.Copy(src, dest, true); copied = true; }
+        }
+        if (copied) AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        foreach (var fbx in Directory.GetFiles(UbcRosterDir, Prefix + "*.fbx"))
+        {
+            var path = fbx.Replace('\\', '/');
+            var imp = (ModelImporter)AssetImporter.GetAtPath(path);
+            imp.animationType = ModelImporterAnimationType.Human;
+            imp.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.generateMeshLods = true;
+            imp.SaveAndReimport();
+            sb.AppendLine(path + ": Humanoid, meshLods=True");
+            Stats(path, sb);
+        }
     }
 
     static void Configure(string path, StringBuilder sb)
@@ -44,6 +79,11 @@ public static class CharacterImport
         var prefix = Path.GetFileNameWithoutExtension(path);
         if (!AssetDatabase.FindAssets("t:Texture2D " + prefix + "_", new[] { RosterDir }).Any())
         {
+            // The committed .meta files carry the GUIDs the materials refer to; extraction would mint new ones.
+            // Unity drops orphan .meta files at startup, so the committed copy is read from git.
+            var guids = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (var line in Git("ls-files " + RosterDir + "/" + prefix + "_*.png.meta").Split('\n', System.StringSplitOptions.RemoveEmptyEntries))
+                guids[Path.GetFileName(line).Replace(".meta", "")] = Regex.Match(Git("show HEAD:" + line), @"guid: (\w+)").Groups[1].Value;
             imp.ExtractTextures(RosterDir);
             AssetDatabase.Refresh();
             foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { RosterDir }))
@@ -54,8 +94,23 @@ public static class CharacterImport
                 AssetDatabase.RenameAsset(p, prefix + "_" + Path.GetFileNameWithoutExtension(n));
             }
             AssetDatabase.SaveAssets();
+            foreach (var kv in guids)
+            {
+                var meta = RosterDir + "/" + kv.Key + ".meta";
+                if (File.Exists(meta)) File.WriteAllText(meta, new Regex(@"guid: \w+").Replace(File.ReadAllText(meta), "guid: " + kv.Value, 1));
+            }
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
         }
         sb.AppendLine($"{path}: Humanoid, meshLods={imp.generateMeshLods} maxMeshLod={imp.maximumMeshLod}");
+    }
+
+    static string Git(string args)
+    {
+        var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", args)
+            { RedirectStandardOutput = true, UseShellExecute = false });
+        var o = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        return o;
     }
 
     public static void Stats(string path, StringBuilder sb)
