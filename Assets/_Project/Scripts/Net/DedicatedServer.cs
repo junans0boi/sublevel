@@ -61,6 +61,7 @@ namespace Game.Net
             }
             if (_options.MaxPlayers > 0) MatchRules.Current.MaxPlayers = _options.MaxPlayers;
             MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
+            if (_options.PerfQuick > 1f) PollutionDirector.RulesOverride = PollutionRules.QuickMatch(_options.PerfQuick);
             if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;
             Application.runInBackground = true;
@@ -185,6 +186,8 @@ namespace Game.Net
                 _overSince = now;
                 Debug.Log("[Server] match decided");
             }
+            // A measurement run has nobody to wait for: it lasts until the match is decided.
+            if (_options.Perf != null && _overSince < 0f) return;
             if (ServerRules.ShouldEndMatch(now - _matchStartedAt, _everHadPeople, _emptySince >= 0f ? now - _emptySince : 0f, _overSince >= 0f ? now - _overSince : 0f))
                 EndMatch();
         }

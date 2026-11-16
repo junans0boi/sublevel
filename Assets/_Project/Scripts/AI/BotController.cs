@@ -848,7 +848,7 @@ namespace Game.AI
                         int from = sys.RegionOf(_keyStation);
                         int known = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
                         int dest = KeyElevatorTravel.BotDestination(from, states, known);
-                        if (dest >= 0 && net.ServerSelect(_self, dest)) KeyRides++;
+                        if (dest >= 0 && net.ServerSelect(_self, dest)) { KeyRides++; Debug.Log($"[BotStat] key-ride from={from} to={dest} known={known} bot={_botIndex}"); }
                         return true;
                     }
                     default: _keyStation = -1; return false;
@@ -872,7 +872,7 @@ namespace Game.AI
             if (rides.StationAt(at) == best && Time.time >= _keyTryAt)
             {
                 _keyTryAt = Time.time + 1f;
-                if (net.ServerInsert(_self, best)) { _keyStation = best; _keyAt = Time.time; KeyInsertOk++; }
+                if (net.ServerInsert(_self, best)) { _keyStation = best; _keyAt = Time.time; KeyInsertOk++; Debug.Log($"[BotStat] key-insert station={best} level={_level} bot={_botIndex}"); }
                 else KeyInsertFail++;
             }
             return true;
@@ -913,7 +913,11 @@ namespace Game.AI
             }
             if (!found) return false;
             urgent = left <= 40f; // before that the brain may still fight; in the last stretch walking out wins
-            if (_warnedLeaves == 0) WarnedLeaveStarts++;
+            if (_warnedLeaves == 0)
+            {
+                WarnedLeaveStarts++;
+                Debug.Log($"[BotStat] warn-leave level={_level} since={since:F1} left={left:F1} region={own} bot={_botIndex}");
+            }
             return true;
         }
 
