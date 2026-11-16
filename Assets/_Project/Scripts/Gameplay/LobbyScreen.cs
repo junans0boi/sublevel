@@ -97,6 +97,9 @@ namespace Game.Gameplay
             _menu.Back();
         }
 
+        // Hides the room panels without leaving the room (the menu switched to another screen).
+        public void HidePanel() { _lobby.Shutdown(); Show(ViewKind.Hidden); }
+
         // 확인 on a failure: back to the address form (join) or the main column (host).
         void AcknowledgeFailure()
         {

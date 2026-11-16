@@ -141,18 +141,14 @@ namespace Game.Gameplay
         public void OpenHost()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            _custom.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
+            ShowOnly(null);
             _lobbyScreen.OpenHost();
         }
 
         public void OpenJoin()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            _custom.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
+            ShowOnly(null);
             _lobbyScreen.OpenJoin();
         }
 
@@ -185,32 +181,29 @@ namespace Game.Gameplay
         public void ShowCustom()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
-            UiFx.Show(_custom);
+            ShowOnly(_custom);
         }
 
         public void ShowSettings()
         {
             if (IsLoading) return;
-            ShowPanels(true);
+            ShowOnly(_settings);
             _settingsScreen.Open();
         }
 
-        public void Back() => ShowPanels(false);
+        public void Back() => ShowOnly(_main);
 
         // 크레딧 (#89): the assets that ask for credit.
         CreditsScreen _creditsScreen;
         public CreditsScreen CreditsScreen => _creditsScreen;
         public int CreditsRows => _creditsScreen != null ? _creditsScreen.RowCount : 0;
+        public bool LobbyHomeShown => _main != null && _main.activeSelf;
         public bool CreditsShown => _credits != null && _credits.activeSelf;
 
         public void ShowCredits()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
-            UiFx.Show(_credits);
+            ShowOnly(_credits);
         }
 
         // ---- Mockup-driven screens: shared router, toast and modal ----
@@ -275,11 +268,7 @@ namespace Game.Gameplay
         public void ShowCharacter()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
-            if (_credits != null) _credits.SetActive(false);
-            if (_custom != null) _custom.SetActive(false);
-            UiFx.Show(_char);
+            ShowOnly(_char);
             _charScreen.Open();
         }
 
@@ -287,12 +276,7 @@ namespace Game.Gameplay
         public void ShowTrainingEntry()
         {
             if (IsLoading) return;
-            _main.SetActive(false);
-            if (_hint != null) _hint.SetActive(false);
-            if (_credits != null) _credits.SetActive(false);
-            if (_custom != null) _custom.SetActive(false);
-            if (_char != null && _char.activeSelf) { _charScreen.Close(); _char.SetActive(false); }
-            UiFx.Show(_training);
+            ShowOnly(_training);
         }
 
         public void ShowQuit() => ShowModal("pop_quit");
@@ -336,18 +320,31 @@ namespace Game.Gameplay
             Application.Quit();
         }
 
-        void ShowPanels(bool settings)
+        // The one place screens change (every tab, 뒤로 가기, Esc): exactly one screen root is active afterwards (`target`, or none
+        // for the room panels), the other roots are off, the modal is closed. The 3D lobby behind is shared and never switched.
+        public int ActiveScreenRoots
         {
-            // Leaving the settings any way but 적용 drops what was only previewed.
-            if (!settings && _settings.activeSelf) _settingsScreen.Cancel();
-            if (settings) _main.SetActive(false); else if (!_main.activeSelf) UiFx.Show(_main);
-            // The bottom hint line would sit on the settings footer.
-            if (_hint != null) _hint.SetActive(!settings);
-            if (settings && !_settings.activeSelf) UiFx.Show(_settings); else if (!settings) _settings.SetActive(false);
-            if (_credits != null) _credits.SetActive(false);
-            if (_custom != null) _custom.SetActive(false);
-            if (_char != null && _char.activeSelf) { _charScreen.Close(); _char.SetActive(false); }
-            if (_training != null) _training.SetActive(false);
+            get
+            {
+                int n = 0;
+                foreach (var r in ScreenRoots()) if (r != null && r.activeSelf) n++;
+                if (_lobbyScreen != null && _lobbyScreen.Shown) n++;
+                return n;
+            }
+        }
+
+        GameObject[] ScreenRoots() => new[] { _main, _settings, _credits, _custom, _char, _training };
+
+        void ShowOnly(GameObject target)
+        {
+            CloseModal();
+            // Leaving the settings any way but 적용 drops what was only previewed; leaving 외형 returns the camera to the party.
+            if (_settings != null && _settings.activeSelf && target != _settings) _settingsScreen.Cancel();
+            if (_char != null && _char.activeSelf && target != _char) _charScreen.Close();
+            if (_lobbyScreen != null && _lobbyScreen.Shown && target != null) _lobbyScreen.HidePanel();
+            foreach (var r in ScreenRoots()) if (r != null && r != target && r.activeSelf) r.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            if (target != null && !target.activeSelf) UiFx.Show(target);
         }
 
         void Build()

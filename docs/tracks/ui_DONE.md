@@ -57,3 +57,9 @@
 - 대기열이 없으면(싱글·호스트) 기존대로 로컬 시작(솔로 = 사람 1+봇 `FillToParticipants`). `MainMenu.SyncQueue`가 전용 서버에 클라이언트로 들어간 로비를 감지해 자동으로 붙이고 떼지만, **현재 UI에는 메인 로비에서 서버에 접속하는 흐름이 없어**(커스텀 모드 참가는 이전 방 화면) 실제로 붙는 것은 전용 서버 접속 흐름이 생긴 뒤.
 - 룩 변경 없음(기존 안내 줄·상태 버튼 재사용). 버튼의 경과 시간은 이 클라이언트의 로컬 시계(대기 시간), 남은 시간은 서버 값이라 둘은 다르다. 파티원 대기열 합류는 API에 아직 없음(파티장만 요청).
 - 테스트: EditMode `QueueText_ShowsOnlyRealState`(1366/1366), PlayMode `Lobby_QueueStates`(오류·요청·서버 값·취소·시작 단언) + 캡처 `docs/bible/img/ui/lobby_queue_1920x1080.png`.
+
+## 플레이어 빌드 버그 수정 (검은 배경 · 화면 겹침 · 썸네일)
+- 검은 배경: 정적 렌더러(isStatic)+Receive GI=Lightmaps인데 라이트맵이 없어 플레이어에서만 검게 렌더. 에디터는 실시간 GI라 가려졌다. 수정: `LobbyStageBuilder.Part`에서 isStatic=false, receiveGI=LightProbes. 전/후: `docs/bible/img/ui/player_lobby_black_before_fix.png` / `player_lobby_fixed.png`.
+- 겹침: 각 Show*가 일부 루트만 숨겼고 내 테스트는 항상 Back()을 거쳐 이동해 못 잡았다. `MainMenu.ShowOnly` 단일 전환 함수 + `ActiveScreenRoots`(항상 1). 테스트 `MenuScreensTests`(모든 화면쌍·탭).
+- 썸네일: 그래픽 모드(run-gfx)로 재생성.
+- 플레이어 검증(Mono review 빌드): `-captureall <dir>` 12단계 전부 activeRoots=1, stage3D=true (`docs/bible/img/ui/player/captureall.json`, 01~12 PNG). `-perflobby`는 절대경로 처리·모든 단계 Player.log(`[perflobby]`)·실패 시 `.fail.txt`. Render P99 10.95 ms(Mono, 조용한 기계 아님 → IL2CPP 빌드 재측정 필요).
