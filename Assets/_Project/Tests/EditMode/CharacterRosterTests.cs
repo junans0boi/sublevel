@@ -13,7 +13,7 @@ namespace Game.Tests
     // Numbers are written to Logs/roster_measure.txt for the DONE note.
     public class CharacterRosterTests
     {
-        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "UbcMale", "UbcFemale" };
+        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "MixamoSteve", "MixamoSwatGuy", "MixamoGasMask", "UbcMale", "UbcFemale" };
         static GameObject Load(string id) => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/Roster/Roster_{id}.prefab");
 
         static IEnumerable<string> Each() => Ids;
@@ -28,7 +28,7 @@ namespace Game.Tests
                 var def = go.GetComponent<CharacterDef>();
                 Assert.IsTrue(def.Animator.isHuman, id + " Animator must be Humanoid");
                 Assert.IsTrue(def.Animator.avatar.isValid, id + " avatar");
-                Assert.GreaterOrEqual(def.Variants.Length, 4, id + " variants (base + at least 3)");
+                Assert.GreaterOrEqual(def.Variants.Length, 1, id + " variants (military atlases keep Base only)");
             }
         }
 
@@ -150,6 +150,27 @@ namespace Game.Tests
             }
             Append(sb);
             Assert.IsEmpty(bad, string.Join("; ", bad));
+        }
+
+        // Memory of every texture the 14 prefabs' base variants sample (runtime size as imported, i.e. after the 2048 cap/compression).
+        [Test]
+        public void TextureMemory_OfRosterBaseVariants_IsBounded()
+        {
+            var sb = new StringBuilder(); long total = 0;
+            foreach (var id in Ids)
+            {
+                var def = Load(id).GetComponent<CharacterDef>();
+                var texs = new HashSet<Texture>();
+                foreach (var m in def.Variants[0].Materials) foreach (var n in m.GetTexturePropertyNames()) { var t = m.GetTexture(n); if (t != null) texs.Add(t); }
+                long bytes = texs.Sum(t => UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t));
+                int max = texs.Count == 0 ? 0 : texs.Max(t => Mathf.Max(t.width, t.height));
+                sb.AppendLine($"{id}: {texs.Count} textures, max {max}px, {bytes / 1048576f:F1} MB");
+                Assert.LessOrEqual(max, 2048, id + " no 4K textures (PERF_BUDGET)");
+                total += bytes;
+            }
+            sb.AppendLine($"TOTAL base-variant texture memory {total / 1048576f:F1} MB");
+            Append(sb);
+            Assert.Less(total, 400L * 1048576, "roster textures");
         }
 
         // Weapon lengths live in the editor-only CharacterKit table; read them by reflection.

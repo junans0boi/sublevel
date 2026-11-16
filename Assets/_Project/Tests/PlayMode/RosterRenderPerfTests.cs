@@ -14,7 +14,7 @@ namespace Game.Tests
     [Category("Perf")]
     public class RosterRenderPerfTests
     {
-        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "UbcMale", "UbcFemale" };
+        static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "MixamoSteve", "MixamoSwatGuy", "MixamoGasMask", "UbcMale", "UbcFemale" };
 
         static CharacterDef[] Spawn(int count, float near, float far, int seed)
         {

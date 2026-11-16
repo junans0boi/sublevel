@@ -1,7 +1,7 @@
 # 캐릭터 API (애니 트랙용, 2026-11-16, `track/character` 기준)
 
 ## 프리팹·복원
-- 프리팹 `Assets/_Project/Prefabs/Roster/Roster_<Id>.prefab`. Id 12종: `MixamoSwat` `MixamoBrian` `MixamoLouise` `MixamoJames` `MixamoMegan` `MixamoKate` `MixamoJosh` `MixamoAdam` `MixamoMartha` `MixamoAlex` `UbcMale` `UbcFemale`.
+- 프리팹 `Assets/_Project/Prefabs/Roster/Roster_<Id>.prefab`. Id 15종: `MixamoSwat` `MixamoSteve`(철모 군복) `MixamoSwatGuy`(위장 전술복) `MixamoGasMask`(방독면) `MixamoBrian` `MixamoLouise` `MixamoJames` `MixamoMegan` `MixamoKate` `MixamoJosh` `MixamoAdam` `MixamoMartha` `MixamoAlex` `UbcMale` `UbcFemale`.
 - FBX·원본 텍스처는 git 무시. 새 클론: `tools/unity.sh run CharacterImport.SyncStaging`(FBX 복원·Humanoid·Mesh LOD) → 프리팹은 이미 커밋돼 있어 `CharacterRoster.Build`는 모델·재질을 바꿀 때만 다시 돌린다. 재생성한 결과(프리팹·재질·`Prefabs/Roster/Textures/*.png`)는 커밋 대상.
 - 구조: 루트(`CharacterDef`, `LODGroup`) → `Model`(FBX 인스턴스, **Animator Humanoid**, Avatar 모델별 생성). 루트가 +Z 정면, 발이 y=0. 루트 모션 끔, `cullingMode = CullUpdateTransforms`.
 
@@ -11,11 +11,11 @@
 | `Height` / `EyeHeight` | 1.8 / **1.6** (캡슐 눈 높이. 메시 눈은 약 1.69라 1인칭 카메라는 메시 눈보다 낮다) |
 | `Sockets` (`HumanoidSockets`) | 본 Transform 18개 + `WeaponSocket` `HeadSocket` `BackSocket` `EyePoint` |
 | `Animator`, `Renderers` | Humanoid Animator, SkinnedMeshRenderer 전부 |
-| `Variants` / `ApplyVariant(i)` | 외형 변형. Swat·UBC 9개, 민간 모델 4개(Base + 3). `Variants[i].Name` 참고 |
+| `Variants` / `ApplyVariant(i)` | 외형 변형. Swat·UBC 9개, 민간 모델 4개(Base + 3), 군복 3종은 Base 1개. `Variants[i].Name` 참고 |
 | `HandSizeScale` | 손바닥~중지 첫마디 거리 / 0.09 m |
 | `WeaponSocketOffsetPos/Euler` | 지금은 0. 총마다 손 파지 보정이 필요하면 애니 트랙이 채운다 |
 | `StartLod` | 빌더가 고른 첫 Mesh LOD(원본 LOD0가 15k 초과인 모델은 1~3) |
-| `HasHelmetMask` | Swat만 true: 모델에 헬멧이 이미 있어 `ArmorVisual` 헬멧과 겹친다 |
+| `HasHelmetMask` | Swat·군복 3종 true: 모델에 헬멧(또는 방독면)이 이미 있어 `ArmorVisual` 헬멧과 겹친다 |
 
 ## 소켓 (런타임에 이름으로 찾지 않는다, `Sockets.X`로 받는다)
 - `WeaponSocket`: 오른손 자식. 위치 = 손목에서 가운뎃손가락 첫마디 방향 60%, 회전 = 손과 동일. 총 프리팹 원점을 여기에 둔다(소총을 든 캡처는 `CharacterRoster.PoseLowReady` + `RenderPosed` 참고).
@@ -35,7 +35,7 @@
 - 검증: `CharacterRosterTests.WornGear_MountsOnRosterBones_AtHeadChestBack`(헬멧 본 아래, 조끼 y 1.08~1.46, 배낭 z −0.20 = 가슴 뒤).
 
 ## 애니 트랙이 알아둘 것
-- 클립은 **Humanoid 공유**(ADR-186). 기준 Avatar는 Swat이지만 각 모델이 자기 Avatar를 가진다. 로스터 12종 모두 `isHuman`.
+- 클립은 **Humanoid 공유**(ADR-186). 기준 Avatar는 Swat이지만 각 모델이 자기 Avatar를 가진다. 로스터 15종 모두 `isHuman`.
 - 본 이름이 모델마다 다르다(`mixamorig:`, `mixamorig12:` 등, UBC는 UE식). 이름 문자열 대신 `Animator.GetBoneTransform` 또는 `Sockets`.
 - T-포즈로 저장돼 있다. 정지 포즈 캡처가 필요하면 `CharacterRoster.PoseLowReady(def)`(월드 회전으로 팔만 굽힘, 클립 아님).
 - 팔 길이는 키의 0.25~0.31배(소총 Warden 0.75 m = 팔의 1.33배)라 왼손 IK가 짧은 모델이 있다(UBC 0.27, James 0.25).

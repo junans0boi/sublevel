@@ -18,7 +18,7 @@ public static class CharacterRoster
     public const float Height = 1.8f, EyeHeight = 1.6f, CullDistance = 100f;
     const string MixDir = CharacterImport.RosterDir + "/", UbcDir = CharacterImport.UbcRosterDir + "/";
 
-    public struct Entry { public string Id, Fbx; public bool Mixamo; public string Prefix; }
+    public struct Entry { public string Id, Fbx; public bool Mixamo; public string Prefix; public bool Military; }
     public static readonly Entry[] Entries =
     {
         new Entry { Id = "MixamoSwat", Fbx = MixDir + "Roster_Swat.fbx", Mixamo = true, Prefix = "Roster_Swat" },
@@ -31,6 +31,9 @@ public static class CharacterRoster
         new Entry { Id = "MixamoAdam", Fbx = MixDir + "Roster_Adam.fbx", Mixamo = true, Prefix = "Roster_Adam" },
         new Entry { Id = "MixamoMartha", Fbx = MixDir + "Roster_Martha.fbx", Mixamo = true, Prefix = "Roster_Martha" },
         new Entry { Id = "MixamoAlex", Fbx = MixDir + "Roster_Alex.fbx", Mixamo = true, Prefix = "Roster_Alex" },
+        new Entry { Id = "MixamoSteve", Fbx = MixDir + "Roster_Steve.fbx", Mixamo = true, Prefix = "Roster_Steve", Military = true },
+        new Entry { Id = "MixamoSwatGuy", Fbx = MixDir + "Roster_SwatGuy.fbx", Mixamo = true, Prefix = "Roster_SwatGuy", Military = true },
+        new Entry { Id = "MixamoGasMask", Fbx = MixDir + "Roster_GasMask.fbx", Mixamo = true, Prefix = "Roster_GasMask", Military = true },
         new Entry { Id = "UbcMale", Fbx = UbcDir + "Roster_Superhero_Male.fbx" },
         new Entry { Id = "UbcFemale", Fbx = UbcDir + "Roster_Superhero_Female.fbx" },
     };
@@ -91,6 +94,7 @@ public static class CharacterRoster
     public static string[] VariantKeys(Entry e)
     {
         if (!e.Mixamo) return new[] { "Base", "Light_Olive", "Light_Charcoal", "Light_Navy", "Light_Coyote", "Dark_Olive", "Dark_Charcoal", "Dark_Navy", "Dark_Coyote" };
+        if (e.Military) return new[] { "Base" }; // camo/gear atlases: a hue shift would break them
         if (e.Prefix == "Roster_Swat") return new[] { "Base" }.Concat(Tints.Select(t => t.name)).ToArray();
         return new[] { "Base" }.Concat(CharacterOutfit.CivilianShifts.Select(c => c.name)).ToArray();
     }
@@ -111,7 +115,8 @@ public static class CharacterRoster
                     // body -> 1001, body1 -> 1002, hair -> the highest-numbered texture (dark colour if that is 1001), others dark.
                     var all = AssetDatabase.FindAssets("t:Texture2D " + e.Prefix + "_", new[] { MixDir.TrimEnd('/') })
                         .Select(AssetDatabase.GUIDToAssetPath).Where(x => x.EndsWith("_Diffuse.png")).OrderBy(x => x).ToArray();
-                    string num = low.EndsWith("body1") ? "1002" : low.EndsWith("body") ? "1001"
+                    string num = e.Id == "MixamoSteve" ? (low.EndsWith("body1") ? "1002" : low.EndsWith("body2") ? "1001" : null) // Steve: body2 carries the head
+                        : low.EndsWith("body2") ? "1003" : low.EndsWith("body1") ? "1002" : low.EndsWith("body") ? "1001"
                         : low.EndsWith("hair") && all.Length > 1 ? Regex.Match(all.Last(), @"_(\d{4})_").Groups[1].Value : null;
                     var d = num != null ? FindTex(e.Prefix, num, "Diffuse") : null;
                     var nm = num != null ? FindTex(e.Prefix, num, "Normal") : null;
@@ -175,7 +180,7 @@ public static class CharacterRoster
         var bounds = new Bounds(rawBounds.center * k0 + Vector3.down * rawBounds.min.y * k0, rawBounds.size * k0);
 
         var def = wrapper.AddComponent<CharacterDef>();
-        def.Id = e.Id; def.HasHelmetMask = e.Prefix == "Roster_Swat"; def.Height = Height; def.EyeHeight = EyeHeight;
+        def.Id = e.Id; def.HasHelmetMask = e.Prefix == "Roster_Swat" || e.Military; def.Height = Height; def.EyeHeight = EyeHeight;
         def.Animator = anim; def.Renderers = renderers;
         anim.applyRootMotion = false;
         anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
@@ -207,7 +212,7 @@ public static class CharacterRoster
 
         // Baked recolours (UBC / civilians) need the body parts that share the body texture.
         Dictionary<string, Texture2D> baked = null; string bakeStats = "";
-        if (!e.Mixamo || e.Prefix != "Roster_Swat")
+        if (!e.Military && (!e.Mixamo || e.Prefix != "Roster_Swat"))
         {
             var parts = new List<(SkinnedMeshRenderer, int)>();
             foreach (SkinnedMeshRenderer r in renderers)
@@ -290,7 +295,7 @@ public static class CharacterRoster
             for (int v = 0; v < 2; v++)
             {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/Roster_{Entries[m].Id}.prefab"));
-                go.transform.position = new Vector3((m - 5.5f) * 2.1f, 0, v * 3f);
+                go.transform.position = new Vector3((m - 6.5f) * 2.1f, 0, v * 3f);
                 var def = go.GetComponent<CharacterDef>();
                 def.ApplyVariant(v == 0 ? 0 : 3);
                 var w = CharacterKit.InstantiateWeapon(CharacterKit.Weapons[2]);
@@ -300,7 +305,7 @@ public static class CharacterRoster
                 n++;
             }
         var pole = GameObject.CreatePrimitive(PrimitiveType.Cube); pole.transform.localScale = new Vector3(0.03f, 1.8f, 0.03f); pole.transform.position = new Vector3(-10.2f, 0.9f, 0);
-        SceneLook.Shot(cam, "Logs/roster/lineup_front.png", new Vector3(0, 1.1f, -27f), new Vector3(0, 0.9f, 0));
+        SceneLook.Shot(cam, "Logs/roster/lineup_front.png", new Vector3(0, 1.1f, -31f), new Vector3(0, 0.9f, 0));
         SceneLook.Shot(cam, "Logs/roster/lineup_side.png", new Vector3(30f, 1.1f, 0f), new Vector3(0, 0.9f, 0));
         EditorApplication.Exit(0);
     }
@@ -327,7 +332,7 @@ public static class CharacterRoster
         var cam = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
         cam.fieldOfView = 30; SceneLook.EnablePost(cam);
         Directory.CreateDirectory("Logs/roster");
-        foreach (var id in new[] { "MixamoSwat", "MixamoBrian", "MixamoLouise", "UbcMale", "UbcFemale" })
+        foreach (var id in new[] { "MixamoGasMask", "MixamoSwatGuy" })
         {
             var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/Roster_{id}.prefab"));
             var def = go.GetComponent<CharacterDef>();
