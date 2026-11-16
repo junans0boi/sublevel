@@ -113,8 +113,8 @@ namespace Game.Core
     [Serializable]
     public class MatchRules
     {
-        public const int MaxParticipantsLimit = 50; // the cap of a match, humans and bots together (ADR-168, ADR-241)
-        public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 49 with one person
+        public const int MaxParticipantsLimit = 80; // the cap of a match, humans and bots together (ADR-168, ADR-241, ADR-251)
+        public const int MaxBotsLimit = MaxParticipantsLimit - 1; // 79 with one person
 
         // Set from data when there is any; tests may replace it.
         public static MatchRules Current = new MatchRules();
@@ -123,7 +123,7 @@ namespace Game.Core
         public int MaxBots = MaxBotsLimit;
         // A full match (ADR-168). Bots fill what people leave empty, never fewer than MinBots; so people are at most Participants - MinBots.
         public int Participants = MaxParticipantsLimit;
-        public int MinBots = 10;
+        public int MinBots = 16;
         // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
         public float QueueWindowSeconds = 30f;
         // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-250).
@@ -189,7 +189,37 @@ namespace Game.Core
             regions <= 0 ? Math.Max(0, participants) : (Math.Max(0, participants) + regions - 1) / regions + 1;
 
         // The elevator index (into `elevators`) for each participant; -1 for everyone when there are no elevators.
-        public static int[] Assign(int participants, IReadOnlyList<ElevatorSlot> elevators, int seed)
+        // `share` false (ADR-252): nobody shares a car with someone who is not on its team. When there are more participants than
+        // elevators the surplus gets -1 (no elevator) and the caller warns; the ones placed keep one car each.
+        public static int[] Assign(int participants, IReadOnlyList<ElevatorSlot> elevators, int seed, bool share = true)
+        {
+            if (!share && elevators != null && participants > elevators.Count && elevators.Count > 0)
+            {
+                var placed = Assign(elevators.Count, elevators, seed, false);
+                var all = new int[Math.Max(0, participants)];
+                for (int i = 0; i < all.Length; i++) all[i] = i < placed.Length ? placed[i] : -1;
+                return all;
+            }
+            var assigned = AssignShared(participants, elevators, seed);
+            if (share || elevators == null || elevators.Count == 0) return assigned;
+            // One per car: whoever landed on an occupied car moves to a car nobody has.
+            var used = new bool[elevators.Count];
+            var dup = new List<int>();
+            for (int i = 0; i < assigned.Length; i++)
+            {
+                if (!used[assigned[i]]) used[assigned[i]] = true; else dup.Add(i);
+            }
+            int free = 0;
+            foreach (int i in dup)
+            {
+                while (used[free]) free++;
+                used[free] = true;
+                assigned[i] = free;
+            }
+            return assigned;
+        }
+
+        static int[] AssignShared(int participants, IReadOnlyList<ElevatorSlot> elevators, int seed)
         {
             var result = new int[Math.Max(0, participants)];
             if (result.Length == 0) return result;
