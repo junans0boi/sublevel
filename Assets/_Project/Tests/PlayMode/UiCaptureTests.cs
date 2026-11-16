@@ -313,6 +313,60 @@ namespace Game.Tests
         static int _msaa; static float _shadowDist;
         static void Toggle(string name, bool on) { foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None)) if (l.name == name) l.enabled = on; }
 
+        sealed class FakeQueue : IMatchQueue
+        {
+            public MatchQueueState State { get; set; }
+            public bool Waiting { get; set; }
+            public bool Connected = true;
+            public bool Cancelled;
+            public event System.Action<MatchQueueState> StateChanged;
+            public bool RequestStart(TeamMode mode, int partySize) { Waiting = Connected; return Connected; }
+            public bool Cancel() { Waiting = false; Cancelled = true; return true; }
+            public void Push(MatchQueueState s) { State = s; StateChanged?.Invoke(s); }
+        }
+
+        // 파티 시작 through the server queue: request, the real queue words, cancel, and the error when not connected.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Lobby_QueueStates()
+        {
+            PlayerPrefs.SetInt(UiFx.ReducedKey, 1);
+            string folder = Folder();
+            yield return Menu();
+            var menu = MainMenu.Instance;
+            var panel = menu.Panel;
+            var fake = new FakeQueue();
+            panel.AttachQueue(fake);
+            var squad = new PartyLobby(0, "해무"); squad.Join(2, "도윤"); squad.SetReady(2, true);
+            panel.SetParty(squad, 0);
+            Assert.AreEqual("파티 시작", panel.StatusLabel);
+
+            fake.Connected = false;                                   // error: not connected
+            panel.PressStatus();
+            Assert.AreEqual(QueueText.NotConnected, menu.ToastText);
+            Assert.IsFalse(panel.Matching);
+
+            fake.Connected = true;                                    // waiting: asked, no window yet
+            panel.PressStatus();
+            Assert.IsTrue(panel.Matching);
+            StringAssert.Contains("매칭 취소", panel.StatusLabel);
+            Assert.AreEqual(QueueText.Requested, panel.ReasonText);
+
+            fake.Push(new MatchQueueState { Open = true, Waiting = 12, Parties = 3, Target = 50, SecondsLeft = 24f });
+            yield return null; panel.Tick(0.1f);                       // the server's real numbers
+            Assert.AreEqual("매칭 중 12/50 · 남은 00:24", panel.ReasonText);
+            yield return Shots(folder, "lobby_queue");
+
+            panel.PressStatus();                                      // cancel
+            Assert.IsTrue(fake.Cancelled);
+            Assert.IsFalse(panel.Matching);
+
+            panel.PressStatus();                                      // again, then the match starts
+            fake.Push(new MatchQueueState { Open = true, Started = true, Waiting = 12, Target = 50 });
+            yield return null; panel.Tick(0.1f);
+            Assert.IsFalse(panel.Matching, "the match was made: the lobby goes to it");
+            panel.AttachQueue(null);
+        }
+
         [UnityTest, Timeout(60000)]
         public IEnumerator HazardSlot_ShowsLineAndItems_AndHides()
         {

@@ -117,5 +117,17 @@ namespace Game.Tests
             Assert.AreEqual(0, AssemblyRules.Remaining(50, 5f, -1f), "full area starts at once");
             Assert.AreEqual(38, AssemblyRules.Bots(12));
         }
+
+        [Test]
+        public void QueueText_ShowsOnlyRealState()
+        {
+            Assert.AreEqual("", QueueText.Line(new MatchQueueState { Open = true, Waiting = 3, Target = 50, SecondsLeft = 20 }, false), "not waiting: nothing");
+            Assert.AreEqual(QueueText.Requested, QueueText.Line(default, true), "asked, the server has not opened a window yet");
+            Assert.AreEqual("매칭 중 12/50 · 남은 00:24", QueueText.Line(new MatchQueueState { Open = true, Waiting = 12, Target = 50, SecondsLeft = 23.2f }, true));
+            Assert.AreEqual("매칭 중 1/50 · 남은 01:05", QueueText.Line(new MatchQueueState { Open = true, Waiting = 1, Target = 50, SecondsLeft = 65f }, true));
+            Assert.AreEqual("매치를 만드는 중입니다…", QueueText.Line(new MatchQueueState { Open = true, Started = true, Waiting = 12, Target = 50 }, true));
+            Assert.IsNotEmpty(QueueText.NotConnected);
+            Assert.IsNotEmpty(QueueText.Cancelled);
+        }
     }
 }
