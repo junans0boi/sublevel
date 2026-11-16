@@ -10,6 +10,7 @@ namespace Game.Gameplay
     public class LobbyStage : MonoBehaviour
     {
         public const int Slots = PartyLobby.SquadSize;
+        public const float MeshLodBias = 0f; // 1 halves the triangles but did not lower p99 (see ui_DONE PERF), so the look keeps the prefab LOD
         // Local x of the four places across the car (slot 0, the local player, stands left and a little forward).
         static readonly Vector3[] SlotPos = { new Vector3(1.35f, 0f, -0.25f), new Vector3(0.45f, 0f, 0f), new Vector3(-0.45f, 0f, 0f), new Vector3(-1.35f, 0f, -0.25f) }; // the camera looks down -Z, so +X is on screen left (slot 0 = leftmost)
 
@@ -83,6 +84,8 @@ namespace Game.Gameplay
             }
             if (a.Helmet > 0 || a.Vest > 0) go.AddComponent<ArmorVisual>().ShowTiers(a.Helmet, a.Vest);
             if (a.Pack > 0) go.AddComponent<BackpackVisual>().Show(a.Pack);
+            // Perf: the lobby characters are small on screen, so one Mesh LOD step coarser than the prefab's start level (about half the triangles).
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true)) smr.meshLodSelectionBias += MeshLodBias;
             // A soft round spot of light on the floor under each person.
             var spot = new GameObject("Spot");
             spot.transform.SetParent(go.transform, false);

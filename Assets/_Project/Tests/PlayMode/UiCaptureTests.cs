@@ -195,6 +195,15 @@ namespace Game.Tests
             StringAssert.Contains("CH-7K2Q", menu.ToastText);
             Assert.AreEqual("CH-7K2Q", GUIUtility.systemCopyBuffer);
             yield return Shots(folder, "toast_invite");
+            menu.ShowTrainingEntry();
+            Assert.IsTrue(menu.TrainingEntryShown);
+            menu.TrainingEntry.Select(2);
+            Assert.AreEqual(2, menu.TrainingEntry.Selected);
+            menu.TrainingEntry.Select(0);
+            yield return Shots(folder, "training");
+            menu.Back();
+            Assert.IsFalse(menu.TrainingEntryShown);
+
             menu.ShowSettings();
             yield return Shots(folder, "settings");
             menu.Back();
@@ -208,25 +217,101 @@ namespace Game.Tests
             Assert.IsFalse(menu.CreditsShown);
         }
 
-        // PERF: the lobby's frame time with the 3D party standing (the editor runs with graphics, no vsync).
-        [UnityTest, Timeout(120000)]
+        // PERF: the lobby (3D party + UI) rendered into a 1920x1080 target frame by frame. Each configuration is timed two ways:
+        // "sync" = render + a 1-pixel read-back that waits for the GPU (real work, includes the stall); "submit" = render only
+        // (CPU time to build and submit the frame). Switching one cost off at a time gives the contribution table.
+        sealed class PerfResult { public float Avg, P99, SubmitAvg; public long Draws, Tris, Batches; }
+
+        IEnumerator MeasureLobby(Camera cam, RenderTexture rt, int frames, PerfResult r)
+        {
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            var times = new System.Collections.Generic.List<float>();
+            float submit = 0f; int submitN = 0;
+            for (int i = 0; i < frames + 20; i++)
+            {
+                yield return null;
+                float t0 = Time.realtimeSinceStartup;
+                cam.Render();
+                float t1 = Time.realtimeSinceStartup;
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, 1, 1), 0, 0); // waits for the GPU
+                RenderTexture.active = null;
+                if (i >= 20) { times.Add((Time.realtimeSinceStartup - t0) * 1000f); submit += (t1 - t0) * 1000f; submitN++; }
+#if UNITY_EDITOR
+                if (i == 60) { r.Draws = UnityEditor.UnityStats.drawCalls; r.Tris = UnityEditor.UnityStats.triangles; r.Batches = UnityEditor.UnityStats.batches; }
+#endif
+            }
+            times.Sort();
+            float avg = 0f; foreach (var x in times) avg += x;
+            r.Avg = avg / times.Count; r.P99 = times[Mathf.Min(times.Count - 1, (int)(times.Count * 0.99f))]; r.SubmitAvg = submit / Mathf.Max(1, submitN);
+        }
+
+        [UnityTest, Timeout(600000)]
         public IEnumerator Lobby_FrameTime()
         {
+            PlayerPrefs.SetInt(UiFx.ReducedKey, 1);
             PlayerAppearanceStore.Save(PlayerAppearance.FromIndex(2, 1));
             yield return Menu();
             var panel = MainMenu.Instance.Panel;
             var squad = new PartyLobby(0, "a", PlayerAppearanceStore.Load()); squad.Join(2, "b", PlayerAppearance.FromIndex(5, 0)); squad.Join(3, "c", PlayerAppearance.FromIndex(8, 2)); squad.Join(4, "d", PlayerAppearance.FromIndex(12, 1));
             panel.SetParty(squad, 0);
             for (int i = 0; i < 30; i++) yield return null;
-            QualitySettings.vSyncCount = 0;
-            float t0 = Time.realtimeSinceStartup; int n = 120;
-            for (int i = 0; i < n; i++) yield return null;
-            float ms = (Time.realtimeSinceStartup - t0) / n * 1000f;
+            var cam = Camera.main;
+            var rt = new RenderTexture(1920, 1080, 24);
+            var canvases = new System.Collections.Generic.List<Canvas>();
+            foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+                if (c.isRootCanvas && c.renderMode == RenderMode.ScreenSpaceOverlay) { c.renderMode = RenderMode.ScreenSpaceCamera; c.worldCamera = cam; c.planeDistance = cam.nearClipPlane + 0.05f; canvases.Add(c); }
+            var oldTarget = cam.targetTexture;
+            cam.targetTexture = rt;
+            var data = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+            var volumes = UnityEngine.Object.FindObjectsByType<UnityEngine.Rendering.Volume>(FindObjectsSortMode.None);
+            var sb = new System.Text.StringBuilder();
             string folder = Folder();
-            File.WriteAllText(Path.Combine(folder, "lobby_perf.txt"), "avg frame " + ms.ToString("0.00") + " ms over " + n + " frames, " + Screen.width + "x" + Screen.height + ", 4 characters\n");
-            Assert.Less(ms, 33f, "the lobby stays above 30 fps");
+
+            var baseline = new PerfResult();
+            yield return MeasureLobby(cam, rt, 160, baseline);
+            // The frame itself, for the look-regression comparison between builds.
+            cam.Render();
+            var prev = RenderTexture.active; RenderTexture.active = rt;
+            var frame = new Texture2D(1920, 1080, TextureFormat.RGB24, false);
+            frame.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0); frame.Apply(); RenderTexture.active = prev;
+            File.WriteAllBytes(Path.Combine(folder, "lobby_perf_frame.png"), frame.EncodeToPNG());
+            sb.AppendLine($"baseline: sync avg {baseline.Avg:0.00} ms, p99 {baseline.P99:0.00} ms | submit avg {baseline.SubmitAvg:0.00} ms | drawcalls {baseline.Draws}, batches {baseline.Batches}, triangles {baseline.Tris}");
+
+            // One cost off at a time: (label, switch off, switch on).
+            var configs = new System.Collections.Generic.List<(string, System.Action, System.Action)>
+            {
+                ("no UI", () => { foreach (var c in canvases) c.enabled = false; }, () => { foreach (var c in canvases) c.enabled = true; }),
+                ("no post-processing", () => data.renderPostProcessing = false, () => data.renderPostProcessing = true),
+                ("no volumes", () => { foreach (var v in volumes) v.enabled = false; }, () => { foreach (var v in volumes) v.enabled = true; }),
+                ("no additional lights", () => { foreach (var l in lights) if (l != null) l.enabled = false; }, () => { foreach (var l in lights) if (l != null) l.enabled = true; }),
+                ("no CarLight", () => Toggle("CarLight", false), () => Toggle("CarLight", true)),
+                ("no WallWash", () => Toggle("WallWash", false), () => Toggle("WallWash", true)),
+                ("no Key", () => Toggle("Key", false), () => Toggle("Key", true)),
+                ("no rim lights", () => { Toggle("RimLeft", false); Toggle("RimRight", false); }, () => { Toggle("RimLeft", true); Toggle("RimRight", true); }),
+                ("no characters", () => MainMenu.Instance.Stage.gameObject.SetActive(false), () => MainMenu.Instance.Stage.gameObject.SetActive(true)),
+                ("MSAA off", () => { var a = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset; if (a != null) { _msaa = a.msaaSampleCount; a.msaaSampleCount = 1; } }, () => { var a = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset; if (a != null) a.msaaSampleCount = _msaa; }),
+                ("shadows off", () => { var a = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset; if (a != null) { _shadowDist = a.shadowDistance; a.shadowDistance = 0f; } }, () => { var a = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset; if (a != null) a.shadowDistance = _shadowDist; }),
+            };
+            foreach (var (label, off, on) in configs)
+            {
+                off();
+                var r = new PerfResult();
+                yield return MeasureLobby(cam, rt, 100, r);
+                on();
+                sb.AppendLine($"{label}: sync avg {r.Avg:0.00} ms (-{baseline.Avg - r.Avg:0.00}), p99 {r.P99:0.00} ms (-{baseline.P99 - r.P99:0.00}) | submit avg {r.SubmitAvg:0.00} ms | drawcalls {r.Draws}, triangles {r.Tris}");
+            }
+            cam.targetTexture = oldTarget;
+            foreach (var c in canvases) c.renderMode = RenderMode.ScreenSpaceOverlay;
+            rt.Release();
+            File.WriteAllText(Path.Combine(folder, "lobby_perf.txt"), "lobby 1920x1080, 4 characters + UI\n" + sb);
             PlayerAppearanceStore.Clear();
+            Assert.Less(baseline.Avg, 33f, "the lobby stays above 30 fps");
         }
+
+        static int _msaa; static float _shadowDist;
+        static void Toggle(string name, bool on) { foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None)) if (l.name == name) l.enabled = on; }
 
         [UnityTest, Timeout(60000)]
         public IEnumerator HazardSlot_ShowsLineAndItems_AndHides()

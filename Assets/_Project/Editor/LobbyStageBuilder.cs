@@ -27,11 +27,11 @@ public static class LobbyStageBuilder
         var metal = WorldMaterials.PaintedMetal;
         var rusty = WorldMaterials.RustyMetal;
         var concrete = WorldMaterials.ConcreteDark;
-        var shell = new WorldMeshes.BoxBatch(Vector2.one);
+        var shell = new WorldMeshes.BoxBatch(new Vector2(2.5f, 2.5f));
         var floor = new WorldMeshes.BoxBatch(metal.Tile);
         var trim = new WorldMeshes.BoxBatch(rusty.Tile);
         var lamp = new WorldMeshes.BoxBatch(Vector2.one);
-        var station = new WorldMeshes.BoxBatch(concrete.Tile);
+        var station = new WorldMeshes.BoxBatch(new Vector2(2.5f, 2.5f));
         var hall = new WorldMeshes.BoxBatch(WorldMaterials.Concrete.Tile);
         var stripe = new WorldMeshes.BoxBatch(Vector2.one);
         var seams = new WorldMeshes.BoxBatch(Vector2.one);
@@ -39,11 +39,22 @@ public static class LobbyStageBuilder
         var ribs = new WorldMeshes.BoxBatch(metal.Tile);
 
         float x0 = -HalfWidth, x1 = HalfWidth, z0 = Back, z1 = Front, s = Skin, h = Height;
+        // The pipeline lights additional lights per vertex, so a big flat quad shows a diagonal seam between its triangles:
+        // big surfaces are cut into 0.5 m boxes so the light varies smoothly across them.
+        void Split(WorldMeshes.BoxBatch b, float a0, float a1, float b0, float b1, float c0, float c1, float step = 0.5f)
+        {
+            int na = Mathf.Max(1, Mathf.CeilToInt((a1 - a0) / step)), nb = Mathf.Max(1, Mathf.CeilToInt((b1 - b0) / step)), nc = Mathf.Max(1, Mathf.CeilToInt((c1 - c0) / step));
+            for (int i = 0; i < na; i++)
+                for (int j = 0; j < nb; j++)
+                    for (int k = 0; k < nc; k++)
+                        b.Add(new Vector3(a0 + (i + 0.5f) * (a1 - a0) / na, b0 + (j + 0.5f) * (b1 - b0) / nb, c0 + (k + 0.5f) * (c1 - c0) / nc),
+                            new Vector3((a1 - a0) / na, (b1 - b0) / nb, (c1 - c0) / nc));
+        }
         void Box(WorldMeshes.BoxBatch b, float a0, float a1, float b0, float b1, float c0, float c1) =>
             b.Add(new Vector3((a0 + a1) / 2f, (b0 + b1) / 2f, (c0 + c1) / 2f), new Vector3(a1 - a0, b1 - b0, c1 - c0));
 
         // The car (same parts as AddElevatorCar).
-        Box(floor, x0, x1, -FloorThick, 0f, z0, z1);
+        Split(floor, x0, x1, -FloorThick, 0f, z0, z1);
         Box(shell, x0, x0 + s, 0f, h, z0, z1);
         Box(shell, x1 - s, x1, 0f, h, z0, z1);
         Box(shell, x0, x1, 0f, h, z0, z0 + s);
@@ -57,10 +68,6 @@ public static class LobbyStageBuilder
         for (int i = -2; i <= 2; i++) Box(lamp, i * 0.22f - 0.06f, i * 0.22f + 0.06f, DoorTop + 0.12f, DoorTop + 0.2f, z1 - s - 0.02f, z1 - s);
         Box(lamp, -DoorHalf, DoorHalf, 0f, 0.012f, z1 - s - 0.16f, z1 - s - 0.1f);
         // Wall detail for depth: pilasters (they catch light and cast shadow), dark panel seams, rows of rivets.
-        foreach (float sy in new[] { 0.9f, 1.8f })
-        {
-            Box(seams, x0 + s, x1 - s, sy - 0.006f, sy + 0.006f, z0 + s + 0.1f, z0 + s + 0.104f);
-        }
         // The door frame's amber stripe along the opening's top and sides (the game's DoorStripe material).
         Box(stripe, -DoorHalf, DoorHalf, DoorTop - 0.05f, DoorTop, z1 - s - 0.006f, z1 - s);
 
@@ -69,7 +76,7 @@ public static class LobbyStageBuilder
         Box(station, -wx, x0 + 0.01f, 0f, wy, wallZ0, wallZ1);
         Box(station, x1 - 0.01f, wx, 0f, wy, wallZ0, wallZ1);
         Box(station, x0, x1, h + CeilThick, wy, wallZ0, wallZ1);
-        Box(hall, -wx, wx, -FloorThick, 0f, z1, 16f);
+        Split(hall, -wx, wx, -FloorThick, 0f, z1, 16f, 1.5f);
 
         Mesh Save(WorldMeshes.BoxBatch b, string name)
         {
@@ -89,8 +96,37 @@ public static class LobbyStageBuilder
             r.shadowCastingMode = shadows;
             go.isStatic = true;
         }
-        Part("Shell", shell, steel, ShadowCastingMode.On);
-        Part("Seams", seams, WorldMaterials.DoorSeam(), ShadowCastingMode.Off);
+        // Wall: a plain URP Lit with a hand-made tileable noise (value noise, our own) so the steel is not one flat colour.
+        // (The game's concrete on tiled boxes shows facets with the pipeline's per-vertex lights, so it is not used here.)
+        var noise = new Texture2D(128, 128, TextureFormat.RGB24, false) { wrapMode = TextureWrapMode.Repeat };
+        var rnd = new System.Random(7);
+        var grid = new float[16 * 16];
+        for (int gi = 0; gi < grid.Length; gi++) grid[gi] = (float)rnd.NextDouble();
+        float V(int gx, int gy) => grid[((gy % 16) + 16) % 16 * 16 + ((gx % 16) + 16) % 16];
+        for (int y = 0; y < 128; y++)
+            for (int x = 0; x < 128; x++)
+            {
+                float n = 0f, amp = 0.5f; int freq = 4;
+                for (int o = 0; o < 3; o++)
+                {
+                    float fx = x / 128f * freq, fy = y / 128f * freq; int ix = (int)fx, iy = (int)fy; float tx = fx - ix, ty = fy - iy;
+                    float a0 = Mathf.Lerp(V(ix, iy), V(ix + 1, iy), tx), a1 = Mathf.Lerp(V(ix, iy + 1), V(ix + 1, iy + 1), tx);
+                    n += Mathf.Lerp(a0, a1, ty) * amp; amp *= 0.5f; freq *= 2;
+                }
+                float v = 0.74f + (n - 0.5f) * 0.4f;
+                noise.SetPixel(x, y, new Color(v, v, v * 1.03f));
+            }
+        noise.Apply();
+        File.WriteAllBytes(MeshDir + "/LobbyWallNoise.png", noise.EncodeToPNG());
+        Object.DestroyImmediate(noise);
+        AssetDatabase.ImportAsset(MeshDir + "/LobbyWallNoise.png");
+        var wallMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        wallMat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(MeshDir + "/LobbyWallNoise.png"));
+        wallMat.SetColor("_BaseColor", new Color(0.50f, 0.54f, 0.60f)); wallMat.SetFloat("_Smoothness", 0.2f); wallMat.SetFloat("_Metallic", 0.1f);
+        AssetDatabase.DeleteAsset(MeshDir + "/LobbyWall.mat");
+        AssetDatabase.CreateAsset(wallMat, MeshDir + "/LobbyWall.mat");
+        wallMat = AssetDatabase.LoadAssetAtPath<Material>(MeshDir + "/LobbyWall.mat");
+        Part("Shell", shell, wallMat, ShadowCastingMode.On);
         var floorMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         floorMat.SetColor("_BaseColor", new Color32(11, 15, 20, 255)); floorMat.SetFloat("_Smoothness", 0f); floorMat.SetFloat("_Metallic", 0f); floorMat.SetFloat("_SpecularHighlights", 0f); floorMat.SetFloat("_EnvironmentReflections", 0f); floorMat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); floorMat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         AssetDatabase.DeleteAsset(MeshDir + "/LobbyFloor.mat");
@@ -100,7 +136,7 @@ public static class LobbyStageBuilder
         Part("Trim", trim, rusty.Material, ShadowCastingMode.Off);
         Part("Lamp", lamp, WorldMaterials.ShaftLamp(), ShadowCastingMode.Off);
         Part("Stripe", stripe, WorldMaterials.DoorStripe(), ShadowCastingMode.Off);
-        Part("StationWall", station, concrete.Material, ShadowCastingMode.On);
+        Part("StationWall", station, wallMat, ShadowCastingMode.On);
         Part("HallFloor", hall, floorMat, ShadowCastingMode.Off);
 
         // Light: the car's own ceiling lamp (as in the game) plus soft fills from the front and a rim from behind so the
@@ -111,8 +147,8 @@ public static class LobbyStageBuilder
         AddPoint(root.transform, "Key", new Vector3(-1.9f, 2.4f, 1.3f), 7f, 2.6f, new Color(1f, 0.82f, 0.62f)); // warm key from the camera's left, soft falloff (a spot leaves a hard cone edge on the wall)
         // A soft wash on the back and side walls so the car reads as a room, not a void.
         AddPoint(root.transform, "WallWash", new Vector3(0.6f, 2.5f, 0.2f), 7f, 1.8f, new Color(0.78f, 0.84f, 0.95f));
-        AddSpot(root.transform, "RimLeft", new Vector3(2.4f, 3.0f, -2.4f), new Vector3(0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
-        AddSpot(root.transform, "RimRight", new Vector3(-2.4f, 3.0f, -2.4f), new Vector3(-0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimLeft", new Vector3(1.9f, 2.7f, -1.3f), new Vector3(0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
+        AddSpot(root.transform, "RimRight", new Vector3(-1.9f, 2.7f, -1.3f), new Vector3(-0.7f, 0.3f, 0.5f), 20f, 4.2f, 2.4f, false, new Color(0.37f, 0.66f, 1f));
 
         // Roster prefabs in PlayerAppearance.ModelIds order and the rifle template.
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
@@ -130,7 +166,7 @@ public static class LobbyStageBuilder
         var lobby = new GameObject("CameraLobby").transform;
         lobby.SetParent(root.transform, false);
         lobby.position = new Vector3(0f, 1.35f, 6.2f);
-        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 1.05f, 0f) - lobby.position);
+        lobby.rotation = Quaternion.LookRotation(new Vector3(0f, 0.95f, 0f) - lobby.position);
         var close = new GameObject("CameraCloseup").transform;
         close.SetParent(root.transform, false);
         close.position = new Vector3(0f, 1.0f, 5.6f);
@@ -147,7 +183,49 @@ public static class LobbyStageBuilder
         RenderSettings.ambientMode = AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.15f, 0.15f, 0.16f);
         RenderSettings.fog = false;
+        RenderRosterThumbs(stage, camera);
         return stage;
+    }
+
+    // 96 x 128 (rendered at 2x) head-and-shoulders pictures of the 15 roster models under the lobby's own lights, saved for the
+    // 외형 screen: Resources/Ui/RosterThumbs/<ModelId>.png.
+    static void RenderRosterThumbs(LobbyStage stage, Camera lobbyCamera)
+    {
+        const string dir = "Assets/_Project/Resources/Ui/RosterThumbs";
+        Directory.CreateDirectory(dir);
+        var camGo = new GameObject("ThumbCam");
+        var cam = camGo.AddComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color32(16, 21, 28, 255);
+        cam.fieldOfView = 20f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 30f; cam.enabled = false;
+        camGo.transform.position = stage.transform.TransformPoint(new Vector3(0f, 1.6f, 2.0f));
+        camGo.transform.rotation = Quaternion.LookRotation(stage.transform.TransformPoint(new Vector3(0f, 1.55f, 0f)) - camGo.transform.position);
+        var rt = new RenderTexture(192, 256, 24) { antiAliasing = 4 };
+        for (int i = 0; i < PlayerAppearance.ModelIds.Length; i++)
+        {
+            var prefab = stage.RosterPrefabs[i];
+            if (prefab == null) continue;
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, stage.transform);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.Euler(0f, 8f, 0f);
+            var def = go.GetComponent<CharacterDef>();
+            if (def != null) { def.ApplyVariant(0); if (def.Animator != null) def.Animator.enabled = false; LobbyStage.PoseCrossed(def); }
+            cam.targetTexture = rt;
+            cam.Render(); cam.Render(); // the first render after a change can come out unlit
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(192, 256, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, 192, 256), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            cam.targetTexture = null;
+            File.WriteAllBytes($"{dir}/{PlayerAppearance.ModelIds[i]}.png", tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(go);
+        }
+        rt.Release();
+        Object.DestroyImmediate(rt);
+        Object.DestroyImmediate(camGo);
+        AssetDatabase.Refresh();
     }
 
     static void AddPoint(Transform parent, string name, Vector3 pos, float range, float intensity, Color color)

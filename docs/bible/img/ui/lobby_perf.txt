@@ -1,1 +1,13 @@
-avg frame 0.20 ms over 120 frames, 640x480, 4 characters
+lobby 1920x1080, 4 characters + UI
+baseline: sync avg 7.58 ms, p99 11.47 ms | submit avg 0.99 ms | drawcalls 230, batches 226, triangles 115872
+no UI: sync avg 7.22 ms (-0.36), p99 11.97 ms (--0.51) | submit avg 0.76 ms | drawcalls 84, triangles 114024
+no post-processing: sync avg 6.78 ms (-0.80), p99 10.55 ms (-0.91) | submit avg 0.88 ms | drawcalls 226, triangles 115868
+no volumes: sync avg 5.78 ms (-1.80), p99 10.42 ms (-1.04) | submit avg 0.88 ms | drawcalls 230, triangles 115872
+no additional lights: sync avg 7.47 ms (-0.11), p99 8.89 ms (-2.58) | submit avg 0.88 ms | drawcalls 230, triangles 115872
+no CarLight: sync avg 7.46 ms (-0.12), p99 13.03 ms (--1.56) | submit avg 0.92 ms | drawcalls 230, triangles 115872
+no WallWash: sync avg 8.94 ms (--1.36), p99 14.56 ms (--3.09) | submit avg 1.01 ms | drawcalls 230, triangles 115872
+no Key: sync avg 6.91 ms (-0.67), p99 15.42 ms (--3.95) | submit avg 0.91 ms | drawcalls 230, triangles 115872
+no rim lights: sync avg 7.05 ms (-0.53), p99 18.33 ms (--6.87) | submit avg 0.87 ms | drawcalls 230, triangles 115872
+no characters: sync avg 3.58 ms (-4.01), p99 8.34 ms (-3.12) | submit avg 0.63 ms | drawcalls 162, triangles 1864
+MSAA off: sync avg 5.73 ms (-1.85), p99 10.69 ms (-0.78) | submit avg 0.88 ms | drawcalls 230, triangles 115872
+shadows off: sync avg 6.54 ms (-1.04), p99 10.88 ms (-0.58) | submit avg 0.87 ms | drawcalls 230, triangles 115872

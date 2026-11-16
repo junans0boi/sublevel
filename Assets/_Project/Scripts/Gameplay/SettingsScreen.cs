@@ -13,7 +13,7 @@ namespace Game.Gameplay
     // 16:9 size from 1280x720 to 2560x1440 (the list scrolls when it is longer than the panel).
     public class SettingsScreen
     {
-        const float MarginX = 110f, MarginY = 56f;
+        const float MarginX = 48f, MarginTop = 112f, MarginBottom = 48f; // 8 px grid; the top bar of the lobby is above the panel
         const float Pad = 36f;
         const float HeaderHeight = 78f;
         const float TabWidth = 172f, TabHeight = 50f;
@@ -64,15 +64,23 @@ namespace Game.Gameplay
         UnityAction _onClose;
 
         // Builds the screen under `parent` (hidden pieces included); `onClose` runs after 뒤로 가기.
-        public RectTransform Build(Transform parent, string name, UnityAction onClose)
+        public RectTransform Build(Transform parent, string name, UnityAction onClose, System.Action<MockScreen.Item> onBar = null)
         {
             _onClose = onClose;
-            Root = UiKit.Fill(name, parent);
-            Root.offsetMin = new Vector2(MarginX, MarginY);
-            Root.offsetMax = new Vector2(-MarginX, -MarginY);
-            UiKit.Box(Root, UiKit.PanelDeep, true);
-            UiKit.Frame(Root, 1f, UiKit.SteelDim);
-            UiKit.Brackets(Root, 22f, 2f, UiKit.Steel);
+            // The shared top bar of the adopted mockup (floor tabs, ping, icons) over the dimmed 3D lobby; the panel sits under it.
+            RectTransform wrapper;
+            if (onBar != null)
+            {
+                var bar = MockScreen.Build(parent, "set_gfx", onBar, it => it.r[1] >= 100f);
+                wrapper = bar.Root;
+                wrapper.name = name + "Wrapper";
+            }
+            else wrapper = UiKit.Fill(name + "Wrapper", parent);
+            Root = UiKit.Fill(name, wrapper);
+            Root.offsetMin = new Vector2(MarginX, MarginBottom);
+            Root.offsetMax = new Vector2(-MarginX, -MarginTop);
+            UiKit.Box(Root, UiPaint.Pn, true);
+            UiKit.Frame(Root, 1f, UiPaint.Ln);
 
             BuildHeader();
             BuildTabs();
@@ -88,7 +96,7 @@ namespace Game.Gameplay
             BuildPage(PageIndex(SettingsTab.Gameplay, SettingsPage.Basic), SettingsTab.Gameplay, SettingsPage.Basic);
 
             ShowPage();
-            return Root;
+            return wrapper;
         }
 
         // ---- key rebinding (#140) ----

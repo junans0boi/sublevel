@@ -136,55 +136,18 @@ namespace Game.Gameplay
             }
         }
 
-        // Head-and-shoulders pictures of the 15 models, rendered once from the roster prefabs in a far corner of the scene.
+        // Head-and-shoulders pictures of the 15 models: rendered under the lobby's lights by Editor/LobbyStageBuilder.
         IEnumerator MakePortraits()
         {
-            var stage = _menu.Stage;
-            if (stage == null || stage.RosterPrefabs == null) yield break;
-            bool have = true;
-            for (int i = 0; i < Total; i++) if (Portraits[i] == null) have = false;
-            if (!have)
+            for (int i = 0; i < Total; i++)
             {
-                var origin = new Vector3(600f, 0f, 600f);
-                var camGo = new GameObject("PortraitCam");
-                camGo.transform.position = origin + new Vector3(0f, 1.55f, 2.5f);
-                camGo.transform.rotation = Quaternion.LookRotation((origin + new Vector3(0f, 1.47f, 0f)) - camGo.transform.position);
-                var cam = camGo.AddComponent<Camera>();
-                cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.063f, 0.082f, 0.11f, 1f);
-                cam.fieldOfView = 20f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 20f; cam.enabled = false;
-                var lights = new GameObject("PortraitLights");
-                lights.transform.position = origin;
-                void L(Vector3 p, Color col, float i2) { var g = new GameObject("L"); g.transform.SetParent(lights.transform, false); g.transform.localPosition = p; var l = g.AddComponent<Light>(); l.type = LightType.Point; l.range = 9f; l.intensity = i2; l.color = col; }
-                L(new Vector3(-1.6f, 2.4f, 2.2f), new Color(1f, 0.86f, 0.7f), 14f);
-                L(new Vector3(1.8f, 2.2f, -1.2f), new Color(0.37f, 0.66f, 1f), 9f);
-                L(new Vector3(0f, 1.6f, 3.0f), Color.white, 5f);
-                var rt = new RenderTexture(192, 256, 24);
-                for (int i = 0; i < Total; i++)
-                {
-                    var prefab = i < stage.RosterPrefabs.Length ? stage.RosterPrefabs[i] : null;
-                    if (prefab == null || Portraits[i] != null) continue;
-                    var go = UnityEngine.Object.Instantiate(prefab, origin, Quaternion.identity);
-                    var def = go.GetComponent<CharacterDef>();
-                    if (def != null) { def.ApplyVariant(0); if (def.Animator != null) def.Animator.enabled = false; }
-                    yield return null;
-                    cam.targetTexture = rt;
-                    cam.Render();
-                    var prev = RenderTexture.active;
-                    RenderTexture.active = rt;
-                    var tex = new Texture2D(192, 256, TextureFormat.RGB24, false);
-                    tex.ReadPixels(new Rect(0, 0, 192, 256), 0, 0);
-                    tex.Apply();
-                    RenderTexture.active = prev;
-                    cam.targetTexture = null;
-                    Portraits[i] = Sprite.Create(tex, new Rect(0, 0, 192, 256), new Vector2(0.5f, 0.5f), 100f);
-                    UnityEngine.Object.Destroy(go);
-                }
-                rt.Release();
-                UnityEngine.Object.Destroy(rt);
-                UnityEngine.Object.Destroy(camGo);
-                UnityEngine.Object.Destroy(lights);
+                if (Portraits[i] != null) continue;
+                var tex = Resources.Load<Texture2D>("Ui/RosterThumbs/" + PlayerAppearance.ModelIds[i]);
+                if (tex == null) continue;
+                Portraits[i] = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
             }
             ApplyPortraits();
+            yield break;
         }
 
         void ApplyPortraits()

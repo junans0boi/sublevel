@@ -42,6 +42,10 @@ namespace Game.Gameplay
         GameObject _root, _main, _settings, _hint, _credits;
         LobbyStage _stage;
         public LobbyStage Stage => _stage;
+        TrainingEntryScreen _trainingScreen;
+        GameObject _training;
+        public TrainingEntryScreen TrainingEntry => _trainingScreen;
+        public bool TrainingEntryShown => _training != null && _training.activeSelf;
         CustomScreen _customScreen;
         CharacterScreen _charScreen;
         GameObject _char;
@@ -236,7 +240,7 @@ namespace Game.Gameplay
             switch (a)
             {
                 case "settings": ShowSettings(); break;
-                case "tutorial": StartTraining(); break;
+                case "tutorial": ShowTrainingEntry(); break;
                 case "char": ShowCharacter(); break;
                 case "custom": ShowCustom(); break;
                 case "credits": ShowCredits(); break;
@@ -276,6 +280,18 @@ namespace Game.Gameplay
             if (_custom != null) _custom.SetActive(false);
             UiFx.Show(_char);
             _charScreen.Open();
+        }
+
+        // 훈련장 tab: the entry screen (사격장 / 봇 연습 매치).
+        public void ShowTrainingEntry()
+        {
+            if (IsLoading) return;
+            _main.SetActive(false);
+            if (_hint != null) _hint.SetActive(false);
+            if (_credits != null) _credits.SetActive(false);
+            if (_custom != null) _custom.SetActive(false);
+            if (_char != null && _char.activeSelf) { _charScreen.Close(); _char.SetActive(false); }
+            UiFx.Show(_training);
         }
 
         public void ShowQuit() => ShowModal("pop_quit");
@@ -318,6 +334,7 @@ namespace Game.Gameplay
             if (_credits != null) _credits.SetActive(false);
             if (_custom != null) _custom.SetActive(false);
             if (_char != null && _char.activeSelf) { _charScreen.Close(); _char.SetActive(false); }
+            if (_training != null) _training.SetActive(false);
         }
 
         void Build()
@@ -328,7 +345,7 @@ namespace Game.Gameplay
 
             BuildMain(_root.transform);
             _settingsScreen = new SettingsScreen();
-            _settings = _settingsScreen.Build(_root.transform, "Settings", Back).gameObject;
+            _settings = _settingsScreen.Build(_root.transform, "Settings", Back, OnMock).gameObject;
             _settings.SetActive(false);
             _creditsScreen = new CreditsScreen();
             _credits = _creditsScreen.Build(_root.transform, OnMock).gameObject;
@@ -340,13 +357,16 @@ namespace Game.Gameplay
         void BuildMain(Transform parent)
         {
             // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
-            _lobbyPanel = LobbyPanel.Build(this, parent, StartTraining, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => Toast("새 알림이 없습니다."));
+            _lobbyPanel = LobbyPanel.Build(this, parent, ShowTrainingEntry, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => Toast("새 알림이 없습니다."));
             _main = _lobbyPanel.Root.gameObject;
 
             // 커스텀 모드 (adopted mockup): room rules, 방 만들기, 코드로 참가.
             _customScreen = new CustomScreen();
             _custom = _customScreen.Build(parent, this).gameObject;
             _custom.SetActive(false);
+            _trainingScreen = new TrainingEntryScreen();
+            _training = _trainingScreen.Build(parent, this).gameObject;
+            _training.SetActive(false);
             _charScreen = new CharacterScreen();
             _char = _charScreen.Build(parent, this).gameObject;
             _char.SetActive(false);
