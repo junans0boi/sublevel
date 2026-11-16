@@ -144,5 +144,18 @@ namespace Game.Tests
             Assert.AreEqual(20f, s.SecondsLeft, 1e-3f);
             Assert.IsFalse(new MatchQueue(Rules()).State(0).Open);
         }
+
+        [Test]
+        public void MenuMatch_FillsToFiftyWithBots_WhenTheDataSaysSo_AndKeepsTheSliceCountWhenNot()
+        {
+            var r = new MatchRules { FillToParticipants = true };
+            Assert.AreEqual(49, r.BotsFor(1));
+            Assert.AreEqual(39, r.BotsFor(11));
+            Assert.AreEqual(10, r.BotsFor(40));
+            Assert.AreEqual(50, r.TargetParticipants);
+            var slice = new MatchRules { BotCount = 3 };
+            Assert.AreEqual(3, slice.BotsFor(1), "tests that set BotCount keep it");
+            Assert.AreEqual(4, slice.TargetParticipants);
+        }
     }
 }

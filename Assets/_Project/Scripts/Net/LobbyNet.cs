@@ -24,7 +24,10 @@ namespace Game.Net
         public int MaxPlayers;
         public MatchQueueState Queue; // matchmaking (ADR-249): who waits, how long is left
     }
-    public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; }
+    // A client asks for a place in the matchmaking queue (ADR-250): the mode and how many people its party has (1..team size).
+    public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; }
+    public struct LobbyQueueCancel : IBroadcast { }
+    public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; public byte Mode; }
 
     // The room before a match (#160, ADR-124): its own small NetworkManager (a lobby needs no spawned objects, only
     // broadcasts), separate from the match's. The host runs server + client, a guest only a client. Joining checks the
@@ -91,7 +94,7 @@ namespace Game.Net
         {
             if (!Begin(true, "127.0.0.1", port)) return false;
             MaxPlayers = Mathf.Max(1, (MatchRules.Current ?? new MatchRules()).MaxPlayers);
-            _truthBots = Bots = LobbyRules.DefaultBots(1, (MatchRules.Current ?? new MatchRules()).ClampedBotCount + 1);
+            _truthBots = Bots = LobbyRules.DefaultBots(1, (MatchRules.Current ?? new MatchRules()).TargetParticipants);
             RegisterServer();
             if (!_nm.ServerManager.StartConnection(port)) return Fail("방을 열지 못했다. 포트 " + port + "을(를) 다른 프로그램이 쓰고 있을 수 있다.");
             return StartClientSide();
@@ -104,7 +107,7 @@ namespace Game.Net
             if (!Begin(true, "127.0.0.1", port)) return false;
             Dedicated = true;
             MaxPlayers = Mathf.Max(1, (MatchRules.Current ?? new MatchRules()).MaxPlayers);
-            _truthBots = Bots = LobbyRules.DefaultBots(1, (MatchRules.Current ?? new MatchRules()).ClampedBotCount + 1);
+            _truthBots = Bots = LobbyRules.DefaultBots(1, (MatchRules.Current ?? new MatchRules()).TargetParticipants);
             RegisterServer();
             if (!_nm.ServerManager.StartConnection(port)) return Fail("포트 " + port + "을(를) 열지 못했다. 다른 프로그램이 쓰고 있을 수 있다.");
             Phase = PhaseKind.InLobby;
@@ -153,6 +156,8 @@ namespace Game.Net
 
         void RegisterServer()
         {
+            _nm.ServerManager.RegisterBroadcast<LobbyQueueRequest>(OnQueueRequest);
+            _nm.ServerManager.RegisterBroadcast<LobbyQueueCancel>(OnQueueCancel);
             _nm.ServerManager.RegisterBroadcast<LobbyHello>(OnHello, false);
             _nm.ServerManager.RegisterBroadcast<LobbyReady>(OnReady);
             _nm.ServerManager.OnRemoteConnectionState += OnRemoteState;
@@ -258,6 +263,7 @@ namespace Game.Net
                 _helloPending = false;
                 _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = "" });
             }
+            TickQueue();
             if (Phase == PhaseKind.Connecting && Time.unscaledTime > _connectDeadline) Fail(LobbyRules.Unreachable);
             if (_hostLeaveAt >= 0f && Time.unscaledTime >= _hostLeaveAt)
             {
@@ -307,6 +313,84 @@ namespace Game.Net
             return true;
         }
 
+        // ---- Matchmaking queue (ADR-247, ADR-250) ----
+
+        // Dedicated server: the queue of people who pressed start. Whoever asked is placed by the composer when the window ends;
+        // clients that never asked stay in the room as before (ready/timer flow).
+        MatchQueue _queue;
+        TeamMode _queueMode;
+        float _nextQueueState = -1f;
+        public bool QueueActive => _queue != null && _queue.Tickets.Count > 0;
+        public TeamMode QueueMode => _queueMode;
+
+        // Client: ask for a place in the queue (one request per client; asking again changes nothing until it leaves).
+        public bool RequestMatch(TeamMode mode, int partySize)
+        {
+            if (Phase != PhaseKind.InLobby || IsHost || _nm == null) return false;
+            _nm.ClientManager.Broadcast(new LobbyQueueRequest { Mode = (byte)mode, PartySize = (byte)Mathf.Clamp(partySize, 1, 4) });
+            return true;
+        }
+
+        public bool CancelMatch()
+        {
+            if (Phase != PhaseKind.InLobby || IsHost || _nm == null) return false;
+            _nm.ClientManager.Broadcast(new LobbyQueueCancel());
+            return true;
+        }
+
+        void OnQueueRequest(NetworkConnection conn, LobbyQueueRequest req, Channel channel)
+        {
+            if (!Dedicated || _matchStarted || !_truth.Contains(conn.ClientId)) return;
+            var mode = (TeamMode)Mathf.Clamp(req.Mode, 0, 2);
+            if (_queue == null) _queue = new MatchQueue(MatchRules.Current ?? new MatchRules());
+            if (_queue.Tickets.Count == 0) _queueMode = mode; // the first one decides the mode of this match
+            else if (mode != _queueMode) return;               // another mode waits for its own window (not queued here)
+            int size = mode == TeamMode.Solo ? 1 : Mathf.Clamp(req.PartySize, 1, MatchComposer.TeamSizeOf(mode, TeamRules.Current));
+            if (_queue.Enqueue(conn.ClientId, size, Time.unscaledTimeAsDouble)) PushQueueState();
+        }
+
+        void OnQueueCancel(NetworkConnection conn, LobbyQueueCancel cancel, Channel channel)
+        {
+            if (_queue != null && _queue.Leave(conn.ClientId, Time.unscaledTimeAsDouble)) PushQueueState();
+        }
+
+        void PushQueueState()
+        {
+            if (_queue == null) return;
+            ServerSetQueue(_queue.State(Time.unscaledTimeAsDouble));
+            BroadcastState();
+        }
+
+        // Server, every frame: the countdown shown to the clients (twice a second) and the start when the window ended or the room is full.
+        void TickQueue()
+        {
+            if (!Dedicated || _queue == null || _matchStarted || Phase != PhaseKind.InLobby) return;
+            double now = Time.unscaledTimeAsDouble;
+            if (_queue.Tickets.Count > 0 && Time.unscaledTime >= _nextQueueState) { _nextQueueState = Time.unscaledTime + 0.5f; PushQueueState(); }
+            if (_queue.ShouldStart(_queueMode, now, TeamRules.Current)) StartFromQueue(now);
+        }
+
+        // The window ended: the composer decides who plays; the placed clients are told the match port, the others stay.
+        void StartFromQueue(double now)
+        {
+            var plan = _queue.Start(_queueMode, now, TeamRules.Current);
+            if (plan.Humans == 0) return;
+            _matchStarted = true;
+            ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
+            var start = new LobbyStart { MatchPort = matchPort, Players = plan.Humans, Bots = plan.Bots, Mode = (byte)_queueMode };
+            foreach (int id in plan.Placed)
+                if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
+            StartInfo = start;
+            StartMode = _queueMode;
+            HasStarted = true;
+            _hostLeaveAt = Time.unscaledTime + HostLeaveDelay;
+            Debug.Log($"[Server] queue closed: {plan.Humans} people, {plan.Bots} bots, {plan.Teams.Count} teams, mode {_queueMode}");
+            Changed?.Invoke();
+        }
+
+        // The mode the match starts in (set by the queue; the dedicated server applies it to TeamMatch before the scene loads).
+        public TeamMode StartMode { get; private set; }
+
         // ---- Host (server) side ----
 
         void OnHello(NetworkConnection conn, LobbyHello hello, Channel channel)
@@ -337,6 +421,7 @@ namespace Game.Net
         {
             if (args.ConnectionState != RemoteConnectionState.Stopped || !_truth.Contains(args.ConnectionId)) return;
             _truth.Remove(args.ConnectionId);
+            if (_queue != null && _queue.Leave(args.ConnectionId, Time.unscaledTimeAsDouble)) PushQueueState();
             RefreshBots();
             BroadcastState();
             if (Dedicated) Changed?.Invoke();
@@ -345,7 +430,7 @@ namespace Game.Net
         // Until the host picks a number, the bots fill the match up to the single-player size as people come and go.
         void RefreshBots()
         {
-            int target = (MatchRules.Current ?? new MatchRules()).ClampedBotCount + 1;
+            int target = (MatchRules.Current ?? new MatchRules()).TargetParticipants;
             _truthBots = _botsChosen ? LobbyRules.ClampBots(_truthBots, _truth.Count) : LobbyRules.DefaultBots(_truth.Count, target);
         }
 

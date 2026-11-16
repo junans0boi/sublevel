@@ -279,7 +279,7 @@ namespace Game.Net
                 if (HasElevators)
                     return NetSession.Role == NetSession.RoleKind.Host && NetSession.Bots >= 0
                         ? LobbyRules.ClampBots(NetSession.Bots, NetSession.Players)
-                        : (MatchRules.Current ?? new MatchRules()).ClampedBotCount;
+                        : (MatchRules.Current ?? new MatchRules()).BotsFor(Mathf.Max(1, NetSession.Players));
                 if (_botSpawns == null) return 0;
                 int count = 0;
                 foreach (var point in _botSpawns) if (point != null) count++;

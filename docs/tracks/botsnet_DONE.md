@@ -109,3 +109,8 @@
 ## 매칭 흐름 1차 (2026-11-17) — ADR-247~249
 - 구현: `Core/MatchQueue.cs`(`MatchQueue`·`QueueParty`·`MatchComposer`·`MatchPlan`·`MatchQueueState`), `MatchRules.QueueWindowSeconds`(rules.json), `LobbyState.Queue`·`LobbyNet.Queue/ServerSetQueue`(복제 필드), 계약 `docs/tracks/botsnet_QUEUE_API.md`, EditMode `MatchQueueTests`(사람 1/11/40/60 × 솔로/스쿼드 표, 파티 1~4, 창 만료·조기 시작, 퇴장, 상태).
 - **미구현:** DedicatedServer가 대기열로 판을 시작하는 연결과 시작 요청(모드·파티 크기) 전송 — 현재 로비 준비/타이머 흐름이 그대로다. PlayMode 없음.
+
+## 매칭 연결 (2026-11-17) — ADR-250
+- 연결: 클라 `MatchmakingClient.RequestStart/Cancel/State/StateChanged` → `LobbyQueueRequest/Cancel` → 전용 서버 `LobbyNet`(대기열 등록, 0.5 s마다 `LobbyState.Queue`, 창 만료·가득 시 `MatchComposer`로 요청자에게만 `LobbyStart{Players, Bots, Mode}`), `DedicatedServer`는 대기열이 있으면 준비/타이머 시작 보류. 싱글·호스트 메뉴 시작: `MatchRules.FillToParticipants`(rules.json 켜짐)로 사람+봇 50. `MaxPlayers` 16→40.
+- **확인(수치):** EditMode 1365건 중 1351 통과(실패 14 = Character FBX 부재); **PlayMode `MenuMatchFillPlayTests`(오디오 끔) 통과: 솔로 시작 → 전투원 50 = 사람 1 + 봇 49**. 대기열↔전용 서버 왕복(요청→창→시작)은 **PlayMode로 못 확인**(서버 빌드+클라 시나리오 필요) — 구성 규칙·창 로직만 EditMode로 확인.
+- 한계: 파티원 묶기(파티장만 대기열), 모드 혼합 동시 대기, 50인 엘리베이터 수용(PlayMode에서 50명이 엘리베이터에 배치돼 완료는 확인, 시작 후 진행은 미확인).

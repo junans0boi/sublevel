@@ -162,7 +162,7 @@ namespace Game.Gameplay
             NetSession.Begin(lobby);
             lobby.Shutdown();
             _lobbyScreen.gameObject.SetActive(false);
-            Load(MatchScene, TeamMode.Solo);
+            Load(MatchScene, (TeamMode)Mathf.Clamp(lobby.StartInfo.Mode, 0, 2)); // a queue match carries its mode
         }
 
         // 모드 button: 솔로 -> 듀오 -> 스쿼드 -> 솔로.

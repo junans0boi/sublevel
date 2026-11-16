@@ -126,6 +126,9 @@ namespace Game.Core
         public int MinBots = 10;
         // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
         public float QueueWindowSeconds = 30f;
+        // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-250).
+        // Off in code so tests that set BotCount keep it.
+        public bool FillToParticipants = false;
         // People in one room (#160, ADR-124); bots fill the rest of the match.
         public int MaxPlayers = 16;
         // A dropped player's combatant waits this many seconds for the same session to return, then a bot takes over (#166, ADR-125).
@@ -133,6 +136,12 @@ namespace Game.Core
 
         // The most people one room can hold: Participants - MinBots, within 1..Participants.
         public int MaxHumans => Math.Max(1, Math.Min(Participants, MaxParticipantsLimit) - Math.Max(0, MinBots));
+
+        // People plus bots a lobby/menu match aims for: the full match when data says so (ADR-250), else the slice size.
+        public int TargetParticipants => FillToParticipants ? Math.Min(Participants, MaxParticipantsLimit) : ClampedBotCount + 1;
+
+        // Bots beside `humans` people: BotFill when data says so (a menu match: 1 person + 49 bots), else the slice's BotCount.
+        public int BotsFor(int humans) => FillToParticipants ? BotFill.Plan(humans, Participants, MinBots) : ClampedBotCount;
 
         // BotCount within 0..MaxBots (and never above MaxBotsLimit).
         public int ClampedBotCount => Math.Max(0, Math.Min(BotCount, Math.Min(Math.Max(0, MaxBots), MaxBotsLimit)));
