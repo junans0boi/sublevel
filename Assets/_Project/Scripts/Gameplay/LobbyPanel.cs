@@ -47,7 +47,7 @@ namespace Game.Gameplay
             public Image[] Body;
         }
 
-        public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit)
+        public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
         {
             var p = new LobbyPanel { _menu = menu };
             p.Party = new PartyLobby(0, "플레이어");
@@ -57,7 +57,7 @@ namespace Game.Gameplay
             p.Stage = UiKit.Rect("Stage", p.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(StageW, StageH));
             p.Root.gameObject.AddComponent<StageFit>().Stage = p.Stage;
             p.BuildScene();
-            p.BuildTop(training, custom, settings, credits, quit);
+            p.BuildTop(training, custom, settings, credits, quit, character, bell);
             p.BuildPlates();
             p.BuildConsole();
             p.Refresh();
@@ -72,12 +72,12 @@ namespace Game.Gameplay
         }
 
         // ---------------------------------------------------------------- top bar
-        void BuildTop(System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit)
+        void BuildTop(System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
         {
             var bar = UiPaint.At(Stage, "TopBar", 0, 0, StageW, 96);
             UiPaint.GradientOpaque(bar, UiPaint.Pn, new Color(UiPaint.Pn.r, UiPaint.Pn.g, UiPaint.Pn.b, 0f));
             string[] names = { "플레이", "외형", "훈련장", "설정", "크레딧" };
-            System.Action[] acts = { null, null, training, settings, credits };
+            System.Action[] acts = { null, character, training, settings, credits };
             for (int i = 0; i < 5; i++)
             {
                 float x = 48f + i * 100f;
@@ -99,7 +99,7 @@ namespace Game.Gameplay
             UiPaint.Box(UiPaint.At(Stage, "Ping", 1476, 34, 85, 26), UiPaint.Pn, 13, UiPaint.Ln);
             UiPaint.Label(Stage, "PingText", 1476, 34, 85, 26, "핑 18 ms", 14, UiPaint.Tx, TextAnchor.MiddleCenter);
             string[] icons = { "ico_ib_bell", "ico_ib_gear", "ico_ib_power" };
-            System.Action[] iacts = { null, settings, quit };
+            System.Action[] iacts = { bell, settings, quit };
             for (int i = 0; i < 3; i++)
             {
                 var ib = UiPaint.Btn(Stage, "Ib" + i, 1569 + i * 52, 26, 44, 44, "", 12, 22, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, iacts[i] == null ? null : new UnityEngine.Events.UnityAction(iacts[i]));
@@ -143,7 +143,7 @@ namespace Game.Gameplay
             Part(dashed, "Legs", -13, 0, 26, 72, 4, true); Part(dashed, "Torso", -19, 68, 38, 74, 8, true); Part(dashed, "Head", -16, 144, 32, 32, 16, true);
             s.Name = UiPaint.Label(Stage, "Name" + i, x - 100, TileY + 102, 200, 28, "", 22, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold).gameObject;
             s.NameText = s.Name.GetComponent<Text>();
-            var inv = UiPaint.Btn(Stage, "Invite" + i, x - 60, TileY + 104, 120, 44, "+ 초대", 18, 22, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, null);
+            var inv = UiPaint.Btn(Stage, "Invite" + i, x - 60, TileY + 104, 120, 44, "+ 초대", 18, 22, UiPaint.Pn, UiPaint.Ln, UiPaint.Tx, () => _menu.Invite());
             s.Invite = inv.gameObject;
             return s;
         }
@@ -203,7 +203,9 @@ namespace Game.Gameplay
             _tppBar = UiPaint.Box(UiPaint.At(_tpp.transform, "Bar", 14, 44, 114, 4), UiPaint.Ac, 1);
             _fppBar = UiPaint.Box(UiPaint.At(_fpp.transform, "Bar", 14, 44, 89, 4), UiPaint.Ac, 1);
             var map = UiPaint.At(Stage, "MapWin", 885, 868, 326, 94);
-            UiPaint.Box(map, UiPaint.Bg, 12, UiPaint.Ln);
+            var mapImg = UiPaint.Box(map, UiPaint.Bg, 12, UiPaint.Ln);
+            mapImg.raycastTarget = true;
+            map.gameObject.AddComponent<Button>().onClick.AddListener(() => _menu.ShowModeModal());
             UiPaint.Pic(Stage, "MapThumb", "ico_mapthumb", 897, 884, 118, 64);
             UiPaint.Label(Stage, "MapName", 1030, 877, 150, 28, "청람도", 22, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
             UiPaint.Label(Stage, "MapSub", 1030, 905, 180, 23, "6개 지역 · 약 20~25분", 18, UiPaint.T2, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -259,7 +261,7 @@ namespace Game.Gameplay
             switch (b.Action)
             {
                 case LobbyAction.Start:
-                    if (Party.Mode != TeamMode.Solo) return;
+                    if (Party.Mode != TeamMode.Solo) { _menu.Toast("스쿼드 매치는 팀 규칙 병합 뒤에 열립니다."); return; }
                     _menu.SetMode(TeamMode.Solo);
                     GameSettings.DefaultViewFirstPerson = Party.View == Perspective.First;
                     _menu.StartGame();

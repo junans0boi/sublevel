@@ -40,6 +40,8 @@ namespace Game.Gameplay
         public string ModeText => _modeLabel != null ? _modeLabel.text : "";
 
         GameObject _root, _main, _settings, _hint, _credits;
+        CustomScreen _customScreen;
+        public CustomScreen CustomPanel => _customScreen;
         SettingsScreen _settingsScreen;
         Text _loading;
         Text _modeLabel, _startLabel;
@@ -87,6 +89,8 @@ namespace Game.Gameplay
 
         void Update()
         {
+            if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }
+            if (_modal != null && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { CloseModal(); return; }
             if (_lobbyPanel != null && !IsLoading && _main != null && _main.activeSelf) _lobbyPanel.Tick(Time.unscaledDeltaTime);
             var keyboard = Keyboard.current;
             if (SettingsScreen.KeyCaptureActive) return; // Esc while choosing a key only cancels that
@@ -95,6 +99,7 @@ namespace Game.Gameplay
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CustomShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && LobbyShown) _lobbyScreen.Leave();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && _main != null && _main.activeSelf && !IsLoading) ShowQuit();
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
@@ -182,6 +187,9 @@ namespace Game.Gameplay
         public void Back() => ShowPanels(false);
 
         // 크레딧 (#89): the assets that ask for credit.
+        CreditsScreen _creditsScreen;
+        public CreditsScreen CreditsScreen => _creditsScreen;
+        public int CreditsRows => _creditsScreen != null ? _creditsScreen.RowCount : 0;
         public bool CreditsShown => _credits != null && _credits.activeSelf;
 
         public void ShowCredits()
@@ -190,6 +198,88 @@ namespace Game.Gameplay
             _main.SetActive(false);
             if (_hint != null) _hint.SetActive(false);
             _credits.SetActive(true);
+        }
+
+        // ---- Mockup-driven screens: shared router, toast and modal ----
+        MockScreen _modal;
+        MockScreen _toastScreen;
+        float _toastUntil;
+        public bool ModalShown => _modal != null;
+        public MockScreen ModalScreen => _modal;
+        public string ToastText { get; private set; } = "";
+
+        // Actions of the mockup's clickable items (data-go / data-act): screen changes, toasts, modals.
+        public void OnMock(MockScreen.Item it)
+        {
+            string a = !string.IsNullOrEmpty(it.go) ? it.go : it.act;
+            if (it.id == "back" || a == "lobby") { Back(); return; }
+            if (string.IsNullOrEmpty(a)) return;
+            if (a.StartsWith("toast:")) { Toast(a.Substring(6)); return; }
+            if (a.StartsWith("mode:") || a.StartsWith("pv:"))
+            {
+                var party = _lobbyPanel.Party;
+                if (a == "mode:solo") party.SetMode(_lobbyPanel.Self, TeamMode.Solo);
+                else if (a == "mode:squad") party.SetMode(_lobbyPanel.Self, TeamMode.Squad);
+                else party.SetView(_lobbyPanel.Self, a == "pv:1인칭" ? Perspective.First : Perspective.Third);
+                _lobbyPanel.Refresh();
+                ShowModeModal(); // redraw with the new selection
+                return;
+            }
+            switch (a)
+            {
+                case "settings": ShowSettings(); break;
+                case "tutorial": StartTraining(); break;
+                case "char": ShowCharacter(); break;
+                case "custom": ShowCustom(); break;
+                case "credits": ShowCredits(); break;
+                case "!quit": ShowQuit(); break;
+                case "quit": Quit(); break;
+                case "modal:": CloseModal(); break;
+            }
+        }
+
+        public void Toast(string text)
+        {
+            ToastText = text;
+            if (_toastScreen != null) Destroy(_toastScreen.Root.gameObject);
+            var s = MockScreen.Build(_root.transform, "toast_blank", null, null, true);
+            _toastScreen = s;
+            _toastUntil = Time.unscaledTime + 2.6f;
+            var r = UiPaint.At(s.Stage, "Toast", 700, 940, 520, 64);
+            UiPaint.Box(r, UiPaint.Pn, 16, UiPaint.Ln);
+            UiPaint.Box(UiPaint.At(r, "Edge", 0, 0, 8, 64), UiPaint.Ac, 4);
+            UiPaint.Label(r, "Text", 28, 0, 480, 64, text, 20, UiPaint.Tx, TextAnchor.MiddleLeft);
+        }
+
+        public void Invite()
+        {
+            GUIUtility.systemCopyBuffer = "CH-7K2Q";
+            Toast("초대 코드 CH-7K2Q를 복사했습니다.");
+        }
+
+        // 외형: the character screen.
+        public void ShowCharacter() => Toast("외형 화면은 다음 작업에서 열립니다.");
+
+        public void ShowQuit() => ShowModal("pop_quit");
+
+        // The map window: 게임 모드 선택 창 (mode, view and the map card), the variant for the current choice.
+        public void ShowModeModal()
+        {
+            var p = _lobbyPanel.Party;
+            ShowModal("lobby_mode_" + (p.Mode == TeamMode.Solo ? "solo" : "squad") + "_" + (p.View == Perspective.Third ? "tpp" : "fpp"));
+        }
+
+        public void ShowModal(string name)
+        {
+            CloseModal();
+            _modal = MockScreen.Build(_root.transform, name, OnMock, null, true);
+            // The scrim and card are one measured set; Esc closes, as the mockup's 취소 shows.
+        }
+
+        public void CloseModal()
+        {
+            if (_modal != null) Destroy(_modal.Root.gameObject);
+            _modal = null;
         }
 
         public void Quit()
@@ -221,28 +311,22 @@ namespace Game.Gameplay
             _settingsScreen = new SettingsScreen();
             _settings = _settingsScreen.Build(_root.transform, "Settings", Back).gameObject;
             _settings.SetActive(false);
-            _credits = new CreditsScreen().Build(_root.transform, Back).gameObject;
+            _creditsScreen = new CreditsScreen();
+            _credits = _creditsScreen.Build(_root.transform, OnMock).gameObject;
             _credits.SetActive(false);
             _lobbyScreen = LobbyScreen.Build(this, _root.transform);
 
-            var version = UiKit.Rect("Version", _root.transform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(24f, 20f), new Vector2(400f, 26f));
-            UiKit.Label(version, "v" + Application.version, 18, UiKit.TextDim, TextAnchor.MiddleLeft);
         }
 
         void BuildMain(Transform parent)
         {
             // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
-            _lobbyPanel = LobbyPanel.Build(this, parent, StartTraining, ShowCustom, ShowSettings, ShowCredits, Quit);
+            _lobbyPanel = LobbyPanel.Build(this, parent, StartTraining, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => Toast("새 알림이 없습니다."));
             _main = _lobbyPanel.Root.gameObject;
 
-            // 커스텀 모드: the host/join entries of the room lobby.
-            var panel = UiKit.CenteredPanel("Custom", parent, MainWidth);
-            _custom = panel.gameObject;
-            float y = UiKit.MenuPadding;
-            AddButton(panel, "방 만들기", ref y, OpenHost);
-            AddButton(panel, "참가", ref y, OpenJoin);
-            AddButton(panel, "뒤로 가기", ref y, Back);
-            panel.sizeDelta = new Vector2(MainWidth, y - UiKit.MenuButtonGap + UiKit.MenuPadding);
+            // 커스텀 모드 (adopted mockup): room rules, 방 만들기, 코드로 참가.
+            _customScreen = new CustomScreen();
+            _custom = _customScreen.Build(parent, this).gameObject;
             _custom.SetActive(false);
 
             var loading = UiKit.Rect("Loading", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(600f, 40f));
