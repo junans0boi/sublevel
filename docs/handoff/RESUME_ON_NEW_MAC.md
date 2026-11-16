@@ -92,3 +92,10 @@
 - 한 복사본(`sublevel-d` 등)을 두 에이전트가 같이 쓰면 `Logs/`와 잠금이 겹침.
 - 에이전트가 이슈 번호를 틀리게 아는 경우가 있음 → 항상 `gh issue view`로 제목 확인.
 - 실행 중인 게임이 UDP 7770을 잡으면 네트워크 PlayMode가 실패.
+
+## 12. 2026-11-16 에셋 라운드 결과 (ADR-165, ADR-166)
+- **받은 것**(모두 ASSET_LEDGER 기록): Quaternius UAL1·UAL2 Standard, Universal Base Characters Standard, Poly Haven 13종·ambientCG 5종(2K), Mixamo Swat 캐릭터와 소총 애니메이션 16종. 조사·약관 근거: `docs/ASSET_ROUND_2026-11-16.md`. Mixamo 원문 약관은 사람이 확인(RISKS_OPEN_QUESTIONS).
+- **적용한 것**: `Editor/MixamoBake.cs`(`tools/unity.sh run MixamoBake.Run`)가 Mixamo 클립을 Swat 뼈대로 구움 → `Prefabs/M1_5/Baked/Mx_*.anim`. `CharacterKit`의 윗몸 레이어(대기·조준·발사)와 무기 손 맞춤이 이 클립을 씀. 프리팹은 `TestBoxBuilder.Build`로 재생성(차량 프리팹이 같이 바뀌므로 `git restore -- Assets/_Project/Prefabs/M1/Vehicles` 필요).
+- **아직 안 한 것**: 웅크리기·엎드리기·장전·사망·옆걸음 클립(구워 두었지만 게임 상태에 연결 안 됨, #223 #227), 권총은 UAL1 클립을 같은 방법으로 구워야 함(Mixamo 뼈대와 달리 Universal 뼈대 이름 매핑 필요), 모델 자체(Swat 저폴리)는 그대로, 새 PBR 텍스처는 미사용(프로젝트에 이미 ambientCG PBR이 쓰이고 있음: Bricks097·Concrete047A 등).
+- **검증**: EditMode 971/971, PlayMode(CharacterCapture·PoseCapture·AimAndLean·MeleeWeaponPlay) 20/20. 캡처는 `Logs/charshots/`(git 무시)와 `Logs/lookdev/mx_*.png`.
+- **저장소 크기**: 새 에셋 약 250 MB(텍스처 173 MB, UAL·Base Characters 68 MB, Mixamo 14 MB). 커밋 전에 미사용 텍스처를 줄일지 정할 것. 아직 커밋하지 않음.

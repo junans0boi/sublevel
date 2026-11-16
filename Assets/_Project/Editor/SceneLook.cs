@@ -13,7 +13,7 @@ public static class SceneLook
     public const string MaterialDir = GeneratedDir + "/Materials";
     const string TextureDir = "Assets/_Project/Art/Materials";
     const string StagingDir = "AssetStaging/acg";
-    const string HdriPath = "Assets/_Project/Art/HDRI/OvercastSoilPuresky/overcast_soil_puresky_2k.hdr";
+    const string HdriPath = "Assets/_Project/Art/HDRI/KloofendalPartlyCloudy/kloofendal_48d_partly_cloudy_puresky_2k.hdr";
     // The raw HDRI lights the scene about twice too bright; ambient is kept low so the key light sets the contrast.
     const float SkyExposure = 0.7f;
     const float AmbientIntensity = 0.38f;

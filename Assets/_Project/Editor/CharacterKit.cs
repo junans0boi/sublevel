@@ -43,8 +43,9 @@ public static class CharacterKit
     // Clips used from the character file (ADR-045, ADR-049). Base layer: a blend over speed along the legs'
     // heading plus whole-body states. The file's Run_Left/Run_Right turn the whole body sideways, so they are not used. Upper layer (arms and torso, armed only): weapon lowered, raised, firing.
     const string IdleClip = "Idle", WalkClip = "Walk", RunClip = "Run", BackClip = "Run_Back";
-    const string HitClip = "HitRecieve", DeathClip = "Death";
-    const string LoweredClip = "Idle_Gun", AimClip = ReferencePose, ShootClip = "Idle_Gun_Shoot";
+    const string HitClip = "HitRecieve", DeathClip = "Mx_RifleDeath";
+    // Upper-body rifle poses come from the Mixamo clips baked onto this skeleton (MixamoBake, ADR-166).
+    const string LoweredClip = "Mx_RifleIdle", AimClip = "Mx_RifleAimingIdle", ShootClip = "Mx_FiringRifleStand";
     // Bare-handed punches (ADR-059), upper layer too. Played once each: not in LoopingClips.
     const string PunchLeftClip = "Punch_Left", PunchRightClip = "Punch_Right";
     static readonly string[] LoopingClips = { IdleClip, WalkClip, RunClip, BackClip, LoweredClip, AimClip };
@@ -164,6 +165,12 @@ public static class CharacterKit
 
     static AnimationClip Clip(string name)
     {
+        if (name.StartsWith("Mx_"))
+        {
+            var baked = AssetDatabase.LoadAssetAtPath<AnimationClip>($"{MixamoBake.BakedDir}/{name}.anim");
+            if (baked == null) throw new FileNotFoundException("baked clip missing (run MixamoBake.Run): " + name);
+            return baked;
+        }
         var clip = AssetDatabase.LoadAllAssetsAtPath(CharacterPath).OfType<AnimationClip>()
             .FirstOrDefault(c => !c.name.StartsWith("__preview__") && c.name.EndsWith("|" + name));
         if (clip == null) throw new FileNotFoundException("animation clip missing in character file: " + name);
@@ -376,6 +383,8 @@ public static class CharacterKit
         Clip(ReferencePose).SampleAnimation(go, 0f);
         go.transform.localScale *= CharacterHeight / SceneLook.WorldBounds(go).size.y;
         go.transform.position += Vector3.down * SceneLook.WorldBounds(go).min.y;
+        // The weapons sit in the hand as the rifle pose holds it, not as the old model pose did.
+        Clip(AimClip).SampleAnimation(go, 0f);
 
         var hand = go.GetComponentsInChildren<Transform>().First(t => t.name == HandBone);
         var bodyRenderers = go.GetComponentsInChildren<Renderer>(true);
