@@ -37,12 +37,15 @@ namespace Game.Tests
         {
             SceneManager.LoadScene("World");
             float end = Time.realtimeSinceStartup + 120f;
-            while (Combatant.All.Count < 80 && Time.realtimeSinceStartup < end) yield return null;
+            // One car per team (ADR-252): the map's elevators are the slots, so the match is as big as they hold (80 once the map has 20 x 4).
+            yield return new WaitUntil(() => MatchDirector.Instance != null && MatchDirector.Instance.Elevators != null);
+            int expectedBots = Mathf.Min(79, MatchDirector.Instance.Elevators.Sites.Count - 1);
+            while (Combatant.All.Count < expectedBots + 1 && Time.realtimeSinceStartup < end) yield return null;
             int people = 0, bots = 0;
             foreach (var c in Combatant.All) if (c != null) { if (c.IsPlayer) people++; else bots++; }
             Debug.Log($"[MenuFill] combatants {Combatant.All.Count}: {people} people, {bots} bots");
             Assert.AreEqual(1, people, "one person");
-            Assert.AreEqual(79, bots, "the rest are bots");
+            Assert.AreEqual(expectedBots, bots, "the rest are bots, as many as the elevators hold");
         }
     }
 }
