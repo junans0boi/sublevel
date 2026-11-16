@@ -24,7 +24,7 @@ namespace Game.Tests
                 {
                     var tag = g.GetComponent<SurfaceIdTag>();
                     Assert.NotNull(tag, g.parent.name);
-                    Assert.Greater(g.GetComponents<BoxCollider>().Length, 0, g.parent.name + " has an empty collider group");
+                    Assert.Greater(g.GetComponents<Collider>().Length, 0, g.parent.name + " has an empty collider group");
                 }
                 // a wooden house has a wooden group, a hall a concrete one (SoundRules.BuildingSurface, as before)
                 var house = groups.First(g => g.parent.name.EndsWith("_House"));

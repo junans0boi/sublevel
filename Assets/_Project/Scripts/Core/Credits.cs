@@ -1,6 +1,6 @@
 namespace Game.Core
 {
-    // Assets whose licence asks for credit (CC BY 4.0): shown on the main menu's 크레딧 screen. Every ASSET_LEDGER row
+    // Assets whose licence asks for credit (CC BY 3.0/4.0): shown on the main menu's 크레딧 screen. Every ASSET_LEDGER row
     // that says credit is needed has an entry here (CreditsTests checks the ledger's source links against Url).
     public struct CreditEntry
     {
@@ -10,6 +10,7 @@ namespace Game.Core
     public static class Credits
     {
         const string CcBy = "CC BY 4.0";
+        const string CcBy3 = "CC BY 3.0";
 
         public static readonly CreditEntry[] Entries =
         {
@@ -27,6 +28,8 @@ namespace Game.Core
                 Url = "https://sketchfab.com/3d-models/mid-poly-dirt-bike-3009c80ec6cc47fcaad27cf96f2a0822" },
             new CreditEntry { Title = "Motorcycle", Author = "animanyarty", Licence = CcBy, Use = "오토바이(로드)",
                 Url = "https://sketchfab.com/3d-models/motorcycle-38404e2077ca4b209cd2f1db30541b94" },
+            new CreditEntry { Title = "Glock19_reload", Author = "Fr3yr", Licence = CcBy3 + " (수정함)", Use = "권총 재장전 소리",
+                Url = "https://freesound.org/s/100804/" },
             new CreditEntry { Title = "Generic passenger car pack", Author = "comrade1280", Licence = CcBy, Use = "주차·폐차 소품",
                 Url = "https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5" },
         };

@@ -30,6 +30,9 @@ namespace Game.Core
         public const float MinSill = 0.9f, MaxSill = 1.1f;
         public const float MaxRise = 0.2f, MinRun = 0.28f, MinStairWidth = 1.1f;
         public const float MaxRoofOverhang = 0.5f;
+        public const float MaxAttachment = 1.5f;               // balconies, canopies, awnings and sign panels stand out from the wall this far
+        static bool IsAttachment(string name) => name.StartsWith("Balcony", StringComparison.Ordinal) || name.StartsWith("Canopy", StringComparison.Ordinal)
+            || name.StartsWith("Awning", StringComparison.Ordinal) || name.StartsWith("Sign", StringComparison.Ordinal);
         public const float Cell = 0.25f;
         const float GridMargin = 2f;
         // The rounded foot of the capsule rides over anything this low beside it (the next two steps of a flight).
@@ -39,9 +42,10 @@ namespace Game.Core
         // Boxes per building, so a building stays a handful of draw calls after combining by material.
         public static int MaxPieces(BuildingKind kind)
         {
-            if (kind == BuildingKind.Shop) return 260;
-            if (kind == BuildingKind.Villa) return 320;
-            if (kind == BuildingKind.Apartment) return 420;
+            if (kind == BuildingKind.School) return 900;
+            if (kind == BuildingKind.Shop) return 380;
+            if (kind == BuildingKind.Villa) return 450;
+            if (kind == BuildingKind.Apartment) return 620;
             kind = BuildingKinds.Family(kind);
             switch (kind)
             {
@@ -56,6 +60,7 @@ namespace Game.Core
         // Visual furniture boxes and lamps per building: interior meshes are batched, but the triangles still count.
         public static int MaxDecor(BuildingKind kind)
         {
+            if (kind == BuildingKind.School) return 5000;
             if (kind == BuildingKind.Shop) return 2600;
             if (kind == BuildingKind.Villa) return 3000;
             if (kind == BuildingKind.Apartment) return 3600;
@@ -87,7 +92,7 @@ namespace Game.Core
             float lowestFloor = float.MaxValue;
             foreach (var p in plan.Pieces)
             {
-                float allowed = p.Kind == SurfaceKind.Roof || p.Kind == SurfaceKind.Trim ? MaxRoofOverhang : 0f;
+                float allowed = p.Kind == SurfaceKind.Trim && IsAttachment(p.Name) ? MaxAttachment : p.Kind == SurfaceKind.Roof || p.Kind == SurfaceKind.Trim ? MaxRoofOverhang : 0f;
                 if (p.MinX < -hw - allowed - Eps || p.MaxX > hw + allowed + Eps || p.MinZ < -hd - allowed - Eps || p.MaxZ > hd + allowed + Eps || p.MinY < -Eps)
                     Add(BuildingRule.PieceOutsideFootprint, p.Name);
                 if (p.Kind == SurfaceKind.WallOuter || p.Kind == SurfaceKind.WallInner)
@@ -120,7 +125,8 @@ namespace Game.Core
                         Add(BuildingRule.DecorBlocksDoor, $"{dc.Name} at {door.Name}");
                 }
             }
-            if (plan.Lamps.Count > MaxLamps) Add(BuildingRule.LampBudget, $"{plan.Lamps.Count} lamps > {MaxLamps}");
+            int lampLimit = plan.Kind == BuildingKind.School ? 60 : MaxLamps;
+            if (plan.Lamps.Count > lampLimit) Add(BuildingRule.LampBudget, $"{plan.Lamps.Count} lamps > {lampLimit}");
             if (plan.Kind != BuildingKind.ElevatorStation)
                 foreach (var room in plan.Rooms)
                 {

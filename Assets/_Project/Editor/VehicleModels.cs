@@ -1133,7 +1133,7 @@ public static class VehicleModels
                     var c = new Combiner();
                     var mats = b.Renderer.sharedMaterials;
                     var m = place * b.Renderer.localToWorldMatrix;
-                    if (wreck) m = Matrix4x4.TRS(new Vector3(0f, -0.22f, 0f), Quaternion.Euler(1.5f, 0f, -2.5f), Vector3.one) * m;
+                    if (wreck) m = Matrix4x4.TRS(new Vector3(0f, -0.08f, 0f), Quaternion.Euler(1.5f, 0f, -2.5f), Vector3.one) * m;
                     for (int s = 0; s < b.Mesh.subMeshCount && s < mats.Length; s++)
                     {
                         string n = mats[s] != null ? mats[s].name : "";

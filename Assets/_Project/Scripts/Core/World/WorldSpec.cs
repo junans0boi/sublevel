@@ -41,6 +41,7 @@ namespace Game.Core
         public float MaxLotGroundSlopeDeg = 20f;
         public float WalkSlopeDeg = 40f;
         public float MinLandKm2 = 0.5f, MaxLandKm2 = 0.8f;
+        public bool RegionsAreWalled = true;             // ridges and sea separate the regions (original island); false on the C2 island, where rivers are crossed by wading, swimming or bridges
     }
 
     // What the world builder (editor) used to hard-code: caps, far clip and fog, and the terrain map resolutions.
@@ -88,6 +89,31 @@ namespace Game.Core
         public WorldRuleSpec Rules = new WorldRuleSpec();
         public WorldBuildSpec Build = new WorldBuildSpec();
         public RegionSpec[] Regions = new RegionSpec[0];
+        public IslandSpec Island;             // the C2 island 'Cheongnam-do' (ADR-204); null = the original generator
+
+        // The C2 island (ADR-168, ADR-204): a 2400 m box with the 2.4 x 2.0 km island at its north, so every map and builder keeps its square assumption.
+        // Same values as Resources/GameData/world.json (WorldTests checks).
+        public static WorldSpec CreateIsland()
+        {
+            var isl = IslandData.Create();
+            var regions = new RegionSpec[isl.Regions.Length];
+            for (int i = 0; i < regions.Length; i++)
+            {
+                var r = isl.Regions[i];
+                regions[i] = new RegionSpec
+                {
+                    Id = r.Id, Name = r.Name, Kind = r.Kind, CentreX = r.Seeds[0], CentreZ = r.Seeds[1], Radius = 300f, Elevators = r.Elevators,
+                    Lots = 8, CompoundLots = 3, ConvergencePoints = 3, CompoundRadius = 40f, RocksPerHectare = r.RocksPerHectare, TreesPerHectare = r.TreesPerHectare,
+                };
+            }
+            return new WorldSpec
+            {
+                Size = 2400f, Seed = 20261116, SeaLevel = 10f, MaxHeight = 240f, IslandRadius = 0f, CoastNoise = 0f, CoastBays = 0f, MaxRoadSlopeDeg = 12f,
+                Island = isl, Regions = regions,
+                Rules = new WorldRuleSpec { MinElevators = 3, MaxElevators = 4, MinElevatorSpacing = 80f, MinLotsNearElevator = 2, LotRange = 60f, DoorstepRange = 35f, MaxLotGroundSlopeDeg = 20f, WalkSlopeDeg = 40f, MinLandKm2 = 2.8f, MaxLandKm2 = 3.8f, RegionsAreWalled = false },
+                Build = new WorldBuildSpec { MaxLootSpawns = 900, LootPerBuilding = 3.4f, MaxRocks = 1400, MaxSingleLodRocks = 120, FarClip = 700f, FogStart = 90f, FogEnd = 640f },
+            };
+        }
 
         // Same values as Resources/GameData/world.json (Game.Core cannot read Resources).
         public static WorldSpec CreateDefault() => new WorldSpec

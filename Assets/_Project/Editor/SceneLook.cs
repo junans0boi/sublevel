@@ -340,6 +340,46 @@ public static class SceneLook
         Object.DestroyImmediate(rt);
     }
 
+    // The game's own sky logic (EnvironmentView, as a match runs it) on the saved World, at the default time and weather and at dusk/night
+    // for comparison, from one fixed view. Editor render, no audio. tools/unity.sh run-gfx SceneLook.CaptureGameSky  ->  Logs/s2/sky_*.png + sky.txt
+    public static void CaptureGameSky()
+    {
+        try
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/_Project/Scenes/World.unity", UnityEditor.SceneManagement.OpenSceneMode.Single);
+            Directory.CreateDirectory("Logs/s2");
+            var info = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+            var terrain = Object.FindFirstObjectByType<Terrain>();
+            var cam = new GameObject("SkyCam").AddComponent<Camera>();
+            EnablePost(cam);
+            cam.GetUniversalAdditionalCameraData().SetRenderer(info.RendererIndex);
+            cam.fieldOfView = 60f; cam.nearClipPlane = 0.05f; cam.farClipPlane = 1500f;
+            var region = info.Regions[0];
+            var eye = region.Hub + Vector3.up * (terrain.SampleHeight(region.Hub) + 1.7f);
+            var look = eye + Vector3.forward * 40f + Vector3.up * 14f;
+            var view = new GameObject("SkyAmbient").AddComponent<Game.Gameplay.EnvironmentView>();
+            typeof(Game.Gameplay.EnvironmentView).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(view, null);
+            var log = new System.Text.StringBuilder();
+            var cases = new (string tag, float hour, Game.Core.WeatherKind weather)[]
+            {
+                ("default_day_clear", (float)Game.Core.WorldSky.StartHour(Game.Core.DayTimeChoice.Day, 1), Game.Core.WeatherKind.Clear),
+                ("dusk", Game.Core.WorldSky.DuskHour, Game.Core.WeatherKind.Clear),
+                ("night", Game.Core.WorldSky.NightHour, Game.Core.WeatherKind.Clear),
+            };
+            foreach (var c in cases)
+            {
+                view.Set(c.hour, c.weather);
+                DynamicGI.UpdateEnvironment();
+                var sun = GameObject.Find("Sun").GetComponent<Light>();
+                log.AppendLine($"{c.tag}: hour {c.hour:0.0} sun {sun.intensity:0.00} elev {sun.transform.eulerAngles.x:0} ambient {RenderSettings.ambientIntensity:0.00} fog {RenderSettings.fogColor} skyExposure {RenderSettings.skybox.GetFloat("_Exposure"):0.00}");
+                Shot(cam, $"Logs/s2/sky_{c.tag}.png", eye, look);
+            }
+            File.WriteAllText("Logs/s2/sky.txt", log.ToString());
+            Debug.Log("[SceneLook] CaptureGameSky\n" + log);
+        }
+        catch (System.Exception e) { Debug.LogError(e); EditorApplication.Exit(1); }
+    }
+
     // Render time (ms, GPU done) of the saved World scene from each region hub, plus texture memory of the materials in use.
     // Editor and offscreen, so draw call counters read zero; compare runs on the same machine only (PERF_BUDGET, S2 T7).
     // tools/unity.sh run-gfx SceneLook.MeasureWorld  ->  Logs/s2/measure.txt

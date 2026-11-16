@@ -115,6 +115,8 @@ namespace Game.Gameplay
         static AudioClip CrashClip()
         {
             if (_crash != null) return _crash;
+            _crash = Resources.Load<AudioClip>("Sfx/glass_break_01"); // the recorded break (ADR-252); the synthesis below is the fallback
+            if (_crash != null) return _crash;
             int count = (int)(SampleRate * CrashSeconds);
             var data = new float[count];
             var rng = new System.Random(65);

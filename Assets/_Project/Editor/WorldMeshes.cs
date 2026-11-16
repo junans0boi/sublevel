@@ -309,40 +309,100 @@ public static class WorldMeshes
 
         // Vertex data is stored compact (position 12 + normal 4 + tangent 4 + uv 8 = 28 bytes instead of 48): normals and
         // tangents are unit vectors, so signed bytes are plenty. The tangents come from Unity, then the stream is rewritten.
-        public Mesh ToMesh(string name)
-        {
-            var temp = new Mesh();
-            if (_vertices.Count > 65000) temp.indexFormat = IndexFormat.UInt32;
-            temp.SetVertices(_vertices);
-            temp.SetNormals(_normals);
-            temp.SetUVs(0, _uvs);
-            temp.SetTriangles(_triangles, 0);
-            temp.RecalculateTangents();
-            var tangents = temp.tangents;
-            Object.DestroyImmediate(temp);
+        public Mesh ToMesh(string name) => ToMesh(name, new[] { this });
 
+        // Half-precision positions and UVs (20 bytes a vertex): only for meshes in a small local frame (a building), where 1.5 cm at 30 m is invisible (ADR-209).
+        public static Mesh ToCompactMesh(string name, IReadOnlyList<BoxBatch> batches) => ToMesh(name, batches, true);
+
+        // One mesh with one sub-mesh per batch, in the compact vertex format (ADR-209: a building's materials share one renderer).
+        public static Mesh ToMesh(string name, IReadOnlyList<BoxBatch> batches, bool compact = false)
+        {
+            int total = 0;
+            foreach (var b in batches) total += b._vertices.Count;
             var mesh = new Mesh { name = name };
-            if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
-            mesh.SetVertexBufferParams(_vertices.Count,
-                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-                new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
-                new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.SNorm8, 4),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2));
-            var data = new Packed[_vertices.Count];
-            for (int i = 0; i < data.Length; i++)
+            if (total > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            if (compact)
+                mesh.SetVertexBufferParams(total,
+                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float16, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float16, 2));
+            else
+                mesh.SetVertexBufferParams(total,
+                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2));
+            var data = compact ? null : new Packed[total];
+            var small = compact ? new PackedHalf[total] : null;
+            var indices = new List<int>();
+            var starts = new List<int>();
+            int offset = 0;
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue); var max = -min;
+            foreach (var b in batches)
             {
-                var n = _normals[i]; var t = tangents[i];
-                data[i] = new Packed
+                foreach (var v in b._vertices) { min = Vector3.Min(min, v); max = Vector3.Max(max, v); }
+                var temp = new Mesh();
+                if (b._vertices.Count > 65000) temp.indexFormat = IndexFormat.UInt32;
+                temp.SetVertices(b._vertices);
+                temp.SetNormals(b._normals);
+                temp.SetUVs(0, b._uvs);
+                temp.SetTriangles(b._triangles, 0);
+                temp.RecalculateTangents();
+                var tangents = temp.tangents;
+                Object.DestroyImmediate(temp);
+                for (int i = 0; i < b._vertices.Count; i++)
                 {
-                    Position = _vertices[i], Uv = _uvs[i],
-                    N0 = Snorm(n.x), N1 = Snorm(n.y), N2 = Snorm(n.z), N3 = 0,
-                    T0 = Snorm(t.x), T1 = Snorm(t.y), T2 = Snorm(t.z), T3 = Snorm(t.w),
-                };
+                    var n = b._normals[i]; var t = tangents[i];
+                    if (compact)
+                        small[offset + i] = new PackedHalf
+                        {
+                            PX = Half(b._vertices[i].x), PY = Half(b._vertices[i].y), PZ = Half(b._vertices[i].z), PW = Half(1f),
+                            N0 = Snorm(n.x), N1 = Snorm(n.y), N2 = Snorm(n.z), N3 = 0,
+                            T0 = Snorm(t.x), T1 = Snorm(t.y), T2 = Snorm(t.z), T3 = Snorm(t.w),
+                            U = Half(b._uvs[i].x), V = Half(b._uvs[i].y),
+                        };
+                    else
+                    data[offset + i] = new Packed
+                    {
+                        Position = b._vertices[i], Uv = b._uvs[i],
+                        N0 = Snorm(n.x), N1 = Snorm(n.y), N2 = Snorm(n.z), N3 = 0,
+                        T0 = Snorm(t.x), T1 = Snorm(t.y), T2 = Snorm(t.z), T3 = Snorm(t.w),
+                    };
+                }
+                starts.Add(indices.Count);
+                foreach (int tri in b._triangles) indices.Add(tri + offset);
+                offset += b._vertices.Count;
             }
-            mesh.SetVertexBufferData(data, 0, 0, data.Length);
-            mesh.SetTriangles(_triangles, 0);
-            mesh.RecalculateBounds();
+            if (compact) mesh.SetVertexBufferData(small, 0, 0, small.Length); else mesh.SetVertexBufferData(data, 0, 0, data.Length);
+            mesh.SetIndexBufferParams(indices.Count, total > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16);
+            if (total > 65000) mesh.SetIndexBufferData(indices, 0, 0, indices.Count); else { var u = new ushort[indices.Count]; for (int i = 0; i < u.Length; i++) u[i] = (ushort)indices[i]; mesh.SetIndexBufferData(u, 0, 0, u.Length); }
+            mesh.subMeshCount = batches.Count;
+            for (int i = 0; i < batches.Count; i++)
+            {
+                int end = i + 1 < batches.Count ? starts[i + 1] : indices.Count;
+                mesh.SetSubMesh(i, new UnityEngine.Rendering.SubMeshDescriptor(starts[i], end - starts[i]) { bounds = new Bounds((min + max) * 0.5f, max - min) }, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds);
+            }
+            if (total > 0) mesh.bounds = new Bounds((min + max) * 0.5f, max - min);
             return mesh;
+        }
+
+        static ushort Half(float value)
+        {
+            int bits = System.BitConverter.SingleToInt32Bits(value);
+            int sign = (bits >> 16) & 0x8000, exp = ((bits >> 23) & 0xFF) - 127 + 15, mant = bits & 0x7FFFFF;
+            if (exp <= 0) return (ushort)sign;
+            if (exp >= 31) return (ushort)(sign | 0x7BFF);
+            int r = (mant + 0x1000) >> 13;                      // round to nearest
+            return (ushort)(sign | ((exp << 10) + r));
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct PackedHalf
+        {
+            public ushort PX, PY, PZ, PW;
+            public sbyte N0, N1, N2, N3, T0, T1, T2, T3;
+            public ushort U, V;
         }
 
         static sbyte Snorm(float v) => (sbyte)Mathf.Clamp(Mathf.RoundToInt(v * 127f), -127, 127);
@@ -354,6 +414,29 @@ public static class WorldMeshes
             public sbyte N0, N1, N2, N3, T0, T1, T2, T3;
             public Vector2 Uv;
         }
+    }
+
+    // Collision stand-in for many boxes: positions only (12 bytes a vertex), eight vertices and twelve triangles a box.
+    public static Mesh BoxCollisionMesh(string name, IReadOnlyList<(Vector3 center, Vector3 size)> boxes)
+    {
+        var vertices = new List<Vector3>(boxes.Count * 8);
+        var triangles = new List<int>(boxes.Count * 36);
+        int[] quad = { 0, 2, 1, 0, 3, 2 };
+        // corner order: bit0 = +x, bit1 = +y, bit2 = +z; faces as index quads (outward winding checked by the face normals below)
+        int[][] faces = { new[] { 0, 1, 3, 2 }, new[] { 4, 6, 7, 5 }, new[] { 0, 4, 5, 1 }, new[] { 2, 3, 7, 6 }, new[] { 0, 2, 6, 4 }, new[] { 1, 5, 7, 3 } };
+        foreach (var (c, s) in boxes)
+        {
+            int first = vertices.Count;
+            for (int k = 0; k < 8; k++) vertices.Add(c + new Vector3((k & 1) != 0 ? s.x : -s.x, (k & 2) != 0 ? s.y : -s.y, (k & 4) != 0 ? s.z : -s.z) * 0.5f);
+            foreach (var f in faces)
+                foreach (int q in quad) triangles.Add(first + f[q]);
+        }
+        var mesh = new Mesh { name = name };
+        if (vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateBounds();
+        return mesh;
     }
 
     // Road surfaces: strips three vertices wide laid on the ground along polylines, combined into one mesh.
