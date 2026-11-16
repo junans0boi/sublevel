@@ -60,6 +60,11 @@ public static class CharacterKit
     {
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
+        public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed;                     // the bare-handed walk and jog clips (m/s)
+        // Punch states (ADR-255): which clip each hand plays (the Jab/Cross swapped, or mirrored, until the right fist goes out for PunchRight and the left for
+        // PunchLeft), and the second in the clip when that fist is furthest out (the hit).
+        public bool PunchSwap, MirrorRight, MirrorLeft;
+        public float PunchLeftImpact, PunchRightImpact;
     }
 
     static GaitProfile _gait;
@@ -87,6 +92,55 @@ public static class CharacterKit
         CharacterAnimClips.EnsureImported();
         _gait = MeasureGait();
         CharacterControllerBuilder.Build(_gait);
+        // The punch clips' hands are read from the built controller (the way the game plays them), then the states are fixed up and rebuilt.
+        for (int pass = 0; pass < 3; pass++)
+        {
+            var right = MeasurePunch(CombatantAnimation.PunchRight); var left = MeasurePunch(CombatantAnimation.PunchLeft);
+            _gait.PunchRightImpact = right.impact; _gait.PunchLeftImpact = left.impact;
+            bool rightOk = right.rightHand, leftOk = !left.rightHand;
+            if (rightOk && leftOk) break;
+            if (pass == 0 && !rightOk && !leftOk) _gait.PunchSwap = !_gait.PunchSwap;
+            else { if (!rightOk) _gait.MirrorRight = !_gait.MirrorRight; if (!leftOk) _gait.MirrorLeft = !_gait.MirrorLeft; }
+            CharacterControllerBuilder.Build(_gait);
+        }
+        Debug.Log($"[CharacterKit] punches: swap {_gait.PunchSwap} mirror R {_gait.MirrorRight} L {_gait.MirrorLeft}, fist out at {_gait.PunchRightImpact:F3}s (right) {_gait.PunchLeftImpact:F3}s (left)");
+    }
+
+    // Plays an Upper-layer punch state of the built controller on a roster model: which hand goes out furthest (forward of the chest) and when.
+    static (bool rightHand, float impact) MeasurePunch(string state)
+    {
+        var go = RosterInstance(DefaultRoster);
+        try
+        {
+            var def = go.GetComponent<CharacterDef>();
+            var animator = def.Animator;
+            animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(CharacterControllerBuilder.ControllerPath);
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate; // the roster prefab culls, and nothing here is on screen
+            animator.Rebind();
+            animator.SetLayerWeight(1, 1f);
+            float length = 1f;
+            foreach (var c in animator.runtimeAnimatorController.animationClips) if (c.name.StartsWith("U_Punch")) length = Mathf.Max(length, c.length);
+            float bestL = float.MinValue, bestR = float.MinValue, atL = 0f, atR = 0f, restL = 0f, restR = 0f;
+            for (int k = 0; k <= 100; k++)
+            {
+                animator.Play(state, 1, k / 100f);
+                animator.Update(0f);
+                float chest = go.transform.InverseTransformPoint(def.Sockets.Chest.position).z;
+                float l = go.transform.InverseTransformPoint(def.Sockets.LeftHand.position).z - chest;
+                float r = go.transform.InverseTransformPoint(def.Sockets.RightHand.position).z - chest;
+                if (k == 0) { restL = l; restR = r; }
+                if (l > bestL) { bestL = l; atL = k / 100f; }
+                if (r > bestR) { bestR = r; atR = k / 100f; }
+            }
+            bool right = bestR - restR > bestL - restL;
+            float normalized = right ? atR : atL;
+            var clipLength = animator.GetCurrentAnimatorClipInfo(1).Length > 0 ? animator.GetCurrentAnimatorClipInfo(1)[0].clip.length : 0f;
+            // The state's clip length (the clip behind the state), so the impact is in seconds.
+            foreach (var layer in ((UnityEditor.Animations.AnimatorController)animator.runtimeAnimatorController).layers[1].stateMachine.states)
+                if (layer.state.name == state) clipLength = ((AnimationClip)layer.state.motion).length;
+            return (right, normalized * clipLength);
+        }
+        finally { Object.DestroyImmediate(go); }
     }
 
     static GameObject RosterInstance(string rosterId)
@@ -112,9 +166,14 @@ public static class CharacterKit
                 var a = go.transform.InverseTransformPoint(hips.position);
                 clip.SampleAnimation(def.Animator.gameObject, clip.length);
                 var b = go.transform.InverseTransformPoint(hips.position);
-                return Mathf.Abs(b.z - a.z) / clip.length;
+                float travel = Mathf.Abs(b.z - a.z) / clip.length;
+                return travel > 0.1f ? travel : PlantedFootSpeed(clip, def, go); // in-place clips (UAL): how fast the planted foot slides back
             }
-            var gait = new GaitProfile { WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack") };
+            var gait = new GaitProfile
+            {
+                WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack"),
+                UnarmedWalkSpeed = Speed("U_Walk_Loop"), UnarmedRunSpeed = Speed("U_Jog_Fwd_Loop"), UnarmedCrouchSpeed = Speed("U_Crouch_Fwd_Loop"),
+            };
             var walk = CharacterControllerBuilder.Clip("RifleWalk");
             float low = float.MaxValue, high = float.MinValue;
             for (int i = 0; i <= 48; i++)
@@ -129,12 +188,42 @@ public static class CharacterKit
             }
             gait.FootPlantHeight = low + (high - low) * 0.25f;
             gait.FootLiftHeight = low + (high - low) * 0.55f;
+            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} m/s");
             Debug.Log($"[CharacterKit] gait: walk {gait.WalkSpeed:F2} run {gait.RunSpeed:F2} back {gait.BackSpeed:F2} m/s, foot height {low:F3}..{high:F3} m");
             if (gait.RunSpeed < 1f || gait.WalkSpeed < 0.3f || gait.RunSpeed <= gait.WalkSpeed || high - low < 0.03f)
                 throw new System.Exception("gait measurement looks wrong; the locomotion clips may not carry root motion");
             return gait;
         }
         finally { Object.DestroyImmediate(go); }
+    }
+
+    // Ground speed of an in-place cycle: the speed at which a foot near its lowest point moves back along the model's z.
+    static float PlantedFootSpeed(AnimationClip clip, CharacterDef def, GameObject go)
+    {
+        const int samples = 96;
+        float dt = clip.length / samples;
+        var feet = new[] { def.Sockets.LeftFoot, def.Sockets.RightFoot };
+        var z = new float[2, samples + 1]; var y = new float[2, samples + 1];
+        float low = float.MaxValue, high = float.MinValue;
+        for (int i = 0; i <= samples; i++)
+        {
+            clip.SampleAnimation(def.Animator.gameObject, i * dt);
+            for (int f = 0; f < 2; f++)
+            {
+                var p = go.transform.InverseTransformPoint(feet[f].position);
+                z[f, i] = p.z; y[f, i] = p.y;
+                low = Mathf.Min(low, p.y); high = Mathf.Max(high, p.y);
+            }
+        }
+        float grounded = low + (high - low) * 0.15f, travelled = 0f, time = 0f;
+        for (int f = 0; f < 2; f++)
+            for (int i = 1; i <= samples; i++)
+            {
+                if (y[f, i] > grounded || y[f, i - 1] > grounded) continue;
+                travelled += Mathf.Abs(z[f, i] - z[f, i - 1]);
+                time += dt;
+            }
+        return time > 0f ? travelled / time : 0f;
     }
 
     // Adds the character under `parent`, standing at its origin and facing its forward, with all weapons attached but hidden.

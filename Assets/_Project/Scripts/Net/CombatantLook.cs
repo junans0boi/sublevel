@@ -5,7 +5,7 @@ using FishNet.Object.Synchronizing;
 namespace Game.Net
 {
     // A client's chosen look as text (PlayerAppearance.Serialize), sent once after it connects so the server can spawn
-    // the matching Player_<model> prefab (ADR-235 seam: the UI track's PlayerAppearance API, animation track wiring).
+    // the matching Player_<model> prefab (ADR-255 seam: the UI track's PlayerAppearance API, animation track wiring).
     public struct LookBroadcast : IBroadcast
     {
         public string Look;

@@ -8,7 +8,7 @@ namespace Game.Core
     // i..i+1, so a pixel centre is i + 0.5. The editor baker and the runtime map share these functions.
     public static class MapProjection
     {
-        public const int PictureSize = 2048;    // baked map picture, pixels per side
+        public const int PictureSize = 4096;    // baked map picture, pixels per side (0.59 m a pixel on the 2400 m island; was 2048)
         public const float GridStep = 128f;     // metres between grid lines on the full map (8 x 8 over 1 km)
 
         static readonly string[] Compass = { "북", "북동", "동", "남동", "남", "남서", "서", "북서" };

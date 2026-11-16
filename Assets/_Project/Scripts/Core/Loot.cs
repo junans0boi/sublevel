@@ -38,6 +38,43 @@ namespace Game.Core
             return Entries[Entries.Length - 1];
         }
 
+        // What a spawn point of a role (ADR-256) may hold. W weapon, A ammunition, H healing and boosts, G protection, X anything.
+        public static bool Fits(LootKind kind, char role)
+        {
+            switch (role)
+            {
+                case 'W': return kind == LootKind.Weapon;
+                case 'A': return kind == LootKind.Ammo;
+                case 'H': return kind == LootKind.Medkit || kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Drink || kind == LootKind.Pill || kind == LootKind.Syringe;
+                case 'G': return kind == LootKind.Helmet || kind == LootKind.Vest || kind == LootKind.Backpack;
+                default: return true;
+            }
+        }
+
+        public LootEntry RollRole(Random rng, char role)
+        {
+            float total = 0f;
+            foreach (var e in Entries) if (Fits(e.Kind, role)) total += e.Weight;
+            if (total <= 0f) return Roll(rng);
+            double pick = rng.NextDouble() * total;
+            foreach (var e in Entries)
+            {
+                if (!Fits(e.Kind, role)) continue;
+                pick -= e.Weight;
+                if (pick < 0) return e;
+            }
+            return Roll(rng);
+        }
+
+        // One role letter per spawn point (the builder bakes them into the spawn names, see LootSpawnName).
+        public LootEntry[] PlanByRole(IReadOnlyList<char> roles, int seed)
+        {
+            var rng = new Random(seed);
+            var plan = new LootEntry[roles.Count];
+            for (int i = 0; i < plan.Length; i++) plan[i] = RollRole(rng, roles[i]);
+            return plan;
+        }
+
         // Deterministic loot for a set of spawn points. The first point always holds a weapon so farming is possible.
         public LootEntry[] Plan(int spawnPoints, int seed)
         {
@@ -53,7 +90,23 @@ namespace Game.Core
         }
     }
 
-    // Regional guarantee on top of the random roll (ADR-210): a kind (the jerrycan, ADR-200/ADR-221) that every region must offer at least `minPerRegion` times.
+    // Spawn point names carry the role and the region: "LootSpawn_W3_17" = weapon point in region 3.
+    public static class LootSpawnName
+    {
+        public static string Make(string prefix, char role, int region, int index) => $"{prefix}_{role}{region}_{index}";
+
+        public static bool Parse(string name, out char role, out int region)
+        {
+            role = 'X'; region = -1;
+            int u = name.IndexOf('_');
+            if (u < 0 || u + 2 >= name.Length) return false;
+            role = name[u + 1];
+            int end = name.IndexOf('_', u + 1);
+            return end > u + 2 && int.TryParse(name.Substring(u + 2, end - u - 2), out region);
+        }
+    }
+
+    // Regional guarantee on top of the random roll (ADR-255): a kind (the jerrycan, ADR-200/ADR-221) that every region must offer at least `minPerRegion` times.
     public static class LootGuarantee
     {
         // Changes `plan` in place. regionOf[i] is the region of spawn point i (-1: none). Points holding a weapon (the farming guarantee, index 0) and points that

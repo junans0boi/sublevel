@@ -18,6 +18,11 @@ namespace Game.Gameplay
         const float MotorcycleMinPivot = 1.5f; // over the rider's head, not just the bike
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
+        // The chase distance stays in these ranges whatever the model's bounds measure (ADR-222): a car 5.5..7.5 m back, a motorcycle 4..5.5 m.
+        public const float CarMinDistance = 5.5f, CarMaxDistance = 7.5f, BikeMinDistance = 4f, BikeMaxDistance = 5.5f;
+        public const float SpeedExtraMeters = 2f, SpeedExtraAtKmh = 90f;   // the camera drifts back with speed, up to this much more
+        public const float DrivingFov = 78f;                                // first person in a vehicle (the on-foot value is narrower)
+        const float FollowIdleSeconds = 1.2f, FollowDegPerSecond = 80f, FollowMinSpeed = 3f;   // third person: behind the car again once the mouse rests
         const float RoofClearance = 0.3f;
         const float CabinLightOverEye = 0.55f; // up under the roof: the own arms and shoulders right by it were blown out white
         const float CabinLightBehindEye = 0.9f; // behind the head, so the dash and wheel get an even wash instead of a hot spot (#99)
@@ -35,10 +40,15 @@ namespace Game.Gameplay
         Vehicle _framed;
         Vector3 _pivotLocal;
         float _orbit;
+        float _idleFor;
+        Vehicle _seated;
         Light _cabin, _cabinLow;
 
         // True while this frame's camera was placed by the car camera.
         public bool Active { get; private set; }
+        // Last third-person camera distance from the pivot (0 in the eye view) and the framed distance it grows from.
+        public float Distance => _distance;
+        public float FramedDistance => _orbit;
 
         void Awake()
         {
@@ -62,6 +72,13 @@ namespace Game.Gameplay
             var cam = _player.Camera;
             if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = _cabinLow.enabled = false; return; }
             Active = true;
+            // Taking the wheel looks straight down the road, level: the view pitch of getting in (down at the door) stays out of it.
+            if (vehicle != _seated)
+            {
+                _seated = vehicle;
+                _player.LookAt(_combatant.EyePosition + vehicle.transform.forward * 30f);
+            }
+            FollowBehind(vehicle);
 
             float yaw = _player.ViewYaw, pitch = _player.ViewPitch;
             var look = Quaternion.Euler(-pitch, yaw, 0f);
@@ -77,13 +94,14 @@ namespace Game.Gameplay
                 if (_animation != null && _animation.HeadEye(out var head)) eye += Vector3.ProjectOnPlane(head - eye, vehicle.transform.up);
                 eye += GripsInView(vehicle, eye);
                 cam.transform.SetPositionAndRotation(eye, look);
+                cam.fieldOfView = DrivingFov;
                 _distance = 0f;
                 return;
             }
             if (vehicle != _framed) Frame(vehicle);
             var pivot = vehicle.transform.TransformPoint(new Vector3(_pivotLocal.x, 0f, _pivotLocal.z)) + Vector3.up * _pivotLocal.y;
             var back = look * Vector3.back;
-            float wanted = ClearDistance(vehicle, pivot, back, _orbit);
+            float wanted = ClearDistance(vehicle, pivot, back, _orbit + SpeedExtra(vehicle.SpeedKmh));
             // Pulled in at once when something is in the way, eased back out.
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
             // Pulled in close (a wall behind), the camera would end up inside the body: over the roof instead.
@@ -91,6 +109,49 @@ namespace Game.Gameplay
             if (Mathf.Abs(at.x - _local.center.x) < _local.extents.x && Mathf.Abs(at.z - _local.center.z) < _local.extents.z && at.y < _local.max.y + RoofClearance)
                 at.y = _local.max.y + RoofClearance;
             cam.transform.SetPositionAndRotation(vehicle.transform.TransformPoint(at), look);
+        }
+
+        public static float SpeedExtra(float kmh) => SpeedExtraMeters * Mathf.Clamp01(Mathf.Abs(kmh) / SpeedExtraAtKmh);
+
+        // Third person: while driving and the mouse rests, the view turns back behind the car, gently (a sharp turn is followed, not snapped to).
+        void FollowBehind(Vehicle vehicle)
+        {
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            bool moved = mouse != null && mouse.delta.ReadValue().sqrMagnitude > 0.5f;
+            _idleFor = moved ? 0f : _idleFor + Time.deltaTime;
+            bool eyes = (_input != null ? _input.EyeView : _player.Rig.Mode == ViewMode.FirstPerson) || _combatant.AimMode == AimMode.Sights;
+            if (eyes || _idleFor < FollowIdleSeconds || vehicle.Body == null || vehicle.Body.linearVelocity.magnitude < FollowMinSpeed) return;
+            var flat = Vector3.ProjectOnPlane(vehicle.Body.linearVelocity, Vector3.up);
+            if (Vector3.Dot(flat, vehicle.transform.forward) < 0f) flat = -flat;   // reversing: still behind the car's own back
+            if (flat.sqrMagnitude < 0.01f) return;
+            float heading = Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg;
+            float yaw = Mathf.MoveTowardsAngle(_player.ViewYaw, heading, FollowDegPerSecond * Time.deltaTime);
+            var dir = Quaternion.Euler(-_player.ViewPitch, yaw, 0f) * Vector3.forward;
+            _player.LookAt(_combatant.EyePosition + dir * 30f);
+        }
+
+        // The model's bounds in the vehicle's own space from its meshes (not the renderers' world boxes: those grow with the
+        // yaw the vehicle happens to have, which made the distance depend on how it was parked). Renderers only, no occupants.
+        public static Bounds LocalBounds(Transform t)
+        {
+            Bounds local = default;
+            bool any = false;
+            foreach (var r in t.GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer || r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly) continue;
+                Bounds b;
+                if (r is SkinnedMeshRenderer sk) b = sk.localBounds;
+                else if (r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) b = mf.sharedMesh.bounds;
+                else continue;
+                for (int i = 0; i < 8; i++)
+                {
+                    var c = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
+                    var p = t.InverseTransformPoint(r.transform.TransformPoint(c));
+                    if (!any) { local = new Bounds(p, Vector3.zero); any = true; }
+                    else local.Encapsulate(p);
+                }
+            }
+            return any ? local : new Bounds(Vector3.up * 0.7f, new Vector3(1.8f, 1.4f, 4.5f));
         }
 
         // At a car's wheel the eye view goes down (view only) until the grips are GripsCarDeg below level (the wheel
@@ -115,21 +176,7 @@ namespace Game.Gameplay
         void Frame(Vehicle vehicle)
         {
             _framed = vehicle;
-            var t = vehicle.transform;
-            var local = new Bounds(Vector3.zero, Vector3.zero);
-            bool any = false;
-            foreach (var r in vehicle.GetComponentsInChildren<Renderer>())
-            {
-                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
-                var b = r.bounds;
-                for (int i = 0; i < 8; i++)
-                {
-                    var p = t.InverseTransformPoint(new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z));
-                    if (!any) { local = new Bounds(p, Vector3.zero); any = true; }
-                    else local.Encapsulate(p);
-                }
-            }
-            if (!any) local = new Bounds(Vector3.up * 0.7f, new Vector3(1.8f, 1.4f, 4.5f));
+            var local = LocalBounds(vehicle.transform);
             _local = local;
             Orbit(local, vehicle.IsMotorcycle, out float height, out _orbit);
             _pivotLocal = new Vector3(local.center.x, height, local.center.z);
@@ -140,7 +187,7 @@ namespace Game.Gameplay
         {
             pivotHeight = local.max.y + PivotOverTop;
             if (motorcycle) pivotHeight = Mathf.Max(pivotHeight, MotorcycleMinPivot);
-            distance = local.size.z * DistancePerLength + DistanceExtra;
+            distance = Mathf.Clamp(local.size.z * DistancePerLength + DistanceExtra, motorcycle ? BikeMinDistance : CarMinDistance, motorcycle ? BikeMaxDistance : CarMaxDistance);
         }
 
         // The cabin is dark under the roof in first person (the sun and the sky do not reach in): one soft fill light

@@ -17,6 +17,7 @@ public static class MatchKit
     {
         public Vector3 Position;
         public float Yaw;
+        public string Tag;      // loot spawns: role letter + region, becomes part of the name (LootSpawnName)
     }
 
     public static Spawn At(float x, float y, float z, float yaw = 0f) => new Spawn { Position = new Vector3(x, y, z), Yaw = yaw };
@@ -70,7 +71,7 @@ public static class MatchKit
         var points = new Transform[spawns.Length];
         for (int i = 0; i < spawns.Length; i++)
         {
-            var t = new GameObject(prefix + i).transform;
+            var t = new GameObject(string.IsNullOrEmpty(spawns[i].Tag) ? prefix + i : Game.Core.LootSpawnName.Make(prefix, spawns[i].Tag[0], int.Parse(spawns[i].Tag.Substring(1)), i)).transform;
             t.SetParent(parent, false);
             t.SetPositionAndRotation(spawns[i].Position, Quaternion.Euler(0, spawns[i].Yaw, 0));
             points[i] = t;

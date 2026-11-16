@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using Game.Core;
 using Game.Net;
@@ -291,6 +292,79 @@ public static partial class WorldBuilder
             SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_side.png", Local(-hw * 0.3f, t.Depth * 0.18f, 1.7f), Local(hw * 0.1f, t.Depth * 0.3f, 3f));
             SceneLook.Shot(cam, $"{OverviewDir}/town_{tag}_{t.Id}_roof.png", Local(0f, 0f, 22f), Local(hw * 0.5f, t.Depth * 0.2f, 6f));
         }
+        EditorApplication.Exit(0);
+    }
+
+    // Loot points against the colliders a player build has (World scene opened, WorldMeshBank filled): where the floor ray LootView.PlaceOnFloor uses lands
+    // relative to each spawn. tools/unity.sh run-gfx WorldBuilder.CheckLoot
+    public static void CheckLoot()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        Physics.SyncTransforms();
+        var director = Object.FindFirstObjectByType<Game.Net.MatchDirector>();
+        var spawns = director.LootSpawns;
+        int none = 0, ok = 0, above = 0, deep = 0, near = 0;
+        var sample = new List<string>();
+        foreach (var t in spawns)
+        {
+            var p = t.position;
+            if (!Physics.Raycast(p + Vector3.up * 0.3f, Vector3.down, out var hit, 1.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) { none++; if (sample.Count < 6) sample.Add($"none at {p}"); continue; }
+            float below = p.y - hit.point.y;                 // how far under the spawn the floor was found; the plan puts the floor LootLift under it
+            if (below < 0.03f) { above++; if (sample.Count < 6) sample.Add($"floor above spawn {p} by {-below:F2} ({hit.collider.name})"); }
+            else if (below > LootLift + 0.1f) { deep++; if (sample.Count < 6) sample.Add($"floor {below:F2} under spawn {p} ({hit.collider.name})"); }
+            else if (Mathf.Abs(below - LootLift) <= 0.05f) ok++; else near++;
+        }
+        // items per building of one town, from the spawn names (role letter + region) and the nearest lot
+        var plan = Game.Core.WorldGenerator.Generate(LoadSpec());
+        foreach (var townId in new[] { "M1", "C" })
+        {
+            var perLot = new Dictionary<string, (int n, int w, int a, int h, int g, int x, int roof)>();
+            foreach (var t in spawns)
+            {
+                Game.Core.LootSpawnName.Parse(t.name, out char role, out _);
+                Game.Core.BuildingLot best = null; float bd = float.MaxValue;
+                foreach (var l in plan.Lots) { if (!l.Name.StartsWith(townId + "-")) continue; float d = l.Distance(t.position.x, t.position.z); if (d < bd) { bd = d; best = l; } }
+                if (best == null || bd > 1f) continue;
+                perLot.TryGetValue(best.Name, out var v);
+                bool roof = t.position.y > plan.Height(best.X, best.Z) + 4.5f;
+                v.n++; v.roof += roof ? 1 : 0; if (role == 'W') v.w++; else if (role == 'A') v.a++; else if (role == 'H') v.h++; else if (role == 'G') v.g++; else v.x++;
+                perLot[best.Name] = v;
+            }
+            Debug.Log($"[CheckLoot] town {townId}: {perLot.Count} buildings with loot, {perLot.Values.Sum(v => v.n)} points, {perLot.Values.Sum(v => v.w)} weapon points, {perLot.Values.Count(v => v.roof > 0)} with a roof point");
+            foreach (var kv in perLot.OrderBy(k => k.Key).Take(14)) Debug.Log($"[CheckLoot]   {kv.Key} {plan.Lots.First(l => l.Name == kv.Key).Kind}: {kv.Value.n} points (weapon {kv.Value.w}, ammo {kv.Value.a}, heal {kv.Value.h}, gear {kv.Value.g}, other {kv.Value.x}, roof {kv.Value.roof})");
+        }
+        Debug.Log($"[CheckLoot] spawns {spawns.Length}: floor at the planned height {ok}, a bit off {near}, floor above the spawn {above}, floor much lower {deep}, nothing below {none}");
+        foreach (var l in sample) Debug.Log("[CheckLoot]   " + l);
+        EditorApplication.Exit(0);
+    }
+
+    // Markers at the loot points (a cube per point, colour by role) seen from a roof and from inside a house: the pickups themselves are network objects that
+    // only exist in a running match. tools/unity.sh run-gfx WorldBuilder.CaptureLoot
+    public static void CaptureLoot()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        var info = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+        var spawns = Object.FindFirstObjectByType<Game.Net.MatchDirector>().LootSpawns;
+        DynamicGI.UpdateEnvironment();
+        var plan = Game.Core.WorldGenerator.Generate(LoadSpec());
+        var colors = new Dictionary<char, Color> { { 'W', Color.red }, { 'A', Color.yellow }, { 'H', Color.green }, { 'G', Color.cyan }, { 'X', Color.white } };
+        foreach (var t in spawns)
+        {
+            Game.Core.LootSpawnName.Parse(t.name, out char role, out _);
+            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.transform.position = t.position - Vector3.up * 0.15f; cube.transform.localScale = new Vector3(0.35f, 0.15f, 0.35f);
+            Object.DestroyImmediate(cube.GetComponent<Collider>());
+            var m = new Material(Shader.Find("Universal Render Pipeline/Unlit")); m.color = colors[role]; cube.GetComponent<Renderer>().sharedMaterial = m;
+        }
+        var cam = new GameObject("LootCamera").AddComponent<Camera>();
+        cam.nearClipPlane = 0.05f; cam.farClipPlane = 400f; cam.fieldOfView = 75f;
+        SceneLook.EnablePost(cam);
+        UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(cam).SetRenderer(info.RendererIndex);
+        var roofSpawn = spawns.First(t => { var l = plan.Lots.OrderBy(q => q.Distance(t.position.x, t.position.z)).First(); return l.Name.StartsWith("M1-") && t.position.y > plan.Height(l.X, l.Z) + 4.5f; });
+        var roofLot = plan.Lots.OrderBy(q => q.Distance(roofSpawn.position.x, roofSpawn.position.z)).First();
+        SceneLook.Shot(cam, OverviewDir + "/loot_roof.png", roofSpawn.position + new Vector3(3f, 2.2f, -4f), roofSpawn.position);
+        var inSpawn = spawns.First(t => { var l = plan.Lots.OrderBy(q => q.Distance(t.position.x, t.position.z)).First(); return l.Name.StartsWith("M1-") && l.Kind == Game.Core.BuildingKind.House && t.position.y < plan.Height(l.X, l.Z) + 1f; });
+        SceneLook.Shot(cam, OverviewDir + "/loot_indoor.png", inSpawn.position + new Vector3(2.2f, 1.2f, -2f), inSpawn.position);
         EditorApplication.Exit(0);
     }
 }
