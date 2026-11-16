@@ -36,3 +36,14 @@ Unity 순번에서 할 일(순차 1회): ① FBX 복사·임포트(삼각형 수
 - 캡처: `WeaponProbe.RenderHold`로 캐릭터가 21종을 조준 자세로 든 모습 3장 `docs/tracks/guns_shots/guns_hold_0~2.png`(전 총 손에 맞게 들림, Anvil 길이 1.15→0.9로 조정). PlayMode 실제 게임 장면은 아님.
 - **안 한 것**: 키트배시(스코프·바이포드 장착), PERF 정량 판정(드로우콜 측정 안 함; 삼각형·머티리얼 수만 기록), Breacher는 펌프형 그대로(박스 탄창 윤곽 변경 안 함), 손 위치 `Forward/Up`·길이는 눈대중이라 게임 안에서 조정 필요, 신규 총 소리 없음(`CombatantAudio` 배열, 사운드 트랙).
 - 위험: Vanguard·Hauler가 AK형으로 보임(실총 연상) → 상표/디자인 검토 목록에 추가 필요.
+
+## 2차 작업 (master 지시 1~7, 2026-11-16)
+1. **키트배시**(ADR-217): `CharacterKit.Part` 추가 — Lancer·Tracer 스코프, Hauler 포어그립, Fang 소음기, Bastion·Anvil 양각대+상자 탄창, Breacher 상자 탄창. 눈으로 `WeaponProbe.RenderRoster`·`RenderHold`로 맞춤. placeholder 목록은 `placeholder/guns_PLACEHOLDERS.md`(Unity 참조가 끊어져 파일은 안 옮김).
+2. **Breacher** 박스 탄창형 윤곽: 펌프 샷건에 상자 탄창 추가(임시, Blender 정리는 아님).
+3. **AK형 제거**: AssaultRifle_1~5(전부 AK형) 미사용, AR2·Bullpup 계열로 교체(Vanguard·Bulwark·Hauler·Lancer·Fang). 남은 윤곽 위험(AR-15형·불펍형)은 RISKS에 기록.
+4. **PERF**: `docs/PERF_BUDGET.md` 맨 아래 표. 총 몫 +98 드로우(서브메시)·+36k 삼각형·+0.8ms, 판정 통과(잠정, 빌드 SetPass 미측정).
+5. **손 위치**: `Forward = Grip(길이, 그립비율)`로 수식화, `WeaponProbe.Fit` 결과 `docs/tracks/guns_shots/fit_table.txt` — 장총 개머리판이 어깨까지 1.0~1.15배(1.3 이하 기준), 권총 0. Anvil 길이 0.9 확정(LMG 중 Bastion 1.05보다 짧게).
+6. 저지력 배선 요구서 `docs/tracks/guns_STAGGER_WIRING.md`.
+7. 신규 총 소리 요청서 `docs/tracks/guns_SOUND_REQUEST.md`.
+- 확인: Unity EditMode 1227/1227 통과(키트배시 후 재실행), Unity 프로세스 없음. 캡처 `docs/tracks/guns_shots/guns_hold_0~2.png`.
+- 못 한 것: 플레이어 빌드 드로우콜/SetPass 정량, Breacher 실제 박스 탄창 모델링, 모델 고유 구분(일부 같은 모델 재사용), 소유 밖 배선 2건(요구서로 인계).
