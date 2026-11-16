@@ -13,8 +13,8 @@ namespace Game.Gameplay
         static readonly string[] TorsoNames = { "Torso", "Chest", "Abdomen" }; // as CharacterKit.UpperBodyRoot
         // Where the bag's bottom centre sits, in the character's frame as the prefab stands: behind the back,
         // below the shoulders. Worn a little smaller than the (enlarged) ground model.
-        static readonly Vector3 BottomInCharacter = new Vector3(0f, 0.98f, -0.2f);
-        const float WornScale = 0.85f;
+        static readonly Vector3 BottomInCharacter = new Vector3(0f, 0.98f, -0.115f);
+        const float WornScale = 1.1f;
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int ColorId = Shader.PropertyToID("_Color");
         static readonly Dictionary<Color32, Material> Tinted = new Dictionary<Color32, Material>();
@@ -43,12 +43,14 @@ namespace Game.Gameplay
             if (_mount != null) return;
             // Taken now, while the character still stands as the prefab was saved: the mount keeps that relation to
             // the bone however the animation turns it later.
-            var bone = FindTorso(transform) ?? transform;
+            Transform bone; Vector3 at; float scale;
+            if (WornGearMeshes.TryFit(transform, out var fit)) { bone = fit.Torso; at = fit.PackBottom; scale = fit.TorsoScale; }
+            else { bone = FindTorso(transform) ?? transform; at = transform.TransformPoint(BottomInCharacter); scale = WornScale; }
             _mount = new GameObject("Backpack").transform;
             _mount.SetParent(bone, false);
-            _mount.position = transform.TransformPoint(BottomInCharacter);
-            _mount.rotation = transform.rotation * Quaternion.Euler(0f, 180f, 0f); // the model's back panel faces -z
-            _mount.localScale = Vector3.one * (WornScale / Mathf.Max(1e-4f, bone.lossyScale.y));
+            _mount.position = at;
+            _mount.rotation = transform.rotation; // the model hangs toward -z, its back panel on the body
+            _mount.localScale = Vector3.one * (scale / Mathf.Max(1e-4f, bone.lossyScale.y));
             _mount.gameObject.layer = bone.gameObject.layer;
             _filter = _mount.gameObject.AddComponent<MeshFilter>();
             _renderer = _mount.gameObject.AddComponent<MeshRenderer>();
@@ -63,9 +65,8 @@ namespace Game.Gameplay
             if (tier == _shown) return;
             _shown = tier;
             if (tier <= 0) { _renderer.enabled = false; return; }
-            _filter.sharedMesh = LootMeshes.Model(LootKind.Backpack, default, tier);
-            LootMeshes.Colors(LootKind.Backpack, default, tier, _colors);
-            _renderer.sharedMaterials = new[] { Tint(_colors[0]), Tint(_colors[1]), Tint(_colors[2]) };
+            _filter.sharedMesh = WornGearMeshes.Model(LootKind.Backpack, tier);
+            _renderer.sharedMaterial = WornGearMeshes.Palette(tier);
             _renderer.enabled = _filter.sharedMesh != null;
         }
 
