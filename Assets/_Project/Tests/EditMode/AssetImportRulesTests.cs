@@ -66,6 +66,19 @@ namespace Game.Tests
             Assert.IsFalse(importer.sRGBTexture);
         }
 
+        // Poly Haven names end in the resolution (brick_wall_001_nor_gl_2k); the suffix rules must look past it (ADR-184).
+        // Checked through a real import: the Editor scripts are not visible to this assembly.
+        [Test]
+        public void PolyHavenNormalAndArm_ImportWithRightColourSpace()
+        {
+            var normal = ImportTexture("brick_wall_001_nor_gl_2k.png", 64);
+            Assert.AreEqual(TextureImporterType.NormalMap, normal.textureType);
+            var arm = ImportTexture("brick_wall_001_arm_2k.png", 64);
+            Assert.IsFalse(arm.sRGBTexture);
+            var diff = ImportTexture("brick_wall_001_diff_2k.png", 64);
+            Assert.IsTrue(diff.sRGBTexture);
+        }
+
         [Test]
         public void TextureUnderHdri_ImportsAsCubemap()
         {

@@ -227,8 +227,19 @@ public static partial class WorldBuilder
         go.transform.SetParent(parent, false);
         go.transform.SetPositionAndRotation(origin, rotation);
         go.isStatic = true;
-        var colliders = Child(go.transform, "Colliders").gameObject;
-        colliders.isStatic = true;
+        // One "Colliders" object per surface (all named alike, as the old name checks expect), each tagged with its SurfaceId.
+        var colliderGroups = new Dictionary<SurfaceId, GameObject>();
+        GameObject Colliders(SurfaceId surface)
+        {
+            if (!colliderGroups.TryGetValue(surface, out var group))
+            {
+                group = Child(go.transform, "Colliders").gameObject;
+                group.isStatic = true;
+                group.AddComponent<SurfaceIdTag>().Id = surface;
+                colliderGroups[surface] = group;
+            }
+            return group;
+        }
 
         uint style = Hash(seed, 7);
         // Inside parts are split into 10 m cells per storey: a mesh only gets the few nearest lamps (URP's per-object
@@ -266,7 +277,7 @@ public static partial class WorldBuilder
 
             foreach (var part in parts)
             {
-                var box = colliders.AddComponent<BoxCollider>();
+                var box = Colliders(SurfaceRules.ForBuilding(kind, piece.Kind)).AddComponent<BoxCollider>();
                 box.center = part.center;
                 box.size = part.size;
             }

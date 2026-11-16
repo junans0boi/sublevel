@@ -46,7 +46,8 @@ namespace Game.Core
     [Serializable]
     public class WorldBuildSpec
     {
-        public int MaxLootSpawns = 250;
+        public int MaxLootSpawns = 250;       // hard ceiling on loot points (network objects); LootPerBuilding decides how many are wanted
+        public float LootPerBuilding = 3.4f;  // points a building of weight 1 asks for (today: 250 points / 73 buildings)
         public int MaxRocks = 900, MaxSingleLodRocks = 80;
         public float FarClip = 700f, FogStart = 90f, FogEnd = 640f;
         public float AlphamapMetersPerPixel = 1f;

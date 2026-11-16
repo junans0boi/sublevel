@@ -47,3 +47,29 @@
 - **발사 모드 표현**: `WeaponDef.Auto`는 "연사 가능"이라 Hauler(연사 전용)·Tracer(반자동/2점사)·Marshal(2점사/단발)의 모드 제한은 표현 못 함. Hauler는 연사+단발, Tracer·Marshal은 단발만. 문서 모드와 다름 → 필요하면 `FireModes` 비트 필드 신설(ADR).
 - **Breacher 확장탄창**: 이제 탄창식이라 확장 탄창 부착을 허용할지 미정(현재 칸 9·11·15 유지, `AttachmentTests`의 "탄창 불가" 단언 유지).
 - **상표**: 가칭 전부 08 시트 §5 목록 그대로, Fang·Hornet·Bastion·Anvil·Marshal은 추가분 → 상표 검토 목록 추가 필요. VK-9 기존 플래그 유지(규칙 8).
+
+## 6. 모델 임시 확정 (준환 위임 → master 판단, 2026-11-16) — 08 시트 §4 권장안
+원칙: CC0로 **라이선스를 확인한** 후보만. CC-BY(austincford 등)·실총형 팩(chilly-durango·Stein·3dmodelscc0)은 쓰지 않는다(쓰게 되면 형상 수정 전제, 별도 승인). 반입은 Unity 순번에서 하고 **그때** ASSET_LEDGER에 행을 추가한다(현재 미반입 → 행 없음). 전부 **임시**: 릴리스 전 교체 표시, 빈 슬롯은 `placeholder/`.
+| id | 총(가칭) | 임시 모델(출처 코드는 08 시트) | 라이선스 확인 | 비고 |
+|---|---|---|---|---|
+| 1 | VK-9 | Q Pistol_1 (사용 중, W-0001) | CC0 확인 | |
+| 6 | Vesper | Q Revolver 계열 | CC0 확인(팩) | 대구경 한 발 권총 연출 |
+| 2 | Ordo | Q SubmachineGun_1 (사용 중) | CC0 확인 | |
+| 7 | Brisk | Q Submachine Gun 두 번째 | CC0 확인 | 색·스케일 차별 |
+| 8 | Sable | P Smg Compact West | CC0 확인(Poly Pizza) | 서양식 형상 실총 연상 가능 → 윤곽 조정 |
+| 3 | Warden | Q Bullpup_1 (사용 중) | CC0 확인 | |
+| 9 | Vanguard | Q Assault Rifle 변형 | CC0 확인 | |
+| 10 | Bulwark | Q Assault Rifle 다른 변형, 길이·스케일로 구분 | CC0 확인 | |
+| 11 | Hauler | **placeholder/** (Q AR 변형 확대 스케일) | CC0 확인 | P Rifle East 계열은 라이선스 미확인이라 제외 |
+| 12·13·14 | Lancer·Tracer·Arbiter | Q AR/짧은 저격 + Q Scope 부착 모델 | CC0 확인 | CC0 전용 DMR 없음 → 임시, 교체 표시 |
+| 5 | Sentinel | Q Sniper Rifle A (현재 AR 늘림 대체) | CC0 확인 | |
+| 15 | Obelisk | Q Sniper Rifle B | CC0 확인(팩) | |
+| 4 | Breacher | P Shotgun Auto West + 윤곽 변경 | CC0 확인 | 박스 탄창형. 실총 연상 → 수정 |
+| 16 | Duo | CT Shotgun Double Barrel | CC0 확인 | |
+| 31·32 | Bastion·Anvil (LMG) | **placeholder/** Q AR + Q Bipod + 큰 탄창 키트배시 | CC0 확인 | CC0 LMG 없음 |
+| 33 | Marshal | **placeholder/** Q Sniper D | CC0 확인(팩) | |
+| 34 | Fang | **placeholder/** Q AR 변형 | CC0 확인 | |
+| 35 | Hornet | **placeholder/** Q SMG 변형 | CC0 확인 | |
+
+반입 전 확인: Quaternius zip 실제 모델 목록·삼각형 수(08 §4-5), Poly Pizza 모델 페이지 라이선스 재확인, 실총 이름이 들어간 파일명은 import 시 개명(LICENSE_POLICY).
+**순서(Unity 순번 필요)**: #279 반입·개명·ledger → #282 키트배시/placeholder 5종 → #280 등록(`CharacterKit`·`MuzzleFlashSize`·아이콘) → #281 PERF. #276·#277(루팅)은 모델과 무관하게 먼저 가능하지만 신규 총 스폰은 #280 이후에 켠다.

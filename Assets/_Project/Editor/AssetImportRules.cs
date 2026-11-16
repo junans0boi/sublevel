@@ -15,8 +15,21 @@ public class AssetImportRules : AssetPostprocessor
     static readonly Regex NormalSuffix = new Regex(@"_(normal|nor|nrm|n)(_gl|_dx)?$", RegexOptions.IgnoreCase);
     static readonly Regex LinearSuffix = new Regex(@"_(roughness|rough|metallic|metal|ao|mask|orm|arm|height|disp)$", RegexOptions.IgnoreCase);
 
+    // Poly Haven ends every file name in its resolution (brick_wall_001_nor_gl_2k): look past it.
+    static readonly Regex ResolutionSuffix = new Regex(@"_\d+k$", RegexOptions.IgnoreCase);
+
+    public enum MapKind { Color, Normal, Linear }
+
+    // Which colour space and type a texture file name asks for (ADR-184: Poly Haven diff/nor_gl/arm/rough and ambientCG alike).
+    public static MapKind Classify(string name)
+    {
+        name = ResolutionSuffix.Replace(name, "");
+        if (NormalSuffix.IsMatch(name)) return MapKind.Normal;
+        return LinearSuffix.IsMatch(name) ? MapKind.Linear : MapKind.Color;
+    }
+
     // Bump when a rule changes so existing assets are reimported.
-    public override uint GetVersion() => 4;
+    public override uint GetVersion() => 5;
 
     void OnPreprocessTexture()
     {
@@ -28,8 +41,9 @@ public class AssetImportRules : AssetPostprocessor
         importer.textureCompression = TextureImporterCompression.Compressed;
         importer.isReadable = false;
         importer.mipmapEnabled = true;
-        if (NormalSuffix.IsMatch(name)) importer.textureType = TextureImporterType.NormalMap;
-        else if (LinearSuffix.IsMatch(name)) importer.sRGBTexture = false;
+        var kind = Classify(name);
+        if (kind == MapKind.Normal) importer.textureType = TextureImporterType.NormalMap;
+        else if (kind == MapKind.Linear) importer.sRGBTexture = false;
 
         // Sky panoramas become cubemaps with a specular mip chain so they can drive the skybox and reflections.
         if (assetPath.StartsWith(HdriRoot))

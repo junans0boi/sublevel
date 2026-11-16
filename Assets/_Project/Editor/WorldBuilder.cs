@@ -63,7 +63,6 @@ public static partial class WorldBuilder
     const int NavTileSize = 256;
     const int NotWalkableArea = 1;          // built-in navmesh area
 
-    static int MaxLootSpawns => Cfg.MaxLootSpawns;
     const float LootLift = 0.3f;            // loot points give the surface an item lies on
     const float SpawnLift = 0.1f;
 
@@ -139,7 +138,7 @@ public static partial class WorldBuilder
         var info = FillInfo(world, plan, ground, stations);
         int rendererIndex = OutdoorRenderer();
         info.SetRenderer(rendererIndex);
-        var loot = PickLoot(lots, MaxLootSpawns);
+        var loot = PickLoot(lots);
         AddMatch(plan, ground, info, loot);
         AddCamera(plan, rendererIndex);
 
@@ -503,22 +502,13 @@ public static partial class WorldBuilder
         return info;
     }
 
-    // At most `cap` points, taken one per building in turn so every building gets some before any gets many.
-    static List<Vector3> PickLoot(List<Placed> buildings, int cap)
+    // Points per building from LootPlacement (points available x weight of its kind, capped by WorldBuildSpec.MaxLootSpawns, ADR-193).
+    static List<Vector3> PickLoot(List<Placed> buildings)
     {
+        var counts = LootPlacement.Allocate(buildings.Select(b => new LootBuilding { Kind = b.Plan.Kind, Available = b.Loot.Count }).ToArray(), Cfg);
         var picked = new List<Vector3>();
-        for (int round = 0; picked.Count < cap; round++)
-        {
-            bool any = false;
-            foreach (var building in buildings)
-            {
-                if (round >= building.Loot.Count) continue;
-                any = true;
-                picked.Add(building.Loot[round]);
-                if (picked.Count >= cap) break;
-            }
-            if (!any) break;
-        }
+        for (int i = 0; i < buildings.Count; i++)
+            for (int k = 0; k < counts[i]; k++) picked.Add(buildings[i].Loot[k]);
         return picked;
     }
 
