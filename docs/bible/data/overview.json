@@ -1,0 +1,139 @@
+{
+  "id": "overview",
+  "title": "개요",
+  "order": 0,
+  "group": "개요",
+  "status": "proposed",
+  "summary": "STEADY TO VIVID STUDIO의 시설 기반 배틀로얄(가칭). 오리지널 세계관, PC 전용, 판당 50명(사람+봇).",
+  "parts": [
+    {
+      "type": "prose",
+      "title": "한 문장 정의",
+      "paragraphs": [
+        "엘리베이터로 섬의 랜덤 지역에 투입 → 파밍 → 오염이 지역을 하나씩 삼키며 도심으로 수렴 → 마지막 지역에서 최후 1인(팀) 생존."
+      ],
+      "bullets": [
+        "분위기: 배틀그라운드급 몰입(완전 실사는 아님). 한국 1980년대 + 열대 혼합의 가상 세계.",
+        "플랫폼: PC(macOS + Windows). 엔진: Unity 6.3 + URP + Fish-Net.",
+        "한 판: 50명(사람 + AI 봇), 약 20~25분(제안).",
+        "맵: 강이 가르고 산맥이 둘러싼 섬(C2안), 전 도시 차도 연결, 시가전·산악전.",
+        "금지: 실존 상표·총기명·차종명, 비상업 에셋, AI 생성 에셋(CLAUDE.md 규칙)."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "확정된 큰 결정 (준환)",
+      "columns": [
+        {
+          "key": "decision",
+          "label": "결정",
+          "kind": "text"
+        },
+        {
+          "key": "date",
+          "label": "날짜",
+          "kind": "tag"
+        }
+      ],
+      "rows": [
+        {
+          "id": "g1",
+          "status": "confirmed",
+          "decision": "캐릭터·애니메이션 모두 Humanoid로 전환(Mixamo 사실풍 + UBC 조합 추천)",
+          "date": "2026-11-16",
+          "source": "대화"
+        },
+        {
+          "id": "g2",
+          "status": "confirmed",
+          "decision": "하늘은 Poly Haven 맑은 낮 HDRI(Kloofendal), 재질은 Poly Haven 중심으로 선정",
+          "date": "2026-11-16",
+          "source": "대화"
+        },
+        {
+          "id": "g3",
+          "status": "confirmed",
+          "decision": "최종 지역은 하이브리드 오염 시스템(지역 확정 + 전선 수렴)",
+          "date": "2026-11-16",
+          "source": "대화"
+        },
+        {
+          "id": "g4",
+          "status": "confirmed",
+          "decision": "판당 50명(사람+봇). 맵은 C2(강+산맥, 전 도시 차도 연결) 방향",
+          "date": "2026-11-16",
+          "source": "대화"
+        },
+        {
+          "id": "g5",
+          "status": "confirmed",
+          "decision": "개발 장비는 M4 Pro 맥북(성능 여유는 늘었으나 PERF_BUDGET 규칙은 유지)",
+          "date": "2026-11-16",
+          "source": "대화"
+        },
+        {
+          "id": "g6",
+          "status": "confirmed",
+          "decision": "팀 모드는 솔로 + 스쿼드(4)",
+          "date": "2026-11-16",
+          "source": "대화"
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "전체 공통으로 아직 정해지지 않은 것",
+      "items": [
+        {
+          "id": "o1",
+          "q": "정식 게임 이름(가칭 → 확정)과 로고 방향",
+          "options": [
+            "후보 조사 후 선택"
+          ],
+          "recommended": "후보 조사 후 선택",
+          "status": "open",
+          "answer": "",
+          "why": "docs/handoff에 타이틀 큐가 있다."
+        },
+        {
+          "id": "o2",
+          "q": "팀 모드(솔로/듀오/스쿼드) 지원 범위",
+          "options": [
+            "솔로만",
+            "솔로+스쿼드(4)",
+            "솔로+듀오+스쿼드"
+          ],
+          "recommended": "솔로+스쿼드(4)",
+          "status": "confirmed",
+          "answer": "솔로+스쿼드(4)",
+          "why": "50명이면 스쿼드 4명 × 12팀 정도. 이미 팀 캡처 테스트가 있어 부분 구현 가능성. (참고: 열쇠 엘리베이터 팀 동승 규칙 때문에 팀 모드가 사실상 필요함.)"
+        },
+        {
+          "id": "o3",
+          "q": "저장소 용량 방침(Git LFS 도입 또는 런타임 생성)",
+          "options": [
+            "Git LFS",
+            "월드 메시는 런타임 생성·저장 안 함",
+            "현행 유지"
+          ],
+          "recommended": "월드 메시는 런타임 생성·저장 안 함",
+          "status": "confirmed",
+          "answer": "월드 메시는 런타임 생성·저장 안 함 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "World_Meshes.asset 42MB + World.unity 32MB가 텍스트로 매번 바뀜(#240)."
+        },
+        {
+          "id": "o4",
+          "q": "Mixamo Additional Terms 원문 확인(사람이 읽기)",
+          "options": [
+            "준환이 읽고 승인",
+            "법 검토"
+          ],
+          "recommended": "준환이 읽고 승인",
+          "status": "open",
+          "answer": "",
+          "why": "상업 사용 허용이지만 원본 단독 재배포 금지."
+        }
+      ]
+    }
+  ]
+}

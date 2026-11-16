@@ -1,0 +1,746 @@
+{
+  "id": "roads",
+  "title": "도로·다리·고개",
+  "order": 42,
+  "group": "월드",
+  "summary": "C2 도로망: 노드 22·엣지 29·순환 8, 합 약 12.2 km. 다리 5 + 얕은 여울 1, 차량 고개 5, 보행 안부 3. 일부 구간이 12도를 넘는 것이 알려진 문제(open).",
+  "status": "proposed",
+  "parts": [
+    {
+      "type": "prose",
+      "title": "도로 체계",
+      "paragraphs": [
+        "도로 등급 3종: 국도(간선·순환, 폭 12 m) 약 2.8 km, 포장 지방도(8 m) 약 8.2 km, 비포장 농로·임도(4 m) 약 1.3 km. 모든 마을이 포장·국도만으로 이어지고(비포장은 hamlet 연결용), 포장·국도 엣지 하나가 끊어져도 전체가 이어진다(페이지 검사: connected, cutEdges 0, townsNotOnPaved 없음).",
+        "고개 구간은 도로를 사인파 스위치백(진폭 58 m, 주기 150 m)으로 만들고 도로 경사를 11도 한도로 절토한다. 아래 경사는 절토 후 30 m 창 기준 최대/평균이다."
+      ],
+      "bullets": [
+        "현재 생성기(확정): Trunk 6 m / Spur 4.5 m / Path 2.5 m, 경사 12도 이하, 지역당 트리 형태, 지역 경계 고개 2개. 출처 WorldSpec.cs:55-57.",
+        "도로 데이터 출처는 설계 페이지의 EDGES(수정하지 않은 원본)이며 길이는 곡선 길이를 노드에서 추출한 값이다."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "도로 구간 (29개)",
+      "columns": [
+        {
+          "key": "name",
+          "label": "구간",
+          "kind": "text"
+        },
+        {
+          "key": "cls",
+          "label": "등급",
+          "kind": "tag"
+        },
+        {
+          "key": "len",
+          "label": "길이 m",
+          "kind": "num"
+        },
+        {
+          "key": "gmax",
+          "label": "최대 경사 도",
+          "kind": "num"
+        },
+        {
+          "key": "gavg",
+          "label": "평균 경사 도",
+          "kind": "num"
+        },
+        {
+          "key": "cut",
+          "label": "절토 최대 m",
+          "kind": "num"
+        },
+        {
+          "key": "sw",
+          "label": "스위치백",
+          "kind": "tag"
+        },
+        {
+          "key": "bridge",
+          "label": "다리·여울",
+          "kind": "text"
+        },
+        {
+          "key": "over",
+          "label": "12도 초과",
+          "kind": "tag"
+        }
+      ],
+      "rows": [
+        {
+          "id": "rd1",
+          "status": "proposed",
+          "name": "청람읍 - 새재",
+          "cls": "국도",
+          "len": 538,
+          "gmax": 9.4,
+          "gavg": 1.7,
+          "cut": 3,
+          "sw": "",
+          "bridge": "청람교 51m",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd2",
+          "status": "proposed",
+          "name": "새재 - 논실",
+          "cls": "국도",
+          "len": 303,
+          "gmax": 10.8,
+          "gavg": 3.7,
+          "cut": 4,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd3",
+          "status": "proposed",
+          "name": "논실 - 남령재",
+          "cls": "국도",
+          "len": 208,
+          "gmax": 7.5,
+          "gavg": 4,
+          "cut": 2,
+          "sw": "스위치백",
+          "bridge": "동천교 29m",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd4",
+          "status": "proposed",
+          "name": "남령재 - 광석리",
+          "cls": "국도",
+          "len": 329,
+          "gmax": 18.1,
+          "gavg": 3.4,
+          "cut": 4,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd5",
+          "status": "proposed",
+          "name": "광석리 - 남포",
+          "cls": "국도",
+          "len": 611,
+          "gmax": 10.8,
+          "gavg": 3.2,
+          "cut": 2,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd6",
+          "status": "proposed",
+          "name": "남포 - 교차로",
+          "cls": "국도",
+          "len": 442,
+          "gmax": 9.6,
+          "gavg": 3.7,
+          "cut": 2,
+          "sw": "",
+          "bridge": "하구교 78m",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd7",
+          "status": "proposed",
+          "name": "교차로 - 해옥포",
+          "cls": "국도",
+          "len": 385,
+          "gmax": 4.3,
+          "gavg": 1.6,
+          "cut": 1,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd8",
+          "status": "proposed",
+          "name": "솔밭 - 서령재",
+          "cls": "비포장",
+          "len": 276,
+          "gmax": 12.1,
+          "gavg": 6.7,
+          "cut": 16,
+          "sw": "",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd9",
+          "status": "proposed",
+          "name": "솔밭 - 학전",
+          "cls": "비포장",
+          "len": 293,
+          "gmax": 16.4,
+          "gavg": 3.6,
+          "cut": 2,
+          "sw": "",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd10",
+          "status": "proposed",
+          "name": "학전 - 청람읍",
+          "cls": "포장",
+          "len": 508,
+          "gmax": 9.9,
+          "gavg": 2.1,
+          "cut": 1,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd11",
+          "status": "proposed",
+          "name": "청람읍 - 달뫼",
+          "cls": "포장",
+          "len": 236,
+          "gmax": 11.9,
+          "gavg": 6.6,
+          "cut": 8,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd12",
+          "status": "proposed",
+          "name": "달뫼 - 서령재",
+          "cls": "포장",
+          "len": 407,
+          "gmax": 8.7,
+          "gavg": 4.6,
+          "cut": 5,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd13",
+          "status": "proposed",
+          "name": "서령재 - 해옥포",
+          "cls": "포장",
+          "len": 650,
+          "gmax": 12.7,
+          "gavg": 3.9,
+          "cut": 3,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd14",
+          "status": "proposed",
+          "name": "학전 - 북령읍",
+          "cls": "포장",
+          "len": 486,
+          "gmax": 10.2,
+          "gavg": 3.5,
+          "cut": 1,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd15",
+          "status": "proposed",
+          "name": "청람읍 - 북령읍",
+          "cls": "포장",
+          "len": 452,
+          "gmax": 11.2,
+          "gavg": 3.2,
+          "cut": 6,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd16",
+          "status": "proposed",
+          "name": "북령읍 - 북령고개",
+          "cls": "포장",
+          "len": 433,
+          "gmax": 10.1,
+          "gavg": 2,
+          "cut": 5,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd17",
+          "status": "proposed",
+          "name": "북령고개 - 북해리",
+          "cls": "포장",
+          "len": 263,
+          "gmax": 14.5,
+          "gavg": 5.1,
+          "cut": 9,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd18",
+          "status": "proposed",
+          "name": "북해리 - 샘골재",
+          "cls": "포장",
+          "len": 789,
+          "gmax": 12.3,
+          "gavg": 5.7,
+          "cut": 35,
+          "sw": "스위치백",
+          "bridge": "발원교 47m",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd19",
+          "status": "proposed",
+          "name": "샘골재 - 샘골",
+          "cls": "포장",
+          "len": 343,
+          "gmax": 15.6,
+          "gavg": 5.2,
+          "cut": 10,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd20",
+          "status": "proposed",
+          "name": "북령읍 - 샘골",
+          "cls": "포장",
+          "len": 606,
+          "gmax": 14.2,
+          "gavg": 7,
+          "cut": 10,
+          "sw": "",
+          "bridge": "북강교 39m",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd21",
+          "status": "proposed",
+          "name": "샘골 - 새재",
+          "cls": "포장",
+          "len": 583,
+          "gmax": 11,
+          "gavg": 4.4,
+          "cut": 3,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd22",
+          "status": "proposed",
+          "name": "샘골 - 채석리",
+          "cls": "포장",
+          "len": 532,
+          "gmax": 12.3,
+          "gavg": 6.8,
+          "cut": 10,
+          "sw": "",
+          "bridge": "",
+          "over": "12도 초과",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd23",
+          "status": "proposed",
+          "name": "채석리 - 양지",
+          "cls": "포장",
+          "len": 387,
+          "gmax": 11.3,
+          "gavg": 7.1,
+          "cut": 13,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd24",
+          "status": "proposed",
+          "name": "새재 - 마루재",
+          "cls": "포장",
+          "len": 340,
+          "gmax": 7.2,
+          "gavg": 2.8,
+          "cut": 2,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd25",
+          "status": "proposed",
+          "name": "마루재 - 양지",
+          "cls": "포장",
+          "len": 639,
+          "gmax": 8.7,
+          "gavg": 2.2,
+          "cut": 3,
+          "sw": "스위치백",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd26",
+          "status": "proposed",
+          "name": "양지 - 광석리",
+          "cls": "포장",
+          "len": 519,
+          "gmax": 11,
+          "gavg": 3.6,
+          "cut": 7,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd27",
+          "status": "proposed",
+          "name": "논실 - 하동",
+          "cls": "비포장",
+          "len": 283,
+          "gmax": 9.8,
+          "gavg": 6.3,
+          "cut": 3,
+          "sw": "",
+          "bridge": "동천 여울(여울) 40m",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd28",
+          "status": "proposed",
+          "name": "하동 - 남포",
+          "cls": "비포장",
+          "len": 247,
+          "gmax": 5.9,
+          "gavg": 3.4,
+          "cut": 1,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "rd29",
+          "status": "proposed",
+          "name": "갯말 - 교차로",
+          "cls": "비포장",
+          "len": 157,
+          "gmax": 3.5,
+          "gavg": 1.6,
+          "cut": 1,
+          "sw": "",
+          "bridge": "",
+          "over": "",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "다리·여울",
+      "columns": [
+        {
+          "key": "name",
+          "label": "이름",
+          "kind": "text"
+        },
+        {
+          "key": "road",
+          "label": "도로",
+          "kind": "text"
+        },
+        {
+          "key": "len",
+          "label": "길이 m",
+          "kind": "num"
+        },
+        {
+          "key": "notes",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "b1",
+          "status": "proposed",
+          "name": "청람교",
+          "road": "청람읍 - 새재 (국도)",
+          "len": 51,
+          "notes": "수도 병목. 다리 폭 12 m, 강폭 약 45 m. 앞에 방벽 5개와 감시탑. 구교(보행교 3 m)와 상류 얕은 여울이 우회로.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "b2",
+          "status": "proposed",
+          "name": "북강교",
+          "road": "북령읍 - 샘골 (포장)",
+          "len": 39,
+          "notes": "북쪽 강 구간. 강폭이 좁은 상류.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "b3",
+          "status": "proposed",
+          "name": "발원교",
+          "road": "북해리 - 샘골재 (포장)",
+          "len": 47,
+          "notes": "강 발원 협곡. 최상류.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "b4",
+          "status": "proposed",
+          "name": "동천교",
+          "road": "논실 - 남령재 (국도)",
+          "len": 29,
+          "notes": "지류 동천 위.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "b5",
+          "status": "proposed",
+          "name": "하구교",
+          "road": "남포 - 교차로 (국도)",
+          "len": 78,
+          "notes": "청람강 하구. 가장 긴 다리.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "b6",
+          "status": "proposed",
+          "name": "동천 여울",
+          "road": "논실 - 하동 (비포장)",
+          "len": 40,
+          "notes": "다리 없이 얕은 여울. 설계 메모의 \"다리 4 + 여울\"은 실제 다리 5(청람·북강·발원·동천·하구) + 여울 1로 집계된다.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "차량 고개 5곳 (스위치백)",
+      "columns": [
+        {
+          "key": "name",
+          "label": "이름",
+          "kind": "text"
+        },
+        {
+          "key": "pos",
+          "label": "좌표(x, y m)",
+          "kind": "text"
+        },
+        {
+          "key": "road",
+          "label": "도로",
+          "kind": "text"
+        },
+        {
+          "key": "notes",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "p1",
+          "status": "proposed",
+          "name": "북령고개",
+          "pos": "1010, 345",
+          "road": "북령읍 - 북령고개 - 북해리",
+          "notes": "백운 능선을 넘는 북쪽 통로. 구간 최대 14.5도.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "p5",
+          "status": "proposed",
+          "name": "샘골재",
+          "pos": "1400, 355",
+          "road": "북해리 - 샘골재 - 샘골",
+          "notes": "강 동안 북쪽 통로. 절토가 가장 큼(최대 35 m), 최대 15.6도.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "p2",
+          "status": "proposed",
+          "name": "동령재",
+          "pos": "1735, 1090",
+          "road": "새재 - 마루재 - 양지",
+          "notes": "동령 능선을 넘어 동안으로. 마루재 마을 위.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "p4",
+          "status": "proposed",
+          "name": "남령재",
+          "pos": "1698, 1445",
+          "road": "논실 - 남령재 - 광석리",
+          "notes": "남동으로. 남령재 - 광석리 구간 최대 18.1도가 전체 최대.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "p3",
+          "status": "proposed",
+          "name": "서령재",
+          "pos": "640, 1245",
+          "road": "달뫼 - 서령재 - 해옥포",
+          "notes": "서령 능선을 넘어 서남 포구로.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "보행 안부 3곳 (차량 불가)",
+      "columns": [
+        {
+          "key": "name",
+          "label": "이름",
+          "kind": "text"
+        },
+        {
+          "key": "route",
+          "label": "도보 경로(좌표)",
+          "kind": "text"
+        },
+        {
+          "key": "notes",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "s4",
+          "status": "proposed",
+          "name": "서령 북안부",
+          "route": "학전(530, 880) - (520, 505) - (560, 390)",
+          "notes": "서령 능선 북쪽 보행 우회로. 학전에서 북령으로.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "s2",
+          "status": "proposed",
+          "name": "서령 안부",
+          "route": "달뫼(880, 1190) - (885, 1325) - (900, 1440)",
+          "notes": "서령 능선을 도보로 넘는 서남 연결.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        },
+        {
+          "id": "s3",
+          "status": "proposed",
+          "name": "솔뫼 안부",
+          "route": "새재(1520, 1090) - (1656, 850) - (1990, 670)",
+          "notes": "동령 능선 보행 통로. 새재에서 채석리로.",
+          "source": "docs/research/map_options/option_C2_river_mountain.html"
+        }
+      ]
+    },
+    {
+      "type": "prose",
+      "title": "알려진 문제: 12도 초과 구간",
+      "paragraphs": [
+        "절토 후에도 9개 구간이 현재 규칙의 도로 한도 12도(MaxRoadSlopeDeg, WorldSpec.cs:49)를 넘는다: 남령재-광석리 18.1도, 솔밭-서령재 12.1도, 솔밭-학전 16.4도, 서령재-해옥포 12.7도, 북령고개-북해리 14.5도, 북해리-샘골재 12.3도, 샘골재-샘골 15.6도, 북령읍-샘골 14.2도, 샘골-채석리 12.3도.",
+        "설계 메모의 \"구간 최대 약 12~16도\"보다 실제 최대(남령재 - 광석리 18.1도)가 크다. 30 m 창 최대값이라 국소 값이고, 평균 경사는 모두 7.1도 이하다. 이 값들이 차량 한계를 넘는지는 Unity에서 측정해야 안다."
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "r-grade",
+          "q": "12도를 넘는 구간(최대 18.1도)을 어떻게 할까?",
+          "options": [
+            "스위치백/절토를 늘려 12도로 맞춘다",
+            "고개 구간만 한도를 14~15도로 완화(ADR)",
+            "그대로 두고 Unity에서 측정 후 결정"
+          ],
+          "recommended": "스위치백/절토를 늘려 12도로 맞춘다",
+          "status": "confirmed",
+          "answer": "스위치백/절토를 늘려 12도로 맞춘다 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "현재 한도 12도는 차량 한계로 정한 값(WorldSpec.cs:49). 완화하면 차량 코드와 NavMesh 설정까지 영향."
+        },
+        {
+          "id": "r-ring",
+          "q": "순환(국도 루프)을 별도 도로 종류 Ring으로 만들까?",
+          "options": [
+            "예",
+            "기존 Trunk 확장"
+          ],
+          "recommended": "기존 Trunk 확장",
+          "status": "confirmed",
+          "answer": "기존 Trunk 확장 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "02 §4는 B안에서 Ring을 제안했지만 C2는 강·고개가 노드를 정하므로 Trunk에 다리·고개 개념을 일반화하는 편이 작다."
+        },
+        {
+          "id": "r-bridge",
+          "q": "다리를 오염 단계에서 폐쇄 가능한 요소로 쓸까?",
+          "options": [
+            "폐쇄 가능(오염 지역 진입 차단)",
+            "항상 개방"
+          ],
+          "recommended": "폐쇄 가능(오염 지역 진입 차단)",
+          "status": "confirmed",
+          "answer": "다리 폐쇄 없음(준환이 오염 시스템 결정에서 확정) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "MASTER_PLAN §6 결정 항목 5(다리 폐쇄)와 연결. 규칙 변경이라 ADR 필요."
+        },
+        {
+          "id": "r-nav",
+          "q": "다리마다 NavMeshLink를 두는 것을 전제로 할까?",
+          "options": [
+            "예",
+            "아니오"
+          ],
+          "recommended": "예",
+          "status": "confirmed",
+          "answer": "예 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "현재 NavMeshLink 0건(MASTER_PLAN §8). 다리 의존 맵이라 봇 길찾기에 필수."
+        }
+      ]
+    }
+  ]
+}

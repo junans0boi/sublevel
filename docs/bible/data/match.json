@@ -1,0 +1,614 @@
+{
+  "id": "match",
+  "title": "매치·투입·점수 규칙",
+  "order": 51,
+  "group": "시스템",
+  "summary": "엘리베이터 투입, 지역 순차 봉쇄, 인원(지금 16명 vs 목표 50명), 시간표, 루팅 한도(MaxLootSpawns 250), 점수 없음.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "table",
+      "title": "한눈에 보기",
+      "columns": [
+        {
+          "key": "item",
+          "label": "항목",
+          "kind": "tag"
+        },
+        {
+          "key": "val",
+          "label": "값",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "o1",
+          "status": "confirmed",
+          "item": "참가자",
+          "val": "16명 (사람+봇), 상한 24",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:104"
+        },
+        {
+          "id": "o2",
+          "status": "confirmed",
+          "item": "지역",
+          "val": "4개, 1024 m 섬",
+          "source": "Assets/_Project/Data/Resources/GameData/world.json"
+        },
+        {
+          "id": "o3",
+          "status": "confirmed",
+          "item": "첫 경고",
+          "val": "5분, 지역당 약 3분 30초",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:17-21"
+        },
+        {
+          "id": "o4",
+          "status": "confirmed",
+          "item": "승리",
+          "val": "마지막 생존자(팀)",
+          "source": "docs/SPEC.md:11"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "SPEC 규칙 (기획서 원문 요약)",
+      "columns": [
+        {
+          "key": "rule",
+          "label": "규칙",
+          "kind": "tag"
+        },
+        {
+          "key": "spec",
+          "label": "SPEC 내용",
+          "kind": "text"
+        },
+        {
+          "key": "now",
+          "label": "현재 구현과 차이",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r_drop",
+          "status": "confirmed",
+          "rule": "엘리베이터 투입",
+          "spec": "비행기 낙하 대신 무작위 지역의 엘리베이터에서 시작. 구역당 3~4대. 스폰 보호 5~10초.",
+          "now": "구현됨: 시드로 참가자를 엘리베이터에 배정. 문은 시작 3초 뒤 열림, 열린 뒤 6초 보호(첫 사격·투척에서 해제).",
+          "source": "docs/SPEC.md:50-51 (SPEC §5); Assets/_Project/Scripts/Core/Deployment.cs:51-100; docs/DECISIONS.md ADR-055"
+        },
+        {
+          "id": "r_one",
+          "status": "confirmed",
+          "rule": "엘리베이터 1명",
+          "spec": "엘리베이터 1대에 1명(팀 모드는 팀 단위).",
+          "now": "빈 엘리베이터가 있는 동안 1명씩. 모자라면 가장 덜 찬 곳에 같이 탐(승강기 안 3x3 격자 0.8 m 간격). 지금 승강장은 합계 13대, 참가자 16명 이상이라 항상 같이 타는 경우가 생긴다.",
+          "source": "Assets/_Project/Scripts/Core/Deployment.cs:62-66,151-153"
+        },
+        {
+          "id": "r_cap",
+          "status": "confirmed",
+          "rule": "지역 상한",
+          "spec": "지역별 시작 인원 상한 = ceil(전체/지역 수)+1. 지역 순서는 시드로 섞는다.",
+          "now": "그대로 구현(RegionCap).",
+          "source": "Assets/_Project/Scripts/Core/Deployment.cs:68; docs/DECISIONS.md ADR-055"
+        },
+        {
+          "id": "r_close",
+          "status": "confirmed",
+          "rule": "지역 순차 봉쇄",
+          "spec": "safe → warning → lockdown(방사능 지속 데미지, 즉사 아님) → red-zone 폭격 → closed. 폐쇄 순서와 최종 지역은 매 판 랜덤.",
+          "now": "구현됨(아래 시간표). 규칙 이름은 '봉쇄'지만 방사능 데미지는 이미 있다.",
+          "source": "docs/SPEC.md:11-21 (SPEC §3); Assets/_Project/Scripts/Core/Lockdown.cs:17-53"
+        },
+        {
+          "id": "r_final",
+          "status": "confirmed",
+          "rule": "최종 지역 공개",
+          "spec": "서버가 시작 때 최종 지역을 정하고 숨김. 마지막 2~3개가 남으면 후보가 좁혀짐. 최종 지역은 소구역 3~4개를 순차 폭격.",
+          "now": "구현됨: 남은 폐쇄가 1개일 때 최종 지역 공개(FinalRevealLastClosings=1), 소구역 3~4개.",
+          "source": "docs/SPEC.md:23-27 (SPEC §3-1); Assets/_Project/Scripts/Core/Lockdown.cs:47-53"
+        },
+        {
+          "id": "r_conn",
+          "status": "confirmed",
+          "rule": "연결 보장",
+          "spec": "폐쇄 순서가 랜덤이어도 남은 구역은 항상 엘리베이터로 연결(허브형).",
+          "now": "지역 간 엘리베이터 이동 구현(ADR-076): 안전·경고 지역만 운행, 목적지는 안전 지역만, 8초·쿨 60초.",
+          "source": "docs/SPEC.md:34-35 (SPEC §3-3)"
+        },
+        {
+          "id": "r_win",
+          "status": "confirmed",
+          "rule": "승리 조건",
+          "spec": "최후의 개인/팀.",
+          "now": "마지막 생존자(팀)가 '승리', 탈락은 순위 표시.",
+          "source": "Assets/_Project/Scripts/Gameplay/ResultScreen.cs:8-14"
+        },
+        {
+          "id": "r_chip",
+          "status": "open",
+          "rule": "칩 부활",
+          "spec": "팀 모드에서만: 사망 시 칩 드롭, 팀원이 수거해 보관함에서 부활, 90초 제한.",
+          "now": "코드에서 칩 부활을 찾지 못했다(Scripts 검색에 '칩'은 인벤토리·휠 UI뿐). 대신 기절(출혈 시간표)·팀원 부활 F 10초가 구현됨(ADR-072·129). SPEC 갱신 필요.",
+          "source": "docs/SPEC.md:42-45 (SPEC §6)"
+        },
+        {
+          "id": "r_spec",
+          "status": "confirmed",
+          "rule": "구역 목록",
+          "spec": "7개(산악·습지·도시·공장·지하·온실·코어), MVP는 산악·공장.",
+          "now": "현재 월드는 4개 지역 A 산악·B 습지·C 마을·D 공장, 지역마다 엘리베이터 3·3·4·3 = 13대(world.json). SPEC과 다르다.",
+          "source": "docs/SPEC.md:36-45 (SPEC §4)"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "참가 인원·모드 (지금 vs 목표)",
+      "columns": [
+        {
+          "key": "item",
+          "label": "항목",
+          "kind": "tag"
+        },
+        {
+          "key": "now",
+          "label": "지금",
+          "kind": "text"
+        },
+        {
+          "key": "target",
+          "label": "목표/제안",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "n_total",
+          "status": "confirmed",
+          "item": "한 판 참가자",
+          "now": "사람+봇 = 기본 16명(BotCount 15 + 1). 상한 24(MaxBotsLimit 23 + 1).",
+          "target": "50명(사람+봇). 06 문서 권장은 24~32부터지만 준환 초안은 50.",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:104; Assets/_Project/Scripts/Core/Deployment.cs:114-127"
+        },
+        {
+          "id": "n_players",
+          "status": "confirmed",
+          "item": "한 방의 사람 수",
+          "now": "MaxPlayers 16, 전용 서버 인자 --max-players 1~24.",
+          "target": "50이면 상한을 올리고 서버 비용을 재측정(network 섹션 참조).",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:104; Assets/_Project/Scripts/Core/Lobby.cs:11"
+        },
+        {
+          "id": "n_mode",
+          "status": "confirmed",
+          "item": "팀 모드",
+          "now": "솔로/듀오(2)/스쿼드(4), 아군 피해 없음(FriendlyFire false).",
+          "target": "유지.",
+          "source": "docs/DECISIONS.md ADR-072; Assets/_Project/Scripts/Core/Teams.cs:71-72"
+        },
+        {
+          "id": "n_island",
+          "status": "confirmed",
+          "item": "맵",
+          "now": "1024 m 정사각 섬(육지 약 0.6~0.7 km²), 지역 4개. 밀도 약 48명/km²(31명 기준).",
+          "target": "C2안: 2.4x2.0 km, 육지 약 3.2 km², 지역 6, 승강장 20곳(슬롯 60), 15.5명/km².",
+          "source": "Assets/_Project/Data/Resources/GameData/world.json:2-9"
+        },
+        {
+          "id": "n_reco",
+          "status": "confirmed",
+          "item": "재접속",
+          "now": "끊기면 몸을 60초 보관, 같은 세션이 돌아오면 복귀, 아니면 봇이 인계(ADR-125).",
+          "target": "유지.",
+          "source": "Assets/_Project/Scripts/Core/Deployment.cs:123-127; Assets/_Project/Data/Resources/GameData/rules.json:104"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "봉쇄 시간표 (Lockdown, 초)",
+      "columns": [
+        {
+          "key": "name",
+          "label": "항목",
+          "kind": "tag"
+        },
+        {
+          "key": "val",
+          "label": "값",
+          "kind": "num"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "t_first",
+          "status": "confirmed",
+          "name": "첫 지역 경고",
+          "val": 300,
+          "desc": "매치 시작 후 이 시간에 첫 지역이 발표된다.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:17"
+        },
+        {
+          "id": "t_warn",
+          "status": "confirmed",
+          "name": "경고(발표~봉쇄)",
+          "val": 45,
+          "desc": "아직 열려 있음, 탈출 시간.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:18"
+        },
+        {
+          "id": "t_lock",
+          "status": "confirmed",
+          "name": "봉쇄(폭격 전)",
+          "val": 120,
+          "desc": "출입문 봉쇄 + 방사능 지속 데미지.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:19"
+        },
+        {
+          "id": "t_bomb",
+          "status": "confirmed",
+          "name": "폭격",
+          "val": 45,
+          "desc": "미사일. 끝나면 폐쇄.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:20"
+        },
+        {
+          "id": "t_gap",
+          "status": "confirmed",
+          "name": "두 지역 발표 사이 최소 간격",
+          "val": 150,
+          "desc": "지역 폐쇄 주기.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:21"
+        },
+        {
+          "id": "t_dps",
+          "status": "confirmed",
+          "name": "방사능 DPS / 유예 / 폐쇄 지역 DPS",
+          "val": 2,
+          "desc": "초당 2, 4초 유예 후 시작, 폐쇄 지역은 초당 20. 단계가 오를수록 배율 1→5.5(RadiationStageScale 7칸).",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:24-27"
+        },
+        {
+          "id": "t_blast",
+          "status": "confirmed",
+          "name": "폭발",
+          "val": 70,
+          "desc": "간격 1.6초, 3초 전 예고, 안쪽 3 m 전체 피해 70, 10 m 밖 0, 절반은 전투원 근처를 노림.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:33-39"
+        },
+        {
+          "id": "t_key",
+          "status": "confirmed",
+          "name": "열쇠",
+          "val": 2,
+          "desc": "지역당 열쇠 2개, 통로는 사용 후 10초 열림, 거리 4 m.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:42-44"
+        },
+        {
+          "id": "t_sub",
+          "status": "confirmed",
+          "name": "최종 지역 소구역",
+          "val": 3,
+          "desc": "최종 지역 폐쇄 20초 뒤 시작, 경고 30·폭격 30초, 90초 간격, 소구역 3~4개.",
+          "source": "Assets/_Project/Scripts/Core/Lockdown.cs:48-53"
+        },
+        {
+          "id": "t_est4",
+          "status": "proposed",
+          "name": "추정: 현재 4지역 총 길이",
+          "val": 1100,
+          "desc": "경고 300/450/600초, 마지막 폐쇄 810초, 소구역 단계 포함 약 18분(계산 추정, 실측 아님).",
+          "source": "계산: 위 값 + world.json 지역 4개"
+        },
+        {
+          "id": "t_est6",
+          "status": "proposed",
+          "name": "추정: 6지역 총 길이",
+          "val": 1460,
+          "desc": "경고 300~900초, 마지막 폐쇄 1110초, 소구역 포함 약 24분. MASTER_PLAN 목표 20~25분과 맞는다(추정). 지역 가로지르기 시간이 경고 45초보다 길어지는 문제는 별도(06 B2).",
+          "source": "계산: 위 값 + C2안 지역 6개"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "루팅 규칙과 한도",
+      "columns": [
+        {
+          "key": "name",
+          "label": "항목",
+          "kind": "tag"
+        },
+        {
+          "key": "val",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "l_cap",
+          "status": "confirmed",
+          "name": "MaxLootSpawns",
+          "val": "250",
+          "desc": "월드 빌더가 건물마다 한 점씩 순환하며 250개에서 자른다. 건물이 늘면 건물당 1개 미만이 되고 마지막 건물은 0개(06 문서 I1).",
+          "source": "Assets/_Project/Editor/WorldBuilder.cs:60,497-508"
+        },
+        {
+          "id": "l_rocks",
+          "status": "confirmed",
+          "name": "MaxRocks",
+          "val": "900",
+          "desc": "바위 상한도 1 km² 기준 상수(WorldBuilder.Structures.cs:30).",
+          "source": "docs/research/06_missed_items.md:I1"
+        },
+        {
+          "id": "l_table",
+          "status": "confirmed",
+          "name": "바닥 루팅 테이블",
+          "val": "전역 1개, 항목 50개, 가중치 합 242",
+          "desc": "건물 종류·지역 구분 없음. LootTable.Plan(점 수, 시드)이 결정적으로 뽑는다(Core/Loot.cs:26-45).",
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json"
+        },
+        {
+          "id": "l_lim",
+          "status": "confirmed",
+          "name": "아이템 종류",
+          "val": "무기·탄약·의료·방어구·조준경·투척물·소모품 등 18종",
+          "desc": "LootKind 열거. 열쇠(12)는 지역당 2개를 따로 배치.",
+          "source": "Assets/_Project/Scripts/Core/Loot.cs:5"
+        },
+        {
+          "id": "l_supply",
+          "status": "confirmed",
+          "name": "보급 상자",
+          "val": "2단계부터 2단계마다, 6개 포함",
+          "desc": "앞 4개는 보장 항목. 하강 6초, 열기 3초(F 길게), 연막 150초, 높이 45 m. 테이블 29항목, 가중치 합 138. 방어구 3단·조준경이 몰려 있다.",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:84; Assets/_Project/Data/Resources/GameData/supply.json"
+        },
+        {
+          "id": "l_50",
+          "status": "proposed",
+          "name": "50명 기준 총량",
+          "val": "미정",
+          "desc": "건물 411채(진입 305)에서 건물당 점 수 x 종류 가중으로 계산하고 상한을 데이터(world.json)로 옮긴다. 루팅 NetworkObject 수가 커지면 접속 직후 스폰 폭주가 날 수 있다(network 섹션).",
+          "source": "docs/research/06_missed_items.md:I1,I2"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "현재 루팅 테이블의 가중치 비율 (계산)",
+      "columns": [
+        {
+          "key": "kind",
+          "label": "분류",
+          "kind": "tag"
+        },
+        {
+          "key": "w",
+          "label": "가중치",
+          "kind": "num"
+        },
+        {
+          "key": "pct",
+          "label": "비율(%)",
+          "kind": "num"
+        }
+      ],
+      "rows": [
+        {
+          "id": "s_optic",
+          "status": "confirmed",
+          "kind": "조준경",
+          "w": 55,
+          "pct": 22.7,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_ammo",
+          "status": "confirmed",
+          "kind": "탄약",
+          "w": 52,
+          "pct": 21.5,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_gun",
+          "status": "confirmed",
+          "kind": "총(VK-9, Ordo, Warden, Breacher, Sentinel)",
+          "w": 42,
+          "pct": 17.4,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_melee",
+          "status": "confirmed",
+          "kind": "근접(마체테 등 4종)",
+          "w": 14,
+          "pct": 5.8,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_armor",
+          "status": "confirmed",
+          "kind": "헬멧·조끼·가방(각 10)",
+          "w": 30,
+          "pct": 12.4,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_heal",
+          "status": "confirmed",
+          "kind": "붕대·구급상자·음료·알약·주사기·의료키트",
+          "w": 37,
+          "pct": 15.3,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        },
+        {
+          "id": "s_thr",
+          "status": "confirmed",
+          "kind": "섬광탄·화염병·연막·제리캔",
+          "w": 12,
+          "pct": 5.0,
+          "source": "Assets/_Project/Data/Resources/GameData/loot.json (계산)"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "슬롯",
+      "columns": [
+        {
+          "key": "name",
+          "label": "슬롯",
+          "kind": "tag"
+        },
+        {
+          "key": "val",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "sl_weapon",
+          "status": "confirmed",
+          "name": "무기 칸 5개",
+          "val": "(1)(2) 주무기 (3) 보조(권총 전용) (4) 근접 (5) 투척",
+          "desc": "HUD 무기 띠와 같다.",
+          "source": "docs/DECISIONS.md ADR-058"
+        },
+        {
+          "id": "sl_elev_now",
+          "status": "confirmed",
+          "name": "엘리베이터 슬롯(현재)",
+          "val": "승강장 13대",
+          "desc": "A 3 + B 3 + C 4 + D 3. 참가자 16명이라 같이 타는 경우가 생김.",
+          "source": "Assets/_Project/Data/Resources/GameData/world.json:20-48"
+        },
+        {
+          "id": "sl_elev_c2",
+          "status": "proposed",
+          "name": "엘리베이터 슬롯(C2안)",
+          "val": "승강장 20곳 x 승강기 3기 = 60",
+          "desc": "50명 중 점유 83%, 승강장 사이 최소 215 m, 지역 상한 ceil(50/6)+1 = 10.",
+          "source": "docs/research/map_options/option_C2_notes.md:11"
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "m_n",
+          "q": "한 판 인원",
+          "options": [
+            "50 (사람+봇)",
+            "24~32 (06 문서 권장)"
+          ],
+          "recommended": "50",
+          "status": "confirmed",
+          "answer": "50 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "준환 초안은 50. 서버 CPU·대역폭은 측정 전이라 24~32로 먼저 돌려 보고 올리는 단계 접근도 가능."
+        },
+        {
+          "id": "m_zone",
+          "q": "봉쇄 단위",
+          "options": [
+            "지역 6개 순차(SPEC 유지)",
+            "오염 전선(B)",
+            "하이브리드(C, 제안)"
+          ],
+          "recommended": "하이브리드(C)",
+          "status": "confirmed",
+          "answer": "하이브리드(C) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "MASTER_PLAN §6. 규칙 변경이므로 ADR 필수(CLAUDE.md 규칙 5)."
+        },
+        {
+          "id": "m_chip",
+          "q": "SPEC §6 칩 부활 처리",
+          "options": [
+            "SPEC에서 삭제하고 기절·부활로 확정",
+            "칩 부활 구현"
+          ],
+          "recommended": "SPEC에서 삭제하고 기절·부활로 확정",
+          "status": "confirmed",
+          "answer": "칩 부활 유지(SPEC §6 유지, 팀 모드 한정). 현재 코드는 기절·부활만 구현돼 있어 칩 부활 구현이 필요함 [준환 결정 2026-11-16, 일괄 확정 번복]",
+          "why": "코드는 이미 기절·부활이다. SPEC과 구현이 어긋나 있다."
+        },
+        {
+          "id": "m_len",
+          "q": "판 길이 목표",
+          "options": [
+            "20~25분",
+            "15분"
+          ],
+          "recommended": "20~25분",
+          "status": "confirmed",
+          "answer": "20~25분 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "위 계산상 6지역 시간표가 약 24분이라 맞는다(추정)."
+        },
+        {
+          "id": "m_loot",
+          "q": "루팅 구조",
+          "options": [
+            "지역·건물 종류별 가중 테이블 + 3단 장비는 일부 종류만",
+            "전역 1개 유지"
+          ],
+          "recommended": "지역·건물 종류별 가중",
+          "status": "confirmed",
+          "answer": "지역·건물 종류별 가중 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "06 문서 I2. 도시가 커질수록 거점 가치 차이가 이동 동기가 된다. 룰 변경이라 ADR."
+        },
+        {
+          "id": "m_score",
+          "q": "점수·크레딧(재화) 도입",
+          "options": [
+            "도입 안 함(순위+킬·피해·생존 시간만)",
+            "경기 후 보상 점수"
+          ],
+          "recommended": "도입 안 함",
+          "status": "confirmed",
+          "answer": "도입 안 함 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "코드에 점수제는 없다. Credits.cs는 에셋 저작자 표기용이다."
+        },
+        {
+          "id": "m_chip2",
+          "q": "칩 부활을 오염 시스템·열쇠 엘리베이터와 어떻게 맞추나? (SPEC §6: 칩 드롭, 팀원이 수거, 구역 입구 칩 보관함, 90초, 구역 폐쇄 시 칩 파괴)",
+          "options": [
+            "각 지역 승강장에 칩 보관함, 사망 후 90초 수거, 그 지역이 오염 확정되면 칩 파괴, 부활은 비오염 지역 승강장에서(승강장 선택)",
+            "칩 보관함은 지역 입구 고정 유지, 부활은 투입처럼 무작위 승강장",
+            "칩 부활은 오염 1~3단계에서만 허용"
+          ],
+          "recommended": "각 지역 승강장에 칩 보관함, 사망 후 90초 수거, 그 지역이 오염 확정되면 칩 파괴, 부활은 비오염 지역 승강장에서(승강장 선택)",
+          "status": "confirmed",
+          "answer": "각 지역 승강장에 칩 보관함, 사망 후 90초 수거, 그 지역이 오염 확정되면 칩 파괴, 부활은 비오염 지역 승강장에서(승강장 선택) [준환 위임 2026-11-16: 추천안 적용]",
+          "why": "SPEC의 '구역 입구 칩 보관함'과 '구역 폐쇄 시 칩 파괴'를 새 구조(6지역, 승강장 20곳, 오염 확정)에 대응시켜야 한다. 팀 모드(스쿼드 4)와 기절·부활과의 관계(기절 중 수혈 vs 사망 후 칩)도 정리 필요."
+        }
+      ]
+    }
+  ]
+}

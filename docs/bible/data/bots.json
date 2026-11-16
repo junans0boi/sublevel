@@ -1,0 +1,700 @@
+{
+  "id": "bots",
+  "title": "봇",
+  "order": 32,
+  "group": "콘텐츠",
+  "summary": "봇은 순수 규칙 두뇌(BotBrain) + 서버에서 NavMeshAgent로 걷는 컨트롤러다. 지금 한 판은 최대 16명(사람+봇 15), 이름은 '봇 N'. 계획은 50명이며, 시가전·산악 행동은 아직 없다.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "table",
+      "title": "상태 (BotBrain)",
+      "columns": [
+        {
+          "key": "state",
+          "label": "상태",
+          "kind": "tag"
+        },
+        {
+          "key": "what",
+          "label": "하는 일",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "s0",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotBrain.cs:31",
+          "state": "Roam",
+          "what": "관심 지점 사이를 돌아다님(반경 35m)",
+          "note": "지점 목록이 없으면 무작위. 45초 안에 못 가면 포기"
+        },
+        {
+          "id": "s1",
+          "status": "confirmed",
+          "source": "BotBrain.cs:31, 334-352",
+          "state": "Loot",
+          "what": "쓸모 있는 아이템으로 이동·줍기",
+          "note": "무기가 없으면 최우선"
+        },
+        {
+          "id": "s2",
+          "status": "confirmed",
+          "source": "BotBrain.cs:31, 372",
+          "state": "Investigate",
+          "what": "소리가 난 곳으로 가서 본다",
+          "note": "12초"
+        },
+        {
+          "id": "s3",
+          "status": "confirmed",
+          "source": "BotBrain.cs:31, 240-296",
+          "state": "Engage",
+          "what": "적을 보면 교전: 선호 거리 25m, 조준 안정 후 버스트 사격, 사격 중 좌우 이동",
+          "note": "반응 0.45초 지연, 재장전은 시야 밖에서"
+        },
+        {
+          "id": "s4",
+          "status": "confirmed",
+          "source": "BotBrain.cs:31, 220-231",
+          "state": "Retreat",
+          "what": "체력 35% 이하면 엄폐로 후퇴(20m, 최대 6초)",
+          "note": "후퇴해도 시선이 안 끊기면 반격"
+        },
+        {
+          "id": "s5",
+          "status": "confirmed",
+          "source": "BotBrain.cs:31, 314",
+          "state": "Heal",
+          "what": "체력 60% 미만이고 안전하면 치료(1.5초)",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "type": "prose",
+      "title": "우선순위",
+      "paragraphs": [
+        "생존(후퇴·치료) > 보이는 적과 교전 > 무장 > 들은 곳 조사 > 쓸모 있는 것 줍기 > 배회 (BotBrain.cs:101-103). 같은 시드와 같은 입력이면 같은 결정을 하는 순수·결정적 코드라 EditMode 테스트로 숫자를 고정한다.",
+        "구역 봉쇄용 목표는 별도: None, Escape, SafeSubZone, ToFinalRegion, Hunt, Elevator (BotController.cs:52). 봉쇄 직전 구역은 배회 후보에서 뺀다(#77)."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "감각 (Normal 기준, rules.json Bot)",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "num"
+        },
+        {
+          "key": "unit",
+          "label": "단위",
+          "kind": "tag"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "v",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "시야 거리",
+          "value": 70,
+          "unit": "m"
+        },
+        {
+          "id": "fov",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "시야각",
+          "value": 110,
+          "unit": "도"
+        },
+        {
+          "id": "close",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "근접 감지(벽 뒤도)",
+          "value": 3,
+          "unit": "m"
+        },
+        {
+          "id": "si",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "감지 주기",
+          "value": 0.15,
+          "unit": "초",
+          "notes": "서버 레이캐스트 비용이 여기서 나온다(BotController.cs:314,427)"
+        },
+        {
+          "id": "gun",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "총소리 청취",
+          "value": 80,
+          "unit": "m"
+        },
+        {
+          "id": "fs",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "발소리 청취",
+          "value": 14,
+          "unit": "m",
+          "notes": "이속 2 m/s 이상일 때만. 느린 걷기는 x0.3"
+        },
+        {
+          "id": "gl",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "유리 깨지는 소리",
+          "value": 40,
+          "unit": "m"
+        },
+        {
+          "id": "horn",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Fuel",
+          "what": "차량 경적",
+          "value": 60,
+          "unit": "m"
+        },
+        {
+          "id": "mem",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "적 기억",
+          "value": 8,
+          "unit": "초"
+        },
+        {
+          "id": "rx",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "반응 시간",
+          "value": 0.45,
+          "unit": "초"
+        },
+        {
+          "id": "aim",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "조준 오차(가까이 10m / 멀리 60m)",
+          "value": "1.2 / 2.6",
+          "unit": "도",
+          "notes": "첫 발은 x2, 추적하며 1.5초에 걸쳐 안정"
+        },
+        {
+          "id": "burst",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Bot",
+          "what": "버스트",
+          "value": "2~5발, 휴식 0.3~0.8초",
+          "unit": ""
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "난이도 (BotDifficulty)",
+      "columns": [
+        {
+          "key": "tier",
+          "label": "단계",
+          "kind": "tag"
+        },
+        {
+          "key": "react",
+          "label": "반응 시간 x",
+          "kind": "num"
+        },
+        {
+          "key": "aim",
+          "label": "조준 오차 x",
+          "kind": "num"
+        },
+        {
+          "key": "turn",
+          "label": "회전 x",
+          "kind": "num"
+        },
+        {
+          "key": "sight",
+          "label": "시야 x",
+          "kind": "num"
+        },
+        {
+          "key": "ears",
+          "label": "청각 x",
+          "kind": "num"
+        },
+        {
+          "key": "look",
+          "label": "감지 주기 x",
+          "kind": "num"
+        }
+      ],
+      "rows": [
+        {
+          "id": "easy",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotRulesDifficulty.cs:7-27",
+          "tier": "쉬움",
+          "react": 1.8,
+          "aim": 1.8,
+          "turn": 0.6,
+          "sight": 0.7,
+          "ears": 0.7,
+          "look": 1.5
+        },
+        {
+          "id": "normal",
+          "status": "confirmed",
+          "source": "BotRulesDifficulty.cs:7,18",
+          "tier": "보통(기본)",
+          "react": 1.0,
+          "aim": 1.0,
+          "turn": 1.0,
+          "sight": 1.0,
+          "ears": 1.0,
+          "look": 1.0
+        },
+        {
+          "id": "hard",
+          "status": "confirmed",
+          "source": "BotRulesDifficulty.cs:7-27",
+          "tier": "어려움",
+          "react": 0.55,
+          "aim": 0.55,
+          "turn": 1.5,
+          "sight": 1.15,
+          "ears": 1.2,
+          "look": 0.7
+        }
+      ]
+    },
+    {
+      "type": "prose",
+      "title": "난이도 보충",
+      "paragraphs": [
+        "시야각은 어려움 x1.05, 쉬움 x0.85(최대 170도). 버스트 휴식은 어려움 x0.7, 쉬움 x1.3. 투척 간격은 어려움 x0.7, 쉬움 x1.5. 설정 화면에서 고르며 매치 전체에 적용된다(GameSettings.ApplyLive). 봇별로 섞는 난이도는 지금 없다."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "장비·아이템 사용 규칙",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "src",
+          "label": "근거",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "i1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotRules.cs:71-77",
+          "what": "줍기 반경 / 줍는 거리",
+          "value": "25m / 2.2m",
+          "src": ""
+        },
+        {
+          "id": "i2",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotRules.cs:71-77",
+          "what": "원하는 양",
+          "value": "탄약 120, 의료키트 3, 붕대+구급 4, 부스트 아이템 종류별 2, 투척 종류별 2",
+          "src": ""
+        },
+        {
+          "id": "i3",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotRulesItems.cs:25-33",
+          "what": "투척 선택",
+          "value": "화염병은 정지한 적만; 섬광과 수류탄은 각자 거리 구간 안일 때, 둘 다 가능하면 무작위 50%",
+          "src": "ADR-116"
+        },
+        {
+          "id": "i4",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotRules.cs:90",
+          "what": "투척 간격",
+          "value": "6초",
+          "src": ""
+        },
+        {
+          "id": "i5",
+          "status": "confirmed",
+          "source": "BotRulesItems.cs:56",
+          "what": "부스트 사용",
+          "value": "시야 밖이고 체력이 기준 미만이거나 최근 위협이 있을 때",
+          "src": ""
+        },
+        {
+          "id": "i6",
+          "status": "confirmed",
+          "source": "BotBrain.cs:253",
+          "what": "재장전",
+          "value": "탄 50% 미만, 적이 충분히 멀 때 시야 밖에서",
+          "src": "ADR-117"
+        },
+        {
+          "id": "i7",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Team",
+          "what": "팀 행동",
+          "value": "아군 14m 안 따라감, 35m 넘으면 합류, 45m 안에서 소생 대상 탐색",
+          "src": "BotController.Team.cs"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "이동·경로 (NavMesh 사실)",
+      "columns": [
+        {
+          "key": "fact",
+          "label": "사실",
+          "kind": "text"
+        },
+        {
+          "key": "detail",
+          "label": "내용",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "n1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/AI/BotController.cs:16,34,868",
+          "fact": "서버에서만 NavMeshAgent를 붙여 걷는다",
+          "detail": "먼 목적지는 NavMesh.CalculatePath 코너를 한 점씩 따라감. 프리팹에는 에이전트 없음",
+          "note": ""
+        },
+        {
+          "id": "n2",
+          "status": "confirmed",
+          "source": "docs/research/06_missed_items.md:59",
+          "fact": "NavMeshLink/OffMeshLink 0건",
+          "detail": "창문 넘기, 사다리, 옥상 진입 경로를 봇은 모른다. 계단은 걷는다. 경사 40도까지, 계단 높이 0.3m",
+          "note": ""
+        },
+        {
+          "id": "n3",
+          "status": "confirmed",
+          "source": "BotController.cs:264",
+          "fact": "닫힌 문은 0.25초마다 열기 시도",
+          "detail": "막히면 포기하고 새 목표(#77)",
+          "note": ""
+        },
+        {
+          "id": "n4",
+          "status": "confirmed",
+          "source": "docs/research/06_missed_items.md:65",
+          "fact": "NavMesh는 지형+건물+바위+나무를 한 덩어리로 한 번에 구움",
+          "detail": "복셀 0.117m, 타일 256, 1km²에서 5.2MB",
+          "note": "도시·산으로 커지면 구움 시간과 파일 크기가 비선형으로 증가"
+        },
+        {
+          "id": "n5",
+          "status": "confirmed",
+          "source": "BotController.cs:984",
+          "fact": "엄폐 탐색이 단순함",
+          "detail": "위협이 못 보는 곳을 찾을 뿐, 바위·능선·건물 활용 로직 없음",
+          "note": ""
+        },
+        {
+          "id": "n6",
+          "status": "confirmed",
+          "source": "docs/research/06_missed_items.md:59-62",
+          "fact": "관심 지점이 도시가 커지면 한곳으로 수렴할 수 있음",
+          "detail": "권장: 건물 입구 + 지붕 + 골목 교차점을 생성기가 자동 출력",
+          "note": "제안 상태"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "인원 수",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "now",
+          "label": "지금",
+          "kind": "num"
+        },
+        {
+          "key": "plan",
+          "label": "계획",
+          "kind": "num"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "c1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Match",
+          "what": "한 판 최대 인원(사람+봇)",
+          "now": 16,
+          "plan": 50,
+          "note": "계획 50: docs/research/MASTER_PLAN.md:9. 사람 수가 달라도 같은 규칙"
+        },
+        {
+          "id": "c2",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Match",
+          "what": "기본 봇 수",
+          "now": 15,
+          "plan": "사람 수에 맞춰 채움",
+          "note": "MaxBots 23 (상한)"
+        },
+        {
+          "id": "c3",
+          "status": "confirmed",
+          "source": "docs/research/06_missed_items.md:16",
+          "what": "인구 밀도",
+          "now": "약 48명/km²(31명/0.65km²)",
+          "plan": "50명/3.2km² = 15.5명/km²",
+          "note": "조사 06은 31명 기준으로 계산함(출처 그대로). 맵을 키우면 밀도가 10~20배 줄어 교전 빈도가 달라진다."
+        },
+        {
+          "id": "c4",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Net/MatchDirector.cs:227-289",
+          "what": "봇 투입",
+          "now": "엘리베이터별 1대씩 배정",
+          "plan": "승강장 20곳, 슬롯 60 (MASTER_PLAN.md:140)",
+          "note": "Teams.Deploy가 사람+봇을 팀 크기로 배치"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "이름",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "nm",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/AI/BotController.cs:302; MatchDirector.cs:255",
+          "what": "봇 이름",
+          "value": "'봇 ' + 번호",
+          "note": "이름 풀 없음, 번호만"
+        },
+        {
+          "id": "np",
+          "status": "proposed",
+          "what": "이름 풀(제안)",
+          "value": "한국어·영어 가상 닉네임 60개 이상(실존 인물·브랜드·스트리머 이름 금지), 중복 없이 시드로 뽑기",
+          "note": "50명 판에서 '봇 N'이면 봇이 티 난다. 일부 플레이어 닉네임 형식(성+숫자 등)을 섞는다."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "시가전·산악 행동 (제안)",
+      "columns": [
+        {
+          "key": "beh",
+          "label": "행동",
+          "kind": "text"
+        },
+        {
+          "key": "why",
+          "label": "필요한 이유",
+          "kind": "text"
+        },
+        {
+          "key": "dep",
+          "label": "선행 조건",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "b1",
+          "status": "proposed",
+          "beh": "건물 진입·방 정리: 입구에서 멈춰 소리·시야 확인, 방 단위 이동",
+          "why": "실내 교전이 핵심. 지금은 문만 열고 지나감",
+          "dep": "건물 입구 관심 지점 자동 생성"
+        },
+        {
+          "id": "b2",
+          "status": "proposed",
+          "beh": "창문·옥상 활용: 창문 사격, 옥상 점령",
+          "why": "도시 전투의 수직 차원",
+          "dep": "NavMeshLink(창문·옥상 진입), 파쿠르 연결"
+        },
+        {
+          "id": "b3",
+          "status": "proposed",
+          "beh": "엄폐 사용: 모서리 피킹, 차량·바위 뒤 숨기",
+          "why": "지금 엄폐는 '안 보이는 곳 이동'뿐",
+          "dep": "엄폐 후보 지점 스캔"
+        },
+        {
+          "id": "b4",
+          "status": "proposed",
+          "beh": "능선·사면 이동과 고지 선점",
+          "why": "산 맵에서 거리 교전이 늘어남",
+          "dep": "고도 가중 경로, 산 NavMesh 연결성 테스트"
+        },
+        {
+          "id": "b5",
+          "status": "proposed",
+          "beh": "차량 이용·회피: 도로 이동 때 탑승, 차량 소리에 반응",
+          "why": "맵이 커지면 이동 수단 필요. 경적은 이미 청취",
+          "dep": "차량 운전 봇 로직(지금 없음)"
+        },
+        {
+          "id": "b6",
+          "status": "proposed",
+          "beh": "소리 구분: 총소리 방향, 실내/실외 가림",
+          "why": "50명이 동시에 쏘면 청취가 폭주",
+          "dep": "서버 소리 이벤트 관심 영역 제한(MASTER_PLAN.md:43)"
+        },
+        {
+          "id": "b7",
+          "status": "proposed",
+          "beh": "난이도 혼합: 같은 판에 쉬움·보통·어려움 비율 배치",
+          "why": "지금은 판 전체가 한 단계",
+          "dep": "BotRules 봇별 인스턴스"
+        },
+        {
+          "id": "b8",
+          "status": "proposed",
+          "beh": "서버 비용 관리: 멀리 있는 봇은 감지 주기 늘리거나 단순 이동",
+          "why": "봇 수 증가 시 감지 레이캐스트와 NavMesh 비용 증가",
+          "dep": "관심 영역 기반 LOD"
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "db1",
+          "q": "50명 중 봇 비율은?",
+          "options": [
+            "사람 수 무관하게 항상 50명으로 채움",
+            "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장)",
+            "고정 비율"
+          ],
+          "recommended": "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장)",
+          "status": "confirmed",
+          "answer": "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "MASTER_PLAN.md:9 '사람 수가 달라도 같은 규칙'과 맞고, 서버 CPU 상한을 지키기 쉽다."
+        },
+        {
+          "id": "db2",
+          "q": "난이도는 판 전체 하나인가, 봇별로 섞는가?",
+          "options": [
+            "판 전체 하나(현재)",
+            "봇별 혼합"
+          ],
+          "recommended": "봇별 혼합(보통 중심, 쉬움·어려움 소수)",
+          "status": "confirmed",
+          "answer": "봇별 혼합(보통 중심, 쉬움·어려움 소수) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "한 판 안에서 실력 차이가 있어야 사람 같고, 초보도 이길 수 있다. 구현은 BotLevels.For를 봇별로 부르는 정도."
+        },
+        {
+          "id": "db3",
+          "q": "봇이 차량을 운전하는가?",
+          "options": [
+            "아니오(회피·청취만)",
+            "예"
+          ],
+          "recommended": "아니오(이번 범위 밖, BACKLOG)",
+          "status": "confirmed",
+          "answer": "봇은 차량을 운전하지 않는다(준환 확정). 봇의 차량 탑승도 이번 범위 밖",
+          "why": "NavMesh 기반 보행과 물리 차량 주행은 다른 문제. 06_missed_items.md I3 권장도 창문·차량 제외."
+        },
+        {
+          "id": "db4",
+          "q": "봇이 창문·옥상·사다리를 쓰는가?",
+          "options": [
+            "이번엔 제외",
+            "NavMeshLink로 지원"
+          ],
+          "recommended": "이번엔 제외, 도시 지도 확정 후 NavMeshLink 후보만 표시",
+          "status": "confirmed",
+          "answer": "이번 범위에서 제외(준환: 상관없음, 제 판단으로 유지). 도시 지도 확정 후 NavMeshLink 후보만 표시",
+          "why": "NavMeshLink 0건이 현재 상태. 도시 설계가 정해진 뒤 입구·옥상 지점을 생성기가 낼 때 같이 한다."
+        },
+        {
+          "id": "db5",
+          "q": "봇 이름은 어떻게?",
+          "options": [
+            "봇 N 유지",
+            "가상 닉네임 풀"
+          ],
+          "recommended": "가상 닉네임 풀",
+          "status": "confirmed",
+          "answer": "가상 닉네임 풀 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "50명 판에서 봇이 한눈에 티 난다. 실존 이름 금지."
+        }
+      ]
+    }
+  ]
+}

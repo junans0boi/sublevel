@@ -1,0 +1,177 @@
+{
+  "id": "ammo",
+  "title": "탄",
+  "order": 21,
+  "group": "콘텐츠",
+  "summary": "4개 구경(9mm·5.56mm·12게이지·7.62mm)과 그 사용 총·루팅 수량·무게.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "prose",
+      "title": "정의",
+      "paragraphs": [
+        "탄은 구경별로 나뉘어 인벤토리에 쌓인다(ADR-054). enum 순서는 데이터·네트워크에 저장되므로 바꾸지 않는다. 총 한 자루는 한 구경만 쓴다."
+      ],
+      "bullets": [
+        "루팅 비중은 loot.json 가중치(탄 항목 합계 52, 전체 대비 아님).",
+        "소지 무게는 Carry 규칙의 개당 값(탄 1발 기준)."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "탄 목록",
+      "columns": [
+        {
+          "key": "name",
+          "label": "게임 내 이름",
+          "kind": "text"
+        },
+        {
+          "key": "enum",
+          "label": "코드 enum",
+          "kind": "tag"
+        },
+        {
+          "key": "users",
+          "label": "사용 총 (id)",
+          "kind": "text"
+        },
+        {
+          "key": "pickup",
+          "label": "루팅 기본 수량",
+          "kind": "num"
+        },
+        {
+          "key": "lw",
+          "label": "루팅 비중",
+          "kind": "num"
+        },
+        {
+          "key": "weight",
+          "label": "무게(개당)",
+          "kind": "num"
+        },
+        {
+          "key": "icon",
+          "label": "아이콘",
+          "kind": "image"
+        },
+        {
+          "key": "real",
+          "label": "실제 대응(참고)",
+          "kind": "text"
+        },
+        {
+          "key": "role",
+          "label": "설계 역할",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "ammo:9mm",
+          "status": "confirmed",
+          "source": "WeaponDef.cs:6-14; Assets/_Project/Data/Resources/GameData/loot.json:17-20; Assets/_Project/Data/Resources/GameData/rules.json:Carry(줄 ~80)",
+          "notes": "",
+          "name": "9mm",
+          "enum": "Pistol9 = 0",
+          "users": "VK-9(1), Ordo(2)",
+          "pickup": 30,
+          "lw": 18,
+          "weight": 0.2,
+          "icon": "../../Assets/_Project/Resources/Icons/ammo_9mm.png",
+          "real": "권총탄 구경 일반 명칭",
+          "role": "권총·SMG 공용. 가장 흔함."
+        },
+        {
+          "id": "ammo:5.56mm",
+          "status": "confirmed",
+          "source": "WeaponDef.cs:6-14; Assets/_Project/Data/Resources/GameData/loot.json:17-20; Assets/_Project/Data/Resources/GameData/rules.json:Carry(줄 ~80)",
+          "notes": "",
+          "name": "5.56mm",
+          "enum": "Rifle556 = 1",
+          "users": "Warden(3)",
+          "pickup": 30,
+          "lw": 14,
+          "weight": 0.3,
+          "icon": "../../Assets/_Project/Resources/Icons/ammo_556.png",
+          "real": "소총탄 구경 일반 명칭",
+          "role": "소총 전용."
+        },
+        {
+          "id": "ammo:12게이지",
+          "status": "confirmed",
+          "source": "WeaponDef.cs:6-14; Assets/_Project/Data/Resources/GameData/loot.json:17-20; Assets/_Project/Data/Resources/GameData/rules.json:Carry(줄 ~80)",
+          "notes": "",
+          "name": "12게이지",
+          "enum": "Shotgun12 = 2",
+          "users": "Breacher(4)",
+          "pickup": 8,
+          "lw": 12,
+          "weight": 0.8,
+          "icon": "../../Assets/_Project/Resources/Icons/ammo_12ga.png",
+          "real": "산탄 구경 일반 명칭",
+          "role": "산탄 전용, 무게 가장 큼."
+        },
+        {
+          "id": "ammo:7.62mm",
+          "status": "confirmed",
+          "source": "WeaponDef.cs:6-14; Assets/_Project/Data/Resources/GameData/loot.json:17-20; Assets/_Project/Data/Resources/GameData/rules.json:Carry(줄 ~80)",
+          "notes": "현재 7.62를 쓰는 총이 Sentinel 하나뿐.",
+          "name": "7.62mm",
+          "enum": "Rifle762 = 3",
+          "users": "Sentinel(5)",
+          "pickup": 15,
+          "lw": 8,
+          "weight": 0.5,
+          "icon": "../../Assets/_Project/Resources/Icons/ammo_762.png",
+          "real": "대구경 소총탄 일반 명칭",
+          "role": "저격 전용. 가장 희귀."
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "탄 — 정해야 할 것",
+      "items": [
+        {
+          "id": "a1",
+          "q": "탄 종류를 늘릴 것인가(현재 4종: 9/5.56/12게이지/7.62)",
+          "options": [
+            "4종 유지",
+            "특수탄(관통·소이 등) 추가",
+            "대구경 .50 추가"
+          ],
+          "recommended": "4종 유지",
+          "status": "confirmed",
+          "answer": "4종 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "범위 최소화. 7.62는 DMR 추가 시 사용처가 늘어남. (2026-11-16 총기 구성 확정에 따라 신규 탄 종류 없이 9mm / 5.56 / 7.62 / 12게이지 4종으로 충분하다고 본다 — 확인 필요.)"
+        },
+        {
+          "id": "a2",
+          "q": "탄 무게/소지량 균형",
+          "options": [
+            "현재 유지(9mm 0.2, 5.56 0.3, 12ga 0.8, 7.62 0.5)",
+            "재조정"
+          ],
+          "recommended": "현재 유지",
+          "status": "confirmed",
+          "answer": "현재 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "배낭 기본 60 + 조끼/배낭 보너스(25/75~125)와 맞물림 — 방어구 섹션 참고."
+        },
+        {
+          "id": "a3",
+          "q": "탄 종류 표기(숫자 구경)와 실존 총기 연상",
+          "options": [
+            "일반 구경 표기 유지",
+            "가상 표기(예: A형/B형)"
+          ],
+          "recommended": "일반 구경 표기 유지",
+          "status": "confirmed",
+          "answer": "일반 구경 표기 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "구경 수치는 상표가 아니고 현실감 전달에 유리."
+        }
+      ]
+    }
+  ]
+}

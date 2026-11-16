@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>게임 정의서</title>
+<style>
+:root{--bg:#f6f6f4;--panel:#fff;--ink:#1d1f22;--mute:#6a6f76;--line:#dcdcd6;--accent:#2f6fed;--ok:#1f8a4c;--warn:#b7791f;--bad:#c2410c;--okbg:#e4f4ea;--warnbg:#fbf0d9;--badbg:#fde6dc;--code:#eef0f3}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#14161a;--panel:#1c1f24;--ink:#e8e9eb;--mute:#8e949c;--line:#2d3138;--accent:#6ea0ff;--ok:#4cc486;--warn:#e0a948;--bad:#f08a5d;--okbg:#17301f;--warnbg:#33290f;--badbg:#3a1e12;--code:#252a31}}
+:root[data-theme=dark]{--bg:#14161a;--panel:#1c1f24;--ink:#e8e9eb;--mute:#8e949c;--line:#2d3138;--accent:#6ea0ff;--ok:#4cc486;--warn:#e0a948;--bad:#f08a5d;--okbg:#17301f;--warnbg:#33290f;--badbg:#3a1e12;--code:#252a31}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;min-height:100vh}
+nav{width:250px;flex:none;border-right:1px solid var(--line);background:var(--panel);position:sticky;top:0;height:100vh;overflow:auto;padding:14px 10px}
+nav h1{font-size:15px;margin:2px 8px 10px}nav input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.grp{font-size:11px;color:var(--mute);margin:14px 8px 4px;letter-spacing:.04em}
+nav a{display:flex;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:6px;color:var(--ink);text-decoration:none;cursor:pointer}nav a:hover{background:var(--bg)}nav a.on{background:var(--accent);color:#fff}
+.cnt{font-size:11px;color:var(--mute)}nav a.on .cnt{color:#fff}.cnt b{color:var(--bad)}nav a.on .cnt b{color:#fff}
+main{flex:1;min-width:0;padding:22px 28px 60px;max-width:1500px}
+h2{margin:0 0 4px;font-size:22px}h3{margin:26px 0 8px;font-size:16px}.sum{color:var(--mute);margin:0 0 14px}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid transparent;white-space:nowrap}
+.confirmed{background:var(--okbg);color:var(--ok)}.proposed{background:var(--warnbg);color:var(--warn)}.open{background:var(--badbg);color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%}th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{position:sticky;top:0;background:var(--panel);font-size:12px;color:var(--mute);white-space:nowrap}tr:last-child td{border-bottom:0}
+td[contenteditable]:focus{outline:2px solid var(--accent)}td.num{text-align:right;font-variant-numeric:tabular-nums}
+.src{color:var(--mute);font-size:11px}img.th{max-height:70px;border-radius:6px;display:block}.sw{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--line);vertical-align:-2px;margin-right:4px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;align-items:center}button,select{font:inherit;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}button.p{background:var(--accent);border-color:var(--accent);color:#fff}button.sel{background:var(--ok);border-color:var(--ok);color:#fff}
+.dq{font-weight:600}.opts{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.why{color:var(--mute);font-size:12px}.rec{font-size:12px;color:var(--accent)}
+ul{margin:6px 0 6px 18px;padding:0}p{margin:6px 0}.empty{color:var(--mute);padding:30px;text-align:center}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.stats .card{margin:0;cursor:pointer}.stats .card:hover{border-color:var(--accent)}
+@media (max-width:800px){body{display:block}nav{position:static;width:auto;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:16px}}
+</style>
+</head>
+<body>
+<nav>
+  <h1>게임 정의서</h1>
+  <input id="q" placeholder="검색 (전체)" autocomplete="off">
+  <div id="menu"></div>
+  <div class="grp">보기</div>
+  <a onclick="location.hash='#/decisions'">결정 대기 <span class="cnt" id="dcnt"></span></a>
+  <a onclick="toggleTheme()">라이트/다크 전환</a>
+</nav>
+<main id="main"></main>
+<script>/*BUNDLE*/</script>
+<script>
+const B = window.BIBLE || [];
+const ST = {confirmed:'확정', proposed:'제안', open:'미정'};
+const LS = 'bible_overlay_v1';
+let ov = {}; try { ov = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) {}
+const save = () => { try { localStorage.setItem(LS, JSON.stringify(ov)); } catch (e) {} };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const badge = s => s ? `<span class="badge ${s}">${ST[s] || s}</span>` : '';
+const eff = (sid, id, key, v) => (ov[sid] && ov[sid][id] && key in ov[sid][id]) ? ov[sid][id][key] : v;
+function setOv(sid, id, key, v){ (ov[sid] = ov[sid] || {})[id] = Object.assign(ov[sid][id] || {}, {[key]: v}); save(); }
+function toggleTheme(){ const r = document.documentElement; const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches; r.dataset.theme = dark ? 'light' : 'dark'; }
+
+function openCount(s){ let n = 0; (s.parts || []).forEach(p => { if (p.type === 'decisions') (p.items || []).forEach(d => { if (eff(s.id, d.id, 'status', d.status) !== 'confirmed') n++; }); }); return n; }
+function menu(filter){
+  const groups = {}; B.forEach(s => (groups[s.group || '기타'] = groups[s.group || '기타'] || []).push(s));
+  let h = '';
+  Object.keys(groups).forEach(g => { h += `<div class="grp">${esc(g)}</div>`; groups[g].forEach(s => { const o = openCount(s); h += `<a data-id="${s.id}" onclick="location.hash='#/${s.id}'"><span>${esc(s.title)}</span><span class="cnt">${o ? '<b>' + o + '</b>' : ''}</span></a>`; }); });
+  document.getElementById('menu').innerHTML = h;
+  document.getElementById('dcnt').innerHTML = '<b>' + B.reduce((a, s) => a + openCount(s), 0) + '</b>';
+}
+function colCell(c, v, r, sid){
+  const k = c.kind || 'text';
+  if (k === 'image') return v ? `<img class="th" loading="lazy" src="${esc(v)}" alt="" onerror="this.replaceWith('이미지 없음')">` : '<span class="src">-</span>';
+  if (k === 'audio') return v ? `<audio controls preload="none" src="${esc(v)}"></audio>` : '<span class="src">-</span>';
+  if (k === 'color') return v ? `<span class="sw" style="background:${esc(v)}"></span>${esc(v)}` : '';
+  if (k === 'link') return v ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>` : '';
+  if (k === 'tag') return v ? `<span class="badge" style="background:var(--code)">${esc(v)}</span>` : '';
+  return `<span data-e>${esc(v)}</span>`;
+}
+function table(s, p, pi){
+  const cols = p.columns || [];
+  let h = `<h3>${esc(p.title || '')}</h3><div class="tw"><table><tr><th>상태</th>${cols.map(c => `<th>${esc(c.label || c.key)}</th>`).join('')}<th>근거</th></tr>`;
+  (p.rows || []).forEach((r, ri) => {
+    const id = r.id || ('r' + pi + '_' + ri);
+    const stat = eff(s.id, id, 'status', r.status);
+    h += `<tr data-s="${s.id}" data-id="${esc(id)}" data-t="${esc(JSON.stringify(r).toLowerCase())}"><td><select class="rs" data-sid="${s.id}" data-id="${esc(id)}"><option value=""></option>${['confirmed','proposed','open'].map(x => `<option value="${x}" ${x === stat ? 'selected' : ''}>${ST[x]}</option>`).join('')}</select></td>`;
+    cols.forEach(c => { const v = eff(s.id, id, c.key, r[c.key]); h += `<td class="${c.kind === 'num' ? 'num' : ''}" ${(!c.kind || c.kind === 'text' || c.kind === 'num') ? `contenteditable data-sid="${s.id}" data-id="${esc(id)}" data-key="${esc(c.key)}"` : ''}>${colCell(c, v, r, s.id)}</td>`; });
+    h += `<td class="src">${esc(r.source || '')}${r.notes ? '<br>' + esc(r.notes) : ''}</td></tr>`;
+  });
+  return h + '</table></div>';
+}
+function decisions(s, p){
+  let h = `<h3>${esc(p.title || '정해야 할 것')}</h3>`;
+  (p.items || []).forEach(d => {
+    const st = eff(s.id, d.id, 'status', d.status), ans = eff(s.id, d.id, 'answer', d.answer);
+    h += `<div class="card" data-t="${esc((d.q + ' ' + (d.options || []).join(' ')).toLowerCase())}"><div class="dq">${badge(st)} ${esc(d.q)}</div><div class="opts">${(d.options || []).map(o => `<button class="${o === ans ? 'sel' : ''}" data-sid="${s.id}" data-id="${esc(d.id)}" data-opt="${esc(o)}">${esc(o)}${o === d.recommended ? ' ★' : ''}</button>`).join('')}<button data-sid="${s.id}" data-id="${esc(d.id)}" data-clear="1">되돌리기</button></div>${d.recommended ? `<div class="rec">추천: ${esc(d.recommended)}</div>` : ''}${d.why ? `<div class="why">${esc(d.why)}</div>` : ''}${ans && !(d.options || []).includes(ans) ? `<div class="why">선택: ${esc(ans)}</div>` : ''}</div>`;
+  });
+  return h;
+}
+function section(s){
+  let h = `<h2>${esc(s.title)} ${badge(s.status)}</h2><p class="sum">${esc(s.summary || '')}</p>`;
+  (s.parts || []).forEach((p, pi) => {
+    if (p.type === 'prose') h += `<div class="card"><b>${esc(p.title || '')}</b>${(p.paragraphs || []).map(x => `<p>${esc(x)}</p>`).join('')}${p.bullets ? '<ul>' + p.bullets.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : ''}</div>`;
+    else if (p.type === 'table') h += table(s, p, pi);
+    else if (p.type === 'decisions') h += decisions(s, p);
+  });
+  return h;
+}
+function home(){
+  let h = '<h2>게임 정의서</h2><p class="sum">모든 항목은 하나의 데이터(docs/bible/data/*.json)에서 나옵니다. 상태: 확정 = 준환이 정했거나 현재 코드에 있음 · 제안 = 초안 · 미정 = 결정 필요.</p><div class="stats">';
+  B.forEach(s => { const c = {confirmed:0, proposed:0, open:0}; (s.parts || []).forEach(p => (p.rows || p.items || []).forEach(r => { const st = eff(s.id, r.id, 'status', r.status); if (c[st] != null) c[st]++; })); h += `<div class="card" onclick="location.hash='#/${s.id}'"><b>${esc(s.title)}</b><div class="src">${esc(s.group || '')}</div><div style="margin-top:6px">${badge('confirmed')} ${c.confirmed} ${badge('proposed')} ${c.proposed} ${badge('open')} ${c.open}</div></div>`; });
+  return h + '</div><div class="tools"><button onclick="exportOv()" class="p">내 수정 내보내기(JSON)</button><button onclick="if(confirm(\'브라우저에 저장된 수정을 모두 지울까요?\')){ov={};save();route()}">수정 초기화</button></div><p class="why">웹에서 한 수정(결정 선택, 상태, 셀 수정)은 이 브라우저에만 저장됩니다. 내보내기 JSON을 Claude에게 주면 data/*.json에 반영합니다.</p>';
+}
+function openList(){
+  let h = '<h2>결정 대기</h2><p class="sum">모든 섹션의 미확정 결정 항목입니다.</p>';
+  B.forEach(s => (s.parts || []).forEach(p => { if (p.type === 'decisions') { const items = (p.items || []).filter(d => eff(s.id, d.id, 'status', d.status) !== 'confirmed'); if (items.length) h += `<h3>${esc(s.title)} · ${esc(p.title || '')}</h3>` + decisions(s, {items}).replace(/^<h3>.*?<\/h3>/, ''); } }));
+  return h;
+}
+function exportOv(){ const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(ov, null, 2)], {type:'application/json'})); a.download = 'bible_overlay.json'; a.click(); }
+function route(){
+  const id = (location.hash || '#/').slice(2); const m = document.getElementById('main'); menu();
+  document.querySelectorAll('nav a[data-id]').forEach(a => a.classList.toggle('on', a.dataset.id === id));
+  const s = B.find(x => x.id === id);
+  m.innerHTML = id === 'decisions' ? openList() : s ? section(s) : B.length ? home() : '<div class="empty">데이터가 없습니다. python3 tools/bible_build.py 를 실행하세요.</div>';
+  applyFilter(); window.scrollTo(0, 0);
+}
+function applyFilter(){
+  const q = document.getElementById('q').value.trim().toLowerCase(); if (!q) return;
+  if (!location.hash || location.hash === '#/') { /* search across sections */
+    let h = `<h2>검색: ${esc(q)}</h2>`; let n = 0;
+    B.forEach(s => (s.parts || []).forEach(p => (p.rows || []).forEach(r => { if (JSON.stringify(r).toLowerCase().includes(q)) { n++; h += `<div class="card"><a href="#/${s.id}"><b>${esc(s.title)}</b></a> · ${esc(p.title || '')}<br>${esc(Object.values(r).filter(v => typeof v === 'string').slice(0, 6).join(' · '))}</div>`; } })));
+    document.getElementById('main').innerHTML = h + (n ? '' : '<div class="empty">결과 없음</div>'); return;
+  }
+  document.querySelectorAll('tr[data-t],.card[data-t]').forEach(e => e.style.display = e.dataset.t.includes(q) ? '' : 'none');
+}
+document.getElementById('q').addEventListener('input', () => { if (location.hash === '' || location.hash === '#/') route(); else applyFilter(); });
+document.addEventListener('click', e => { const b = e.target.closest('button[data-sid]'); if (!b) return; const {sid, id, opt, clear} = b.dataset; if (clear) { setOv(sid, id, 'answer', ''); setOv(sid, id, 'status', 'open'); } else { setOv(sid, id, 'answer', opt); setOv(sid, id, 'status', 'confirmed'); } route(); });
+document.addEventListener('change', e => { const s = e.target.closest('select.rs'); if (s) { setOv(s.dataset.sid, s.dataset.id, 'status', s.value); menu(); } });
+document.addEventListener('focusout', e => { const t = e.target.closest('td[contenteditable]'); if (t) setOv(t.dataset.sid, t.dataset.id, t.dataset.key, t.innerText.trim()); });
+addEventListener('hashchange', route); route();
+</script>
+</body>
+</html>

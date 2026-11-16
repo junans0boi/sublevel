@@ -1,0 +1,832 @@
+{
+  "id": "characters",
+  "title": "캐릭터",
+  "order": 31,
+  "group": "콘텐츠",
+  "summary": "지금은 Quaternius CC0 'Swat' 한 모델(Generic 리그)이 플레이어·봇·더미를 모두 맡는다. 키 1.8m 캡슐, 눈 1.6m, 높이 기반 피격 구역. 실사 비율 Humanoid 교체와 20종 이상 로스터는 제안 단계.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "table",
+      "title": "현재 모델",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "model",
+          "status": "confirmed",
+          "source": "docs/ASSET_LEDGER.md:38 (C-0001); Assets/_Project/Editor/CharacterKit.cs:15",
+          "what": "캐릭터 모델",
+          "value": "Quaternius Ultimate Modular Men - Swat.fbx (CC0, Generic 리그, 손 뼈 Wrist.R)",
+          "note": "플레이어·봇·훈련 더미가 같은 모델. 스타일화 비율(큰 머리, 5.5등신)."
+        },
+        {
+          "id": "skin",
+          "status": "open",
+          "what": "스킨·복장 변형",
+          "value": "확인된 변형 없음",
+          "note": "팀 구분 색이 어떻게 입혀지는지는 이 조사에서 확인 못 함. 제안은 아래 로스터 참고."
+        },
+        {
+          "id": "cap",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/TestBoxBuilder.cs:331",
+          "what": "캡슐",
+          "value": "높이 1.8m, 반지름 0.35m, 중심 0.9m",
+          "note": ""
+        },
+        {
+          "id": "eye",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Net/Combatant.cs:28",
+          "what": "눈 높이(서기)",
+          "value": "1.6m",
+          "note": "앉기 -0.65, 엎드리기 -1.2 (Stance 규칙)"
+        },
+        {
+          "id": "owned",
+          "status": "confirmed",
+          "source": "docs/research/01_character.md:5-6",
+          "what": "무기 소켓",
+          "value": "Wrist.R 이름 문자열 한 곳",
+          "note": "교체 비용 작음"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "자세별 수치",
+      "columns": [
+        {
+          "key": "stance",
+          "label": "자세",
+          "kind": "text"
+        },
+        {
+          "key": "cap",
+          "label": "캡슐 높이 m",
+          "kind": "num"
+        },
+        {
+          "key": "eye",
+          "label": "눈 낮춤 m",
+          "kind": "num"
+        },
+        {
+          "key": "move",
+          "label": "이동 배율",
+          "kind": "num"
+        },
+        {
+          "key": "spread",
+          "label": "탄퍼짐 배율",
+          "kind": "num"
+        },
+        {
+          "key": "foot",
+          "label": "발소리 배율",
+          "kind": "num"
+        }
+      ],
+      "rows": [
+        {
+          "id": "stand",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Stance",
+          "stance": "서기",
+          "cap": 1.8,
+          "eye": 0,
+          "move": 1.0,
+          "spread": 1.0,
+          "foot": 1.0
+        },
+        {
+          "id": "crouch",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Stance",
+          "stance": "웅크리기",
+          "cap": 1.0,
+          "eye": 0.65,
+          "move": 0.745,
+          "spread": 0.5,
+          "foot": 0.4
+        },
+        {
+          "id": "prone",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Stance",
+          "stance": "엎드리기",
+          "cap": 0.7,
+          "eye": 1.2,
+          "move": 0.255,
+          "spread": 0.2,
+          "foot": 0.1
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "이동 수치",
+      "columns": [
+        {
+          "key": "what",
+          "label": "동작",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "walk",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Locomotion",
+          "what": "걷기",
+          "value": "4.7 m/s",
+          "note": "무기별 배율: SMG 0.977, 소총 0.954, 마크스맨 0.952, 샷건 0.939"
+        },
+        {
+          "id": "run",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Locomotion",
+          "what": "질주",
+          "value": "6.3 m/s",
+          "note": ""
+        },
+        {
+          "id": "slow",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Locomotion",
+          "what": "느린 걷기(발소리 작음)",
+          "value": "1.7 m/s, 발소리 0.25",
+          "note": ""
+        },
+        {
+          "id": "crouchs",
+          "status": "confirmed",
+          "source": "계산: 4.7 x 0.745",
+          "what": "웅크려 걷기",
+          "value": "약 3.5 m/s",
+          "note": "배율을 곱한 값(코드에서 직접 읽은 수치 아님)"
+        },
+        {
+          "id": "prones",
+          "status": "confirmed",
+          "source": "계산: 4.7 x 0.255",
+          "what": "엎드려 기기",
+          "value": "약 1.2 m/s",
+          "note": "같음"
+        },
+        {
+          "id": "jump",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Locomotion",
+          "what": "점프",
+          "value": "초속 4.8, 중력 -14",
+          "note": "낙하: 3m까지 안전, 12m 이상 즉사(피해 100)"
+        },
+        {
+          "id": "stam",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts 전체 grep 결과 0건",
+          "what": "스태미나",
+          "value": "없음",
+          "note": "질주에 제한이 없다. 의도된 설계인지는 open"
+        },
+        {
+          "id": "swim",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/Swim.cs:10-30",
+          "what": "수영",
+          "value": "질주 속도의 46%(약 2.9 m/s), 잠수 20초, 회복 9초, 익사 피해 초당 5",
+          "note": "수심 1.2m 이상에서 수영, 1.0m 이하에서 해제"
+        },
+        {
+          "id": "park",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Parkour",
+          "what": "파쿠르",
+          "value": "넘기 0.5~1.0m, 오르기 최대 2.0m, 창문 턱 0.9~1.25m, 난간 매달리기 2.0~2.5m",
+          "note": "넘기 0.55초, 창문 0.65초, 낮은 오르기 0.6초, 높은 0.9초"
+        },
+        {
+          "id": "lean",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/Aiming.cs:35-36",
+          "what": "기울이기",
+          "value": "옆으로 0.25m, 눈 0.04m 낮춤",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "피격 구역 (높이 기반)",
+      "columns": [
+        {
+          "key": "zone",
+          "label": "구역",
+          "kind": "text"
+        },
+        {
+          "key": "rule",
+          "label": "판정",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "head",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/HitZones.cs:14-18",
+          "zone": "머리",
+          "rule": "발 위 높이 >= 키 - 0.3m (서기: 1.5m 이상)",
+          "note": "자세가 낮아져도 머리는 위 0.3m 고정"
+        },
+        {
+          "id": "limb",
+          "status": "confirmed",
+          "source": "HitZones.cs:16",
+          "zone": "다리",
+          "rule": "키의 45% 미만 (서기: 0.81m 미만)",
+          "note": "팔은 몸통으로 친다(뼈 단위 판정 아님)"
+        },
+        {
+          "id": "body",
+          "status": "confirmed",
+          "source": "HitZones.cs:31-35",
+          "zone": "몸",
+          "rule": "그 사이",
+          "note": ""
+        },
+        {
+          "id": "min",
+          "status": "confirmed",
+          "source": "HitZones.cs:18",
+          "zone": "최소 키",
+          "rule": "0.6m",
+          "note": "어떤 자세도 이보다 작지 않다"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "피격 배율 (weapons.json)",
+      "columns": [
+        {
+          "key": "weapon",
+          "label": "무기",
+          "kind": "text"
+        },
+        {
+          "key": "head",
+          "label": "머리",
+          "kind": "num"
+        },
+        {
+          "key": "body",
+          "label": "몸",
+          "kind": "num"
+        },
+        {
+          "key": "limb",
+          "label": "다리",
+          "kind": "num"
+        }
+      ],
+      "rows": [
+        {
+          "id": "w1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/weapons.json",
+          "weapon": "VK-9 권총",
+          "head": 2.1,
+          "body": 1.0,
+          "limb": 0.9
+        },
+        {
+          "id": "w2",
+          "status": "confirmed",
+          "source": "weapons.json",
+          "weapon": "Ordo SMG",
+          "head": 2.1,
+          "body": 1.05,
+          "limb": 1.3
+        },
+        {
+          "id": "w3",
+          "status": "confirmed",
+          "source": "weapons.json",
+          "weapon": "Warden 불펍",
+          "head": 2.35,
+          "body": 1.0,
+          "limb": 0.9
+        },
+        {
+          "id": "w4",
+          "status": "confirmed",
+          "source": "weapons.json",
+          "weapon": "Breacher 샷건",
+          "head": 1.5,
+          "body": 1.0,
+          "limb": 0.8
+        },
+        {
+          "id": "w5",
+          "status": "confirmed",
+          "source": "weapons.json",
+          "weapon": "Sentinel 저격",
+          "head": 2.5,
+          "body": 1.0,
+          "limb": 0.7
+        },
+        {
+          "id": "wm",
+          "status": "confirmed",
+          "source": "weapons.json",
+          "weapon": "근접 4종(마체테, 쇠지렛대, 낫, 프라이팬)",
+          "head": 1.5,
+          "body": 1.0,
+          "limb": 1.0
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "체력·방어",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "hp",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Net/Combatant.cs:27",
+          "what": "최대 체력",
+          "value": "100",
+          "note": ""
+        },
+        {
+          "id": "helm",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Armor",
+          "what": "헬멧 3등급",
+          "value": "피해 감소 30/40/55%, 내구 80/150/230",
+          "note": ""
+        },
+        {
+          "id": "vest",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Armor",
+          "what": "조끼 3등급",
+          "value": "감소 30/40/55%, 내구 200/220/250",
+          "note": "부서지면 감소 20%"
+        },
+        {
+          "id": "heal",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Heal",
+          "what": "회복 아이템",
+          "value": "붕대 4초 +10(75까지), 구급 6초 +75(75까지), 의료키트 8초 +100",
+          "note": "치료 중 이동 배율 0.6"
+        },
+        {
+          "id": "boost",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Boost",
+          "what": "부스트 게이지",
+          "value": "최대 100, 초당 0.8 소모. 음료 +40, 알약 +60, 주사 +100",
+          "note": "단계별 이속 보너스 0/0/2.5/5%"
+        },
+        {
+          "id": "down",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Team",
+          "what": "쓰러짐(팀전)",
+          "value": "쓰러짐 체력 100, 출혈 초당 2.5, 소생 10초 후 체력 10",
+          "note": "듀오 2 / 스쿼드 4, 아군 사격 없음"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "감정 표현",
+      "columns": [
+        {
+          "key": "id",
+          "label": "코드",
+          "kind": "text"
+        },
+        {
+          "key": "name",
+          "label": "표시 이름",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "e1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/Emotes.cs:8",
+          "name": "손 흔들기 (Wave)"
+        },
+        {
+          "id": "e2",
+          "status": "confirmed",
+          "source": "Emotes.cs:8",
+          "name": "만세 (Cheer)"
+        },
+        {
+          "id": "e3",
+          "status": "confirmed",
+          "source": "Emotes.cs:8",
+          "name": "가리키기 (Point)"
+        },
+        {
+          "id": "e4",
+          "status": "confirmed",
+          "source": "Emotes.cs:8",
+          "name": "인사 (Bow)"
+        },
+        {
+          "id": "e5",
+          "status": "confirmed",
+          "source": "Emotes.cs:8",
+          "name": "춤 (Dance)"
+        },
+        {
+          "id": "e6",
+          "status": "confirmed",
+          "source": "Emotes.cs:8",
+          "name": "박수 (Clap)"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "애니메이션 클립 목록",
+      "columns": [
+        {
+          "key": "set",
+          "label": "묶음",
+          "kind": "text"
+        },
+        {
+          "key": "clips",
+          "label": "클립",
+          "kind": "text"
+        },
+        {
+          "key": "use",
+          "label": "쓰임",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "swat",
+          "status": "confirmed",
+          "source": "docs/ASSET_LEDGER.md:38; Assets/_Project/Editor/CharacterKit.cs:45-50",
+          "set": "Swat 내장(24개, Quaternius CC0)",
+          "clips": "Idle, Walk, Run, Run_Back, HitRecieve, Punch_Left, Punch_Right, Idle_Gun_Pointing 등",
+          "use": "이동 기본층, 피격, 펀치",
+          "note": "이름은 코드에 쓰인 것만 적음"
+        },
+        {
+          "id": "mx",
+          "status": "confirmed",
+          "source": "Assets/_Project/Prefabs/M1_5/Baked/*.anim; docs/ASSET_LEDGER.md:77 (C-0005)",
+          "set": "Mixamo 소총 17개를 Swat 뼈대에 구운 Mx_* (ADR-166)",
+          "clips": "RifleIdle, RifleAimingIdle, FiringRifleStand, ReloadingRifleStand, ReloadRifleCrouch, RifleWalk, RifleWalkBack, RifleRun, RifleSideStep, RifleCrouchWalk, RifleCrouchWalkBack, RifleKneelIdle, RiflePullOut, RiflePutAway, RifleDeath, ProneFiringRifle, ProneReloadingRifle",
+          "use": "조준/낮춤/발사/사망에 연결. ProneFiringRifle, ProneReloadingRifle은 구웠지만 어느 상태에도 안 이어짐",
+          "note": "비 CC0, 저장소 비공개 유지(Mixamo/LICENSE.txt). Adobe 추가 약관 미확인."
+        },
+        {
+          "id": "ual",
+          "status": "confirmed",
+          "source": "docs/ASSET_LEDGER.md:72-76 (C-0002, C-0004)",
+          "set": "Quaternius UAL1/UAL2 Standard (CC0)",
+          "clips": "UAL1: 권총 조준·대기·장전·발사, 웅크리기, 수영, 달리기, 구르기, 사망, 피격. UAL2: 근접·슬라이드·점프·피격",
+          "use": "임포트만, 현 컨트롤러에는 연결 안 됨(확인 필요)",
+          "note": "Humanoid 리그용이라 현 Swat(Generic)에는 못 붙는다"
+        },
+        {
+          "id": "code",
+          "status": "confirmed",
+          "source": "docs/research/04_animation_audit.md",
+          "set": "코드 구동 포즈",
+          "clips": "엎드리기(모델 85도 눕힘), 웅크리기 무릎, 수영 팔·다리, 총 두 손 IK, 차량 착석, 난간, 파쿠르 포즈",
+          "use": "클립 없이 코드가 뼈를 직접 돌림",
+          "note": "엎드림 시 몸이 약 35도 뜨고 소총 달릴 때 한 팔이 늘어지는 결함이 감사에서 확인됨"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "애니메이터 구조",
+      "columns": [
+        {
+          "key": "name",
+          "label": "이름",
+          "kind": "text"
+        },
+        {
+          "key": "kind",
+          "label": "종류",
+          "kind": "tag"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "c",
+          "status": "confirmed",
+          "source": "Assets/_Project/Prefabs/M1_5/Character.controller",
+          "name": "Base",
+          "kind": "레이어",
+          "note": "이동 블렌드 (Locomotion)"
+        },
+        {
+          "id": "c2",
+          "status": "confirmed",
+          "source": "Character.controller",
+          "name": "Upper",
+          "kind": "레이어",
+          "note": "상체 자세: Lowered, Aim, Death 상태"
+        },
+        {
+          "id": "c3",
+          "status": "confirmed",
+          "source": "Character.controller",
+          "name": "PunchRight / PunchLeft",
+          "kind": "레이어",
+          "note": ""
+        },
+        {
+          "id": "c4",
+          "status": "confirmed",
+          "source": "Character.controller",
+          "name": "Air, Shoot, Hit",
+          "kind": "레이어",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "type": "prose",
+      "title": "교체 계획 (제안)",
+      "paragraphs": [
+        "Swat은 Humanoid 리타겟이 안 되는 뼈 구조(다리가 Hips 아래가 아님)라 Mixamo 클립을 오프라인으로 구워 써야 했고, 엎드리기·소총 팔에서 결함이 남았다. 실사 비율 Humanoid 캐릭터로 교체하면 Mixamo/Quaternius 클립을 베이크 없이 직접 쓸 수 있다.",
+        "교체 때 바꿔야 하는 곳: CharacterKit(전면 재작성), MixamoBake(폐기), CombatantAnimation 본 슬롯, 소총·차량 IK, MeleeKit 소켓, 좌석 위치 재측정. 피격 구역은 높이 기반이라 키·눈 높이·캡슐만 새 비율(약 1.75m)에 맞추면 된다(조사 01 §0, §4).",
+        "폴리 예산: 화면 내 삼각형 1.5M 이하. LOD 3단계 필수(LOD0 15k 이하 8명, LOD1 약 5k, LOD2 약 1.5k, 100m 밖 컬)."
+      ],
+      "bullets": [
+        "목표 로스터: 서로 구분되는 외형 20종 이상(남녀·체형 혼합), 같은 모델은 인접하지 않게 배치 + 머티리얼 틴트 + 팀 색 소품.",
+        "AI 생성 모델 금지(규칙 2). Ready Player Me는 2026-01-31 서비스 종료라 제외."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "교체 후보 (모두 제안)",
+      "columns": [
+        {
+          "key": "name",
+          "label": "후보",
+          "kind": "text"
+        },
+        {
+          "key": "source",
+          "label": "출처",
+          "kind": "text"
+        },
+        {
+          "key": "lic",
+          "label": "라이선스",
+          "kind": "text"
+        },
+        {
+          "key": "count",
+          "label": "수량",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "장단점",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "mx",
+          "status": "proposed",
+          "source": "docs/research/01_character.md §1a",
+          "name": "Mixamo 사실풍 캐릭터 풀",
+          "lic": "Adobe Mixamo FAQ: 상업 무료. 비 CC0, 원본 단독 재배포 금지",
+          "count": "8~12종 (남녀·체형 혼합)",
+          "note": "표준 Mixamo 뼈대로 Humanoid 자동 구성, 클립 직결. 단점: 폴리·텍스처 미확인, 약관 원문 미확인(사람 검토 R2), 모델마다 의상 고정."
+        },
+        {
+          "id": "ubc",
+          "status": "proposed",
+          "source": "저장소 Art/Characters/QuaterniusUniversal/BaseCharacters; docs/ASSET_LEDGER.md:73 (C-0003)",
+          "name": "Quaternius Universal Base Characters Standard",
+          "lic": "CC0 1.0",
+          "count": "보유 2종(Superhero 남/녀) x 피부 2 x 머리 2 = 8 조합",
+          "note": "약 13k 폴리, Humanoid 설정됨(Avatar 유효성은 실측 필요). 이상화 체형, 군복 없음. Regular/Teen 체형은 유료라 규칙 3상 blocked."
+        },
+        {
+          "id": "sk",
+          "status": "proposed",
+          "source": "조사 01 §1c",
+          "name": "Sketchfab CC0/CC-BY 개별 캐릭터",
+          "lic": "건별 확인",
+          "count": "보조",
+          "note": "리깅 품질 편차 큼, 건별 심사 비용."
+        },
+        {
+          "id": "mh",
+          "status": "proposed",
+          "source": "조사 01 §1c",
+          "name": "MakeHuman 출력물",
+          "lic": "CC0 표기(원문 확인 필요)",
+          "count": "대량 변형 가능",
+          "note": "리깅에 Blender 작업 필요. 2차 수단."
+        },
+        {
+          "id": "kn",
+          "status": "proposed",
+          "source": "조사 01 §1c",
+          "name": "Kenney, Quaternius Ultimate Modular 계열",
+          "lic": "CC0",
+          "count": "-",
+          "note": "스타일화라 실사 방향에 안 맞음. 비추천."
+        },
+        {
+          "id": "as",
+          "status": "proposed",
+          "source": "조사 01 §1c",
+          "name": "Asset Store 무료 캐릭터",
+          "lic": "Asset Store EULA",
+          "count": "-",
+          "note": "외형 부적합·상표 위험. 비추천."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "로스터 규모 (제안)",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r1",
+          "status": "proposed",
+          "what": "서로 다른 외형 수",
+          "value": "20종 이상",
+          "note": "Mixamo 8~12 + UBC 조합 8 이상"
+        },
+        {
+          "id": "r2",
+          "status": "proposed",
+          "what": "플레이어 전용",
+          "value": "UBC 조합(피부·머리 선택)",
+          "note": "CC0라 크레딧 부담 없음"
+        },
+        {
+          "id": "r3",
+          "status": "proposed",
+          "what": "봇 전용",
+          "value": "Mixamo 풀 + 시드 기반 배정",
+          "note": "팀 색은 완장·머리띠 소품 + 약한 틴트"
+        },
+        {
+          "id": "r4",
+          "status": "proposed",
+          "what": "진행 순서",
+          "value": "1종 시험 임포트로 Avatar·폴리·텍스처 검증 -> 소켓 일반화 -> 클립 직결 -> LOD -> 변형 시스템 -> ledger 갱신 -> Swat 제거",
+          "note": "조사 01 체크리스트 I1~I9"
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "dc1",
+          "q": "Mixamo 약관 원문 검토 전에 Mixamo 캐릭터를 출시 빌드에 넣어도 되는가?",
+          "options": [
+            "검토 전까지 보류",
+            "그냥 진행"
+          ],
+          "recommended": "검토 전까지 보류",
+          "status": "confirmed",
+          "answer": "검토 전까지 보류 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "비 CC0, 약관 원문 미확인(법적 판단은 사람의 일). 개발용은 가능하되 출시 전 체크리스트 항목으로."
+        },
+        {
+          "id": "dc2",
+          "q": "플레이어 기본 아바타는 CC0(UBC)로 가고 Mixamo는 봇만 쓰는가?",
+          "options": [
+            "예",
+            "Mixamo도 플레이어에게 개방"
+          ],
+          "recommended": "예",
+          "status": "confirmed",
+          "answer": "예 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "약관 위험을 봇 한쪽으로 가두고, 폴백(UBC 단독)이 항상 있다."
+        },
+        {
+          "id": "dc3",
+          "q": "스태미나를 둘 것인가?",
+          "options": [
+            "없음 유지",
+            "질주 스태미나 추가"
+          ],
+          "recommended": "없음 유지",
+          "status": "confirmed",
+          "answer": "없음 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "현재 질주 무제한이 전투 흐름에 맞는지 플레이 피드백 필요. 도시·산 맵 크기 결정 후 재검토."
+        },
+        {
+          "id": "dc4",
+          "q": "새 캐릭터의 서기 키와 눈 높이 기준은?",
+          "options": [
+            "키 1.8 / 눈 1.6 유지",
+            "키 1.75 / 눈 1.65 등 새 비율에 맞춰 조정"
+          ],
+          "recommended": "키 1.8 / 눈 1.6 유지(캡슐 기준)",
+          "status": "confirmed",
+          "answer": "키 1.8 / 눈 1.6 유지(캡슐 기준) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "캡슐·피격 구역·좌석·문 높이가 모두 이 값에 묶여 있다. 모델을 캡슐에 맞추는 편이 변경 범위가 작다."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>맵 안 C2 - 강과 산악의 섬 (50인)</title>
+<style>
+:root{--seabg:#7bb3c5;--bg:#f3f0e8;--fg:#1d1c19;--mut:#625e54;--card:#fffdf8;--line:#d9d3c4;--acc:#1b5e9e;--halo:#fffdf8d9;--ok:#1f7a3a;--bad:#b3261e;
+--rdH:#e8b04a;--rdHc:#6b4c14;--rdP:#fbf7ee;--rdPc:#5f5a50;--rdD:#7a5a36;--brg:#fff;--brgc:#222;--contour:#5e4d2c;--coast:#2b5d6e;
+--town:#c8a86a;--street:#cdc7b6;--streetc:#8c8675;--blk:#f4efdd;--plaza:#d6cdb4;--play:#bcd49e;--field:#a9c97a;--fenceC:#4b4b4b;--car:#3a6ea5;--cont:#b5651d;--ground:#e4dfcb;--river:#79b4cf;--embank:#b3a88c;
+--b-house:#c9915a;--b-shop:#d4574d;--b-villa:#a77fb8;--b-apt:#5b84b8;--b-school:#e3c140;--b-barr:#6b8f58;--b-fact:#6c747d;--b-ware:#9aa095;--b-market:#e58a22;--b-stall:#f2b85c;--b-tower:#2a2a2a;--b-shed:#b9ad95;--bstroke:#3a352c;
+--elev:#1b5e9e;--hi:#c0281e;--mid:#d98a00;--veh:#0f8a82;--pk:#7b3fb5;--zone:#c0281e;--reg:#4a3b78;--foot:#2a2a2a}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--seabg:#123344;--bg:#15171a;--fg:#ecebe7;--mut:#a3a097;--card:#1e2125;--line:#363a3f;--acc:#6db3ff;--halo:#15171ad9;--ok:#5fd08a;--bad:#ff8a80;--rdH:#d9a441;--rdHc:#120d04;--rdP:#cfcabd;--rdPc:#0e0f10;--rdD:#b08a5a;--brg:#e8e6df;--brgc:#000;--contour:#d8caa0;--coast:#7fc2d6;--town:#e0b86a;--street:#4a4d4a;--streetc:#2b2d2c;--blk:#33362f;--plaza:#585a52;--play:#4b6b3c;--field:#4f6e34;--fenceC:#cfcfcf;--car:#79aee6;--cont:#d08a4c;--ground:#2b2f27;--river:#2f6e86;--embank:#6b6552;--b-house:#c28a55;--b-shop:#d96a60;--b-villa:#b48fc4;--b-apt:#6f9ad1;--b-school:#d9bb45;--b-barr:#7fa66a;--b-fact:#8a929c;--b-ware:#8f968b;--b-market:#e8953a;--b-stall:#e8b45c;--b-tower:#eeeeee;--b-shed:#9c917b;--bstroke:#0c0c0b;--elev:#6db3ff;--hi:#ff6b5e;--mid:#f2b13a;--veh:#3fd0c5;--pk:#c69bf2;--zone:#ff6b5e;--reg:#b9a8ef;--foot:#e8e8e8}}
+:root[data-theme=dark]{--seabg:#123344;--bg:#15171a;--fg:#ecebe7;--mut:#a3a097;--card:#1e2125;--line:#363a3f;--acc:#6db3ff;--halo:#15171ad9;--ok:#5fd08a;--bad:#ff8a80;--rdH:#d9a441;--rdHc:#120d04;--rdP:#cfcabd;--rdPc:#0e0f10;--rdD:#b08a5a;--brg:#e8e6df;--brgc:#000;--contour:#d8caa0;--coast:#7fc2d6;--town:#e0b86a;--street:#4a4d4a;--streetc:#2b2d2c;--blk:#33362f;--plaza:#585a52;--play:#4b6b3c;--field:#4f6e34;--fenceC:#cfcfcf;--car:#79aee6;--cont:#d08a4c;--ground:#2b2f27;--river:#2f6e86;--embank:#6b6552;--b-house:#c28a55;--b-shop:#d96a60;--b-villa:#b48fc4;--b-apt:#6f9ad1;--b-school:#d9bb45;--b-barr:#7fa66a;--b-fact:#8a929c;--b-ware:#8f968b;--b-market:#e8953a;--b-stall:#e8b45c;--b-tower:#eeeeee;--b-shed:#9c917b;--bstroke:#0c0c0b;--elev:#6db3ff;--hi:#ff6b5e;--mid:#f2b13a;--veh:#3fd0c5;--pk:#c69bf2;--zone:#ff6b5e;--reg:#b9a8ef;--foot:#e8e8e8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+main{max-width:1480px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0 0 2px}h2{font-size:17px;margin:28px 0 8px}h3{font-size:14px;margin:0 0 6px}
+p{margin:.3em 0}.lead,.mut{color:var(--mut)}
+.top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+button,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--fg)}button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.badge{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 11px;font-size:13px;white-space:nowrap}
+.badge b{font-weight:700}.badge.ok{border-color:var(--ok);color:var(--ok)}.badge.bad{border-color:var(--bad);color:var(--bad)}
+.mapwrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+#vp{position:relative;overflow:hidden;height:clamp(440px,74vh,780px);border:1px solid var(--line);border-radius:8px;background:var(--seabg);touch-action:none;cursor:grab;user-select:none}
+#vp.drag{cursor:grabbing}
+#vp canvas{position:absolute;left:0;top:0;width:2400px;height:2000px;transform-origin:0 0;pointer-events:none}
+#map{position:absolute;inset:0;width:100%;height:100%}
+.inv{transform:scale(var(--inv,1))}
+.ovl{position:absolute;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 8px;opacity:.95;pointer-events:none}
+#zoomb{position:absolute;left:8px;top:8px;display:flex;flex-direction:column;gap:4px}#zoomb button{width:32px;height:32px;padding:0;font-size:16px}
+#na{right:8px;top:8px;padding:2px 6px}#sbw{left:8px;bottom:8px}#rd{right:8px;bottom:8px}
+#sb{height:6px;border:2px solid var(--fg);border-top:none;margin-top:2px}
+.layers{display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px 0}.layers label{display:flex;gap:5px;align-items:center;cursor:pointer;white-space:nowrap}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--mut)}.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:14px;height:10px;border:1px solid var(--bstroke);border-radius:2px}.swl{display:inline-block;width:22px;height:0;border-top:4px solid}
+#poi{max-height:clamp(440px,74vh,780px);display:flex;flex-direction:column;padding:10px}
+#poil{overflow:auto;flex:1;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}.chips button{padding:2px 9px;font-size:12.5px}.chips button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.pi{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;padding:5px 2px}
+.pi:hover,.pi:focus-visible{background:color-mix(in srgb,var(--acc) 12%,transparent)}.pi small{color:var(--mut);display:block}
+.gh{font-size:12px;color:var(--mut);margin:8px 0 2px;font-weight:700}
+#tip{position:fixed;z-index:9;pointer-events:none;background:var(--fg);color:var(--bg);padding:5px 9px;border-radius:6px;font-size:12.5px;display:none;max-width:260px;line-height:1.4}
+.lab{fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:3px;stroke-linejoin:round;font-weight:600}
+.pulse{fill:none;stroke:var(--hi);stroke-width:3;animation:pl 1s ease-out 3}@keyframes pl{from{r:6;opacity:1}to{r:46;opacity:0}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+.town2{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}
+#plan{width:100%;height:auto;display:block;background:var(--ground);border:1px solid var(--line);border-radius:6px}
+#plan text{font-family:inherit}
+.b{stroke:var(--bstroke);stroke-width:.5}.ne{opacity:.55;stroke-dasharray:1.6 1}
+.t-house{fill:var(--b-house)}.t-shop{fill:var(--b-shop)}.t-villa{fill:var(--b-villa)}.t-apt{fill:var(--b-apt)}.t-school{fill:var(--b-school)}.t-barr{fill:var(--b-barr)}.t-fact{fill:var(--b-fact)}.t-ware{fill:var(--b-ware)}.t-market{fill:var(--b-market)}.t-stall{fill:var(--b-stall)}.t-tower{fill:var(--b-tower)}.t-shed{fill:var(--b-shed)}
+.co{fill:var(--acc);stroke:var(--card);stroke-width:1.2}.con{fill:#fff;font-weight:700;text-anchor:middle;font-size:8.5px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:600}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto}.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+ol.call{padding-left:0;list-style:none;margin:8px 0}ol.call li{display:flex;gap:8px;margin:7px 0}ol.call .n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--acc);color:var(--bg);font-weight:700;text-align:center;line-height:22px;font-size:12px}
+.note{font-size:12.5px;color:var(--mut)}
+@media (max-width:980px){.mapwrap,.town2{grid-template-columns:minmax(0,1fr)}#poi{max-height:380px}#vp{height:60vh}}
+@media (max-width:520px){main{padding:10px}h1{font-size:18px}.badge{white-space:normal}}
+</style></head><body><main>
+<div class="top"><div><h1>맵 안 C2 · 청람도: 강이 가르고 산이 감싼 섬 (50인)</h1>
+<p class="lead">C안(강 분할·다리 교전)을 유지하고 산악 지형·연결 도로망·50인 규모를 더한 설계안. 1980년대 한국 읍내 + 열대 섬(Sanhok 계열) 분위기, 이름은 모두 가상. 전부 코드로 만든 결정적(시드 고정) 지형이라 새로고침해도 같다.</p></div>
+<div><button id="theme" title="테마 전환(자동 → 라이트 → 다크)">테마: 자동</button></div></div>
+<div class="badges" id="badges"></div>
+
+<div class="mapwrap"><div>
+ <div id="vp"><canvas id="cvR" width="960" height="800"></canvas><canvas id="cvS" width="960" height="800"></canvas><canvas id="cvG" width="240" height="200"></canvas>
+  <svg id="map" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" role="img" aria-label="청람도 전체 지도"></svg>
+  <div id="zoomb"><button id="zi" aria-label="확대">+</button><button id="zo" aria-label="축소">&minus;</button><button id="zf" aria-label="전체 보기" title="전체 보기">&#x26F6;</button></div>
+  <div class="ovl" id="na"><svg width="26" height="34" viewBox="0 0 26 34" aria-label="북쪽이 위"><path d="M13 2 L21 28 L13 22 L5 28 Z" fill="var(--fg)"/><text x="13" y="34" text-anchor="middle" font-size="9" fill="var(--fg)">N</text></svg></div>
+  <div class="ovl" id="sbw"><span id="sbt">500 m</span><div id="sb"></div></div><div class="ovl" id="rd">-</div></div>
+ <div class="layers" id="layers" role="group" aria-label="레이어"></div>
+ <div class="ctl"><span class="mut">구역 원 시드</span><button id="zs">다시 뽑기</button><span class="mut">·</span><button id="co">지역 폐쇄 순서 예시 뽑기</button><span class="note" id="coText"></span></div>
+ <div class="legend" id="lg"></div>
+ <p class="note">드래그 이동 · 휠/+- 확대 · 오른쪽 목록 클릭 시 해당 지점으로 이동. 등고선 20 m 간격(굵은 선 100 m). 경사 레이어: 초록 15도 이하, 연두 25도 이하, 주황 35도 이하(걷기 한계), 빨강 35도 초과(절벽).</p>
+</div>
+<aside class="card" id="poi"><h3>지점 목록 (클릭하면 이동)</h3><div class="chips" id="chips"></div><div id="poil"></div></aside></div>
+
+<h2>핵심 확대도 · 청람읍 (440 x 300 m, 건물 <span id="cn"></span>채)</h2>
+<div class="card"><div class="town2"><div><svg id="plan" viewBox="-34 -16 574 352" role="img" aria-label="청람읍 평면도"></svg>
+<p class="note">건물 위에 마우스를 올리면 종류·층수·진입 가능 여부가 나온다. 색 채움=진입 가능(문 표시), 흐린 점선=진입 불가(외형만).</p></div>
+<div><h3>범례</h3><div class="legend" id="plg" style="flex-direction:column;gap:3px"></div>
+<h3 style="margin-top:12px">건물 종류별 수</h3><table id="pct"></table>
+<h3 style="margin-top:12px">왜 시가전이 되는가</h3><ol class="call" id="calls"></ol></div></div></div>
+
+<h2>설계 수치</h2>
+<div class="cols">
+ <div class="card tbl"><h3>규모와 밀도 (50명)</h3><table id="t1"></table></div>
+ <div class="card tbl"><h3>마을 등급과 건물 수</h3><table id="t2"></table></div>
+ <div class="card tbl"><h3>건물 종류 합계</h3><table id="t3"></table></div>
+ <div class="card tbl"><h3>지역 6개(강·산을 따라) · 엘리베이터</h3><table id="t4"></table></div>
+ <div class="card tbl"><h3>6단계 구역 원 (비교용 오버레이)</h3><table id="t5"></table></div>
+ <div class="card tbl"><h3>도로망 · 고개</h3><table id="t6"></table></div>
+</div>
+<p class="note" style="margin-top:14px">한계: 지형 높이는 이 페이지의 결정적 노이즈이고 Unity 지형이 아니다. 실제 구현은 WorldGenerator 확장(강 곡선, 능선 폴리라인, 고개 가중치, 블록 생성기)이 필요하다. 건물 형태는 평면 상자 기준이고 개별 지붕·내부는 그리지 않았다.</p>
+</main><div id="tip"></div>
+<script>var MODEL=(function(){
+'use strict';
+const W=2400,H=2000,CS=5,NX=W/CS+1,NY=H/CS+1;
+const clamp=(x,a,b)=>x<a?a:x>b?b:x,lerp=(a,b,t)=>a+(b-a)*t;
+const sm=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hash(ix,iy,s){let h=Math.imul(ix,374761393)^Math.imul(iy,668265263)^Math.imul(s,1274126177);h=Math.imul(h^h>>>13,1274126177);return((h^h>>>16)>>>0)/4294967296}
+function vn(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);const a=hash(ix,iy,s),b=hash(ix+1,iy,s),c=hash(ix,iy+1,s),d=hash(ix+1,iy+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+function fbm(x,y,s,o){let a=.5,f=1,t=0,n=0;for(let i=0;i<o;i++){t+=a*vn(x*f,y*f,s+i*17);n+=a;a*=.5;f*=2.03}return t/n}
+function ridged(x,y,s,o){let a=.5,f=1,t=0,n=0;for(let i=0;i<o;i++){const v=1-Math.abs(2*vn(x*f,y*f,s+i*13)-1);t+=a*v*v;n+=a;a*=.5;f*=2.1}return t/n}
+function segD(px,py,ax,ay,bx,by){const vx=bx-ax,vy=by-ay,L=vx*vx+vy*vy;let t=L?((px-ax)*vx+(py-ay)*vy)/L:0;t=clamp(t,0,1);return [Math.hypot(px-ax-vx*t,py-ay-vy*t),t]}
+function polyD(p,x,y){let best=1e9,bs=0,acc=0;for(let i=0;i<p.length-1;i++){const L=Math.hypot(p[i+1][0]-p[i][0],p[i+1][1]-p[i][1]);const r=segD(x,y,p[i][0],p[i][1],p[i+1][0],p[i+1][1]);if(r[0]<best){best=r[0];bs=acc+r[1]*L}acc+=L}return [best,bs]}
+function cr(pts,step){const out=[],P=[pts[0],...pts,pts[pts.length-1]];for(let i=1;i<P.length-2;i++){const p0=P[i-1],p1=P[i],p2=P[i+1],p3=P[i+2];const n=Math.max(2,Math.ceil(Math.hypot(p2[0]-p1[0],p2[1]-p1[1])/step));for(let j=0;j<n;j++){const t=j/n,t2=t*t,t3=t2*t;const f=k=>0.5*(2*p1[k]+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3);out.push([f(0),f(1)])}}out.push(pts[pts.length-1].slice());return out}
+
+/* ---------- geography data ---------- */
+const RIDGES=[
+ {n:'백운 능선',pts:[[250,640],[650,440],[1000,340],[1450,360],[1900,330],[2100,540]],amp:165,w:150},
+ {n:'동령 능선',pts:[[1560,700],[1720,950],[1740,1300],[1640,1650]],amp:105,w:120},
+ {n:'서령 능선',pts:[[280,1300],[620,1230],[900,1330],[1050,1500]],amp:92,w:115}];
+const PEAKS=[
+ {n:'백운봉',x:790,y:410,h:110,s:120},{n:'서령봉',x:470,y:540,h:55,s:110},{n:'동령봉',x:2000,y:430,h:75,s:150},
+ {n:'솔뫼봉',x:1690,y:800,h:45,s:90},{n:'망루봉',x:650,y:1040,h:85,s:100},{n:'(남석 구릉)',x:1990,y:1320,h:55,s:90}];
+const PASSES=[
+ {id:'P1',n:'북령고개',x:1010,y:345,road:1},{id:'P2',n:'동령재',x:1735,y:1090,road:1},{id:'P3',n:'서령재',x:640,y:1245,road:1},{id:'P4',n:'남령재',x:1698,y:1445,road:1},
+ {id:'P5',n:'샘골재',x:1400,y:355,road:1},{id:'S4',n:'서령 북안부(도보)',x:520,y:505,road:0},{id:'S2',n:'서령 안부(도보)',x:885,y:1325,road:0},{id:'S3',n:'솔뫼 안부(도보)',x:1656,y:850,road:0}];
+const QUARRIES=[{n:'동령 채석장',x:2090,y:600,r:105},{n:'남석 채석장',x:1990,y:1330,r:90}];
+const RIVERS=[
+ {n:'청람강',pts:[[1170,150],[1120,360],[1190,560],[1160,780],[1260,990],[1230,1180],[1330,1360],[1270,1560],[1350,1720],[1310,1910]],hw0:8,hw1:30,b0:42,b1:-2,sl0:.85,sl1:.3},
+ {n:'동천',pts:[[1700,1250],[1650,1360],[1520,1450],[1410,1440],[1318,1400]],hw0:5,hw1:9,b0:30,b1:1,sl0:.35,sl1:.3}];
+RIVERS.forEach(r=>{r.s=cr(r.pts,8);let a=0;r.t=[0];for(let i=1;i<r.s.length;i++){a+=Math.hypot(r.s[i][0]-r.s[i-1][0],r.s[i][1]-r.s[i-1][1]);r.t.push(a)}r.t=r.t.map(v=>v/a)});
+RIVERS[0].f=t=>({bed:42*Math.pow(1-t,3)-2,hw:8+22*Math.pow(t,1.2),sl:lerp(.85,.3,sm(0,.4,t))});
+RIVERS[1].f=t=>({bed:30*Math.pow(1-t,2),hw:lerp(5,9,t),sl:.35});
+
+/* ---------- towns (block generator) ---------- */
+const TYPES={
+ house:{n:'주택',fl:'1~2',en:.7},shop:{n:'상가(점포)',fl:'2~3',en:.85},villa:{n:'빌라·연립',fl:'3~4',en:.8},apt:{n:'아파트',fl:'5',en:1},
+ school:{n:'학교·체육관',fl:'1~3',en:1},barr:{n:'막사',fl:'1',en:1},fact:{n:'공장',fl:'1(높은 천장)',en:1},ware:{n:'창고',fl:'1',en:1},
+ market:{n:'시장 건물',fl:'1',en:1},stall:{n:'노점',fl:'1',en:0},tower:{n:'감시탑',fl:'3(옥상)',en:1},shed:{n:'헛간·가건물',fl:'1',en:0}};
+function genTown(T){
+ const rng=mulberry32(T.seed),R=(a,b)=>a+(b-a)*rng();
+ const rows=T.m.length,cols=T.m[0].length,Wd=T.W,Hd=T.H;const mr=T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2),mc=Math.floor((cols-1)/2);
+ const xs=T.xs||Array.from({length:cols+1},(_,i)=>Wd*i/cols),ys=T.ys||Array.from({length:rows+1},(_,i)=>Hd*i/rows);
+ const xw=T.xw||xs.slice(1,-1).map(()=>6),yw=T.yw||ys.slice(1,-1).map((_,i)=>(i===(T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2))?11:6));
+ const B=[],ST=[],FD=[],FN=[],CV=[],BL=[];
+ xs.slice(1,-1).forEach((x,i)=>ST.push({x:x-xw[i]/2,y:0,w:xw[i],h:Hd,v:1,n:(T.nv||[])[i]}));
+ ys.slice(1,-1).forEach((y,i)=>ST.push({x:0,y:y-yw[i]/2,w:Wd,h:yw[i],v:0,n:(T.nh||[])[i],main:i===(T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2))}));
+ const add=(t,x,y,w,h,f,door)=>{const e=rng()<TYPES[t].en;B.push({t,x,y,w,h,f,e,d:door,id:T.id+'-'+(B.length+1)})};
+ function strip(r,side,depth,lw,t,gap,fl,setb){ // lots along one side of rect r
+  const hor=side==='n'||side==='s';const len=hor?r.w:r.h;let c=(setb?2:0)+R(0,3);
+  while(true){const w=R(lw[0],lw[1]);if(c+w>len-2)break;const bd=Math.min(depth,R(depth*.8,depth)); let x,y,bw,bh;
+   if(side==='n'){x=r.x+c;y=r.y;bw=w;bh=bd}else if(side==='s'){x=r.x+c;y=r.y+r.h-bd;bw=w;bh=bd}else if(side==='w'){x=r.x;y=r.y+c;bw=bd;bh=w}else{x=r.x+r.w-bd;y=r.y+c;bw=bd;bh=w}
+   add(t,x+(setb?R(.5,1.2):0),y+(setb?R(.5,1.5):0),bw-(setb?1.2:0),bh-(setb?1.2:0),Array.isArray(fl)?Math.round(R(fl[0],fl[1])):fl,side);c+=w+gap+(setb?R(0,2.5):0)}}
+ function fence(r,m){FN.push({x:r.x+m,y:r.y+m,w:r.w-2*m,h:r.h-2*m})}
+ function cars(r,n){for(let i=0;i<n;i++)CV.push({k:'car',x:r.x+R(4,r.w-8),y:r.y+R(4,r.h-6),a:rng()<.5?0:90})}
+ T.m.forEach((row,ri)=>row.forEach((code,ci)=>{
+  const hx=ci>0?xw[ci-1]/2:0,hx2=ci<cols-1?xw[ci]/2:(T.river?4:0),hy=ri>0?yw[ri-1]/2:0,hy2=ri<rows-1?yw[ri]/2:0;
+  const r={x:xs[ci]+hx,y:ys[ri]+hy,w:xs[ci+1]-xs[ci]-hx-hx2,h:ys[ri+1]-ys[ri]-hy-hy2};
+  BL.push({x:r.x,y:r.y,w:r.w,h:r.h,code});const flat=r.w>=r.h;const sd=flat?['n','s']:['w','e'];const lo=flat?r.h:r.w;
+  switch(code){
+   case 'H':{const dpt=Math.min(11,(lo-4)/2.4);strip(r,sd[0],dpt,[13,19],'house',4.5,[1,2],1);strip(r,sd[1],dpt,[13,19],'house',4.5,[1,2],1);break}
+   case 'h':{strip(r,sd[0],Math.min(11,lo-3),[14,20],'house',5,[1,2],1);break}
+   case 'S':{const dpt=Math.min(13,(lo-3)/2);strip(r,sd[0],dpt,[9,13],'shop',.4,[2,3]);strip(r,sd[1],dpt,[9,13],'shop',.4,[2,3]);break}
+   case 'T':{const side=flat?(ri<=mr?'s':'n'):(ci<=mc?'e':'w');strip(r,side,Math.min(13,lo-3),[9,13],'shop',.4,[2,3]);break}
+   case 'V':{const dpt=Math.min(12,(lo-3)/2);strip(r,sd[0],dpt,[17,22],'villa',6,[3,4]);strip(r,sd[1],dpt,[17,22],'villa',6,[3,4]);break}
+   case 'A':{const n=Math.max(1,Math.floor((r.h-10)/26));for(let i=0;i<n;i++){const y=r.y+6+i*(r.h-12-12)/Math.max(1,n-1||1)*(n>1?1:0);let c=4;while(c+36<r.w-3){add('apt',r.x+c,n>1?y:r.y+r.h/2-6,36,12,5,'s');c+=48}}FD.push({k:'plaza',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});break}
+   case 'K':{add('school',r.x+8,r.y+3,56,15,3,'s');add('school',r.x+r.w-40,r.y+3,30,12,2,'s');add('school',r.x+r.w-34,r.y+r.h-22,26,18,1,'n');FD.push({k:'play',x:r.x+8,y:r.y+r.h-26,w:r.w-52,h:22});fence(r,1);break}
+   case 'M':{add('market',r.x+r.w/2-22,r.y+r.h/2-12,44,24,1,'s');for(let i=0;i<4;i++){add('stall',r.x+10+i*9,r.y+3,7,3.4,1,'s');add('stall',r.x+r.w-10-i*9-7,r.y+r.h-7,7,3.4,1,'n')}FD.push({k:'plaza',x:r.x+1,y:r.y+1,w:r.w-2,h:r.h-2});break}
+   case 'B':{const n=Math.max(2,Math.floor((r.h-16)/17));for(let i=0;i<n;i++)add('barr',r.x+14,r.y+4+i*17,Math.min(46,r.w-24),9,1,'e');add('barr',r.x+3,r.y+r.h-14,13,10,1,'n');add('tower',r.x+r.w-9,r.y+3,6,6,3,'w');fence(r,1);break}
+   case 'F':{add('fact',r.x+8,r.y+r.h/2-14,Math.min(66,r.w-24),30,1,'n');add('fact',r.x+r.w-26,r.y+4,18,13,1,'s');add('tower',r.x+3,r.y+3,5,5,3,'e');for(let i=0;i<4;i++)CV.push({k:'cont',x:r.x+r.w-30+(i%2)*9,y:r.y+r.h-14+Math.floor(i/2)*4.5,a:0});fence(r,1);break}
+   case 'W':{const n=Math.max(1,Math.floor((r.h-4)/22));for(let i=0;i<n;i++)add('ware',r.x+6,r.y+3+i*22,Math.min(32,r.w-16),16,1,'e');for(let i=0;i<5;i++)CV.push({k:'cont',x:r.x+r.w-22+(i%2)*9,y:r.y+6+Math.floor(i/2)*5,a:0});fence(r,1);break}
+   case 'P':{add('ware',r.x+5,r.y+4,30,15,1,'s');add('ware',r.x+r.w-36,r.y+4,30,15,1,'s');for(let i=0;i<6;i++)CV.push({k:'cont',x:r.x+10+(i%3)*10,y:r.y+r.h-14+Math.floor(i/3)*4.6,a:0});FD.push({k:'plaza',x:r.x+1,y:r.y+1,w:r.w-2,h:r.h-2});break}
+   case 'L':{FD.push({k:'field',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});add('shed',r.x+r.w-12,r.y+r.h-10,8,6,1,'w');break}
+   case 'Q':{FD.push({k:'plaza',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});add('shop',r.x+r.w/2-5,r.y+r.h/2-3,10,6,1,'s');break}
+  }}));
+ ST.forEach(s=>{ // parked cars along streets (cover)
+  const len=s.v?s.h:s.w;for(let p=25;p<len-10;p+=R(38,60)){const side=rng()<.5?-1:1;if(s.v)CV.push({k:'car',x:s.x+(side>0?s.w-3.6:.8),y:p,a:90});else CV.push({k:'car',x:p,y:s.y+(side>0?s.h-3.6:.8),a:0})}});
+ return {B,ST,FD,FN,CV,BL,xs,ys,W:Wd,H:Hd};
+}
+
+const TOWNS=[
+ {id:'C',n:'청람읍',tier:1,x:1020,y:1000,rot:0,W:440,H:300,xs:[0,90,190,330,430],ys:[0,60,140,230,300],xw:[6,9,6],yw:[6,12,6],mainRow:1,river:1,nv:['샛길','시장길','신흥로'],nh:['학교길','중앙로','역전길'],
+  m:[['L','H','K','h'],['h','S','M','T'],['h','S','A','V'],['B','h','F','W']],seed:11,fl:'capital'},
+ {id:'L1',n:'새재',tier:2,x:1530,y:1100,rot:8,W:330,H:240,m:[['h','T','h'],['h','M','T'],['H','A','L']],seed:21,fl:'market'},
+ {id:'L2',n:'해옥포',tier:2,x:640,y:1610,rot:-14,W:300,H:230,m:[['h','T','W'],['h','T','P'],['L','h','h']],seed:22,fl:'port'},
+ {id:'L3',n:'광석리',tier:2,x:1900,y:1500,rot:10,W:320,H:240,m:[['h','F','F'],['V','T','W'],['L','h','B']],seed:23,fl:'factory'},
+ {id:'L4',n:'북령읍',tier:2,x:880,y:570,rot:-6,W:330,H:210,m:[['h','T','V'],['H','T','h']],seed:24,fl:'pass'},
+ {id:'M1',n:'학전',tier:3,x:530,y:880,rot:5,W:190,H:130,m:[['h','K'],['h','T']],seed:31,fl:'school'},
+ {id:'M2',n:'논실',tier:3,x:1560,y:1400,rot:-8,W:200,H:140,m:[['H','T'],['L','h']],seed:32,fl:'farm'},
+ {id:'M3',n:'마루재',tier:3,x:1745,y:1090,rot:90,W:190,H:130,m:[['H','T'],['h','h']],seed:33,fl:'pass'},
+ {id:'M4',n:'채석리',tier:3,x:1990,y:670,rot:12,W:200,H:140,m:[['H','T'],['L','W']],seed:34,fl:'quarry'},
+ {id:'M5',n:'남포',tier:3,x:1420,y:1790,rot:-5,W:220,H:140,m:[['H','T'],['L','P']],seed:35,fl:'port'},
+ {id:'M6',n:'북해리',tier:3,x:1010,y:180,rot:0,W:200,H:140,m:[['H','T'],['h','L']],seed:36,fl:'fishing'},
+ {id:'H1',n:'솔밭',tier:4,x:390,y:1130,rot:20,W:160,H:50,m:[['h','h']],seed:41,fl:'hamlet'},
+ {id:'H3',n:'샘골',tier:4,x:1470,y:560,rot:0,W:160,H:50,m:[['h','h']],seed:42,fl:'hamlet'},
+ {id:'H4',n:'양지',tier:4,x:2100,y:1040,rot:-10,W:170,H:50,m:[['h','h']],seed:43,fl:'hamlet'},
+ {id:'H5',n:'달뫼',tier:4,x:880,y:1190,rot:30,W:100,H:60,m:[['H']],seed:44,fl:'hamlet'},
+ {id:'H6',n:'하동',tier:4,x:1330,y:1560,rot:0,W:150,H:50,m:[['h','h']],seed:45,fl:'hamlet'},
+ {id:'H7',n:'갯말',tier:4,x:850,y:1790,rot:0,W:150,H:50,m:[['h','h']],seed:46,fl:'hamlet'}];
+const TIER=['','수도급 중심읍','대형 읍','중형 마을','작은 마을(hamlet)'];
+TOWNS.forEach(T=>{T.g=genTown(T);const cs=Math.cos(T.rot*Math.PI/180),sn=Math.sin(T.rot*Math.PI/180);T.toW=(lx,ly)=>{const dx=lx-T.W/2,dy=ly-T.H/2;return [T.x+dx*cs-dy*sn,T.y+dx*sn+dy*cs]};T.cnt={};T.g.B.forEach(b=>{T.cnt[b.t]=(T.cnt[b.t]||0)+1;const c=T.toW(b.x+b.w/2,b.y+b.h/2);b.wx=c[0];b.wy=c[1]})});
+
+/* ---------- terrain ---------- */
+function rawH(x,y){
+ const dx=(x-1200)/1150,dy=(y-1000)/960,ang=Math.atan2(dy,dx);
+ const r=Math.hypot(dx,dy)+(fbm(x/380,y/380,7,3)-.5)*.26+.035*Math.sin(ang*3+1)+.025*Math.sin(ang*5+2)+.02*Math.sin(ang*9);
+ const hc=1-r,base=lerp(-20,7,sm(-.09,.12,hc)),inl=sm(.04,.28,hc);
+ let m=(fbm(x/330,y/330,3,4)-.38)*50+(fbm(x/85,y/85,5,3)-.5)*14;
+ let rid=0;
+ for(let k=0;k<RIDGES.length;k++){const R=RIDGES[k];const [d,s]=polyD(R.pts,x,y);if(d>R.w*3)continue;const env=Math.exp(-(d/R.w)*(d/R.w)),al=.6+.4*fbm(s/240,k*3.1,11,2)*1.6;
+  rid+=R.amp*env*Math.min(1.15,al)*(.7+.55*ridged(x/150,y/150,21+k,3))}
+ let dip=1;for(const p of PASSES){const dd=Math.hypot(x-p.x,y-p.y);dip*=1-.8*Math.exp(-(dd/(p.road?125:90))*(dd/(p.road?125:90)))}
+ rid*=dip;
+ let pk=0;for(const p of PEAKS){const dd=Math.hypot(x-p.x,y-p.y);pk+=p.h*Math.exp(-(dd/p.s)*(dd/p.s))}
+ return base+inl*(m+rid+pk*(.6+.4*dip));
+}
+const hg=new Float32Array(NX*NY),rd=new Float32Array(NX*NY).fill(999);
+function build(){
+ const townZ=TOWNS.map(T=>{const z=Math.max(T.id==='C'?17:6,Math.min(90,rawH(T.x,T.y)));return z});
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){
+  const x=i*CS,y=j*CS;let h=rawH(x,y);
+  for(let k=0;k<TOWNS.length;k++){const T=TOWNS[k],d=Math.hypot(x-T.x,y-T.y),rf=Math.hypot(T.W,T.H)*.5*.8;if(d<rf+90){h=lerp(h,townZ[k],1-sm(rf,rf+90,d))}}
+  for(const Q of QUARRIES){const d=Math.hypot(x-Q.x,y-Q.y);if(d<Q.r*1.5){const w=1-sm(Q.r*.7,Q.r*1.5,d);const st=Math.round((h-14*w)/9)*9;h=lerp(h,Math.max(6,st),w*.95)}}
+  for(const rv of RIVERS){let bd=1e18,bi=0;const S=rv.s;for(let q=0;q<S.length;q++){const ex=S[q][0]-x,ey=S[q][1]-y,dd=ex*ex+ey*ey;if(dd<bd){bd=dd;bi=q}}
+   const d=Math.sqrt(bd),f=rv.f(rv.t[bi]);if(d>900)continue;const cone=f.bed+Math.max(0,d-f.hw)*f.sl;if(h>cone)h=cone;if(d<f.hw+1.5&&h>f.bed-.5)h=Math.min(h,f.bed+Math.max(0,d-f.hw)*f.sl);
+   const v=d-f.hw;if(v<rd[j*NX+i])rd[j*NX+i]=v}
+  hg[j*NX+i]=h}
+}
+build();
+function hAt(x,y){x=clamp(x,0,W-.001)/CS;y=clamp(y,0,H-.001)/CS;const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,o=j*NX+i;return hg[o]*(1-fx)*(1-fy)+hg[o+1]*fx*(1-fy)+hg[o+NX]*(1-fx)*fy+hg[o+NX+1]*fx*fy}
+function rdAt(x,y){x=clamp(x,0,W-.001)/CS;y=clamp(y,0,H-.001)/CS;const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,o=j*NX+i;return rd[o]*(1-fx)*(1-fy)+rd[o+1]*fx*(1-fy)+rd[o+NX]*(1-fx)*fy+rd[o+NX+1]*fx*fy}
+function slopeDeg(x,y,e){e=e||10;const gx=(hAt(x+e,y)-hAt(x-e,y))/(2*e),gy=(hAt(x,y+e)-hAt(x,y-e))/(2*e);return Math.atan(Math.hypot(gx,gy))*180/Math.PI}
+const isWater=(x,y)=>hAt(x,y)<=0||rdAt(x,y)<0;
+
+/* ---------- regions ---------- */
+const REG=[
+ {id:0,n:'북령 산악',c:'#8c7ab8',seeds:[[700,400],[1250,350]],w:0,note:'백운 산맥과 강 발원 협곡'},
+ {id:1,n:'청람읍권',c:'#c9822f',seeds:[[700,950]],w:1,note:'서안 수도급 읍 + 학전·달뫼'},
+ {id:2,n:'서남 포구',c:'#2f8f9d',seeds:[[700,1600]],w:1,note:'해옥포 항구·갯말, 서령 능선 남쪽'},
+ {id:3,n:'동령 고원',c:'#b5483c',seeds:[[1950,700]],w:0,note:'동령봉·채석장, 동안 북부'},
+ {id:4,n:'동천 평야',c:'#6a9a3a',seeds:[[1550,1200]],w:0,note:'새재·논실, 강 동안 평지'},
+ {id:5,n:'남동 해안',c:'#4a6fb5',seeds:[[1900,1500]],w:0,note:'광석리 공업·남포 하구'}];
+const RS=10,RNX=W/RS,RNY=H/RS;const regId=new Int8Array(RNX*RNY).fill(-1);
+function riverXAt(y){const S=RIVERS[0].s;let b=1e9,bx=0;for(const p of S){const d=Math.abs(p[1]-y);if(d<b){b=d;bx=p[0]}}return bx}
+function regionAt(x,y){let best=1e9,bi=-1;const westOf=x<riverXAt(y);for(const R of REG){for(const s of R.seeds){let d=Math.hypot(x-s[0],y-s[1]);if(y>600&&R.id!==0&&((R.w===1)!==westOf))d+=500;if(R.id===0&&y>700)d+=150;if(d<best){best=d;bi=R.id}}}return bi}
+for(let j=0;j<RNY;j++)for(let i=0;i<RNX;i++){const x=(i+.5)*RS,y=(j+.5)*RS;if(hAt(x,y)>0)regId[j*RNX+i]=regionAt(x,y)}
+const regOf=(x,y)=>{const i=clamp(Math.floor(x/RS),0,RNX-1),j=clamp(Math.floor(y/RS),0,RNY-1);let v=regId[j*RNX+i];return v<0?regionAt(x,y):v};
+const adj=REG.map(()=>new Set());for(let j=0;j<RNY-1;j++)for(let i=0;i<RNX-1;i++){const a=regId[j*RNX+i];for(const o of [1,RNX]){const b=regId[j*RNX+i+o];if(a>=0&&b>=0&&a!==b){adj[a].add(b);adj[b].add(a)}}}
+function closeOrder(seed){const rng=mulberry32(seed);const fin=Math.floor(rng()*6);let rem=new Set([0,1,2,3,4,5]);const ord=[];const conn=s=>{const a=[...s];if(!a.length)return true;const seen=new Set([a[0]]),q=[a[0]];while(q.length){const u=q.pop();adj[u].forEach(v=>{if(s.has(v)&&!seen.has(v)){seen.add(v);q.push(v)}})}return seen.size===s.size};
+ while(rem.size>1){const c=[...rem].filter(r=>r!==fin&&(()=>{const t=new Set(rem);t.delete(r);return conn(t)})());const p=c[Math.floor(rng()*c.length)];ord.push(p);rem.delete(p)}ord.push(fin);return ord}
+
+/* ---------- road network ---------- */
+const NODES={};TOWNS.forEach(T=>NODES[T.id]={x:T.x,y:T.y,n:T.n,town:1,tier:T.tier});
+NODES.P1={x:1010,y:345,n:'북령고개',pass:1};NODES.P3={x:640,y:1245,n:'서령재',pass:1};NODES.P4={x:1698,y:1445,n:'남령재',pass:1};NODES.P5={x:1400,y:355,n:'샘골재',pass:1};NODES.J5={x:1000,y:1745,n:'교차로'};NODES.M3.pass=1;
+const EDGES=[
+ ['C','L1','H',[[1150,990],[1380,1010]]],['L1','M2','H',[[1530,1240]]],['M2','P4','H',[[1630,1420]],1],['P4','L3','H',[[1800,1480]],1],['L3','M5','H',[[1760,1700],[1600,1790]]],['M5','J5','H',[[1330,1830],[1150,1790]]],['J5','L2','H',[[880,1690]]],
+ ['H1','P3','D',[[500,1190]]],['H1','M1','D',[[430,1000]]],['M1','C','P',[[700,900],[850,960]]],['C','H5','P',[[950,1100]]],
+ ['H5','P3','P',[[760,1220]],1],['P3','L2','P',[[620,1420],[640,1520]],1],
+ ['M1','L4','P',[[640,700]]],['C','L4','P',[[960,800]]],['L4','P1','P',[[950,460]],1],['P1','M6','P',[[1040,250]],1],['M6','P5','P',[[1230,215],[1330,280]],1],['P5','H3','P',[[1430,450]],1],
+ ['L4','H3','P',[[1060,610],[1170,630],[1300,590]]],['H3','L1','P',[[1400,800],[1440,950]]],['H3','M4','P',[[1620,600],[1800,640]]],['M4','H4','P',[[2060,850]]],
+ ['L1','M3','P',[[1630,1100]],1],['M3','H4','P',[[1900,1110],[2010,1090]],1],['H4','L3','P',[[2060,1290]]],
+ ['M2','H6','D',[[1470,1440]]],['H6','M5','D',[[1380,1680]]],['H7','J5','D',[[930,1760]]]];
+var SWA=58,SWL=150;
+const CLS={H:{n:'국도(간선·순환)',w:12},P:{n:'포장 지방도',w:8},D:{n:'비포장 농로·임도',w:4}};
+const roads=EDGES.map((e,i)=>{const a=NODES[e[0]],b=NODES[e[1]];let pts=cr([[a.x,a.y],...e[3],[b.x,b.y]],6);
+ if(e[4]){const S=pts.length;const tot=[0];for(let k=1;k<S;k++)tot.push(tot[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));const L=tot[S-1];
+  pts=pts.map((p,k)=>{const q=pts[Math.min(S-1,k+1)],o=pts[Math.max(0,k-1)];let nx=-(q[1]-o[1]),ny=q[0]-o[0];const nl=Math.hypot(nx,ny)||1;nx/=nl;ny/=nl;const s=tot[k],env=Math.min(1,s/70,(L-s)/70),off=SWA*env*Math.sin(2*Math.PI*s/SWL);return [p[0]+nx*off,p[1]+ny*off]})}
+ return {id:i,a:e[0],b:e[1],c:e[2],sw:!!e[4],pts}});
+function lenOf(p){let a=0;for(let i=1;i<p.length;i++)a+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return a}
+function roadGrade(r){let mx=0,sum=0,n=0;const p=r.pts;let acc=0,idx=[0];for(let i=1;i<p.length;i++){acc+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);idx.push(acc)}
+ for(let i=0;i<p.length;i++){let j=i;while(j<p.length-1&&idx[j]-idx[i]<30)j++;if(j===i)continue;const d=idx[j]-idx[i];if(d<20)continue;if(rdAt(p[i][0],p[i][1])<4||rdAt(p[j][0],p[j][1])<4)continue;const ha=Math.max(hAt(p[i][0],p[i][1]),0),hb=Math.max(hAt(p[j][0],p[j][1]),0);const g=Math.atan(Math.abs(hb-ha)/d)*180/Math.PI;if(g>mx)mx=g;sum+=g;n++}return {max:mx,avg:n?sum/n:0}}
+// bridges: contiguous water runs along road polylines
+const BR_NAMES=[[1260,990,'청람교'],[1170,630,'북강교'],[1150,200,'발원교'],[1325,1830,'하구교'],[1650,1420,'동천교'],[1360,1420,'동천 하구 여울'],[1420,1450,'동천 여울'],[1470,1440,'동천 여울']];
+const bridges=[];roads.forEach(r=>{let run=null;const flush=()=>{if(run&&run.length){const a=run[0],b=run[run.length-1];const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;let nm='다리',bd=1e9;BR_NAMES.forEach(q=>{const d=Math.hypot(q[0]-cx,q[1]-cy);if(d<bd){bd=d;nm=q[2]}});
+ bridges.push({road:r.id,c:r.c,x:cx,y:cy,pts:[[a[0],a[1]],...run.slice(1,-1).filter((_,i)=>i%4===0),[b[0],b[1]]],len:Math.hypot(b[0]-a[0],b[1]-a[1])+12,n:bd<160?nm:'다리 '+(bridges.length+1)})}run=null};
+ r.pts.forEach(p=>{if(rdAt(p[0],p[1])<4){(run=run||[]).push(p)}else flush()});flush()});
+bridges.forEach(b=>{b.ford=b.c==='D'});
+function graphCheck(){const ids=Object.keys(NODES);const adjL={};ids.forEach(i=>adjL[i]=[]);EDGES.forEach(e=>{adjL[e[0]].push(e[1]);adjL[e[1]].push(e[0])});const seen=new Set([ids[0]]),q=[ids[0]];while(q.length){const u=q.pop();adjL[u].forEach(v=>{if(!seen.has(v)){seen.add(v);q.push(v)}})}
+ const towns=ids.filter(i=>NODES[i].town);const allReach=towns.every(t=>seen.has(t));const paved=ids.filter(i=>true);
+ // paved-only reachability from every town (excluding dirt) for non-hamlet nodes
+ const adjP={};ids.forEach(i=>adjP[i]=[]);EDGES.filter(e=>e[2]!=='D').forEach(e=>{adjP[e[0]].push(e[1]);adjP[e[1]].push(e[0])});
+ const s2=new Set(['C']),q2=['C'];while(q2.length){const u=q2.pop();adjP[u].forEach(v=>{if(!s2.has(v)){s2.add(v);q2.push(v)}})}
+ const unreachP=towns.filter(t=>!s2.has(t)&&NODES[t].tier!==4);
+ // pairwise reachability: every pair reachable (single component) <=> allReach; also check removing any single non-dirt edge keeps connected (loop network, not a tree)
+ let bridgesCut=0;EDGES.forEach((e,k)=>{if(e[2]==='D')return;const a2={};ids.forEach(i=>a2[i]=[]);EDGES.forEach((f,m)=>{if(m!==k){a2[f[0]].push(f[1]);a2[f[1]].push(f[0])}});const s3=new Set([ids[0]]),q3=[ids[0]];while(q3.length){const u=q3.pop();a2[u].forEach(v=>{if(!s3.has(v)){s3.add(v);q3.push(v)}})}if(s3.size!==ids.length)bridgesCut++});
+ return {nodes:ids.length,edges:EDGES.length,connected:seen.size===ids.length&&allReach,cycles:EDGES.length-ids.length+1,townsNotOnPaved:unreachP,cutEdges:bridgesCut}}
+
+
+function carveRoads(){
+ const g=Math.tan(11*Math.PI/180),bw=new Float32Array(NX*NY),bh=new Float32Array(NX*NY);const rep=[];
+ roads.forEach(r=>{const p=r.pts,n=p.length,ds=[0];for(let i=1;i<n;i++)ds.push(ds[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
+  const h=p.map(q=>hAt(q[0],q[1])),wet=p.map(q=>rdAt(q[0],q[1])<5);
+  for(let i=0;i<n;i++)if(wet[i]){let a=i-1;while(a>=0&&wet[a])a--;let b=i+1;while(b<n&&wet[b])b++;if(a<0)h[i]=h[b];else if(b>=n)h[i]=h[a];else h[i]=lerp(h[a],h[b],(ds[i]-ds[a])/(ds[b]-ds[a]))}
+  const raw=h.slice(),lo=h.map((_,i)=>{let m=1e9;for(let j=0;j<n;j++)m=Math.min(m,raw[j]+g*Math.abs(ds[i]-ds[j]));return m}),up=h.map((_,i)=>{let m=-1e9;for(let j=0;j<n;j++)m=Math.max(m,raw[j]-g*Math.abs(ds[i]-ds[j]));return m});
+  let prof=lo.map((v,i)=>(v+up[i])/2);prof=prof.map((_,i)=>{let a=0,c=0;for(let k=-4;k<=4;k++){const j=i+k;if(j>=0&&j<n){a+=prof[j];c++}}return a/c});
+  let cut=0;prof.forEach((v,i)=>{cut=Math.max(cut,Math.abs(v-raw[i]))});rep.push(cut);r.cut=cut;
+  p.forEach((q,i)=>{if(wet[i])return;const x0=Math.floor((q[0]-18)/CS),x1=Math.ceil((q[0]+18)/CS),y0=Math.floor((q[1]-18)/CS),y1=Math.ceil((q[1]+18)/CS);
+   for(let y=Math.max(0,y0);y<=Math.min(NY-1,y1);y++)for(let x=Math.max(0,x0);x<=Math.min(NX-1,x1);x++){const d=Math.hypot(x*CS-q[0],y*CS-q[1]);const w=1-sm(5,18,d);const o=y*NX+x;if(w>bw[o]&&rd[o]>=3){bw[o]=w;bh[o]=prof[i]}}})});
+ for(let o=0;o<NX*NY;o++)if(bw[o]>0)hg[o]=lerp(hg[o],bh[o],bw[o]);
+}
+carveRoads();roads.forEach(r=>{const g=roadGrade(r);r.gradeMax=g.max;r.gradeAvg=g.avg});
+let landCells=0,walk=0,maxH=0;for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const h=hg[j*NX+i];if(h>0&&rd[j*NX+i]>=0){landCells++;if(h>maxH)maxH=h;if(slopeDeg(i*CS,j*CS,CS)<=35)walk++}}
+/* ---------- elevators, vehicles, hotspots, peaks ---------- */
+const ELEV=[['L4','e',.5,0],['L4','w',.5,0],['M6','w',.5,0],['C','w',.35,1],['C','n',.55,1],['M1','n',.5,1],['H5','e',.5,1],['L2','n',.5,2],['L2','e',.5,2],['H7','e',.5,2],['M4','w',.5,3],['M4','e',.5,3],['H4','w',.5,3],['L1','w',.5,4],['L1','n',.5,4],['M2','n',.5,4],['M3','s',.5,4],['L3','n',.5,5],['L3','s',.5,5],['M5','e',.5,5]]
+ .map((e,i)=>{const T=TOWNS.find(t=>t.id===e[0]);const d=20;let best=null;for(let k=1;k<=9;k++){const f=k/10;let l;switch(e[1]){case 'w':l=[-d,f*T.H];break;case 'e':l=[T.W+d+(T.river?20:0),f*T.H];break;case 'n':l=[f*T.W,-d];break;default:l=[f*T.W,T.H+d]}const p=T.toW(l[0],l[1]);const nb=nearBld(p[0],p[1],60);const sc=nb*10-Math.abs(f-e[2])*3;if(!best||sc>best.sc)best={sc,p,nb}}return {i:i+1,t:T.id,x:best.p[0],y:best.p[1],reg:regOf(best.p[0],best.p[1]),want:e[3]}});
+function nearBld(x,y,r){let n=0;TOWNS.forEach(T=>T.g.B.forEach(b=>{if(b.t!=='stall'&&b.t!=='tower'&&Math.hypot(b.wx-x,b.wy-y)<=r)n++}));return n}
+ELEV.forEach(e=>e.near=nearBld(e.x,e.y,60));
+function ptOnRoad(r,fromStart,dist){const p=fromStart?r.pts:r.pts.slice().reverse();let acc=0;for(let i=1;i<p.length;i++){const l=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(acc+l>=dist){const t=(dist-acc)/l;return {x:lerp(p[i-1][0],p[i][0],t),y:lerp(p[i-1][1],p[i][1],t),a:Math.atan2(p[i][1]-p[i-1][1],p[i][0]-p[i-1][0])*180/Math.PI}}acc+=l}return {x:p[p.length-1][0],y:p[p.length-1][1],a:0}}
+const VEH=[];TOWNS.forEach(T=>{const es=roads.filter(r=>r.a===T.id||r.b===T.id);const want=T.tier===1?3:T.tier===2?2:1;es.slice(0,want).forEach((r,k)=>{const pr=T.W>T.H?T.W/2:T.H/2;const p=ptOnRoad(r,r.a===T.id,pr+45+k*25);VEH.push({x:p.x,y:p.y,a:p.a,t:T.id})})});
+roads.filter(r=>r.sw).forEach(r=>{const p=ptOnRoad(r,true,lenOf(r.pts)/2);VEH.push({x:p.x,y:p.y,a:p.a,t:'pass'})});
+const LOOT=[];TOWNS.forEach(T=>{const seen={};T.g.B.forEach(b=>{const m={barr:['high','무기고(막사)'],fact:['high','공장 보급창'],market:['mid','시장'],school:['mid','학교'],ware:['mid','창고단지']}[b.t];if(m&&!seen[b.t]&&(b.t!=='ware'||T.tier<=2)){seen[b.t]=1;LOOT.push({x:b.wx,y:b.wy,tier:m[0],n:T.n+' '+m[1]})}})});
+LOOT.push({x:2090,y:600,tier:'mid',n:'동령 채석장 사무동'},{x:1990,y:1330,tier:'mid',n:'남석 채석장 사무동'});
+const peaks=PEAKS.filter(p=>p.n[0]!=='(').slice(0,5).map(p=>{let x=p.x,y=p.y,h=hAt(x,y);for(let it=0;it<60;it++){let moved=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){const nx=x+dx*10,ny=y+dy*10,nh=hAt(nx,ny);if(nh>h){x=nx;y=ny;h=nh;moved=1}}if(!moved)break}return {n:p.n,x,y,h}});
+const FOOT=[[[530,880],[525,700],[520,505],[560,390]],[[880,1190],[890,1260],[885,1325],[900,1440]],[[1520,1090],[1600,950],[1656,850],[1800,700],[1990,670]]].map(p=>cr(p,8));
+const RIDGEFIGHTS=[{n:'백운 능선 교전지',x:1300,y:342},{n:'동령 능선 교전지',x:1735,y:1330},{n:'서령 능선 교전지',x:470,y:1262}];
+return {W,H,CS,NX,NY,hg,rd,hAt,rdAt,slopeDeg,isWater,RIDGES,PEAKS,PASSES,QUARRIES,RIVERS,TOWNS,TIER,TYPES,REG,regId,RNX,RNY,RS,regOf,adj,closeOrder,NODES,EDGES,CLS,roads,roadGrade,lenOf,bridges,graphCheck,ELEV,VEH,LOOT,peaks,FOOT,RIDGEFIGHTS,mulberry32,fbm,sm,clamp,lerp,
+  stats:{land:landCells*CS*CS/1e6,walk:walk/landCells,maxH},get SW(){return [SWA,SWL]}};
+})();
+if(typeof module!=='undefined')module.exports=MODEL;
+</script>
+<script>(function(){
+'use strict';
+const M=MODEL,W=M.W,H=M.H,NS='http://www.w3.org/2000/svg',root=document.documentElement,$=s=>document.querySelector(s);
+const S=(t,a,p,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;if(p)p.appendChild(e);return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f1=v=>Math.round(v*10)/10,fmt=v=>v.toLocaleString('ko-KR');
+const isDark=()=>{const t=root.dataset.theme;return t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches)};
+const clamp=M.clamp,lerp=M.lerp,sm=M.sm;
+const TY=M.TYPES,TN={house:'주택',shop:'상가',villa:'빌라·연립',apt:'아파트',school:'학교',barr:'막사',fact:'공장',ware:'창고',market:'시장 건물',stall:'노점',tower:'감시탑',shed:'헛간'};
+const TCOL={house:'--b-house',shop:'--b-shop',villa:'--b-villa',apt:'--b-apt',school:'--b-school',barr:'--b-barr',fact:'--b-fact',ware:'--b-ware',market:'--b-market',stall:'--b-stall',tower:'--b-tower',shed:'--b-shed'};
+const ORD=['①','②','③','④','⑤','⑥'];
+
+/* ---------- raster layers ---------- */
+const RAMP={light:[[0,176,201,120],[25,150,184,104],[70,136,168,96],[120,168,160,112],[170,176,160,132],[230,214,206,190]],dark:[[0,52,72,44],[25,48,70,42],[70,56,76,46],[120,76,82,58],[170,92,90,76],[230,128,124,112]]};
+const PAL={light:{rock:[150,142,128],sand:[233,220,174],sh:[156,208,214],dp:[88,150,178],rv:[120,180,208]},dark:{rock:[104,100,92],sand:[122,112,80],sh:[26,70,86],dp:[8,30,44],rv:[40,104,130]}};
+function ramp(r,z){if(z<=r[0][0])return r[0].slice(1);for(let i=1;i<r.length;i++)if(z<=r[i][0]){const t=(z-r[i-1][0])/(r[i][0]-r[i-1][0]);return [lerp(r[i-1][1],r[i][1],t),lerp(r[i-1][2],r[i][2],t),lerp(r[i-1][3],r[i][3],t)]}return r[r.length-1].slice(1)}
+function drawRelief(){
+ const cv=$('#cvR'),w=cv.width,h=cv.height,ctx=cv.getContext('2d'),img=ctx.createImageData(w,h),d=img.data,sc=W/w,dk=isDark(),R=RAMP[dk?'dark':'light'],P=PAL[dk?'dark':'light'];
+ const L=[-.55,-.55,.63],ex=1.9;
+ for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+  const x=(px+.5)*sc,y=(py+.5)*sc,z=M.hAt(x,y),o=(py*w+px)*4;
+  const e=6,gx=(M.hAt(x+e,y)-M.hAt(x-e,y))/(2*e),gy=(M.hAt(x,y+e)-M.hAt(x,y-e))/(2*e);
+  const nx=-gx*ex,ny=-gy*ex,nl=Math.hypot(nx,ny,1),dot=(nx*L[0]+ny*L[1]+L[2])/nl;
+  let sh=clamp(.8+(dot-.63)*1.6,.38,1.28);
+  const rv=M.rdAt(x,y);let c;
+  if(z<=0&&rv>=0){const t=sm(0,40,-z);c=[lerp(P.sh[0],P.dp[0],t),lerp(P.sh[1],P.dp[1],t),lerp(P.sh[2],P.dp[2],t)];sh=1}
+  else if(rv<0&&z>-3){const t=sm(0,1.5,-rv);const base=ramp(R,Math.max(z,0));c=[lerp(base[0],P.rv[0],t),lerp(base[1],P.rv[1],t),lerp(base[2],P.rv[2],t)];sh=lerp(sh,1,t)}
+  else{
+   c=ramp(R,z);const deg=Math.atan(Math.hypot(gx,gy))*180/Math.PI;
+   const rk=sm(27,42,deg)*.85;c=[lerp(c[0],P.rock[0],rk),lerp(c[1],P.rock[1],rk),lerp(c[2],P.rock[2],rk)];
+   const sa=1-sm(.4,3.4,z);if(sa>0)c=[lerp(c[0],P.sand[0],sa),lerp(c[1],P.sand[1],sa),lerp(c[2],P.sand[2],sa)];
+   const nv=M.fbm(x/28,y/28,5,2);const vv=dk?.9+.22*nv:.93+.14*nv;sh*=vv;
+  }
+  d[o]=clamp(c[0]*sh,0,255);d[o+1]=clamp(c[1]*sh,0,255);d[o+2]=clamp(c[2]*sh,0,255);d[o+3]=255}
+ ctx.putImageData(img,0,0)}
+function drawSlope(){
+ const cv=$('#cvS'),w=cv.width,h=cv.height,ctx=cv.getContext('2d'),img=ctx.createImageData(w,h),d=img.data,sc=W/w;
+ const C=[[70,170,80,60],[170,200,60,110],[240,150,30,150],[210,30,30,185]];
+ for(let py=0;py<h;py++)for(let px=0;px<w;px++){const x=(px+.5)*sc,y=(py+.5)*sc;if(M.hAt(x,y)<=0||M.rdAt(x,y)<0)continue;const g=M.slopeDeg(x,y,6),k=g<=15?0:g<=25?1:g<=35?2:3,o=(py*w+px)*4;d[o]=C[k][0];d[o+1]=C[k][1];d[o+2]=C[k][2];d[o+3]=C[k][3]}
+ ctx.putImageData(img,0,0)}
+function drawReg(){
+ const cv=$('#cvG'),ctx=cv.getContext('2d'),img=ctx.createImageData(cv.width,cv.height),d=img.data,a=isDark()?58:46;
+ for(let i=0;i<M.regId.length;i++){const r=M.regId[i];if(r<0)continue;const c=M.REG[r].c;d[i*4]=parseInt(c.slice(1,3),16);d[i*4+1]=parseInt(c.slice(3,5),16);d[i*4+2]=parseInt(c.slice(5,7),16);d[i*4+3]=a}
+ ctx.putImageData(img,0,0)}
+function redraw(){drawRelief();drawReg()}
+
+/* ---------- SVG overlay ---------- */
+const svg=$('#map');svg.setAttribute('viewBox','0 0 '+W+' '+H);
+const G={};['contour','regions','farm','roads','towns','features','buildings','zones','vehicles','loot','peaks','elev','labels','hi'].forEach(k=>G[k]=S('g',{id:'g-'+k},svg));
+function mk(par,x,y){const g=S('g',{transform:'translate('+f1(x)+' '+f1(y)+')'},par);return S('g',{class:'inv'},g)}
+function lab(par,x,y,t,sz,opt){const i=mk(par,x,y);const e=S('text',Object.assign({class:'lab','font-size':sz||12,'text-anchor':'middle'},opt||{}),i,t);return e}
+function tipEl(e,t){e.setAttribute('data-tip',t);return e}
+
+// contours
+(function(){
+ const NX=M.NX,NY=M.NY,CS=M.CS,hg=M.hg;let minor='',major='',coast='';
+ function seg(lv,i,j){const a=hg[j*NX+i],b=hg[j*NX+i+1],c=hg[(j+1)*NX+i+1],d=hg[(j+1)*NX+i];const pts=[];
+  const X=(v1,v2,x1,y1,x2,y2)=>{const t=(lv-v1)/(v2-v1);pts.push([x1+(x2-x1)*t,y1+(y2-y1)*t])};
+  if((a<lv)!==(b<lv))X(a,b,i,j,i+1,j);if((b<lv)!==(c<lv))X(b,c,i+1,j,i+1,j+1);if((d<lv)!==(c<lv))X(d,c,i,j+1,i+1,j+1);if((a<lv)!==(d<lv))X(a,d,i,j,i,j+1);
+  let s='';const P=(p,q)=>'M'+f1(p[0]*CS)+' '+f1(p[1]*CS)+'L'+f1(q[0]*CS)+' '+f1(q[1]*CS);
+  if(pts.length===2)s=P(pts[0],pts[1]);else if(pts.length===4)s=P(pts[0],pts[1])+P(pts[2],pts[3]);return s}
+ for(let j=0;j<NY-1;j++)for(let i=0;i<NX-1;i++){const a=hg[j*NX+i],b=hg[j*NX+i+1],c=hg[(j+1)*NX+i+1],d=hg[(j+1)*NX+i];const mn=Math.min(a,b,c,d),mx=Math.max(a,b,c,d);
+  if(mx<0||mn>240)continue;
+  if(mn<=0&&mx>0)coast+=seg(0,i,j);
+  for(let lv=20;lv<=240;lv+=20){if(mn<lv&&mx>=lv){if(lv%100===0)major+=seg(lv,i,j);else minor+=seg(lv,i,j)}}}
+ S('path',{d:minor,fill:'none',stroke:'var(--contour)','stroke-opacity':.42,'stroke-width':.7,'vector-effect':'non-scaling-stroke'},G.contour);
+ S('path',{d:major,fill:'none',stroke:'var(--contour)','stroke-opacity':.8,'stroke-width':1.3,'vector-effect':'non-scaling-stroke'},G.contour);
+ S('path',{d:coast,fill:'none',stroke:'var(--coast)','stroke-width':1.4,'vector-effect':'non-scaling-stroke'},G.contour);
+})();
+
+// region borders + labels
+let regLabels=[];
+(function(){
+ const N=M.RNX,Hh=M.RNY,RS=M.RS;let d='';
+ for(let j=0;j<Hh-1;j++)for(let i=0;i<N-1;i++){const a=M.regId[j*N+i];if(a<0)continue;const r=M.regId[j*N+i+1],b=M.regId[(j+1)*N+i];
+  if(r>=0&&r!==a)d+='M'+(i+1)*RS+' '+j*RS+'v'+RS;if(b>=0&&b!==a)d+='M'+i*RS+' '+(j+1)*RS+'h'+RS}
+ S('path',{d,fill:'none',stroke:'var(--reg)','stroke-width':2.4,'stroke-dasharray':'7 4','vector-effect':'non-scaling-stroke','stroke-linecap':'round'},G.regions);
+ M.REG.forEach(R=>{let sx=0,sy=0,n=0;for(let j=0;j<Hh;j++)for(let i=0;i<N;i++)if(M.regId[j*N+i]===R.id){sx+=i;sy+=j;n++}R.cx=sx/n*RS;R.cy=sy/n*RS;R.area=n*RS*RS/1e6;
+  let b=1e9,bx=R.cx,by=R.cy;for(let j=0;j<Hh;j++)for(let i=0;i<N;i++)if(M.regId[j*N+i]===R.id){const dd=Math.hypot(i*RS-R.cx,j*RS-R.cy);if(dd<b){b=dd;bx=i*RS;by=j*RS}}R.lx=bx;R.ly=by});
+})();
+
+// roads
+(function(){
+ const ord=['D','P','H'];const gc=S('g',{},G.roads),gf=S('g',{},G.roads);
+ const path=r=>'M'+r.pts.map(p=>f1(p[0])+' '+f1(p[1])).join('L');
+ const st={H:[9.5,6.5],P:[6.5,4.4],D:[3.6,2]};
+ ord.forEach(c=>M.roads.filter(r=>r.c===c).forEach(r=>S('path',{d:path(r),fill:'none',stroke:c==='H'?'var(--rdHc)':'var(--rdPc)','stroke-width':st[c][0],'stroke-linecap':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke'},gc)));
+ ord.forEach(c=>M.roads.filter(r=>r.c===c).forEach(r=>{const p=S('path',{d:path(r),fill:'none',stroke:c==='H'?'var(--rdH)':c==='P'?'var(--rdP)':'var(--rdD)','stroke-width':st[c][1],'stroke-linecap':c==='D'?'butt':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke'},gf);if(c==='D')p.setAttribute('stroke-dasharray','5 3');
+  tipEl(p,'<b>'+M.CLS[c].n+'</b><br>'+M.NODES[r.a].n+' - '+M.NODES[r.b].n+'<br>길이 '+Math.round(M.lenOf(r.pts))+' m'+(r.sw?' · 고개 스위치백':''))}));
+ M.bridges.forEach(b=>{const d='M'+b.pts.map(p=>f1(p[0])+' '+f1(p[1])).join('L');
+  if(b.ford){const p=S('path',{d,fill:'none',stroke:'var(--rdD)','stroke-width':3.6,'stroke-dasharray':'2 3','vector-effect':'non-scaling-stroke'},G.roads);tipEl(p,'<b>'+b.n+'</b> (얕은 여울, 차량 통과 가능·느림)')}
+  else{S('path',{d,fill:'none',stroke:'var(--brgc)','stroke-width':10,'vector-effect':'non-scaling-stroke'},G.roads);const p=S('path',{d,fill:'none',stroke:'var(--brg)','stroke-width':6.6,'vector-effect':'non-scaling-stroke'},G.roads);tipEl(p,'<b>'+b.n+'</b><br>다리 길이 약 '+Math.round(b.len)+' m ('+M.CLS[b.c].n+')')}});
+})();
+
+// foot paths, passes, ridge fights, quarries (features)
+(function(){
+ M.FOOT.forEach(p=>S('path',{d:'M'+p.map(q=>f1(q[0])+' '+f1(q[1])).join('L'),fill:'none',stroke:'var(--foot)','stroke-width':1.8,'stroke-dasharray':'1.5 4','stroke-linecap':'round','vector-effect':'non-scaling-stroke'},G.features));
+ M.PASSES.forEach(p=>{const i=mk(G.features,p.x,p.y);const e=S('path',{d:'M-6 5 L0 -6 L6 5 Z',fill:p.road?'var(--card)':'none',stroke:'var(--fg)','stroke-width':1.8},i);tipEl(e,'<b>'+p.n+'</b><br>'+(p.road?'차량 통과 가능한 고개(스위치백 도로)':'보행 전용 안부(걸어서만 통과)')+'<br>안부 고도 '+Math.round(M.hAt(p.x,p.y))+' m')});
+ M.RIDGEFIGHTS.forEach(r=>{const i=mk(G.features,r.x,r.y);const e=S('circle',{r:10,fill:'color-mix(in srgb,var(--pk) 25%,transparent)',stroke:'var(--pk)','stroke-width':2,'stroke-dasharray':'3 2'},i);S('path',{d:'M-5 3 L-1 -4 L2 1 L5 -3',fill:'none',stroke:'var(--pk)','stroke-width':1.8},i);tipEl(e,'<b>'+r.n+'</b><br>능선선 위 바위·쓰러진 나무·차량 엄폐, 양쪽 사면 접근')});
+ M.QUARRIES.forEach(q=>{const g=S('g',{transform:'translate('+q.x+' '+q.y+')'},G.features);for(let k=1;k<=4;k++)S('circle',{r:q.r*k/4.6,fill:'none',stroke:'var(--hi)','stroke-width':1.3,'stroke-dasharray':'6 3','vector-effect':'non-scaling-stroke','stroke-opacity':.8},g);tipEl(S('circle',{r:q.r,fill:'transparent'},g),'<b>'+q.n+'</b><br>계단식 절벽(9 m 단), 차량·컨테이너 엄폐 풍부')});
+})();
+
+// towns
+const T_BY={};M.TOWNS.forEach(T=>T_BY[T.id]=T);
+(function(){
+ const rng=M.mulberry32(77);
+ [['M2',380],['L1',330],['H6',330],['M5',300],['L2',300],['H4',300],['M1',260],['H7',240],['H1',200]].forEach(([id,R])=>{const T=T_BY[id];for(let n=0;n<90;n++){const a=rng()*6.283,r=60+rng()*R,x=T.x+Math.cos(a)*r,y=T.y+Math.sin(a)*r;if(r<Math.max(T.W,T.H)/2+18)continue;const h=M.hAt(x,y);if(h<3||h>40||M.rdAt(x,y)<40||M.slopeDeg(x,y,8)>5)continue;
+  S('rect',{x:x-16,y:y-10,width:32,height:20,rx:3,fill:'var(--field)',opacity:.75,transform:'rotate('+f1(T.rot+(rng()-.5)*10)+' '+f1(x)+' '+f1(y)+')'},G.farm)}});
+ M.TOWNS.forEach(T=>{
+  const tg=S('g',{transform:'translate('+T.x+' '+T.y+') rotate('+T.rot+') translate('+-T.W/2+' '+-T.H/2+')'},G.towns);
+  S('rect',{x:-14,y:-14,width:T.W+28,height:T.H+28,rx:12,fill:'var(--ground)',stroke:'var(--town)','stroke-width':3,'vector-effect':'non-scaling-stroke'},tg);S('rect',{x:0,y:0,width:T.W,height:T.H,fill:'var(--blk)'},tg);
+  const g=T.g;g.FD.forEach(f=>S('rect',{x:f.x,y:f.y,width:f.w,height:f.h,fill:f.k==='field'?'var(--field)':f.k==='play'?'var(--play)':'var(--plaza)',opacity:.9},tg));
+  g.ST.forEach(s=>S('rect',{x:s.x,y:s.y,width:s.w,height:s.h,fill:'var(--street)'},tg));
+  const bg=S('g',{transform:tg.getAttribute('transform')},G.buildings);
+  g.B.forEach(b=>{const r=S('rect',{x:f1(b.x),y:f1(b.y),width:f1(b.w),height:f1(b.h),class:'b t-'+b.t+(b.e?'':' ne')},bg);tipEl(r,bTip(b,T))})});
+ function bTip(b,T){return '<b>'+TN[b.t]+'</b> · '+T.n+'<br>'+b.f+'층 · '+Math.round(b.w)+'x'+Math.round(b.h)+' m<br>'+(b.e?'진입 가능':'진입 불가(외형)')}
+ window.bTip=bTip;
+})();
+
+// zones (circle overlay)
+const ZR=[950,680,470,300,170,70];let zSeed=3;
+function drawZones(){
+ G.zones.innerHTML='';const rng=M.mulberry32(zSeed*977);let cx=1180,cy=1000,pr=null;const cs=[];
+ ZR.forEach((r,i)=>{let tries=0,x,y;do{if(!pr){x=1200+(rng()-.5)*500;y=1000+(rng()-.5)*500}else{const a=rng()*6.283,rr=Math.sqrt(rng())*(pr-r)*.9;x=cx+Math.cos(a)*rr;y=cy+Math.sin(a)*rr}tries++}while(tries<60&&(M.hAt(x,y)<4||(i>=2&&M.hAt(x,y)<8)));cx=x;cy=y;pr=r;cs.push([x,y,r])});
+ cs.forEach((c,i)=>{const e=S('circle',{cx:f1(c[0]),cy:f1(c[1]),r:c[2],fill:i===cs.length-1?'color-mix(in srgb,var(--zone) 18%,transparent)':'none',stroke:'var(--zone)','stroke-width':2.4-i*.15,'stroke-dasharray':'12 7','vector-effect':'non-scaling-stroke'},G.zones);tipEl(e,'<b>'+(i+1)+'단계 원</b> 반지름 '+c[2]+' m<br>면적 '+(Math.PI*c[2]*c[2]/1e6).toFixed(2)+' km²');
+  lab(G.zones,c[0],c[1]-c[2],(i+1)+'단계 '+c[2]+' m',12,{fill:'var(--zone)'})});
+ S('circle',{cx:cs[5][0],cy:cs[5][1],r:3,fill:'var(--zone)'},G.zones)}
+drawZones();
+
+// vehicles
+M.VEH.forEach(v=>{const i=mk(G.vehicles,v.x,v.y);const g=S('g',{transform:'rotate('+f1(v.a)+')'},i);const e=S('rect',{x:-9,y:-4.5,width:18,height:9,rx:2.5,fill:'color-mix(in srgb,var(--veh) 30%,transparent)',stroke:'var(--veh)','stroke-width':1.6,'stroke-dasharray':'3 2'},g);S('rect',{x:-4,y:-2.5,width:8,height:5,rx:1,fill:'var(--veh)'},g);tipEl(e,'<b>차량 스폰 구역</b><br>'+(v.t==='pass'?'고갯길 갓길':T_BY[v.t].n+' 진입로')+' · 구역당 1대')});
+// loot
+M.LOOT.forEach(l=>{const i=mk(G.loot,l.x,l.y);const e=S('path',{d:'M0 -8 L7 0 L0 8 L-7 0 Z',fill:l.tier==='high'?'var(--hi)':'var(--mid)',stroke:'var(--card)','stroke-width':1.5},i);tipEl(e,'<b>'+(l.tier==='high'?'고급 루팅 핫스팟':'중급 루팅 핫스팟')+'</b><br>'+l.n)});
+// peaks
+M.peaks.forEach(p=>{S('circle',{cx:p.x,cy:p.y,r:250,fill:'color-mix(in srgb,var(--pk) 8%,transparent)',stroke:'var(--pk)','stroke-width':1,'stroke-dasharray':'2 5','vector-effect':'non-scaling-stroke'},G.peaks);
+ const i=mk(G.peaks,p.x,p.y);const e=S('path',{d:'M0 -9 L8 6 L-8 6 Z',fill:'var(--pk)',stroke:'var(--card)','stroke-width':1.5},i);tipEl(e,'<b>'+p.n+'</b> 오버워치 봉우리<br>고도 '+Math.round(p.h)+' m · 점선 원 = 유효 사거리 250 m')});
+// elevators
+M.ELEV.forEach(e=>{const i=mk(G.elev,e.x,e.y);S('rect',{x:-8,y:-8,width:16,height:16,rx:3,fill:'var(--elev)',stroke:'var(--card)','stroke-width':1.5},i);S('path',{d:'M0 -4.5 L4 0 L1.4 0 L1.4 4.5 L-1.4 4.5 L-1.4 0 L-4 0 Z',fill:'#fff'},i);
+ tipEl(i.firstChild,'<b>엘리베이터 승강장 #'+e.i+'</b> · '+M.REG[e.reg].n+'<br>'+T_BY[e.t].n+' 외곽 · 60 m 안 건물 '+e.near+'채<br>승강기 3기(1인 1기)')});
+
+// labels
+(function(){
+ const tsz={1:15,2:13,3:12,4:11};
+ M.TOWNS.forEach(T=>{const t=lab(G.labels,T.x,T.y-Math.max(T.W,T.H)/2*.6-16,T.n,tsz[T.tier],{});if(T.tier<=2)t.setAttribute('font-weight',800)});
+ M.REG.forEach(R=>{const t=lab(G.labels,R.lx,R.ly,R.n,15,{opacity:.55,'letter-spacing':2});t.id='rl'+R.id});
+ [['청람강',1180,470,-80],['청람강',1230,1260,60],['동천',1560,1440,-35]].forEach(a=>lab(G.labels,a[1],a[2],a[0],12,{fill:'var(--acc)','font-style':'italic',transform:'rotate('+a[3]+')'}));
+ M.peaks.forEach(p=>lab(G.labels,p.x,p.y+22,p.n+' '+Math.round(p.h)+'m',11,{fill:'var(--pk)'}));
+ M.PASSES.forEach(p=>lab(G.labels,p.x,p.y+18,p.n,10.5,{}));
+ M.bridges.forEach(b=>lab(G.labels,b.x+4,b.y-12,b.n,10.5,{fill:'var(--acc)'}));
+ M.QUARRIES.forEach(q=>lab(G.labels,q.x,q.y-q.r*.62,q.n,11,{fill:'var(--hi)'}));
+ M.RIDGEFIGHTS.forEach(r=>lab(G.labels,r.x,r.y-18,r.n,10.5,{fill:'var(--pk)'}));
+ lab(G.labels,200,1900,'청람해',15,{opacity:.55,'font-style':'italic'});lab(G.labels,2250,260,'청람해',15,{opacity:.55,'font-style':'italic'});
+})();
+
+/* ---------- view ---------- */
+const vp=$('#vp'),cvs=[$('#cvR'),$('#cvS'),$('#cvG')];let V={k:.4,x0:0,y0:0},vw=1,vh=1;const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+function fitK(){return Math.min(vw/W,vh/H)*.97}
+function apply(){const k=V.k;svg.setAttribute('viewBox',f1(V.x0)+' '+f1(V.y0)+' '+f1(vw/k)+' '+f1(vh/k));svg.style.setProperty('--inv',1/k);
+ cvs.forEach(c=>c.style.transform='translate('+(-V.x0*k)+'px,'+(-V.y0*k)+'px) scale('+k+')');
+ const t=[50,100,200,250,500,1000].find(v=>v*k>=70)||1000;$('#sb').style.width=t*k+'px';$('#sbt').textContent=t>=1000?'1 km':t+' m'}
+function fit(){const r=vp.getBoundingClientRect();vw=r.width;vh=r.height;V.k=fitK();V.x0=W/2-vw/V.k/2;V.y0=H/2-vh/V.k/2;apply()}
+function zoomAt(f,sx,sy){const k0=V.k,k=clamp(k0*f,fitK()*.98,8);const wx=V.x0+sx/k0,wy=V.y0+sy/k0;V.k=k;V.x0=wx-sx/k;V.y0=wy-sy/k;apply()}
+function fly(x,y,k){const tk=k||2.4;const sx=x-vw/tk/2,sy=y-vh/tk/2;if(reduce){V={k:tk,x0:sx,y0:sy};apply();return}
+ const a=Object.assign({},V),t0=performance.now();(function st(t){const u=clamp((t-t0)/500,0,1),e=u*u*(3-2*u);V={k:a.k*Math.pow(tk/a.k,e),x0:0,y0:0};V.x0=lerp(a.x0+vw/a.k/2,x,e)-vw/V.k/2;V.y0=lerp(a.y0+vh/a.k/2,y,e)-vh/V.k/2;apply();if(u<1)requestAnimationFrame(st)})(t0)}
+let drag=null;
+vp.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;drag={x:e.clientX,y:e.clientY,x0:V.x0,y0:V.y0};vp.classList.add('drag');vp.setPointerCapture(e.pointerId)});
+vp.addEventListener('pointermove',e=>{const r=vp.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top;
+ if(drag){V.x0=drag.x0-(e.clientX-drag.x)/V.k;V.y0=drag.y0-(e.clientY-drag.y)/V.k;apply()}
+ const wx=V.x0+sx/V.k,wy=V.y0+sy/V.k;if(wx>=0&&wx<W&&wy>=0&&wy<H){const h=M.hAt(wx,wy);$('#rd').textContent='x '+Math.round(wx)+' · y '+Math.round(wy)+' m · '+(h<=0?'바다':'고도 '+Math.round(h)+' m · 경사 '+Math.round(M.slopeDeg(wx,wy,8))+'도')}});
+vp.addEventListener('pointerup',()=>{drag=null;vp.classList.remove('drag')});
+vp.addEventListener('wheel',e=>{e.preventDefault();const r=vp.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+$('#zi').onclick=()=>zoomAt(1.5,vw/2,vh/2);$('#zo').onclick=()=>zoomAt(1/1.5,vw/2,vh/2);$('#zf').onclick=fit;
+addEventListener('resize',()=>{const r=vp.getBoundingClientRect();const c=[V.x0+vw/V.k/2,V.y0+vh/V.k/2],f=V.k/fitK();vw=r.width;vh=r.height;V.k=fitK()*f;V.x0=c[0]-vw/V.k/2;V.y0=c[1]-vh/V.k/2;apply()});
+// tooltip
+const tip=$('#tip');document.addEventListener('pointermove',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(!t){tip.style.display='none';return}tip.innerHTML=t.getAttribute('data-tip');tip.style.display='block';const w=tip.offsetWidth;tip.style.left=Math.min(innerWidth-w-8,e.clientX+14)+'px';tip.style.top=(e.clientY+16)+'px'});
+
+/* ---------- layers ---------- */
+const LAY=[['relief','지형 음영',[$('#cvR')],1],['contours','등고선',[G.contour],1],['slope','경사 구간',[$('#cvS')],0],['roads','도로·다리',[G.roads],1],['towns','마을',[G.towns],1],['bld','건물',[G.buildings],1],['zones','구역 원',[G.zones],0],['elev','엘리베이터',[G.elev],1],['loot','루팅 핫스팟',[G.loot],0],['peaks','오버워치 봉우리',[G.peaks],1],['veh','차량 스폰 구역',[G.vehicles],0],['reg','지역 경계',[G.regions,$('#cvG')],1],['feat','고개·능선·채석장',[G.features],1],['lab','라벨',[G.labels],1]];
+const L=$('#layers');LAY.forEach(l=>{const lb=document.createElement('label');const c=document.createElement('input');c.type='checkbox';c.checked=!!l[3];c.id='ly-'+l[0];lb.append(c,l[1]);L.appendChild(lb);const up=()=>l[2].forEach(e=>e.style.display=c.checked?'':'none');c.onchange=up;up()});
+
+// closing order
+$('#zs').onclick=()=>{zSeed++;drawZones();if(!$('#ly-zones').checked){$('#ly-zones').checked=true;$('#ly-zones').onchange()}};
+let coSeed=0;$('#co').onclick=()=>{coSeed++;const o=M.closeOrder(coSeed*31+7);M.REG.forEach(R=>{const t=document.getElementById('rl'+R.id);const k=o.indexOf(R.id);t.textContent=R.n+(k===5?' (최종)':' '+ORD[k]+' 폐쇄')});$('#coText').textContent='순서: '+o.map(i=>M.REG[i].n).join(' → ')+' · 남은 지역이 항상 육로로 이어짐';if(!$('#ly-reg').checked){$('#ly-reg').checked=true;$('#ly-reg').onchange()}};
+
+/* ---------- POI list ---------- */
+const POI=[];
+M.TOWNS.forEach(T=>POI.push({g:'마을',n:T.n,sub:M.TIER[T.tier]+' · 건물 '+T.g.B.length+'채',x:T.x,y:T.y,k:T.tier===1?3.2:T.tier===2?2.6:3.4,cap:T.id==='C'}));
+M.peaks.forEach(p=>POI.push({g:'지형',n:p.n,sub:'오버워치 봉우리 · '+Math.round(p.h)+' m',x:p.x,y:p.y,k:2.2}));
+M.PASSES.forEach(p=>POI.push({g:'지형',n:p.n,sub:p.road?'고개 도로(스위치백)':'보행 전용 안부',x:p.x,y:p.y,k:3}));
+M.RIDGEFIGHTS.forEach(r=>POI.push({g:'지형',n:r.n,sub:'능선 교전지',x:r.x,y:r.y,k:2.6}));
+M.QUARRIES.forEach(q=>POI.push({g:'지형',n:q.n,sub:'절벽·계단식 채석장',x:q.x,y:q.y,k:2.8}));
+M.bridges.forEach(b=>POI.push({g:'교통',n:b.n,sub:(b.ford?'여울':'다리')+' · '+Math.round(b.len)+' m',x:b.x,y:b.y,k:3.4}));
+M.ELEV.forEach(e=>POI.push({g:'교통',n:'엘리베이터 #'+e.i,sub:M.REG[e.reg].n+' · '+T_BY[e.t].n,x:e.x,y:e.y,k:3.2}));
+let flt='전체';const chips=$('#chips');['전체','마을','지형','교통'].forEach(n=>{const b=document.createElement('button');b.textContent=n;b.onclick=()=>{flt=n;render()};chips.appendChild(b)});
+function render(){[...chips.children].forEach(b=>b.classList.toggle('on',b.textContent===flt));const el=$('#poil');el.innerHTML='';let last='';
+ POI.filter(p=>flt==='전체'||p.g===flt).forEach(p=>{if(flt==='전체'&&p.g!==last){last=p.g;const h=document.createElement('div');h.className='gh';h.textContent=p.g;el.appendChild(h)}
+  const b=document.createElement('button');b.className='pi';b.innerHTML='<b>'+esc(p.n)+'</b><small>'+esc(p.sub)+'</small>';b.onclick=()=>{fly(p.x,p.y,p.k);G.hi.innerHTML='';const i=mk(G.hi,p.x,p.y);S('circle',{class:'pulse',r:10},i);setTimeout(()=>{G.hi.innerHTML=''},3200);if(p.cap)$('#plan').scrollIntoView({block:'nearest'})};el.appendChild(b)})}
+render();
+
+/* ---------- legend ---------- */
+const lg=$('#lg');lg.innerHTML=[['<i class="swl" style="border-color:var(--rdH)"></i>국도(순환·간선)'],['<i class="swl" style="border-color:var(--rdPc);height:0;border-top-width:3px;background:none"></i>포장 지방도'],['<i class="swl" style="border-color:var(--rdD);border-top-style:dashed;border-top-width:2px"></i>비포장 농로·임도'],['<i class="swl" style="border-color:var(--foot);border-top-style:dotted;border-top-width:2px"></i>보행 전용 산길'],
+ ['<svg width="14" height="12"><path d="M1 11 L7 1 L13 11Z" fill="var(--card)" stroke="var(--fg)" stroke-width="1.6"/></svg>고개/안부'],['<svg width="14" height="12"><rect width="12" height="12" rx="2" fill="var(--elev)"/></svg>엘리베이터'],['<svg width="14" height="14"><path d="M7 0 L14 7 L7 14 L0 7Z" fill="var(--hi)"/></svg>고급 루팅 <svg width="14" height="14"><path d="M7 0 L14 7 L7 14 L0 7Z" fill="var(--mid)"/></svg>중급'],['<svg width="14" height="12"><path d="M7 1 L13 11 L1 11Z" fill="var(--pk)"/></svg>오버워치 봉우리'],['<svg width="18" height="10"><rect width="18" height="10" rx="2" fill="none" stroke="var(--veh)" stroke-dasharray="3 2"/></svg>차량 스폰'],['<i class="sw" style="background:var(--field)"></i>논·밭'],['<i class="sw" style="background:var(--town);opacity:.5"></i>마을 부지']].map(x=>'<span>'+x[0]+'</span>').join('');
+
+/* ---------- capital plan ---------- */
+(function(){
+ const T=T_BY.C,g=T.g,sv=$('#plan');const P=(t,a,p,x)=>S(t,a,p,x);
+ const grp=n=>P('g',{id:n},sv);
+ P('rect',{x:-34,y:-16,width:574,height:352,fill:'var(--ground)'},sv);
+ // farmland edge (west margin) + river
+ const gF=grp('pf');for(let i=0;i<8;i++)P('rect',{x:-32,y:-14+i*44,width:30,height:38,fill:'var(--field)',opacity:.8,rx:2},gF);P('text',{x:-17,y:-2,'text-anchor':'middle','font-size':5.5,fill:'var(--fg)'},gF,'논·밭');
+ P('rect',{x:430,y:-16,width:14,height:352,fill:'var(--embank)'},sv);P('rect',{x:444,y:-16,width:96,height:352,fill:'var(--river)'},sv);
+ P('path',{d:'M444 -16 Q452 30 444 70 T444 150 T444 240 T444 336',fill:'none',stroke:'var(--card)','stroke-width':1.2,opacity:.8},sv);
+ // streets base
+ const gS=grp('ps');P('rect',{x:0,y:0,width:430,height:300,fill:'var(--streetc)'},gS);
+ g.BL.forEach(b=>P('rect',{x:b.x,y:b.y,width:b.w,height:b.h,fill:'var(--blk)'},gS));
+ g.ST.forEach(s=>P('rect',{x:s.x,y:s.y,width:s.w,height:s.h,fill:'var(--street)'},gS));
+ P('rect',{x:430,y:0,width:8,height:300,fill:'var(--street)'},gS);
+ g.ST.filter(s=>s.main).forEach(s=>P('line',{x1:0,x2:430,y1:s.y+s.h/2,y2:s.y+s.h/2,stroke:'var(--streetc)','stroke-width':.5,'stroke-dasharray':'4 3'},gS));
+ // alleys inside double-strip blocks
+ g.BL.forEach(b=>{if('SVH'.includes(b.code)){const hor=b.w>=b.h;const e=hor?{x1:b.x+1,x2:b.x+b.w-1,y1:b.y+b.h/2,y2:b.y+b.h/2}:{x1:b.x+b.w/2,x2:b.x+b.w/2,y1:b.y+1,y2:b.y+b.h-1};P('line',Object.assign(e,{stroke:'var(--street)','stroke-width':2.6,'stroke-linecap':'round'}),gS)}});
+ g.FD.forEach(f=>P('rect',{x:f.x,y:f.y,width:f.w,height:f.h,fill:f.k==='field'?'var(--field)':f.k==='play'?'var(--play)':'var(--plaza)',opacity:.95},gS));
+ // bridges
+ const mainY=g.ST.find(s=>s.main);const my=mainY.y+mainY.h/2;
+ P('rect',{x:430,y:my-7,width:92,height:14,fill:'var(--brgc)'},sv);P('rect',{x:430,y:my-5.5,width:92,height:11,fill:'var(--brg)'},sv);P('text',{x:480,y:my-9,'text-anchor':'middle','font-size':6,'font-weight':700,fill:'var(--fg)'},sv,'청람교 (강폭 45 m)');
+ P('rect',{x:430,y:38,width:92,height:5,fill:'var(--brgc)'},sv);P('rect',{x:430,y:39,width:92,height:3,fill:'var(--brg)'},sv);P('text',{x:480,y:34,'text-anchor':'middle','font-size':5.2,fill:'var(--fg)'},sv,'구교(보행교 3 m)');
+ P('text',{x:492,y:200,'font-size':8,fill:'var(--card)','font-weight':700,'text-anchor':'middle',transform:'rotate(-90 492 200)'},sv,'청람강');
+ P('text',{x:437,y:150,'font-size':4.6,fill:'var(--fg)','text-anchor':'middle',transform:'rotate(-90 437 150)'},sv,'제방길 8 m');
+ // street names
+ g.ST.forEach(s=>{if(!s.n)return;if(s.v)P('text',{x:s.x+s.w/2,y:s.main?0:150+(s.n==='샛길'?-70:-20),'font-size':6,'text-anchor':'middle',fill:'var(--fg)',transform:'rotate(-90 '+(s.x+s.w/2)+' '+(s.n==='샛길'?80:130)+')'},sv,s.n);else P('text',{x:s.main?100:340,y:s.y+s.h/2+(s.main?2.2:1.8),'font-size':s.main?7.5:6,'font-weight':s.main?700:400,'text-anchor':'middle',fill:'var(--fg)'},sv,s.n+(s.main?' (12 m)':''))});
+ // fences, cover
+ const gC=grp('pc');g.FN.forEach(f=>P('rect',{x:f.x,y:f.y,width:f.w,height:f.h,fill:'none',stroke:'var(--fenceC)','stroke-width':.7,'stroke-dasharray':'2 1.2'},gC));
+ g.CV.forEach(c=>{if(c.k==='car')P('rect',{x:c.a?c.x:c.x,y:c.y,width:c.a?2.3:4.6,height:c.a?4.6:2.3,rx:.8,fill:'var(--car)',stroke:'var(--card)','stroke-width':.3},gC);else P('rect',{x:c.x,y:c.y,width:6,height:2.4,fill:'var(--cont)',stroke:'var(--card)','stroke-width':.3},gC)});
+ [[408,my-9],[408,my+6],[418,my-9],[418,my+6],[392,my-1]].forEach(b=>P('rect',{x:b[0],y:b[1],width:4.5,height:2.2,fill:'var(--fg)',opacity:.75},gC));
+ // buildings
+ const gB=grp('pb');g.B.forEach(b=>{const r=P('rect',{x:f1(b.x),y:f1(b.y),width:f1(b.w),height:f1(b.h),class:'b t-'+b.t+(b.e?'':' ne')},gB);tipEl(r,bTip(b,T));
+  if(b.e&&b.t!=='tower'){const d=b.d;const cx=b.x+b.w/2,cy=b.y+b.h/2;const l=d==='n'?[cx-1.6,b.y,cx+1.6,b.y]:d==='s'?[cx-1.6,b.y+b.h,cx+1.6,b.y+b.h]:d==='w'?[b.x,cy-1.6,b.x,cy+1.6]:[b.x+b.w,cy-1.6,b.x+b.w,cy+1.6];P('line',{x1:l[0],y1:l[1],x2:l[2],y2:l[3],stroke:'var(--card)','stroke-width':1.4,'pointer-events':'none'},gB)}});
+ g.B.filter(b=>b.t==='apt').forEach(b=>P('text',{x:b.x+b.w/2,y:b.y+b.h/2+1.7,'font-size':4.4,'text-anchor':'middle',fill:'#fff','font-weight':700,'pointer-events':'none'},gB,'5F'));
+ // block labels
+ const nm={K:'학교 · 운동장',M:'시장',A:'아파트 단지',B:'막사 구역',F:'공장',W:'창고 · 컨테이너',L:'논·밭 가장자리',V:'빌라'};
+ g.BL.forEach(b=>{if(nm[b.code]&&b.code!=='V')P('text',{x:b.x+b.w/2,y:b.y+(b.code==='K'?b.h-5.5:b.h-3),'font-size':4.6,'text-anchor':'middle',fill:'var(--fg)',opacity:.85,'pointer-events':'none'},gB,nm[b.code])});
+ // callouts
+ const gk=grp('pk');
+ const sl=P('line',{x1:20,y1:my+.5,x2:424,y2:my+.5,stroke:'var(--acc)','stroke-width':1.2,'stroke-dasharray':'5 3',opacity:.9},gk);P('path',{d:'M424 '+(my+.5)+'l-5 -2.4v4.8z',fill:'var(--acc)'},gk);
+ const bl=g.BL.find(b=>b.code==='T'&&b.y>my);
+ [[135,118,'1'],[150,163,'2'],[262,183,'3'],[420,my,'4']].forEach(c=>{P('circle',{cx:c[0],cy:c[1],r:6.2,class:'co'},gk);P('text',{x:c[0],y:c[1]+3,class:'con'},gk,c[2])});
+ // alley arrows
+ P('path',{d:'M100 163 L170 163',stroke:'var(--acc)','stroke-width':1.1,'stroke-dasharray':'2 2',fill:'none','marker-end':''},gk);
+ // scale bar + north
+ P('rect',{x:-26,y:318,width:50,height:2.6,fill:'var(--fg)'},sv);P('rect',{x:-26,y:318,width:25,height:2.6,fill:'var(--card)',stroke:'var(--fg)','stroke-width':.4},sv);P('text',{x:-26,y:315.5,'font-size':5,fill:'var(--fg)'},sv,'0');P('text',{x:24,y:315.5,'font-size':5,'text-anchor':'middle',fill:'var(--fg)'},sv,'50 m');
+ P('path',{d:'M520 -8 L525 8 L520 5 L515 8 Z',fill:'var(--fg)'},sv);P('text',{x:520,y:16,'font-size':5.5,'text-anchor':'middle',fill:'var(--fg)'},sv,'N');
+ // counts
+ const cnt={};g.B.forEach(b=>{const c=cnt[b.t]||(cnt[b.t]={n:0,e:0});c.n++;if(b.e)c.e++});
+ const tot=g.B.length,ent=g.B.filter(b=>b.e).length;$('#cn').textContent=tot+' (진입 '+ent+')';
+ const fl={house:'1~2',shop:'2~3',villa:'3~4',apt:'5',school:'1~3',barr:'1',fact:'1(고천장)',ware:'1',market:'1',stall:'1',tower:'3',shed:'1'};
+ $('#pct').innerHTML='<tr><th>종류</th><th class="n">수</th><th class="n">진입</th><th>층</th></tr>'+Object.keys(TN).filter(k=>cnt[k]).map(k=>'<tr><td><i class="sw" style="background:var('+TCOL[k]+')"></i> '+TN[k]+'</td><td class="n">'+cnt[k].n+'</td><td class="n">'+cnt[k].e+'</td><td>'+fl[k]+'</td></tr>').join('')+'<tr><th>합계</th><th class="n">'+tot+'</th><th class="n">'+ent+'</th><th></th></tr>';
+ const cars=g.CV.filter(c=>c.k==='car').length,cont=g.CV.filter(c=>c.k==='cont').length,fence=Math.round(g.FN.reduce((a,f)=>a+2*(f.w+f.h),0));
+ $('#plg').innerHTML=Object.keys(TN).filter(k=>cnt[k]).map(k=>'<span><i class="sw" style="background:var('+TCOL[k]+')"></i>'+TN[k]+'</span>').join('')+
+  '<span><i class="sw" style="background:var(--b-house);opacity:.55;border-style:dashed"></i>진입 불가(흐린 점선)</span><span><i class="swl" style="border-color:var(--card);border-top-width:3px;background:var(--bstroke)"></i>문(진입 가능 건물 표시)</span><span><i class="sw" style="background:var(--car)"></i>주차 차량 '+cars+'대(엄폐)</span><span><i class="sw" style="background:var(--cont)"></i>컨테이너 '+cont+'개</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--fenceC)" stroke-dasharray="3 2"/></svg>울타리·담 약 '+fence+' m</span><span><i class="sw" style="background:var(--fg);opacity:.75"></i>콘크리트 방벽(다리 앞)</span><span><i class="sw" style="background:var(--field)"></i>논·밭 / 운동장(연두)</span><span><i class="sw" style="background:var(--embank)"></i>제방 · 강(파랑)</span>';
+ $('#calls').innerHTML=[['중앙로 직선 시선(파란 점선).','폭 12 m, 서쪽 끝에서 청람교까지 약 400 m가 한 줄로 보인다. 주차 차량과 방벽이 40~60 m마다 시선을 끊어서 통째로 가로지르기 어렵고, 차량 단위로 전진하게 된다.'],
+  ['상가 뒷골목(폭 3 m, 보행 전용).','중앙로 양쪽 상가는 붙은 줄(틈 0.4 m)이고 그 뒤에 골목이 있다. 큰길을 피해 블록을 돌아 측면·후방으로 들어갈 수 있고 차량은 못 들어가 근접전이 된다.'],
+  ['5층 아파트 외벽 계단 → 옥상.','블록에서 가장 높아 중앙로와 시장을 내려다본다. 대신 옥상은 노출되어 건너편 건물 옥상·수류탄에 약하다. 1층 상가 지붕(2~3층)과 높이차 2층이라 옥상 사다리 오르내림 경로가 갈린다.'],
+  ['청람교 병목 + 제방길.','다리 폭 12 m, 앞에 방벽 5개와 감시탑. 구교(3 m 보행교)와 상류 얕은 여울이 우회로라서 한 곳만 막아서는 안 된다. 제방 위는 강 건너편에서 보여서 엄폐가 낮다.']].map((c,i)=>'<li><span class="n">'+(i+1)+'</span><div><b>'+c[0]+'</b> '+c[1]+'</div></li>').join('');
+})();
+
+/* ---------- numbers ---------- */
+(function(){
+ const TW=M.TOWNS,tot=TW.reduce((a,T)=>a+T.g.B.length,0),ent=TW.reduce((a,T)=>a+T.g.B.filter(b=>b.e).length,0),land=M.stats.land,gc=M.graphCheck();
+ const sw=M.roads.filter(r=>r.sw).length,pr=M.roads.reduce((a,r)=>a+M.lenOf(r.pts),0)/1000;
+ const bd=[['','섬 약 2.4 x 2.0 km'],['','육지 '+land.toFixed(1)+' km²'],['','50명 · '+(50/land).toFixed(1)+'명/km²'],['','마을 '+TW.length+' · 건물 '+tot+' (진입 '+ent+')'],['','엘리베이터 승강장 '+M.ELEV.length],['','지역 6'],['','고개 도로 '+(M.PASSES.filter(p=>p.road).length)+'곳(스위치백)'],['','걷기 가능(35도 이하) '+Math.round(M.stats.walk*100)+'%'],['','최고 고도 '+Math.round(M.stats.maxH)+' m']];
+ let h=bd.map(b=>'<span class="badge">'+esc(b[1])+'</span>').join('');
+ h+='<span class="badge '+(gc.connected?'ok':'bad')+'" id="gbadge"><b>도로 그래프 연결: '+(gc.connected?'예':'아니오')+'</b> · 노드 '+gc.nodes+' · 엣지 '+gc.edges+' · 순환 '+gc.cycles+(gc.cutEdges===0?' · 단일 구간 차단에도 연결 유지':' · 끊으면 갈라지는 구간 '+gc.cutEdges)+'</span>';
+ $('#badges').innerHTML=h;
+ const td=(a,cls)=>a.map(x=>'<td'+(cls?' class="n"':'')+'>'+x+'</td>').join('');
+ const row=(a,hd)=>'<tr>'+a.map((x,i)=>'<'+(hd?'th':'td')+(i&&!isNaN(parseFloat(x))&&!hd?' class="n"':hd&&i?' class="n"':'')+'>'+x+'</'+(hd?'th':'td')+'>').join('')+'</tr>';
+ $('#t1').innerHTML=row(['항목','현재','제안 C2'],1)+row(['플레이어(봇 포함)','16 (봇 15, 최대 23)','50']).replace(/class="n"/g,'')+row(['지형','1.02 km 사각 · 육지 0.65 km²','2.4 x 2.0 km 박스 · 육지 '+land.toFixed(2)+' km²']).replace(/class="n"/g,'')+row(['인원 밀도(육지)','약 25명/km² (16명) · 48 (31명)',(50/land).toFixed(1)+'명/km²']).replace(/class="n"/g,'')+row(['인원 밀도(박스 4.8 km²)','-',(50/4.8).toFixed(1)+'명/km²']).replace(/class="n"/g,'')+row(['참고(공개 수치 추정)','Karakin 16 · Sanhok 6.3 · Erangel 1.6','PUBG보다 작고 Karakin 수준']).replace(/class="n"/g,'')+row(['건물','약 78채',tot+'채 (진입 '+ent+')']).replace(/class="n"/g,'')+row(['걷기 끝에서 끝','약 1 km','약 2.3 km (도로 이용 시 차량 1분 안팎)']).replace(/class="n"/g,'');
+ const tiers=[1,2,3,4].map(t=>{const a=TW.filter(T=>T.tier===t),n=a.map(T=>T.g.B.length);return [M.TIER[t],a.length,Math.min(...n)+'~'+Math.max(...n),n.reduce((x,y)=>x+y,0),a.reduce((x,T)=>x+T.g.B.filter(b=>b.e).length,0)]});
+ $('#t2').innerHTML=row(['등급','곳','건물/곳','합계','진입'],1)+tiers.map(r=>row(r)).join('')+row(['합계',TW.length,'',tot,ent],1);
+ const ty={};TW.forEach(T=>T.g.B.forEach(b=>{const c=ty[b.t]||(ty[b.t]=[0,0]);c[0]++;if(b.e)c[1]++}));
+ $('#t3').innerHTML=row(['종류','수','진입 가능','층수'],1)+Object.keys(TN).filter(k=>ty[k]).map(k=>row([TN[k],ty[k][0],ty[k][1],M.TYPES[k].fl])).join('');
+ const rg=M.REG.map(R=>{const el=M.ELEV.filter(e=>e.reg===R.id),tw=TW.filter(T=>M.regOf(T.x,T.y)===R.id);return [R.n,R.area.toFixed(2),tw.map(T=>T.n).join('·'),el.length,el.length*3,R.note]});
+ $('#t4').innerHTML=row(['지역','km²','마을','승강장','슬롯','지형'],1)+rg.map(r=>row(r)).join('')+row(['합계',M.REG.reduce((a,R)=>a+R.area,0).toFixed(2),'',M.ELEV.length,M.ELEV.length*3,'지역 투입 상한 ceil(50/6)+1 = 10'],1);
+ const z=[['1',950],['2',680],['3',470],['4',300],['5',170],['6',70]],sv=[38,26,16,9,4,2];
+ $('#t5').innerHTML=row(['단계','반지름 m','면적 km²','생존 예상'],1)+z.map((a,i)=>row([a[0],a[1],(Math.PI*a[1]*a[1]/1e6).toFixed(2),sv[i]])).join('')+'<tr><td colspan="4" class="note">이 원은 SPEC 3의 지역 순차 봉쇄를 대체하는 안이 아니라 비교용이다. 원 방식 채택은 ADR 필요. 지역 방식은 폐쇄 순서 버튼으로 시뮬레이션.</td></tr>';
+ const len={H:0,P:0,D:0},cnt={H:0,P:0,D:0};M.roads.forEach(r=>{len[r.c]+=M.lenOf(r.pts)/1000;cnt[r.c]++});
+ const gr=M.roads.filter(r=>r.sw).map(r=>[M.NODES[r.a].n+' - '+M.NODES[r.b].n,Math.round(M.lenOf(r.pts))+' m',r.gradeMax.toFixed(0)+'도']);
+ $('#t6').innerHTML=row(['등급','구간','길이 km'],1)+['H','P','D'].map(c=>row([M.CLS[c].n,cnt[c],len[c].toFixed(1)])).join('')+row(['합계',M.roads.length,pr.toFixed(1)],1)+'<tr><th colspan="3">고개 스위치백 구간(30 m 창 최대 경사, 절토 후)</th></tr>'+gr.map(r=>'<tr><td>'+r[0]+'</td><td class="n">'+r[1]+'</td><td class="n">'+r[2]+'</td></tr>').join('');
+})();
+
+/* ---------- theme ---------- */
+const tb=$('#theme'),modes=['auto','light','dark'];let mi=0;
+function setTheme(){const m=modes[mi];if(m==='auto')delete root.dataset.theme;else root.dataset.theme=m;tb.textContent='테마: '+{auto:'자동',light:'라이트',dark:'다크'}[m];redraw()}
+tb.onclick=()=>{mi=(mi+1)%3;setTheme()};
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(modes[mi]==='auto')redraw()});
+redraw();drawSlope();fit();
+
+// deep link: #theme=dark&fly=x,y,k&on=slope,zones&off=bld&scroll=plan&co=1
+(function(){const h=new URLSearchParams(location.hash.slice(1));
+ if(h.get('theme')){mi=modes.indexOf(h.get('theme'));if(mi<0)mi=0;setTheme()}
+ (h.get('on')||'').split(',').filter(Boolean).forEach(k=>{const c=$('#ly-'+k);if(c){c.checked=true;c.onchange()}});
+ (h.get('off')||'').split(',').filter(Boolean).forEach(k=>{const c=$('#ly-'+k);if(c){c.checked=false;c.onchange()}});
+ if(h.get('co'))$('#co').onclick();
+ if(h.get('fly')){const a=h.get('fly').split(',').map(Number);V={k:a[2],x0:a[0]-vw/a[2]/2,y0:a[1]-vh/a[2]/2};apply()}
+ if(h.get('scroll'))setTimeout(()=>{const e=$('#'+h.get('scroll'));if(e)e.scrollIntoView()},50)})();
+window.__C2={M,V:()=>V,fly,setTheme};
+})();
+</script></body></html>

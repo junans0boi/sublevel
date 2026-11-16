@@ -1,0 +1,827 @@
+{
+  "id": "vehicles",
+  "title": "차량",
+  "order": 30,
+  "group": "콘텐츠",
+  "summary": "운전 가능 차량 7종(승용 5 + 오토바이 2)과 정적 소품 차량 1팩. 모델은 전부 Sketchfab CC BY 4.0이라 크레딧 화면이 필수. 엔진·경적·타이어·충돌음은 파일 없이 코드로 합성한 임시 소리다.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "prose",
+      "title": "현재 구성",
+      "paragraphs": [
+        "차량은 한 프레임워크(Vehicle)에 Car와 Motorcycle 두 종류가 올라가 있다. 모델별 차이는 질량·좌석 배치·무게중심 정도이고, 최고속도·가속·서스펜션 등은 종류별(차/오토바이) 한 벌의 rules.json 값을 공유한다.",
+        "월드에는 주차 지점마다 1대가 놓인다: 차 6대 + 오토바이 4대(총 10대), 거기에 정적 주차·폐차 소품(물리 없음) 최대 28대."
+      ],
+      "bullets": [
+        "좌석 번호는 네트워크로 전송되므로 순서를 바꾸지 않는다(0 운전석, 1 조수석, 2·3 뒷좌석).",
+        "차량 사운드는 모두 코드 합성(VehicleAudio)이며 소리 파일이 없다 → 정식 소리 후보 조사 필요.",
+        "인게임 표시 이름은 코드에 없다(프리팹 이름과 크레딧 화면 제목만 있음)."
+      ]
+    },
+    {
+      "type": "table",
+      "title": "운전 가능 차량",
+      "columns": [
+        {
+          "key": "name",
+          "label": "모델(프리팹 이름)",
+          "kind": "text"
+        },
+        {
+          "key": "kind",
+          "label": "종류",
+          "kind": "tag"
+        },
+        {
+          "key": "body",
+          "label": "차체",
+          "kind": "text"
+        },
+        {
+          "key": "seats",
+          "label": "좌석",
+          "kind": "text"
+        },
+        {
+          "key": "color",
+          "label": "페인트 틴트",
+          "kind": "color"
+        },
+        {
+          "key": "mass",
+          "label": "질량 kg",
+          "kind": "num"
+        },
+        {
+          "key": "com",
+          "label": "무게중심 높이 m",
+          "kind": "num"
+        },
+        {
+          "key": "license",
+          "label": "라이선스",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "lt80",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:220-224",
+          "name": "FairheavenLT80",
+          "kind": "차",
+          "body": "세단",
+          "seats": "4 (운전+조수+뒷 2)",
+          "color": "#751a14",
+          "mass": 1250,
+          "com": "기본 0.38",
+          "license": "CC BY 4.0 (V-0001, DanielZhabotinsky)",
+          "note": "틴트는 코드의 Color 값(0.46,0.10,0.08). 텍스처와 곱해지므로 실제 화면 색은 다를 수 있다."
+        },
+        {
+          "id": "sw84",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:225-229",
+          "name": "FairheavenSW84",
+          "kind": "차",
+          "body": "왜건",
+          "seats": "4",
+          "color": "#a89978",
+          "mass": 1350,
+          "com": "기본 0.38",
+          "license": "CC BY 4.0 (V-0002)",
+          "note": "트렁크 덮개는 분리 부품에서 제외(해치가 뒷유리 포함)."
+        },
+        {
+          "id": "lifted85",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:230-236",
+          "name": "LightbodyLifted85",
+          "kind": "차",
+          "body": "리프트업 픽업(일반 캡)",
+          "seats": "2 (적재함 탑승 불가, ADR-077)",
+          "color": "#334730",
+          "mass": 1900,
+          "com": 0.62,
+          "license": "CC BY 4.0 (V-0003)",
+          "note": "좌석 2개만 측정됨. 적재함에는 못 탄다."
+        },
+        {
+          "id": "shvan92",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:237-242",
+          "name": "Shvan92",
+          "kind": "차",
+          "body": "패널 밴",
+          "seats": "2 (뒤는 맨 화물 바닥)",
+          "color": "#c7c7bf",
+          "mass": 1750,
+          "com": 0.6,
+          "license": "CC BY 4.0 (V-0004)",
+          "note": "화물칸은 좌석이 아니다."
+        },
+        {
+          "id": "goblin",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:244-262",
+          "name": "GoblinV12",
+          "kind": "차",
+          "body": "스포츠카",
+          "seats": "2",
+          "color": "",
+          "mass": 1450,
+          "com": 0.32,
+          "license": "CC BY 4.0 (V-0005, ollitei, 수정함)",
+          "note": "알베도 텍스처를 코드(VehicleArt)로 수정(번호판·웹주소 덧칠). 색은 텍스처 그대로. 핸들이 모델에 없어 코드로 만든 핸들을 쓴다."
+        },
+        {
+          "id": "dirtbike",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:740-746",
+          "name": "DirtBike",
+          "kind": "오토바이",
+          "body": "오프로드",
+          "seats": "2 (운전+뒤)",
+          "color": "",
+          "mass": 190,
+          "com": 0.55,
+          "license": "CC BY 4.0 (V-0006, danilloribeiro)",
+          "note": "7색 텍스처 중 빨강만 사용. 모델 질량 190인데 rules의 Motorcycles.MassKg는 230: 어느 값이 실제 물리에 쓰이는지는 확인 필요(open)."
+        },
+        {
+          "id": "roadbike",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleModels.cs:799-800",
+          "name": "RoadMotorcycle",
+          "kind": "오토바이",
+          "body": "로드",
+          "seats": "2",
+          "color": "",
+          "mass": 230,
+          "com": 0.55,
+          "license": "CC BY 4.0 (V-0007, animanyarty)",
+          "note": "부품 이름이 없어 경계 상자로 분류해 병합."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "정적 소품 차량",
+      "columns": [
+        {
+          "key": "name",
+          "label": "이름",
+          "kind": "text"
+        },
+        {
+          "key": "what",
+          "label": "용도",
+          "kind": "text"
+        },
+        {
+          "key": "license",
+          "label": "라이선스",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "carpack",
+          "status": "confirmed",
+          "source": "docs/ASSET_LEDGER.md:54",
+          "name": "PassengerCarPack",
+          "what": "마을 주차·폐차 소품(물리 없음, 충돌체만). 폐차 변형은 녹색 갈색 톤, 바퀴 없음, 기울임",
+          "license": "CC BY 4.0 (V-0008, comrade1280)",
+          "note": "월드에 최대 28대(MaxProps), 주차 후보지의 55%(PropShare)."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "주행 수치 (rules.json, 모델 공통)",
+      "columns": [
+        {
+          "key": "stat",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "car",
+          "label": "차",
+          "kind": "num"
+        },
+        {
+          "key": "bike",
+          "label": "오토바이",
+          "kind": "num"
+        },
+        {
+          "key": "unit",
+          "label": "단위",
+          "kind": "tag"
+        }
+      ],
+      "rows": [
+        {
+          "id": "top",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Vehicles/Motorcycles",
+          "stat": "최고속도(도로)",
+          "car": 90,
+          "bike": 105,
+          "unit": "km/h",
+          "notes": "비포장·지형 x0.85(OffRoadSpeedFactor)"
+        },
+        {
+          "id": "boost",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "부스트 최고속도(Shift)",
+          "car": 105,
+          "bike": 120,
+          "unit": "km/h"
+        },
+        {
+          "id": "rev",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "후진 최고속도",
+          "car": 25,
+          "bike": 8,
+          "unit": "km/h"
+        },
+        {
+          "id": "acc",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "출발 가속(최고속도에서 0으로 감소)",
+          "car": 5.5,
+          "bike": 7.5,
+          "unit": "m/s²",
+          "notes": "부스트 x1.25, 런치(W+Shift+Space) x1.5 1.2초"
+        },
+        {
+          "id": "brk",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "제동",
+          "car": 9,
+          "bike": 8,
+          "unit": "m/s²"
+        },
+        {
+          "id": "steer",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "조향 최대각(정지/최고속)",
+          "car": "32 / 6",
+          "bike": "30 / 4",
+          "unit": "도"
+        },
+        {
+          "id": "wheel",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "바퀴 반지름(기본값, 모델은 실측으로 덮어씀)",
+          "car": 0.34,
+          "bike": 0.31,
+          "unit": "m"
+        },
+        {
+          "id": "grip",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "타이어 접지 계수",
+          "car": 1.05,
+          "bike": 1.1,
+          "unit": ""
+        },
+        {
+          "id": "enter",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/VehicleRules.cs:40-42",
+          "stat": "탑승 거리 / 탑승 시간 / 자리 바꾸기",
+          "car": "3m / 0.6s / 0.5s",
+          "bike": "같음",
+          "unit": ""
+        },
+        {
+          "id": "exit",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json ExitSafeKmh/ExitLethalKmh",
+          "stat": "하차 피해(이 속도 이하 안전 / 이상 즉사)",
+          "car": "30 / 65",
+          "bike": "30 / 65",
+          "unit": "km/h",
+          "notes": "그 사이는 낙하 피해처럼 아프다"
+        },
+        {
+          "id": "flip",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "전복 시 자동 복구",
+          "car": "5초 뒤 2.5초",
+          "bike": "5초 뒤 2초",
+          "unit": ""
+        },
+        {
+          "id": "drown",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json",
+          "stat": "침수 정지 수심",
+          "car": 0.8,
+          "bike": 0.6,
+          "unit": "m"
+        },
+        {
+          "id": "bike",
+          "status": "confirmed",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Motorcycles",
+          "stat": "오토바이 기울기/충돌",
+          "car": "",
+          "bike": "기울기 35도, 충돌 속도 9m/s 이상이면 탑승자 이탈",
+          "unit": "",
+          "notes": "공중 자세 조절 300도/s², 킥스탠드 12도"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "연료",
+      "columns": [
+        {
+          "key": "stat",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "cap",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/Fuel.cs:20-31",
+          "stat": "탱크",
+          "value": "0~1 비율(리터 단위 없음)",
+          "note": "엔진 켜진 채 공회전 25분, 풀스로틀 가산 약 5분. 부스트 시 가산분 x2. 오토바이 x0.7"
+        },
+        {
+          "id": "start",
+          "status": "confirmed",
+          "source": "Fuel.cs:24-25",
+          "stat": "시작 연료",
+          "value": "35%~90% (차량별 시드)",
+          "note": ""
+        },
+        {
+          "id": "low",
+          "status": "confirmed",
+          "source": "Fuel.cs:27",
+          "stat": "경고(HUD 빨강)",
+          "value": "15% 이하",
+          "note": ""
+        },
+        {
+          "id": "can",
+          "status": "confirmed",
+          "source": "Fuel.cs:30-37",
+          "stat": "제리캔",
+          "value": "5초 주입, 1통 = 탱크 60%, 사거리 1.6m, 10km/h 이하",
+          "note": "피해·사격·무기 교체·이동하면 중단"
+        },
+        {
+          "id": "horn",
+          "status": "confirmed",
+          "source": "Fuel.cs:40-41",
+          "stat": "경적 소음",
+          "value": "봇이 60m까지 듣는다, 1초마다 갱신",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "내구도·폭발·피해",
+      "columns": [
+        {
+          "key": "stat",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "car",
+          "label": "차",
+          "kind": "text"
+        },
+        {
+          "key": "bike",
+          "label": "오토바이",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "hp",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/VehicleDamageRules.cs:24-40",
+          "stat": "체력",
+          "car": 1000,
+          "bike": 450,
+          "note": "부위 배율: 엔진 100%, 차체 75%, 지붕 50% (ADR-067)"
+        },
+        {
+          "id": "stage",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:42-47",
+          "stat": "연기 단계",
+          "car": "50% 이하 흰 연기, 25% 이하 검은 연기(최고속 x0.85)",
+          "bike": "같음",
+          "note": "0이 되면 5초 불탄 뒤 폭발"
+        },
+        {
+          "id": "expl",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:50-57",
+          "stat": "폭발",
+          "car": "피해 100, 안쪽 2.5m, 바깥 8m. 탑승 중이면 250",
+          "bike": "같음",
+          "note": "다른 차량에 x4"
+        },
+        {
+          "id": "gren",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:60-62",
+          "stat": "수류탄",
+          "car": "폭발 피해 x6, 1.2m 이내면 즉시 파괴",
+          "bike": "같음",
+          "note": ""
+        },
+        {
+          "id": "col",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:66-69",
+          "stat": "충돌 피해",
+          "car": "6m/s 이상, m/s당 22",
+          "bike": "m/s당 14",
+          "note": "유리: 1발 금, 2발 파손(6장)"
+        },
+        {
+          "id": "tyre",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:72-78",
+          "stat": "타이어",
+          "car": "체력 30, 펑크 시 접지 x0.55·차체 9cm 하강·최고속 x0.9",
+          "bike": "접지 x0.45",
+          "note": ""
+        },
+        {
+          "id": "part",
+          "status": "confirmed",
+          "source": "VehicleDamageRules.cs:80-85",
+          "stat": "분리 부품(후드·트렁크·앞뒤 범퍼)",
+          "car": "체력 120, 절반이면 덜렁, 0이면 탈락(20초 뒤 사라짐)",
+          "bike": "없음",
+          "note": ""
+        },
+        {
+          "id": "rk",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/VehicleRules.cs:94-99",
+          "stat": "치고 지나가기(로드킬)",
+          "car": "10km/h 초과분 1km/h당 2.5, 질량 제곱근 비례(기준 1350kg)",
+          "bike": "같음",
+          "note": "밀침 최대 12m/s"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "스폰 규칙",
+      "columns": [
+        {
+          "key": "stat",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "value",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "cnt",
+          "status": "confirmed",
+          "source": "Assets/_Project/Editor/VehicleBuilder.cs:382-407",
+          "stat": "월드 배치",
+          "value": "차 6 + 오토바이 4",
+          "note": "주차 지점당 1대, 간격 40m. 차 모델은 5종을 순환(6번째는 세단 반복), 오토바이는 2종 교대."
+        },
+        {
+          "id": "road",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Net/VehicleSpawner.cs:12-33",
+          "stat": "도로 판정",
+          "value": "4m 셀 도로 마스크; 도로 밖 x0.85",
+          "note": ""
+        },
+        {
+          "id": "tb",
+          "status": "confirmed",
+          "source": "VehicleBuilder.cs:338-355",
+          "stat": "테스트 박스",
+          "value": "차 5 + 오토바이 2 고정 배치",
+          "note": ""
+        },
+        {
+          "id": "plan",
+          "status": "proposed",
+          "stat": "50명 판 목표 대수",
+          "value": "산·도시 확장에 비례해 증가(제안: 차 12~16 + 오토바이 6~8)",
+          "note": "맵 면적 결정 후 확정."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "사운드 현황",
+      "columns": [
+        {
+          "key": "what",
+          "label": "소리",
+          "kind": "text"
+        },
+        {
+          "key": "clip",
+          "label": "클립",
+          "kind": "text"
+        },
+        {
+          "key": "how",
+          "label": "방식",
+          "kind": "text"
+        },
+        {
+          "key": "audio",
+          "label": "파일",
+          "kind": "audio"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "eng",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Gameplay/VehicleAudio.cs:153",
+          "what": "엔진 루프",
+          "clip": "VehicleEngine",
+          "how": "코드 합성(5단 가상 기어, 피치/음량 EngineNote)",
+          "audio": "",
+          "note": "임시. 후보 조사 필요(차/오토바이 별도)."
+        },
+        {
+          "id": "whine",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:154",
+          "what": "휘파람(변속기/터빈)",
+          "clip": "VehicleWhine",
+          "how": "코드 합성",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "horn",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:159",
+          "what": "경적",
+          "clip": "VehicleHorn",
+          "how": "코드 합성 두 음 루프, 오토바이 피치 1.35",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "scr",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:155",
+          "what": "타이어 끌림",
+          "clip": "TyreScreech",
+          "how": "코드 합성, 노면·미끄러짐에 따라 음량",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "wind",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:156",
+          "what": "바람",
+          "clip": "VehicleWind",
+          "how": "코드 합성",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "crash",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:157",
+          "what": "충돌",
+          "clip": "VehicleCrunch",
+          "how": "코드 합성, 충돌 깊이로 음량",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "gear",
+          "status": "confirmed",
+          "source": "VehicleAudio.cs:158",
+          "what": "기어 변속",
+          "clip": "GearClunk",
+          "how": "코드 합성",
+          "audio": "",
+          "note": "임시"
+        },
+        {
+          "id": "door",
+          "status": "open",
+          "what": "문 여닫기·시동 키",
+          "clip": "",
+          "how": "없음",
+          "audio": "",
+          "note": "후보 조사 필요"
+        },
+        {
+          "id": "expl",
+          "status": "open",
+          "what": "차량 폭발",
+          "clip": "",
+          "how": "확인 필요(전역 폭발음 재사용 여부)",
+          "audio": "",
+          "note": "후보 조사 필요"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "라이선스·크레딧",
+      "columns": [
+        {
+          "key": "id",
+          "label": "ledger",
+          "kind": "text"
+        },
+        {
+          "key": "work",
+          "label": "작품",
+          "kind": "text"
+        },
+        {
+          "key": "author",
+          "label": "작가",
+          "kind": "text"
+        },
+        {
+          "key": "lic",
+          "label": "라이선스",
+          "kind": "text"
+        },
+        {
+          "key": "credit",
+          "label": "크레딧 필수",
+          "kind": "text"
+        },
+        {
+          "key": "note",
+          "label": "메모",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "V-0001..8",
+          "status": "confirmed",
+          "source": "docs/ASSET_LEDGER.md:47-54; Assets/_Project/Scripts/Core/Credits.cs:16-24",
+          "work": "차량 8건(세단·왜건·픽업·밴·스포츠카·오토바이 2·소품팩)",
+          "author": "DanielZhabotinsky(4), ollitei, danilloribeiro, animanyarty, comrade1280",
+          "lic": "CC BY 4.0",
+          "credit": "예 - 메인 메뉴 크레딧 화면 + 폴더 LICENSE.txt",
+          "note": "수정함: Goblin(텍스처)·병합·머티리얼 교체. 배지 메시와 미국 번호판 시트는 쓰지 않고 오리지널 한국식 번호판으로 대체."
+        }
+      ]
+    },
+    {
+      "type": "prose",
+      "title": "실존 이름 주의",
+      "paragraphs": [
+        "작품 제목(Fairheaven, Lightbody, Shvan 등)은 실존 제조사·차종을 패러디한 이름처럼 읽힐 수 있다. 크레딧 화면에는 작가 표기를 위해 제목을 써야 하지만, 게임 안(HUD·상점·UI) 표시 이름은 우리가 지은 가상 이름을 쓰는 것이 안전하다. 법적 판단은 사람의 일(CLAUDE.md 규칙 8)이므로 RISKS_OPEN_QUESTIONS에 올려둔다."
+      ],
+      "bullets": [
+        "Dirt bike 모델 파일 내부 머티리얼 이름에 실존 타이어 브랜드(Mishelin) 철자가 있다. 화면에는 안 나옴(ledger V-0007 기록).",
+        "'V12 Goblin'은 가상 이름이라 문제 없어 보이나 외형이 실존 슈퍼카와 닮았는지는 사람이 한 번 본다.",
+        "인게임 이름 후보(제안): 세단 '해안 세단', 왜건 '여행 왜건', 픽업 '농장 픽업', 밴 '배달 밴', 스포츠 '질주', 오토바이 '산길 바이크'/'도로 바이크'."
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "dv1",
+          "q": "차량 인게임 표시 이름은 어떻게?",
+          "options": [
+            "가상 한국어 이름을 새로 짓는다",
+            "작품 제목을 그대로 쓴다",
+            "종류만 표시(세단/밴 등)"
+          ],
+          "recommended": "종류만 표시(세단/밴 등)",
+          "status": "confirmed",
+          "answer": "종류만 표시(세단/밴 등) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "실존 차종 패러디 이름 위험을 피하고 구현이 가장 작다. 필요해지면 가상 이름을 추가."
+        },
+        {
+          "id": "dv2",
+          "q": "차량 색 변형을 둘 것인가?",
+          "options": [
+            "모델당 1색 고정(현재)",
+            "머티리얼 틴트로 3~5색 변형",
+            "없음"
+          ],
+          "recommended": "머티리얼 틴트로 3~5색 변형",
+          "status": "confirmed",
+          "answer": "머티리얼 틴트로 3~5색 변형 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "차량 수가 적어 같은 차가 반복된다. 틴트 한 값이면 모델 추가 없이 변화가 생긴다. 법적 위험 없음."
+        },
+        {
+          "id": "dv3",
+          "q": "50명 판에서 차량 대수는?",
+          "options": [
+            "10대 유지",
+            "면적 비례 증가(차 12~16, 바이크 6~8)",
+            "없음"
+          ],
+          "recommended": "면적 비례 증가(차 12~16, 바이크 6~8)",
+          "status": "confirmed",
+          "answer": "면적 비례 증가(차 12~16, 바이크 6~8) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "맵이 커지면 이동 수단이 없을 때 템포가 느려진다. 맵 크기 결정 뒤 확정."
+        },
+        {
+          "id": "dv4",
+          "q": "차량 소리를 파일로 바꿀 것인가?",
+          "options": [
+            "합성 유지",
+            "CC0 소리 파일 후보 조사 후 교체"
+          ],
+          "recommended": "CC0 소리 파일 후보 조사 후 교체",
+          "status": "confirmed",
+          "answer": "CC0 소리 파일 후보 조사 후 교체 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "합성 소리는 임시이고 체감 품질 약점. 오디오 트랙에서 후보를 조사한다. 사운드가 구매 필요하면 blocked."
+        },
+        {
+          "id": "dv5",
+          "q": "오토바이 질량 190 vs 230 중 무엇이 물리에 쓰이는가?",
+          "options": [
+            "모델 값",
+            "rules 값"
+          ],
+          "recommended": "rules 값을 데이터 한 곳으로 통일",
+          "status": "confirmed",
+          "answer": "rules 값을 데이터 한 곳으로 통일 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "VehicleModels와 rules.json에 값이 둘이라 헷갈린다. 코드에서 어느 쪽이 최종인지 확인 필요."
+        }
+      ]
+    }
+  ]
+}

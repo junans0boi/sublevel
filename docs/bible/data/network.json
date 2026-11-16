@@ -1,0 +1,565 @@
+{
+  "id": "network",
+  "title": "네트워크",
+  "order": 60,
+  "group": "기술",
+  "summary": "Fish-Net 4.7.3/Tugboat 30 Hz, 소유자 권위 이동+서버 권위 전투, 관심 영역, 자체 LagComp, 전용 서버, 대역폭 실측과 50명 요구·위험.",
+  "status": "confirmed",
+  "parts": [
+    {
+      "type": "table",
+      "title": "Fish-Net 구성",
+      "columns": [
+        {
+          "key": "item",
+          "label": "항목",
+          "kind": "tag"
+        },
+        {
+          "key": "val",
+          "label": "값",
+          "kind": "text"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "f_ver",
+          "status": "confirmed",
+          "item": "버전",
+          "val": "Fish-Net 4.7.3 (무료판, git 패키지)",
+          "desc": "Pro 기능(ColliderRollback 등)은 본문이 빈 스텁이라 쓰지 않는다. Pro 구매는 규칙 3상 하지 않는다(ADR-121).",
+          "source": "Packages/manifest.json:3"
+        },
+        {
+          "id": "f_tr",
+          "status": "confirmed",
+          "item": "전송",
+          "val": "Tugboat(UDP)",
+          "desc": "로비 포트 N(기본 7770), 매치는 N+1(쓰는 중이면 빈 포트). 방화벽 포트 2개.",
+          "source": "Assets/_Project/Scripts/Net/LobbyNet.cs:8,195; Assets/_Project/Scripts/Net/MatchDirector.cs:132"
+        },
+        {
+          "id": "f_tick",
+          "status": "confirmed",
+          "item": "틱레이트",
+          "val": "30 Hz(보간 2틱)",
+          "desc": "Fish-Net 기본값을 쓴다. 설정 파일에서 바꾼 흔적은 찾지 못함(코드 검색 결과 없음). NetPulse가 서버 틱을 클라이언트에 알려 F3 줄에 표시한다.",
+          "source": "docs/DECISIONS.md:136 (ADR-126)"
+        },
+        {
+          "id": "f_room",
+          "status": "confirmed",
+          "item": "방 구조",
+          "val": "한 프로세스 = 방 1개 = 매치 1개",
+          "desc": "로비(NetworkManager 하나, Broadcast만, 스폰 없음)와 매치(World 씬, 별도 NetworkManager)가 분리돼 있다(ADR-124).",
+          "source": "docs/DECISIONS.md:137 (ADR-127); docs/DEDICATED_SERVER.md"
+        },
+        {
+          "id": "f_host",
+          "status": "confirmed",
+          "item": "호스트 모드",
+          "val": "서버+클라이언트 한 프로세스",
+          "desc": "싱글도 같은 구조(서버 권위 구조, SPEC §2). 전용 서버는 로컬 플레이어 없이 `--dedicated`.",
+          "source": "Assets/_Project/Scripts/Net/MatchDirector.cs:121-145"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "권위 모델",
+      "columns": [
+        {
+          "key": "area",
+          "label": "영역",
+          "kind": "tag"
+        },
+        {
+          "key": "who",
+          "label": "누가 결정",
+          "kind": "text"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "a_move",
+          "status": "confirmed",
+          "area": "플레이어 이동",
+          "who": "소유자 클라이언트(소유자 권위 NetworkTransform)",
+          "desc": "소유자 몸이 곧 예측. Fish-Net 예측/서버 재생은 쓰지 않음(이동 코드가 점프·수영·파쿠르·차량 좌석 등과 얽혀 있어서). 서버 MoveGuard가 0.25초마다 위치를 검사해 의심스러우면 되돌린다(수평 (6.3+12)x1.2 m/s, 수직 60 m/s, 여유 2.5 m).",
+          "source": "docs/DECISIONS.md:136 (ADR-126)"
+        },
+        {
+          "id": "a_fire",
+          "status": "confirmed",
+          "area": "사격·피해",
+          "who": "서버",
+          "desc": "클라이언트는 방향+viewTick만 보낸다. 탄도·관통·피해는 서버 계산. 연사 속도 상한 무기 x1.5+버스트 4.",
+          "source": "docs/DECISIONS.md:151-152 (ADR-141,142)"
+        },
+        {
+          "id": "a_bot",
+          "status": "confirmed",
+          "area": "봇",
+          "who": "서버만",
+          "desc": "봇은 서버에서만 시뮬한다. 감지 레이캐스트 0.15초 주기, NavMesh 서버.",
+          "source": "Assets/_Project/Scripts/AI/BotController.cs:19; docs/research/MASTER_PLAN.md:3"
+        },
+        {
+          "id": "a_loot",
+          "status": "confirmed",
+          "area": "루팅·인벤토리",
+          "who": "서버",
+          "desc": "LootItem NetworkObject(SyncVar), 줍기 거리 3 m + 지연 여유 1.5 m 서버 검사.",
+          "source": "docs/MP_AUDIT_WORLD.md:18"
+        },
+        {
+          "id": "a_zone",
+          "status": "confirmed",
+          "area": "구역·날씨",
+          "who": "서버가 시드·시각을 정함",
+          "desc": "ZoneUpdate, SkyState 방송. 클라이언트는 받은 시드로 같은 하늘·안개를 계산(ADR-131).",
+          "source": "docs/MP_AUDIT_WORLD.md:15-16"
+        },
+        {
+          "id": "a_veh",
+          "status": "confirmed",
+          "area": "차량",
+          "who": "서버(상태 복제)",
+          "desc": "차량은 되감기 제외(ADR-141). 상세는 MP_AUDIT_VEHICLES.md 참고.",
+          "source": "docs/MP_AUDIT_VEHICLES.md"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "복제되는 것 (수단별)",
+      "columns": [
+        {
+          "key": "kind",
+          "label": "수단",
+          "kind": "tag"
+        },
+        {
+          "key": "what",
+          "label": "내용",
+          "kind": "text"
+        },
+        {
+          "key": "desc",
+          "label": "특징",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r_obj",
+          "status": "confirmed",
+          "kind": "NetworkObject + SyncVar",
+          "what": "전투원(플레이어·봇), 아이템, 차량, 투척물(연막·불), 보급 상자 등",
+          "desc": "관심 영역 필터를 받는다. 늦게 들어온 클라이언트도 현재 상태를 받는다(투척물은 Effect/EffectLeft SyncVar).",
+          "source": "Assets/_Project/Scripts/Net/Combatant.cs; Assets/_Project/Scripts/Net/LootItem.cs; Assets/_Project/Scripts/Net/Vehicle.cs; Assets/_Project/Scripts/Net/ThrownItem.cs"
+        },
+        {
+          "id": "r_rpc",
+          "status": "confirmed",
+          "kind": "ObserversRpc/ServerRpc/TargetRpc",
+          "what": "사격 효과(RpcShotFx), 근접, 차량 피해, 폭발, 줍기·사용 요청",
+          "desc": "객체에 실려 있어 관찰자만 받는다. 소리·효과 이벤트를 따로 거르지 않는다.",
+          "source": "docs/DECISIONS.md:145 (ADR-135 (2))"
+        },
+        {
+          "id": "r_bc",
+          "status": "confirmed",
+          "kind": "Broadcast(전 클라이언트)",
+          "what": "문(DoorChanged), 유리(GlassShattered), 매치 상태, 구역(ZoneUpdate), 승강기 문·사이클, 보급(SupplyDropped), 하늘, 핑, 스폰 보호",
+          "desc": "NetworkObject 없음, 관심 영역을 타지 않는다. 접속 시 현재 상태(열린 문·깨진 유리 포함)를 한꺼번에 보낸다. 총 약 54개 Broadcast 호출·29개 IBroadcast 구조체(코드 검색 계수).",
+          "source": "docs/MP_AUDIT_WORLD.md:7-22"
+        },
+        {
+          "id": "r_pulse",
+          "status": "confirmed",
+          "kind": "신뢰성 없는 펄스",
+          "what": "NetPulse(번호, 서버 틱) 0.1초마다",
+          "desc": "클라이언트가 번호 빈 곳으로 패킷 손실을 계산, 핑은 Fish-Net RTT.",
+          "source": "docs/DECISIONS.md:138 (ADR-128); Assets/_Project/Scripts/Core/NetStats.cs:48"
+        },
+        {
+          "id": "r_local",
+          "status": "confirmed",
+          "kind": "복제 안 함(로컬)",
+          "what": "총알 자국, 사망 표시, 발소리 간격, 반동·카메라, 소리 재생",
+          "desc": "영구 상태가 아니라 각 클라이언트가 만든다. 소리는 이벤트로 동기화하고 걸음 간격은 클라이언트가 계산(MASTER_PLAN §2-9, 제안).",
+          "source": "docs/MP_AUDIT_WORLD.md:22"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "관심 영역(Interest Management) — 구현됨",
+      "columns": [
+        {
+          "key": "kind",
+          "label": "대상",
+          "kind": "tag"
+        },
+        {
+          "key": "m",
+          "label": "반경(m)",
+          "kind": "num"
+        },
+        {
+          "key": "desc",
+          "label": "설명",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "o_comb",
+          "status": "confirmed",
+          "kind": "전투원",
+          "m": 300,
+          "desc": "총소리 200 m 까지 들리므로(FarLayerFull) 그보다 크게.",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:105"
+        },
+        {
+          "id": "o_veh",
+          "status": "confirmed",
+          "kind": "차량",
+          "m": 350,
+          "desc": "",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:105"
+        },
+        {
+          "id": "o_loot",
+          "status": "confirmed",
+          "kind": "아이템",
+          "m": 100,
+          "desc": "가장 큰 절감 요인(보이는 아이템 253 → 30).",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:105"
+        },
+        {
+          "id": "o_thr",
+          "status": "confirmed",
+          "kind": "투척물(연막·불·폭발)",
+          "m": 200,
+          "desc": "",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:105"
+        },
+        {
+          "id": "o_hide",
+          "status": "confirmed",
+          "kind": "깜빡임 방지",
+          "m": 0,
+          "desc": "이미 보이는 객체는 반경 x1.2까지 유지(HideExtraFraction 0.2).",
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json:105"
+        },
+        {
+          "id": "o_rule",
+          "status": "confirmed",
+          "kind": "항상 보냄",
+          "m": 0,
+          "desc": "자기 소유, 같은 팀, 팀원이 탄 차량, NetworkObject 아닌 전역 상태. 죽은 클라이언트는 전투원·차량·투척물 전부 받고 아이템만 거리로 거른다. 조건은 시간형이라 Fish-Net이 약 0.5초 주기로 재검사(들어올 때 최대 0.5초+ 지연).",
+          "source": "docs/DECISIONS.md:145 (ADR-135)"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "type": "prose",
+      "title": "지연 보상 (LagComp)",
+      "paragraphs": [
+        "서버가 모든 전투원 위치를 링버퍼(240개, 약 1초)에 기록하고, 클라이언트가 보내는 viewTick(마지막 받은 서버 틱 - 보간 2틱)만큼 되감아 사격자 밖의 전투원을 그 시각 위치로 옮긴 뒤 레이캐스트하고 되돌린다. 되감기 상한 0.25초(왕복 약 180 ms까지). 호스트와 봇의 사격은 되감기 없음. 문·유리·차량은 되감지 않는다. 사격마다 Physics.SyncTransforms 비용이 든다(건물 콜라이더가 수만 개로 늘면 증가, 06 문서 I10 — 영향 낮음, 관찰)."
+      ],
+      "source": "docs/DECISIONS.md:151 (ADR-141); Assets/_Project/Scripts/Core/LagComp.cs:66-70; Assets/_Project/Scripts/Net/LagCompensation.cs:54,82"
+    },
+    {
+      "type": "prose",
+      "title": "전용 서버 문서 요약",
+      "paragraphs": [
+        "빌드: `tools/unity.sh build server` (macOS Mono, 약 1분) / server-win은 미검증. 실행: `--dedicated --port 7770 --bots 15 --region C --max-players 16 --start-seconds 60` + `-batchmode -nographics`. 끝: 결정 20초 뒤 / 모두 떠난 지 30초 뒤 / 150초간 아무도 안 옴 → 로비로 복귀. SIGTERM에 정상 종료. 잘못된 인자는 코드 2로 종료."
+      ],
+      "bullets": [
+        "아직 확인하지 않은 것: Windows 서버 빌드·실행, 다른 기기 접속(방화벽·NAT), 두 사람 이상, 서버 CPU·메모리 예산(PERF_BUDGET에 서버 항목 없음), 장시간 운영.",
+        "한 프로세스에 방 하나라 50명 방을 여러 개 운영하려면 프로세스 여러 개를 띄우는 구조다(추정)."
+      ],
+      "source": "docs/DEDICATED_SERVER.md:1-60; Assets/_Project/Scripts/Core/ServerArgs.cs:71-83"
+    },
+    {
+      "type": "table",
+      "title": "대역폭 실측 (16명 + 봇 20)",
+      "columns": [
+        {
+          "key": "case",
+          "label": "조건",
+          "kind": "tag"
+        },
+        {
+          "key": "bps",
+          "label": "클라이언트당 B/s",
+          "kind": "num"
+        },
+        {
+          "key": "see",
+          "label": "보이는 전투원/아이템/차량",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "b_off",
+          "status": "confirmed",
+          "case": "관심 영역 끔",
+          "bps": 14719,
+          "see": "36.0 / 253 / 10.0",
+          "source": "docs/PERF_BUDGET.md:145-157"
+        },
+        {
+          "id": "b_on",
+          "status": "confirmed",
+          "case": "관심 영역 켬",
+          "bps": 8497,
+          "see": "20.7 / 30 / 5.0",
+          "source": "docs/PERF_BUDGET.md:145-157"
+        },
+        {
+          "id": "b_7",
+          "status": "confirmed",
+          "case": "7명 + 봇 20, 켬",
+          "bps": 6249,
+          "see": "10.2 / 12 / 4.5",
+          "source": "docs/PERF_BUDGET.md:145-157"
+        },
+        {
+          "id": "b_mp",
+          "status": "confirmed",
+          "case": "봇 12 + 사람 4 한 매치 79초 평균",
+          "bps": 8300,
+          "see": "클라이언트 4명 모두 약 8.1~8.2 KiB/s",
+          "source": "docs/MP_AUDIT_MATCH.md:21-23"
+        },
+        {
+          "id": "b_est",
+          "status": "proposed",
+          "case": "50명 + 봇(가정)",
+          "bps": 12000,
+          "see": "관측 인원이 36→50으로 늘면 선형 증가로 가정한 값. 서버 송신 총량은 클라이언트 수만큼 곱해져 사람 50명이면 약 600 KB/s(약 5 Mbit/s)로 추정. 사람이 서로 모이는 결승에서는 더 크다.",
+          "source": "계산 추정(외삽, 실측 아님)"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "type": "table",
+      "title": "50명 요구와 위험 (계획)",
+      "columns": [
+        {
+          "key": "area",
+          "label": "영역",
+          "kind": "tag"
+        },
+        {
+          "key": "risk",
+          "label": "위험/요구",
+          "kind": "text"
+        },
+        {
+          "key": "plan",
+          "label": "제안",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "n_door",
+          "status": "proposed",
+          "area": "문·유리 방송",
+          "risk": "문·유리가 전 클라이언트 Broadcast이고 서버 문 리스트는 선형 탐색(ClosedBetween 등). 문 수천 개 x 봇 30마리가 0.25초마다 스캔.",
+          "plan": "DoorSystem 공간 해시 + 문·유리 방송을 건물 소속+관심 영역 필터로.",
+          "source": "docs/research/06_missed_items.md:I9; Assets/_Project/Scripts/Net/DoorSystem.cs:170-223"
+        },
+        {
+          "id": "n_spawn",
+          "status": "proposed",
+          "area": "루팅 스폰 폭주",
+          "risk": "루팅 약 1,500개를 서버 시작에 전부 NetworkObject로 스폰하면 접속 직후 폭주.",
+          "plan": "플레이어 접근 시 지연 스폰 또는 지역 단위.",
+          "source": "docs/research/06_missed_items.md:I9"
+        },
+        {
+          "id": "n_bot",
+          "status": "proposed",
+          "area": "봇 서버 CPU",
+          "risk": "봇은 서버 전용 시뮬. 많을수록 CPU 증가(감지 레이캐스트 0.15초, NavMesh 경로).",
+          "plan": "봇 AI LOD(먼 봇은 낮은 틱, 사람 없는 지역은 거의 정지).",
+          "source": "docs/research/MASTER_PLAN.md:62-63"
+        },
+        {
+          "id": "n_late",
+          "status": "proposed",
+          "area": "늦은 접속",
+          "risk": "접속 시 열린 문·깨진 유리 상태를 한꺼번에 보내므로 건물 수에 선형.",
+          "plan": "건물 단위 지연 전송. 전송량 측정.",
+          "source": "docs/MP_AUDIT_WORLD.md:7-8"
+        },
+        {
+          "id": "n_elev",
+          "status": "proposed",
+          "area": "엘리베이터 슬롯",
+          "risk": "현재 13대 < 16명. 50명은 슬롯 60 필요.",
+          "plan": "C2안 승강장 20곳x3.",
+          "source": "docs/research/06_missed_items.md:N10"
+        },
+        {
+          "id": "n_cheat",
+          "status": "proposed",
+          "area": "치트·정보 은닉",
+          "risk": "서버 판정·이동 속도 검증은 있음(ADR-142). 시야 밖 적 정보는 관심 영역 300 m 안이면 전송됨.",
+          "plan": "시야 기반 은닉은 비용이 커서 우선순위 낮음(제안).",
+          "source": "docs/research/MASTER_PLAN.md:67-68"
+        },
+        {
+          "id": "n_tick",
+          "status": "proposed",
+          "area": "틱·대역폭 예산",
+          "risk": "목표값이 없다(MASTER_PLAN '근거 없음').",
+          "plan": "플레이어당 다운 약 10~15 KB/s, 업 약 2~3 KB/s를 1차 목표로 측정 뒤 확정(제안, 근거 없음).",
+          "source": "docs/research/MASTER_PLAN.md:66"
+        },
+        {
+          "id": "n_phys",
+          "status": "proposed",
+          "area": "물리 비용",
+          "risk": "건물 콜라이더가 많아지면 SyncTransforms·Raycast 비용 증가.",
+          "plan": "건물당 콜라이더 수 상한 테스트.",
+          "source": "docs/research/06_missed_items.md:I10"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "테스트 계획",
+      "columns": [
+        {
+          "key": "name",
+          "label": "테스트",
+          "kind": "tag"
+        },
+        {
+          "key": "desc",
+          "label": "내용",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "t_harn",
+          "status": "confirmed",
+          "name": "MultiHarness",
+          "desc": "같은 프로세스에 원격 클라이언트 N개(localhost), 지연 100 ms RTT·손실 2% 주입. MultiClientSmokeTests 4개.",
+          "source": "docs/DECISIONS.md:133 (ADR-123); Assets/_Project/Tests/PlayMode/MultiHarness.cs"
+        },
+        {
+          "id": "t_bw",
+          "status": "confirmed",
+          "name": "InterestBandwidthTests",
+          "desc": "16+봇 20 대역폭 실측(PlayMode, 에디터 batchmode 한 프로세스).",
+          "source": "docs/PERF_BUDGET.md:147"
+        },
+        {
+          "id": "t_end",
+          "status": "confirmed",
+          "name": "MatchDedicatedEndToEndTests",
+          "desc": "서버(--bots 8 --max-players 4)와 클라이언트 1 별도 프로세스로 로비~World~복귀 250초 통과.",
+          "source": "docs/MP_AUDIT_MATCH.md:38-45"
+        },
+        {
+          "id": "t_rep",
+          "status": "confirmed",
+          "name": "ReplicationCombatTests 12개",
+          "desc": "원격 시점 사격·탄도·관통·투척·늦은 접속.",
+          "source": "docs/DECISIONS.md:140 (ADR-130)"
+        },
+        {
+          "id": "t_50",
+          "status": "proposed",
+          "name": "헤드리스 부하 시험(제안)",
+          "desc": "헤드리스 클라이언트 N개(예 49+1)로 서버 CPU·대역폭·틱 지연 측정. CI에는 최소 버전(예 8+봇)만.",
+          "source": "docs/research/MASTER_PLAN.md:68"
+        },
+        {
+          "id": "t_scene",
+          "status": "proposed",
+          "name": "도시 규모 재측정(제안)",
+          "desc": "InterestBandwidthTests를 건물 200동·루팅 1,500·봇 30 시나리오로 확장, 합격선은 ADR로.",
+          "source": "docs/research/06_missed_items.md:I9,N6"
+        }
+      ]
+    },
+    {
+      "type": "decisions",
+      "title": "정해야 할 것",
+      "items": [
+        {
+          "id": "nd_cap",
+          "q": "50명 서버 구조",
+          "options": [
+            "프로세스 1개에 50명 방",
+            "프로세스 여러 개(방당 1개)로 확장"
+          ],
+          "recommended": "프로세스 방당 1개",
+          "status": "confirmed",
+          "answer": "프로세스 방당 1개 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "현재 구조가 이미 한 프로세스=한 방. 서버 CPU 측정 뒤 동시 방 수 결정."
+        },
+        {
+          "id": "nd_tick",
+          "q": "틱레이트",
+          "options": [
+            "30 Hz 유지",
+            "60 Hz",
+            "20 Hz"
+          ],
+          "recommended": "30 Hz 유지",
+          "status": "confirmed",
+          "answer": "30 Hz 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "50명에서 서버 비용을 줄이려면 올리지 않는다. 사격 판정은 LagComp 보정이 있으므로 30 Hz로 충분하다고 본다(추정, 측정 필요)."
+        },
+        {
+          "id": "nd_budget",
+          "q": "대역폭 목표",
+          "options": [
+            "다운 15 KB/s 이하",
+            "측정 뒤 결정"
+          ],
+          "recommended": "측정 뒤 결정",
+          "status": "open",
+          "answer": "",
+          "why": "근거 없는 수치를 고정하지 않는다(MASTER_PLAN §3-5)."
+        },
+        {
+          "id": "nd_door",
+          "q": "문·유리 방송 방식",
+          "options": [
+            "건물 소속+관심 영역 필터",
+            "전역 유지"
+          ],
+          "recommended": "건물 소속+관심 영역 필터",
+          "status": "confirmed",
+          "answer": "건물 소속+관심 영역 필터 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "why": "06 문서 D10 권장."
+        }
+      ]
+    }
+  ]
+}

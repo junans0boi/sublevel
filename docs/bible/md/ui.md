@@ -1,0 +1,99 @@
+# 메인 UI·화면
+
+> 상태: 확정 · 요약: 현재 구현된 화면·HUD·키 바인딩과 계획(새 섬 지도, 미니맵 축척, 오염 경고 UI), 한국어 텍스트 정책.
+
+## 화면 흐름
+
+메인 메뉴 → (시작: 솔로/듀오/스쿼드 모드로 World 씬 로드 | 훈련장 | 방 만들기·참가 → 로비 → 준비 → 시작) → 엘리베이터 투입(문 3초 뒤 열림, 6초 스폰 보호) → 경기(HUD) → 사망/우승 → 결과 화면(킬캠 → 패널) → 관전 / 다시 시작 / 메인 메뉴. 경기 중 Esc = 일시정지 메뉴(설정 포함), Tab = 인벤토리, M = 지도.
+
+- 시작 버튼 레이블은 '시작 (솔로)'처럼 선택 모드를 표시. 모드 선택은 실행 중에만 유지(저장하지 않음, ADR-072).
+- 불러오는 중 문구 '불러오는 중...'이 중앙에 표시된다.
+- 서버가 값을 정하고 UI는 표시만 한다(UI_SPEC 원칙).
+
+## 화면·메뉴 목록 (현재 구현)
+
+| 상태 | 이름 | 위치/진입 | 내용 | 근거 |
+|---|---|---|---|---|
+| 확정 | 메인 메뉴 | 처음 실행(빌드 목록 첫 씬) | 타이틀 SUBLEVEL + STEADY TO VIVID STUDIO. 버튼: 모드(솔로→듀오→스쿼드 순환) · 시작 · 훈련장 · 방 만들기 · 참가 · 설정 · 크레딧 · 종료. 하단에 조작 힌트 한 줄, 우하단 버전. 씬은 MainMenuBuilder가 만들고 UI는 코드(UiKit uGUI) | Assets/_Project/Scripts/Gameplay/MainMenu.cs:11-15,220-231; Assets/_Project/Editor/MainMenuBuilder.cs:9-12 |
+| 확정 | 방 만들기/참가/로비 | 메인 메뉴 > 방 만들기·참가 | 방 만들기(호스트), 참가(IP:포트 입력), 실패 사유 표시, 로비(사람 목록·준비 상태·봇 수·시작 버튼). 네트워크는 LobbyNet | Assets/_Project/Scripts/Gameplay/LobbyScreen.cs:11-13 |
+| 확정 | 설정(환경 설정) | 메인 메뉴 / Esc 메뉴 | 탭 5개: 그래픽 / 오디오 / 컨트롤 / 키 설정 / 게임 플레이. 그래픽은 기본/고급 페이지. 슬라이더·선택 행 + 오른쪽 설명 패널, 기본·적용·뒤로 가기. 변경은 즉시 미리보기, 적용해야 저장. 메인 메뉴와 Esc 메뉴가 공유. 1920x1080 기준 캔버스 | Assets/_Project/Scripts/Gameplay/SettingsScreen.cs:8-14; Assets/_Project/Scripts/Gameplay/SettingsCatalog.cs:78-79 |
+| 확정 | 크레딧 | 메인 메뉴 > 크레딧 | 스튜디오명 + 크레딧이 필요한 에셋(Credits.Entries: 제목·제작자·라이선스·출처 링크·용도) + 뒤로 가기. 현재 항목은 CC BY 4.0 차량 모델 위주 | Assets/_Project/Scripts/Gameplay/CreditsScreen.cs:7-9; Assets/_Project/Scripts/Core/Credits.cs:14-29 |
+| 확정 | Esc 일시정지 메뉴 | 경기 중 Esc | 계속하기/설정/메인 메뉴 등. 호스트 매치라 게임은 멈추지 않고 입력만 가로챈다 | Assets/_Project/Scripts/Gameplay/PauseMenu.cs:7-10 |
+| 확정 | Tab 인벤토리 | 경기 중 Tab | 주변(바닥) · 인벤토리(가방·조준경/부착물) · 캐릭터(실시간 3D 미리보기, 헬멧·조끼·가방 칸·내구도·용량 막대) · 무기 카드 1~3(부착물 5칸) · 근접(4)·투척(5). 끌어놓기, 더블클릭 줍기·사용, 우클릭 메뉴 | docs/UI_SPEC.md:11-14; Assets/_Project/Scripts/Gameplay/InventoryPreview.cs:9-13 |
+| 확정 | 전체 지도(M) | 경기 중 M | 구운 지도 그림 + 지역 이름·엘리베이터·통로·내 화살표 + 클릭으로 마커 1개 찍기. WorldInfo가 있는 씬에서만 열림. M 또는 Esc로 닫기 | Assets/_Project/Scripts/Gameplay/MapScreen.cs:10-13 |
+| 확정 | 결과 화면 | 사망·우승 후 | 사망 시 몇 초 킬캠(킬러 이름·무기·거리) → 패널: 탈락(순위)/사망(팀 생존)/승리. 킬 수·준 피해·생존 시간·누가 죽였나. 버튼: 관전 / 다시 시작 / 메인 메뉴 | Assets/_Project/Scripts/Gameplay/ResultScreen.cs:8-14 |
+| 확정 | 관전 카메라 | 결과 화면 > 관전 | 킬캠 뒤 살아 있는 전투원을 어깨 너머로 따라가며 체력·무기를 아래에 표시 | Assets/_Project/Scripts/Gameplay/SpectateCamera.cs:19-22 |
+| 확정 | 훈련장 + 체크리스트 | 메인 메뉴 > 훈련장 | 좌측 단계 체크리스트 + 상단 '다음에 할 일' 한 줄. 키는 현재 바인딩 값 | Assets/_Project/Scripts/Gameplay/TrainingHud.cs:7-9 |
+| 확정 | 휠(핑 마커 휠/이모트 휠) | 경기 중 Ping/Emote 키 | 키를 누르는 동안 열리고 마우스로 고른 뒤 놓으면 선택. 시점은 멈춤 | Assets/_Project/Scripts/Gameplay/RadialWheel.cs:7-10 |
+| 확정 | 개발용 씬 선택 | 커맨드라인 | 메뉴 UI에는 없다. 실행 인자 `-scene <이름>`만 | Assets/_Project/Scripts/Gameplay/StartScene.cs:7-10 |
+
+## 인게임 HUD 요소
+
+| 상태 | 이름 | 위치/진입 | 내용 | 근거 |
+|---|---|---|---|---|
+| 확정 | HUD 전체 배치 | 상시 | 현장 단말기 톤, 영역마다 캔버스 직계 자식. 상단 중앙 나침반 / 좌상 지역 카드 / 우상 생존·킬 카드+킬 로그 / 하단 좌 플레이어 상태 / 하단 중앙 무기+체력 / 우하 미니맵+무기 띠 | Assets/_Project/Scripts/Gameplay/Hud.cs:10-19 |
+| 확정 | 나침반 띠 | 상단 중앙 | 15도 눈금, 한글 방위(북·북동…), 고정폭 숫자 방위각. 맵 마커는 마름모+거리, 범위 밖은 가장자리 화살표 | Assets/_Project/Scripts/Gameplay/CompassStrip.cs:6-10 |
+| 확정 | 지역 카드 | 좌상 | 현재 지역 이름 + 상태(안전/봉쇄 등) + 가장 가까운 통로를 가리키는 화살표. 지도 없는 씬에서는 숨김 | Assets/_Project/Scripts/Gameplay/RegionCard.cs:7-10 |
+| 확정 | 생존자 수·킬 수 카드 + 킬 로그 | 우상 | 최신 킬이 위, 몇 초 뒤 사라짐. 킬 로그는 설정으로 끄기 가능 | Assets/_Project/Scripts/Gameplay/KillFeed.cs:8-10; docs/UI_SPEC.md:13-14 |
+| 확정 | 네트워크 상태 줄 | 우상(킬 로그 아래) | 핑·손실·서버 틱, 좋음/보통/나쁨 색. 기본 꺼짐, 설정 또는 F3 | Assets/_Project/Scripts/Gameplay/NetStatusView.cs:9-12 |
+| 확정 | 미니맵 | 우하 | 220x220 기준 px, 플레이어 중심 300 m 사각형, 우하단 | Assets/_Project/Scripts/Gameplay/Minimap.cs:11-13; Assets/_Project/Scripts/Gameplay/MinimapView.cs:50 |
+| 확정 | 무기 띠(5칸) | 우하(미니맵 아래) | (1)(2) 주무기, (3) 보조, (4) 근접, (5) 투척+개수. 든 칸은 강조색 테두리 | Assets/_Project/Scripts/Gameplay/WeaponStrip.cs:8-10 |
+| 확정 | 체력 막대 + 무기·탄약 | 하단 중앙 | 하단 중앙 스택: 체력(수치 보조), 무기 이름·장탄/예비탄, 사격 모드 | Assets/_Project/Scripts/Gameplay/Hud.cs:30-35; docs/UI_SPEC.md:7-8 |
+| 확정 | 조준선·히트마커·피격 방향 | 화면 중앙/가장자리 | 탄퍼짐을 반영하는 조준선(색 설정 가능), 히트마커 0.12초, 피격 방향 호(슬롯 4개·세그먼트 5개) | Assets/_Project/Scripts/Gameplay/Hud.cs:20-27 |
+| 확정 | 줍기 프롬프트·줍기 목록 | 중앙 오른쪽 | 1개면 하단 한 줄, 2개 이상이면 조준선 오른쪽 목록(최대 8행, 휠로 선택, F로 줍기) | Assets/_Project/Scripts/Gameplay/PickupList.cs:10-14 |
+| 확정 | 봉쇄 배너·구역 안개 | 상단 중앙 | '○○ 지역 봉쇄 경고 — N초', '봉쇄', '폭격 시작', '폐쇄', 최종 지역 공개, 통로 열쇠 프롬프트. 안개(ZoneFog)는 카메라에 적용 | Assets/_Project/Scripts/Gameplay/ZoneBanner.cs:8-12 |
+| 확정 | 팀 HUD | 좌하 / 월드 | 팀원 목록+체력, 이름표, 나침반·지도에 팀원/핑, 기절·부활 오버레이. 팀 모드에서만 | Assets/_Project/Scripts/Gameplay/TeamHud.cs:23-28 |
+| 확정 | 차량 판 | 하단 중앙 위 | 속도(km/h)·연료 게이지·차량 상태·제리캔 주유 안내 | Assets/_Project/Scripts/Gameplay/VehicleHud.cs:8-12 |
+| 확정 | 호흡 막대 | 하단 중앙 | 수영 중 숨이 다 안 찼을 때 표시, 익사 중 빨강, 머리가 잠기면 파란 화면 | Assets/_Project/Scripts/Gameplay/SwimHud.cs:8-10 |
+| 확정 | 섬광 오버레이 | 전체 화면 | 섬광탄 화면 효과(소리 음량도 낮춤: AudioListener.volume) | Assets/_Project/Scripts/Gameplay/FlashOverlay.cs:120-128 |
+
+## 키 바인딩 기본값 (KeyBinds, 키 설정 탭에서 변경 가능)
+
+| 상태 | 행동 | 기본 키 | 메모 | 근거 |
+|---|---|---|---|---|
+| 확정 | 이동 | WASD / LShift / Space / = / LCtrl | 달리기·점프·자동달리기·느린 걷기 | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:36-39 |
+| 확정 | 자세 | C 앉기 / Z 엎드리기 / Q·E 기울이기 / LAlt 자유시점 |  | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:39-41 |
+| 확정 | 사격·조준 | 좌클릭 발사 / 우클릭 조준 / R 장전 / B 사격 모드 |  | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:40-42 |
+| 확정 | 무기 칸 | 1~5 / X 무장 해제 |  | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:43-44 |
+| 확정 | 투척·소모품 | G 투척 / T 투척물 순환 / H 회복 / J 부스트 | J는 차량 안에서 제리캔 주유에도 쓰임 | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:44-45; Assets/_Project/Scripts/Gameplay/VehicleHud.cs:10 |
+| 확정 | 상호작용·화면 | F 상호작용 / V 시점 / Tab 인벤토리 / M 지도 / Esc 메뉴 / F3 네트워크 상태 |  | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:45-47 |
+| 확정 | 팀·기타 | 휠클릭 핑 / K 업기 / N 이모트 / L 전조등 | Enter(죽은 뒤 재시작)만 고정 | Assets/_Project/Scripts/Gameplay/KeyBinds.cs:11-12,47-48 |
+
+## 한국어 텍스트 정책
+
+사용자에게 보이는 글은 한국어, 코드·식별자·커밋은 영어(CLAUDE.md). 글꼴은 Noto Sans KR(SIL OFL 1.1, ledger F-0001), 없으면 내장 LegacyRuntime 폰트로 대체된다. 본문 최소 18px(1080p 기준)을 UI_SPEC이 요구.
+
+- 코드에서 확인한 불일치: 로비 오류 문구는 '~하자'(평어체)인데 설정 설명은 '~합니다'(존댓말)다. 하나로 통일해야 한다(아래 결정 d_tone).
+- 영어 로컬라이징은 우선순위 낮음(MASTER_PLAN §7). 지금은 문자열이 코드에 박혀 있어(UiKit.Label 호출부) 나중에 영어를 넣으려면 문자열 표 분리가 필요하다(추정).
+- 색만으로 구분하지 않기, 구역 경고는 소리+시각 동시(UI_SPEC 6).
+
+## 계획·제안 (아직 구현 안 됨)
+
+| 상태 | 항목 | 위치 | 내용 | 근거 |
+|---|---|---|---|---|
+| 제안 | 새 섬 지도 이미지 | MapImage / MapBaker / MapScreen | C2안 섬은 2.4x2.0 km 직사각형인데 현재 지도는 정사각형 가정이다(MapProjection.WorldToUv가 size 하나로 u,v를 나눔, 그림 2048 px, 격자 128 m '1 km 8x8'). 장방형으로 바꾸려면 sizeX/sizeZ 분리, 그리드 간격 재설계, 베이크 해상도 결정이 필요. | Assets/_Project/Scripts/Core/MapProjection.cs:5-30; docs/research/map_options/option_C2_notes.md:7; docs/research/MASTER_PLAN.md:110 |
+| 제안 | 지도 해상도 | MapProjection.PictureSize | 2 km에서 2048 px이면 약 1 px = 1.2 m라 건물 윤곽이 뭉개진다. 선택지: 4096(+64MB, 4K 금지 규칙 예외 ADR 필요) / 줌 단계 / 타일 지도. 도심은 건물 대신 블록 표현. | docs/research/06_missed_items.md:N1 |
+| 제안 | 미니맵 축척 | Minimap.ViewMeters | 지금 300 m 폭 고정. 섬이 2.4 km면 줌 2단계(150/300 m)와 차량 탑승 시 확대를 제안. 수치는 플레이 확인 후 결정. | Assets/_Project/Scripts/Gameplay/Minimap.cs:12 |
+| 제안 | 오염 경고 UI | ZoneBanner / 지도 / 미니맵 / 화면 효과 | MASTER_PLAN §6: 사전 경고(사이렌·방송·지도 표시, 예고 시간 미정), 붉은 안개, 가이거 계수관 소리, 화면 효과, 오염 지역을 지도·미니맵에 색 면/전선으로 표시. 현재 ZoneBanner의 '봉쇄 경고 — N초' 배너와 ZoneFog가 출발점. | docs/research/MASTER_PLAN.md:149-165; Assets/_Project/Scripts/Gameplay/ZoneBanner.cs:8-12 |
+| 제안 | 50인용 그래픽 프리셋·접근성 | SettingsCatalog | 그래픽 프리셋 재조정, 색약·자막·UI 크기 옵션은 현재 범위 밖(이슈 없음). | docs/research/06_missed_items.md:N5; docs/research/MASTER_PLAN.md:7 |
+
+## 스크린샷
+
+저장소에 커밋된 UI 캡처는 없다. docs/handoff/shots_2026-11-16/ 4장은 캐릭터·무기 사진이다(UI 아님). HUD 캡처는 Logs/(gitignore)에 생성되며 PlayMode 캡처 테스트로 다시 찍을 수 있다. 정의서용 UI 캡처는 새로 찍어 docs/bible/img/ui/ 에 두는 것을 제안한다.
+
+
+## 정해야 할 것
+
+- [x] **UI 문구 어투** (확정) → 존댓말('~합니다') [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+  - 선택지: 평어체('~하자') / 존댓말('~합니다') / 명사형  · 추천: 존댓말('~합니다')
+  - 근거: 로비 문구(평어)와 설정 설명(존댓말)이 섞여 있다. 게임 톤이 어두운 산업/현장 단말기라 간결한 명사형도 가능하다. 준환 취향.
+- [x] **지도 해상도 방식** (확정) → 2048 + 줌 단계 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+  - 선택지: 4096 한 장(4K 예외 ADR) / 2048 + 줌 단계 / 타일  · 추천: 2048 + 줌 단계
+  - 근거: 4K 텍스처 금지 규칙(PERF_BUDGET)과 충돌하지 않는다.
+- [x] **오염 예고 시간과 표시 수단** (확정) → 둘 다 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+  - 선택지: 사이렌+배너 30초 / 지도 면 표시+방송 60초 / 둘 다  · 추천: 둘 다
+  - 근거: MASTER_PLAN §6 결정 2번. 현재 경고 45초(Lockdown.WarningSeconds). 최종 값은 오염 방식(A/B/C) 확정 뒤.
+- [x] **정의서용 UI 캡처 촬영** (확정) → 구현 후 일괄 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+  - 선택지: 지금 PlayMode 캡처 재실행 / 구현 후 일괄  · 추천: 구현 후 일괄
+  - 근거: UI가 바뀔 예정(지도·오염)이라 지금 찍으면 낡는다.
+

@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>청람도 오염 전선 시뮬레이터</title>
+<style>
+:root{--bg:#f3f0e8;--fg:#1d1c19;--mut:#5f5b52;--card:#fffdf8;--line:#d9d3c4;--acc:#1b5e9e;--ok:#1f7a3a;--bad:#b3261e;--warn:#9a6200;--seabg:#7bb3c5;--halo:#fffdf8d9;
+--rdH:#e8b04a;--rdHc:#6b4c14;--rdP:#fbf7ee;--rdPc:#5f5a50;--rdD:#7a5a36;--brg:#fff;--brgc:#222;--cont:#c01c28;--bord:#3d3166;--elev:#1b5e9e;--c1:#1b5e9e;--c2:#c2571a;--c3:#0f8a82;--c4:#7b3fb5;--town:#2a2a2a}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15171a;--fg:#ecebe7;--mut:#a9a69d;--card:#1e2125;--line:#363a3f;--acc:#6db3ff;--ok:#5fd08a;--bad:#ff8a80;--warn:#f0b84a;--seabg:#123344;--halo:#15171ad9;
+--rdH:#d9a441;--rdHc:#120d04;--rdP:#cfcabd;--rdPc:#0e0f10;--rdD:#b08a5a;--brg:#e8e6df;--brgc:#0b0b0b;--cont:#ff5a64;--bord:#b7a8f0;--elev:#6db3ff;--c1:#6db3ff;--c2:#ff9a5a;--c3:#4fd1c5;--c4:#c79bff;--town:#f2f0ea}}
+:root[data-theme=dark]{--bg:#15171a;--fg:#ecebe7;--mut:#a9a69d;--card:#1e2125;--line:#363a3f;--acc:#6db3ff;--ok:#5fd08a;--bad:#ff8a80;--warn:#f0b84a;--seabg:#123344;--halo:#15171ad9;
+--rdH:#d9a441;--rdHc:#120d04;--rdP:#cfcabd;--rdPc:#0e0f10;--rdD:#b08a5a;--brg:#e8e6df;--brgc:#0b0b0b;--cont:#ff5a64;--bord:#b7a8f0;--elev:#6db3ff;--c1:#6db3ff;--c2:#ff9a5a;--c3:#4fd1c5;--c4:#c79bff;--town:#f2f0ea}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+main{max-width:1560px;margin:0 auto;padding:14px 16px 40px}
+h1{font-size:21px;margin:0}h2{font-size:17px;margin:26px 0 8px}h3{font-size:14px;margin:0 0 6px}
+p{margin:.3em 0}.mut,.note{color:var(--mut)}.note{font-size:12.5px}
+button,select,input[type=number]{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+button:hover{border-color:var(--fg)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.pri{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+.top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:12px;align-items:start}
+.kpis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.kpi{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:3px 10px;font-size:12.5px;white-space:nowrap}.kpi b{font-size:15px}
+.kpi.ok{border-color:var(--ok)}.kpi.warn{border-color:var(--warn)}.kpi.bad{border-color:var(--bad)}
+.mapbox{width:min(100%,calc((100vh - 232px)*1.2));min-width:320px}
+#vp{position:relative;aspect-ratio:6/5;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--seabg)}
+#vp canvas{position:absolute;inset:0;width:100%;height:100%}
+#map{position:absolute;inset:0;width:100%;height:100%}
+#banner{position:absolute;left:8px;top:8px;max-width:70%;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:13px;opacity:.96}
+#banner.w{border-color:var(--warn);color:var(--warn);font-weight:700}
+.lab{fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:3px;stroke-linejoin:round;font-weight:700;pointer-events:none}
+.blink{animation:bl 1s ease-in-out infinite}@keyframes bl{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.blink{animation:none}}
+.tl{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap}.tl input[type=range]{flex:1;min-width:160px}
+#tt{font-variant-numeric:tabular-nums;min-width:200px}
+.layers{display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0}.layers label{display:flex;gap:5px;align-items:center;white-space:nowrap;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--mut)}.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:14px;height:10px;border:1px solid var(--fg);border-radius:2px}
+.params{max-height:calc(100vh - 28px);overflow:auto;position:sticky;top:10px}
+.params details{border-top:1px solid var(--line);padding:5px 0}.params summary{cursor:pointer;font-weight:700;padding:2px 0}
+.row{display:grid;grid-template-columns:132px 1fr 64px;gap:6px;align-items:center;margin:2px 0;font-size:12.5px}
+.row input[type=range]{width:100%;min-width:0}.row output{text-align:right;font-variant-numeric:tabular-nums}
+.seedrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}.seedrow input{width:90px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border-bottom:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:600}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.st{display:inline-block;min-width:44px;text-align:center;border-radius:999px;padding:0 8px;border:1px solid;font-size:12px;font-weight:700}
+.st.ok{color:var(--ok);border-color:var(--ok)}.st.warn{color:var(--warn);border-color:var(--warn)}.st.bad{color:var(--bad);border-color:var(--bad)}
+svg.ch{width:100%;height:auto;display:block}svg.ch text{fill:var(--mut);font-size:11px;font-family:inherit}
+.bar{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:2px 0}.bar i{display:inline-block;height:12px;background:var(--c1);border-radius:2px}
+ul.rules{margin:6px 0;padding-left:18px}ul.rules li{margin:3px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:color-mix(in srgb,var(--fg) 8%,transparent);padding:0 4px;border-radius:3px}
+@media (max-width:1050px){.grid{grid-template-columns:minmax(0,1fr)}.params{position:static;max-height:none}.mapbox{width:100%}}
+@media (max-width:520px){main{padding:10px}.row{grid-template-columns:100px 1fr 56px}}
+</style></head><body><main>
+<div class="top"><div><h1>청람도 오염 전선 시뮬레이터 (하이브리드: 지역 확정 + 전선 확산)</h1>
+<p class="mut">맵 안 C2 섬 데이터와 시드·PRNG를 그대로 사용. 모든 수치는 이 페이지의 시뮬레이션 결과이며 고정값이 아니다. 조사·설계 단계 도구이며 게임 코드와 무관하다.</p></div>
+<div><button id="theme" title="테마 전환(자동, 라이트, 다크)">테마: 자동</button></div></div>
+
+<div class="grid">
+<section>
+ <div class="kpis" id="kpi"></div>
+ <div class="mapbox">
+  <div id="vp"><canvas id="cR" width="720" height="600"></canvas><canvas id="cG" width="200" height="167"></canvas><canvas id="cH" width="200" height="167"></canvas><canvas id="cC" width="200" height="167"></canvas>
+   <svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 2000" preserveAspectRatio="none" role="img" aria-label="청람도 오염 전선 지도"></svg>
+   <div id="banner">-</div></div>
+ </div>
+ <div class="tl"><button id="play" class="pri" aria-label="재생">재생</button><button id="rst" title="시간을 0으로">처음으로</button>
+  <label class="mut">배속 <select id="spd"><option value="30">30x</option><option value="60" selected>60x</option><option value="120">120x</option><option value="300">300x</option></select></label>
+  <input type="range" id="scrub" min="0" max="1500" step="1" value="0" aria-label="시간 스크럽"><span id="tt">0:00</span></div>
+ <div class="layers" id="layers" role="group" aria-label="레이어"></div>
+ <div class="legend" id="lg"></div>
+ <p class="note">지도 1칸 = 12 m. 지도 위 숫자 ①~⑥은 오염 확정 순서. 청록 숫자 원은 엘리베이터 승강장(20곳). 거리 단위 m, 면적 km², 시간 분:초.</p>
+</section>
+<aside class="card params" id="params">
+ <div class="seedrow"><label>시드 <input type="number" id="seed" min="1" max="999999" value="1" aria-label="시드"></label><button id="newseed">새 시드</button><button id="reset">리셋</button></div>
+ <div class="seedrow"><button id="presetRec" class="pri" title="시뮬레이션으로 정한 권장 수치">권장 프리셋</button><button id="presetDraft" title="기획서 초안 수치 (30~50 m/분, 5/9/13/16/19분)">초안 프리셋</button></div>
+ <p class="note" id="order">-</p>
+ <div id="sliders"></div>
+</aside>
+</div>
+
+<h2>지표 (현재 시드 · 현재 파라미터)</h2>
+<div class="cols">
+ <div class="card"><h3>남은 안전 면적 (km²) 대 시간</h3><div id="chA"></div><p class="note">세로 점선=경고 시작, 실선=오염 확정. 음영=목표 20~25분. 판 종료는 안전 면적이 종료 기준 이하가 되는 시각.</p></div>
+ <div class="card"><h3>단계별 탈출 가능 비율 (몬테카를로)</h3><div id="chF"></div><p class="note" id="chFn"></p></div>
+ <div class="card"><h3>단계별 초당 데미지 (DPS) 곡선</h3><div id="chD"></div></div>
+</div>
+<div class="card tbl" style="margin-top:12px"><h3>단계별 표</h3><div id="tPhase"></div></div>
+<div class="cols" style="margin-top:12px">
+ <div class="card tbl"><h3>판정 (기준을 항목마다 표기)</h3><div id="verdict"></div></div>
+ <div class="card"><h3>마을별 오염 시각</h3><div id="towns"></div></div>
+</div>
+
+<h2>시드 스윕 (헤드리스)</h2>
+<div class="card"><div class="seedrow"><label>시드 수 <input type="number" id="swN" min="10" max="2000" value="200"></label><button id="swGo" class="pri">스윕 실행</button><span class="note" id="swT"></span></div><div id="swOut" class="cols"></div>
+<p class="note">현재 파라미터로 시드 1~N의 순서와 전선을 계산한다. 탈출 몬테카를로는 시간이 오래 걸려 제외하고 판 길이, 최종 지역, 순서 위반만 본다.</p></div>
+
+<h2>열쇠 개수 비교 (6/7/8, 판당 6~8 무작위) · 팀 규모 · 보정안</h2>
+<div class="card"><div class="seedrow"><label>시드 수 <input type="number" id="cmpN" min="10" max="400" value="200"></label><label>몬테카를로 표본 <input type="number" id="cmpM" min="200" max="3000" step="100" value="1000"></label><button id="cmpGo" class="pri">열쇠 6/7/8 비교 실행</button><span class="note" id="cmpT"></span></div>
+<p class="note">같은 시드 묶음, 같은 몬테카를로(탈출 지표)로 열쇠 수만 바꿔 비교한다. 열쇠가 6~8 무작위(각 1/3)인 경우는 세 결과의 단순 평균(가중 평균)이다. 현재 파라미터(사이드 패널)를 그대로 쓴다.</p>
+<div id="cmpOut"></div>
+<div class="card" style="margin-top:10px;background:transparent"><h3>압박 판정 기준 (위협 지역 인원 중 엘리베이터로 이탈하는 비율의 1~5단계 평균)</h3>
+<ul class="rules"><li><span class="st warn">무의미</span> 5% 미만: 열쇠가 있어도 거의 쓰이지 않는다.</li><li><span class="st ok">적정</span> 5~25%: 열쇠가 전략 자원이면서 오염 압박이 유지된다.</li><li><span class="st warn">경계</span> 25~35%: 압박이 약해지기 시작한다.</li><li><span class="st bad">압박 약화</span> 35% 초과, 또는 어느 한 단계라도 45% 초과: 오염이 위협이 아니라 열쇠 소모전이 된다.</li></ul>
+<p class="note">남은 인원 비율 = 1 - 이탈 비율(전선 도달 시점에 걸어서 대응해야 하는 비율). 압박 지수 = 엘리베이터도 못 타고 도보로도 못 빠지는 비율(위협 인원 대비). 팀 평균 탑승 인원 = 솔로 비율 x 1 + (1 - 솔로 비율) x 스쿼드 인원 x 탑승률.</p></div>
+<div class="seedrow" style="margin-top:12px"><label>시드 수 <input type="number" id="scN" min="10" max="400" value="100"></label><button id="scGo" class="pri">보정안 비교 실행 (열쇠 7, 8개 기준)</button><button id="presetFix" title="열쇠 위치 편중 0.5 + 팀 쿨다운">보정 프리셋 (편중+쿨다운)</button><button id="presetFix3" title="편중 + 쿨다운 + 탑승 상한 3명">보정 프리셋 (+탑승 3명)</button><span class="note" id="scT"></span></div>
+<div id="scOut" class="card tbl"></div>
+<div class="card" style="margin-top:10px"><h3>팀 규모 가정 점검 (열쇠 6/7/8 가중 평균 이탈 비율, 솔로 비율 x 스쿼드 탑승률)</h3><div class="seedrow"><button id="tmGo">점검 실행</button><span class="note" id="tmT"></span></div><div id="tmOut"></div></div></div>
+
+<h2>규칙 요약 (확정: 2026-11-16)</h2>
+<div class="card"><ul class="rules">
+<li>섬은 6개 지역. 시드에 따라 지역이 한 번에 하나씩 <b>오염 확정</b>되고, 남은 지역은 항상 육로로 이어진다. 마지막 남은 지역이 <b>최종 지역</b>(6개 중 무작위).</li>
+<li>확정된 지역의 해안과, 이미 오염된 이웃 지역과 맞닿은 경계에서 <b>전선</b>이 출발해 지형 비용(평지 느림, 도로 빠름, 급경사 느림, 강 느림)에 따라 지역 안쪽으로 퍼진다. 전선이 지나간 곳은 계속 위험하다. 물리 벽은 없고 다리도 닫히지 않으며 차량은 다닌다.</li>
+<li>오염 DPS는 단계(확정된 지역 수)가 오를수록 증가한다. 확정 90~120초 전에 사이렌, 방송, 지도 점멸로 경고한다.</li>
+<li>최종 지역은 사방(해안 + 오염된 이웃)에서 전선이 수렴해 지형을 따라 중심으로 줄어든다(원이 아님).</li>
+<li>탈출: 승강장 20곳, 열쇠(1회용, 판당 6~8개). 열쇠 보유자가 삽입 → 문 열림 30초 → 팀 최대 4명 탑승 → 15초 안에 비오염 지역의 승강장 선택. 전선이 닿은 지역의 승강장도 작동하나 사용 후 90초 충전. 도착 보호 없음.</li>
+<li>시뮬레이션이 푸는 것: 위 규칙 아래에서 판 길이, 지역별 몰락 시각, 안전 면적, 도보·차량·엘리베이터 탈출 가능성, 적정 전선 속도와 DPS.</li></ul></div>
+<p class="note">한계: 지형은 C2의 결정적 노이즈이고 Unity 지형이 아니다. 플레이어는 최단 시간 경로로 비오염 지역을 향해 뛰는 단순 모델이며 교전, 파밍, 차량 위치, 방독 아이템, 봇 AI는 반영하지 않는다. 상세는 pollution_sim_notes.md.</p>
+</main>
+<script>
+var MODEL=(function(){
+'use strict';
+const W=2400,H=2000,CS=5,NX=W/CS+1,NY=H/CS+1;
+const clamp=(x,a,b)=>x<a?a:x>b?b:x,lerp=(a,b,t)=>a+(b-a)*t;
+const sm=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hash(ix,iy,s){let h=Math.imul(ix,374761393)^Math.imul(iy,668265263)^Math.imul(s,1274126177);h=Math.imul(h^h>>>13,1274126177);return((h^h>>>16)>>>0)/4294967296}
+function vn(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);const a=hash(ix,iy,s),b=hash(ix+1,iy,s),c=hash(ix,iy+1,s),d=hash(ix+1,iy+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+function fbm(x,y,s,o){let a=.5,f=1,t=0,n=0;for(let i=0;i<o;i++){t+=a*vn(x*f,y*f,s+i*17);n+=a;a*=.5;f*=2.03}return t/n}
+function ridged(x,y,s,o){let a=.5,f=1,t=0,n=0;for(let i=0;i<o;i++){const v=1-Math.abs(2*vn(x*f,y*f,s+i*13)-1);t+=a*v*v;n+=a;a*=.5;f*=2.1}return t/n}
+function segD(px,py,ax,ay,bx,by){const vx=bx-ax,vy=by-ay,L=vx*vx+vy*vy;let t=L?((px-ax)*vx+(py-ay)*vy)/L:0;t=clamp(t,0,1);return [Math.hypot(px-ax-vx*t,py-ay-vy*t),t]}
+function polyD(p,x,y){let best=1e9,bs=0,acc=0;for(let i=0;i<p.length-1;i++){const L=Math.hypot(p[i+1][0]-p[i][0],p[i+1][1]-p[i][1]);const r=segD(x,y,p[i][0],p[i][1],p[i+1][0],p[i+1][1]);if(r[0]<best){best=r[0];bs=acc+r[1]*L}acc+=L}return [best,bs]}
+function cr(pts,step){const out=[],P=[pts[0],...pts,pts[pts.length-1]];for(let i=1;i<P.length-2;i++){const p0=P[i-1],p1=P[i],p2=P[i+1],p3=P[i+2];const n=Math.max(2,Math.ceil(Math.hypot(p2[0]-p1[0],p2[1]-p1[1])/step));for(let j=0;j<n;j++){const t=j/n,t2=t*t,t3=t2*t;const f=k=>0.5*(2*p1[k]+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3);out.push([f(0),f(1)])}}out.push(pts[pts.length-1].slice());return out}
+
+/* ---------- geography data ---------- */
+const RIDGES=[
+ {n:'백운 능선',pts:[[250,640],[650,440],[1000,340],[1450,360],[1900,330],[2100,540]],amp:165,w:150},
+ {n:'동령 능선',pts:[[1560,700],[1720,950],[1740,1300],[1640,1650]],amp:105,w:120},
+ {n:'서령 능선',pts:[[280,1300],[620,1230],[900,1330],[1050,1500]],amp:92,w:115}];
+const PEAKS=[
+ {n:'백운봉',x:790,y:410,h:110,s:120},{n:'서령봉',x:470,y:540,h:55,s:110},{n:'동령봉',x:2000,y:430,h:75,s:150},
+ {n:'솔뫼봉',x:1690,y:800,h:45,s:90},{n:'망루봉',x:650,y:1040,h:85,s:100},{n:'(남석 구릉)',x:1990,y:1320,h:55,s:90}];
+const PASSES=[
+ {id:'P1',n:'북령고개',x:1010,y:345,road:1},{id:'P2',n:'동령재',x:1735,y:1090,road:1},{id:'P3',n:'서령재',x:640,y:1245,road:1},{id:'P4',n:'남령재',x:1698,y:1445,road:1},
+ {id:'P5',n:'샘골재',x:1400,y:355,road:1},{id:'S4',n:'서령 북안부(도보)',x:520,y:505,road:0},{id:'S2',n:'서령 안부(도보)',x:885,y:1325,road:0},{id:'S3',n:'솔뫼 안부(도보)',x:1656,y:850,road:0}];
+const QUARRIES=[{n:'동령 채석장',x:2090,y:600,r:105},{n:'남석 채석장',x:1990,y:1330,r:90}];
+const RIVERS=[
+ {n:'청람강',pts:[[1170,150],[1120,360],[1190,560],[1160,780],[1260,990],[1230,1180],[1330,1360],[1270,1560],[1350,1720],[1310,1910]],hw0:8,hw1:30,b0:42,b1:-2,sl0:.85,sl1:.3},
+ {n:'동천',pts:[[1700,1250],[1650,1360],[1520,1450],[1410,1440],[1318,1400]],hw0:5,hw1:9,b0:30,b1:1,sl0:.35,sl1:.3}];
+RIVERS.forEach(r=>{r.s=cr(r.pts,8);let a=0;r.t=[0];for(let i=1;i<r.s.length;i++){a+=Math.hypot(r.s[i][0]-r.s[i-1][0],r.s[i][1]-r.s[i-1][1]);r.t.push(a)}r.t=r.t.map(v=>v/a)});
+RIVERS[0].f=t=>({bed:42*Math.pow(1-t,3)-2,hw:8+22*Math.pow(t,1.2),sl:lerp(.85,.3,sm(0,.4,t))});
+RIVERS[1].f=t=>({bed:30*Math.pow(1-t,2),hw:lerp(5,9,t),sl:.35});
+
+/* ---------- towns (block generator) ---------- */
+const TYPES={
+ house:{n:'주택',fl:'1~2',en:.7},shop:{n:'상가(점포)',fl:'2~3',en:.85},villa:{n:'빌라·연립',fl:'3~4',en:.8},apt:{n:'아파트',fl:'5',en:1},
+ school:{n:'학교·체육관',fl:'1~3',en:1},barr:{n:'막사',fl:'1',en:1},fact:{n:'공장',fl:'1(높은 천장)',en:1},ware:{n:'창고',fl:'1',en:1},
+ market:{n:'시장 건물',fl:'1',en:1},stall:{n:'노점',fl:'1',en:0},tower:{n:'감시탑',fl:'3(옥상)',en:1},shed:{n:'헛간·가건물',fl:'1',en:0}};
+function genTown(T){
+ const rng=mulberry32(T.seed),R=(a,b)=>a+(b-a)*rng();
+ const rows=T.m.length,cols=T.m[0].length,Wd=T.W,Hd=T.H;const mr=T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2),mc=Math.floor((cols-1)/2);
+ const xs=T.xs||Array.from({length:cols+1},(_,i)=>Wd*i/cols),ys=T.ys||Array.from({length:rows+1},(_,i)=>Hd*i/rows);
+ const xw=T.xw||xs.slice(1,-1).map(()=>6),yw=T.yw||ys.slice(1,-1).map((_,i)=>(i===(T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2))?11:6));
+ const B=[],ST=[],FD=[],FN=[],CV=[],BL=[];
+ xs.slice(1,-1).forEach((x,i)=>ST.push({x:x-xw[i]/2,y:0,w:xw[i],h:Hd,v:1,n:(T.nv||[])[i]}));
+ ys.slice(1,-1).forEach((y,i)=>ST.push({x:0,y:y-yw[i]/2,w:Wd,h:yw[i],v:0,n:(T.nh||[])[i],main:i===(T.mainRow!=null?T.mainRow:Math.floor((rows-1)/2))}));
+ const add=(t,x,y,w,h,f,door)=>{const e=rng()<TYPES[t].en;B.push({t,x,y,w,h,f,e,d:door,id:T.id+'-'+(B.length+1)})};
+ function strip(r,side,depth,lw,t,gap,fl,setb){ // lots along one side of rect r
+  const hor=side==='n'||side==='s';const len=hor?r.w:r.h;let c=(setb?2:0)+R(0,3);
+  while(true){const w=R(lw[0],lw[1]);if(c+w>len-2)break;const bd=Math.min(depth,R(depth*.8,depth)); let x,y,bw,bh;
+   if(side==='n'){x=r.x+c;y=r.y;bw=w;bh=bd}else if(side==='s'){x=r.x+c;y=r.y+r.h-bd;bw=w;bh=bd}else if(side==='w'){x=r.x;y=r.y+c;bw=bd;bh=w}else{x=r.x+r.w-bd;y=r.y+c;bw=bd;bh=w}
+   add(t,x+(setb?R(.5,1.2):0),y+(setb?R(.5,1.5):0),bw-(setb?1.2:0),bh-(setb?1.2:0),Array.isArray(fl)?Math.round(R(fl[0],fl[1])):fl,side);c+=w+gap+(setb?R(0,2.5):0)}}
+ function fence(r,m){FN.push({x:r.x+m,y:r.y+m,w:r.w-2*m,h:r.h-2*m})}
+ function cars(r,n){for(let i=0;i<n;i++)CV.push({k:'car',x:r.x+R(4,r.w-8),y:r.y+R(4,r.h-6),a:rng()<.5?0:90})}
+ T.m.forEach((row,ri)=>row.forEach((code,ci)=>{
+  const hx=ci>0?xw[ci-1]/2:0,hx2=ci<cols-1?xw[ci]/2:(T.river?4:0),hy=ri>0?yw[ri-1]/2:0,hy2=ri<rows-1?yw[ri]/2:0;
+  const r={x:xs[ci]+hx,y:ys[ri]+hy,w:xs[ci+1]-xs[ci]-hx-hx2,h:ys[ri+1]-ys[ri]-hy-hy2};
+  BL.push({x:r.x,y:r.y,w:r.w,h:r.h,code});const flat=r.w>=r.h;const sd=flat?['n','s']:['w','e'];const lo=flat?r.h:r.w;
+  switch(code){
+   case 'H':{const dpt=Math.min(11,(lo-4)/2.4);strip(r,sd[0],dpt,[13,19],'house',4.5,[1,2],1);strip(r,sd[1],dpt,[13,19],'house',4.5,[1,2],1);break}
+   case 'h':{strip(r,sd[0],Math.min(11,lo-3),[14,20],'house',5,[1,2],1);break}
+   case 'S':{const dpt=Math.min(13,(lo-3)/2);strip(r,sd[0],dpt,[9,13],'shop',.4,[2,3]);strip(r,sd[1],dpt,[9,13],'shop',.4,[2,3]);break}
+   case 'T':{const side=flat?(ri<=mr?'s':'n'):(ci<=mc?'e':'w');strip(r,side,Math.min(13,lo-3),[9,13],'shop',.4,[2,3]);break}
+   case 'V':{const dpt=Math.min(12,(lo-3)/2);strip(r,sd[0],dpt,[17,22],'villa',6,[3,4]);strip(r,sd[1],dpt,[17,22],'villa',6,[3,4]);break}
+   case 'A':{const n=Math.max(1,Math.floor((r.h-10)/26));for(let i=0;i<n;i++){const y=r.y+6+i*(r.h-12-12)/Math.max(1,n-1||1)*(n>1?1:0);let c=4;while(c+36<r.w-3){add('apt',r.x+c,n>1?y:r.y+r.h/2-6,36,12,5,'s');c+=48}}FD.push({k:'plaza',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});break}
+   case 'K':{add('school',r.x+8,r.y+3,56,15,3,'s');add('school',r.x+r.w-40,r.y+3,30,12,2,'s');add('school',r.x+r.w-34,r.y+r.h-22,26,18,1,'n');FD.push({k:'play',x:r.x+8,y:r.y+r.h-26,w:r.w-52,h:22});fence(r,1);break}
+   case 'M':{add('market',r.x+r.w/2-22,r.y+r.h/2-12,44,24,1,'s');for(let i=0;i<4;i++){add('stall',r.x+10+i*9,r.y+3,7,3.4,1,'s');add('stall',r.x+r.w-10-i*9-7,r.y+r.h-7,7,3.4,1,'n')}FD.push({k:'plaza',x:r.x+1,y:r.y+1,w:r.w-2,h:r.h-2});break}
+   case 'B':{const n=Math.max(2,Math.floor((r.h-16)/17));for(let i=0;i<n;i++)add('barr',r.x+14,r.y+4+i*17,Math.min(46,r.w-24),9,1,'e');add('barr',r.x+3,r.y+r.h-14,13,10,1,'n');add('tower',r.x+r.w-9,r.y+3,6,6,3,'w');fence(r,1);break}
+   case 'F':{add('fact',r.x+8,r.y+r.h/2-14,Math.min(66,r.w-24),30,1,'n');add('fact',r.x+r.w-26,r.y+4,18,13,1,'s');add('tower',r.x+3,r.y+3,5,5,3,'e');for(let i=0;i<4;i++)CV.push({k:'cont',x:r.x+r.w-30+(i%2)*9,y:r.y+r.h-14+Math.floor(i/2)*4.5,a:0});fence(r,1);break}
+   case 'W':{const n=Math.max(1,Math.floor((r.h-4)/22));for(let i=0;i<n;i++)add('ware',r.x+6,r.y+3+i*22,Math.min(32,r.w-16),16,1,'e');for(let i=0;i<5;i++)CV.push({k:'cont',x:r.x+r.w-22+(i%2)*9,y:r.y+6+Math.floor(i/2)*5,a:0});fence(r,1);break}
+   case 'P':{add('ware',r.x+5,r.y+4,30,15,1,'s');add('ware',r.x+r.w-36,r.y+4,30,15,1,'s');for(let i=0;i<6;i++)CV.push({k:'cont',x:r.x+10+(i%3)*10,y:r.y+r.h-14+Math.floor(i/3)*4.6,a:0});FD.push({k:'plaza',x:r.x+1,y:r.y+1,w:r.w-2,h:r.h-2});break}
+   case 'L':{FD.push({k:'field',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});add('shed',r.x+r.w-12,r.y+r.h-10,8,6,1,'w');break}
+   case 'Q':{FD.push({k:'plaza',x:r.x+2,y:r.y+2,w:r.w-4,h:r.h-4});add('shop',r.x+r.w/2-5,r.y+r.h/2-3,10,6,1,'s');break}
+  }}));
+ ST.forEach(s=>{ // parked cars along streets (cover)
+  const len=s.v?s.h:s.w;for(let p=25;p<len-10;p+=R(38,60)){const side=rng()<.5?-1:1;if(s.v)CV.push({k:'car',x:s.x+(side>0?s.w-3.6:.8),y:p,a:90});else CV.push({k:'car',x:p,y:s.y+(side>0?s.h-3.6:.8),a:0})}});
+ return {B,ST,FD,FN,CV,BL,xs,ys,W:Wd,H:Hd};
+}
+
+const TOWNS=[
+ {id:'C',n:'청람읍',tier:1,x:1020,y:1000,rot:0,W:440,H:300,xs:[0,90,190,330,430],ys:[0,60,140,230,300],xw:[6,9,6],yw:[6,12,6],mainRow:1,river:1,nv:['샛길','시장길','신흥로'],nh:['학교길','중앙로','역전길'],
+  m:[['L','H','K','h'],['h','S','M','T'],['h','S','A','V'],['B','h','F','W']],seed:11,fl:'capital'},
+ {id:'L1',n:'새재',tier:2,x:1530,y:1100,rot:8,W:330,H:240,m:[['h','T','h'],['h','M','T'],['H','A','L']],seed:21,fl:'market'},
+ {id:'L2',n:'해옥포',tier:2,x:640,y:1610,rot:-14,W:300,H:230,m:[['h','T','W'],['h','T','P'],['L','h','h']],seed:22,fl:'port'},
+ {id:'L3',n:'광석리',tier:2,x:1900,y:1500,rot:10,W:320,H:240,m:[['h','F','F'],['V','T','W'],['L','h','B']],seed:23,fl:'factory'},
+ {id:'L4',n:'북령읍',tier:2,x:880,y:570,rot:-6,W:330,H:210,m:[['h','T','V'],['H','T','h']],seed:24,fl:'pass'},
+ {id:'M1',n:'학전',tier:3,x:530,y:880,rot:5,W:190,H:130,m:[['h','K'],['h','T']],seed:31,fl:'school'},
+ {id:'M2',n:'논실',tier:3,x:1560,y:1400,rot:-8,W:200,H:140,m:[['H','T'],['L','h']],seed:32,fl:'farm'},
+ {id:'M3',n:'마루재',tier:3,x:1745,y:1090,rot:90,W:190,H:130,m:[['H','T'],['h','h']],seed:33,fl:'pass'},
+ {id:'M4',n:'채석리',tier:3,x:1990,y:670,rot:12,W:200,H:140,m:[['H','T'],['L','W']],seed:34,fl:'quarry'},
+ {id:'M5',n:'남포',tier:3,x:1420,y:1790,rot:-5,W:220,H:140,m:[['H','T'],['L','P']],seed:35,fl:'port'},
+ {id:'M6',n:'북해리',tier:3,x:1010,y:180,rot:0,W:200,H:140,m:[['H','T'],['h','L']],seed:36,fl:'fishing'},
+ {id:'H1',n:'솔밭',tier:4,x:390,y:1130,rot:20,W:160,H:50,m:[['h','h']],seed:41,fl:'hamlet'},
+ {id:'H3',n:'샘골',tier:4,x:1470,y:560,rot:0,W:160,H:50,m:[['h','h']],seed:42,fl:'hamlet'},
+ {id:'H4',n:'양지',tier:4,x:2100,y:1040,rot:-10,W:170,H:50,m:[['h','h']],seed:43,fl:'hamlet'},
+ {id:'H5',n:'달뫼',tier:4,x:880,y:1190,rot:30,W:100,H:60,m:[['H']],seed:44,fl:'hamlet'},
+ {id:'H6',n:'하동',tier:4,x:1330,y:1560,rot:0,W:150,H:50,m:[['h','h']],seed:45,fl:'hamlet'},
+ {id:'H7',n:'갯말',tier:4,x:850,y:1790,rot:0,W:150,H:50,m:[['h','h']],seed:46,fl:'hamlet'}];
+const TIER=['','수도급 중심읍','대형 읍','중형 마을','작은 마을(hamlet)'];
+TOWNS.forEach(T=>{T.g=genTown(T);const cs=Math.cos(T.rot*Math.PI/180),sn=Math.sin(T.rot*Math.PI/180);T.toW=(lx,ly)=>{const dx=lx-T.W/2,dy=ly-T.H/2;return [T.x+dx*cs-dy*sn,T.y+dx*sn+dy*cs]};T.cnt={};T.g.B.forEach(b=>{T.cnt[b.t]=(T.cnt[b.t]||0)+1;const c=T.toW(b.x+b.w/2,b.y+b.h/2);b.wx=c[0];b.wy=c[1]})});
+
+/* ---------- terrain ---------- */
+function rawH(x,y){
+ const dx=(x-1200)/1150,dy=(y-1000)/960,ang=Math.atan2(dy,dx);
+ const r=Math.hypot(dx,dy)+(fbm(x/380,y/380,7,3)-.5)*.26+.035*Math.sin(ang*3+1)+.025*Math.sin(ang*5+2)+.02*Math.sin(ang*9);
+ const hc=1-r,base=lerp(-20,7,sm(-.09,.12,hc)),inl=sm(.04,.28,hc);
+ let m=(fbm(x/330,y/330,3,4)-.38)*50+(fbm(x/85,y/85,5,3)-.5)*14;
+ let rid=0;
+ for(let k=0;k<RIDGES.length;k++){const R=RIDGES[k];const [d,s]=polyD(R.pts,x,y);if(d>R.w*3)continue;const env=Math.exp(-(d/R.w)*(d/R.w)),al=.6+.4*fbm(s/240,k*3.1,11,2)*1.6;
+  rid+=R.amp*env*Math.min(1.15,al)*(.7+.55*ridged(x/150,y/150,21+k,3))}
+ let dip=1;for(const p of PASSES){const dd=Math.hypot(x-p.x,y-p.y);dip*=1-.8*Math.exp(-(dd/(p.road?125:90))*(dd/(p.road?125:90)))}
+ rid*=dip;
+ let pk=0;for(const p of PEAKS){const dd=Math.hypot(x-p.x,y-p.y);pk+=p.h*Math.exp(-(dd/p.s)*(dd/p.s))}
+ return base+inl*(m+rid+pk*(.6+.4*dip));
+}
+const hg=new Float32Array(NX*NY),rd=new Float32Array(NX*NY).fill(999);
+function build(){
+ const townZ=TOWNS.map(T=>{const z=Math.max(T.id==='C'?17:6,Math.min(90,rawH(T.x,T.y)));return z});
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){
+  const x=i*CS,y=j*CS;let h=rawH(x,y);
+  for(let k=0;k<TOWNS.length;k++){const T=TOWNS[k],d=Math.hypot(x-T.x,y-T.y),rf=Math.hypot(T.W,T.H)*.5*.8;if(d<rf+90){h=lerp(h,townZ[k],1-sm(rf,rf+90,d))}}
+  for(const Q of QUARRIES){const d=Math.hypot(x-Q.x,y-Q.y);if(d<Q.r*1.5){const w=1-sm(Q.r*.7,Q.r*1.5,d);const st=Math.round((h-14*w)/9)*9;h=lerp(h,Math.max(6,st),w*.95)}}
+  for(const rv of RIVERS){let bd=1e18,bi=0;const S=rv.s;for(let q=0;q<S.length;q++){const ex=S[q][0]-x,ey=S[q][1]-y,dd=ex*ex+ey*ey;if(dd<bd){bd=dd;bi=q}}
+   const d=Math.sqrt(bd),f=rv.f(rv.t[bi]);if(d>900)continue;const cone=f.bed+Math.max(0,d-f.hw)*f.sl;if(h>cone)h=cone;if(d<f.hw+1.5&&h>f.bed-.5)h=Math.min(h,f.bed+Math.max(0,d-f.hw)*f.sl);
+   const v=d-f.hw;if(v<rd[j*NX+i])rd[j*NX+i]=v}
+  hg[j*NX+i]=h}
+}
+build();
+function hAt(x,y){x=clamp(x,0,W-.001)/CS;y=clamp(y,0,H-.001)/CS;const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,o=j*NX+i;return hg[o]*(1-fx)*(1-fy)+hg[o+1]*fx*(1-fy)+hg[o+NX]*(1-fx)*fy+hg[o+NX+1]*fx*fy}
+function rdAt(x,y){x=clamp(x,0,W-.001)/CS;y=clamp(y,0,H-.001)/CS;const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,o=j*NX+i;return rd[o]*(1-fx)*(1-fy)+rd[o+1]*fx*(1-fy)+rd[o+NX]*(1-fx)*fy+rd[o+NX+1]*fx*fy}
+function slopeDeg(x,y,e){e=e||10;const gx=(hAt(x+e,y)-hAt(x-e,y))/(2*e),gy=(hAt(x,y+e)-hAt(x,y-e))/(2*e);return Math.atan(Math.hypot(gx,gy))*180/Math.PI}
+const isWater=(x,y)=>hAt(x,y)<=0||rdAt(x,y)<0;
+
+/* ---------- regions ---------- */
+const REG=[
+ {id:0,n:'북령 산악',c:'#8c7ab8',seeds:[[700,400],[1250,350]],w:0,note:'백운 산맥과 강 발원 협곡'},
+ {id:1,n:'청람읍권',c:'#c9822f',seeds:[[700,950]],w:1,note:'서안 수도급 읍 + 학전·달뫼'},
+ {id:2,n:'서남 포구',c:'#2f8f9d',seeds:[[700,1600]],w:1,note:'해옥포 항구·갯말, 서령 능선 남쪽'},
+ {id:3,n:'동령 고원',c:'#b5483c',seeds:[[1950,700]],w:0,note:'동령봉·채석장, 동안 북부'},
+ {id:4,n:'동천 평야',c:'#6a9a3a',seeds:[[1550,1200]],w:0,note:'새재·논실, 강 동안 평지'},
+ {id:5,n:'남동 해안',c:'#4a6fb5',seeds:[[1900,1500]],w:0,note:'광석리 공업·남포 하구'}];
+const RS=10,RNX=W/RS,RNY=H/RS;const regId=new Int8Array(RNX*RNY).fill(-1);
+function riverXAt(y){const S=RIVERS[0].s;let b=1e9,bx=0;for(const p of S){const d=Math.abs(p[1]-y);if(d<b){b=d;bx=p[0]}}return bx}
+function regionAt(x,y){let best=1e9,bi=-1;const westOf=x<riverXAt(y);for(const R of REG){for(const s of R.seeds){let d=Math.hypot(x-s[0],y-s[1]);if(y>600&&R.id!==0&&((R.w===1)!==westOf))d+=500;if(R.id===0&&y>700)d+=150;if(d<best){best=d;bi=R.id}}}return bi}
+for(let j=0;j<RNY;j++)for(let i=0;i<RNX;i++){const x=(i+.5)*RS,y=(j+.5)*RS;if(hAt(x,y)>0)regId[j*RNX+i]=regionAt(x,y)}
+const regOf=(x,y)=>{const i=clamp(Math.floor(x/RS),0,RNX-1),j=clamp(Math.floor(y/RS),0,RNY-1);let v=regId[j*RNX+i];return v<0?regionAt(x,y):v};
+const adj=REG.map(()=>new Set());for(let j=0;j<RNY-1;j++)for(let i=0;i<RNX-1;i++){const a=regId[j*RNX+i];for(const o of [1,RNX]){const b=regId[j*RNX+i+o];if(a>=0&&b>=0&&a!==b){adj[a].add(b);adj[b].add(a)}}}
+function closeOrder(seed){const rng=mulberry32(seed);const fin=Math.floor(rng()*6);let rem=new Set([0,1,2,3,4,5]);const ord=[];const conn=s=>{const a=[...s];if(!a.length)return true;const seen=new Set([a[0]]),q=[a[0]];while(q.length){const u=q.pop();adj[u].forEach(v=>{if(s.has(v)&&!seen.has(v)){seen.add(v);q.push(v)}})}return seen.size===s.size};
+ while(rem.size>1){const c=[...rem].filter(r=>r!==fin&&(()=>{const t=new Set(rem);t.delete(r);return conn(t)})());const p=c[Math.floor(rng()*c.length)];ord.push(p);rem.delete(p)}ord.push(fin);return ord}
+
+/* ---------- road network ---------- */
+const NODES={};TOWNS.forEach(T=>NODES[T.id]={x:T.x,y:T.y,n:T.n,town:1,tier:T.tier});
+NODES.P1={x:1010,y:345,n:'북령고개',pass:1};NODES.P3={x:640,y:1245,n:'서령재',pass:1};NODES.P4={x:1698,y:1445,n:'남령재',pass:1};NODES.P5={x:1400,y:355,n:'샘골재',pass:1};NODES.J5={x:1000,y:1745,n:'교차로'};NODES.M3.pass=1;
+const EDGES=[
+ ['C','L1','H',[[1150,990],[1380,1010]]],['L1','M2','H',[[1530,1240]]],['M2','P4','H',[[1630,1420]],1],['P4','L3','H',[[1800,1480]],1],['L3','M5','H',[[1760,1700],[1600,1790]]],['M5','J5','H',[[1330,1830],[1150,1790]]],['J5','L2','H',[[880,1690]]],
+ ['H1','P3','D',[[500,1190]]],['H1','M1','D',[[430,1000]]],['M1','C','P',[[700,900],[850,960]]],['C','H5','P',[[950,1100]]],
+ ['H5','P3','P',[[760,1220]],1],['P3','L2','P',[[620,1420],[640,1520]],1],
+ ['M1','L4','P',[[640,700]]],['C','L4','P',[[960,800]]],['L4','P1','P',[[950,460]],1],['P1','M6','P',[[1040,250]],1],['M6','P5','P',[[1230,215],[1330,280]],1],['P5','H3','P',[[1430,450]],1],
+ ['L4','H3','P',[[1060,610],[1170,630],[1300,590]]],['H3','L1','P',[[1400,800],[1440,950]]],['H3','M4','P',[[1620,600],[1800,640]]],['M4','H4','P',[[2060,850]]],
+ ['L1','M3','P',[[1630,1100]],1],['M3','H4','P',[[1900,1110],[2010,1090]],1],['H4','L3','P',[[2060,1290]]],
+ ['M2','H6','D',[[1470,1440]]],['H6','M5','D',[[1380,1680]]],['H7','J5','D',[[930,1760]]]];
+var SWA=58,SWL=150;
+const CLS={H:{n:'국도(간선·순환)',w:12},P:{n:'포장 지방도',w:8},D:{n:'비포장 농로·임도',w:4}};
+const roads=EDGES.map((e,i)=>{const a=NODES[e[0]],b=NODES[e[1]];let pts=cr([[a.x,a.y],...e[3],[b.x,b.y]],6);
+ if(e[4]){const S=pts.length;const tot=[0];for(let k=1;k<S;k++)tot.push(tot[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));const L=tot[S-1];
+  pts=pts.map((p,k)=>{const q=pts[Math.min(S-1,k+1)],o=pts[Math.max(0,k-1)];let nx=-(q[1]-o[1]),ny=q[0]-o[0];const nl=Math.hypot(nx,ny)||1;nx/=nl;ny/=nl;const s=tot[k],env=Math.min(1,s/70,(L-s)/70),off=SWA*env*Math.sin(2*Math.PI*s/SWL);return [p[0]+nx*off,p[1]+ny*off]})}
+ return {id:i,a:e[0],b:e[1],c:e[2],sw:!!e[4],pts}});
+function lenOf(p){let a=0;for(let i=1;i<p.length;i++)a+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return a}
+function roadGrade(r){let mx=0,sum=0,n=0;const p=r.pts;let acc=0,idx=[0];for(let i=1;i<p.length;i++){acc+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);idx.push(acc)}
+ for(let i=0;i<p.length;i++){let j=i;while(j<p.length-1&&idx[j]-idx[i]<30)j++;if(j===i)continue;const d=idx[j]-idx[i];if(d<20)continue;if(rdAt(p[i][0],p[i][1])<4||rdAt(p[j][0],p[j][1])<4)continue;const ha=Math.max(hAt(p[i][0],p[i][1]),0),hb=Math.max(hAt(p[j][0],p[j][1]),0);const g=Math.atan(Math.abs(hb-ha)/d)*180/Math.PI;if(g>mx)mx=g;sum+=g;n++}return {max:mx,avg:n?sum/n:0}}
+// bridges: contiguous water runs along road polylines
+const BR_NAMES=[[1260,990,'청람교'],[1170,630,'북강교'],[1150,200,'발원교'],[1325,1830,'하구교'],[1650,1420,'동천교'],[1360,1420,'동천 하구 여울'],[1420,1450,'동천 여울'],[1470,1440,'동천 여울']];
+const bridges=[];roads.forEach(r=>{let run=null;const flush=()=>{if(run&&run.length){const a=run[0],b=run[run.length-1];const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;let nm='다리',bd=1e9;BR_NAMES.forEach(q=>{const d=Math.hypot(q[0]-cx,q[1]-cy);if(d<bd){bd=d;nm=q[2]}});
+ bridges.push({road:r.id,c:r.c,x:cx,y:cy,pts:[[a[0],a[1]],...run.slice(1,-1).filter((_,i)=>i%4===0),[b[0],b[1]]],len:Math.hypot(b[0]-a[0],b[1]-a[1])+12,n:bd<160?nm:'다리 '+(bridges.length+1)})}run=null};
+ r.pts.forEach(p=>{if(rdAt(p[0],p[1])<4){(run=run||[]).push(p)}else flush()});flush()});
+bridges.forEach(b=>{b.ford=b.c==='D'});
+function graphCheck(){const ids=Object.keys(NODES);const adjL={};ids.forEach(i=>adjL[i]=[]);EDGES.forEach(e=>{adjL[e[0]].push(e[1]);adjL[e[1]].push(e[0])});const seen=new Set([ids[0]]),q=[ids[0]];while(q.length){const u=q.pop();adjL[u].forEach(v=>{if(!seen.has(v)){seen.add(v);q.push(v)}})}
+ const towns=ids.filter(i=>NODES[i].town);const allReach=towns.every(t=>seen.has(t));const paved=ids.filter(i=>true);
+ // paved-only reachability from every town (excluding dirt) for non-hamlet nodes
+ const adjP={};ids.forEach(i=>adjP[i]=[]);EDGES.filter(e=>e[2]!=='D').forEach(e=>{adjP[e[0]].push(e[1]);adjP[e[1]].push(e[0])});
+ const s2=new Set(['C']),q2=['C'];while(q2.length){const u=q2.pop();adjP[u].forEach(v=>{if(!s2.has(v)){s2.add(v);q2.push(v)}})}
+ const unreachP=towns.filter(t=>!s2.has(t)&&NODES[t].tier!==4);
+ // pairwise reachability: every pair reachable (single component) <=> allReach; also check removing any single non-dirt edge keeps connected (loop network, not a tree)
+ let bridgesCut=0;EDGES.forEach((e,k)=>{if(e[2]==='D')return;const a2={};ids.forEach(i=>a2[i]=[]);EDGES.forEach((f,m)=>{if(m!==k){a2[f[0]].push(f[1]);a2[f[1]].push(f[0])}});const s3=new Set([ids[0]]),q3=[ids[0]];while(q3.length){const u=q3.pop();a2[u].forEach(v=>{if(!s3.has(v)){s3.add(v);q3.push(v)}})}if(s3.size!==ids.length)bridgesCut++});
+ return {nodes:ids.length,edges:EDGES.length,connected:seen.size===ids.length&&allReach,cycles:EDGES.length-ids.length+1,townsNotOnPaved:unreachP,cutEdges:bridgesCut}}
+
+
+function carveRoads(){
+ const g=Math.tan(11*Math.PI/180),bw=new Float32Array(NX*NY),bh=new Float32Array(NX*NY);const rep=[];
+ roads.forEach(r=>{const p=r.pts,n=p.length,ds=[0];for(let i=1;i<n;i++)ds.push(ds[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
+  const h=p.map(q=>hAt(q[0],q[1])),wet=p.map(q=>rdAt(q[0],q[1])<5);
+  for(let i=0;i<n;i++)if(wet[i]){let a=i-1;while(a>=0&&wet[a])a--;let b=i+1;while(b<n&&wet[b])b++;if(a<0)h[i]=h[b];else if(b>=n)h[i]=h[a];else h[i]=lerp(h[a],h[b],(ds[i]-ds[a])/(ds[b]-ds[a]))}
+  const raw=h.slice(),lo=h.map((_,i)=>{let m=1e9;for(let j=0;j<n;j++)m=Math.min(m,raw[j]+g*Math.abs(ds[i]-ds[j]));return m}),up=h.map((_,i)=>{let m=-1e9;for(let j=0;j<n;j++)m=Math.max(m,raw[j]-g*Math.abs(ds[i]-ds[j]));return m});
+  let prof=lo.map((v,i)=>(v+up[i])/2);prof=prof.map((_,i)=>{let a=0,c=0;for(let k=-4;k<=4;k++){const j=i+k;if(j>=0&&j<n){a+=prof[j];c++}}return a/c});
+  let cut=0;prof.forEach((v,i)=>{cut=Math.max(cut,Math.abs(v-raw[i]))});rep.push(cut);r.cut=cut;
+  p.forEach((q,i)=>{if(wet[i])return;const x0=Math.floor((q[0]-18)/CS),x1=Math.ceil((q[0]+18)/CS),y0=Math.floor((q[1]-18)/CS),y1=Math.ceil((q[1]+18)/CS);
+   for(let y=Math.max(0,y0);y<=Math.min(NY-1,y1);y++)for(let x=Math.max(0,x0);x<=Math.min(NX-1,x1);x++){const d=Math.hypot(x*CS-q[0],y*CS-q[1]);const w=1-sm(5,18,d);const o=y*NX+x;if(w>bw[o]&&rd[o]>=3){bw[o]=w;bh[o]=prof[i]}}})});
+ for(let o=0;o<NX*NY;o++)if(bw[o]>0)hg[o]=lerp(hg[o],bh[o],bw[o]);
+}
+carveRoads();roads.forEach(r=>{const g=roadGrade(r);r.gradeMax=g.max;r.gradeAvg=g.avg});
+let landCells=0,walk=0,maxH=0;for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const h=hg[j*NX+i];if(h>0&&rd[j*NX+i]>=0){landCells++;if(h>maxH)maxH=h;if(slopeDeg(i*CS,j*CS,CS)<=35)walk++}}
+/* ---------- elevators, vehicles, hotspots, peaks ---------- */
+const ELEV=[['L4','e',.5,0],['L4','w',.5,0],['M6','w',.5,0],['C','w',.35,1],['C','n',.55,1],['M1','n',.5,1],['H5','e',.5,1],['L2','n',.5,2],['L2','e',.5,2],['H7','e',.5,2],['M4','w',.5,3],['M4','e',.5,3],['H4','w',.5,3],['L1','w',.5,4],['L1','n',.5,4],['M2','n',.5,4],['M3','s',.5,4],['L3','n',.5,5],['L3','s',.5,5],['M5','e',.5,5]]
+ .map((e,i)=>{const T=TOWNS.find(t=>t.id===e[0]);const d=20;let best=null;for(let k=1;k<=9;k++){const f=k/10;let l;switch(e[1]){case 'w':l=[-d,f*T.H];break;case 'e':l=[T.W+d+(T.river?20:0),f*T.H];break;case 'n':l=[f*T.W,-d];break;default:l=[f*T.W,T.H+d]}const p=T.toW(l[0],l[1]);const nb=nearBld(p[0],p[1],60);const sc=nb*10-Math.abs(f-e[2])*3;if(!best||sc>best.sc)best={sc,p,nb}}return {i:i+1,t:T.id,x:best.p[0],y:best.p[1],reg:regOf(best.p[0],best.p[1]),want:e[3]}});
+function nearBld(x,y,r){let n=0;TOWNS.forEach(T=>T.g.B.forEach(b=>{if(b.t!=='stall'&&b.t!=='tower'&&Math.hypot(b.wx-x,b.wy-y)<=r)n++}));return n}
+ELEV.forEach(e=>e.near=nearBld(e.x,e.y,60));
+function ptOnRoad(r,fromStart,dist){const p=fromStart?r.pts:r.pts.slice().reverse();let acc=0;for(let i=1;i<p.length;i++){const l=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(acc+l>=dist){const t=(dist-acc)/l;return {x:lerp(p[i-1][0],p[i][0],t),y:lerp(p[i-1][1],p[i][1],t),a:Math.atan2(p[i][1]-p[i-1][1],p[i][0]-p[i-1][0])*180/Math.PI}}acc+=l}return {x:p[p.length-1][0],y:p[p.length-1][1],a:0}}
+const VEH=[];TOWNS.forEach(T=>{const es=roads.filter(r=>r.a===T.id||r.b===T.id);const want=T.tier===1?3:T.tier===2?2:1;es.slice(0,want).forEach((r,k)=>{const pr=T.W>T.H?T.W/2:T.H/2;const p=ptOnRoad(r,r.a===T.id,pr+45+k*25);VEH.push({x:p.x,y:p.y,a:p.a,t:T.id})})});
+roads.filter(r=>r.sw).forEach(r=>{const p=ptOnRoad(r,true,lenOf(r.pts)/2);VEH.push({x:p.x,y:p.y,a:p.a,t:'pass'})});
+const LOOT=[];TOWNS.forEach(T=>{const seen={};T.g.B.forEach(b=>{const m={barr:['high','무기고(막사)'],fact:['high','공장 보급창'],market:['mid','시장'],school:['mid','학교'],ware:['mid','창고단지']}[b.t];if(m&&!seen[b.t]&&(b.t!=='ware'||T.tier<=2)){seen[b.t]=1;LOOT.push({x:b.wx,y:b.wy,tier:m[0],n:T.n+' '+m[1]})}})});
+LOOT.push({x:2090,y:600,tier:'mid',n:'동령 채석장 사무동'},{x:1990,y:1330,tier:'mid',n:'남석 채석장 사무동'});
+const peaks=PEAKS.filter(p=>p.n[0]!=='(').slice(0,5).map(p=>{let x=p.x,y=p.y,h=hAt(x,y);for(let it=0;it<60;it++){let moved=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){const nx=x+dx*10,ny=y+dy*10,nh=hAt(nx,ny);if(nh>h){x=nx;y=ny;h=nh;moved=1}}if(!moved)break}return {n:p.n,x,y,h}});
+const FOOT=[[[530,880],[525,700],[520,505],[560,390]],[[880,1190],[890,1260],[885,1325],[900,1440]],[[1520,1090],[1600,950],[1656,850],[1800,700],[1990,670]]].map(p=>cr(p,8));
+const RIDGEFIGHTS=[{n:'백운 능선 교전지',x:1300,y:342},{n:'동령 능선 교전지',x:1735,y:1330},{n:'서령 능선 교전지',x:470,y:1262}];
+return {W,H,CS,NX,NY,hg,rd,hAt,rdAt,slopeDeg,isWater,RIDGES,PEAKS,PASSES,QUARRIES,RIVERS,TOWNS,TIER,TYPES,REG,regId,RNX,RNY,RS,regOf,adj,closeOrder,NODES,EDGES,CLS,roads,roadGrade,lenOf,bridges,graphCheck,ELEV,VEH,LOOT,peaks,FOOT,RIDGEFIGHTS,mulberry32,fbm,sm,clamp,lerp,
+  stats:{land:landCells*CS*CS/1e6,walk:walk/landCells,maxH},get SW(){return [SWA,SWL]}};
+})();
+
+</script>
+<script>
+(function(){
+'use strict';
+/* ================= 오염 시뮬레이션 코어 (DOM 없음) ================= */
+const M=MODEL,CL=M.clamp;
+const CELL=12,GX=Math.ceil(M.W/CELL),GY=Math.ceil(M.H/CELL),N=GX*GY,CA=CELL*CELL/1e6;
+const sea=new Uint8Array(N),riv=new Uint8Array(N),reg=new Int8Array(N).fill(-1),slp=new Float32Array(N),road=new Uint8Array(N),coast=new Uint8Array(N);
+const DX=[1,-1,0,0,1,1,-1,-1],DY=[0,0,1,-1,1,-1,1,-1],DD=[1,1,1,1,1.4142,1.4142,1.4142,1.4142].map(v=>v*CELL);
+for(let i=0;i<N;i++){const x=(i%GX+.5)*CELL,y=(((i/GX)|0)+.5)*CELL,h=M.hAt(x,y),rv=M.rdAt(x,y);
+ if(h<=0&&rv>=0){sea[i]=1;continue}
+ if(rv<0)riv[i]=1;reg[i]=M.regOf(x,y);slp[i]=riv[i]?0:M.slopeDeg(x,y,CELL*.5)}
+for(let i=0;i<N;i++){if(sea[i])continue;const x=i%GX,y=(i/GX)|0;for(let k=0;k<8;k++){const nx=x+DX[k],ny=y+DY[k];if(nx<0||ny<0||nx>=GX||ny>=GY||sea[ny*GX+nx]){coast[i]=1;break}}}
+{const cv={H:3,P:2,D:1};M.roads.forEach(r=>{const p=r.pts;for(let k=1;k<p.length;k++){const a=p[k-1],b=p[k],L=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.max(1,Math.ceil(L/4));
+ for(let s=0;s<=n;s++){const x=a[0]+(b[0]-a[0])*s/n,y=a[1]+(b[1]-a[1])*s/n,ix=Math.floor(x/CELL),iy=Math.floor(y/CELL);if(ix<0||iy<0||ix>=GX||iy>=GY)continue;const o=iy*GX+ix;if(!sea[o]&&cv[r.c]>road[o])road[o]=cv[r.c]}}})}
+const isLand=i=>!sea[i]&&!riv[i];
+const regArea=new Float64Array(6);let landCells=0;for(let i=0;i<N;i++)if(isLand(i)){regArea[reg[i]]+=CA;landCells++}
+const cellAt=(x,y)=>Math.floor(CL(y,0,M.H-1)/CELL)*GX+Math.floor(CL(x,0,M.W-1)/CELL);
+function nearPass(x,y){let i=cellAt(x,y);if(!sea[i])return i;for(let r=1;r<6;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const o=cellAt(x+dx*CELL,y+dy*CELL);if(!sea[o])return o}return i}
+const TOWNC=M.TOWNS.map(T=>nearPass(T.x,T.y));
+const PLAT=M.ELEV.map(e=>{const c=nearPass(e.x,e.y);return {n:e.i,x:e.x,y:e.y,cell:c,reg:reg[c]}});
+
+/* ---------- 힙 + 다익스트라 ---------- */
+const HK=new Float64Array(N*9+16),HV=new Int32Array(N*9+16);let HN=0,HPK=0;
+function hpush(k,v){let i=HN++;while(i>0){const p=(i-1)>>1;if(HK[p]<=k)break;HK[i]=HK[p];HV[i]=HV[p];i=p}HK[i]=k;HV[i]=v}
+function hpop(){const rv=HV[0];HPK=HK[0];const n=--HN;if(n>0){const k=HK[n],v=HV[n];let i=0;for(;;){let c=2*i+1;if(c>=n)break;if(c+1<n&&HK[c+1]<HK[c])c++;if(HK[c]>=k)break;HK[i]=HK[c];HV[i]=HV[c];i=c}HK[i]=k;HV[i]=v}return rv}
+
+/* ---------- 파라미터 ---------- */
+const DEF={vFlat:60,vRoad:100,vSteep:30,riverK:.6,accel:.05,mFinal:.7,
+ T:[4,7.5,10.5,13,15,16.5],lead:105,dps1:2,dps6:20,hp:100,keys:6,pSolo:.3,squadN:4,board:.75,bias:0,cool:0,recharge:90,door:30,sel:15,
+ walk:5,vVeh:20,pVeh:.2,delay:40,pLate:.15,nAlive:50,endArea:.03,nmc:2000};
+const DRAFT=Object.assign(JSON.parse(JSON.stringify(DEF)),{vFlat:40,vRoad:60,vSteep:20,accel:0,mFinal:1,T:[5,9,13,16,19,19.5],dps1:1.5,dps6:15});
+const clonePar=P=>JSON.parse(JSON.stringify(P));
+const normT=P=>{const T=P.T.slice();for(let i=1;i<6;i++)T[i]=Math.max(T[i],T[i-1]+.5);return T};
+const dpsArr=P=>[...Array(6)].map((_,i)=>P.dps1*Math.pow(P.dps6/P.dps1,i/5));
+
+/* ---------- 전선: 비용 기반 도달시간장 A[셀] (분) ---------- */
+function frontSpeed(P){const sp=new Float32Array(N);for(let i=0;i<N;i++){if(sea[i])continue;const t=CL((slp[i]-15)/20,0,1);let s=P.vFlat+(P.vSteep-P.vFlat)*t;if(riv[i])s*=P.riverK;
+ const rc=road[i];if(rc){const rs=rc>=2?P.vRoad:(P.vRoad+P.vFlat)/2;if(rs>s)s=rs}sp[i]=Math.max(s,1)}return sp}
+function computeFront(order,P){
+ const T=normT(P),Tc=new Float64Array(6),mu=new Float64Array(6);
+ order.forEach((r,k)=>{Tc[r]=T[k];mu[r]=(1+P.accel*k)*(k===5?P.mFinal:1)});
+ const sp=frontSpeed(P),inv=new Float32Array(N);for(let i=0;i<N;i++)inv[i]=sea[i]?0:1/sp[i];
+ const A=new Float64Array(N).fill(1e9);HN=0;
+ for(let i=0;i<N;i++)if(coast[i]&&!sea[i]){A[i]=Tc[reg[i]];hpush(A[i],i)}
+ while(HN){const u=hpop(),t=HPK;if(t>A[u])continue;const ux=u%GX,uy=(u/GX)|0;
+  for(let k=0;k<8;k++){const nx=ux+DX[k],ny=uy+DY[k];if(nx<0||ny<0||nx>=GX||ny>=GY)continue;const v=ny*GX+nx;if(sea[v])continue;
+   let nt=t+DD[k]*.5*(inv[u]+inv[v])/mu[reg[v]];const c=Tc[reg[v]];if(nt<c)nt=c;if(nt<A[v]){A[v]=nt;hpush(nt,v)}}}
+ return A}
+function frontStats(A,order,P){
+ const T=normT(P),sorted=new Float32Array(landCells);let n=0;for(let i=0;i<N;i++)if(isLand(i))sorted[n++]=A[i];sorted.sort();
+ const ub=t=>{let lo=0,hi=n;while(lo<hi){const m=(lo+hi)>>1;if(sorted[m]<=t)lo=m+1;else hi=m}return lo};
+ const safeAt=t=>(n-ub(t))*CA;
+ const endIdx=Math.min(n-1,Math.max(0,n-Math.ceil(P.endArea/CA)));const endT=sorted[endIdx];
+ const done=new Float64Array(6);for(let i=0;i<N;i++)if(isLand(i)&&A[i]<1e8&&A[i]>done[reg[i]])done[reg[i]]=A[i];
+ const townT=TOWNC.map(c=>A[c]);
+ const lost=order.map((r,k)=>{const a=T[k],b=k<5?T[k+1]:1e9;return townT.filter(t=>t>=a&&t<b).length});
+ return {T,safeAt,endT,fullEnd:sorted[n-1],done,townT,lost,n}}
+function orderViolations(order){let v=0;const rem=new Set(order);const conn=s=>{const a=[...s];if(!a.length)return true;const seen=new Set([a[0]]),q=[a[0]];while(q.length){const u=q.pop();M.adj[u].forEach(w=>{if(s.has(w)&&!seen.has(w)){seen.add(w);q.push(w)}})}return seen.size===s.size};
+ for(let k=0;k<5;k++){rem.delete(order[k]);if(!conn(rem))v++}return v}
+
+/* ---------- 플레이어 이동장 ---------- */
+const slopeF=d=>d<=20?1:d<=35?1-.65*(d-20)/15:Math.max(.12,.35-(d-35)*.02);
+const footCi=new Float32Array(N);for(let i=0;i<N;i++){if(sea[i])continue;footCi[i]=road[i]?1:(riv[i]?2:1/slopeF(slp[i]))}
+function vehCi(P){const c=new Float32Array(N);for(let i=0;i<N;i++){if(sea[i])continue;if(road[i]){c[i]=1/P.vVeh;continue}const d=slp[i],fv=d<=12?1:d<=25?1-.85*(d-12)/13:.1;c[i]=1/(8*(riv[i]?.12:Math.max(.1,fv)))}return c}
+function playerField(isTarget,ci){const d=new Float64Array(N).fill(1e12),nxt=new Int32Array(N).fill(-1);HN=0;
+ for(let i=0;i<N;i++)if(!sea[i]&&isTarget(i)){d[i]=0;hpush(0,i)}
+ while(HN){const u=hpop(),t=HPK;if(t>d[u])continue;const ux=u%GX,uy=(u/GX)|0;
+  for(let k=0;k<8;k++){const nx=ux+DX[k],ny=uy+DY[k];if(nx<0||ny<0||nx>=GX||ny>=GY)continue;const v=ny*GX+nx;if(sea[v])continue;const nt=t+DD[k]*.5*(ci[u]+ci[v]);if(nt<d[v]){d[v]=nt;nxt[v]=u;hpush(nt,v)}}}
+ return {d,nxt}}
+function evalEsc(i0,F,ci,scale,t0,A60,ts,dps,hp,wait){let t=t0,dmg=0,i=i0;
+ for(let g=0;g<4000;g++){const j=F.nxt[i];if(j<0)break;const dx=((j%GX)-(i%GX)),dy=(((j/GX)|0)-((i/GX)|0));const dist=(dx&&dy)?CELL*1.4142:CELL,dt=dist*.5*(ci[i]+ci[j])*scale;
+  if(t>=A60[i]){let a=0;while(a<5&&ts[a+1]<=t)a++;dmg+=(t>=ts[0]?dps[a]:0)*dt;if(dmg>=hp*3)return dmg}t+=dt;i=j}
+ return dmg}
+
+/* ---------- 탈출 지표 (MC + 히트맵 + 엘리베이터) ---------- */
+let FC={key:''};
+function ensureFields(order,P,seed){const key=seed+'|'+P.vVeh+'|'+order.join('');if(FC.key===key)return FC;
+ const rank=[];order.forEach((r,k)=>rank[r]=k);const vc=vehCi(P);FC={key,foot:[],veh:[],pfoot:[],pveh:[],vc};
+ for(let k=0;k<5;k++){const tgt=i=>rank[reg[i]]>k;FC.foot[k]=playerField(tgt,footCi);FC.veh[k]=playerField(tgt,vc);
+  const pc=new Set(PLAT.filter(p=>p.reg===order[k]).map(p=>p.cell));const pt=i=>pc.has(i);FC.pfoot[k]=playerField(pt,footCi);FC.pveh[k]=playerField(pt,vc)}
+ return FC}
+const teamAvg=P=>P.pSolo+(1-P.pSolo)*P.squadN*P.board;
+function keysEff(P,K){const T=P.nAlive*(P.pSolo+(1-P.pSolo)/P.squadN),dist=T*(1-Math.pow(1-1/T,K));return K-(K-dist)*CL(P.cool/3,0,1)}
+function escapeCore(order,P,A,st,seed,noHeat){
+ const F=ensureFields(order,P,seed),T=st.T,ts=T.map(x=>x*60),A60=new Float64Array(N);for(let i=0;i<N;i++)A60[i]=A[i]>1e8?1e12:A[i]*60;
+ const dps=dpsArr(P),rng=M.mulberry32(seed*7919+13),out=[],heat=[],wait=P.door+P.sel*.5;
+ const aliveF=t=>Math.max(2,P.nAlive-(P.nAlive-2)*CL(t/(st.endT*60),0,1));
+ for(let k=0;k<6;k++){const R=order[k],cells=[];for(let i=0;i<N;i++)if(isLand(i)&&reg[i]===R)cells.push(i);
+  const W0=ts[k]-P.lead,o={k,R,area:regArea[R],cells:cells.length};
+  const alive=aliveF(W0),safeA=Math.max(st.safeAt(W0/60),1e-6);o.alive=alive;o.nR=alive*Math.min(1,regArea[R]/safeA);
+  if(k===5){o.final=true;out.push(o);heat.push(null);continue}
+  const plat=PLAT.filter(p=>p.reg===R);o.plat=plat.length;o.platA=plat.map(p=>A60[p.cell]);o.W0=W0;o.tsk=ts[k];
+  let nd=0,ns=0,nm=0,ne=0;const NM=P.nmc;
+  for(let n=0;n<NM;n++){const c=cells[Math.floor(rng()*cells.length)],vw=CL(P.walk*(.8+.4*rng()),2,6.5),dl=rng()*P.delay,veh=rng()<P.pVeh,t0=rng()<P.pLate?Math.max(A60[c],0):W0+dl;
+   const d1=evalEsc(c,F.foot[k],footCi,1/vw,t0,A60,ts,dps,P.hp,0);if(d1<=1e-6)nd++;if(d1<P.hp)ns++;
+   let d2=d1;if(veh)d2=Math.min(d1,evalEsc(c,F.veh[k],F.vc,1,t0,A60,ts,dps,P.hp,0));if(d2<P.hp)nm++;
+   if(plat.length){const e1=evalEsc(c,F.pfoot[k],footCi,1/vw,t0,A60,ts,dps,P.hp,wait);let e2=e1;if(veh)e2=Math.min(e1,evalEsc(c,F.pveh[k],F.vc,1,t0,A60,ts,dps,P.hp,wait));if(e2<P.hp)ne++}}
+  o.foot0=nd/NM;o.footS=ns/NM;o.mixS=nm/NM;o.elevS=ne/NM;
+  if(noHeat)heat.push(null);else{const h=new Float32Array(N).fill(-1),t0=W0+P.delay/2;for(const c of cells)h[c]=Math.min(2,evalEsc(c,F.foot[k],footCi,1/P.walk,t0,A60,ts,dps,P.hp,0)/P.hp);heat.push(h)}
+  out.push(o)}
+ return {phases:out,heat}}
+function applyKeys(raw,P,K){const dps=dpsArr(P),team=teamAvg(P),cyc=P.door+P.sel;let keysLeft=keysEff(P,K);
+ return raw.map(r=>{const o=Object.assign({},r);if(o.final)return o;const k=o.k,grace=P.hp/dps[k];let cap=0;o.platA.forEach(a=>{const pre=Math.max(0,Math.min(a,o.tsk+3600)-o.W0);cap+=Math.floor(pre/cyc)+Math.ceil(grace/(cyc+P.recharge))});o.cap=cap;
+  const f=1-P.bias*(5-k)/5;o.keysLeft=keysLeft;o.kR=Math.min(keysLeft*o.nR/Math.max(o.alive,1)*f,o.nR/team);const need=o.kR*o.elevS;o.used=Math.min(need,cap);keysLeft=Math.max(0,keysLeft-o.used);
+  o.saved=Math.min(o.nR,o.used*team);o.exit=o.saved/Math.max(o.nR,1e-6);o.remain=1-o.exit;const failF=o.nR*(1-o.mixS);o.stranded=Math.max(0,failF-o.saved*(1-o.mixS));o.press=o.stranded/Math.max(o.nR,1e-6);
+  o.elevN=o.elevS*o.nR;o.cover=Math.min(1,o.kR*team/Math.max(o.nR,1e-6));return o})}
+function escapeMetrics(order,P,A,st,seed){const c=escapeCore(order,P,A,st,seed,false);return {phases:applyKeys(c.phases,P,P.keys),heat:c.heat}}
+/* 시드 묶음 집계: 같은 시드 묶음에서 MC를 한 번만 돌리고, 사후 파라미터(팀 규모·편중·쿨다운·충전)가 다른 변형들(overs)과 열쇠 수 목록 Ks를 평가 */
+const MCSIG=['vFlat','vRoad','vSteep','riverK','accel','mFinal','T','lead','door','sel','dps1','dps6','hp','walk','vVeh','pVeh','delay','pLate','nAlive','endArea'];
+const sigOf=P=>JSON.stringify(MCSIG.map(k=>P[k]));
+function evalGroup(P0,seeds,Ks,nmc,overs,progress){const Pb=clonePar(P0);Pb.nmc=nmc||Pb.nmc;Pb.T=normT(Pb);const Pv=overs.map(o=>{const p=Object.assign(clonePar(Pb),o);if(o.T)p.T=normT(p);return p});
+ const mk=()=>({len:[],foot:[0,0,0,0,0],foot0:[0,0,0,0,0],mix:[0,0,0,0,0],by:{}}),Rs=Pv.map(()=>{const R=mk();R.Ks=Ks;Ks.forEach(K=>R.by[K]={exit:[0,0,0,0,0],press:[0,0,0,0,0],remain:[0,0,0,0,0],cover:[0,0,0,0,0]});return R});
+ let cnt=0;for(const s of seeds){const order=M.closeOrder(s),A=computeFront(order,Pv[0],0),st=frontStats(A,order,Pv[0]);const c=escapeCore(order,Pv[0],A,st,s,true);
+  Pv.forEach((P,vi)=>{const R=Rs[vi];R.len.push(st.endT);for(let k=0;k<5;k++){R.foot[k]+=c.phases[k].footS;R.foot0[k]+=c.phases[k].foot0;R.mix[k]+=c.phases[k].mixS}
+   Ks.forEach(K=>{const ph=applyKeys(c.phases,P,K),b=R.by[K];for(let k=0;k<5;k++){b.exit[k]+=ph[k].exit;b.press[k]+=ph[k].press;b.remain[k]+=ph[k].remain;b.cover[k]+=ph[k].cover}})});
+  if(progress&&(++cnt%10===0))progress(cnt)}
+ const n=seeds.length,avg=a=>a.map(v=>v/n),mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+ Rs.forEach(R=>{R.n=n;R.foot=avg(R.foot);R.foot0=avg(R.foot0);R.mix=avg(R.mix);Ks.forEach(K=>{const b=R.by[K];['exit','press','remain','cover'].forEach(k=>b[k]=avg(b[k]));b.avgExit=mean(b.exit);b.avgPress=mean(b.press);b.avgRemain=mean(b.remain);b.maxExit=Math.max(...b.exit)});
+  const L=R.len.slice().sort((a,b)=>a-b);R.lenMean=mean(L);R.lenMin=L[0];R.lenMax=L[L.length-1];R.lenIn=L.filter(x=>x>=20&&x<=25).length/L.length;R.footAvg=mean(R.foot);
+  R.W={};['exit','press','remain'].forEach(k=>{R.W[k]=[0,1,2,3,4].map(i=>mean(Ks.map(K=>R.by[K][k][i])))});R.W.avgExit=mean(Ks.map(K=>R.by[K].avgExit));R.W.avgPress=mean(Ks.map(K=>R.by[K].avgPress));R.W.maxExit=Math.max(...Ks.map(K=>R.by[K].maxExit))});
+ return Rs}
+const evalSeeds=(P0,seeds,Ks,nmc)=>evalGroup(P0,seeds,Ks,nmc,[{}])[0];
+/* 보정안 후보 */
+const SCEN=[['기준(보정 없음)',{}],['전선 속도 +15%',{vFlat:69,vRoad:115,vSteep:34.5}],['전선 속도 +30%',{vFlat:78,vRoad:130,vSteep:39}],['충전 120초',{recharge:120}],['충전 150초',{recharge:150}],['문 개방 30→20초',{door:20}],['팀 쿨다운(재사용 불가 3분+)',{cool:3}],['열쇠 위치 편중 0.3',{bias:.3}],['열쇠 위치 편중 0.5',{bias:.5}],['열쇠 위치 편중 0.7',{bias:.7}],['탑승 상한 4→3명',{squadN:3}],['편중 0.5 + 쿨다운',{bias:.5,cool:3}],['편중 0.5 + 쿨다운 + 탑승 3명',{bias:.5,cool:3,squadN:3}]];
+function runScen(P0,seeds,Ks,nmc,progress){const P=clonePar(P0),groups={};SCEN.forEach(([n,o],i)=>{const sg=sigOf(Object.assign(clonePar(P),o));(groups[sg]=groups[sg]||[]).push(i)});const res=[];
+ for(const g in groups){const idx=groups[g],base=Object.assign(clonePar(P),SCEN[idx[0]][1]);const Rs=evalGroup(base,seeds,Ks,nmc,idx.map(i=>{const o=Object.assign({},SCEN[i][1]);['vFlat','vRoad','vSteep','door','sel'].forEach(k=>delete o[k]);return o}),progress);idx.forEach((i,j)=>res[i]=Rs[j])}
+ return res}
+/* 압박 판정 */
+function keyVerdict(avgExit,maxExit){return avgExit<.05?['무의미','warn']:(avgExit>.35||maxExit>.45)?['압박 약화','bad']:(avgExit>.25?['경계','warn']:['적정','ok'])}
+
+/* ---------- 판정 ---------- */
+function verdicts(P,st,esc,order){const V=[],mins=st.endT;
+ V.push(['판 길이',mins.toFixed(1)+'분',mins>=20&&mins<=25?'ok':(mins>=18&&mins<=27?'warn':'bad'),'목표 20~25분. 18~27분은 주의, 그 밖은 위험']);
+ const ph=esc.phases.slice(0,5),f=ph.map(p=>p.footS),mean=f.reduce((a,b)=>a+b,0)/5;
+ const tp=(f[0]<.8||f[1]<.8||f[2]<.8||mean<.6),te=f.every(x=>x>=.98);
+ V.push(['도보 생존 탈출률 평균',(mean*100).toFixed(0)+'%',tp?'bad':te?'warn':'ok','쉬움: 모든 단계 98% 이상 / 가혹: 1~3단계 중 80% 미만이 있거나 평균 60% 미만 / 그 사이 적정']);
+ V.push(['난이도 종합',tp?'너무 가혹':te?'너무 쉬움':'적정',tp?'bad':te?'warn':'ok','위 기준의 요약. 쉬움이면 오염이 압박이 되지 않는다']);
+ const late=(f[3]+f[4])/2;V.push(['후반(4~5단계) 도보 탈출률',(late*100).toFixed(0)+'%',late>=.35&&late<=.85?'ok':(late>.85?'warn':'bad'),'후반은 늦은 사람이 죽어야 하므로 35~85%가 적정. 85% 초과 쉬움, 35% 미만 가혹']);
+ V.push(['경고 선행 시간',P.lead+'초',P.lead>=90&&P.lead<=120?'ok':'warn','확정 사항 90~120초']);
+ const d1=P.hp/P.dps1;V.push(['1단계 오염지 생존 시간',d1.toFixed(0)+'초',d1>=40?'ok':'warn','초반은 달아날 수 있어야 하므로 40초 이상(HP '+P.hp+' / DPS '+P.dps1.toFixed(1)+')']);
+ const d6=P.hp/P.dps6;V.push(['최종 단계 오염지 생존 시간',d6.toFixed(1)+'초',d6<=10?'ok':'warn','최종 지역은 버틸 수 없어야 하므로 10초 이하']);
+ const em=ph.reduce((a,p)=>a+p.exit,0)/5,kv=keyVerdict(em,Math.max(...ph.map(p=>p.exit)));V.push(['열쇠 엘리베이터 이탈 비율(평균)',(em*100).toFixed(0)+'%',kv[1],'위협 지역 인원 중 열쇠로 이탈하는 비율. 5% 미만 무의미, 25~35% 경계, 35% 초과(또는 한 단계 45% 초과) 압박 약화. 현재 판정: '+kv[0]]);
+ const fa=regArea[order[5]];V.push(['최종 지역 면적',fa.toFixed(2)+' km²',fa>=.35&&fa<=.8?'ok':'warn','50명 최종전에 0.35~0.8 km²가 무난(지역 구획의 결과)']);
+ const gap=st.endT-st.T[5];V.push(['최종 수렴 소요',gap.toFixed(1)+'분',gap>=3&&gap<=8?'ok':'warn','최종 지역 확정 후 끝까지 3~8분이 적정']);
+ return V}
+
+/* ---------- 시드 스윕 ---------- */
+function sweepOne(seed,P){const order=M.closeOrder(seed),A=computeFront(order,P),st=frontStats(A,order,P);return {seed,order,final:order[5],first:order[0],end:st.endT,viol:orderViolations(order)}}
+
+/* ================= UI ================= */
+const $=s=>document.querySelector(s),root=document.documentElement,NS='http://www.w3.org/2000/svg';
+const S=(t,a,p,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;if(p)p.appendChild(e);return e};
+const lerp=M.lerp,sm=M.sm,f1=v=>Math.round(v*10)/10,esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const isDark=()=>{const t=root.dataset.theme;return t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches)};
+const mmss=sec=>{sec=Math.max(0,Math.round(sec));return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')};
+const mm=m=>mmss(m*60);
+const f1p=v=>(v*100).toFixed(1)+'%',pc0=v=>(v*100).toFixed(0)+'%';
+const ORD=['①','②','③','④','⑤','⑥'];
+const st8={seed:1,P:clonePar(DEF),order:[],A:null,st:null,esc:null,t:0,playing:false,tMax:1500};
+window.SIM=st8;
+
+/* ---------- 지형 ---------- */
+const RAMP={light:[[0,176,201,120],[25,150,184,104],[70,136,168,96],[120,168,160,112],[170,176,160,132],[230,214,206,190]],dark:[[0,52,72,44],[25,48,70,42],[70,56,76,46],[120,76,82,58],[170,92,90,76],[230,128,124,112]]};
+const PAL={light:{rock:[150,142,128],sand:[233,220,174],sh:[156,208,214],dp:[88,150,178],rv:[120,180,208]},dark:{rock:[104,100,92],sand:[122,112,80],sh:[26,70,86],dp:[8,30,44],rv:[40,104,130]}};
+function ramp(r,z){if(z<=r[0][0])return r[0].slice(1);for(let i=1;i<r.length;i++)if(z<=r[i][0]){const t=(z-r[i-1][0])/(r[i][0]-r[i-1][0]);return [lerp(r[i-1][1],r[i][1],t),lerp(r[i-1][2],r[i][2],t),lerp(r[i-1][3],r[i][3],t)]}return r[r.length-1].slice(1)}
+function drawRelief(){
+ const cv=$('#cR'),w=cv.width,h=cv.height,ctx=cv.getContext('2d'),img=ctx.createImageData(w,h),d=img.data,sc=M.W/w,dk=isDark(),R=RAMP[dk?'dark':'light'],P=PAL[dk?'dark':'light'];
+ const L=[-.55,-.55,.63],ex=1.9;
+ for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+  const x=(px+.5)*sc,y=(py+.5)*sc,z=M.hAt(x,y),o=(py*w+px)*4,e=6,gx=(M.hAt(x+e,y)-M.hAt(x-e,y))/(2*e),gy=(M.hAt(x,y+e)-M.hAt(x,y-e))/(2*e);
+  const nx=-gx*ex,ny=-gy*ex,nl=Math.hypot(nx,ny,1),dot=(nx*L[0]+ny*L[1]+L[2])/nl;let sh=CL(.8+(dot-.63)*1.6,.38,1.28);
+  const rv=M.rdAt(x,y);let c;
+  if(z<=0&&rv>=0){const t=sm(0,40,-z);c=[lerp(P.sh[0],P.dp[0],t),lerp(P.sh[1],P.dp[1],t),lerp(P.sh[2],P.dp[2],t)];sh=1}
+  else if(rv<0&&z>-3){const t=sm(0,1.5,-rv),base=ramp(R,Math.max(z,0));c=[lerp(base[0],P.rv[0],t),lerp(base[1],P.rv[1],t),lerp(base[2],P.rv[2],t)];sh=lerp(sh,1,t)}
+  else{c=ramp(R,z);const deg=Math.atan(Math.hypot(gx,gy))*180/Math.PI,rk=sm(27,42,deg)*.85;c=[lerp(c[0],P.rock[0],rk),lerp(c[1],P.rock[1],rk),lerp(c[2],P.rock[2],rk)];
+   const sa=1-sm(.4,3.4,z);if(sa>0)c=[lerp(c[0],P.sand[0],sa),lerp(c[1],P.sand[1],sa),lerp(c[2],P.sand[2],sa)];const nv=M.fbm(x/28,y/28,5,2);sh*=dk?.9+.22*nv:.93+.14*nv}
+  d[o]=CL(c[0]*sh,0,255);d[o+1]=CL(c[1]*sh,0,255);d[o+2]=CL(c[2]*sh,0,255);d[o+3]=255}
+ ctx.putImageData(img,0,0)}
+function drawRegTint(){const cv=$('#cG'),ctx=cv.getContext('2d'),img=ctx.createImageData(GX,GY),d=img.data,a=isDark()?66:52;
+ for(let i=0;i<N;i++){if(sea[i])continue;const c=M.REG[reg[i]].c;d[i*4]=parseInt(c.slice(1,3),16);d[i*4+1]=parseInt(c.slice(3,5),16);d[i*4+2]=parseInt(c.slice(5,7),16);d[i*4+3]=a}ctx.putImageData(img,0,0)}
+
+/* ---------- SVG 오버레이 ---------- */
+const svg=$('#map'),G={};['roads','towns','borders','plat','labels'].forEach(k=>G[k]=S('g',{id:'g-'+k},svg));
+const f1s=v=>f1(v);
+const pathOf=pts=>'M'+pts.map(p=>f1s(p[0])+' '+f1s(p[1])).join('L');
+const regPaths=[...Array(6)].map(()=>[]);let allB=[];
+for(let i=0;i<N;i++){if(sea[i])continue;const x=i%GX,y=(i/GX)|0;
+ if(x<GX-1){const j=i+1;if(!sea[j]&&reg[j]!==reg[i]){const s='M'+(x+1)*CELL+' '+y*CELL+'v'+CELL;regPaths[reg[i]].push(s);regPaths[reg[j]].push(s);allB.push(s)}}
+ if(y<GY-1){const j=i+GX;if(!sea[j]&&reg[j]!==reg[i]){const s='M'+x*CELL+' '+(y+1)*CELL+'h'+CELL;regPaths[reg[i]].push(s);regPaths[reg[j]].push(s);allB.push(s)}}}
+S('path',{d:allB.join(''),fill:'none',stroke:'var(--bord)','stroke-width':1.6,'stroke-dasharray':'6 4','vector-effect':'non-scaling-stroke',opacity:.8},G.borders);
+const regHi=M.REG.map(R=>S('path',{d:regPaths[R.id].join(''),fill:'none',stroke:'var(--warn)','stroke-width':5,'vector-effect':'non-scaling-stroke',opacity:0,'stroke-linecap':'round'},G.borders));
+(function(){const st={H:[8,5.5],P:[5.5,3.6],D:[3.2,1.8]},gb=S('g',{},G.roads),gf=S('g',{},G.roads);
+ ['D','P','H'].forEach(c=>M.roads.filter(r=>r.c===c).forEach(r=>{const d=pathOf(r.pts);S('path',{d,fill:'none',stroke:c==='H'?'var(--rdHc)':'var(--rdPc)','stroke-width':st[c][0],'stroke-linecap':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke',opacity:.9},gb);
+  const p=S('path',{d,fill:'none',stroke:c==='H'?'var(--rdH)':c==='P'?'var(--rdP)':'var(--rdD)','stroke-width':st[c][1],'stroke-linecap':c==='D'?'butt':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke'},gf);if(c==='D')p.setAttribute('stroke-dasharray','5 3')}));
+ M.bridges.forEach(b=>{const d=pathOf(b.pts);if(b.ford)S('path',{d,fill:'none',stroke:'var(--rdD)','stroke-width':3.6,'stroke-dasharray':'2 3','vector-effect':'non-scaling-stroke'},G.roads);
+  else{S('path',{d,fill:'none',stroke:'var(--brgc)','stroke-width':9,'vector-effect':'non-scaling-stroke'},G.roads);S('path',{d,fill:'none',stroke:'var(--brg)','stroke-width':5.6,'vector-effect':'non-scaling-stroke'},G.roads)}})})();
+const townEl=M.TOWNS.map((T,i)=>{const r=[0,16,12,9,6][T.tier],c=S('circle',{cx:T.x,cy:T.y,r:r*1.2,fill:'var(--town)',stroke:'var(--card)','stroke-width':2,'vector-effect':'non-scaling-stroke'},G.towns);S('title',{},c,T.n+' ('+M.TIER[T.tier]+')');return c});
+const platEl=PLAT.map(p=>{const g=S('g',{},G.plat),c=S('circle',{cx:p.x,cy:p.y,r:17,fill:'var(--elev)',stroke:'var(--card)','stroke-width':3,'vector-effect':'non-scaling-stroke'},g);S('text',{x:p.x,y:p.y+6,'text-anchor':'middle','font-size':17,'font-weight':700,fill:'#fff'},g,p.n);S('title',{},g,'승강장 '+p.n+' · '+M.REG[p.reg].n);return {g,c}});
+const regCent=M.REG.map(R=>{let sx=0,sy=0,n=0;for(let i=0;i<N;i++)if(isLand(i)&&reg[i]===R.id){sx+=i%GX;sy+=(i/GX)|0;n++}return [(sx/n+.5)*CELL,(sy/n+.5)*CELL]});
+const regLab=M.REG.map(R=>S('text',{x:regCent[R.id][0],y:regCent[R.id][1],'text-anchor':'middle','font-size':34,class:'lab'},G.labels,R.n));
+
+/* ---------- 레이어 ---------- */
+const LAY=[['cont','전선·오염지',[$('#cC')],1],['heat','탈출 히트맵',[$('#cH')],1],['reg','지역 색',[$('#cG')],1],['bord','지역 경계',[G.borders],1],['road','도로·다리',[G.roads],1],['town','마을',[G.towns],1],['plat','승강장',[G.plat],1],['lab','지역 이름',[G.labels],1]];
+const LD=$('#layers');LAY.forEach(l=>{const lb=document.createElement('label'),c=document.createElement('input');c.type='checkbox';c.checked=!!l[3];c.id='ly-'+l[0];lb.append(c,l[1]);LD.appendChild(lb);const up=()=>l[2].forEach(e=>e.style.display=c.checked?'':'none');c.onchange=up;up()});
+{const lb=document.createElement('label');lb.append('히트맵 단계 ');const s=document.createElement('select');s.id='heatSel';[['auto','자동(시간 따라)'],['1','단계 1'],['2','단계 2'],['3','단계 3'],['4','단계 4'],['5','단계 5']].forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];s.appendChild(op)});s.onchange=()=>draw(true);lb.appendChild(s);LD.appendChild(lb)}
+$('#lg').innerHTML='<span><i class="sw" style="background:#ff7814"></i>전선(막 지나간 띠)</span><span><i class="sw" style="background:#c01c28"></i>전선이 지나간 오염지(계속 위험)</span><span><i class="sw" style="background:#e6c200"></i>경고 중인 지역(경계 점멸)</span><span><i class="sw" style="background:#32aa5a"></i>히트맵: 무피해 탈출</span><span><i class="sw" style="background:#f0b428"></i>피해 입고 탈출</span><span><i class="sw" style="background:#780014"></i>사망</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--elev)"></i>승강장</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--bad)"></i>오염된 승강장(충전 규칙 적용)</span>';
+
+/* ---------- 슬라이더 ---------- */
+const PS=[
+ ['전선 속도 (비용 기반 확산, m/분)',[['vFlat','평지·완만(≤15°)',10,150,1,'m/분'],['vRoad','도로·다리 위',10,300,1,'m/분'],['vSteep','급경사(≥35°)',5,100,1,'m/분'],['riverK','강·여울 비율',.2,1,.05,'x'],['accel','단계별 가속',0,.3,.01,'/단계'],['mFinal','최종 지역 수렴 배율',.3,2,.05,'x']],1],
+ ['시간표 (분, 경고)',[['T0','1단계 확정',1,30,.5,'분'],['T1','2단계 확정',1,30,.5,'분'],['T2','3단계 확정',1,30,.5,'분'],['T3','4단계 확정',1,30,.5,'분'],['T4','5단계 확정',1,30,.5,'분'],['T5','6단계(최종) 확정',1,30,.5,'분'],['lead','경고 선행',60,180,5,'초'],['endArea','판 종료 안전면적',.005,.2,.005,'km²']],1],
+ ['데미지 (오염지 DPS, 플레이어 HP)',[['dps1','1단계 DPS',.5,10,.1,'/초'],['dps6','6단계 DPS',5,60,.5,'/초'],['hp','플레이어 HP',50,200,5,'']],0],
+ ['열쇠 엘리베이터·팀 모델',[['keys','열쇠 수(판당)',0,15,1,'개'],['pSolo','솔로 비율(플레이어)',0,1,.05,''],['squadN','스쿼드 인원',2,4,1,'명'],['board','스쿼드 탑승률',.25,1,.05,''],['bias','열쇠 위치 편중',0,.9,.05,''],['cool','팀 쿨다운(재사용)',0,5,.5,'분'],['recharge','전력 충전',0,240,10,'초'],['door','문 열림',10,60,5,'초'],['sel','지역 선택',5,30,1,'초']],0],
+ ['플레이어 모델 (몬테카를로)',[['walk','평균 이동속도',3,6.5,.1,'m/초'],['vVeh','차량(도로)',8,30,1,'m/초'],['pVeh','차량 이용 비율',0,1,.05,''],['delay','반응 지연 최대',0,120,5,'초'],['pLate','경고 무시 비율',0,.5,.05,''],['nAlive','시작 인원',20,100,1,'명'],['nmc','표본 수',500,5000,500,'']],0]];
+const SL={};
+function getP(k){return k[0]==='T'&&/^T\d$/.test(k)?st8.P.T[+k[1]]:st8.P[k]}
+function setP(k,v){if(k[0]==='T'&&/^T\d$/.test(k))st8.P.T[+k[1]]=v;else st8.P[k]=v}
+const fmtV=(k,v)=>k==='pVeh'||k==='pLate'||k==='pSolo'||k==='board'||k==='bias'?Math.round(v*100)+'%':(k==='endArea'?v.toFixed(3):(k==='riverK'||k==='accel'||k==='mFinal'?v.toFixed(2):(+v).toFixed(v%1?1:0)));
+(function(){const host=$('#sliders');PS.forEach(g=>{const d=document.createElement('details');if(g[2])d.open=true;const sm_=document.createElement('summary');sm_.textContent=g[0];d.appendChild(sm_);
+ g[1].forEach(it=>{const [k,lab,mn,mx,step,u]=it,row=document.createElement('div');row.className='row';const l=document.createElement('label');l.textContent=lab;l.htmlFor='sl-'+k;
+  const inp=document.createElement('input');inp.type='range';inp.id='sl-'+k;inp.min=mn;inp.max=mx;inp.step=step;const o=document.createElement('output');o.htmlFor=inp.id;
+  inp.oninput=()=>{setP(k,+inp.value);o.textContent=fmtV(k,+inp.value)+' '+u;sched()};row.append(l,inp,o);d.appendChild(row);SL[k]={inp,o,u}});host.appendChild(d)})})();
+function syncSliders(){for(const k in SL){const v=getP(k);SL[k].inp.value=v;SL[k].o.textContent=fmtV(k,v)+' '+SL[k].u}}
+let timer=0;function sched(){clearTimeout(timer);timer=setTimeout(()=>recompute(),120)}
+
+/* ---------- 계산 & 렌더 ---------- */
+function recompute(){
+ clearTimeout(timer);const P=st8.P;P.T=normT(P);
+ st8.order=M.closeOrder(st8.seed);st8.A=computeFront(st8.order,P);st8.st=frontStats(st8.A,st8.order,P);st8.esc=escapeMetrics(st8.order,P,st8.A,st8.st,st8.seed);
+ st8.tMax=Math.ceil(st8.st.endT*60)+60;const sc=$('#scrub');sc.max=st8.tMax;if(st8.t>st8.tMax)st8.t=st8.tMax;
+ M.REG.forEach(R=>{const k=st8.order.indexOf(R.id);regLab[R.id].textContent=R.n+' '+ORD[k]+(k===5?' (최종)':'')});
+ $('#order').textContent='순서: '+st8.order.map(i=>M.REG[i].n).join(' → ')+' (마지막이 최종 지역). 순서 위반 '+orderViolations(st8.order)+'건.';
+ renderMetrics();draw(true)}
+function phaseAt(t){const T=st8.st.T;let n=0;while(n<6&&T[n]*60<=t)n++;return n}
+function dpsNow(t){const n=phaseAt(t);return n?dpsArr(st8.P)[n-1]:0}
+let lastKey='';
+function draw(force){
+ if(!st8.A)return;const t=st8.t,tm=t/60,P=st8.P,T=st8.st.T,dk=isDark(),n=phaseAt(t);
+ $('#scrub').value=t;
+ /* 오염 캔버스 */
+ const cv=$('#cC'),ctx=cv.getContext('2d'),img=ctx.createImageData(GX,GY),d=img.data,A=st8.A,band=1.2;
+ const cp=dk?[235,70,80]:[192,28,40],cf=dk?[255,150,50]:[255,120,20];
+ let warnReg=-1,warnLeft=0;for(let k=0;k<6;k++){const w=T[k]*60-P.lead;if(t>=w&&t<T[k]*60){warnReg=st8.order[k];warnLeft=T[k]*60-t}}
+ for(let i=0;i<N;i++){if(sea[i])continue;const dd=tm-A[i],o=i*4;
+  if(dd>=0){if(dd<band){const k=1-dd/band;d[o]=lerp(cp[0],cf[0],k);d[o+1]=lerp(cp[1],cf[1],k);d[o+2]=lerp(cp[2],cf[2],k);d[o+3]=lerp(.46,.9,k)*255}else{d[o]=cp[0];d[o+1]=cp[1];d[o+2]=cp[2];d[o+3]=.46*255}}
+  else if(reg[i]===warnReg){d[o]=230;d[o+1]=190;d[o+2]=0;d[o+3]=40}}
+ ctx.putImageData(img,0,0);
+ /* 히트맵 */
+ const hc=$('#cH'),hx=hc.getContext('2d');hx.clearRect(0,0,GX,GY);let hk=$('#heatSel').value;hk=hk==='auto'?Math.min(4,Math.max(0,(warnReg>=0?st8.order.indexOf(warnReg):n-1))):+hk-1;
+ const hm=st8.esc.heat[hk];if(hm){const hi=hx.createImageData(GX,GY),h=hi.data;for(let i=0;i<N;i++){const r=hm[i];if(r<0)continue;const o=i*4;let c;
+   if(r<=1e-6)c=[50,170,90,150];else if(r<1){const u=r;c=[lerp(50,240,u),lerp(170,180,u),lerp(90,40,u),170]}else c=[120,0,20,205];h[o]=c[0];h[o+1]=c[1];h[o+2]=c[2];h[o+3]=c[3]}hx.putImageData(hi,0,0)}
+ /* SVG 상태 */
+ M.TOWNS.forEach((_,i)=>townEl[i].setAttribute('fill',tm>=A[TOWNC[i]]?'var(--bad)':'var(--town)'));
+ PLAT.forEach((p,i)=>platEl[i].c.setAttribute('fill',tm>=A[p.cell]?'var(--bad)':'var(--elev)'));
+ M.REG.forEach(R=>{const k=st8.order.indexOf(R.id),w=R.id===warnReg;regHi[R.id].setAttribute('opacity',w?1:0);regHi[R.id].setAttribute('class',w?'blink':'')});
+ /* 배너·시간 */
+ const ban=$('#banner');if(warnReg>=0){ban.className='w';ban.textContent='경고: '+M.REG[warnReg].n+' 오염 확정까지 '+mmss(warnLeft)}else{ban.className='';ban.textContent=n===0?'투입 단계 (오염 전)':(n<6?'단계 '+n+' 진행: '+M.REG[st8.order[n-1]].n+' 확정':'최종 단계: '+M.REG[st8.order[5]].n+' 수렴')}
+ $('#tt').textContent=mmss(t)+' / '+mmss(st8.st.endT*60)+' · 안전 '+st8.st.safeAt(tm).toFixed(2)+' km² · DPS '+dpsNow(t).toFixed(1)}
+
+function renderMetrics(){
+ const st=st8.st,P=st8.P,e=st8.esc,order=st8.order,V=verdicts(P,st,e,order);
+ /* KPI */
+ const gap=st.endT-st.T[5],c=(cl,l,v)=>'<div class="kpi '+cl+'">'+l+' <b>'+v+'</b></div>';
+ const vm=V[0],vd=V[2];
+ $('#kpi').innerHTML=c(vm[2],'판 길이',vm[1])+c('', '최종 지역',M.REG[order[5]].n+' ('+regArea[order[5]].toFixed(2)+' km²)')+c(vd[2],'난이도',vd[1])+c('','최종 수렴',gap.toFixed(1)+'분')+c(orderViolations(order)?'bad':'ok','순서 위반',orderViolations(order)+'건');
+ /* 판정 */
+ const lbl={ok:'적정',warn:'주의',bad:'위험'};
+ $('#verdict').innerHTML='<table><tr><th>항목</th><th class="n">값</th><th>상태</th><th>기준</th></tr>'+V.map(r=>'<tr><td>'+esc(r[0])+'</td><td class="n">'+esc(r[1])+'</td><td><span class="st '+r[2]+'">'+lbl[r[2]]+'</span></td><td class="note">'+esc(r[3])+'</td></tr>').join('')+'</table>';
+ /* 단계표 */
+ const dp=dpsArr(P),pc=x=>(x*100).toFixed(0)+'%';
+ let tb='<table><tr><th>단계</th><th>확정 지역</th><th class="n">경고</th><th class="n">확정</th><th class="n">지역 완주</th><th class="n">면적 km²</th><th class="n">DPS</th><th class="n">잃은 마을</th><th class="n">승강장</th><th class="n">도보 무피해</th><th class="n">도보 생존</th><th class="n">차량 혼합</th><th class="n">승강장 도달</th><th class="n">열쇠 보유율</th><th class="n">승강장 처리(회)</th><th class="n">엘리베이터 탈출(명)</th></tr>';
+ e.phases.forEach((p,k)=>{const R=order[k],tw=M.TOWNS.filter((_,i)=>st.townT[i]>=st.T[k]&&(k===5||st.townT[i]<st.T[k+1])).map(T=>T.n);
+  tb+='<tr><td>'+(k===5?'6 최종':k+1)+'</td><td>'+esc(M.REG[R].n)+'</td><td class="n">'+mmss(st.T[k]*60-P.lead)+'</td><td class="n">'+mm(st.T[k])+'</td><td class="n">'+mm(st.done[R])+'</td><td class="n">'+regArea[R].toFixed(2)+'</td><td class="n">'+dp[k].toFixed(1)+'</td><td class="n" title="'+esc(tw.join(', '))+'">'+st.lost[k]+'</td>'+
+  (p.final?'<td class="n">'+PLAT.filter(q=>q.reg===R).length+'</td><td class="n" colspan="7">탈출 불가(남은 비오염 지역 없음). 최종 지역은 수렴전.</td>':'<td class="n">'+p.plat+'</td><td class="n">'+pc(p.foot0)+'</td><td class="n">'+pc(p.footS)+'</td><td class="n">'+pc(p.mixS)+'</td><td class="n">'+pc(p.elevS)+'</td><td class="n">'+pc(p.cover)+'</td><td class="n">'+p.cap+'</td><td class="n">'+p.saved.toFixed(1)+'</td>')+'</tr>'});
+ $('#tPhase').innerHTML=tb+'</table><p class="note">도보 무피해=전선보다 앞서 도착, 도보 생존=피해를 입어도 HP가 남은 채 도착, 차량 혼합=차량 이용자 포함, 승강장 도달=위협 지역의 승강장에 생존 도달. 열쇠 보유율=위협 지역 인원 중 열쇠 팀의 비율(기댓값). 마을 칸에 마우스를 올리면 마을 이름.</p>';
+ /* 마을 */
+ const rows=M.TOWNS.map((T,i)=>({n:T.n,t:T.tier,reg:M.REG[reg[TOWNC[i]]].n,at:st.townT[i]})).sort((a,b)=>a.at-b.at);
+ $('#towns').innerHTML='<div class="tbl" style="max-height:300px;overflow:auto"><table><tr><th>마을</th><th>등급</th><th>지역</th><th class="n">오염 시각</th></tr>'+rows.map(r=>'<tr><td>'+esc(r.n)+'</td><td>'+['','수도급','대형','중형','hamlet'][r.t]+'</td><td>'+esc(r.reg)+'</td><td class="n">'+mm(r.at)+'</td></tr>').join('')+'</table></div>';
+ /* 차트 */
+ renderCharts()}
+function mkChart(el,o){const w=560,h=250,pl=42,pr=12,pt=26,pb=34,X=x=>pl+(x-o.x0)/(o.x1-o.x0)*(w-pl-pr),Y=y=>h-pb-(y-o.y0)/(o.y1-o.y0)*(h-pt-pb);let s='<svg class="ch" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="'+esc(o.aria)+'">';
+ (o.bands||[]).forEach(b=>s+='<rect x="'+X(b[0])+'" y="'+pt+'" width="'+(X(b[1])-X(b[0]))+'" height="'+(h-pt-pb)+'" fill="var(--ok)" opacity=".13"/>');
+ for(let i=0;i<=4;i++){const y=o.y0+(o.y1-o.y0)*i/4;s+='<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+Y(y)+'" y2="'+Y(y)+'" stroke="var(--line)"/><text x="'+(pl-5)+'" y="'+(Y(y)+4)+'" text-anchor="end">'+o.yf(y)+'</text>'}
+ for(let x=Math.ceil(o.x0);x<=o.x1;x+=o.xs)s+='<line x1="'+X(x)+'" x2="'+X(x)+'" y1="'+(h-pb)+'" y2="'+(h-pb+4)+'" stroke="var(--mut)"/><text x="'+X(x)+'" y="'+(h-pb+16)+'" text-anchor="middle">'+(o.xf?o.xf(x):x)+'</text>';
+ s+='<text x="'+(w/2)+'" y="'+(h-3)+'" text-anchor="middle">'+esc(o.xl)+'</text>';
+ (o.vl||[]).forEach(v=>s+='<line x1="'+X(v.x)+'" x2="'+X(v.x)+'" y1="'+pt+'" y2="'+(h-pb)+'" stroke="'+(v.c||'var(--mut)')+'" stroke-dasharray="'+(v.d?'3 3':'0')+'" opacity=".8"/>');
+ (o.lines||[]).forEach(l=>{s+='<polyline fill="none" stroke="'+l.c+'" stroke-width="2.2" points="'+l.p.map(q=>X(q[0]).toFixed(1)+','+Y(q[1]).toFixed(1)).join(' ')+'"/>';if(l.dots)l.p.forEach(q=>s+='<circle cx="'+X(q[0])+'" cy="'+Y(q[1])+'" r="3.2" fill="'+l.c+'"/>')});
+ (o.bars||[]).forEach((b,i)=>{const bw=(w-pl-pr)/o.bars.length*.6,x=X(i)-bw/2;s+='<rect x="'+x+'" y="'+Y(b.v)+'" width="'+bw+'" height="'+(Y(o.y0)-Y(b.v))+'" fill="'+(b.c||'var(--c2)')+'" rx="2"/><text x="'+X(i)+'" y="'+(Y(b.v)-4)+'" text-anchor="middle">'+b.l+'</text>'});
+ let lx=pl+6;(o.lines||[]).forEach(l=>{if(!l.n)return;s+='<line x1="'+lx+'" x2="'+(lx+16)+'" y1="10" y2="10" stroke="'+l.c+'" stroke-width="2.4"/><text x="'+(lx+20)+'" y="14">'+esc(l.n)+'</text>';lx+=20+l.n.length*12+14});
+ el.innerHTML=s+'</svg>'}
+function renderCharts(){
+ const st=st8.st,P=st8.P,e=st8.esc,tEnd=Math.ceil(st.endT)+2;
+ const pts=[];for(let m=0;m<=tEnd;m+=.25)pts.push([m,st.safeAt(m)]);
+ const vl=[];st.T.forEach((T,k)=>{vl.push({x:T-P.lead/60,d:1,c:'var(--warn)'});vl.push({x:T,c:'var(--bad)'})});vl.push({x:st.endT,c:'var(--acc)'});
+ mkChart($('#chA'),{aria:'남은 안전 면적',x0:0,x1:Math.max(26,tEnd),y0:0,y1:3.5,xs:2,yf:v=>v.toFixed(1),xl:'경과 시간 (분)',bands:[[20,25]],vl,lines:[{p:pts,c:'var(--c1)'}]});
+ const ph=e.phases.slice(0,5),L=(k,c,n)=>({c,n,dots:1,p:ph.map((p,i)=>[i+1,p[k]*100])});
+ mkChart($('#chF'),{aria:'단계별 탈출 가능 비율',x0:.7,x1:5.3,y0:0,y1:100,xs:1,yf:v=>v.toFixed(0)+'%',xl:'단계 (확정된 지역 번호)',lines:[L('foot0','var(--c3)','도보 무피해'),L('footS','var(--c1)','도보 생존'),L('mixS','var(--c4)','차량 혼합'),L('elevS','var(--c2)','승강장 도달')]});
+ $('#chFn').textContent='표본 '+P.nmc+'명/단계, 경고 무시 '+Math.round(P.pLate*100)+'%, 반응 지연 0~'+P.delay+'초, 속도 '+P.walk+' m/s +-20%, HP '+P.hp+'. 최종 지역(6단계)은 비오염 지역이 없어 탈출 지표 없음.';
+ const dp=dpsArr(P);mkChart($('#chD'),{aria:'단계별 DPS',x0:-.5,x1:5.5,y0:0,y1:Math.ceil(dp[5]/5)*5,xs:1,xf:x=>'단계 '+(x+1),yf:v=>v.toFixed(0),xl:'확정된 지역 수 (단계)',bars:dp.map((v,i)=>({v,l:v.toFixed(1)+' ('+(P.hp/v).toFixed(0)+'초)'}))});}
+
+/* ---------- 재생 ---------- */
+let raf=0,last=0;
+function tick(ts){if(!st8.playing)return;const dt=(ts-last)/1000;last=ts;st8.t=Math.min(st8.tMax,st8.t+dt*(+$('#spd').value));draw();if(st8.t>=st8.tMax){setPlay(false);return}raf=requestAnimationFrame(tick)}
+function setPlay(b){st8.playing=b;$('#play').textContent=b?'일시정지':'재생';if(b){if(st8.t>=st8.tMax)st8.t=0;last=performance.now();raf=requestAnimationFrame(tick)}else cancelAnimationFrame(raf)}
+$('#play').onclick=()=>setPlay(!st8.playing);$('#rst').onclick=()=>{setPlay(false);st8.t=0;draw()};
+$('#scrub').oninput=e=>{st8.t=+e.target.value;draw()};
+function setSeed(s){st8.seed=Math.max(1,Math.floor(s)||1);$('#seed').value=st8.seed;recompute()}
+$('#seed').onchange=e=>setSeed(+e.target.value);$('#newseed').onclick=()=>setSeed(1+Math.floor(Math.random()*99999));
+$('#reset').onclick=()=>{st8.P=clonePar(DEF);st8.seed=1;$('#seed').value=1;st8.t=0;syncSliders();recompute()};
+$('#presetRec').onclick=()=>{st8.P=clonePar(DEF);syncSliders();recompute()};
+$('#presetDraft').onclick=()=>{st8.P=clonePar(DRAFT);syncSliders();recompute()};
+
+/* ---------- 스윕 ---------- */
+function runSweep(n){const P=clonePar(st8.P);P.T=normT(P);const t0=performance.now(),R=[];for(let s=1;s<=n;s++)R.push(sweepOne(s,P));return {R,ms:performance.now()-t0}}
+function renderSweep(o){const R=o.R,n=R.length,fin=[0,0,0,0,0,0],first=[0,0,0,0,0,0];let viol=0;R.forEach(r=>{fin[r.final]++;first[r.first]++;viol+=r.viol});
+ const ends=R.map(r=>r.end).sort((a,b)=>a-b),mean=ends.reduce((a,b)=>a+b,0)/n,q=p=>ends[Math.min(n-1,Math.floor(p*n))],inT=ends.filter(x=>x>=20&&x<=25).length/n;
+ const lo=Math.floor(ends[0]),hi=Math.ceil(ends[n-1]),bins=[];for(let b=lo;b<hi;b++)bins.push([b,ends.filter(x=>x>=b&&x<b+1).length]);const mx=Math.max(...bins.map(b=>b[1]),1),mf=Math.max(...fin,1);
+ const bars=(arr,lab)=>arr.map((v,i)=>'<div class="bar"><span style="width:92px">'+esc(lab(i))+'</span><i style="width:'+(v/Math.max(...arr,1)*160)+'px"></i>'+v+' ('+(v/n*100).toFixed(0)+'%)</div>').join('');
+ $('#swT').textContent=n+'시드 '+Math.round(o.ms)+' ms';
+ $('#swOut').innerHTML='<div><h3>최종 지역 빈도</h3>'+bars(fin,i=>M.REG[i].n)+'<h3 style="margin-top:8px">첫 확정 지역 빈도</h3>'+bars(first,i=>M.REG[i].n)+'</div>'+
+ '<div><h3>판 길이 분포 (분, 1분 구간)</h3>'+bins.map(b=>'<div class="bar"><span style="width:92px">'+b[0]+'~'+(b[0]+1)+'분</span><i style="width:'+(b[1]/mx*160)+'px;background:'+(b[0]>=20&&b[0]<25?'var(--ok)':'var(--c2)')+'"></i>'+b[1]+'</div>').join('')+'</div>'+
+ '<div><h3>요약</h3><table><tr><td>평균</td><td class="n">'+mean.toFixed(1)+'분</td></tr><tr><td>최소 / 최대</td><td class="n">'+ends[0].toFixed(1)+' / '+ends[n-1].toFixed(1)+'분</td></tr><tr><td>10% / 50% / 90%</td><td class="n">'+q(.1).toFixed(1)+' / '+q(.5).toFixed(1)+' / '+q(.9).toFixed(1)+'분</td></tr><tr><td>20~25분 비율</td><td class="n">'+(inT*100).toFixed(1)+'%</td></tr><tr><td>연결 순서 위반(0이어야 함)</td><td class="n"><span class="st '+(viol?'bad':'ok')+'">'+viol+'</span></td></tr></table></div>';
+ return {fin,first,viol,mean,min:ends[0],max:ends[n-1],inT}}
+$('#swGo').onclick=()=>{const n=Math.max(10,Math.min(2000,+$('#swN').value||200));$('#swT').textContent='계산 중...';setTimeout(()=>{renderSweep(runSweep(n))},20)};
+
+/* ---------- 테마 ---------- */
+const tb=$('#theme'),modes=['auto','light','dark'];let mi=0;
+function setTheme(){const m=modes[mi];if(m==='auto')delete root.dataset.theme;else root.dataset.theme=m;tb.textContent='테마: '+{auto:'자동',light:'라이트',dark:'다크'}[m];drawRelief();drawRegTint();draw(true)}
+tb.onclick=()=>{mi=(mi+1)%3;setTheme()};
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(modes[mi]==='auto')setTheme()});
+
+/* ---------- 시작 ---------- */
+window.SIMAPI={recompute,setSeed,runSweep,renderSweep,setTheme,setP,syncSliders,draw,verdicts};
+drawRelief();drawRegTint();syncSliders();recompute();st8.t=Math.round(st8.st.T[1]*60-40);draw(true);
+
+/* ---------- 열쇠 비교 / 보정안 / 팀 점검 ---------- */
+const seedsN=n=>[...Array(n)].map((_,i)=>i+1),KLB={ok:'적정',warn:'주의',bad:'위험'};
+function renderCompare(R){const Ks=R.Ks,cols=Ks.concat(['W']),nm=c=>c==='W'?'6~8 무작위(가중)':'열쇠 '+c+'개',get=c=>c==='W'?R.W:R.by[c],avgE=c=>c==='W'?R.W.avgExit:R.by[c].avgExit,mxE=c=>c==='W'?R.W.maxExit:R.by[c].maxExit;
+ let t='<div class="tbl"><table><tr><th>구분</th>'+[1,2,3,4,5].map(i=>'<th class="n">'+i+'단계 이탈</th>').join('')+'<th class="n">평균 이탈</th><th class="n">남은 인원 비율</th><th class="n">압박 지수</th><th>판정</th></tr>';
+ cols.forEach(c=>{const g=get(c),v=keyVerdict(avgE(c),mxE(c)),ex=g.exit,pr=c==='W'?R.W.avgPress:g.avgPress;t+='<tr><td>'+nm(c)+'</td>'+ex.map(x=>'<td class="n">'+pc0(x)+'</td>').join('')+'<td class="n"><b>'+f1p(avgE(c))+'</b></td><td class="n">'+f1p(1-avgE(c))+'</td><td class="n">'+f1p(pr)+'</td><td><span class="st '+v[1]+'">'+v[0]+'</span></td></tr>'});
+ t+='</table></div><p class="note">판 길이(열쇠와 무관): 평균 '+R.lenMean.toFixed(1)+'분, 최소 '+R.lenMin.toFixed(1)+', 최대 '+R.lenMax.toFixed(1)+', 20~25분 비율 '+f1p(R.lenIn)+' ('+R.n+'시드). 도보 생존 탈출률(열쇠와 무관) 1~5단계 '+R.foot.map(pc0).join(' / ')+', 평균 '+f1p(R.footAvg)+'. 팀 평균 탑승 '+teamAvg(st8.P).toFixed(2)+'명(솔로 '+pc0(st8.P.pSolo)+', 스쿼드 '+st8.P.squadN+'명 x 탑승률 '+pc0(st8.P.board)+').</p>';
+ t+='<div class="cols"><div><h3>단계별 탈출 비율 (열쇠와 무관)</h3><div id="cA"></div></div><div><h3>단계별 엘리베이터 이탈 비율</h3><div id="cB"></div></div><div><h3>열쇠 수별 평균 이탈 비율 / 압박 지수</h3><div id="cC2"></div></div></div>';
+ $('#cmpOut').innerHTML=t;const L=(arr,c,n,dots)=>({c,n,dots:1,p:arr.map((v,i)=>[i+1,v*100])});
+ mkChart($('#cA'),{aria:'단계별 탈출 비율',x0:.7,x1:5.3,y0:0,y1:100,xs:1,yf:v=>v.toFixed(0)+'%',xl:'단계',lines:[L(R.foot0,'var(--c3)','무피해'),L(R.foot,'var(--c1)','생존'),L(R.mix,'var(--c4)','차량 혼합')]});
+ mkChart($('#cB'),{aria:'단계별 엘리베이터 이탈 비율',x0:.7,x1:5.3,y0:0,y1:60,xs:1,yf:v=>v.toFixed(0)+'%',xl:'단계',vl:[],lines:[L(R.by[Ks[0]].exit,'var(--c3)','열쇠 '+Ks[0]),L(R.by[Ks[1]].exit,'var(--c1)','열쇠 '+Ks[1]),L(R.by[Ks[2]].exit,'var(--c2)','열쇠 '+Ks[2]),L(R.W.exit,'var(--c4)','가중')]});
+ const bars=[];cols.forEach(c=>{bars.push({v:avgE(c)*100,l:(avgE(c)*100).toFixed(0)+'%',c:'var(--c2)'});});cols.forEach(c=>bars.push({v:(c==='W'?R.W.avgPress:get(c).avgPress)*100,l:((c==='W'?R.W.avgPress:get(c).avgPress)*100).toFixed(0)+'%',c:'var(--c1)'}));
+ mkChart($('#cC2'),{aria:'열쇠 수별 평균 이탈과 압박 지수',x0:-.5,x1:7.5,y0:0,y1:48,xs:1,xf:x=>['6','7','8','가중','6','7','8','가중'][x]||'',yf:v=>v.toFixed(0)+'%',xl:'왼쪽 4개=평균 이탈(주황), 오른쪽 4개=압박 지수(파랑)',bars})}
+$('#cmpGo').onclick=()=>{const n=Math.max(10,Math.min(400,+$('#cmpN').value||200)),m=+$('#cmpM').value||1000;$('#cmpT').textContent='계산 중... (수 초~수십 초)';setTimeout(()=>{const t0=performance.now(),R=evalGroup(st8.P,seedsN(n),[6,7,8],m,[{}])[0];window.CMP=R;renderCompare(R);$('#cmpT').textContent=n+'시드 x '+m+'표본, '+Math.round(performance.now()-t0)+' ms'},30)};
+const CAT={'전선 속도 +15%':'front','전선 속도 +30%':'front','충전 120초':'recharge','충전 150초':'recharge','문 개방 30→20초':'door','팀 쿨다운(재사용 불가 3분+)':'cool','열쇠 위치 편중 0.3':'bias','열쇠 위치 편중 0.5':'bias','열쇠 위치 편중 0.7':'bias','탑승 상한 4→3명':'cap'};
+function renderScen(res){const b=res[0],w=r=>(r.by[7].avgExit+r.by[8].avgExit)/2,rows=SCEN.map(([n],i)=>({n,r:res[i],d:(w(b)-w(res[i]))*100,i}));
+ const single=rows.filter(r=>CAT[r.n]).sort((a,c)=>c.d-a.d),seen={},rec=new Set();single.forEach(r=>{const c=CAT[r.n];if(!seen[c]&&rec.size<3&&r.d>1.5&&keyVerdict(r.r.by[8].avgExit,r.r.by[8].maxExit)[1]!=='bad'){seen[c]=1;rec.add(r.n)}});
+ const ord=[rows[0]].concat(rows.slice(1).sort((a,c)=>c.d-a.d));
+ let t='<table><tr><th>보정안</th><th class="n">판 길이(분)</th><th class="n">도보 생존</th><th class="n">열쇠 7 이탈</th><th class="n">열쇠 8 이탈</th><th class="n">7·8 평균</th><th class="n">감소(%p)</th><th class="n">압박 지수</th><th>판정(열쇠 8)</th><th>비고</th></tr>';
+ ord.forEach(r=>{const v=keyVerdict(r.r.by[8].avgExit,r.r.by[8].maxExit);t+='<tr><td>'+esc(r.n)+'</td><td class="n">'+r.r.lenMean.toFixed(1)+'</td><td class="n">'+f1p(r.r.footAvg)+'</td><td class="n">'+f1p(r.r.by[7].avgExit)+'</td><td class="n">'+f1p(r.r.by[8].avgExit)+'</td><td class="n">'+f1p(w(r.r))+'</td><td class="n"><b>'+(r.i?r.d.toFixed(1):'-')+'</b></td><td class="n">'+f1p(r.r.W.avgPress)+'</td><td><span class="st '+v[1]+'">'+v[0]+'</span></td><td>'+(rec.has(r.n)?'<span class="st ok">추천</span>':'')+'</td></tr>'});
+ $('#scOut').innerHTML=t+'</table><p class="note">효과 순(감소 큰 순). 전선 속도, 충전, 문 시간은 효과가 거의 없거나 판 길이만 줄이고, 열쇠 위치 편중·팀 쿨다운·탑승 상한이 효과가 크다. 쿨다운 모델: 한 팀이 열쇠를 쓰면 쿨다운 동안 같은 팀의 다른 열쇠 사용이 막히므로 유효 열쇠 수가 서로 다른 보유 팀 수로 줄어든다(3분 이상이면 완전 적용). 편중 b: k단계(1~5) 위협 지역의 열쇠 비율 x (1 - b x (5-k)/5), 즉 먼저 오염되는 지역에 열쇠를 덜 배치.</p>';window.SCR=res}
+$('#scGo').onclick=()=>{const n=Math.max(10,Math.min(400,+$('#scN').value||100));$('#scT').textContent='계산 중... (수십 초)';setTimeout(()=>{const t0=performance.now(),res=runScen(st8.P,seedsN(n),[7,8],500);renderScen(res);$('#scT').textContent=n+'시드, '+Math.round(performance.now()-t0)+' ms'},30)};
+const applyFix=o=>{Object.assign(st8.P,o);syncSliders();recompute()};
+$('#presetFix').onclick=()=>applyFix({bias:.5,cool:3});$('#presetFix3').onclick=()=>applyFix({bias:.5,cool:3,squadN:3});
+$('#tmGo').onclick=()=>{$('#tmT').textContent='계산 중...';setTimeout(()=>{const ps=[.1,.3,.5,.7],bs=[.5,.75,1],overs=[];ps.forEach(p=>bs.forEach(b=>overs.push({pSolo:p,board:b})));const t0=performance.now(),Rs=evalGroup(st8.P,seedsN(60),[6,7,8],500,overs);
+ let t='<table><tr><th>솔로 비율 \\ 스쿼드 탑승률</th>'+bs.map(b=>'<th class="n">'+pc0(b)+'</th>').join('')+'</tr>';ps.forEach((p,i)=>{t+='<tr><td>'+pc0(p)+' (평균 탑승 '+bs.map(b=>teamAvg({pSolo:p,squadN:st8.P.squadN,board:b}).toFixed(1)).join('/')+')</td>'+bs.map((b,j)=>{const r=Rs[i*bs.length+j],v=keyVerdict(r.W.avgExit,r.W.maxExit);return '<td class="n">'+f1p(r.W.avgExit)+' <span class="st '+v[1]+'">'+v[0]+'</span></td>'}).join('')+'</tr>'});
+ $('#tmOut').innerHTML=t+'</table><p class="note">스쿼드 인원 '+st8.P.squadN+'명 기준, 60시드. 평균 탑승 2명 가정은 스쿼드 탑승률 약 0.5(솔로 30%)에 해당한다. 판 초반에는 팀이 온전해 탑승률이 높고 후반에는 팀원이 줄어 낮으므로, 평균 2명은 후반에 맞고 초반에는 낮게 잡힌 값이다.</p>';$('#tmT').textContent=Math.round(performance.now()-t0)+' ms'},30)};
+
+})();
+</script></body></html>
