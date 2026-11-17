@@ -13,6 +13,9 @@ namespace Game.Net
         static SimulatedPing? _parsed;
         public static SimulatedPing Options => _parsed ??= Read();
 
+        // Tests: act as if these were on the command line (null = read the real command line again).
+        public static void Use(SimulatedPing? options) => _parsed = options;
+
         NetworkManager _nm;
 
         static SimulatedPing Read()
