@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using Game.Core;
 using Game.Gameplay;
 using UnityEditor;
 using UnityEngine;
@@ -70,6 +71,46 @@ public static class CharacterAnimProbe
         }
         File.WriteAllText("Logs/anim_muscles.txt", sb.ToString());
         Object.DestroyImmediate(go);
+        EditorApplication.Exit(0);
+    }
+
+    // Lowest point of each roster model's body mesh (baked in the saved pose) and its ankle heights, relative to the prefab's origin: tools/unity.sh run CharacterAnimProbe.Soles
+    public static void Soles()
+    {
+        var sb = new StringBuilder("model,meshMinY,ankleL,ankleR,modelLocalY,modelScale\n");
+        foreach (var id in PlayerAppearance.ModelIds)
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{CharacterRoster.PrefabDir}/Roster_{id}.prefab"));
+            var def = go.GetComponent<CharacterDef>();
+            float min = float.MaxValue;
+            foreach (SkinnedMeshRenderer r in def.Renderers)
+            {
+                if (r.name == "Eyes" || r.name == "Eyebrows") continue;
+                var mesh = new Mesh(); r.BakeMesh(mesh);
+                var m = r.transform.localToWorldMatrix;
+                foreach (var v in mesh.vertices) min = Mathf.Min(min, go.transform.InverseTransformPoint(m.MultiplyPoint3x4(v)).y);
+                Object.DestroyImmediate(mesh);
+            }
+            sb.AppendLine($"{id},{min:F3},{go.transform.InverseTransformPoint(def.Sockets.LeftFoot.position).y:F3},{go.transform.InverseTransformPoint(def.Sockets.RightFoot.position).y:F3},{def.Animator.transform.localPosition.y:F3},{def.Animator.transform.localScale.x:F3}");
+            Object.DestroyImmediate(go);
+        }
+        File.WriteAllText("Logs/anim_soles.csv", sb.ToString());
+        EditorApplication.Exit(0);
+    }
+
+    // The saved pose of the built prefabs: tools/unity.sh run CharacterAnimProbe.PrefabPose -> Logs/anim_prefabpose.txt
+    public static void PrefabPose()
+    {
+        var sb = new StringBuilder();
+        foreach (var name in new[] { "Player", "Player_MixamoSwat", "Bot" })
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/M1/{name}.prefab"));
+            var def = go.GetComponentInChildren<CharacterDef>(true);
+            var a = def.Animator;
+            sb.AppendLine($"{name}: model {def.Id}, ankles {go.transform.InverseTransformPoint(a.GetBoneTransform(HumanBodyBones.LeftFoot).position).y:F3}/{go.transform.InverseTransformPoint(a.GetBoneTransform(HumanBodyBones.RightFoot).position).y:F3}, hips {go.transform.InverseTransformPoint(a.GetBoneTransform(HumanBodyBones.Hips).position).y:F3}, head {go.transform.InverseTransformPoint(a.GetBoneTransform(HumanBodyBones.Head).position).y:F3}, animator pos {a.transform.localPosition}, controller {(a.runtimeAnimatorController != null ? a.runtimeAnimatorController.name : "none")}");
+            Object.DestroyImmediate(go);
+        }
+        File.WriteAllText("Logs/anim_prefabpose.txt", sb.ToString());
         EditorApplication.Exit(0);
     }
 }
