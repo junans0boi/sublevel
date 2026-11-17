@@ -333,8 +333,8 @@ public static class WorldMaterials
         mat.SetTexture("_BaseMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_color.jpg"));
         mat.SetTexture("_BumpMap", SceneLook.Load<Texture2D>($"{ArtMaterials}/{id}/{id}_normal.jpg"));
         mat.SetTexture("_MaskMap", SceneLook.Load<Texture2D>(MaskPath(id)));
-        // Dirt matches the terrain's own dirt layer (tinted 0.46) so a track does not glow against its verge.
-        mat.SetColor("_BaseColor", paved ? surface.Material.GetColor("_BaseColor") : new Color(0.74f, 0.68f, 0.58f) * Match(id));
+        // Dirt matches the terrain's own dirt layer (red earth, ADR-284) so a track does not glow against its verge.
+        mat.SetColor("_BaseColor", paved ? surface.Material.GetColor("_BaseColor") : new Color(0.86f, 0.64f, 0.52f) * Match(id));
         mat.SetFloat("_Smoothness", paved ? 0.55f : 0.25f);
         mat.SetFloat("_Paved", paved ? 1f : 0f);
         mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent - 100;
@@ -359,8 +359,8 @@ public static class WorldMaterials
 
     public static TerrainLayer[] TerrainLayers() => new[]
     {
-        Layer("Grass", Src("grass"), new Vector2(7f, 7f), 0.12f, new Color(0.38f, 0.52f, 0.31f)),
-        Layer("Dirt", Src("dirt_road"), new Vector2(4.5f, 2.25f), 0.15f, new Color(0.46f, 0.43f, 0.38f)),
+        Layer("Grass", Src("grass"), new Vector2(7f, 7f), 0.12f, new Color(0.46f, 0.58f, 0.31f)),   // olive base (x Match);  WorldTerrainPasses tints it toward dry yellow by area (ADR-284)
+        Layer("Dirt", Src("dirt_road"), new Vector2(4.5f, 2.25f), 0.15f, new Color(0.60f, 0.37f, 0.30f)),   // red earth (ADR-284)
         Layer("Rock", "Rock051", new Vector2(RockTile, RockTile), 0.2f, new Color(0.50f, 0.50f, 0.49f)),
         Layer("Mud", "Ground054", new Vector2(8.6f, 8.6f), 0.3f, new Color(0.30f, 0.30f, 0.26f)),
     };

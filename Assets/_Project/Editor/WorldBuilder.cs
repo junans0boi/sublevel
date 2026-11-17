@@ -250,7 +250,7 @@ public static partial class WorldBuilder
                 // Broad patches so the plains are not one colour: dry, worn ground and darker damp ground take
                 // over some of the grass (the plan only knows roads, yards, slopes and the shore).
                 float fine = Mathf.PerlinNoise(wx / 23f + 5.1f, wz / 23f + 9.4f);
-                float dry = Mathf.SmoothStep(0.5f, 0.78f, Mathf.PerlinNoise(wx / 85f + 13.7f, wz / 85f + 71.3f) * 0.72f + fine * 0.28f) * 0.36f;
+                float dry = Mathf.SmoothStep(0.5f, 0.78f, Mathf.PerlinNoise(wx / 85f + 13.7f, wz / 85f + 71.3f) * 0.72f + fine * 0.28f) * 0.16f;   // dirt share of dry ground: the meadow turns yellow in the shader instead (ADR-284)
                 float damp = Mathf.SmoothStep(0.52f, 0.8f, Mathf.PerlinNoise(wx / 120f + 31.9f, wz / 120f + 47.2f) * 0.75f + (1f - fine) * 0.25f) * 0.3f;
                 // Hollows are damp and dark, crowns are dry: the hills then read from above.
                 const float around = 32f;
@@ -259,7 +259,7 @@ public static partial class WorldBuilder
                     + ground.Height(wx + around * 0.7f, wz - around * 0.7f) + ground.Height(wx - around * 0.7f, wz - around * 0.7f)) / 8f;
                 float hollow = Mathf.Clamp((mean - height) / 3f, -1f, 1f);
                 damp = Mathf.Clamp01(damp + 0.45f * Mathf.Max(0f, hollow));
-                dry = Mathf.Clamp01(dry + 0.3f * Mathf.Max(0f, -hollow));
+                dry = Mathf.Clamp01(dry + 0.12f * Mathf.Max(0f, -hollow));
                 // Under the trees: needle and leaf litter (dirt) with dark damp soil (the mud layer) between the roots.
                 float litter = floor[z, x] * (0.55f + 0.45f * fine);
                 dry = Mathf.Clamp01(dry + 0.65f * litter);

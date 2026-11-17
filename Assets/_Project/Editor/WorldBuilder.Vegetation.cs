@@ -124,8 +124,10 @@ public static partial class WorldBuilder
                 if (allowed <= 0f) continue;
                 float patch = Mathf.Clamp01(0.45f + 0.75f * Mathf.PerlinNoise(wx / 19f + 3.3f, wz / 19f + 8.1f) - 0.2f * Mathf.PerlinNoise(wx / 5f + 1.7f, wz / 5f + 6.2f));
                 bool tall = Vegetation.TallGrass(plan, wx, wz, h);
+                float meadow = tall ? 0f : Vegetation.TallMeadow(plan, wx, wz, h);
+                if (meadow > 0.25f) tall = true;
                 float density;
-                if (tall) density = allowed * (0.5f + 0.5f * patch);
+                if (tall && meadow <= 0f) density = allowed * (0.5f + 0.5f * patch);
                 else
                 {
                     int ax = Mathf.Clamp((int)(wx / plan.Size * ares), 0, ares - 1), az = Mathf.Clamp((int)(wz / plan.Size * ares), 0, ares - 1);
@@ -133,6 +135,7 @@ public static partial class WorldBuilder
                     var kind = region >= 0 ? plan.Regions[region].Kind : RegionKind.Town;
                     float regionShare = kind == RegionKind.Factory ? 0.6f : kind == RegionKind.Mountain ? 0.85f : 1f;
                     density = allowed * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.08f, 0.55f, alpha[az, ax, 0])) * regionShare * patch;
+                    if (tall) density = Mathf.Max(density, allowed * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.08f, 0.55f, alpha[az, ax, 0])) * regionShare * (0.65f + 0.35f * patch)); // tall patches are denser than short grass
                 }
                 byte v = Vegetation.EncodeGrass(density, tall);
                 bytes[z * res + x] = v;
@@ -268,12 +271,21 @@ public static partial class WorldBuilder
             cam.fieldOfView = 50f;
             SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_air_{region.Id}.png", c + new Vector3(0f, 230f, -380f), c + Vector3.up * 40f);
         }
-        // Render stats of the first eye view, 120 frames.
+        var statAt = Ground(pts[pts.Count / 2].x, pts[pts.Count / 2].y) + Vector3.up * 1.7f;
+        string stats = ViewStats(cam, statAt, statAt + new Vector3(0.7f, 0f, 0.7f) * 40f, tag);
+        Debug.Log(stats);
+        File.AppendAllText($"Logs/forest_{tag}.txt", stats + "\n");
+        cam.targetTexture = null;
+        EditorApplication.Exit(0);
+    }
+
+    // Render stats of one view over 120 frames, plus the instanced vegetation estimated from the renderer's own LOD rule.
+    static string ViewStats(Camera cam, Vector3 stat, Vector3 look, string tag)
+    {
         cam.fieldOfView = 60f;
         var rt = new RenderTexture(1280, 720, 24);
         cam.targetTexture = rt;
-        var stat = Ground(pts[pts.Count / 2].x, pts[pts.Count / 2].y) + Vector3.up * 1.7f;
-        cam.transform.position = stat; cam.transform.LookAt(stat + new Vector3(0.7f, 0f, 0.7f) * 40f);
+        cam.transform.position = stat; cam.transform.LookAt(look);
         var times = new List<double>();
         for (int i = 0; i < 125; i++)
         {
@@ -310,10 +322,8 @@ public static partial class WorldBuilder
         times.Sort();
         string stats = $"[ForestCheck:{tag}] eye view: {visible} plants drawn (conifer LOD0/1/2 {inView[1, 0]}/{inView[1, 1]}/{inView[1, 2]}, broadleaf {inView[0, 0]}/{inView[0, 1]}/{inView[0, 2]}, bush {inView[2, 0]}), " +
             $"vegetation estimate ~{estTris / 1000.0:F0}k triangles ~{estDraws:F0} draws; cpu render avg {times.Average():F2} ms p99 {times[(int)(times.Count * 0.99)]:F2} ms (editor, whole scene, CPU submission only)";
-        Debug.Log(stats);
-        File.AppendAllText($"Logs/forest_{tag}.txt", stats + "\n");
         cam.targetTexture = null;
-        EditorApplication.Exit(0);
+        return stats;
     }
 
     // ---- pictures for review (called from RenderOverview) ----
