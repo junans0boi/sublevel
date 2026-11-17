@@ -18,6 +18,7 @@ public static partial class WorldBuilder
 {
     const string GrassMapPath = WorldMaterials.GeneratedDir + "/World_Grass.bytes";
     const float PlantSink = 0.08f;          // feet a little into the ground
+    const float TrunkCell = 32f;            // trunk colliders of one square share a GameObject
     const float MaxTrunkCollider = 7f;      // capsule height cap: the crown above it does not stop anything
 
     // Sea stacks: rocks standing in the sea beyond the wading line, so the view out from the shore has something in
@@ -30,7 +31,7 @@ public static partial class WorldBuilder
     {
         var watch = Stopwatch.StartNew();
         var kit = WorldVegetation.Build(store);
-        var plants = Vegetation.Plan(plan);
+        var plants = Vegetation.Plan(plan, System.Environment.GetEnvironmentVariable("FOREST") != "0"); // FOREST=0: the map before the forest belt, for before/after captures
         var root = Child(parent, "Vegetation");
         var trunks = Child(root, "Trunks");
         trunks.gameObject.isStatic = true;
@@ -39,6 +40,7 @@ public static partial class WorldBuilder
         var placement = new Vector4[plants.Count];
         var yaw = new float[plants.Count];
         int colliders = 0;
+        var cellObjects = new Dictionary<long, GameObject>();
         for (int i = 0; i < plants.Count; i++)
         {
             var p = plants[i];
@@ -52,14 +54,23 @@ public static partial class WorldBuilder
             // Bushes stop nothing; trunks stop bodies and shots and are holes in the navmesh.
             float radius = kit.TrunkRadius[proto] * p.Scale + 0.05f;
             float height = Mathf.Min(kit.TrunkHeight[proto] * p.Scale, MaxTrunkCollider);
-            var go = new GameObject("Trunk" + colliders++);
-            go.transform.SetParent(trunks, false);
-            go.transform.position = new Vector3(p.X, y, p.Z);
-            var capsule = go.AddComponent<CapsuleCollider>();
+            // One GameObject per TrunkCell square carries the capsules of all its trunks (ADR-270: ~30 000 trunks, a GameObject each
+            // would bloat the scene and the load), each capsule offset by its own centre.
+            int cx = Mathf.FloorToInt(p.X / TrunkCell), cz = Mathf.FloorToInt(p.Z / TrunkCell);
+            long key = ((long)cx << 32) ^ (uint)cz;
+            if (!cellObjects.TryGetValue(key, out var cell))
+            {
+                var cellGo = new GameObject($"TrunkCell_{cx}_{cz}");
+                cellGo.transform.SetParent(trunks, false);
+                cellGo.transform.position = new Vector3(cx * TrunkCell, 0f, cz * TrunkCell);
+                cellGo.isStatic = true;
+                cellObjects[key] = cell = cellGo;
+            }
+            colliders++;
+            var capsule = cell.AddComponent<CapsuleCollider>();
             capsule.radius = radius;
             capsule.height = height;
-            capsule.center = Vector3.up * (height * 0.5f);
-            go.isStatic = true;
+            capsule.center = new Vector3(p.X - cx * TrunkCell, y + height * 0.5f, p.Z - cz * TrunkCell);
             float side = radius * 2f + 0.3f;
             nav.Add(new NavMeshBuildSource
             {
@@ -187,6 +198,122 @@ public static partial class WorldBuilder
         }
         Debug.Log($"[WorldBuilder] offshore: {placed} sea stacks");
         return placed;
+    }
+
+    // Forest belt check on the built World scene (ADR-270; tools/unity.sh run-gfx WorldBuilder.ForestCheck, FOREST_TAG names the outputs): mean sight distance over
+    // 8 horizontal physics rays at eye height from slope points, a shot-blocking check, eye-level and aerial pictures, and render stats of the densest view.
+    public static void ForestCheck()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+        Physics.SyncTransforms();
+        string tag = System.Environment.GetEnvironmentVariable("FOREST_TAG") ?? "now";
+        Directory.CreateDirectory(OverviewDir);
+        DynamicGI.UpdateEnvironment();
+        var plan = WorldGenerator.Generate(LoadSpec());
+        var terrain = Object.FindFirstObjectByType<Terrain>();
+        var info = Object.FindFirstObjectByType<WorldInfo>();
+        Vector3 Ground(float x, float z) => new Vector3(x, terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.GetPosition().y, z);
+
+        var pts = new List<Vector2>();
+        for (float z = 20f; z < plan.Size; z += 40f)
+            for (float x = 20f; x < plan.Size; x += 40f)
+                if (Vegetation.ForestDensity(plan, x, z) >= 0.5f) pts.Add(new Vector2(x, z));
+        double sum = 0; int n = 0, under30 = 0;
+        foreach (var pt in pts)
+        {
+            var eye = Ground(pt.x, pt.y) + Vector3.up * 1.7f;
+            for (int d = 0; d < 8; d++)
+            {
+                float a = d * Mathf.PI / 4f + 0.2f;
+                var dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                float seen = Physics.Raycast(eye, dir, out var hit, 150f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) ? hit.distance : 150f;
+                sum += seen; n++;
+                if (seen < 30f) under30++;
+            }
+        }
+        string line = $"[ForestCheck:{tag}] {pts.Count} slope points, 8 rays each: mean sight {sum / System.Math.Max(1, n):F1} m, {100.0 * under30 / System.Math.Max(1, n):F0}% of rays blocked within 30 m";
+        Debug.Log(line);
+        File.AppendAllText($"Logs/forest_{tag}.txt", line + "\n");
+
+        // A shot at a trunk from 4 m away stops at it.
+        var trunks = Object.FindObjectsByType<CapsuleCollider>(FindObjectsSortMode.None).Where(c => c.transform.parent != null && c.transform.parent.name == "Trunks").Take(400).ToList();
+        int stopped = 0, tried = 0;
+        foreach (var c in trunks)
+        {
+            if (tried >= 40) break;
+            var centre = c.transform.TransformPoint(c.center);
+            var from = new Vector3(centre.x + 4f, centre.y - c.height * 0.5f + 1.3f, centre.z);
+            tried++;
+            if (Physics.Raycast(from, (new Vector3(centre.x, from.y, centre.z) - from).normalized, out var hit, 4.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) && hit.distance < 4f) stopped++;
+        }
+        Debug.Log($"[ForestCheck:{tag}] shot at {tried} trunks from 4 m at chest height: {stopped} stopped short of the centre");
+        File.AppendAllText($"Logs/forest_{tag}.txt", $"shots at trunks: {stopped}/{tried}\n");
+
+        var cam = new GameObject("ForestCamera").AddComponent<Camera>();
+        cam.nearClipPlane = 0.1f; cam.farClipPlane = 1500f; cam.fieldOfView = 60f;
+        SceneLook.EnablePost(cam);
+        UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(cam).SetRenderer(info.RendererIndex);
+        // Eye-level views at a few slope points (every 25th), looking along the contour.
+        int shots = 0;
+        for (int i = 3; i < pts.Count && shots < 4; i += System.Math.Max(1, pts.Count / 5))
+        {
+            var e = Ground(pts[i].x, pts[i].y) + Vector3.up * 1.7f;
+            SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_eye{shots}.png", e, e + new Vector3(0.7f, 0f, 0.7f) * 40f);
+            shots++;
+        }
+        // Aerial: the mountain regions from the south at an angle.
+        foreach (var region in info.Regions.Where(r => r.Kind == RegionKind.Mountain).Take(2))
+        {
+            var c = Ground(region.Hub.x, region.Hub.z);
+            cam.fieldOfView = 50f;
+            SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_air_{region.Id}.png", c + new Vector3(0f, 230f, -380f), c + Vector3.up * 40f);
+        }
+        // Render stats of the first eye view, 120 frames.
+        cam.fieldOfView = 60f;
+        var rt = new RenderTexture(1280, 720, 24);
+        cam.targetTexture = rt;
+        var stat = Ground(pts[pts.Count / 2].x, pts[pts.Count / 2].y) + Vector3.up * 1.7f;
+        cam.transform.position = stat; cam.transform.LookAt(stat + new Vector3(0.7f, 0f, 0.7f) * 40f);
+        var times = new List<double>();
+        for (int i = 0; i < 125; i++)
+        {
+            var w = Stopwatch.StartNew(); cam.Render(); w.Stop();
+            if (i >= 5) times.Add(w.Elapsed.TotalMilliseconds);
+        }
+        times.Sort();
+        // Instanced draws are not in the editor's stats in batch mode: estimate them from the renderer's own LOD rule (frustum + reach, high level).
+        var veg = Object.FindFirstObjectByType<VegetationRenderer>();
+        var planes = GeometryUtility.CalculateFrustumPlanes(cam);
+        var avg = new double[3, 3]; var subs = new double[3, 3]; var kinds = new int[3]; // kind, lod
+        foreach (var proto in veg.Prototypes)
+        {
+            kinds[(int)proto.Kind]++;
+            for (int l = 0; l < proto.Lods.Length && l < 3; l++) { avg[(int)proto.Kind, l] += Triangles(proto.Lods[l].Mesh); subs[(int)proto.Kind, l] += proto.Lods[l].Mesh.subMeshCount; }
+        }
+        var inView = new int[3, 3]; double estTris = 0; int visible = 0;
+        float zoom = Vegetation.Zoom(cam.fieldOfView);
+        for (int i = 0; i < veg.Count; i++)
+        {
+            var foot = veg.Foot(i); var at = new Vector3(foot.x, foot.y, foot.z);
+            float dist = Vector3.Distance(stat, at);
+            if (dist > 400f || !GeometryUtility.TestPlanesAABB(planes, new Bounds(at + Vector3.up * 5f, new Vector3(10f, 10f, 10f)))) continue;
+            var kind = veg.KindOf(i);
+            int lod = Vegetation.Lod(kind, dist, 1.3f, zoom, 2);
+            if (lod < 0) continue;
+            int k = (int)kind; lod = Mathf.Min(lod, kind == PlantKind.Bush ? 0 : 2);
+            inView[k, lod]++; visible++;
+            estTris += avg[k, lod] / System.Math.Max(1, kinds[k]);
+        }
+        double estDraws = 0;
+        for (int k = 0; k < 3; k++) for (int l = 0; l < 3; l++)
+            if (inView[k, l] > 0) estDraws += (subs[k, l] / System.Math.Max(1, kinds[k])) * 5 * System.Math.Ceiling(inView[k, l] / 5.0 / 1023.0);
+        times.Sort();
+        string stats = $"[ForestCheck:{tag}] eye view: {visible} plants drawn (conifer LOD0/1/2 {inView[1, 0]}/{inView[1, 1]}/{inView[1, 2]}, broadleaf {inView[0, 0]}/{inView[0, 1]}/{inView[0, 2]}, bush {inView[2, 0]}), " +
+            $"vegetation estimate ~{estTris / 1000.0:F0}k triangles ~{estDraws:F0} draws; cpu render avg {times.Average():F2} ms p99 {times[(int)(times.Count * 0.99)]:F2} ms (editor, whole scene, CPU submission only)";
+        Debug.Log(stats);
+        File.AppendAllText($"Logs/forest_{tag}.txt", stats + "\n");
+        cam.targetTexture = null;
+        EditorApplication.Exit(0);
     }
 
     // ---- pictures for review (called from RenderOverview) ----

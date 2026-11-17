@@ -90,7 +90,10 @@ namespace Game.Core
         // Every tree and bush of the map: the plan's scattered trees with a species each, trees in the yards of the
         // houses and along the town streets (the town read as bare between buildings), and bushes at the edges of
         // woods, round the houses and through the wetland.
-        public static List<Plant> Plan(WorldPlan plan)
+        public static List<Plant> Plan(WorldPlan plan) => Plan(plan, true);
+
+        // forest: false gives the map as it was before the forest belt (ADR-270), for before/after measurements.
+        public static List<Plant> Plan(WorldPlan plan, bool forest)
         {
             var plants = new List<Plant>();
             var grid = new SpacingGrid(plan.Size, 8f);
@@ -158,6 +161,8 @@ namespace Game.Core
                 }
             }
 
+            if (forest) AddForest(plan, plants, grid, seed);
+
             int trees = plants.Count;
             var treeGrid = new SpacingGrid(plan.Size, 12f);
             foreach (var p in plants) treeGrid.Add(p.X, p.Z);
@@ -189,6 +194,68 @@ namespace Game.Core
                 }
             }
             return plants;
+        }
+
+        // ---- forest belt (ADR-270): dense trees on mountain and hill slopes so that cover and concealment exist up there ----
+
+        public const float ForestCell = 3.6f, ForestSpacing = 2.6f, ForestChance = 0.88f;
+        public const int MaxForest = 80000;
+        public const float TreeLineAbove = 165f;                 // metres above the sea: full forest up to TreeLineAbove - 30, thinning to none at TreeLineAbove
+        const float ForestRoadClear = 5f, ForestRoadRamp = 9f;   // bare verge, then the wood thickens over this distance
+        const float ForestLotClear = 12f, ForestLotRamp = 12f;
+        const float ForestPadClear = 14f, ForestPassClear = 30f, ForestJunctionClear = 10f, ForestRiverClear = 3f;
+        const float ForestSlopeFull = 0.7f, ForestSlopeMax = 1.0f;    // tan: dense up to 35 degrees, none past 45
+
+        // How thick the wood is at a point, 0 (none) .. 1 (full). Keeps roads, passes, buildings, elevator pads and
+        // junction yards open; the wood grows in on a ramp so the clearings have soft edges, never an empty wall.
+        public static float ForestDensity(WorldPlan plan, float x, float z)
+        {
+            int region = plan.RegionAt(x, z);
+            if (region < 0) return 0f;
+            float h = plan.Height(x, z), up = h - plan.SeaLevel;
+            if (up < 2f || up >= TreeLineAbove) return 0f;
+            if (plan.Regions[region].Kind != RegionKind.Mountain && up < 30f) return 0f;      // hills of the low regions only above 30 m
+            float slope = plan.SlopeTan(x, z);
+            if (slope >= ForestSlopeMax) return 0f;
+            float f = 1f - WorldTerrain.Smooth01((slope - ForestSlopeFull) / (ForestSlopeMax - ForestSlopeFull));
+            f *= 1f - WorldTerrain.Smooth01((up - (TreeLineAbove - 30f)) / 30f);
+            f *= 0.7f + 0.3f * WorldTerrain.Smooth01(0.5f + 1.1f * WorldNoise.Value(x / 45f, z / 45f, unchecked((uint)plan.Seed + 0xF0E5u)));   // glades, never bare
+            if (f <= 0f) return 0f;
+            f *= WorldTerrain.Smooth01((plan.RoadDistance(x, z) - ForestRoadClear) / ForestRoadRamp);
+            if (f <= 0f) return 0f;
+            f *= WorldTerrain.Smooth01((NearestLot(plan, x, z, ForestLotClear + ForestLotRamp) - ForestLotClear) / ForestLotRamp);
+            if (f <= 0f) return 0f;
+            foreach (var e in plan.Elevators)
+                if (e.Pad().Distance(x, z) < ForestPadClear) return 0f;
+            foreach (var p in plan.ConvergencePoints)
+                if (Sq(p.X - x) + Sq(p.Z - z) < Sq(p.ClearRadius + ForestJunctionClear)) return 0f;
+            foreach (var p in plan.Passes)
+                if (Sq(p.X - x) + Sq(p.Z - z) < ForestPassClear * ForestPassClear) return 0f;
+            foreach (var river in plan.Rivers)
+                for (int i = 0; i < river.X.Length; i++)
+                    if (Sq(river.X[i] - x) + Sq(river.Z[i] - z) < Sq(river.HalfWidth[i] + ForestRiverClear + 4f)) return 0f;
+            return f;
+        }
+
+        static void AddForest(WorldPlan plan, List<Plant> plants, SpacingGrid grid, uint seed)
+        {
+            int cells = (int)(plan.Size / ForestCell), added = 0;
+            for (int gz = 0; gz < cells && added < MaxForest; gz++)
+                for (int gx = 0; gx < cells && added < MaxForest; gx++)
+                {
+                    float x = (gx + WorldNoise.Hash01(gx, gz, seed + 60u)) * ForestCell;
+                    float z = (gz + WorldNoise.Hash01(gx, gz, seed + 61u)) * ForestCell;
+                    if (WorldNoise.Hash01(gx, gz, seed + 62u) >= ForestChance) continue;
+                    float f = ForestDensity(plan, x, z);
+                    if (f <= 0f || WorldNoise.Hash01(gx, gz, seed + 63u) >= f) continue;
+                    float y = plan.Height(x, z);
+                    int region = plan.RegionAt(x, z);
+                    if (!grid.Clear(x, z, ForestSpacing)) continue;
+                    Add(plants, grid, Species(plan, region, y, WorldNoise.Hash01(gx, gz, seed + 64u)), region, x, y, z,
+                        1f + 0.6f * WorldNoise.Hash01(gx, gz, seed + 65u), WorldNoise.Hash01(gx, gz, seed + 66u) * 360f,
+                        (int)(WorldNoise.Hash01(gx, gz, seed + 67u) * Variants));
+                    added++;
+                }
         }
 
         // Conifers climb the mountain and mix into its foothills; the low regions are broadleaf with a few conifers.
@@ -225,12 +292,12 @@ namespace Game.Core
             Add(plants, grid, kind, region, x, y, z, scale, yaw, variant);
         }
 
-        static float NearestLot(WorldPlan plan, float x, float z)
+        static float NearestLot(WorldPlan plan, float x, float z, float within = 8f)
         {
             float best = float.MaxValue;
             foreach (var lot in plan.Lots)
             {
-                float reach = (lot.SizeX + lot.SizeZ) * 0.5f + 8f;
+                float reach = (lot.SizeX + lot.SizeZ) * 0.5f + within;
                 if (Math.Abs(lot.X - x) > reach || Math.Abs(lot.Z - z) > reach) continue;
                 best = Math.Min(best, lot.Distance(x, z));
             }

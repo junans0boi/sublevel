@@ -61,6 +61,7 @@ namespace Game.Core
                 default: ElevatorStation(d); break;
             }
             d.Finish();
+            BuildingRules.DropUnreachableLoot(d.Plan); // door keep-out moved the random picks: drop any that now sit out of reach
             return d.Plan;
         }
 
@@ -1020,7 +1021,7 @@ namespace Game.Core
                 int first = Plan.LootPoints.Count, placed = 0;
                 foreach (var top in _tops)
                 {
-                    if (top.Room != room || placed >= (count + 1) / 2) continue;
+                    if (top.Room != room || placed >= (count + 1) / 2 || LootPlacement.NearDoor(Plan, top.X, top.Y, top.Z)) continue;
                     AddLoot(top.X, top.Y, top.Z, room, true);
                     placed++;
                 }
@@ -1028,7 +1029,7 @@ namespace Game.Core
                 {
                     float x = Rng.Range(area.X0 + 0.5f, area.X1 - 0.5f), z = Rng.Range(area.Z0 + 0.5f, area.Z1 - 0.5f);
                     if (exclude.HasValue && exclude.Value.Contains(x, z)) continue;
-                    if (!FloorIsFree(x, y, z)) continue;
+                    if (!FloorIsFree(x, y, z) || LootPlacement.NearDoor(Plan, x, y, z)) continue;
                     float spacing = attempt < count * 20 ? 1.2f : 0.6f;
                     bool crowded = false;
                     for (int i = first; i < Plan.LootPoints.Count; i++)
@@ -1050,6 +1051,7 @@ namespace Game.Core
                 {
                     float x = Rng.Range(x0 + 1.2f, x1 - 1.2f), z = Rng.Range(z0 + 1.2f, z1 - 1.2f);
                     if (exclude.X0 - 1f < x && x < exclude.X1 + 1f && exclude.Z0 - 1f < z && z < exclude.Z1 + 1f) continue;
+                    if (LootPlacement.NearDoor(Plan, x, y, z)) continue;
                     bool crowded = false;
                     foreach (var p in Plan.LootPoints) if (p.Room == "Roof" && Math.Abs(p.X - x) < 2f && Math.Abs(p.Z - z) < 2f) crowded = true;
                     if (crowded) continue;
@@ -1080,6 +1082,7 @@ namespace Game.Core
                 float height = 0f;
                 foreach (var p in plan.Pieces) height = Math.Max(height, p.MaxY);
                 plan.Height = height;
+                plan.LootPoints.RemoveAll(p => LootPlacement.NearDoor(plan, p.X, p.Y, p.Z)); // backstop: the placers above already skip these
 
                 foreach (var door in plan.Doors)
                 {

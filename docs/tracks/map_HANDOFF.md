@@ -17,3 +17,8 @@ A1 측정, #240(.bytes+LFS), 규칙 데이터화, BuildingKind 13종, 루팅 가
 - 첫 Unity 실행은 Library APFS 클론에서 시작한다. 재임포트에 걸린 시간을 보고에 적는다.
 - 새 아이디어는 BACKLOG.md 한 줄. 범위 밖 작업 금지. commit은 이 브랜치에 WP 단위로 해도 된다(준환 위임: master가 병합 전 검토). 메시지 끝에 `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - 완료하면 `docs/tracks/map_DONE.md`(한 것/못 한 것/확인·추정)를 쓰고 master에 보고한다. 보고는 한국어 간결.
+
+## 2026-11-17 추가 (숲·문 루팅, ADR-270~272)
+- 바뀐 인터페이스(루팅 배치): `LootPlacement.DoorClear`, `LootPlacement.NearDoor(BuildingPlan,x,y,z)` 추가. `Buildings.Generate`가 이제 모든 종류에 `DropUnreachableLoot`을 적용하고 문 반경(폭/2+1.2 m) 안에는 루팅 점이 없다. 줍기 대상 선택·가시성(Gameplay/Net)은 건드리지 않음.
+- `Vegetation.Plan(plan, forest)` 오버로드, `Vegetation.ForestDensity` 공개. 트렁크 충돌체는 `Vegetation/Trunks/TrunkCell_x_z`(32 m 칸당 GO 하나, CapsuleCollider 여러 개).
+- 준환 요청: 지형·산 분위기를 PUBG식으로(BACKLOG 참고), master에 전달함.
