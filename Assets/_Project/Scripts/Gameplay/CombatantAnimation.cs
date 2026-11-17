@@ -549,7 +549,7 @@ namespace Game.Gameplay
             // while a weapon pose is on, take that out too or the weapon points off to the side when moving.
             // (Not for the dead: the death clip turns the hips on purpose.)
             // (A long gun squares the shoulders itself, PoseRifle.)
-            float turnBack = -_legTurnShown - (_combatant.Dead.Value ? 0f : HipsYaw() * _upperWeight);
+            float turnBack = -_legTurnShown - (_combatant.Dead.Value ? 0f : HipsYaw() * Mathf.Max(_upperWeight, _unarmedBody ? 1f : 0f));
             // About the model's own up: the character's up while standing, along the ground while lying.
             Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
             // Leaning right tips the torso clockwise seen from behind: a negative turn about the forward axis.

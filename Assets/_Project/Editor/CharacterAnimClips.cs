@@ -44,7 +44,7 @@ public static class CharacterAnimClips
             AssetDatabase.ImportAsset(UalPath, ImportAssetOptions.ForceSynchronousImport);
         }
         var imp = (ModelImporter)AssetImporter.GetAtPath(UalPath);
-        bool ok = imp.animationType == ModelImporterAnimationType.Human && imp.clipAnimations.Length == UalNames.Length;
+        bool ok = imp.animationType == ModelImporterAnimationType.Human && imp.clipAnimations.Length == UalNames.Length && imp.clipAnimations.All(c => !c.keepOriginalOrientation);
         if (ok) foreach (var n in UalNames) ok &= LoadClip("U_" + n) != null;
         if (ok) return;
         imp.animationType = ModelImporterAnimationType.Human;
@@ -60,7 +60,8 @@ public static class CharacterAnimClips
             c.name = "U_" + n;
             c.loopTime = c.loopPose = UalLoops.Contains(n);
             c.lockRootRotation = true; c.lockRootHeightY = true; c.lockRootPositionXZ = false;
-            c.keepOriginalOrientation = true; c.keepOriginalPositionY = true; c.keepOriginalPositionXZ = true;
+            // Not the file's orientation: UAL's forward axis is not the model's, which turned the body round (player report, ADR-255): body orientation.
+            c.keepOriginalOrientation = false; c.keepOriginalPositionY = true; c.keepOriginalPositionXZ = true;
             if (n == "Hit_Chest") { c.hasAdditiveReferencePose = true; c.additiveReferencePoseFrame = 0f; }
             list.Add(c);
         }

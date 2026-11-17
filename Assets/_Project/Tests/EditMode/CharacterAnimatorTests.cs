@@ -253,5 +253,38 @@ namespace Game.Tests
             Assert.Less(Swing("Unarmed", 3.5f), -0.05f, "bare hands: an arm swings back past the hips");
             Assert.Greater(Swing("Locomotion", 3f), 0.1f, "rifle run: both hands stay in front on the gun");
         }
+
+        // Which way the body faces, read from the shoulder line (right of the root = +x): 1 = the way the model faces, -1 = turned round.
+        float FacingDot()
+        {
+            var across = (S.RightUpperArm.position - S.LeftUpperArm.position).normalized;
+            return Vector3.Dot(Vector3.Cross(across, Vector3.up), _go.transform.forward);
+        }
+
+        [Test]
+        public void EveryState_FacesTheWayTheModelFaces_NoClipTurnsTheBodyRound()
+        {
+            // Player report: standing and walking bare-handed the body faced backwards, and a punch twisted the waist the other way. The clips of
+            // other files (UAL) carry their own forward axis, which the import must not keep.
+            _animator.SetFloat("Move", 3f);
+            foreach (var (layer, state, upper) in new[]
+            {
+                (Base, "Locomotion", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
+                (Upper, "Aim", 1f), (Upper, "PunchRight", 1f), (Upper, "PunchLeft", 1f),
+            })
+            {
+                float worst = 1f, mean = 0f;
+                for (int i = 0; i <= 10; i++)
+                {
+                    Pose(layer, state, i / 10f, upper: upper);
+                    worst = Mathf.Min(worst, FacingDot()); mean += FacingDot() / 11f;
+                }
+                Debug.Log($"[AnimTest] facing {state}: worst {worst:F2} mean {mean:F2} (yaw off by up to {Mathf.Acos(Mathf.Clamp(worst, -1f, 1f)) * Mathf.Rad2Deg:F0} deg)");
+                if (state == "Death" || state == "Prone") continue; // lying down: the shoulder line is not a facing
+                // A jog twists the shoulders against the hips by up to ~45 degrees, so the cycle's average decides, and no frame may be near sideways.
+                Assert.Greater(mean, 0.85f, $"{state}: on average the body faces the way the model faces (shoulder-line facing, 1 = forward)");
+                Assert.Greater(worst, 0.5f, $"{state}: no frame is turned more than 60 degrees from the model's facing");
+            }
+        }
     }
 }
