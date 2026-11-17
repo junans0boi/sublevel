@@ -34,3 +34,10 @@ ADR-230~234. 판정은 수치 + 연속 프레임 CSV + 테스트(ADR-191). 정�
 - 소유 밖 변경: `MatchDirector.cs`(+2줄), `MatchKit.cs`, `TestBoxBuilder.cs`(봇 변종·`_proneHeadAhead`), `CharacterKit.cs` 재작성, `BackpackVisual/ArmorVisual/InventoryPreview`(Humanoid 본 조회), `Core/Stance.cs`(`ProneArmCounterDeg` 삭제), `StanceTests`·`StancePlayTests`·`AimAndLeanTests` 등 본 조회·수치 기준 수정, 재생성물 `Bot*.prefab`·`Player.prefab`·`TestBox.unity`·`DefaultPrefabObjects.asset`(병합 시 master가 `TestBoxBuilder.Build`로 재생성).
 - `MixamoBake`·`Baked/Mx_*.anim` 삭제는 준환 확인 대기(지금은 안 쓰이고 컴파일만 됨).
 - 머지 뒤: `CharacterImport.SyncStaging` → `CharacterAnimClips.Reimport` → `TestBoxBuilder.Build`.
+
+## 2026-11-17 총기 파지·1인칭 웅크림 (ADR-264, 브랜치 claude/animation-guns-f03acf)
+- 한 것(확인, Unity 실행): 소총 저조준 총구 yaw 90.7→-14°·pitch +4→-24°(설정값과 일치), 어깨 견착·사격 yaw 96→0°, 소총/권총 분류 복원, 웅크림 1인칭 카메라 안 몸 메시 제거, 달리기 점프 1인칭 총 점유 12.7%(점유 과다 아님).
+- 테스트: EditMode 1409/1409, `AnimationJointTests` 17/17(신규 1건), Stance·AimAndLean·CombatantPresentation·FootPlant 23/25(실패 2건: `Crouching_LowersTheServersEyes…` knee 0.4011>0.4 선재 실패, `ASixMetreFall…` 묶음 실행에서만 스폰 전 NullRef, 단독 통과).
+- 산출: `Tests/PlayMode/GunPoseSurveyTests.cs`(명시 실행, `Logs/gun_survey.csv`), 전/후 CSV·캡처는 세션 노트 폴더 `anim_shots/`.
+- 못 한 것: 15모델 중 Swat만 측정(다른 3~4모델 캡처 미실행), 재장전·꺼내기·교체·투척·근접 자세는 수치 CSV로만 훑고 화면 판정은 일부(재장전·ADS·달리기), 엎드림 왼손 팜-그립 0.25~0.38m 미수정, 몸 렌더러를 다시 켜는 코드 미특정(매 프레임 숨김으로 우회).
+- 확인·추정: 위 수치는 확인. '몸 렌더러를 켜는 주체'와 재장전 중 yaw 50°의 정상 여부는 추정.

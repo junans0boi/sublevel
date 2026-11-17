@@ -34,6 +34,8 @@ namespace Game.Gameplay
         Transform _upperArmR, _wristR;
         float _shoulderRestYaw;      // shoulder line's turn from the facing in the saved pose (degrees, right positive)
         Quaternion _wristRBind;      // right wrist relative to the character in the saved pose, weapon pointing forward
+        Quaternion[] _gunBind;       // per weapon id: the right wrist (relative to the character) at which that weapon points straight ahead
+        Quaternion[] _toAim;         // per weapon id: turns the saved pose's frame into the aim frame (the weapon model's own pose when it was fitted)
         WeaponVisual _weapons;
         float[] _supportAhead;       // per weapon id: the left hand this far along the weapon from the grip; 0 = not held in both hands
         float[] _rearBack;           // per weapon id: how far the rear of the model is behind the right hand (m), for seating the stock (#226)
@@ -81,13 +83,24 @@ namespace Game.Gameplay
             _wristRBind = Quaternion.Inverse(transform.rotation) * _wristR.rotation;
             _shoulderRestYaw = ShoulderYaw();
             _supportAhead = new float[MaxWeaponId + 1];
+            _gunBind = new Quaternion[MaxWeaponId + 1];
+            _toAim = new Quaternion[MaxWeaponId + 1];
             _isPistol = new bool[MaxWeaponId + 1];
             _rearBack = new float[MaxWeaponId + 1];
             for (int id = 1; id <= MaxWeaponId; id++)
             {
                 var model = _weapons.ModelFor(id);
                 var def = GameData.Weapons.Find(id);
-                if (model == null || def == null || def.IsMelee || !Span(model, out float back, out float front)) continue;
+                _gunBind[id] = _wristRBind; _toAim[id] = Quaternion.identity;
+                if (model != null && _weapons.TryFit(id, out var fit) && fit.Rotation != default)
+                {
+                    // The roster characters are saved in their T-pose, not in the pose the weapons were fitted in: the weapon sits on the hand
+                    // where it was fitted, so ask the weapon itself which wrist turn makes it point ahead (it was fitted muzzle along +Z).
+                    var rel = Quaternion.Inverse(_wristR.rotation) * model.transform.rotation;
+                    _gunBind[id] = fit.Rotation * Quaternion.Inverse(rel);
+                    _toAim[id] = model.transform.rotation * Quaternion.Inverse(transform.rotation * fit.Rotation);
+                }
+                if (model == null || def == null || def.IsMelee || !Span(model, _toAim[id], out float back, out float front)) continue;
                 if (front - back < MinLongGunMeters)
                 {
                     // A hand gun: the left hand cups the right (no handguard to hold).
@@ -107,15 +120,15 @@ namespace Game.Gameplay
                 var grip = model.transform.Find(LeftHandGripName);
                 if (grip == null) { grip = new GameObject(LeftHandGripName).transform; grip.SetParent(model.transform, false); }
                 var offset = _isPistol[id] ? new Vector3(-PistolCupSide, -0.01f, _supportAhead[id]) : new Vector3(0f, -PalmBelowBore, _supportAhead[id]);
-                grip.SetPositionAndRotation(_wristR.position + transform.rotation * offset, transform.rotation);
+                grip.SetPositionAndRotation(_wristR.position + _toAim[id] * (transform.rotation * offset), _toAim[id] * transform.rotation);
             }
         }
 
         // How far the weapon model reaches behind (negative) and in front of the right hand, along the character's forward.
-        bool Span(GameObject model, out float back, out float front)
+        bool Span(GameObject model, Quaternion toAim, out float back, out float front)
         {
             back = float.MaxValue; front = float.MinValue;
-            float hand = transform.InverseTransformPoint(_wristR.position).z;
+            var undo = Quaternion.Inverse(toAim);
             foreach (var filter in model.GetComponentsInChildren<MeshFilter>(true))
             {
                 if (filter.sharedMesh == null) continue;
@@ -123,7 +136,7 @@ namespace Game.Gameplay
                 for (int i = 0; i < 8; i++)
                 {
                     var corner = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
-                    float z = transform.InverseTransformPoint(filter.transform.TransformPoint(corner)).z - hand;
+                    float z = transform.InverseTransformDirection(undo * (filter.transform.TransformPoint(corner) - _wristR.position)).z;
                     back = Mathf.Min(back, z);
                     front = Mathf.Max(front, z);
                 }
@@ -330,7 +343,7 @@ namespace Game.Gameplay
             float stock = _isPistol[id] ? 0f : Mathf.Max(0f, StockPocketZ + _rearBack[id] - pose.Z) * _ready;
             var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down - act.Down, pose.Z + stock)
                 - axis * (r.KickBackMeters * _kick);
-            var gripTurn = turn * _wristRBind;
+            var gripTurn = turn * _gunBind[id];
 
             // Right hand: on the grip, turned so the weapon (hanging from it) points along the hold.
             Reach(1, ArmRight, grip, _rifle);

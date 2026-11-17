@@ -811,6 +811,8 @@ namespace Game.Gameplay
             // Seated with empty hands, only the head goes (its shadow stays): the own arms on the wheel or the bars
             // and the legs show in the eye view.
             int shown = !hide ? 0 : VehicleSeat.IsAttached(_combatant) && _combatant.ActiveWeaponId == 0 ? 2 : 1;
+            // Every frame, not only on a change: something turned the body mesh back on in the crouched eye view (the camera sat inside it).
+            if (shown == 1) foreach (var r in _bodyRenderers) if (r != null) { r.enabled = false; r.forceRenderingOff = true; }
             if (shown == _bodyShown) return;
             _bodyShown = shown;
             foreach (var r in _bodyRenderers)
@@ -818,6 +820,7 @@ namespace Game.Gameplay
                 if (r == null) continue;
                 bool head = r.name.Contains("Head");
                 r.enabled = shown != 1;
+                r.forceRenderingOff = false;
                 r.shadowCastingMode = shown == 2 && head ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
             }
             // #179: the worn helmet and vest go with the body (the eye sits inside the helmet).
