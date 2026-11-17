@@ -21,7 +21,7 @@ namespace Game.Tests
             var trees = Plants.Where(p => p.HasTrunk).ToList();
             var bushes = Plants.Where(p => !p.HasTrunk).ToList();
             Assert.GreaterOrEqual(trees.Count, Plan.Trees.Count * 0.9f, "the plan's trees are kept");
-            Assert.LessOrEqual(trees.Count, Vegetation.MaxTrees);
+            Assert.LessOrEqual(trees.Count, Vegetation.MaxTrees + Vegetation.MaxForest);
             Assert.Greater(bushes.Count, 500);
             Assert.LessOrEqual(bushes.Count, Vegetation.MaxBushes);
             Assert.Greater(trees.Count(p => p.Kind == PlantKind.Conifer), 100);
@@ -83,8 +83,9 @@ namespace Game.Tests
         [Test]
         public void Trees_AreNotStackedOnEachOther()
         {
-            var trees = Plants.Skip(Plan.Trees.Count).Where(p => p.HasTrunk).ToList();
-            var all = Plants.Where(p => p.HasTrunk).ToList();
+            var plain = Vegetation.Plan(Plan, false); // the forest belt packs trees 2.6 m apart on purpose (ADR-270)
+            var trees = plain.Skip(Plan.Trees.Count).Where(p => p.HasTrunk).ToList();
+            var all = plain.Where(p => p.HasTrunk).ToList();
             foreach (var t in trees)
                 foreach (var o in all)
                 {

@@ -33,6 +33,20 @@ namespace Game.Core
             }
         }
 
+        // Loot never lies where a door swings or someone stands to use it (a door that opens and shuts under the F press made the item unpickable):
+        // clear of the opening by half its width plus DoorClear, which also covers the swing arc (hinge at the jamb, radius = width).
+        public const float DoorClear = 1.2f;
+        public static bool NearDoor(BuildingPlan plan, float x, float y, float z)
+        {
+            foreach (var d in plan.Doors)
+            {
+                if (Math.Abs(y - d.Y) > 2.2f) continue;
+                float r = d.Width * 0.5f + DoorClear, dx = x - d.X, dz = z - d.Z;
+                if (dx * dx + dz * dz < r * r) return true;
+            }
+            return false;
+        }
+
         // Weapons every building of the kind holds at least (ADR-256): one for every place a player can walk into and look around, none for sheds and stalls;
         // the barracks armoury and the apartment blocks hold more.
         public static int MinWeapons(BuildingKind kind)

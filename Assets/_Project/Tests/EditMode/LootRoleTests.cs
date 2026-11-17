@@ -60,5 +60,27 @@ namespace Game.Tests
             Assert.GreaterOrEqual(weapons, 80 * 2 * 2, "weapon points vs two per player of an 80 player match, twice over");
             Assert.LessOrEqual(counts.Sum(), spec.Build.MaxLootSpawns);
         }
+
+        static int LotSeed(int seed, int index)
+        {
+            unchecked { uint h = (uint)seed * 2654435761u + (uint)index * 40503u + 0x9E3779B9u; h ^= h >> 15; h *= 2246822519u; h ^= h >> 13; return (int)h; }
+        }
+
+        // Loot beside a door was unpickable when the door swung shut under the F press: every point of every building is clear of every door.
+        [Test]
+        public void No_loot_point_of_the_island_lies_within_reach_of_a_door_and_the_minimums_hold()
+        {
+            var plan = WorldGenerator.Generate(WorldSpec.CreateIsland());
+            Assert.AreEqual(411, plan.Lots.Count);
+            for (int i = 0; i < plan.Lots.Count; i++)
+            {
+                var lot = plan.Lots[i];
+                var b = Buildings.Generate(lot.Kind, lot.SizeX, lot.SizeZ, LotSeed(plan.Seed, i));
+                foreach (var p in b.LootPoints)
+                    Assert.IsFalse(LootPlacement.NearDoor(b, p.X, p.Y, p.Z), $"lot {i} {lot.Kind} {p.Name}");
+                if (lot.Kind != BuildingKind.ElevatorStation)
+                    Assert.GreaterOrEqual(b.LootPoints.Count, System.Math.Max(1, LootPlacement.MinWeapons(lot.Kind)), $"lot {i} {lot.Kind} keeps its weapon points");
+            }
+        }
     }
 }
