@@ -81,6 +81,7 @@ namespace Game.Tests
         {
             LagComp.ViewDelayTicks = _viewDelayBefore;
             GameData.Rules.Ballistics.MaxRewindSeconds = _capBefore;
+            LagCompensation.Probe = null;
             if (_def != null) _def.SpreadDeg = _spreadBefore;
             if (_pump != null) UnityEngine.Object.Destroy(_pump);
             yield return _net.Teardown();
@@ -93,6 +94,20 @@ namespace Game.Tests
         }
 
         static string Inv(double v) => v.ToString("F2", CultureInfo.InvariantCulture);
+
+        // The server time at which the body stood where `copy` is (its recorded history): the time the copy shows.
+        static bool TimeShownBy(PositionHistory h, Vector3 copy, out double time)
+        {
+            time = 0; float best = float.MaxValue;
+            double newest = h.Newest;
+            for (double t = newest; t > newest - 0.8; t -= 0.002)
+            {
+                if (!h.TryAt(t, out float x, out float y, out float z)) break;
+                float d = new Vector2(x - copy.x, z - copy.z).sqrMagnitude;
+                if (d < best) { best = d; time = t; }
+            }
+            return best < 0.5f * 0.5f;
+        }
 
         static int OtherEditorsOrServers()
         {
@@ -151,6 +166,11 @@ namespace Game.Tests
             _net.HostInput.Frame.Move = Vector2.zero;
             a.Input.Frame.AimHeld = true;
 
+            var history = _net.HostPlayer.GetComponent<PositionRecorder>().History;
+            double probeNow = 0, probeAt = 0; int probeCalls = 0;
+            LagCompensation.Probe = (shooter, now, at) => { if (shooter != onServer) return; probeNow = now; probeAt = at; probeCalls++; };
+            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms\n");
+            string curCond = "", curScenario = ""; int curRep = 0, curShot = 0;
             bool resolved = false, hit = false;
             void On(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Launch) return; resolved = true; hit = s.Victim != null; }
             a.Player.ShotResolved += On;
@@ -159,11 +179,19 @@ namespace Game.Tests
             IEnumerator Fire(Action<bool> done)
             {
                 if (a.Player.ActiveMag < 3) { a.Player.CmdReload(); yield return Frames(3.5f); }
-                resolved = false;
-                var aim = seen.transform.position + Vector3.up * 0.9f;
+                resolved = false; probeCalls = 0;
+                var copyPos = seen.transform.position;
+                var aim = copyPos + Vector3.up * 0.9f;
+                double callT = Time.timeAsDouble;
                 a.Player.CmdFire((aim - a.Player.EyePosition).normalized, a.Player.ViewTick);
                 float giveUp = Time.time + 3f;
                 while (!resolved && Time.time < giveUp) yield return null;
+                // The model the server used and how late the copy was (dt = rewound-to minus the time the copy showed, + = too little rewind).
+                string extra = ",,";
+                if (probeCalls > 0 && TimeShownBy(history, copyPos, out double tShown))
+                    extra = $",{Inv((probeNow - probeAt) * 1000)},{Inv((callT - tShown) * 1000)},{Inv((probeAt - tShown) * 1000)}";
+                else if (probeCalls > 0) extra = $",{Inv((probeNow - probeAt) * 1000)},,";
+                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra));
                 done(resolved && hit);
             }
 
@@ -191,11 +219,23 @@ namespace Game.Tests
                     foreach (var scenario in new[] { "static", "moving", "far35" })
                     {
                         var place = scenario == "far35" ? far : near;
-                        a.Controller.Teleport(place.shooter);
-                        a.Controller.LookAt(place.lane + Vector3.up * 1.6f);
-                        hostCtl.Teleport(place.lane);
-                        hostCtl.LookAt(place.shooter + Vector3.up * 1.6f);
-                        yield return Frames(scenario == "far35" ? 1.5f : 1f);
+                        curCond = cond.Name; curScenario = scenario; curRep = rep; curShot = 0;
+                        // Both bodies must stand where the test put them, on the server and in the shooter's copy, before a shot is fired:
+                        // a shooter teleported back from 35 m was held at the old spot for seconds (every shot of the rep missed).
+                        bool placed = false;
+                        for (int attempt = 0; attempt < 3 && !placed; attempt++)
+                        {
+                            a.Controller.Teleport(place.shooter);
+                            a.Controller.LookAt(place.lane + Vector3.up * 1.6f);
+                            hostCtl.Teleport(place.lane);
+                            hostCtl.LookAt(place.shooter + Vector3.up * 1.6f);
+                            float until = Time.time + 6f;
+                            while (Time.time < until && !((onServer.transform.position - place.shooter).magnitude < 0.3f && (seen.transform.position - place.lane).magnitude < 0.3f)) yield return null;
+                            placed = (onServer.transform.position - place.shooter).magnitude < 0.3f && (seen.transform.position - place.lane).magnitude < 0.3f;
+                            if (!placed) Debug.Log($"placement retry {attempt}: {cond.Name} {scenario} rep {rep}");
+                        }
+                        Assert.IsTrue(placed, "both bodies placed and synced");
+                        yield return Frames(0.5f);
                         int shots = scenario == "far35" ? 10 : 20, hits = 0, taken = 0, speedN = 0; float speedSum = 0f;
                         if (scenario == "static")
                         {
@@ -241,6 +281,7 @@ namespace Game.Tests
                 }
                 Directory.CreateDirectory(LogDir);
                 File.WriteAllText(Path.Combine(LogDir, $"lagcomp-matrix-{model}.csv"), csv.ToString());
+                File.WriteAllText(Path.Combine(LogDir, $"lagcomp-matrix-shots-{model}.csv"), shotsCsv.ToString());
             }
             a.Player.ShotResolved -= On;
             summary.AppendLine($"\n{(failures.Count == 0 ? "PASS" : "FAIL")}: {failures.Count} of {conds.Count * 3} condition/scenario cells fail" + (failures.Count > 0 ? ": " + string.Join(", ", failures) : ""));
