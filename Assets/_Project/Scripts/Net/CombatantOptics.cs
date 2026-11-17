@@ -303,7 +303,7 @@ namespace Game.Net
             if (_combatant.Dead.Value || lootObject == null || !SlotOk(slot, "optic from ground")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Optic) return;
-            if ((item.transform.position - transform.position).sqrMagnitude > Combatant.ServerPickupRange * Combatant.ServerPickupRange)
+            if (!PickupSight.Reachable(transform.position, _combatant.EyePosition, item.transform, transform, GameData.Rules.Guard.LagSlackMeters))
             {
                 ServerGuard.Refuse(GuardKind.Distance, _combatant, "optic pickup");
                 return;

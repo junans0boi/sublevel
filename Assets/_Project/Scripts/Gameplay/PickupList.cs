@@ -15,17 +15,22 @@ namespace Game.Gameplay
     {
         public const int MaxRows = 8;
         const float TakenSeconds = 1f;
+        const float WheelHoldSeconds = 1.5f, FollowMargin = 6f; // after a wheel notch the view leaves the selection alone; rank points one row must lead by
         const float RowWidth = 330f, RowHeight = 40f, RowGap = 3f;
         static readonly Vector2 Offset = new Vector2(70f, 0f); // from the screen centre to the list's left edge
 
         public static PickupList Instance { get; private set; }
         // The list is on screen (the HUD's single prompt stands down then).
         public static bool Showing => Instance != null && Instance._root != null && Instance._root.activeSelf;
+        // The player's F goes to a door this frame (it is nearer the view): the list stands down.
+        public static bool DoorFirst;
 
         readonly List<LootItem> _rows = new List<LootItem>();
         readonly List<LootItem> _nearby = new List<LootItem>();
         readonly Dictionary<LootItem, float> _taken = new Dictionary<LootItem, float>();
         readonly List<LootItem> _expired = new List<LootItem>();
+        readonly Dictionary<LootItem, float> _rank = new Dictionary<LootItem, float>(), _bearing = new Dictionary<LootItem, float>();
+        float _wheelUntil;
         int _selected = -1;
         bool _visible;
 
@@ -80,9 +85,10 @@ namespace Game.Gameplay
             if (Instance == this) Instance = null;
         }
 
-        // Called by the local PlayerController every frame: the pickups around `position`, the wheel applied, the
-        // selected one returned (null when none is in reach).
-        public LootItem Refresh(Vector3 position, int wheel)
+        // Called by the local PlayerController every frame with the pickups it can see in reach (PickupSight.Gather) and
+        // their bearing off the view: the wheel applied, the one nearest the middle of the view returned (null when none).
+        // Rows keep their order while the same pickups stay; the selection follows the view unless the wheel moved it lately.
+        public LootItem Refresh(Vector3 position, IList<LootItem> candidates, IList<float> bearings, int wheel)
         {
             float now = Time.unscaledTime;
             _expired.Clear();
@@ -91,17 +97,44 @@ namespace Game.Gameplay
             foreach (var item in _expired)
             {
                 _taken.Remove(item);
-                if (item != null) SetHidden(item, false);
+                if (item != null) SetHidden(item, false); else Hidden.Remove(item);
             }
 
             _nearby.Clear();
-            float rangeSqr = Combatant.PickupRange * Combatant.PickupRange;
-            foreach (var item in LootItem.All)
-                if (item != null && item.IsSpawned && !_taken.ContainsKey(item) && (item.transform.position - position).sqrMagnitude < rangeSqr) _nearby.Add(item);
-            Sync(_rows, _nearby, i => i == null ? float.MaxValue : (i.transform.position - position).sqrMagnitude, ref _selected);
-            if (wheel != 0 && _rows.Count > 1) _selected = Step(_selected, _rows.Count, wheel);
+            _rank.Clear();
+            _bearing.Clear();
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var item = candidates[i];
+                if (item == null || _taken.ContainsKey(item)) continue;
+                _nearby.Add(item);
+                _bearing[item] = bearings[i];
+                _rank[item] = Interact.Rank(bearings[i], (item.transform.position - position).magnitude);
+            }
+            Sync(_rows, _nearby, i => i == null || !_rank.TryGetValue(i, out float r) ? float.MaxValue : r, ref _selected);
+            if (wheel != 0 && _rows.Count > 1)
+            {
+                _selected = Step(_selected, _rows.Count, wheel);
+                _wheelUntil = now + WheelHoldSeconds;
+            }
+            else if (now >= _wheelUntil) FollowView();
             return Current;
         }
+
+        // The selection moves to the row nearest the middle of the view once it beats the current one by a margin.
+        void FollowView()
+        {
+            int best = -1;
+            float bestRank = float.MaxValue;
+            for (int i = 0; i < _rows.Count; i++)
+                if (_rank.TryGetValue(_rows[i], out float r) && r < bestRank) { bestRank = r; best = i; }
+            if (best < 0 || best == _selected) return;
+            float current = _selected >= 0 && _selected < _rows.Count && _rank.TryGetValue(_rows[_selected], out float c) ? c : float.MaxValue;
+            if (bestRank + FollowMargin < current) _selected = best;
+        }
+
+        // The bearing off the view of the selected pickup (degrees); 180 when none.
+        public float CurrentBearing => Current != null && _bearing.TryGetValue(Current, out float r) ? r : 180f;
 
         // F on the selected pickup: asks the server and takes it off the list (and out of sight) right away.
         public static void Take(Combatant combatant, LootItem item)
@@ -113,16 +146,33 @@ namespace Game.Gameplay
             SetHidden(item, true);
         }
 
+        // Hides what F asked for at once. Only renderers that were drawn are switched off and back on: LootView keeps the
+        // box off behind a weapon or optic model, and showing it again would draw it over the model.
+        static readonly Dictionary<LootItem, List<Renderer>> Hidden = new Dictionary<LootItem, List<Renderer>>();
+
         static void SetHidden(LootItem item, bool hidden)
         {
-            foreach (var r in item.GetComponentsInChildren<Renderer>(true)) r.forceRenderingOff = hidden;
+            if (hidden)
+            {
+                if (Hidden.ContainsKey(item)) return;
+                var drawn = new List<Renderer>();
+                foreach (var r in item.GetComponentsInChildren<Renderer>(true))
+                    if (!r.forceRenderingOff) { r.forceRenderingOff = true; drawn.Add(r); }
+                Hidden[item] = drawn;
+            }
+            else if (Hidden.TryGetValue(item, out var drawn))
+            {
+                Hidden.Remove(item);
+                foreach (var r in drawn) if (r != null) r.forceRenderingOff = false;
+            }
         }
 
         void LateUpdate()
         {
             var me = Combatant.LocalPlayer;
-            _visible = _rows.Count > 1 && me != null && !me.Dead.Value && UiFocus.Current == UiScreen.None
+            _visible = _rows.Count > 1 && !DoorFirst && me != null && !me.Dead.Value && UiFocus.Current == UiScreen.None
                 && !ResultScreen.BlocksGameplay && TeamHud.ReviveCandidate(me) == null;
+            DoorFirst = false; // the player sets it again next frame
             if (_root == null)
             {
                 if (!_visible) return;

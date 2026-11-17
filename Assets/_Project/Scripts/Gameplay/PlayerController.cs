@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishNet.Object;
 using Game.Core;
 using Game.Net;
@@ -453,8 +454,14 @@ namespace Game.Gameplay
             // A door in reach and in view opens or shuts (G11, ADR-104); otherwise F picks up.
             // F held next to a landed supply crate opens it (#144, ADR-113); a tap still picks up.
             bool supplyKey = !elevatorKey && SupplyView.HandleInteract(_combatant, f.InteractHeld, Time.deltaTime);
-            bool doorKey = !elevatorKey && !supplyKey && f.Interact && TeamHud.ReviveCandidate(_combatant) == null
-                && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, Camera != null ? Camera.transform.forward : transform.forward);
+            // One press, one target (ADR-276): the pickup, unless a door lies clearly nearer the middle of the view.
+            var look = Camera != null ? Camera.transform.forward : transform.forward;
+            float doorBearing = DoorSystem.Bearing(_combatant.EyePosition, look);
+            bool doorFirst = doorBearing != float.MaxValue && (NearbyLoot == null || !Interact.PickupBeatsDoor(PickupList.Instance != null ? PickupList.Instance.CurrentBearing : 0f, doorBearing, InteractRules.Current));
+            if (doorFirst) NearbyLoot = null; // the prompt and list show what F will do
+            PickupList.DoorFirst = doorFirst && doorBearing != float.MaxValue;
+            bool doorKey = !elevatorKey && !supplyKey && f.Interact && doorFirst && TeamHud.ReviveCandidate(_combatant) == null
+                && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, look);
             if (!elevatorKey && !supplyKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             // The hand reaches for the door or the loot (#212, own view only).
             if (doorKey || (f.Interact && !elevatorKey && !supplyKey && NearbyLoot != null))
@@ -841,16 +848,21 @@ namespace Game.Gameplay
             _vehicleHeading = heading;
         }
 
+        readonly List<LootItem> _sightItems = new List<LootItem>();
+        readonly List<float> _sightBearings = new List<float>();
+
+        // The pickup F takes (ADR-276): in reach, on this storey, in front and in sight; the one nearest the middle of the view.
         LootItem FindNearbyLoot()
         {
+            PickupSight.Gather(_combatant, Camera != null ? Camera.transform.forward : transform.forward, _sightItems, _sightBearings);
             // G5 (ADR-093): the pickup list's selection; the wheel is the scope's while looking down the sights.
-            if (PickupList.Instance != null) return PickupList.Instance.Refresh(transform.position, _aim.Mode == AimMode.Sights ? 0 : LastInput.ZoomSteps);
+            if (PickupList.Instance != null) return PickupList.Instance.Refresh(transform.position, _sightItems, _sightBearings, _aim.Mode == AimMode.Sights ? 0 : LastInput.ZoomSteps);
             LootItem best = null;
-            float bestSqr = Combatant.PickupRange * Combatant.PickupRange;
-            foreach (var item in LootItem.All)
+            float bestRank = float.MaxValue;
+            for (int i = 0; i < _sightItems.Count; i++)
             {
-                float sqr = (item.transform.position - transform.position).sqrMagnitude;
-                if (sqr < bestSqr) { bestSqr = sqr; best = item; }
+                float rank = Interact.Rank(_sightBearings[i], (_sightItems[i].transform.position - transform.position).magnitude);
+                if (rank < bestRank) { bestRank = rank; best = _sightItems[i]; }
             }
             return best;
         }

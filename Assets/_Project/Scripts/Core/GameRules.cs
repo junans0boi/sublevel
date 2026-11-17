@@ -38,6 +38,7 @@ namespace Game.Core
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();
         public InterestRules Interest = new InterestRules(); // #167, ADR-135
+        public InteractRules Interact = new InteractRules(); // ADR-276
         public ParkourRules Parkour = new ParkourRules();
         public VehicleRules Vehicles = new VehicleRules();
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();

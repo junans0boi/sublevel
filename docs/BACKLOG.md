@@ -1,2 +1,5 @@
 - [botsnet] 열쇠 흐름이 승강장 진입 전에 막히는 원인(`[BotStat] key-gate` 진단 로그 실행)·T9 팀·칩·방독 사용·T10 관심 지점·T13 PERF 자동화·T11 NavMesh 연결성·T12 통계 시나리오 (docs/tracks/botsnet_DONE.md)
 - [botsnet] 열쇠 삽입 0건 원인 후보: `ElevatorRides.Running`이 클라 스케줄(`DoorsClosed`)을 읽어 전용 서버에서 항상 false → 봇은 서버용(`_doors.ServerScheduled && !ServerDoorsClosed`)을 써야 함(미검증, `TryKeyElevator`의 `rides.Running` 교체 후 서버 실측). 대기열 흐름의 DedicatedServer 연결·시작 요청 전송(모드·파티 크기)도 후속.
+- [interact] 봇 줍기(`BotServerActions`)에도 같은 층·시선 검사 적용(지금은 거리만).
+- [interact] 아이템 모델 외곽선(림 라이트)·거리별 아이콘 빌보드, 밝은 야외 지붕용 링 색 대비 보정.
+- [interact] 서버가 클라 카메라 방향을 받아 시선 콘도 검증(지금은 클라 선택만).

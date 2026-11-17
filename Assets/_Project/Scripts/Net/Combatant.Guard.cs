@@ -16,7 +16,7 @@ namespace Game.Net
         }
 
         // How far a pickup may be: the reach plus what the server's late copy of the body can be off by.
-        public static float ServerPickupRange => PickupRange + GameData.Rules.Guard.LagSlackMeters;
+        public static float ServerPickupRange => InteractRules.Current.ReachMeters + GameData.Rules.Guard.LagSlackMeters;
 
         // A fire or punch request: a finite direction, and no faster than the weapon (plus a margin) can shoot.
         bool FireRequestOk(Vector3 direction)
@@ -32,8 +32,12 @@ namespace Game.Net
         bool SlotOk(int slot, string what) =>
             InputGuard.ValidSlot(slot, Loadout.SlotCount) || ServerGuard.Refuse(GuardKind.Slot, this, $"{what}: slot {slot}");
 
-        bool PickupInReach(LootItem item, string what) =>
-            (item.transform.position - transform.position).sqrMagnitude <= ServerPickupRange * ServerPickupRange
-            || ServerGuard.Refuse(GuardKind.Distance, this, $"{what}: item {(item.transform.position - transform.position).magnitude:F1} m away");
+        // The pickup's distance, storey and line of sight from this body's eyes (ADR-276; the late copy of the body gets the lag slack).
+        bool PickupInReach(LootItem item, string what)
+        {
+            var g = GameData.Rules.Guard;
+            if (PickupSight.Reachable(transform.position, EyePosition, item.transform, transform, g.LagSlackMeters)) return true;
+            return ServerGuard.Refuse(GuardKind.Distance, this, $"{what}: item {(item.transform.position - transform.position).magnitude:F1} m away, out of reach or sight");
+        }
     }
 }

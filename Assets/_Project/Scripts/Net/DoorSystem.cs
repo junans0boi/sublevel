@@ -132,6 +132,16 @@ namespace Game.Net
         public int Pick(Vector3 eye, Vector3 look) =>
             Doors.Pick(_xs, _ys, _zs, _doors.Count, eye.x, eye.y, eye.z, look.x, look.z, DoorRules.Current);
 
+        // How far off the middle of the view (flat degrees) the door F would reach lies; float.MaxValue when there is none.
+        // F weighs this against a pickup's bearing (Interact.PickupBeatsDoor, ADR-276).
+        public static float Bearing(Vector3 eye, Vector3 look)
+        {
+            var self = Instance;
+            if (self == null) return float.MaxValue;
+            int index = self.Pick(eye, look);
+            return index < 0 ? float.MaxValue : Interact.BearingDegrees(eye.x, eye.z, look.x, look.z, self._xs[index], self._zs[index]);
+        }
+
         // F pressed by the local player: the door in reach opens or shuts. False when there is none.
         public static bool TryInteract(Combatant me, Vector3 eye, Vector3 look)
         {
