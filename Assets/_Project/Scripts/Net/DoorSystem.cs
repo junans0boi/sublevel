@@ -19,6 +19,14 @@ namespace Game.Net
         Transform _root;
         readonly List<Door> _doors = new List<Door>();
         float[] _xs = new float[0], _ys = new float[0], _zs = new float[0];
+        // Doors do not move: a hash over them lets a bot look at the few near it instead of all (ADR-290).
+        readonly PointGrid _grid = new PointGrid(4f);
+        readonly List<int> _near = new List<int>();
+        int _gridCount = -1;
+        // Doors a person walks in by, with the lot they belong to (the building loot index lists them per building).
+        public readonly List<(int Lot, Vector3 Position)> ExteriorDoors = new List<(int, Vector3)>();
+        // The world plan the doors were made from (null without the generated map).
+        public WorldPlan Plan { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => Instance = null;
@@ -74,7 +82,7 @@ namespace Game.Net
             if (buildings == null) return;
             var spec = LoadSpec();
             if (spec == null) return;
-            var plan = WorldGenerator.Generate(spec);
+            var plan = Plan = WorldGenerator.Generate(spec);
             _root = new GameObject("Doors").transform;
             _root.SetParent(transform, false);
             for (int i = 0; i < plan.Lots.Count; i++)
@@ -90,6 +98,7 @@ namespace Game.Net
                     var centre = tr.TransformPoint(new Vector3(opening.X, opening.Y, opening.Z));
                     var facing = tr.rotation * Quaternion.Euler(0f, opening.FacingDeg, 0f);
                     Add(Door.Create(_root, _doors.Count, centre, facing, opening.Width, opening.Height));
+                    if (opening.Exterior) ExteriorDoors.Add((i, centre));
                 }
             }
         }
@@ -210,8 +219,16 @@ namespace Game.Net
             heading.y = 0f;
             var rules = DoorRules.Current;
             float reach = rules.BotReachMeters * rules.BotReachMeters;
-            for (int i = 0; i < self._doors.Count; i++)
+            if (self._gridCount != self._doors.Count)
             {
+                self._grid.Rebuild(self._xs, self._zs, self._doors.Count);
+                self._gridCount = self._doors.Count;
+            }
+            self._grid.Query(position.x, position.z, rules.BotReachMeters, self._near);
+            // Walking the hits in door order, as the scan of the whole list did.
+            for (int n = 0; n < self._near.Count; n++)
+            {
+                int i = self._near[n];
                 var door = self._doors[i];
                 if (door.State != DoorState.Closed) continue;
                 var to = door.transform.position - position;

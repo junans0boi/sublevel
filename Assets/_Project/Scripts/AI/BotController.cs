@@ -239,8 +239,24 @@ namespace Game.AI
         }
 
         float _nextDoor;
+        const float DoorInterval = 0.25f;
+        const int PathsPerFrame = 2;
+        static int _pathFrame, _pathsThisFrame;
+
+        static bool TakePathSlot()
+        {
+            if (_pathFrame != Time.frameCount) { _pathFrame = Time.frameCount; _pathsThisFrame = 0; }
+            return _pathsThisFrame++ < PathsPerFrame;
+        }
 
         void Update()
+        {
+            long t0 = BotPerf.Begin();
+            UpdateBot();
+            BotPerf.End(BotPerf.Ai, t0);
+        }
+
+        void UpdateBot()
         {
             if (!_self.IsServerInitialized) return;
             if (!_ready) Init();
@@ -261,13 +277,17 @@ namespace Game.AI
             if (now >= _nextSense)
             {
                 _nextSense = now + _rules.SenseInterval;
+                long ts = BotPerf.Begin();
                 Sense();
+                BotPerf.End(BotPerf.Sense, ts);
             }
             // Bots open a closed door in their way (G11, ADR-104).
             if (now >= _nextDoor)
             {
-                _nextDoor = now + 0.25f;
+                _nextDoor = now + DoorInterval;
+                long td = BotPerf.Begin();
                 DoorSystem.ServerBotOpen(transform.position, OnNavMesh && _agent.velocity.sqrMagnitude > 0.04f ? _agent.velocity : transform.forward);
+                BotPerf.End(BotPerf.Doors, td);
             }
             ApplyBlindness(now);
             FillSelf();
@@ -302,6 +322,9 @@ namespace Game.AI
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
+            // Phase spread (ADR-290): bots that start together would sense and check doors on the same frame for ever.
+            _nextSense = Time.time + (float)_rng.NextDouble() * _rules.SenseInterval;
+            _nextDoor = Time.time + (float)_rng.NextDouble() * DoorInterval;
             _maxHp = Mathf.Max(1f, _self.Hp.Value);
             _named++;
             DisplayName = BotNames.For(matchSeed, _botIndex);
@@ -418,7 +441,9 @@ namespace Game.AI
                 _percept.HeardPosition = ToVec(heardAt);
             }
 
+            long tl = BotPerf.Begin();
             SenseLoot(eye);
+            BotPerf.End(BotPerf.Loot, tl);
         }
 
         // A clear line from the eyes to that point on that combatant.
@@ -432,6 +457,8 @@ namespace Game.AI
             if (!Physics.Raycast(eye, to / distance, out var hit, distance + 0.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) return false;
             return hit.collider.GetComponentInParent<Combatant>() == target;
         }
+
+        readonly List<LootItem> _lootNear = new List<LootItem>();
 
         void SenseLoot(Vector3 eye)
         {
@@ -448,7 +475,8 @@ namespace Game.AI
             float bestSqr = rules.LootRadius * rules.LootRadius;
             bool bestIsWeapon = false;
             var feet = transform.position;
-            var items = LootItem.All;
+            var items = _lootNear;
+            BotLootGrid.Near(feet, rules.LootRadius, items);
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
@@ -704,9 +732,14 @@ namespace Game.AI
             bool waypointDone = _routing && !_agent.pathPending && _agent.remainingDistance <= WaypointReachedMeters;
             // No route last time: a long search is not run again every frame.
             if (far && !_hasDestination && now < _routeRetryAt) return;
-            if (!_hasDestination || now >= _nextRepath || waypointDone || (target - _destination).sqrMagnitude > moveLimit * moveLimit)
+            bool replan = !_hasDestination || now >= _nextRepath || waypointDone || (target - _destination).sqrMagnitude > moveLimit * moveLimit;
+            // At most PathsPerFrame bots plan a route in one frame (ADR-290): the rest keep walking the old one and plan on the next.
+            // A bot with no destination yet always plans (it would stand still otherwise).
+            if (replan && _hasDestination && !TakePathSlot()) replan = false;
+            if (replan)
             {
-                _nextRepath = now + (far ? RouteRepathSeconds : RepathSeconds);
+                // Spread by +-20 % (ADR-290): paths planned on the same second would land on the same frame.
+                _nextRepath = now + (far ? RouteRepathSeconds : RepathSeconds) * (0.8f + 0.4f * (float)_rng.NextDouble());
                 if (!_hasDestination)
                 {
                     _progressFrom = transform.position;
@@ -715,7 +748,10 @@ namespace Game.AI
                 _hasDestination = true;
                 _destination = target;
                 _routing = false;
-                if (!SnapToNavMesh(target, far, out var onMesh))
+                long tp = BotPerf.Begin();
+                bool snapped = SnapToNavMesh(target, far, out var onMesh);
+                BotPerf.End(BotPerf.Path, tp);
+                if (!snapped)
                 {
                     GiveUp(intent, now);
                     return;
@@ -723,7 +759,10 @@ namespace Game.AI
                 var next = onMesh;
                 if (far)
                 {
-                    if (!NextWaypoint(onMesh, out next))
+                    tp = BotPerf.Begin();
+                    bool waypoint = NextWaypoint(onMesh, out next);
+                    BotPerf.End(BotPerf.Path, tp);
+                    if (!waypoint)
                     {
                         _routeRetryAt = now + RouteRepathSeconds;
                         GiveUp(intent, now);
@@ -731,7 +770,10 @@ namespace Game.AI
                     }
                     _routing = true;
                 }
-                if (!_agent.SetDestination(next))
+                tp = BotPerf.Begin();
+                bool set = _agent.SetDestination(next);
+                BotPerf.End(BotPerf.Path, tp);
+                if (!set)
                 {
                     GiveUp(intent, now);
                     return;
