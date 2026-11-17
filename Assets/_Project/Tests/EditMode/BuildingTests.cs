@@ -221,6 +221,19 @@ namespace Game.Tests
             }
         }
 
+        // WorldBuilder.Structures makes the roof deck walkable by these piece names (ADR-273): bots reach the roof loot over it.
+        [Test]
+        public void RoofAccessBlocks_HaveNamedWalkableDeckSlabs()
+        {
+            foreach (var kind in new[] { BuildingKind.Shop, BuildingKind.Villa, BuildingKind.Apartment })
+            {
+                var (w, d) = Sizes(kind)[0];
+                var plan = Buildings.Generate(kind, w, d, 3);
+                foreach (var name in new[] { "RoofFloor", "RoofLanding", "RoofFloorFront" })
+                    Assert.IsTrue(plan.Pieces.Any(p => p.Name == name && p.Kind == SurfaceKind.Roof), $"{kind} {name}");
+            }
+        }
+
         [Test]
         public void PieceCount_StaysInsideTheBudget()
         {

@@ -296,7 +296,10 @@ public static partial class WorldBuilder
 
             // Floors and stairs are walked on; walls, roofs, trim and props only get in the way (a roof nobody
             // can reach would otherwise become an island of navmesh).
-            bool walkable = piece.Kind == SurfaceKind.Floor || piece.Kind == SurfaceKind.Stairs;
+            // The roof deck of a block with roof access (Roof*Floor/Landing/FloorFront slabs; ADR-273) is walked on too: bots reach the roof loot.
+            // The parapet and rails are Trim, so they still cut the edge out; a roof without access stays blocked (no island of navmesh).
+            bool roofDeck = piece.Kind == SurfaceKind.Roof && BuildingKinds.RoofAccess(kind) && piece.Name != null && piece.Name.StartsWith("Roof", StringComparison.Ordinal);
+            bool walkable = piece.Kind == SurfaceKind.Floor || piece.Kind == SurfaceKind.Stairs || roofDeck;
             nav.Add(new NavMeshBuildSource
             {
                 shape = NavMeshBuildSourceShape.Box,

@@ -239,6 +239,9 @@ public static partial class WorldBuilder
             // Along the wall: +x for front/back, +z for the sides.
             Vector3 Step(float a, float outward) =>
                 World(lx + (alongX ? a : (side == 2 ? -outward : outward)), lz + (alongX ? (side == 0 ? outward : -outward) : a));
+            // A tight street puts the next building's wall within a metre of this one: clutter must not land inside it (it blocked the stair foot of 8 shops, ADR-273).
+            var anchor = Step(0f, 0f);
+            if (!d.Free(anchor.x, anchor.z, 0f, 1.6f, lot)) continue;
             int type = (int)((gh >> 14) % (house ? 3u : 5u));
             switch (type)
             {
