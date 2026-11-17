@@ -99,9 +99,13 @@ namespace Game.Tests
             int n = 0;
             foreach (var p in Process.GetProcesses())
             {
-                string name = p.ProcessName;
-                if (name == "Unity" || name.StartsWith("Sublevel")) n++;
-                p.Dispose();
+                try
+                {
+                    string name = p.ProcessName;
+                    if (name == "Unity" || name.StartsWith("Sublevel")) n++;
+                }
+                catch (InvalidOperationException) { } // exited while we looked
+                finally { p.Dispose(); }
             }
             return n - 1; // this editor itself
         }
