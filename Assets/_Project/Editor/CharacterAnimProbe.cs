@@ -113,4 +113,29 @@ public static class CharacterAnimProbe
         File.WriteAllText("Logs/anim_prefabpose.txt", sb.ToString());
         EditorApplication.Exit(0);
     }
+
+    // Scales, facing and saved pose of every Player_<model> prefab: tools/unity.sh run CharacterAnimProbe.PlayerPrefabs -> Logs/anim_playerprefabs.csv
+    public static void PlayerPrefabs()
+    {
+        var sb = new StringBuilder("prefab,modelId,wrapperScale,modelScale,modelEulerY,hipsScale,spineScale,chestScale,spineLossy,hipsForwardDotRoot,chestForwardDotRoot,headFwdDotRoot,rightHandDotRootRight,ankleY,hipsY\n");
+        foreach (var name in new[] { "Player" }.Concat(PlayerAppearance.ModelIds.Select(i => "Player_" + i)))
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/M1/{name}.prefab"));
+            var def = go.GetComponentInChildren<CharacterDef>(true);
+            var a = def.Animator; var root = go.transform;
+            Transform B(HumanBodyBones b) => a.GetBoneTransform(b);
+            float Dot(Transform t, Vector3 axis) => Vector3.Dot(t.TransformDirection(axis), root.forward);
+            // The face direction of the body: hips->head is up, so use the line between the hands' shoulders (right is +x of the root).
+            var across = (B(HumanBodyBones.RightUpperArm).position - B(HumanBodyBones.LeftUpperArm).position).normalized;
+            sb.AppendLine(string.Join(",", name, def.Id, def.transform.localScale.x.ToString("F3"), a.transform.localScale.x.ToString("F3"), a.transform.localEulerAngles.y.ToString("F0"),
+                B(HumanBodyBones.Hips).localScale.x.ToString("F3"), B(HumanBodyBones.Spine).localScale.x.ToString("F3"), B(HumanBodyBones.Chest).localScale.x.ToString("F3"),
+                B(HumanBodyBones.Spine).lossyScale.x.ToString("F3"),
+                Vector3.Dot(Vector3.Cross(across, Vector3.up), root.forward).ToString("F2"), "-", "-",
+                Vector3.Dot(across, root.right).ToString("F2"),
+                root.InverseTransformPoint(B(HumanBodyBones.LeftFoot).position).y.ToString("F3"), root.InverseTransformPoint(B(HumanBodyBones.Hips).position).y.ToString("F3")));
+            Object.DestroyImmediate(go);
+        }
+        File.WriteAllText("Logs/anim_playerprefabs.csv", sb.ToString());
+        EditorApplication.Exit(0);
+    }
 }

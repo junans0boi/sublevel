@@ -246,6 +246,40 @@ namespace Game.Tests
             Assert.Greater(_anim.RifleHoldShown, 0.9f, "the rifle hold shows with a gun");
         }
 
+        // The body faces the way the controller faces (shoulder-line facing, 1 = forward) and a punch turns the shoulders the right way.
+        [UnityTest]
+        public IEnumerator BareHands_FaceForward_Standing_Walking_AndAPunchTwistsTheShouldersTheRightWay()
+        {
+            yield return Load();
+            float Dot() { var across = (B(HumanBodyBones.RightUpperArm).position - B(HumanBodyBones.LeftUpperArm).position).normalized; return Vector3.Dot(Vector3.Cross(across, Vector3.up), _pc.transform.forward); }
+            float Yaw() => Facing(HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm); // degrees, right positive
+            float stand = 0f; int n = 0;
+            for (float end = Time.time + 0.6f; Time.time < end; n++) { yield return null; stand += Dot(); }
+            stand /= n;
+            Shot("bare_front", 0f, 1.0f, 1.0f, -3.5f); Shot("bare_side", 3f, 1.0f, 1.0f);
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.6f);
+            float walk = 0f, wMin = 999f, wMax = -999f; n = 0;
+            for (float end = Time.time + 0.8f; Time.time < end; n++) { yield return null; walk += Dot(); wMin = Mathf.Min(wMin, Yaw()); wMax = Mathf.Max(wMax, Yaw()); }
+            walk /= n;
+            Debug.Log($"[AnimMetrics] walking shoulder yaw {wMin:F1}..{wMax:F1}");
+            _input.Frame.Move = Vector2.zero;
+            yield return new WaitForSeconds(0.6f);
+            float rest = 0f; n = 0;
+            for (float end = Time.time + 0.3f; Time.time < end; n++) { yield return null; rest += Yaw(); }
+            rest /= n;
+            bool right = false; _me.Punched += (in Combatant.PunchResult p) => right = p.Right;
+            _input.Frame.FirePressed = true;
+            float minYaw = 999f, maxYaw = -999f;
+            for (float end = Time.time + 0.5f; Time.time < end;) { yield return null; minYaw = Mathf.Min(minYaw, Yaw()); maxYaw = Mathf.Max(maxYaw, Yaw()); }
+            Debug.Log($"[AnimMetrics] bare hands facing: standing {stand:F2}, walking {walk:F2}; shoulder yaw at rest {rest:F1}, during a {(right ? "right" : "left")} punch {minYaw:F1}..{maxYaw:F1}");
+            Assert.Greater(stand, 0.85f, "standing bare-handed, the body faces forward");
+            Assert.Greater(walk, 0.8f, "walking bare-handed, the body faces forward");
+            if (right) Assert.Less(minYaw, rest - 5f, "a right punch brings the right shoulder forward (shoulder line turns left)");
+            else Assert.Greater(maxYaw, rest + 5f, "a left punch brings the left shoulder forward (shoulder line turns right)");
+            Shot("bare_punch", 2.5f, 1.3f, 1.2f);
+        }
+
         [UnityTest]
         public IEnumerator Punch_TheFistIsOutWithin50MsOfTheServersJudgement_AndTheVictimFlinches()
         {

@@ -78,6 +78,50 @@ namespace Game.Tests
             UnityEngine.Object.Destroy(tex); UnityEngine.Object.Destroy(rt); UnityEngine.Object.Destroy(go);
         }
 
+        // The player as spawned in the World scene (elevator), seen from the front and the side, with the bone scales and the facing in numbers.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator SpawnPoseInWorld()
+        {
+            var input = new ScriptedInput();
+            PlayerController.InputOverride = input;
+            SceneManager.LoadScene("World");
+            yield return null; yield return null;
+            float end = Time.realtimeSinceStartup + 60f;
+            while ((PlayerController.Local == null || Combatant.LocalPlayer == null) && Time.realtimeSinceStartup < end) yield return null;
+            var me = Combatant.LocalPlayer; var pc = PlayerController.Local;
+            Assert.IsNotNull(me);
+            yield return new WaitForSeconds(2f);
+            var animator = me.GetComponentInChildren<Animator>();
+            var def = me.GetComponentInChildren<CharacterDef>();
+            Transform B(HumanBodyBones b) => animator.GetBoneTransform(b);
+            for (int i = 0; i < 3; i++)
+            {
+                var across = (B(HumanBodyBones.RightUpperArm).position - B(HumanBodyBones.LeftUpperArm).position).normalized;
+                var face = Vector3.Cross(across, Vector3.up);
+                Debug.Log($"[Spawn] model {def.Id} root fwd {pc.transform.forward} body faces {face} (dot {Vector3.Dot(face, pc.transform.forward):F2}) hips scale {B(HumanBodyBones.Hips).lossyScale} spine {B(HumanBodyBones.Spine).lossyScale} chest {B(HumanBodyBones.Chest).lossyScale} visual rot {animator.transform.localEulerAngles} root pos {pc.transform.position} legTurn {me.GetComponent<CombatantAnimation>().LegTurnDeg:F1} model fwd {animator.transform.forward} wrapper fwd {def.transform.forward} wrapper euler {def.transform.eulerAngles} hips fwd {B(HumanBodyBones.Hips).forward} chest up {B(HumanBodyBones.Chest).up} parent chain {string.Join("/", animator.transform.GetComponentsInParent<Transform>().Select(t => t.name + ":" + t.localEulerAngles.y.ToString("F0")).Take(4))} plantDrop {me.GetComponent<CombatantAnimation>().PlantDrop:F3} base {me.GetComponent<CombatantAnimation>().BaseState}");
+                ShotFront($"spawn_front_{i}"); Shot($"spawn_side_{i}");
+                yield return new WaitForSeconds(0.5f);
+            }
+            PlayerController.InputOverride = null;
+        }
+
+        static void ShotFront(string name)
+        {
+            var pc = PlayerController.Local;
+            var go = new GameObject("ShotCam");
+            var cam = go.AddComponent<Camera>();
+            cam.fieldOfView = 30; cam.clearFlags = CameraClearFlags.Skybox;
+            go.transform.position = pc.transform.position + pc.transform.forward * 3.5f + Vector3.up * 1.0f;
+            go.transform.LookAt(pc.transform.position + Vector3.up * 1.0f);
+            var rt = new RenderTexture(1280, 720, 24);
+            cam.targetTexture = rt; cam.Render(); cam.targetTexture = null;
+            var tex = new Texture2D(1280, 720, TextureFormat.RGB24, false);
+            RenderTexture.active = rt; tex.ReadPixels(new Rect(0, 0, 1280, 720), 0, 0); RenderTexture.active = null;
+            Directory.CreateDirectory("Logs/plantshots");
+            File.WriteAllBytes($"Logs/plantshots/{name}.png", tex.EncodeToPNG());
+            UnityEngine.Object.Destroy(tex); UnityEngine.Object.Destroy(rt); UnityEngine.Object.Destroy(go);
+        }
+
         [UnityTest, Timeout(1700000)]
         public IEnumerator Survey()
         {
