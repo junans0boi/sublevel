@@ -19,6 +19,40 @@ namespace Game.Gameplay
         public static readonly Color Ln = new Color32(42, 51, 64, 255);        // #2A3340 1 px border
         public static readonly Color Pn = new Color32(16, 21, 28, 209);        // panel: #10151C at 82 %
 
+        // Derived from the tokens above (no new colours): hover wash (Tx at 3.5 %; UI blends in linear space, so it reads about 3x brighter), the darkened well of a list (Bg at 45 %),
+        // the nearly opaque panel used over a busy scene (Sf at 96 %), a "transparent" that still takes the pointer.
+        public static readonly Color Hover = new Color32(230, 236, 242, 9);
+        public static readonly Color Press = new Color32(230, 236, 242, 22);
+        public static readonly Color Well = new Color32(11, 15, 20, 115);
+        public static readonly Color PnSolid = new Color32(16, 21, 28, 245);
+        public static readonly Color Off = new Color(1f, 1f, 1f, 0.004f);
+
+        // A segment of a segmented control (lobby floor tabs, 일반/커스텀, TPP/FPP): no fill until chosen, then the accent at
+        // 24 % with a short accent bar under the label. Hover and press are washes of the text colour. SetSeg switches it.
+        public static Button Seg(Transform parent, string name, float x, float y, float w, float h, string text, int size, int radius,
+            UnityEngine.Events.UnityAction onClick)
+        {
+            var b = Btn(parent, name, x, y, w, h, text, size, radius, Color.white, Color.clear, Tx, onClick);
+            b.targetGraphic.color = Color.white; // the colour block below tints it
+            Box(At(b.transform, "Bar", w * 0.14f, h - 8f, w * 0.72f, 3f), Ac, 1);
+            SetSeg(b, false);
+            return b;
+        }
+
+        public static void SetSeg(Button b, bool on)
+        {
+            if (b == null) return;
+            var c = b.colors;
+            c.normalColor = c.selectedColor = on ? AcS : Off;
+            c.highlightedColor = on ? new Color32(255, 106, 43, 84) : Hover;
+            c.pressedColor = on ? new Color32(255, 106, 43, 110) : Press;
+            b.colors = c;
+            var label = b.GetComponentInChildren<Text>();
+            if (label != null) label.color = on ? Tx : T2;
+            var bar = b.transform.Find("Bar");
+            if (bar != null) bar.gameObject.SetActive(on);
+        }
+
         // A rect placed by top-left corner and size in stage pixels.
         public static RectTransform At(Transform parent, string name, float x, float y, float w, float h)
         {

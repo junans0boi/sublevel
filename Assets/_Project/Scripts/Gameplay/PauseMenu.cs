@@ -15,7 +15,7 @@ namespace Game.Gameplay
         const float ButtonHeight = 56f;
         const float ButtonGap = 12f;
 
-        static readonly Color Dim = new Color(0f, 0f, 0f, 0.6f);
+        static readonly Color Dim = new Color(UiPaint.Bg.r, UiPaint.Bg.g, UiPaint.Bg.b, 0.84f); // the lobby's scrim
 
         public static PauseMenu Instance { get; private set; }
 
@@ -87,7 +87,7 @@ namespace Game.Gameplay
             // Leaving the settings any way but 적용 drops what was only previewed.
             if (!settings && _settings.activeSelf) _settingsScreen.Cancel();
             _main.SetActive(!settings);
-            _settings.SetActive(settings);
+            if (settings) UiFx.Show(_settings); else _settings.SetActive(false);
         }
 
         void Build()
@@ -125,7 +125,7 @@ namespace Game.Gameplay
         static RectTransform Panel(string name, Transform parent, float width)
         {
             var panel = UiKit.Rect(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(width, 100f));
-            UiKit.Box(panel, UiKit.Panel, true);
+            UiPaint.Box(panel, UiPaint.PnSolid, 16, UiPaint.Ln).raycastTarget = true;
             return panel;
         }
 
@@ -135,13 +135,16 @@ namespace Game.Gameplay
 
         static float Title(Transform panel, string text, float panelWidth, float y)
         {
-            UiKit.Label(Row("Title", panel, panelWidth - Padding * 2f, 44f, y), text, 34, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiKit.Label(Row("Title", panel, panelWidth - Padding * 2f, 44f, y), text, 32, UiPaint.Tx, TextAnchor.MiddleCenter, FontStyle.Bold);
             return y + 44f + 24f;
         }
 
         static float MenuButton(Transform panel, string text, float panelWidth, float y, UnityEngine.Events.UnityAction onClick)
         {
-            UiKit.Button(Row(text, panel, panelWidth - Padding * 2f, ButtonHeight, y), text, 24, onClick);
+            // The first button of the column (계속하기) is the one accent action, the rest are outlined like the lobby's.
+            bool primary = y < 100f;
+            UiPaint.Btn(panel, text, Padding, y, panelWidth - Padding * 2f, ButtonHeight, text, 24, 14,
+                primary ? UiPaint.Ac : UiPaint.Sf, primary ? UiPaint.Ac : UiPaint.Ln, primary ? UiPaint.Bg : UiPaint.Tx, onClick);
             return y + ButtonHeight + ButtonGap;
         }
     }
