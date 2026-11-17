@@ -19,16 +19,27 @@ public static class BuildScript
     public static void BuildServerMac() => Build(BuildTarget.StandaloneOSX, "Build/server/SublevelServer.app", ScriptingImplementation.Mono2x);
     public static void BuildServerWin() => Build(BuildTarget.StandaloneWindows64, "Build/server-win/SublevelServer.exe", ScriptingImplementation.Mono2x);
 
-    static void Build(BuildTarget target, string output, ScriptingImplementation backend)
+    // Oracle Always Free ARM server (#381, docs/research/linux_arm64_server_build.md): Linux ARM64, Server subtarget.
+    public static void BuildServerLinuxArm64()
+    {
+        EditorUserBuildSettings.SetPlatformSettings("Linux64", "Architecture", "ARM64");
+        Debug.Log($"[BuildScript] Linux Architecture setting = {EditorUserBuildSettings.GetPlatformSettings("Linux64", "Architecture")}");
+        Build(BuildTarget.StandaloneLinux64, "Build/server-linux-arm64/SublevelServer", ScriptingImplementation.IL2CPP, server: true);
+    }
+
+    static void Build(BuildTarget target, string output, ScriptingImplementation backend, bool server = false)
     {
         try
         {
             PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone, backend);
+            if (server) PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Server, backend);
+            EditorUserBuildSettings.standaloneBuildSubtarget = server ? StandaloneBuildSubtarget.Server : StandaloneBuildSubtarget.Player;
             var options = new BuildPlayerOptions
             {
                 scenes = Array.ConvertAll(EditorBuildSettings.scenes, s => s.path),
                 locationPathName = output,
                 target = target,
+                subtarget = (int)(server ? StandaloneBuildSubtarget.Server : StandaloneBuildSubtarget.Player),
                 options = BuildOptions.None,
             };
             var summary = BuildPipeline.BuildPlayer(options).summary;
