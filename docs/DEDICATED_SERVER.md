@@ -11,6 +11,12 @@ tools/unity.sh build server-win    # Build/server-win/SublevelServer.exe (Window
 
 Unity 에디터 메뉴: `Build > Dedicated Server (mac)`. 코드는 `Assets/_Project/Editor/BuildScript.cs`(`BuildServerMac`, `BuildServerWin`).
 
+```bash
+tools/unity.sh build server-linux-arm64   # Build/server-linux-arm64/SublevelServer (Linux ARM64, Server 서브타깃, IL2CPP, 약 3분)
+```
+
+오라클 ARM 서버용(#381, ADR-295). Unity Hub 모듈 `linux-server`·`linux-il2cpp`와 `com.unity.sdk.linux-arm64`·`com.unity.toolchain.macos-arm64-linux` 패키지가 필요하다. 올릴 것은 `SublevelServer`, `GameAssembly.so`, `UnityPlayer.so`, `SublevelServer_Data/`(약 340 MB); `*_BackUpThisFolder_*`(1.5 GB)는 올리지 않는다. 실행 확인은 #383. 자세한 내용: `docs/research/linux_arm64_server_build.md`.
+
 ## 실행
 
 ```bash
