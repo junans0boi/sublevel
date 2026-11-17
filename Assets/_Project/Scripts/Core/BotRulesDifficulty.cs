@@ -42,6 +42,11 @@ namespace Game.Core
             r.BurstPauseMin *= pause;
             r.BurstPauseMax *= pause;
             r.ThrowIntervalSeconds *= hard ? 0.7f : 1.5f;
+            // Farming (ADR-294): the easy bot farms longest and is told where a weapon is; the hard one kits itself out with armour.
+            r.FarmSeconds *= hard ? 180f / 210f : 240f / 210f;
+            r.FarmHint = !hard;
+            if (hard) { r.FarmArmorPieces = Math.Max(r.FarmArmorPieces, 2); r.FarmHealItems = Math.Max(r.FarmHealItems, 2); }
+            else r.FarmHealItems = 0;
             return r;
         }
     }

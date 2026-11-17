@@ -58,6 +58,9 @@ namespace Game.Core
         public BotVec HeardPosition;
 
         public bool Stuck;             // the last move target cannot be reached
+
+        public bool FarmActive;        // farming (ADR-294): walk the building's loot points
+        public BotVec FarmTarget;
     }
 
     // What the bot wants to do this moment. The controller turns it into movement and server calls.
@@ -333,7 +336,8 @@ namespace Game.Core
 
             // Without a weapon, one on the ground comes before anything else.
             bool armFirst = !canFight && p.LootVisible;
-            if (canFight && !low && !armFirst)
+            // A bot that is still farming has its mind on the loot points (ADR-294): it does not go and look at far noises.
+            if (canFight && !low && !armFirst && !p.FarmActive)
             {
                 if (recentThreat)
                 {
@@ -360,6 +364,12 @@ namespace Game.Core
             }
 
             intent.State = BotState.Roam;
+            if (p.FarmActive)
+            {
+                intent.Move = true;
+                intent.MoveTarget = p.FarmTarget;
+                return intent;
+            }
             bool arrived = _hasRoam && BotVec.PlanarDistance(p.Position, _roam) <= rules.ArriveMeters;
             if (!_hasRoam || arrived || p.Stuck || now >= _roamUntil) PickRoam(p.Position, now);
             intent.Move = true;

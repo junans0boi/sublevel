@@ -232,6 +232,8 @@ namespace Game.Net
             NetPulseServer.Attach(_networkManager);
             ServerPlanDeployment();
 
+            BuildingLoot.Build(_lootSpawns);
+            BotFarmStats.Reset();
             var plan = PlanLoot();
             for (int i = 0; i < plan.Length; i++)
             {

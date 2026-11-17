@@ -7,12 +7,13 @@ namespace Game.Net
 {
     // Server measurement (ADR-242, issue #328): frame time (mean/p50/p95/p99/max), managed heap, combatant and bot counts and
     // lag-compensation rewinds per window. One [Perf] line per window in the log, and a CSV next to it. Started by the
-    // dedicated server with --perf. Per-system stopwatches (bot update, sense, door scan) are a later step.
+    // dedicated server with --perf. Bot stopwatches (BotPerf: update, sense, item sense, door check) are the last columns.
     public class ServerPerfProbe : MonoBehaviour
     {
         const float WindowSeconds = 10f;
 
         readonly ServerFrameStats _frames = new ServerFrameStats();
+        readonly ServerFrameStats[] _bot = { new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats() };
         float _windowStart;
         int _rewindsAtStart;
         string _csv;
@@ -31,7 +32,9 @@ namespace Game.Net
             Directory.CreateDirectory("Logs/perf");
             probe._gather = scenario.StartsWith("p3");
             probe._csv = "Logs/perf/s8_server_" + scenario + ".csv";
-            File.WriteAllText(probe._csv, "t,frames,mean_ms,p50_ms,p95_ms,p99_ms,max_ms,heap_mb,combatants,rewinds\n");
+            File.WriteAllText(probe._csv, "t,frames,mean_ms,p50_ms,p95_ms,p99_ms,max_ms,heap_mb,combatants,rewinds,bot_ai_mean,bot_ai_p99,sense_mean,sense_p99,loot_mean,loot_p99,doors_mean,doors_p99,path_mean,path_p99\n");
+            BotPerf.Enabled = true;
+            Combatant.ServerDied += (victim, info) => Debug.Log("[Death] t=" + Time.realtimeSinceStartup.ToString("F0") + " victim_armed=" + (victim.HasAnyWeapon ? 1 : 0) + " cause=" + info.Cause + " attacker=" + (info.Attacker == null ? "none" : (info.Attacker.HasAnyWeapon ? "armed" : "unarmed")) + " weapon=" + info.WeaponId);
             probe._windowStart = Time.realtimeSinceStartup;
             probe._rewindsAtStart = LagCompensation.Rewinds;
             return probe;
@@ -73,6 +76,27 @@ namespace Game.Net
         public static bool GiveKeys;
         bool _keysGiven;
 
+        // Farming (ADR-294): bots holding a gun, the first-gun median, how many are still farming, buildings with 3+ bots inside.
+        void LogFarm(float now)
+        {
+            var index = BuildingLoot.Index;
+            int bots = 0, armed = 0, crowded = 0;
+            var inside = new System.Collections.Generic.Dictionary<int, int>();
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer || c.Dead.Value) continue;
+                bots++;
+                if (c.HasAnyWeapon) armed++;
+                if (index == null) continue;
+                int b = index.BuildingAt(c.transform.position.x, c.transform.position.z);
+                if (b < 0) continue;
+                inside.TryGetValue(b, out int n);
+                inside[b] = n + 1;
+            }
+            foreach (var n in inside.Values) if (n >= 3) crowded++;
+            Debug.Log($"[Farm] t={now:F0} bots={bots} armed={armed} farming={BotFarmStats.Farming} firstGunMedian={BotFarmStats.MedianFirstGun():F0}s n={BotFarmStats.FirstGunSeconds.Count} inBuildings={inside.Count} crowded3+={crowded}");
+        }
+
         void Update()
         {
             if (GiveKeys && !_keysGiven && Combatant.All.Count > 1)
@@ -89,12 +113,15 @@ namespace Game.Net
                 else if (Time.realtimeSinceStartup - _matchStart >= GatherAfterSeconds && BotsWithAgent() >= 0.9f * BotCount()) { _gathered = true; Gather(); }
             }
             _frames.Add(Time.unscaledDeltaTime * 1000f);
+            for (int k = 0; k < BotPerf.Slots; k++) _bot[k].Add(BotPerf.TakeMs(k));
             float now = Time.realtimeSinceStartup;
             if (now - _windowStart < WindowSeconds) return;
             float heap = System.GC.GetTotalMemory(false) / (1024f * 1024f);
             int rewinds = LagCompensation.Rewinds - _rewindsAtStart;
             string line = $"{now:F0},{_frames.Count},{_frames.Mean():F2},{_frames.Percentile(50):F2},{_frames.Percentile(95):F2},{_frames.Percentile(99):F2},{_frames.Max():F2},{heap:F0},{Combatant.All.Count},{rewinds}";
+            for (int k = 0; k < BotPerf.Slots; k++) { line += $",{_bot[k].Mean():F3},{_bot[k].Percentile(99):F3}"; _bot[k].Clear(); }
             Debug.Log("[Perf] " + line);
+            LogFarm(now);
             File.AppendAllText(_csv, line + "\n");
             _frames.Clear();
             _windowStart = now;
