@@ -34,6 +34,7 @@ namespace Game.Gameplay
         const float FloorAbove = 0.3f, FloorBelow = 1.2f;
 
         LootItem _item;
+        LootMarker _marker;
         bool _ready;
         Transform _visual; // everything drawn, moved as one onto the floor
         MeshFilter _boxFilter;
@@ -206,8 +207,12 @@ namespace Game.Gameplay
             if (!any) return;
             var pivot = transform.position;
             var shift = new Vector3(pivot.x - bounds.center.x, pivot.y - bounds.center.y, pivot.z - bounds.center.z);
-            if (FindFloor(pivot, out float floor)) shift.y = floor - bounds.min.y + 0.002f;
+            bool onFloor = FindFloor(pivot, out float floor);
+            if (onFloor) shift.y = floor - bounds.min.y + 0.002f;
             _visual.position += shift;
+            // The ring lies on the floor under it (ADR-277).
+            if (_marker == null) _marker = gameObject.AddComponent<LootMarker>();
+            _marker.Setup((LootKind)_shownKind, new Vector3(pivot.x, bounds.min.y + shift.y, pivot.z));
         }
 
         bool FindFloor(Vector3 pivot, out float floor)

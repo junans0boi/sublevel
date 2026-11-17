@@ -278,6 +278,8 @@ namespace Game.Gameplay
             foreach (var item in LootItem.All)
             {
                 if (item == null || (item.transform.position - position).sqrMagnitude >= rangeSqr) continue;
+                var me = Combatant.LocalPlayer;
+                if (me != null && !PickupSight.Reachable(position, me.EyePosition, item.transform, me.transform, 0f)) continue; // ADR-276: not through walls or from another storey
                 _vicinity.Add(item);
                 if (_vicinity.Count == MaxVicinityRows) break;
             }

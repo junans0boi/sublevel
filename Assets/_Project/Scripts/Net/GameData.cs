@@ -34,6 +34,7 @@ namespace Game.Net
             MeleeRules.Current = rules.Melee;
             MatchRules.Current = rules.Match ?? new MatchRules();
             InterestRules.Current = rules.Interest ?? new InterestRules();
+            InteractRules.Current = rules.Interact ?? new InteractRules();
             ParkourRules.Current = rules.Parkour;
             VehicleRules.Current = rules.Vehicles;
             VehicleRules.Motorcycle = rules.Motorcycles;
