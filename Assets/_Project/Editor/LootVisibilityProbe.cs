@@ -79,6 +79,9 @@ public static class LootVisibilityProbe
                     : role == "H" ? new LootEntry { Kind = LootKind.Medkit }
                     : role == "G" ? new LootEntry { Kind = LootKind.Helmet, Tier = 2 }
                     : new LootEntry { Kind = LootKind.Bandage };
+                if (taken == 6)
+                    foreach (var mr in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+                        if ((mr.bounds.center - t.position).sqrMagnitude < 16f && mr.bounds.size.magnitude < 1.2f) Debug.Log($"[Near] {mr.name} parent {mr.transform.parent?.name} {mr.bounds.center:F1} {mr.bounds.size:F2}");
                 var go = Object.Instantiate(prefab, t.position, Quaternion.identity);
                 foreach (var melee in go.GetComponentsInChildren<MeleeModel>(true)) melee.Build();
                 go.GetComponent<LootView>().Show(e.Kind, e.WeaponId, e.Ammo, e.Tier, e.Optic);
@@ -104,6 +107,104 @@ public static class LootVisibilityProbe
                 }
                 Object.DestroyImmediate(go);
             }
+        }
+        catch (System.Exception e) { Debug.LogError(e); code = 1; }
+        EditorApplication.Exit(code);
+    }
+
+    // Same composition at 3, 8 and 15 m with the ring off (before) and on (after); the ring's footprint and contrast from the image difference.
+    // tools/unity.sh run-gfx LootVisibilityProbe.ShootDistances -> Logs/interact/dist_*.png, docs/tracks/interact_distance.txt
+    public static void ShootDistances()
+    {
+        int code = 0;
+        try
+        {
+            SceneLook.PrepareTextures();
+            RenderSetup.Apply();
+            EditorSceneManager.OpenScene("Assets/_Project/Scenes/World.unity", OpenSceneMode.Single);
+            Physics.SyncTransforms();
+            var spawns = Object.FindFirstObjectByType<MatchDirector>().LootSpawns;
+            var cam = new GameObject("Probe Camera").AddComponent<Camera>();
+            cam.fieldOfView = 70; cam.nearClipPlane = 0.05f; cam.farClipPlane = 300f;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(TestBoxBuilder.PrefabDir + "/LootItem.prefab");
+            Directory.CreateDirectory("Logs/interact");
+            var report = new StringBuilder("kind distance_m item_px marker_px marker_mean_diff(0-255) found\n");
+            var kinds = new[] { new LootEntry { Kind = LootKind.Weapon, WeaponId = 3 }, new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556 }, new LootEntry { Kind = LootKind.Helmet, Tier = 2 }, new LootEntry { Kind = LootKind.Medkit }, new LootEntry { Kind = LootKind.Jerrycan } };
+            int done = 0;
+            for (int i = 0; i < spawns.Length && done < kinds.Length; i++)
+            {
+                var t = spawns[i];
+                // An open spot: all three distances in one direction with a clear line (outdoors / on a roof).
+                for (int a = 0; a < 16; a++)
+                {
+                    float ang = a * Mathf.PI / 8f;
+                    var dir = new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang));
+                    var eyes = new Vector3[3]; bool ok = true;
+                    float[] ds = { 3f, 8f, 15f };
+                    for (int k = 0; k < 3 && ok; k++)
+                    {
+                        var xz = t.position + dir * ds[k];
+                        if (!Stand(xz.x, xz.z, t.position.y - 0.3f, out var feet)) { ok = false; break; }
+                        eyes[k] = feet + Vector3.up * EyeHeight;
+                        if (Physics.Linecast(eyes[k], t.position - Vector3.up * 0.2f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) ok = false;
+                    }
+                    if (!ok) continue;
+                    var e = kinds[done];
+                    var go = Object.Instantiate(prefab, t.position, Quaternion.identity);
+                    foreach (var melee in go.GetComponentsInChildren<MeleeModel>(true)) melee.Build();
+                    go.GetComponent<LootView>().Show(e.Kind, e.WeaponId, e.Ammo, e.Tier, e.Optic);
+                    Physics.SyncTransforms();
+                    var marker = go.GetComponent<LootMarker>();
+                    Bounds b = default; bool anyB = false;
+                    foreach (var r in go.GetComponentsInChildren<Renderer>())
+                    {
+                        if (r.name == "LootMarker" || r.forceRenderingOff || !r.gameObject.activeInHierarchy) continue;
+                        if (!anyB) { b = r.bounds; anyB = true; } else b.Encapsulate(r.bounds);
+                    }
+                    for (int k = 0; k < 3; k++)
+                    {
+                        string stem = $"Logs/interact/dist_{e.Kind}_{ds[k]:0}m";
+                        marker.Tick(eyes[k], false);
+                        marker.gameObject.SetActive(false); marker.enabled = false;
+                        foreach (var mr in marker.GetComponentsInChildren<MeshRenderer>(true)) if (mr.name == "LootMarker") mr.enabled = false;
+                        SceneLook.Shot(cam, stem + "_before.png", eyes[k], b.center);
+                        marker.gameObject.SetActive(true);
+                        foreach (var mr in marker.GetComponentsInChildren<MeshRenderer>(true)) if (mr.name == "LootMarker") mr.enabled = true;
+                        marker.Tick(eyes[k], false);
+                        SceneLook.Shot(cam, stem + "_after.png", eyes[k], b.center);
+                        var before = new Texture2D(2, 2); before.LoadImage(File.ReadAllBytes(stem + "_before.png"));
+                        var after = new Texture2D(2, 2); after.LoadImage(File.ReadAllBytes(stem + "_after.png"));
+                        var pb = before.GetPixels32(); var pa = after.GetPixels32();
+                        long n = 0, sum = 0;
+                        cam.transform.position = eyes[k]; cam.transform.LookAt(b.center);
+                        var cp = cam.WorldToViewportPoint(b.center);
+                        float ringPx = Mathf.Lerp(0.5f, 2.2f, ds[k] / 28f) / (2f * ds[k] * Mathf.Tan(35f * Mathf.Deg2Rad)) * 1080f;
+                        int cx = (int)(cp.x * 1920), cy = (int)(cp.y * 1080), half = (int)(ringPx * 0.75f);
+                        for (int q = 0; q < pa.Length; q++)
+                        {
+                            if (Mathf.Abs(q % 1920 - cx) > half || Mathf.Abs(q / 1920 - cy) > half) continue;
+                            int d = Mathf.Max(Mathf.Abs(pa[q].r - pb[q].r), Mathf.Max(Mathf.Abs(pa[q].g - pb[q].g), Mathf.Abs(pa[q].b - pb[q].b)));
+                            if (d > 15) { n++; sum += d; }
+                        }
+                        // The item's longest screen side in pixels (bounds corners projected at 1920x1080).
+                        float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
+                        cam.transform.position = eyes[k]; cam.transform.LookAt(b.center);
+                        for (int c = 0; c < 8; c++)
+                        {
+                            var corner = b.center + Vector3.Scale(b.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
+                            var sp = cam.WorldToViewportPoint(corner);
+                            minX = Mathf.Min(minX, sp.x * 1920); maxX = Mathf.Max(maxX, sp.x * 1920); minY = Mathf.Min(minY, sp.y * 1080); maxY = Mathf.Max(maxY, sp.y * 1080);
+                        }
+                        report.AppendLine($"{e.Kind} {ds[k]:0} {Mathf.Max(maxX - minX, maxY - minY):F0} {n} {(n > 0 ? sum / (float)n : 0):F0} yes");
+                        Object.DestroyImmediate(before); Object.DestroyImmediate(after);
+                    }
+                    Object.DestroyImmediate(go);
+                    done++;
+                    break;
+                }
+            }
+            File.WriteAllText("docs/tracks/interact_distance.txt", report.ToString());
+            Debug.Log(report.ToString());
         }
         catch (System.Exception e) { Debug.LogError(e); code = 1; }
         EditorApplication.Exit(code);
