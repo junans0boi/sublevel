@@ -49,6 +49,12 @@ namespace Game.Tests
             while (Time.time < end) yield return null;
         }
 
+        // LAGCOMP_INTERPS="2" runs only that interpolation (default 1,2,3).
+        static IEnumerable<ushort> InterpsToRun()
+        {
+            foreach (var t in (System.Environment.GetEnvironmentVariable("LAGCOMP_INTERPS") ?? "1,2,3").Split(',')) yield return ushort.Parse(t);
+        }
+
         static string F(double v) => v.ToString("F4", CultureInfo.InvariantCulture);
 
         // The server time at which the body stood where `copy` is (its history is the server's own): the time the copy shows.
@@ -113,7 +119,7 @@ namespace Game.Tests
             {
                 if (rtt == 0) _net.ClearSimulation(a); else _net.Simulate(a, rtt, 0.0);
                 yield return Frames(1.5f);
-                foreach (ushort interp in new ushort[] { 1, 2, 3 })
+                foreach (ushort interp in InterpsToRun())
                 {
                     nt.SetInterpolation(interp);
                     onServer.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 200 });

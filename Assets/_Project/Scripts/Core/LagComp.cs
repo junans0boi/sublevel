@@ -62,10 +62,17 @@ namespace Game.Core
 
     public static class LagComp
     {
-        // How far back a shot may be judged (fairness cap): a round trip of ~100 ms plus the interpolation delay is ~0.17 s.
-        public const float MaxRewindSeconds = 0.25f; // (ADR-243 on hold: stays 0.25) the default of BallisticsRules.MaxRewindSeconds (data)
+        // How far back a shot may be judged (fairness cap, ADR-301): 0.30 s. A shooter whose round trip + the copy's delay needs more is
+        // not compensated beyond it (it is the shooter's own ping that costs it, not everyone else's).
+        public const float MaxRewindSeconds = 0.30f; // the default of BallisticsRules.MaxRewindSeconds (data)
         // The interpolation delay of the replicated bodies, in network ticks (the prefab's setting, ADR-126).
         public const int InterpolationTicks = 2;
+        // What a copy shows beyond its interpolation: about one more tick (measured #401: the copy trails the real body by ~70 ms at
+        // 0 ms ping with 2 interpolation ticks = 66 ms, the model counted only the 66), so the shot claims one tick earlier (ADR-302).
+        public const int ReplicaExtraTicks = 1;
+        // Ticks a shot's claimed view lags the newest server tick. A field only so the measurement can run the old model (0 extra)
+        // in the same build; the game never changes it.
+        public static int ViewDelayTicks = InterpolationTicks + ReplicaExtraTicks;
         // How much history is kept (seconds).
         public const float HistorySeconds = 1f;
 
@@ -78,7 +85,7 @@ namespace Game.Core
             return (float)Math.Min(max, (serverTick - viewTick) * tickDelta);
         }
 
-        // The tick a client was showing: the newest one it has heard from the server less the interpolation delay.
-        public static uint ViewTick(uint lastServerTick) => lastServerTick > InterpolationTicks ? lastServerTick - InterpolationTicks : 0u;
+        // The tick a client was showing: the newest one it has heard from the server less the interpolation delay and the copy's extra tick.
+        public static uint ViewTick(uint lastServerTick) => lastServerTick > (uint)ViewDelayTicks ? lastServerTick - (uint)ViewDelayTicks : 0u;
     }
 }
