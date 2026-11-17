@@ -150,6 +150,7 @@ namespace Game.Net
             _nm.ClientManager.RegisterBroadcast<LobbyState>(OnState);
             _nm.ClientManager.RegisterBroadcast<LobbyReject>(OnReject);
             _nm.ClientManager.RegisterBroadcast<LobbyStart>(OnStart);
+            PingSimulation.Attach(_nm);
             if (!_nm.ClientManager.StartConnection(Address, Port)) return Fail(LobbyRules.Unreachable);
             return true;
         }

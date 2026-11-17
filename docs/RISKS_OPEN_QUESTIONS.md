@@ -46,6 +46,7 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 - 캐릭터가 Universal Base Characters가 아닌 Ultimate Modular Men(Swat)이다(ADR-036). Humanoid 리타깃은 하지 않았다(애니메이션이 같은 파일에 내장).
 
 ## M1.6a-fix 중 누적 (2026-11-13)
+- [ ] **릴리스 전 제거(S5, #399, ADR-300)**: 클라이언트 `--simulate-ping <ms>`·`--simulate-jitter <ms>`(체감용 지연 주입). 파일 `Core/SimulatedPing.cs`, `Net/PingSimulation.cs`, `LobbyNet.StartClientSide`·`MatchDirector`의 `PingSimulation.Attach` 호출, `NetStatusView`의 표시 한 줄, 테스트 `SimulatedPingTests`. 인자가 없으면 아무것도 하지 않는다.
 - [ ] **릴리스(특히 멀티 공개) 전 제거**: 플레이어 빌드의 개발용 실행 인자 `-feelcapture`(대본 입력 + 화면 저장, 호스트가 자기에게 무기 지급), `-perfcapture`, `-autoplay`(#77, 빠른 봇 매치 관전 촬영). 지금은 검수를 위해 일반 빌드에 들어 있다.
 - 옆·대각선 이동은 전용 애니메이션이 없어 다리를 돌리고 허리를 비트는 방식이다(ADR-049). 8방향 이동·점프 애니메이션 에셋을 확보하면 교체한다(가입형 소스는 사람이 받아야 함 — HUMAN_TODO).
 
