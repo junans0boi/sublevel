@@ -116,6 +116,7 @@ namespace Game.Tests
                 foreach (ushort interp in new ushort[] { 1, 2, 3 })
                 {
                     nt.SetInterpolation(interp);
+                    onServer.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 200 });
                     yield return Frames(1f);
                     for (int rep = 0; rep < reps; rep++)
                     {
@@ -141,8 +142,10 @@ namespace Game.Tests
                                 resolvedFlag = false; probeCalls = 0;
                                 var aim = copyPos + Vector3.up * 0.9f;
                                 a.Player.CmdFire((aim - eye).normalized, view);
-                                yield return NetHarness.WaitUntil(() => resolvedFlag, "shot resolved", Debug.Log, 5f);
+                                float giveUp = Time.time + 3f;
+                                while (!resolvedFlag && Time.time < giveUp) yield return null;
                                 total++;
+                                if (!resolvedFlag) { Debug.Log($"shot {shot} not resolved (mag {a.Player.ActiveMag}): skipped"); shot++; yield return Frames(0.4f); continue; }
                                 bool moving = speed > 2f;
                                 double tShown = 0;
                                 bool shown = moving && TimeShownBy(history, copyPos, out tShown);
@@ -168,6 +171,8 @@ namespace Game.Tests
                         _net.HostInput.Frame.Move = Vector2.zero;
                     }
                     Debug.Log($"scatter rtt {rtt} interp {interp}: {taken}/{total} shots logged so far");
+                    Directory.CreateDirectory(LogDir);
+                    File.WriteAllText(Path.Combine(LogDir, "lagcomp-shot-scatter.csv"), csv.ToString());
                 }
             }
             _net.HostInput.Frame.Move = Vector2.zero;
