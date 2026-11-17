@@ -13,29 +13,25 @@ namespace Game.Gameplay
     // 16:9 size from 1280x720 to 2560x1440 (the list scrolls when it is longer than the panel).
     public class SettingsScreen
     {
-        const float MarginX = 48f, MarginTop = 112f, MarginBottom = 48f; // 8 px grid; the top bar of the lobby is above the panel
-        const float Pad = 36f;
-        const float HeaderHeight = 78f;
-        const float TabWidth = 172f, TabHeight = 50f;
-        const float PageTop = HeaderHeight + TabHeight + 12f;
-        const float PageTabWidth = 116f, PageTabHeight = 38f;
-        const float BodyTop = PageTop + PageTabHeight + 14f;
-        const float FooterHeight = 86f;
-        const float ButtonWidth = 200f, ButtonHeight = 50f;
+        const float MarginX = 48f, MarginTopMenu = 112f, MarginTopOverlay = 48f, MarginBottom = 48f; // 8 px grid; the lobby's top bar sits above the panel
+        const float Pad = 32f;
+        const float HeaderHeight = 80f;
+        const float TabWidth = 168f, TabGap = 8f, TabHeight = 56f;
+        const float PageTabWidth = 112f;
+        const float BodyTop = HeaderHeight + TabHeight + 16f;
+        const float FooterHeight = 96f;
+        const float ButtonWidth = 200f, ButtonHeight = 56f;
         const float DescriptionWidth = 460f;
         const float Gap = 24f;
-        const float RowHeight = 54f, RowGap = 2f, SectionHeight = 46f;
+        const float RowHeight = 56f, RowGap = 4f, SectionHeight = 48f;
         const float ControlWidth = 460f;
-        const float ArrowWidth = 46f;
-        const float ValueBoxWidth = 86f;
+        const float ArrowWidth = 48f;
+        const float ValueBoxWidth = 88f;
         const float ScrollbarWidth = 6f;
+        const int PanelRadius = 16, InnerRadius = 8;
         const int MaxPips = 6;
         const int PageCount = 6;
         const int SwatchCells = 9;
-
-        static readonly Color Well = new Color(0f, 0f, 0f, 0.22f);
-        static readonly Color ValueBack = new Color(0f, 0f, 0f, 0.3f);
-        static readonly Color DescriptionBack = new Color(0.075f, 0.085f, 0.095f, 0.92f);
 
         public RectTransform Root { get; private set; }
         public SettingsTab CurrentTab { get; private set; } = SettingsTab.Graphics;
@@ -51,10 +47,8 @@ namespace Game.Gameplay
         readonly List<SettingsRow>[] _rows = new List<SettingsRow>[PageCount];
         readonly RectTransform[] _contents = new RectTransform[PageCount];
         readonly SettingsRow[] _byId = new SettingsRow[SettingsCatalog.Count];
-        readonly Text[] _tabLabels = new Text[5];
-        readonly Image[] _tabLines = new Image[5];
-        readonly Text[] _pageLabels = new Text[2];
-        readonly Image[] _pageLines = new Image[2];
+        readonly Button[] _tabs = new Button[5];
+        readonly Button[] _pageTabs = new Button[2];
         readonly Image[] _swatchCells = new Image[SwatchCells];
         GameObject _pageBar, _swatch;
         Text _keysNote;
@@ -69,6 +63,7 @@ namespace Game.Gameplay
             _onClose = onClose;
             // The shared top bar of the adopted mockup (floor tabs, ping, icons) over the dimmed 3D lobby; the panel sits under it.
             RectTransform wrapper;
+            bool overScene = onBar == null; // the Esc menu: a busy match behind, so the panel is nearly opaque
             if (onBar != null)
             {
                 var bar = MockScreen.Build(parent, "set_gfx", onBar, it => it.r[1] >= 100f);
@@ -78,9 +73,8 @@ namespace Game.Gameplay
             else wrapper = UiKit.Fill(name + "Wrapper", parent);
             Root = UiKit.Fill(name, wrapper);
             Root.offsetMin = new Vector2(MarginX, MarginBottom);
-            Root.offsetMax = new Vector2(-MarginX, -MarginTop);
-            UiKit.Box(Root, UiPaint.Pn, true);
-            UiKit.Frame(Root, 1f, UiPaint.Ln);
+            Root.offsetMax = new Vector2(-MarginX, -(overScene ? MarginTopOverlay : MarginTopMenu));
+            UiPaint.Box(Root, overScene ? UiPaint.PnSolid : UiPaint.Pn, PanelRadius, UiPaint.Ln).raycastTarget = true;
 
             BuildHeader();
             BuildTabs();
@@ -117,6 +111,7 @@ namespace Game.Gameplay
             Listening = row;
             _listenStartedFrame = Time.frameCount;
             row.Value.text = "키를 누르세요...";
+            row.Value.color = UiPaint.Ac;
         }
 
         public void CancelRebind()
@@ -232,7 +227,7 @@ namespace Game.Gameplay
                 _swatch.SetActive(false);
                 return;
             }
-            row.Background.color = UiKit.RowHover;
+            row.Background.color = UiPaint.Hover;
             row.Marker.enabled = true;
             _descTitle.text = row.Label;
             _descBody.text = row.Binding != null ? row.Description + "\n\n" + SettingsCatalog.KeysNote : row.Description;
@@ -248,11 +243,11 @@ namespace Game.Gameplay
             if (_keysNote != null)
             {
                 _keysNote.text = ConflictWarning.Length > 0 ? ConflictWarning : SettingsCatalog.KeysNote;
-                _keysNote.color = ConflictWarning.Length > 0 ? UiKit.Danger : UiKit.Accent;
+                _keysNote.color = ConflictWarning.Length > 0 ? UiPaint.Wr : UiPaint.T2;
             }
             bool dirty = GameSettings.HasUnappliedChanges;
             _dirtyLabel.enabled = dirty;
-            UiKit.SetSelected(_applyButton, dirty);
+            SetPrimary(_applyButton, dirty);
             RefreshSwatch();
         }
 
@@ -271,9 +266,9 @@ namespace Game.Gameplay
             _scroll.StopMovement();
             _scroll.content = _contents[page];
             _contents[page].anchoredPosition = Vector2.zero;
-            for (int i = 0; i < _tabLabels.Length; i++) UiKit.SetTab(_tabLabels[i], _tabLines[i], i == (int)CurrentTab);
+            for (int i = 0; i < _tabs.Length; i++) UiPaint.SetSeg(_tabs[i], i == (int)CurrentTab);
             _pageBar.SetActive(CurrentTab == SettingsTab.Graphics);
-            for (int i = 0; i < _pageLabels.Length; i++) UiKit.SetTab(_pageLabels[i], _pageLines[i], i == (int)CurrentPage);
+            for (int i = 0; i < _pageTabs.Length; i++) UiPaint.SetSeg(_pageTabs[i], i == (int)CurrentPage);
             Sync();
             var rows = _rows[page];
             Focus(rows.Count > 0 ? rows[0] : null);
@@ -290,7 +285,7 @@ namespace Game.Gameplay
                 if (row.Binding != null && Listening != row)
                 {
                     row.Value.text = row.Binding.Keys;
-                    row.Value.color = KeyBinds.ConflictOf(row.Binding.Action).HasValue ? UiKit.Danger : UiKit.Text;
+                    row.Value.color = KeyBinds.ConflictOf(row.Binding.Action).HasValue ? UiPaint.Wr : UiPaint.Tx;
                 }
                 return;
             }
@@ -306,8 +301,8 @@ namespace Game.Gameplay
                 case SettingKind.Toggle:
                 {
                     bool on = GameSettings.GetToggle(def.Id);
-                    UiKit.SetSelected(row.Off, !on);
-                    UiKit.SetSelected(row.On, on);
+                    SetToggle(row.Off, row.Def.Options[0], !on);
+                    SetToggle(row.On, row.Def.Options[1], on);
                     break;
                 }
                 default:
@@ -318,7 +313,7 @@ namespace Game.Gameplay
                     row.Previous.interactable = index > 0;
                     row.Next.interactable = index < count - 1;
                     if (row.Pips != null)
-                        for (int i = 0; i < row.Pips.Length; i++) row.Pips[i].color = i == index ? UiKit.Accent : UiKit.SteelDim;
+                        for (int i = 0; i < row.Pips.Length; i++) row.Pips[i].color = i == index ? UiPaint.Ac : UiPaint.Ln;
                     break;
                 }
             }
@@ -353,41 +348,71 @@ namespace Game.Gameplay
             return rect;
         }
 
-        void BuildHeader()
+        // 적용: the one filled accent button while there is something to apply, a quiet outlined one otherwise (as the lobby's
+        // status button); the label stays readable either way.
+        static void SetPrimary(Button button, bool active)
         {
-            UiKit.Label(TopLeft("Title", Root, Pad, 18f, 600f, 48f), "환경 설정", 34, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            var hint = UiKit.Rect("Hint", Root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-Pad, -18f), new Vector2(700f, 48f));
-            UiKit.Label(hint, "바꾼 내용은 바로 미리 보이고, 적용을 눌러야 저장됩니다", 17, UiKit.TextDim, TextAnchor.MiddleRight);
+            if (button == null) return;
+            button.targetGraphic.color = active ? UiPaint.Ac : UiPaint.Sf;
+            var ring = button.transform.Find("Ring");
+            if (ring != null) ring.GetComponent<Image>().color = active ? UiPaint.Ac : UiPaint.Ln;
+            var label = button.GetComponentInChildren<Text>();
+            if (label != null) label.color = active ? UiPaint.Bg : UiPaint.T2;
         }
 
+        // 켜짐/꺼짐 segments: chosen = accent wash + bar + ✓ (never colour alone).
+        static void SetToggle(Button button, string text, bool on)
+        {
+            UiPaint.SetSeg(button, on);
+            var label = button.GetComponentInChildren<Text>();
+            if (label != null) label.text = (on ? "✓ " : "") + text;
+        }
+
+        // An outlined button of the lobby (+ 초대 / icon buttons): panel fill, 1 px border, bold label.
+        static Button Quiet(Transform parent, string name, float x, float y, float w, float h, string text, int size, int radius, UnityAction onClick)
+        {
+            var b = UiPaint.Btn(parent, name, x, y, w, h, text, size, radius, UiPaint.Sf, UiPaint.Ln, UiPaint.Tx, onClick);
+            return b;
+        }
+
+        void BuildHeader()
+        {
+            UiKit.Label(TopLeft("Title", Root, Pad, 16f, 600f, 48f), "환경 설정", 32, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var hint = UiKit.Rect("Hint", Root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-Pad, -16f), new Vector2(700f, 48f));
+            UiKit.Label(hint, "바꾼 내용은 바로 미리 보이고, 적용을 눌러야 저장됩니다", 18, UiPaint.T2, TextAnchor.MiddleRight);
+        }
+
+        // Tabs are the lobby's segmented control; 기본 / 고급 is a smaller pill of two segments at the right end of the same row.
         void BuildTabs()
         {
-            for (int i = 0; i < _tabLabels.Length; i++)
+            for (int i = 0; i < _tabs.Length; i++)
             {
                 var tab = (SettingsTab)i;
-                UiKit.TabButton(TopLeft("Tab " + SettingsCatalog.TabLabels[i], Root, Pad + i * TabWidth, HeaderHeight, TabWidth, TabHeight),
-                    SettingsCatalog.TabLabels[i], 22, () => SelectTab(tab), out _tabLabels[i], out _tabLines[i]);
+                var rect = TopLeft("Tab " + SettingsCatalog.TabLabels[i], Root, Pad + i * (TabWidth + TabGap), HeaderHeight, TabWidth, TabHeight);
+                _tabs[i] = UiPaint.Seg(Root, rect.name, 0f, 0f, TabWidth, TabHeight, SettingsCatalog.TabLabels[i], 20, 14, () => SelectTab(tab));
+                var seg = (RectTransform)_tabs[i].transform;
+                seg.anchorMin = seg.anchorMax = new Vector2(0f, 1f);
+                seg.anchoredPosition = new Vector2(Pad + i * (TabWidth + TabGap), -HeaderHeight);
+                Object.Destroy(rect.gameObject);
             }
-            var line = Band("TabLine", Root, HeaderHeight + TabHeight, 1f, Pad);
-            UiKit.Box(line, UiKit.SteelDim);
 
-            var bar = TopLeft("Pages", Root, Pad, PageTop, PageTabWidth * 2f, PageTabHeight);
+            var bar = UiKit.Rect("Pages", Root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-Pad, -HeaderHeight), new Vector2(PageTabWidth * 2f + 4f, TabHeight));
             _pageBar = bar.gameObject;
-            for (int i = 0; i < _pageLabels.Length; i++)
+            UiPaint.Box(bar, Color.clear, (int)(TabHeight * 0.5f), UiPaint.Ln);
+            for (int i = 0; i < _pageTabs.Length; i++)
             {
                 var page = (SettingsPage)i;
-                var rect = TopLeft("Page " + SettingsCatalog.PageLabels[i], bar, i * PageTabWidth, 0f, PageTabWidth, PageTabHeight);
-                UiKit.TabButton(rect, SettingsCatalog.PageLabels[i], 19, () => SelectPage(page), out _pageLabels[i], out _pageLines[i]);
+                _pageTabs[i] = UiPaint.Seg(bar, "Page " + SettingsCatalog.PageLabels[i], 2f + i * PageTabWidth, 2f, PageTabWidth, TabHeight - 4f,
+                    SettingsCatalog.PageLabels[i], 18, (int)((TabHeight - 4f) * 0.5f), () => SelectPage(page));
             }
         }
 
         void BuildList()
         {
             var area = UiKit.Fill("List", Root);
-            area.offsetMin = new Vector2(Pad, FooterHeight + 10f);
+            area.offsetMin = new Vector2(Pad, FooterHeight);
             area.offsetMax = new Vector2(-(Pad + DescriptionWidth + Gap), -BodyTop);
-            UiKit.Box(area, Well, true); // also catches the wheel between rows
-            UiKit.Frame(area, 1f, UiKit.SteelDim);
+            UiPaint.Box(area, UiPaint.Well, 12, UiPaint.Ln).raycastTarget = true; // also catches the wheel between rows
 
             var viewport = UiKit.Fill("Viewport", area, 1f);
             viewport.offsetMax = new Vector2(-(ScrollbarWidth + 8f), -1f);
@@ -404,11 +429,12 @@ namespace Game.Gameplay
             var bar = UiKit.Rect("Scrollbar", area, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-4f, 0f), new Vector2(ScrollbarWidth, 0f));
             bar.anchorMin = new Vector2(1f, 0f);
             bar.anchorMax = new Vector2(1f, 1f);
-            bar.offsetMin = new Vector2(-4f - ScrollbarWidth, 6f);
-            bar.offsetMax = new Vector2(-4f, -6f);
-            UiKit.Box(bar, new Color(UiKit.SteelDim.r, UiKit.SteelDim.g, UiKit.SteelDim.b, 0.4f), true);
+            bar.offsetMin = new Vector2(-4f - ScrollbarWidth, 10f);
+            bar.offsetMax = new Vector2(-4f, -10f);
+            UiPaint.Box(bar, UiPaint.Ln, 3).raycastTarget = true;
             var handle = UiKit.Fill("Handle", UiKit.Fill("Sliding Area", bar));
-            var handleImage = UiKit.Box(handle, UiKit.Steel, true);
+            var handleImage = UiPaint.Box(handle, UiPaint.T2, 3);
+            handleImage.raycastTarget = true;
             var scrollbar = bar.gameObject.AddComponent<Scrollbar>();
             scrollbar.handleRect = handle;
             scrollbar.targetGraphic = handleImage;
@@ -431,47 +457,48 @@ namespace Game.Gameplay
             var panel = UiKit.Rect("Description", Root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, Vector2.zero);
             panel.anchorMin = new Vector2(1f, 0f);
             panel.anchorMax = new Vector2(1f, 1f);
-            panel.offsetMin = new Vector2(-(Pad + DescriptionWidth), FooterHeight + 10f);
+            panel.offsetMin = new Vector2(-(Pad + DescriptionWidth), FooterHeight);
             panel.offsetMax = new Vector2(-Pad, -BodyTop);
-            UiKit.Box(panel, DescriptionBack, true);
-            UiKit.Frame(panel, 1f, UiKit.SteelDim);
-            UiKit.Brackets(panel, 12f, 2f, UiKit.Steel);
+            UiPaint.Box(panel, UiPaint.Pn, PanelRadius, UiPaint.Ln);
 
             float inner = DescriptionWidth - 56f;
-            UiKit.Label(TopLeft("Caption", panel, 28f, 22f, inner, 22f), "설명", 16, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-            _descTitle = UiKit.Label(TopLeft("Title", panel, 28f, 50f, inner, 36f), "", 26, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Box(TopLeft("Rule", panel, 28f, 94f, 44f, 2f), UiKit.Accent);
-            _descBody = UiKit.Paragraph(TopLeft("Body", panel, 28f, 112f, inner, 230f), "", 19, UiKit.Text);
+            UiKit.Label(TopLeft("Caption", panel, 28f, 24f, inner, 24f), "설명", 16, UiPaint.T2, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _descTitle = UiKit.Label(TopLeft("Title", panel, 28f, 52f, inner, 40f), "", 28, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _descBody = UiKit.Paragraph(TopLeft("Body", panel, 28f, 108f, inner, 232f), "", 20, UiPaint.Tx);
 
-            var swatch = TopLeft("Swatch", panel, 28f, 352f, inner, 64f);
+            var swatch = TopLeft("Swatch", panel, 28f, 352f, inner, 72f);
             _swatch = swatch.gameObject;
             float cell = inner / SwatchCells;
             for (int i = 0; i < SwatchCells; i++)
                 _swatchCells[i] = UiKit.Box(TopLeft("Cell" + i, swatch, i * cell, 0f, cell - 2f, 40f), Color.grey);
-            UiKit.Label(TopLeft("SwatchCaption", swatch, 0f, 44f, inner, 20f), "견본", 15, UiKit.TextDim);
+            UiKit.Label(TopLeft("SwatchCaption", swatch, 0f, 48f, inner, 24f), "견본", 16, UiPaint.T2, TextAnchor.MiddleLeft, FontStyle.Bold);
             _swatch.SetActive(false);
         }
 
         void BuildFooter()
         {
-            var line = UiKit.Rect("FooterLine", Root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero);
-            line.anchorMin = new Vector2(0f, 0f);
-            line.anchorMax = new Vector2(1f, 0f);
-            line.anchoredPosition = new Vector2(0f, FooterHeight - 4f);
-            line.sizeDelta = new Vector2(-Pad * 2f, 1f);
-            UiKit.Box(line, UiKit.SteelDim);
-
-            float y = (FooterHeight - 4f - ButtonHeight) * 0.5f;
-            UiKit.Button(UiKit.Rect("기본", Root, Vector2.zero, Vector2.zero, new Vector2(Pad, y), new Vector2(ButtonWidth, ButtonHeight)),
-                "기본", 22, ResetCurrentTab);
-            UiKit.Button(UiKit.Rect("뒤로 가기", Root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-Pad, y), new Vector2(ButtonWidth, ButtonHeight)),
-                "뒤로 가기", 22, Back);
-            _applyButton = UiKit.Button(UiKit.Rect("적용", Root, new Vector2(1f, 0f), new Vector2(1f, 0f),
-                new Vector2(-Pad - ButtonWidth - 14f, y), new Vector2(ButtonWidth, ButtonHeight)), "적용", 22, Apply);
+            float y = 24f;
+            int radius = (int)(ButtonHeight * 0.5f);
+            Quiet(Root, "기본", 0f, 0f, ButtonWidth, ButtonHeight, "기본", 22, radius, ResetCurrentTab);
+            Quiet(Root, "뒤로 가기", 0f, 0f, ButtonWidth, ButtonHeight, "뒤로 가기", 22, radius, Back);
+            _applyButton = Quiet(Root, "적용", 0f, 0f, ButtonWidth, ButtonHeight, "적용", 22, radius, Apply);
+            Place(Root.Find("기본"), new Vector2(0f, 0f), Pad, y);
+            Place(Root.Find("뒤로 가기"), new Vector2(1f, 0f), -Pad - ButtonWidth, y);
+            Place(Root.Find("적용"), new Vector2(1f, 0f), -Pad - ButtonWidth * 2f - 16f, y);
             var dirty = UiKit.Rect("Unapplied", Root, new Vector2(1f, 0f), new Vector2(1f, 0f),
                 new Vector2(-Pad - ButtonWidth * 2f - 40f, y), new Vector2(520f, ButtonHeight));
-            _dirtyLabel = UiKit.Label(dirty, "적용하지 않은 변경 사항이 있습니다", 18, UiKit.Accent, TextAnchor.MiddleRight);
+            _dirtyLabel = UiKit.Label(dirty, "적용하지 않은 변경 사항이 있습니다", 18, UiPaint.Ac, TextAnchor.MiddleRight);
             _dirtyLabel.enabled = false;
+            SetPrimary(_applyButton, false);
+        }
+
+        // Bottom-anchored placement of a button made by UiPaint.Btn (which hangs from the top-left).
+        static void Place(Transform t, Vector2 anchor, float x, float y)
+        {
+            var r = (RectTransform)t;
+            r.anchorMin = r.anchorMax = anchor;
+            r.pivot = new Vector2(anchor.x, 0f);
+            r.anchoredPosition = new Vector2(anchor.x == 0f ? x : x + ButtonWidth, y);
         }
 
         void BuildPage(int page, SettingsTab tab, SettingsPage sub)
@@ -483,18 +510,23 @@ namespace Game.Gameplay
             if (tab == SettingsTab.Keys)
             {
                 var note = Band("Note", content, y, 40f, 22f);
-                _keysNote = UiKit.Label(note, SettingsCatalog.KeysNote, 18, UiKit.Accent);
-                y += 44f;
+                _keysNote = UiKit.Label(note, SettingsCatalog.KeysNote, 18, UiPaint.T2);
+                y += 48f;
                 var keys = SettingsCatalog.KeyBindings;
                 for (int i = 0; i < keys.Length; i++)
                 {
                     if (keys[i].Section != section) { section = keys[i].Section; y = Section(content, section, y); }
                     var row = NewRow(content, keys[i].Label, rows.Count, ref y);
                     row.Binding = keys[i];
-                    var box = UiKit.Rect("Key", row.transform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(260f, RowHeight - 16f));
                     var rowRef = row;
-                    row.KeyButton = UiKit.Button(box, keys[i].Keys, 19, () => BeginRebind(rowRef));
-                    row.Value = box.GetComponentInChildren<Text>();
+                    var key = Quiet(row.transform, "Key", 0f, 0f, 260f, RowHeight - 16f, keys[i].Keys, 20, InnerRadius, () => BeginRebind(rowRef));
+                    var kr = (RectTransform)key.transform;
+                    kr.anchorMin = kr.anchorMax = new Vector2(1f, 0.5f);
+                    kr.pivot = new Vector2(1f, 0.5f);
+                    kr.anchoredPosition = new Vector2(-14f, 0f);
+                    row.KeyButton = key;
+                    row.Value = key.GetComponentInChildren<Text>();
+                    row.Value.fontStyle = FontStyle.Normal;
                     rows.Add(row);
                 }
             }
@@ -518,9 +550,17 @@ namespace Game.Gameplay
             content.sizeDelta = new Vector2(0f, y + 8f);
         }
 
+        // A small caption with a hairline running to the right edge.
         static float Section(RectTransform content, string text, float y)
         {
-            UiKit.SectionHeader(Band("Section " + text, content, y + 10f, SectionHeight - 10f, 22f), text);
+            var rect = Band("Section " + text, content, y + 12f, SectionHeight - 12f, 22f);
+            var label = UiKit.Label(UiKit.Fill("Caption", rect), text, 18, UiPaint.T2, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var line = UiKit.Rect("Line", rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 1f));
+            line.anchorMin = new Vector2(0f, 0.5f);
+            line.anchorMax = new Vector2(1f, 0.5f);
+            line.offsetMin = new Vector2(label.preferredWidth + 16f, -0.5f);
+            line.offsetMax = new Vector2(0f, 0.5f);
+            UiKit.Box(line, UiPaint.Ln);
             return y + SectionHeight;
         }
 
@@ -531,15 +571,16 @@ namespace Game.Gameplay
             var row = rect.gameObject.AddComponent<SettingsRow>();
             row.Owner = this;
             // Never fully transparent so the hover always registers.
-            row.BaseColor = index % 2 == 0 ? UiKit.RowBand : new Color(1f, 1f, 1f, 0.004f);
-            row.Background = UiKit.Box(rect, row.BaseColor, true);
-            var marker = UiKit.Rect("Marker", rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(3f, RowHeight - 16f));
-            row.Marker = UiKit.Box(marker, UiKit.Accent);
+            row.BaseColor = UiPaint.Off;
+            row.Background = UiPaint.Box(rect, row.BaseColor, InnerRadius);
+            row.Background.raycastTarget = true;
+            var marker = UiKit.Rect("Marker", rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(4f, 0f), new Vector2(3f, RowHeight - 24f));
+            row.Marker = UiPaint.Box(marker, UiPaint.Ac, 1);
             row.Marker.enabled = false;
             var text = UiKit.Fill("Label", rect);
             text.offsetMin = new Vector2(22f, 0f);
             text.offsetMax = new Vector2(-(ControlWidth + 28f), 0f);
-            UiKit.Label(text, label, 21, UiKit.Text);
+            UiKit.Label(text, label, 20, UiPaint.Tx);
             return row;
         }
 
@@ -547,28 +588,21 @@ namespace Game.Gameplay
         static RectTransform Control(Transform row) =>
             UiKit.Rect("Control", row, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(ControlWidth, RowHeight - 12f));
 
-        // A dark framed box at the right end of a row (value read-outs).
-        static RectTransform ValueBox(Transform row, float width)
-        {
-            var box = UiKit.Rect("Value", row, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(width, RowHeight - 16f));
-            UiKit.Box(box, ValueBack);
-            UiKit.Frame(box, 1f, UiKit.SteelDim);
-            return box;
-        }
+        // A read-out well: the lobby's map card (page background, 1 px border).
+        static void ValueWell(RectTransform box) => UiPaint.Box(box, UiPaint.Bg, InnerRadius, UiPaint.Ln);
 
         void BuildChoice(SettingsRow row)
         {
             var id = row.Def.Id;
             var area = Control(row.transform);
-            float h = RowHeight - 14f;
-            row.Previous = UiKit.Button(UiKit.Rect("Previous", area, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(ArrowWidth, h)),
-                "◀", 16, () => Step(id, -1));
-            row.Next = UiKit.Button(UiKit.Rect("Next", area, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(ArrowWidth, h)),
-                "▶", 16, () => Step(id, 1));
+            float h = RowHeight - 16f;
+            row.Previous = Quiet(area, "Previous", 0f, 0f, ArrowWidth, h, "◀", 16, InnerRadius, () => Step(id, -1));
+            row.Next = Quiet(area, "Next", 0f, 0f, ArrowWidth, h, "▶", 16, InnerRadius, () => Step(id, 1));
+            AnchorMid(row.Previous.transform, 0f);
+            AnchorMid(row.Next.transform, 1f);
             var box = UiKit.Rect("Value", area, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(ControlWidth - (ArrowWidth + 8f) * 2f, h));
-            UiKit.Box(box, ValueBack);
-            UiKit.Frame(box, 1f, UiKit.SteelDim);
-            row.Value = UiKit.Label(UiKit.Fill("Text", box), "", 20, UiKit.Text, TextAnchor.MiddleCenter);
+            ValueWell(box);
+            row.Value = UiKit.Label(UiKit.Fill("Text", box), "", 20, UiPaint.Tx, TextAnchor.MiddleCenter);
             int count = row.Def.OptionCount;
             if (count > 1 && count <= MaxPips)
             {
@@ -581,9 +615,18 @@ namespace Game.Gameplay
                 {
                     var pip = UiKit.Rect("Pip" + i, box, new Vector2(0.5f, 0f), new Vector2(0f, 1f),
                         new Vector2(-total * 0.5f + i * (pipWidth + pipGap), -3f), new Vector2(pipWidth, 2f));
-                    row.Pips[i] = UiKit.Box(pip, UiKit.SteelDim);
+                    row.Pips[i] = UiKit.Box(pip, UiPaint.Ln);
                 }
             }
+        }
+
+        // Pins a UiPaint.Btn (top-left anchored) to the left (0) or right (1) middle of its parent.
+        static void AnchorMid(Transform t, float side)
+        {
+            var r = (RectTransform)t;
+            r.anchorMin = r.anchorMax = new Vector2(side, 0.5f);
+            r.pivot = new Vector2(side, 0.5f);
+            r.anchoredPosition = Vector2.zero;
         }
 
         void BuildSlider(SettingsRow row)
@@ -592,26 +635,44 @@ namespace Game.Gameplay
             var id = def.Id;
             var area = Control(row.transform);
             var rect = UiKit.Rect("Slider", area, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero,
-                new Vector2(ControlWidth - ValueBoxWidth - 18f, 22f));
+                new Vector2(ControlWidth - ValueBoxWidth - 20f, 24f));
             row.Slider = UiKit.BuildSlider(rect, def.Min, def.Max, GameSettings.Get(id));
+            StyleSlider(row.Slider);
             row.Slider.wholeNumbers = def.Step >= 1f;
             row.Slider.onValueChanged.AddListener(v => OnSliderChanged(id, v));
             row.SliderTexts = SettingsCatalog.SliderTexts(def);
             var box = UiKit.Rect("Value", area, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(ValueBoxWidth, RowHeight - 16f));
-            UiKit.Box(box, ValueBack);
-            UiKit.Frame(box, 1f, UiKit.SteelDim);
-            row.Value = UiKit.Label(UiKit.Fill("Text", box, 6f), "", 20, UiKit.Text, TextAnchor.MiddleRight);
+            ValueWell(box);
+            row.Value = UiKit.Label(UiKit.Fill("Text", box, 8f), "", 20, UiPaint.Tx, TextAnchor.MiddleRight);
         }
 
+        // The kit slider with the lobby's shapes and colours: a rounded hairline track, an accent fill, a light round handle.
+        static void StyleSlider(Slider slider)
+        {
+            foreach (var image in slider.GetComponentsInChildren<Image>(true))
+            {
+                switch (image.gameObject.name)
+                {
+                    case "Track": image.sprite = UiPaint.Round(3); image.type = Image.Type.Sliced; image.color = UiPaint.Ln; break;
+                    case "Fill": image.sprite = UiPaint.Round(3); image.type = Image.Type.Sliced; image.color = UiPaint.Ac; break;
+                    case "Handle": image.sprite = UiPaint.Round(6); image.type = Image.Type.Sliced; image.color = UiPaint.Tx; break;
+                }
+            }
+        }
+
+        // 꺼짐 / 켜짐: two segments in one outlined pill.
         void BuildToggle(SettingsRow row)
         {
             var id = row.Def.Id;
             var area = Control(row.transform);
-            float w = (ControlWidth - 8f) * 0.5f, h = RowHeight - 14f;
-            row.Off = UiKit.Button(UiKit.Rect("Off", area, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(w, h)),
-                row.Def.Options[0], 19, () => { GameSettings.Preview(id, 0f); Sync(); });
-            row.On = UiKit.Button(UiKit.Rect("On", area, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(w, h)),
-                row.Def.Options[1], 19, () => { GameSettings.Preview(id, 1f); Sync(); });
+            float h = RowHeight - 16f, w = (ControlWidth - 8f) * 0.5f;
+            UiPaint.Box(area, Color.clear, (int)(h * 0.5f), UiPaint.Ln);
+            row.Off = UiPaint.Seg(area, "Off", 0f, 0f, w, h - 4f, row.Def.Options[0], 18, (int)((h - 4f) * 0.5f), () => { GameSettings.Preview(id, 0f); Sync(); });
+            row.On = UiPaint.Seg(area, "On", 0f, 0f, w, h - 4f, row.Def.Options[1], 18, (int)((h - 4f) * 0.5f), () => { GameSettings.Preview(id, 1f); Sync(); });
+            var off = (RectTransform)row.Off.transform;
+            off.anchorMin = off.anchorMax = new Vector2(0f, 0.5f); off.pivot = new Vector2(0f, 0.5f); off.anchoredPosition = new Vector2(2f, 0f);
+            var on = (RectTransform)row.On.transform;
+            on.anchorMin = on.anchorMax = new Vector2(1f, 0.5f); on.pivot = new Vector2(1f, 0.5f); on.anchoredPosition = new Vector2(-2f, 0f);
         }
     }
 }
