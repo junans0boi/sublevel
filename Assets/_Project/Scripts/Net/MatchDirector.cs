@@ -134,6 +134,7 @@ namespace Game.Net
                 _guestGiveUpAt = Time.time + GuestConnectSeconds;
                 SessionHelloSender.Attach(_networkManager, NetSession.Token);
                 _networkManager.ClientManager.OnClientConnectionState += OnGuestState;
+                PingSimulation.Attach(_networkManager);
                 _networkManager.ClientManager.StartConnection(NetSession.Address, NetSession.Port);
             }
             else if (_startAsHost)
