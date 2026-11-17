@@ -34,6 +34,7 @@ namespace Game.Net
             probe._csv = "Logs/perf/s8_server_" + scenario + ".csv";
             File.WriteAllText(probe._csv, "t,frames,mean_ms,p50_ms,p95_ms,p99_ms,max_ms,heap_mb,combatants,rewinds,bot_ai_mean,bot_ai_p99,sense_mean,sense_p99,loot_mean,loot_p99,doors_mean,doors_p99,path_mean,path_p99\n");
             BotPerf.Enabled = true;
+            Combatant.ServerDied += (victim, info) => Debug.Log("[Death] t=" + Time.realtimeSinceStartup.ToString("F0") + " victim_armed=" + (victim.HasAnyWeapon ? 1 : 0) + " cause=" + info.Cause + " attacker=" + (info.Attacker == null ? "none" : (info.Attacker.HasAnyWeapon ? "armed" : "unarmed")) + " weapon=" + info.WeaponId);
             probe._windowStart = Time.realtimeSinceStartup;
             probe._rewindsAtStart = LagCompensation.Rewinds;
             return probe;
