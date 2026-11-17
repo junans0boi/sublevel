@@ -28,7 +28,9 @@ namespace Game.Net
             foreach (var door in doors.ExteriorDoors) index.AddDoor(door.Lot, door.Position.x, door.Position.y, door.Position.z);
             Index = index;
             BuildMilliseconds = watch.Elapsed.TotalMilliseconds;
-            Debug.Log($"[BuildingLoot] {index.BuildingCount} buildings, {spawns.Length} spawns, unassigned {index.Unassigned}, ambiguous {index.Ambiguous}, {BuildMilliseconds:F1} ms (the plan itself comes from the door system)");
+            var histogram = new int[8];
+            for (int b = 0; b < index.BuildingCount; b++) histogram[System.Math.Min(7, index.SpawnsOf(b).Count)]++;
+            Debug.Log($"[BuildingLoot] spawns per building 0..7+: {string.Join(" ", histogram)}; {index.BuildingCount} buildings, {spawns.Length} spawns, unassigned {index.Unassigned}, ambiguous {index.Ambiguous}, {BuildMilliseconds:F1} ms (the plan itself comes from the door system)");
         }
     }
 }
