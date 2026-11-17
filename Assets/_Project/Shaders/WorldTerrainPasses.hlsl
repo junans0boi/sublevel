@@ -40,24 +40,12 @@ half4 RockSample(TEXTURE2D_PARAM(tex, smp), float2 uvTop)
 // Game: the ground repeats nowhere you can see. Grass, dirt and mud get a second sample (turned and 2.7x larger)
 // mixed in by low-frequency noise from world position, and the whole ground a slow brightness / hue drift.
 float _GameGroundOff; // global: 1 skips the untiling sample and the colour drift (low quality, A/B timing)
+#include "Assets/_Project/Shaders/WorldGroundTint.hlsl"
 static float2 g_GroundXZ = float2(0.0, 0.0);
 static half g_UntileMix = 0.0h;   // how far the turned second sample shows, once per pixel
+static float g_GroundY = 0.0;     // world height of the pixel
 
 float _GameWet; // global: 0 dry .. 1 soaked, set by GroundFx (#207)
-
-float GroundHash(float2 p)
-{
-    p = frac(p * float2(0.1031, 0.1030));
-    p += dot(p, p.yx + 33.33);
-    return frac((p.x + p.y) * p.x);
-}
-
-float GroundNoise(float2 p)
-{
-    float2 i = floor(p), f = frac(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return lerp(lerp(GroundHash(i), GroundHash(i + float2(1, 0)), f.x), lerp(GroundHash(i + float2(0, 1)), GroundHash(i + float2(1, 1)), f.x), f.y);
-}
 
 half4 UntiledSample(TEXTURE2D_PARAM(tex, smp), float2 uv)
 {
@@ -78,6 +66,30 @@ half3 GroundDrift()
     half3 warm = half3(1.10h, 1.0h, 0.86h), cool = half3(0.90h, 1.0h, 0.97h);
     half3 hue = lerp(cool, warm, (half)smoothstep(0.3, 0.7, broad));
     return hue * (half)(0.84 + 0.32 * broad * 0.6 + 0.12 * fine + 0.1);
+}
+
+// Mood tints (ADR-284): the meadow runs from lush green to dry yellow in patches a few hundred metres across (and a little
+// drier on the high ground), and bare earth from brown to red. Layer order: 0 grass, 1 dirt. The base map (beyond the
+// terrain's basemap distance) only gets the grass part, picked out of the baked colour by hue.
+half DryMeadow() { return DryAmount(g_GroundXZ, g_GroundY); }
+
+void LayerTints(out half3 grass, out half3 dirt)
+{
+    UNITY_BRANCH
+    if (_GameGroundOff > 0.5) { grass = 1.0h; dirt = 1.0h; return; }
+    grass = lerp(half3(0.72h, 1.22h, 0.80h), half3(1.6h, 1.75h, 1.5h), DryMeadow());
+    half red = (half)smoothstep(0.25, 0.75, GroundNoise(g_GroundXZ / 190.0 + 3.3));
+    dirt = lerp(half3(1.0h, 0.95h, 0.90h), half3(1.14h, 0.88h, 0.80h), red);
+}
+
+half3 BaseMapTint(half3 c)
+{
+    UNITY_BRANCH
+    if (_GameGroundOff > 0.5) return c;
+    // Grass: not red-leaning (dirt) and not grey-blue (rock, mud).
+    half green = (half)((1.0 - smoothstep(0.03, 0.10, c.r - c.g)) * (1.0 - smoothstep(0.55, 0.8, c.b / max(c.g, 0.01h))));
+    half3 grass = lerp(half3(0.72h, 1.22h, 0.80h), half3(1.6h, 1.75h, 1.5h), DryMeadow());
+    return c * lerp(half3(1.0h, 1.0h, 1.0h), grass, green);
 }
 
 struct Attributes
@@ -280,8 +292,10 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
 #endif
 
     mixedDiffuse = 0.0h;
-    mixedDiffuse += diffAlbedo[0] * half4(_DiffuseRemapScale0.rgb * splatControl.rrr, 1.0h);
-    mixedDiffuse += diffAlbedo[1] * half4(_DiffuseRemapScale1.rgb * splatControl.ggg, 1.0h);
+    half3 grassTint, dirtTint;
+    LayerTints(grassTint, dirtTint);
+    mixedDiffuse += diffAlbedo[0] * half4(_DiffuseRemapScale0.rgb * grassTint * splatControl.rrr, 1.0h);
+    mixedDiffuse += diffAlbedo[1] * half4(_DiffuseRemapScale1.rgb * dirtTint * splatControl.ggg, 1.0h);
     mixedDiffuse += diffAlbedo[2] * half4(_DiffuseRemapScale2.rgb * splatControl.bbb, 1.0h);
     mixedDiffuse += diffAlbedo[3] * half4(_DiffuseRemapScale3.rgb * splatControl.aaa, 1.0h);
     mixedDiffuse.rgb *= GroundDrift(); // Game: broad light/dark and warm/cool patches
@@ -476,7 +490,9 @@ void SplatmapFragment(
 
     half3 normalTS = half3(0.0h, 0.0h, 1.0h);
 #ifdef TERRAIN_SPLAT_BASEPASS
-    half3 albedo = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uvMainAndLM.xy).rgb;
+    g_GroundXZ = IN.positionWS.xz;
+    g_GroundY = IN.positionWS.y;
+    half3 albedo = BaseMapTint(SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uvMainAndLM.xy).rgb);
     half smoothness = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uvMainAndLM.xy).a;
     half metallic = SAMPLE_TEXTURE2D(_MetallicTex, sampler_MetallicTex, IN.uvMainAndLM.xy).r;
     half alpha = 1;
@@ -484,6 +500,7 @@ void SplatmapFragment(
 #else
 
     g_GroundXZ = IN.positionWS.xz;
+    g_GroundY = IN.positionWS.y;
     g_UntileMix = (half)(smoothstep(0.25, 0.75, GroundNoise(g_GroundXZ / 17.0 + 3.7)) * 0.7);
     // Game: projection weights for the rock layer from the terrain's own normal.
     {

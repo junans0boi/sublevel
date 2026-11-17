@@ -20,6 +20,7 @@ Shader "Game/WorldFoliage"
         [Toggle(_MATTE)] _Matte("Matte (no highlights or reflections)", Float) = 1
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha clip", Float) = 1
         [Toggle(_NORMALMAP)] _UseNormal("Use normal map", Float) = 0
+        [Toggle] _DryTint("Follow the ground's dry/lush tint (grass blades)", Float) = 0
         [HideInInspector] _Cull("Cull", Float) = 0
     }
 
@@ -41,6 +42,7 @@ Shader "Game/WorldFoliage"
         #endif
 
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        #include "Assets/_Project/Shaders/WorldGroundTint.hlsl"
 
         TEXTURE2D(_BaseMap);  SAMPLER(sampler_BaseMap);
         TEXTURE2D(_BumpMap);  SAMPLER(sampler_BumpMap);
@@ -50,6 +52,7 @@ Shader "Game/WorldFoliage"
             float4 _BaseMap_ST;
             half4 _BaseColor;
             half _BumpScale;
+            half _DryTint;
             half _Smoothness;
             half _Cutoff;
             float _WindHeight;
@@ -171,6 +174,7 @@ float4 _GameBends[4]; // global: someone walking through (world x, z, radius m, 
                     clip(base.a - _Cutoff);
                 #endif
                 half3 albedo = base.rgb * _BaseColor.rgb;
+                if (_DryTint > 0.5h) albedo *= lerp(half3(0.85h, 1.0h, 0.9h), half3(1.45h, 1.3h, 0.6h), DryAmount(i.positionWS.xz, i.positionWS.y));
                 half4 mask = SAMPLE_TEXTURE2D(_MaskMap, sampler_MaskMap, i.uv);
 
                 half3 normalWS = i.normalWS;

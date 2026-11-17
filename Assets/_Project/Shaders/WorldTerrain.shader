@@ -1,6 +1,6 @@
 // The outdoor map's ground (ADR-052): URP's Terrain/Lit (URP 17.3, Unity Companion License) with one change, in
 // WorldTerrainPasses.hlsl: terrain layer 2 (rock) is projected from the sides on steep ground, so cliffs are not
-// smeared down the slope. Everything else, including the base map and depth passes, is URP's own.
+// smeared down the slope. The base map pass is a copy (WorldTerrainBase) that adds the meadow tint (ADR-284); the rest is URP's own.
 Shader "Game/WorldTerrain"
 {
     Properties
@@ -299,7 +299,7 @@ Shader "Game/WorldTerrain"
         UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
     }
     Dependency "AddPassShader" = "Hidden/Universal Render Pipeline/Terrain/Lit (Add Pass)"
-    Dependency "BaseMapShader" = "Hidden/Universal Render Pipeline/Terrain/Lit (Base Pass)"
+    Dependency "BaseMapShader" = "Hidden/Game/WorldTerrainBase"
     Dependency "BaseMapGenShader" = "Hidden/Universal Render Pipeline/Terrain/Lit (Basemap Gen)"
 
     CustomEditor "UnityEditor.Rendering.Universal.TerrainLitShaderGUI"

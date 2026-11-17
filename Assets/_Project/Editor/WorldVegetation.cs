@@ -26,7 +26,7 @@ public static class WorldVegetation
     static readonly Color BroadleafTint = new Color(0.86f, 0.92f, 0.80f);
     static readonly Color ConiferTint = new Color(0.78f, 0.86f, 0.80f);
     static readonly Color BushTint = new Color(0.74f, 0.82f, 0.68f);
-    static readonly Color GrassTint = new Color(0.66f, 0.74f, 0.52f);
+    static readonly Color GrassTint = new Color(0.66f, 0.74f, 0.52f);   // the blades follow the ground's dry tint in the shader (ADR-284)
     static readonly Color BarkTint = new Color(0.82f, 0.80f, 0.78f);
     const float LeafCutoff = 0.5f;
 
@@ -69,19 +69,34 @@ public static class WorldVegetation
         var broadleafBillboard = Foliage("World_Billboard_Broadleaf", broadleafBoardTex, BroadleafTint, 14f, 0.28f, 0f);
         var coniferBillboard = Foliage("World_Billboard_Conifer", coniferBoardTex, ConiferTint, 18f, 0.22f, 0f);
 
+        // Autumn crowns (ADR-285): two of the five broadleaf shapes turn colour, so a wood has gold and orange trees among the green.
+        var autumn = new[]
+        {
+            (variant: 1, name: "Gold", tint: BroadleafTint * new Color(1.55f, 1.12f, 0.42f)),
+            (variant: 3, name: "Rust", tint: BroadleafTint * new Color(2.1f, 0.78f, 0.32f)),
+        };
+        var leavesOf = new Material[Vegetation.Variants];
+        var boardOf = new Material[Vegetation.Variants];
+        for (int v = 0; v < Vegetation.Variants; v++) { leavesOf[v] = broadleafLeaves; boardOf[v] = broadleafBillboard; }
+        foreach (var a in autumn)
+        {
+            leavesOf[a.variant] = Foliage("World_Leaves_Broadleaf_" + a.name, leafTex, a.tint, 14f, 0.28f, 0.05f);
+            boardOf[a.variant] = Foliage("World_Billboard_Broadleaf_" + a.name, broadleafBoardTex, a.tint, 14f, 0.28f, 0f);
+        }
+
         var kit = new Kit
         {
             Prototypes = new VegetationRenderer.Prototype[3 * Vegetation.Variants],
             TrunkOf = new int[3 * Vegetation.Variants],
             TrunkRadius = new float[3 * Vegetation.Variants],
             TrunkHeight = new float[3 * Vegetation.Variants],
-            Grass = Foliage("World_Grass", grassTex, GrassTint, 0.9f, 0.22f, 0.012f),
+            Grass = DryTinted(Foliage("World_Grass", grassTex, GrassTint, 0.9f, 0.22f, 0.012f)),
             Flowers = Foliage("World_Flowers", flowerTex, Color.white, 0.8f, 0.25f, 0.012f),
         };
         for (int v = 0; v < Vegetation.Variants; v++)
         {
             int b = kit.Prototype(PlantKind.Broadleaf, v);
-            kit.Prototypes[b] = BroadleafTree(v, store, broadleafBark, broadleafLeaves, broadleafBillboard, out kit.TrunkRadius[b], out kit.TrunkHeight[b]);
+            kit.Prototypes[b] = BroadleafTree(v, store, broadleafBark, leavesOf[v], boardOf[v], out kit.TrunkRadius[b], out kit.TrunkHeight[b]);
             kit.TrunkOf[b] = b;
             int c = kit.Prototype(PlantKind.Conifer, v);
             kit.Prototypes[c] = ConiferTree(v, store, coniferBark, coniferLeaves, coniferBillboard, out kit.TrunkRadius[c], out kit.TrunkHeight[c]);
@@ -574,6 +589,13 @@ public static class WorldVegetation
         mat.renderQueue = (int)RenderQueue.AlphaTest;
         mat.SetFloat("_Smoothness", 0.1f);
         Wind(mat, windHeight, bend, flutter);
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    static Material DryTinted(Material mat)
+    {
+        mat.SetFloat("_DryTint", 1f);
         EditorUtility.SetDirty(mat);
         return mat;
     }

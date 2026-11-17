@@ -85,7 +85,7 @@ namespace Game.Core
         const float BushCell = 5f, BushRoadClear = 1.5f, BushLotClear = 2f, BushSpacing = 2.2f;
         const float PassClear = 26f, JunctionTreeClear = 9f;
         const float MaxPlantSlopeTan = 0.5f;
-        public const int MaxTrees = 2200, MaxBushes = 2600;   // instanced draws make these cheap; colliders are per trunk
+        public const int MaxTrees = 2200, MaxBushes = 16000;   // instanced draws make these cheap; colliders are per trunk
 
         // Every tree and bush of the map: the plan's scattered trees with a species each, trees in the yards of the
         // houses and along the town streets (the town read as bare between buildings), and bushes at the edges of
@@ -161,7 +161,7 @@ namespace Game.Core
                 }
             }
 
-            if (forest) AddForest(plan, plants, grid, seed);
+            if (forest) { AddForest(plan, plants, grid, seed); AddMeadow(plan, plants, grid, seed); }
 
             int trees = plants.Count;
             var treeGrid = new SpacingGrid(plan.Size, 12f);
@@ -182,9 +182,12 @@ namespace Game.Core
                     var regionKind = plan.Regions[region].Kind;
                     float chance = regionKind == RegionKind.Wetland ? 0.13f : regionKind == RegionKind.Factory ? 0.025f : 0.045f;
                     if (treeGrid.Near(x, z, 9f)) chance += 0.22f;
+                    // Thickets in and along the tall-grass patches of the meadow (ADR-283).
+                    float roll = WorldNoise.Hash01(gx, gz, seed + 42u);
+                    if (roll < 0.22f && TallMeadow(plan, x, z, y) > 0.1f) chance += 0.16f;
                     float lotDistance = NearestLot(plan, x, z);
                     if (lotDistance > BushLotClear && lotDistance < 5f) chance += 0.2f;
-                    if (WorldNoise.Hash01(gx, gz, seed + 42u) >= chance) continue;
+                    if (roll >= chance) continue;
                     if (!Free(plan, x, z, BushRoadClear, BushLotClear, 1.5f, 2f)) continue;
                     if (!grid.Clear(x, z, BushSpacing)) continue;
                     float size = WorldNoise.Hash01(gx, gz, seed + 43u);
@@ -221,9 +224,16 @@ namespace Game.Core
             f *= 1f - WorldTerrain.Smooth01((up - (TreeLineAbove - 30f)) / 30f);
             f *= 0.7f + 0.3f * WorldTerrain.Smooth01(0.5f + 1.1f * WorldNoise.Value(x / 45f, z / 45f, unchecked((uint)plan.Seed + 0xF0E5u)));   // glades, never bare
             if (f <= 0f) return 0f;
-            f *= WorldTerrain.Smooth01((plan.RoadDistance(x, z) - ForestRoadClear) / ForestRoadRamp);
+            return f * Clearance(plan, x, z, ForestLotClear, ForestLotRamp);
+        }
+
+        // 0..1: how far a point is from roads, buildings, elevator pads, junctions, passes and rivers (1 = free). Shared by the
+        // forest belt and the meadow trees (ADR-282).
+        static float Clearance(WorldPlan plan, float x, float z, float lotClear, float lotRamp)
+        {
+            float f = WorldTerrain.Smooth01((plan.RoadDistance(x, z) - ForestRoadClear) / ForestRoadRamp);
             if (f <= 0f) return 0f;
-            f *= WorldTerrain.Smooth01((NearestLot(plan, x, z, ForestLotClear + ForestLotRamp) - ForestLotClear) / ForestLotRamp);
+            f *= WorldTerrain.Smooth01((NearestLot(plan, x, z, lotClear + lotRamp) - lotClear) / lotRamp);
             if (f <= 0f) return 0f;
             foreach (var e in plan.Elevators)
                 if (e.Pad().Distance(x, z) < ForestPadClear) return 0f;
@@ -254,6 +264,52 @@ namespace Game.Core
                     Add(plants, grid, Species(plan, region, y, WorldNoise.Hash01(gx, gz, seed + 64u)), region, x, y, z,
                         1f + 0.6f * WorldNoise.Hash01(gx, gz, seed + 65u), WorldNoise.Hash01(gx, gz, seed + 66u) * 360f,
                         (int)(WorldNoise.Hash01(gx, gz, seed + 67u) * Variants));
+                    added++;
+                }
+        }
+
+        // ---- meadow trees (ADR-282): broadleaf groves with open grass between, thickening toward the slope forest ----
+
+        public const float MeadowCell = 5f, MeadowSpacing = 5.5f;
+        public const int MaxMeadow = 9000;
+        const float MeadowLotClear = 22f, MeadowLotRamp = 14f, MeadowMaxSlopeTan = 0.45f;
+
+        // 0..1 at a point of the low regions' meadow (Mountain regions have the forest belt). A few lone trees everywhere, groves where the
+        // noise is high; from 14 m up the hill the groves widen so they run into the belt that starts at 30 m.
+        public static float MeadowDensity(WorldPlan plan, float x, float z)
+        {
+            int region = plan.RegionAt(x, z);
+            if (region < 0) return 0f;
+            var kind = plan.Regions[region].Kind;
+            if (kind == RegionKind.Mountain || kind == RegionKind.Wetland) return 0f;
+            float up = plan.Height(x, z) - plan.SeaLevel;
+            if (up < 3f || up >= 36f) return 0f;
+            if (plan.SlopeTan(x, z) >= MeadowMaxSlopeTan) return 0f;
+            uint salt = unchecked((uint)plan.Seed + 0x3EAD0u);
+            float n = 0.75f * WorldNoise.Value(x / 90f, z / 90f, salt) + 0.25f * WorldNoise.Value(x / 28f, z / 28f, salt + 1u);
+            float threshold = 0.24f - 0.22f * WorldTerrain.Smooth01((up - 14f) / 16f);
+            float d = Math.Max(0.04f, 0.8f * WorldTerrain.Smooth01((n - threshold) / 0.22f));
+            if (kind == RegionKind.Factory) d *= 0.35f;
+            return d * Clearance(plan, x, z, MeadowLotClear, MeadowLotRamp);
+        }
+
+        static void AddMeadow(WorldPlan plan, List<Plant> plants, SpacingGrid grid, uint seed)
+        {
+            int cells = (int)(plan.Size / MeadowCell), added = 0;
+            for (int gz = 0; gz < cells && added < MaxMeadow; gz++)
+                for (int gx = 0; gx < cells && added < MaxMeadow; gx++)
+                {
+                    float x = (gx + WorldNoise.Hash01(gx, gz, seed + 70u)) * MeadowCell;
+                    float z = (gz + WorldNoise.Hash01(gx, gz, seed + 71u)) * MeadowCell;
+                    if (WorldNoise.Hash01(gx, gz, seed + 72u) >= 0.9f) continue;
+                    float f = MeadowDensity(plan, x, z);
+                    if (f <= 0f || WorldNoise.Hash01(gx, gz, seed + 73u) >= f) continue;
+                    if (!grid.Clear(x, z, MeadowSpacing)) continue;
+                    float y = plan.Height(x, z);
+                    int region = plan.RegionAt(x, z);
+                    Add(plants, grid, Species(plan, region, y, WorldNoise.Hash01(gx, gz, seed + 74u)), region, x, y, z,
+                        0.9f + 0.6f * WorldNoise.Hash01(gx, gz, seed + 75u), WorldNoise.Hash01(gx, gz, seed + 76u) * 360f,
+                        (int)(WorldNoise.Hash01(gx, gz, seed + 77u) * Variants));
                     added++;
                 }
         }
@@ -407,6 +463,29 @@ namespace Game.Core
         // Reeds: the wetland shallows and the wet ground just above them.
         public static bool TallGrass(WorldPlan plan, float x, float z, float height) =>
             WetlandAt(plan, x, z) && height < plan.SeaLevel + 1.1f;
+
+        // Tall meadow grass (ADR-283): patches knee to waist high that hide a prone or crouching player. 0..1 weight; 0 on roads, near
+        // buildings and elevator pads (kept open), on slopes, in the wetland (it has reeds), factory and mountain regions.
+        public static float TallMeadow(WorldPlan plan, float x, float z, float height)
+        {
+            int region = plan.RegionAt(x, z);
+            if (region < 0) return 0f;
+            var kind = plan.Regions[region].Kind;
+            if (kind == RegionKind.Mountain || kind == RegionKind.Wetland || kind == RegionKind.Factory) return 0f;
+            if (height < plan.SeaLevel + 1.5f) return 0f;
+            uint salt = unchecked((uint)plan.Seed + 0x7A11u);
+            float n = 0.7f * WorldNoise.Value(x / 34f, z / 34f, salt) + 0.3f * WorldNoise.Value(x / 11f, z / 11f, salt + 1u);
+            float w = WorldTerrain.Smooth01((n - 0.28f) / 0.2f);
+            if (w <= 0f) return 0f;
+            w *= WorldTerrain.Smooth01((plan.RoadDistance(x, z) - TallRoadClear) / 6f);
+            if (w <= 0f) return 0f;
+            w *= WorldTerrain.Smooth01((NearestLot(plan, x, z, TallLotClear + 8f) - TallLotClear) / 8f);
+            if (w <= 0f) return 0f;
+            foreach (var e in plan.Elevators)
+                if (e.Pad().Distance(x, z) < TallPadClear) return 0f;
+            return w * (1f - WorldTerrain.Smooth01((plan.SlopeTan(x, z) - 0.2f) / 0.15f));
+        }
+        const float TallRoadClear = 8f, TallLotClear = 14f, TallPadClear = 18f;
 
         static bool WetlandAt(WorldPlan plan, float x, float z)
         {
