@@ -12,7 +12,7 @@ namespace Game.Gameplay
         const float BreathSeconds = 3.8f, BreathPitchDeg = 1.6f, SwayYawDeg = 0.7f, SwaySeconds = 7.3f;
         const float TurnStepMinDegPerSecond = 20f, TurnStepFullDegPerSecond = 90f, TurnStepHz = 1.3f;
         const float TurnThighDeg = 24f, TurnShinDeg = 34f, TurnStepStillSpeed = 0.5f;
-        const float PlantRayUp = 0.5f, PlantRayLength = 1.1f, PlantMaxRaise = 0.3f, PlantMaxLower = 0.4f;
+        const float PlantRayUp = 0.5f, PlantRayLength = 1.1f, PlantMaxRaise = 0.3f, PlantMaxLower = 0.4f, PlantMaxBelowOrigin = 0.3f, PlantContact = 0.03f, PlantMaxSplit = 0.12f;
         const float PlantTiltMaxDeg = 35f; // the slope limit's walkable range (ADR-195: 35 deg walkable, 40 hard)
         const float PlantFadeHeight = 0.12f, PlantSmoothPerSecond = 16f, PlantMinMove = 0.004f;
         const float CrawlMetersPerCycle = 1.1f, CrawlRollDeg = 5f, CrawlKneeDeg = 25f;
@@ -141,24 +141,40 @@ namespace Game.Gameplay
             }
             bool still = speed < 0.4f;
             var want = new float[2];
+            var above = new float[2];
+            var under = new float?[2];
             var normal = new Vector3[2];
-            // The capsule hovers over flat ground by a small lift that the feet's targets already include (measured against the ground under the
-            // origin). On a slope it rests on its side and the origin sits above the surface by its own lift: the feet belong on the surface,
-            // so as the ground under the origin tilts (0 flat .. full at 10 degrees) the targets are measured from the origin's height instead.
-            var origin = GroundUnder(transform.position, out var originNormal);
-            float lift = origin.HasValue ? transform.position.y - origin.Value : 0f;
-            float extraLift = lift * Mathf.Clamp01((1f - originNormal.y) / (1f - 0.9848f));
+            // Each ankle belongs `rest` above the ground under it (a bit more on a slope). The target is measured against the capsule's own height:
+            // the capsule hovers by its skin width and rests on its side on a steep slope, so the origin is not on the ground and a cast under the
+            // origin would not say where the soles are. A cast that finds something far below the origin missed the floor (a layer it skips would
+            // let it through): it is limited to a step, so it never sinks the body (player report "walks buried", ADR-232).
             for (int side = 0; side < 2; side++)
             {
                 var foot = _bones[side == 0 ? FootLeft : FootRight];
                 float footY = transform.InverseTransformPoint(foot.position).y;
-                var under = GroundUnder(foot.position, out normal[side]);
-                float groundDelta = under.HasValue && origin.HasValue ? under.Value - origin.Value - extraLift : 0f;
+                under[side] = GroundUnder(foot.position, out normal[side]);
+                float groundDelta = under[side].HasValue
+                    ? Mathf.Max(under[side].Value - transform.position.y, -PlantMaxBelowOrigin) + _footRestHeight * (1f / Mathf.Max(0.7f, normal[side].y) - 1f)
+                    : 0f;
                 PlantDebug[side] = $"footY {footY:F3} groundDelta {groundDelta:F3}";
+                above[side] = footY - (_footRestHeight + groundDelta); // how far this ankle is over where it belongs
                 want[side] = PlantMove(footY, _footRestHeight, groundDelta, still) * (1f - _stepShown[side]);
             }
-            // The lower foot decides the pelvis: standing still it follows exactly, moving it eases (the stride lifts the feet anyway).
-            float dropTarget = Mathf.Clamp(_plantDrop - Mathf.Min(want[0], want[1]), 0f, PlantMaxLower);
+            // The pelvis goes down by the distance from the capsule's origin to the lowest ground under a foot: a planted ankle is `rest` over
+            // its ground in the clips, so that is how far the body has to come down for it to stand there (the hover of the capsule on flat
+            // ground, more where one foot is downhill or on a lower step). From the geometry alone: a foot in the air, or one the clip
+            // lifted a little, cannot pull the body down a bit more every stride.
+            float needLow = float.MaxValue, needHigh = 0f; // distance from the origin down to the nearer and the further ground under a foot
+            for (int side = 0; side < 2; side++)
+                if (under[side].HasValue)
+                {
+                    float d = Mathf.Max(0f, transform.position.y - under[side].Value);
+                    needLow = Mathf.Min(needLow, d); needHigh = Mathf.Max(needHigh, d);
+                }
+            if (needLow == float.MaxValue) needLow = 0f;
+            // The far foot may float a little rather than the body sinking into the near step: the pelvis comes down no more than PlantMaxSplit
+            // below what the nearer ground needs (a leg folded for a stair cannot be folded further).
+            float dropTarget = Mathf.Clamp(Mathf.Min(needHigh, needLow + PlantMaxSplit), 0f, PlantMaxLower);
             float k = 1f - Mathf.Exp(-PlantSmoothPerSecond * Time.deltaTime);
             float newDrop = Mathf.Lerp(_plantDrop, dropTarget, k);
             float extra = newDrop - _plantDrop;
@@ -203,7 +219,7 @@ namespace Game.Gameplay
 
         float? GroundUnder(Vector3 at, out Vector3 normal)
         {
-            int n = Physics.RaycastNonAlloc(at + Vector3.up * PlantRayUp, Vector3.down, _groundHits, PlantRayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            int n = Physics.RaycastNonAlloc(at + Vector3.up * PlantRayUp, Vector3.down, _groundHits, PlantRayLength, Physics.AllLayers, QueryTriggerInteraction.Ignore);
             float best = float.NegativeInfinity;
             normal = Vector3.up;
             for (int i = 0; i < n; i++)

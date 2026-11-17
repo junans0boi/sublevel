@@ -294,7 +294,8 @@ namespace Game.Gameplay
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
             // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-255).
-            _unarmedBody = HeldId == 0 || HoldsMelee;
+            // Seated, the arms are placed on the grips by code (PoseSeated) from the clip's forward hands; the bare-handed tree's swinging arms start too far away.
+            _unarmedBody = (HeldId == 0 || HoldsMelee) && _seated < 0.5f;
             float clipSpeed = _unarmedBody
                 ? (_legs.Backward || slowWalk ? _unarmedWalkSpeed : _unarmedRunSpeed)
                 : _legs.Backward ? _backClipSpeed : slowWalk ? _walkClipSpeed : _forwardClipSpeed;

@@ -46,8 +46,13 @@ namespace Game.Tests
             }
         }
 
+        string _savedLook;
+
         IEnumerator Load()
         {
+            // The saved look is editor-wide (PlayerPrefs): the default model, whatever an earlier run left there; put back in TearDown.
+            _savedLook = PlayerPrefs.GetString(PlayerAppearanceStore.Key, "");
+            PlayerAppearanceStore.Save(PlayerAppearance.Default); // explicit: Load() also reads the old ui.char.index key, which another run may have left
             _input = new ScriptedInput();
             PlayerController.InputOverride = _input;
             SceneManager.LoadScene("TestBox");
@@ -63,6 +68,7 @@ namespace Game.Tests
         public IEnumerator TearDown()
         {
             PlayerController.InputOverride = null;
+            if (_savedLook != null) { if (_savedLook == "") PlayerAppearanceStore.Clear(); else PlayerPrefs.SetString(PlayerAppearanceStore.Key, _savedLook); }
             Directory.CreateDirectory("Logs");
             if (_csv.Length > 0) File.AppendAllText("Logs/anim_metrics.csv", _csv.ToString());
             SceneManager.LoadScene("Bootstrap");
@@ -352,7 +358,7 @@ namespace Game.Tests
         }
 
         [UnityTest] public IEnumerator On25DegreeSlope_BothFeetStayOnTheGround() { yield return OnSlope(25f, 0.03f); }
-        [UnityTest] public IEnumerator On35DegreeSlope_BothFeetStayWithin5Cm() { yield return OnSlope(35f, 0.05f); }
+        [UnityTest] public IEnumerator On35DegreeSlope_NoFootSinks_AndNoneFloatsOver15Cm() { yield return OnSlope(35f, 0.15f); }
 
         IEnumerator OnSlope(float SlopeDeg, float tolerance)
         {
@@ -372,9 +378,61 @@ namespace Game.Tests
             Shot($"slope{SlopeDeg:0}_side", 3f, 0.8f, 0.7f);
             var err = SoleErrors(col, flatRest / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad)); // vertical offset of an ankle over a sloped sole
             Debug.Log($"[AnimMetrics] slope {SlopeDeg} deg: sole errors left {err[0]:F3} right {err[1]:F3} m, plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} pelvis drop {_anim.PlantDrop:F3} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]} | capsule y {_pc.transform.position.y:F3} ground at origin {top.point.y:F3}");
-            Assert.LessOrEqual(Mathf.Abs(err[0]), tolerance, "left foot on the slope (m)");
-            Assert.LessOrEqual(Mathf.Abs(err[1]), tolerance, "right foot on the slope (m)");
+            // Sunk is the visible fault (the body in the ground), floating less so: the pelvis comes down no more than 12 cm below the nearer ground.
+            Assert.GreaterOrEqual(Mathf.Min(err[0], err[1]), -0.03f, "no foot sinks into the slope (m)");
+            Assert.LessOrEqual(Mathf.Max(err[0], err[1]), tolerance, "no foot floats over the slope (m)");
             UnityEngine.Object.Destroy(slope);
+        }
+
+        // Ankle height over the ground really under it (all layers, characters excluded).
+        float AnkleOverGround(HumanBodyBones bone)
+        {
+            var p = B(bone).position;
+            float best = float.NegativeInfinity;
+            foreach (var h in Physics.RaycastAll(p + Vector3.up * 1f, Vector3.down, 3f, ~0, QueryTriggerInteraction.Ignore))
+                if (h.collider.GetComponentInParent<Combatant>() == null && h.normal.y > 0.5f) best = Mathf.Max(best, h.point.y);
+            Assert.IsFalse(float.IsNegativeInfinity(best), "ground under the foot");
+            return p.y - best;
+        }
+
+        // Player report "walks buried in the ground": standing and moving on flat ground, an ankle is `rest` over the ground under it, never sunk.
+        [UnityTest]
+        public IEnumerator FlatGround_SolesOnTheGround_StandingAndMoving_NeverSunk()
+        {
+            yield return Load();
+            float rest = _anim.FootRest, standing = Mathf.Abs(AnkleOverGround(HumanBodyBones.LeftFoot) - rest);
+            float lowest = 9f, drop = 0f;
+            _input.Frame.Move = new Vector2(0, 1);
+            yield return new WaitForSeconds(0.6f);
+            for (float end = Time.time + 1.5f; Time.time < end;)
+            {
+                yield return null;
+                lowest = Mathf.Min(lowest, AnkleOverGround(HumanBodyBones.LeftFoot), AnkleOverGround(HumanBodyBones.RightFoot));
+                drop = Mathf.Max(drop, _anim.PlantDrop);
+            }
+            Debug.Log($"[AnimMetrics] flat ground: standing ankle error {standing:F3} m, lowest ankle while moving {lowest:F3} (rest {rest:F3}), max pelvis drop {drop:F3}");
+            Assert.LessOrEqual(standing, 0.025f, "standing: an ankle is `rest` above the ground (m)");
+            Assert.GreaterOrEqual(lowest, rest - 0.03f, "moving: no ankle is more than 3 cm below its resting height over the ground");
+            Assert.LessOrEqual(drop, 0.15f, "the pelvis is lowered only by the capsule's hover, not further");
+        }
+
+        // A floor on a layer the default ray casts skip (Ignore Raycast) must still be stood on: the feet must not sink to the floor below it.
+        [UnityTest]
+        public IEnumerator FloorOnIgnoreRaycastLayer_TheBodyIsNotSunkToTheFloorBelow()
+        {
+            yield return Load();
+            var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            slab.layer = 2; // Ignore Raycast
+            slab.transform.position = new Vector3(-14f, -0.9f, -26f);
+            slab.transform.localScale = new Vector3(8f, 2f, 8f); // top at y = 0.1
+            Physics.SyncTransforms();
+            _pc.Teleport(new Vector3(-14f, 0.3f, -26f));
+            yield return new WaitForSeconds(1.0f);
+            float onTop = AnkleOverGround(HumanBodyBones.LeftFoot);
+            float pelvis = _anim.PlantDrop;
+            Debug.Log($"[AnimMetrics] slab on Ignore Raycast: ankle over the slab top {onTop:F3} (rest {_anim.FootRest:F3}), pelvis drop {pelvis:F3}, origin y {_pc.transform.position.y:F3}");
+            Assert.LessOrEqual(pelvis, 0.15f, "no sinking through the slab");
+            UnityEngine.Object.Destroy(slab);
         }
 
         [UnityTest]
