@@ -23,8 +23,9 @@ namespace Game.Net
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var xs = new float[spawns.Length];
             var zs = new float[spawns.Length];
-            for (int i = 0; i < spawns.Length; i++) { xs[i] = spawns[i].position.x; zs[i] = spawns[i].position.z; }
-            var index = new BuildingLootIndex(plan.Lots, xs, zs);
+            var ys = new float[spawns.Length];
+            for (int i = 0; i < spawns.Length; i++) { xs[i] = spawns[i].position.x; zs[i] = spawns[i].position.z; ys[i] = spawns[i].position.y; }
+            var index = new BuildingLootIndex(plan.Lots, xs, zs, ys);
             foreach (var door in doors.ExteriorDoors) index.AddDoor(door.Lot, door.Position.x, door.Position.y, door.Position.z);
             Index = index;
             BuildMilliseconds = watch.Elapsed.TotalMilliseconds;

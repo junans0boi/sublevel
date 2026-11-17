@@ -75,6 +75,27 @@ namespace Game.Net
         public static bool GiveKeys;
         bool _keysGiven;
 
+        // Farming (ADR-294): bots holding a gun, the first-gun median, how many are still farming, buildings with 3+ bots inside.
+        void LogFarm(float now)
+        {
+            var index = BuildingLoot.Index;
+            int bots = 0, armed = 0, crowded = 0;
+            var inside = new System.Collections.Generic.Dictionary<int, int>();
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer || c.Dead.Value) continue;
+                bots++;
+                if (c.HasAnyWeapon) armed++;
+                if (index == null) continue;
+                int b = index.BuildingAt(c.transform.position.x, c.transform.position.z);
+                if (b < 0) continue;
+                inside.TryGetValue(b, out int n);
+                inside[b] = n + 1;
+            }
+            foreach (var n in inside.Values) if (n >= 3) crowded++;
+            Debug.Log($"[Farm] t={now:F0} bots={bots} armed={armed} farming={BotFarmStats.Farming} firstGunMedian={BotFarmStats.MedianFirstGun():F0}s n={BotFarmStats.FirstGunSeconds.Count} inBuildings={inside.Count} crowded3+={crowded}");
+        }
+
         void Update()
         {
             if (GiveKeys && !_keysGiven && Combatant.All.Count > 1)
@@ -99,6 +120,7 @@ namespace Game.Net
             string line = $"{now:F0},{_frames.Count},{_frames.Mean():F2},{_frames.Percentile(50):F2},{_frames.Percentile(95):F2},{_frames.Percentile(99):F2},{_frames.Max():F2},{heap:F0},{Combatant.All.Count},{rewinds}";
             for (int k = 0; k < BotPerf.Slots; k++) { line += $",{_bot[k].Mean():F3},{_bot[k].Percentile(99):F3}"; _bot[k].Clear(); }
             Debug.Log("[Perf] " + line);
+            LogFarm(now);
             File.AppendAllText(_csv, line + "\n");
             _frames.Clear();
             _windowStart = now;

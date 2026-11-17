@@ -76,6 +76,15 @@ namespace Game.Core
         public int BoostWanted = 2;               // per boost item type
         public int ThrowablesWanted = 2;          // per throwable type
 
+        // ---- Farming (ADR-294): right after the drop a bot walks the loot points of a nearby building until it is kitted out ----
+        public float FarmSeconds = 210f;          // longest it farms (Normal; the levels scale it: 240 / 210 / 180)
+        public bool FarmHint = true;              // out of time and unarmed: it is told where the nearest weapon lies
+        public int FarmMags = 1;                  // ready needs a gun with this many magazines of rounds (mag + reserve)
+        public int FarmArmorPieces = 0;           // ...and this many armour pieces worn (0..2)
+        public int FarmHealItems = 1;             // ...and this many healing items (medkits, bandages, first-aid kits)
+        public int FarmBuildingCap = 2;           // at most this many other bots choose the same building (soft)
+        public float FarmArriveMeters = 2.5f;     // a loot point counts as visited this close (and within 2.5 m in height)
+
         // ---- Fighting like a player (ADR-117) ----
         public float StrafeMeters = 3f;           // sidesteps this far while shooting (0 = stands still)
         public float StrafeMinSeconds = 0.8f;     // then changes side after a time in this range

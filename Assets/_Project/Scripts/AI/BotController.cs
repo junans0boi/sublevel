@@ -235,6 +235,7 @@ namespace Game.AI
         void OnDisable()
         {
             All.Remove(this);
+            if (Farming) EndFarm();
             if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
         }
 
@@ -262,6 +263,7 @@ namespace Game.AI
             if (!_ready) Init();
             if (_self.Dead.Value)
             {
+                if (Farming) EndFarm();
                 if (_agent != null && _agent.enabled) _agent.enabled = false;
                 return;
             }
@@ -291,6 +293,7 @@ namespace Game.AI
             }
             ApplyBlindness(now);
             FillSelf();
+            TickFarm(now);
             _intent = _brain.Think(_percept);
             // Teams (ADR-072): revive a knocked teammate, keep near the leader.
             ApplyTeam(ref _intent, now);
@@ -515,6 +518,7 @@ namespace Game.AI
                 bestSqr = sqr;
                 bestIsWeapon = isWeapon;
             }
+            AdoptRemembered(now);
             if (_loot == null) return;
             _percept.LootVisible = true;
             _percept.LootId = _loot.ObjectId;
@@ -692,7 +696,7 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || intent.State == BotState.Roam || intent.State == BotState.Investigate);
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && (intent.State == BotState.Roam || intent.State == BotState.Investigate)));
             if (!zoneMove) _goal = ZoneGoal.None;
 
             if (!intent.Move && !zoneMove)

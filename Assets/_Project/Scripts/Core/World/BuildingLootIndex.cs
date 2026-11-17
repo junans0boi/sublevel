@@ -14,13 +14,16 @@ namespace Game.Core
         readonly List<int>[] _spawns;
         readonly List<float[]>[] _doors;
         readonly int[] _lotOf;
+        readonly float[] _sx, _sy, _sz;
 
         public int Unassigned { get; private set; }
         public int Ambiguous { get; private set; }
 
-        public BuildingLootIndex(IReadOnlyList<BuildingLot> lots, IReadOnlyList<float> spawnX, IReadOnlyList<float> spawnZ)
+        public BuildingLootIndex(IReadOnlyList<BuildingLot> lots, IReadOnlyList<float> spawnX, IReadOnlyList<float> spawnZ, IReadOnlyList<float> spawnY = null)
         {
             _lots = lots;
+            _sx = new float[spawnX.Count]; _sy = new float[spawnX.Count]; _sz = new float[spawnX.Count];
+            for (int i = 0; i < _sx.Length; i++) { _sx[i] = spawnX[i]; _sz[i] = spawnZ[i]; _sy[i] = spawnY != null ? spawnY[i] : 0f; }
             _spawns = new List<int>[lots.Count];
             _doors = new List<float[]>[lots.Count];
             for (int b = 0; b < lots.Count; b++) { _spawns[b] = new List<int>(); _doors[b] = new List<float[]>(); }
@@ -49,6 +52,16 @@ namespace Game.Core
         }
 
         public int BuildingCount => _lots.Count;
+        public int SpawnCount => _sx.Length;
+
+        public void SpawnAt(int spawn, out float x, out float y, out float z) { x = _sx[spawn]; y = _sy[spawn]; z = _sz[spawn]; }
+
+        // The building whose footprint holds this ground point, or -1 (a scan of all lots: for statistics, not per frame).
+        public int BuildingAt(float x, float z)
+        {
+            for (int b = 0; b < _lots.Count; b++) if (_lots[b].Distance(x, z) <= InsideMeters) return b;
+            return -1;
+        }
 
         // The building spawn `spawn` stands in, or -1.
         public int BuildingOf(int spawn) => spawn >= 0 && spawn < _lotOf.Length ? _lotOf[spawn] : -1;
