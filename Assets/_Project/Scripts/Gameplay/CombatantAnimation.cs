@@ -57,12 +57,13 @@ namespace Game.Gameplay
         const float AirPhasePerSecond = 1.5f;  // how fast the jump pose moves between rise, fall and landing
         const float StepPauseAfterLanding = 0.15f;
         const float TakeoffAttackShare = 0.3f; // of the take-off push spent getting into it
+        const float UnarmedShoulderSwingCut = 0.6f; // share of the bare-hand clips' shoulder twist taken out
         const float LandArmShare = 0.5f;       // of the arm lift shown again while absorbing a landing
         const float FallbackLegLength = 0.9f;  // hip to ankle, when the leg bones are not wired
         const float MaxFootFix = 0.3f;         // most the crouched model is moved to put the lowest foot on the ground
         // Bones turned in code after the animator has posed them, parents before children.
         const int Torso = 0, ThighLeft = 1, ThighRight = 2, ShinLeft = 3, ShinRight = 4, FootLeft = 5, FootRight = 6,
-            ArmLeft = 7, ArmRight = 8, TurnedBones = 9;
+            ArmLeft = 7, ArmRight = 8, Pelvis = 9, TurnedBones = 10;
 
         [SerializeField] Animator _animator;
         [SerializeField] Transform _spine;
@@ -182,6 +183,7 @@ namespace Game.Gameplay
             _pace = Animator.StringToHash(Pace);
             _airPhaseId = Animator.StringToHash(AirPhase);
             _bones[Torso] = _spine;
+            _bones[Pelvis] = _hips;
             _bones[FootLeft] = _footLeft;
             _bones[FootRight] = _footRight;
             for (int i = 0; _jumpBones != null && i < _jumpBones.Length; i++)
@@ -549,9 +551,19 @@ namespace Game.Gameplay
             // while a weapon pose is on, take that out too or the weapon points off to the side when moving.
             // (Not for the dead: the death clip turns the hips on purpose.)
             // (A long gun squares the shoulders itself, PoseRifle.)
-            float turnBack = -_legTurnShown - (_combatant.Dead.Value ? 0f : HipsYaw() * Mathf.Max(_upperWeight, _unarmedBody ? 1f : 0f));
+            // Bare hands: the jog/walk clip yaws the pelvis (with a bias), which reads as running sideways: turn the whole body back from the hips.
+            bool pelvisFixed = _unarmedBody && _prone < 0.001f && !_combatant.Dead.Value;
+            float hipsYawNow = HipsYaw();
+            if (pelvisFixed) Turn(Pelvis, -hipsYawNow, transform.up);
+            // The clip's shoulders counter-twist the hips by far more than a person does: take most of that swing out (shoulder line measured on the posed arms).
+            float turnBack = -_legTurnShown + (_combatant.Dead.Value ? 0f : pelvisFixed ? 0f : -hipsYawNow * _upperWeight);
             // About the model's own up: the character's up while standing, along the ground while lying.
             Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
+            if (pelvisFixed && Time.time >= _punchUntil && _bones[ArmLeft] != null && _bones[ArmRight] != null)
+            {
+                var across = transform.InverseTransformDirection(_bones[ArmRight].position - _bones[ArmLeft].position);
+                Turn(Torso, -UnarmedShoulderSwingCut * Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg, transform.up);
+            }
             // Leaning right tips the torso clockwise seen from behind: a negative turn about the forward axis.
             Turn(Torso, -_combatant.LeanAmount * GameData.Rules.Lean.BodyRollDeg * (1f - _prone), transform.forward);
 

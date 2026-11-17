@@ -165,6 +165,30 @@ namespace Game.Tests
             Assert.LessOrEqual(worstPitch, 5f, "barrel along the look (deg)");
         }
 
+        // Roster characters are saved in a T-pose: the hold must still point each weapon where the pose says (it pointed 90 degrees off to the right), and class the guns by length.
+        [UnityTest]
+        public IEnumerator LowReady_PointsTheMuzzleAheadAndDown_AndGunsAreClassedByLength()
+        {
+            yield return Load();
+            yield return GiveRifle();
+            var hand = B(HumanBodyBones.RightHand);
+            var model = _me.GetComponent<WeaponVisual>().ModelFor(3);
+            MeshFilter best = null; float longest = 0f;
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+                if (mf.sharedMesh != null && mf.sharedMesh.bounds.size.magnitude > longest) { longest = mf.sharedMesh.bounds.size.magnitude; best = mf; }
+            var e = best.sharedMesh.bounds.extents;
+            var local = e.x >= e.y && e.x >= e.z ? Vector3.right : e.y >= e.z ? Vector3.up : Vector3.forward;
+            var dir = best.transform.TransformDirection(local).normalized;
+            if (Vector3.Dot(dir, best.transform.TransformPoint(best.sharedMesh.bounds.center) - hand.position) < 0f) dir = -dir;
+            var d = _pc.transform.InverseTransformDirection(dir);
+            float yaw = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg, pitch = Mathf.Asin(Mathf.Clamp(d.y, -1f, 1f)) * Mathf.Rad2Deg;
+            Debug.Log($"[AnimMetrics] low ready rifle muzzle yaw {yaw:F1} pitch {pitch:F1}; rifle pistol-grip {_anim.IsPistolGrip(3)}, pistol pistol-grip {_anim.IsPistolGrip(1)}");
+            Assert.That(Mathf.Abs(yaw), Is.LessThan(25f), "muzzle ahead (not across the body)");
+            Assert.That(pitch, Is.InRange(-40f, 0f), "muzzle low, down");
+            Assert.IsFalse(_anim.IsPistolGrip(3), "a rifle is not held like a pistol");
+            Assert.IsTrue(_anim.IsPistolGrip(1), "a pistol is");
+        }
+
         [UnityTest]
         public IEnumerator RunningForward_LiftsEachFoot_AndKeepsBothHandsOnTheGun()
         {
@@ -278,6 +302,27 @@ namespace Game.Tests
             if (right) Assert.Less(minYaw, rest - 5f, "a right punch brings the right shoulder forward (shoulder line turns left)");
             else Assert.Greater(maxYaw, rest + 5f, "a left punch brings the left shoulder forward (shoulder line turns right)");
             Shot("bare_punch", 2.5f, 1.3f, 1.2f);
+        }
+
+        [UnityTest]
+        public IEnumerator BareHands_RunningForward_ShouldersAndHipsFaceTheMotion()
+        {
+            yield return Load();
+            _input.Frame.Move = new Vector2(0, 1); _input.Frame.Sprint = true;
+            yield return new WaitForSeconds(1.0f);
+            float sMin = 999f, sMax = -999f, sSum = 0f, hSum = 0f, hMin = 999f, hMax = -999f, dir = 0f; int n = 0; var last = _pc.transform.position;
+            for (float end = Time.time + 1.5f; Time.time < end; n++)
+            {
+                yield return null;
+                float sh = Facing(HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm), hp = Facing(HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg);
+                sSum += sh; hSum += hp; sMin = Mathf.Min(sMin, sh); sMax = Mathf.Max(sMax, sh); hMin = Mathf.Min(hMin, hp); hMax = Mathf.Max(hMax, hp);
+                var d = _pc.transform.position - last; last = _pc.transform.position;
+                if (d.sqrMagnitude > 1e-8f) dir += Vector3.SignedAngle(_pc.transform.forward, d, Vector3.up);
+            }
+            Debug.Log($"[AnimMetrics] bare run: sprinting {_pc.Sprinting} shoulders mean {sSum / n:F1} ({sMin:F1}..{sMax:F1}) hips mean {hSum / n:F1} ({hMin:F1}..{hMax:F1}) travel vs facing {dir / n:F1}");
+            Shot("bare_run", 3f, 1.0f, 1.0f);
+            Assert.That(sSum / n, Is.InRange(-8f, 8f), "running bare-handed, the shoulders face the way we go");
+            Assert.That(hSum / n, Is.InRange(-8f, 8f), "running bare-handed, the hips face the way we go");
         }
 
         [UnityTest]
