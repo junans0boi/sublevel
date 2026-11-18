@@ -41,6 +41,30 @@ namespace Game.Core
             return new TeamLayout(Concat(sizes, bots, size));
         }
 
+        // Queue starts carry the human party sizes. Use them only when they describe this exact roster; older/direct
+        // lobby starts have no party data and keep the arrival-order grouping from For.
+        public static TeamLayout ForMatch(int humans, int bots, int size, IReadOnlyList<int> partySizes)
+        {
+            int expected = Math.Max(0, humans);
+            int teamSize = Math.Max(1, size);
+            if (partySizes == null || partySizes.Count == 0) return For(expected, bots, teamSize);
+
+            int total = 0;
+            var sizes = new List<int>(partySizes.Count);
+            for (int i = 0; i < partySizes.Count; i++)
+            {
+                int partySize = partySizes[i];
+                if (partySize < 1 || partySize > teamSize || total > expected - partySize)
+                    return For(expected, bots, teamSize);
+                sizes.Add(partySize);
+                total += partySize;
+            }
+
+            return total == expected
+                ? new TeamLayout(Concat(sizes, bots, teamSize))
+                : For(expected, bots, teamSize);
+        }
+
         static List<int> Concat(List<int> sizes, int bots, int size) { sizes.AddRange(BotTeamSizes(bots, size)); return sizes; }
 
         public static IEnumerable<int> BotTeamSizes(int bots, int size)
