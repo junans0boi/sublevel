@@ -20,6 +20,9 @@ namespace Game.Net
         // Gas protection carried (pollution, ADR-237): filters and antidotes live here beside the keys.
         public readonly SyncVar<int> Filters = new SyncVar<int>();
         public readonly SyncVar<int> Antidotes = new SyncVar<int>();
+        // The cover in force, on the match clock, so the owner's HUD can show what is left (0 = none).
+        public readonly SyncVar<float> CoverUntil = new SyncVar<float>();
+        public readonly SyncVar<float> CoverFactor = new SyncVar<float>();
 
         // The local player's own, for the HUD. Null when there is none.
         public static KeyHolder Local { get; private set; }
@@ -89,7 +92,17 @@ namespace Game.Net
             if (count.Value <= 0) return false;
             count.Value--;
             if (kind == 0) pollution.ServerUseFilter(_combatant.ObjectId); else pollution.ServerUseAntidote(_combatant.ObjectId);
+            var cover = pollution.ExposureOf(_combatant.ObjectId)?.Cover ?? default;
+            CoverUntil.Value = (float)cover.Until;
+            CoverFactor.Value = cover.Factor;
             return true;
+        }
+
+        // The use key: the antidote when carried (the stronger), else the filter.
+        public void RequestGasCover()
+        {
+            if (Antidotes.Value > 0) CmdUseGas(1);
+            else if (Filters.Value > 0) CmdUseGas(0);
         }
 
         [ServerRpc] public void CmdUseGas(int kind) => ServerUseGas(kind == 0 ? 0 : 1);

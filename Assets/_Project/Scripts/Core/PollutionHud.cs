@@ -67,6 +67,25 @@ namespace Game.Core
             return hud;
         }
 
+        // The HUD slot's content (ui_HUD_SLOT.md): level, seconds and region of the soonest confirmation, keys, chip.
+        public static HudHazardView ToHazard(PollutionHudModel h, string regionName, int keys, PollutionChipFlag chip) => new HudHazardView
+        {
+            Warn = (HazardWarn)(byte)Level(h),
+            SecondsToClose = h.BannerVisible ? (int)Math.Ceiling(h.BannerSeconds) : -1,
+            Region = h.BannerVisible ? regionName : "",
+            Keys = keys,
+            Chip = (HudChip)(byte)chip,
+        };
+
+        // "오염 중 · 초당 4.5 · 방독 0:42" (cover useless in the final region), "" outside the gas.
+        public static string GasLine(PollutionHudModel h)
+        {
+            if (!h.InGas) return string.Empty;
+            string line = "오염 중 · 초당 " + h.Dps.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+            if (h.CoverSeconds > 0f) line += h.CoverUseless ? " · 방독 효과 없음" : " · " + (h.CoverIsAntidote ? "해독" : "방독") + " " + Clock(h.CoverSeconds);
+            return line;
+        }
+
         public static string Clock(float seconds)
         {
             int s = Math.Max(0, (int)Math.Ceiling(seconds));

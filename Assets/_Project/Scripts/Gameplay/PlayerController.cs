@@ -257,7 +257,7 @@ namespace Game.Gameplay
             {
                 if (InParkour) AbortParkour();
                 f.Sprint = f.Jump = f.Crouch = f.Prone = f.AimHeld = f.FireHeld = f.FirePressed = f.LeanLeft = f.LeanRight = false;
-                f.Interact = f.Reload = f.Heal = f.Boost = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
+                f.Interact = f.Reload = f.Heal = f.Boost = f.GasCover = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
                 f.ThrowHeld = f.ThrowPressed = f.ThrowReleased = false;
                 f.SelectSlot = -1;
                 // Carried on a teammate's back (ADR-129): no crawling of its own, it rides where the carrier goes.
@@ -472,6 +472,7 @@ namespace Game.Gameplay
             if (f.FireMode) _combatant.CmdToggleFireMode();
             if (f.Heal) _combatant.CmdUseMedkit();
             if (f.Boost) GetComponent<CombatantHealing>()?.RequestBoost();
+            if (f.GasCover) GetComponent<KeyHolder>()?.RequestGasCover();
             if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
             if (f.Ping) PingAtCrosshair();
             // No shooting (or punching) while free looking: the camera is not where the weapon points (PUBG-like).
