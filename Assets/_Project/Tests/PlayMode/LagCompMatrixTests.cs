@@ -21,6 +21,9 @@ namespace Game.Tests
     // Environment: LAGCOMP_MODEL=before|after (before = the model of ADR-141: view 2 ticks, cap 0.25 s; default after = ADR-301/302),
     // LAGCOMP_CONDS=clean|all|<comma list of names> (default all), LAGCOMP_REPS (default 5), LAGCOMP_ALLOW_SHARED=1 (skip the
     // exclusive-window check). Output: Logs/net-multi/lagcomp-matrix-<model>.csv and .txt (PASS/FAIL table, run time).
+    // Experiment knobs: LAGCOMP_INTERP=<ticks> (the copy's interpolation), LAGCOMP_TRACE=1 (per-frame queue depth + copy delay of every moving
+    // leg -> lagcomp-matrix-frames-<model>.csv), LAGCOMP_CLAIM=shown [LAGCOMP_CLAIM_OFFSET=<ticks>] (shot claims the tick the copy is moving toward
+    // instead of ViewTick; shots csv logs view_tick/shown_tick/claim_tick). All default off.
     // Pass rule (spec Q6; the shots per scenario are scaled by the fractions): ping <= 80: static all hit, moving >= 90 %;
     // ping >= 100 (150 is the spec's one): static >= 95 %, moving >= 80 %. 35 m is judged like moving.
     [Category("Measure"), Explicit("the matrix takes ~45 min and needs an exclusive window; run by name")]
@@ -48,6 +51,9 @@ namespace Game.Tests
             return keep;
         }
 
+        // Experiment 1 (LAGCOMP_TRACE=1): calls Tick every rendered frame so a moving leg can be logged frame by frame.
+        sealed class FrameTrace : MonoBehaviour { public Action Tick; void Update() => Tick?.Invoke(); }
+
         // Per-packet delay wander for the jitter conditions: Fish-Net's simulator has none, so the delay is redrawn every frame.
         sealed class JitterPump : MonoBehaviour
         {
@@ -66,6 +72,7 @@ namespace Game.Tests
         float _capBefore;
         int _viewDelayBefore;
         GameObject _pump;
+        GameObject _trace;
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -84,6 +91,7 @@ namespace Game.Tests
             LagCompensation.Probe = null;
             if (_def != null) _def.SpreadDeg = _spreadBefore;
             if (_pump != null) UnityEngine.Object.Destroy(_pump);
+            if (_trace != null) UnityEngine.Object.Destroy(_trace);
             yield return _net.Teardown();
         }
 
@@ -133,12 +141,25 @@ namespace Game.Tests
             return nt != null && f != null && f.GetValue(nt) is System.Collections.ICollection q ? q.Count : -1;
         }
 
+        // Experiment 2 (LAGCOMP_CLAIM=shown): the server tick of the packet the copy is moving toward (its _currentGoalData.Transforms.Tick),
+        // instead of lastPacketTick - ViewDelayTicks. Test-only reflection; 0 when unreadable. LAGCOMP_CLAIM_OFFSET shifts it (ticks).
+        static uint ShownTick(Component copy)
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance;
+            var nt = copy.GetComponent<FishNet.Component.Transforming.NetworkTransform>();
+            object goal = typeof(FishNet.Component.Transforming.NetworkTransform).GetField("_currentGoalData", F)?.GetValue(nt);
+            object td = goal?.GetType().GetField("Transforms", F)?.GetValue(goal);
+            return td?.GetType().GetField("Tick", F)?.GetValue(td) is uint t ? t : 0u;
+        }
+
         [UnityTest, Timeout(7200000)]
         public IEnumerator Matrix()
         {
             string model = Environment.GetEnvironmentVariable("LAGCOMP_MODEL") ?? "after";
             Assert.IsTrue(model == "before" || model == "after", "LAGCOMP_MODEL is before or after");
             int reps = int.TryParse(Environment.GetEnvironmentVariable("LAGCOMP_REPS"), out int r) && r > 0 ? r : 5;
+            bool claimShown = Environment.GetEnvironmentVariable("LAGCOMP_CLAIM") == "shown";
+            int claimOffset = int.TryParse(Environment.GetEnvironmentVariable("LAGCOMP_CLAIM_OFFSET"), out int co) ? co : 0;
             var conds = Conditions(Environment.GetEnvironmentVariable("LAGCOMP_CONDS"));
             if (Environment.GetEnvironmentVariable("LAGCOMP_ALLOW_SHARED") != "1")
                 Assert.AreEqual(0, OtherEditorsOrServers(), "another Unity or Sublevel process is running: measure in an exclusive window (LAGCOMP_ALLOW_SHARED=1 to override)");
@@ -183,8 +204,21 @@ namespace Game.Tests
             var history = _net.HostPlayer.GetComponent<PositionRecorder>().History;
             double probeNow = 0, probeAt = 0; int probeCalls = 0;
             LagCompensation.Probe = (shooter, now, at) => { if (shooter != onServer) return; probeNow = now; probeAt = at; probeCalls++; };
-            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms,queue_depth\n");
+            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms,queue_depth,view_tick,shown_tick,claim_tick\n");
             string curCond = "", curScenario = ""; int curRep = 0, curShot = 0;
+            // Per-frame trace of the copy's queue depth and how late it shows the body, for every moving leg (hypothesis: depth steps 2<->3 per leg).
+            StringBuilder frames = null; int curLeg = 0; float legStart = 0f;
+            if (Environment.GetEnvironmentVariable("LAGCOMP_TRACE") == "1")
+            {
+                frames = new StringBuilder("model,condition,rep,leg,t_ms,queue_depth,copy_delay_ms\n");
+                _trace = new GameObject("FrameTrace");
+                _trace.AddComponent<FrameTrace>().Tick = () =>
+                {
+                    if (curScenario != "moving" || _net.HostInput.Frame.Move == Vector2.zero) return;
+                    string delay = TimeShownBy(history, seen.transform.position, out double shown) ? Inv((Time.timeAsDouble - shown) * 1000) : "";
+                    frames.AppendLine($"{model},{curCond},{curRep},{curLeg},{Inv((Time.time - legStart) * 1000)},{QueueDepth(seen)},{delay}");
+                };
+            }
             bool resolved = false, hit = false;
             void On(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Launch) return; resolved = true; hit = s.Victim != null; }
             a.Player.ShotResolved += On;
@@ -198,7 +232,9 @@ namespace Game.Tests
                 int depth = QueueDepth(seen); // hypothesis: the copy's interpolation queue sits at 2 or 3 per movement start
                 var aim = copyPos + Vector3.up * 0.9f;
                 double callT = Time.timeAsDouble;
-                a.Player.CmdFire((aim - a.Player.EyePosition).normalized, a.Player.ViewTick);
+                uint claim = a.Player.ViewTick, shown = ShownTick(seen);
+                if (claimShown && shown > 0) claim = (uint)Math.Max(0, (long)shown + claimOffset);
+                a.Player.CmdFire((aim - a.Player.EyePosition).normalized, claim);
                 float giveUp = Time.time + 3f;
                 while (!resolved && Time.time < giveUp) yield return null;
                 // The model the server used and how late the copy was (dt = rewound-to minus the time the copy showed, + = too little rewind).
@@ -206,7 +242,7 @@ namespace Game.Tests
                 if (probeCalls > 0 && TimeShownBy(history, copyPos, out double tShown))
                     extra = $",{Inv((probeNow - probeAt) * 1000)},{Inv((callT - tShown) * 1000)},{Inv((probeAt - tShown) * 1000)}";
                 else if (probeCalls > 0) extra = $",{Inv((probeNow - probeAt) * 1000)},,";
-                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra) + "," + depth);
+                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra) + "," + depth + $",{a.Player.ViewTick},{shown},{claim}");
                 done(resolved && hit);
             }
 
@@ -264,6 +300,7 @@ namespace Game.Tests
                             while (taken < shots)
                             {
                                 _net.HostInput.Frame.Move = new Vector2(dir, 0f);
+                                curLeg++; legStart = Time.time;
                                 yield return Frames(settle);
                                 for (int k = 0; k < perLeg && taken < shots; k++)
                                 {
@@ -297,6 +334,7 @@ namespace Game.Tests
                 Directory.CreateDirectory(LogDir);
                 File.WriteAllText(Path.Combine(LogDir, $"lagcomp-matrix-{model}.csv"), csv.ToString());
                 File.WriteAllText(Path.Combine(LogDir, $"lagcomp-matrix-shots-{model}.csv"), shotsCsv.ToString());
+                if (frames != null) File.WriteAllText(Path.Combine(LogDir, $"lagcomp-matrix-frames-{model}.csv"), frames.ToString());
             }
             a.Player.ShotResolved -= On;
             summary.AppendLine($"\n{(failures.Count == 0 ? "PASS" : "FAIL")}: {failures.Count} of {conds.Count * 3} condition/scenario cells fail" + (failures.Count > 0 ? ": " + string.Join(", ", failures) : ""));
