@@ -1,4 +1,18 @@
-# MASTER_STATE — 새 master 세션 인수인계 (2026-11-16, 구 master 작성)
+# MASTER_STATE — 새 master 세션 인수인계
+
+## 최신 상태 — 2026-11-18 15:42 (Codex)
+
+- 후속 사용자 지시로 Claude 대화 12개·현행 기획을 분석하고 구형 기획 이슈 7개(#55 #250 #251 #296 #324 #336 #338)를 `not_planned`로 종료했다. 현재 OPEN 136개, 대기섬 13개는 보류 유지(나머지 123개). 후속 이슈에 유효 요구 보존, 상세는 `docs/ISSUE_RECONCILE_2026-11-18.md` 3차 점검.
+- 주의: 런처는 공개 0.1.6(b7db8d6)이며 `sg_` API 토큰을 준다. main LoginEnv는 서명 토큰만 처리한다. 원본 mp-client worktree의 토큰 교환·Social/Ticket 코드와 bot worktree B7은 미커밋으로 남아 있다. 이번 분석에서 통합·빌드·배포는 하지 않았다.
+- 앞선 지시로 병합·빌드 후 중단했고, 이후 위의 분석·기획 이슈 정리만 재개했다. 다음 구현 작업·push·배포는 미수행.
+- 로컬 `main` = `731eb29`(`integration/r2` ff-only 병합), `origin/main`보다 16커밋 앞섬. 통합 브랜치의 `.unity` LFS 추적 제거를 승인 범위에서 복구했고 main 조상 이력은 유지했다.
+- WorldBuilder → CharacterImport.SyncStaging → CharacterAnimClips.Reimport → TestBoxBuilder → MainMenuBuilder 순차 성공. 전체 EditMode **1510/1510**, `Logs/test-editmode.xml`(2026-11-18 06:31:49Z~06:36:03Z).
+- 클라이언트 빌드: `Build/mac/Sublevel.app` **Succeeded 3493 MB**, `Build/win/Sublevel.exe` **Succeeded 952 MB**. 로그 `Logs/build-mac.log`, `Logs/build-win.log`. 빌드 후 Unity 프로세스 없음. 플레이 실기 확인은 하지 않음.
+- 생성된 씬·프리팹·월드 자산과 문서 변경은 미커밋. 기존 미커밋 자료는 `/tmp/sublevel-main-premerge-20261118.tar.gz`에 백업했고 보존했다. 통합 워크트리의 이전 생성물은 `stash@{0}`(`pre-lfs-migration integration-r2 generated outputs`)에 보존.
+- #424: 파티 크기 전달 경로는 추가했으나 구성원과 매치 참가자의 안정적인 매핑은 남음. #345·#347·#349·#375·#389도 열린 상태로 유지. 로비 Protocol=2이므로 서버 갱신 전 기존 서버와 호환되지 않을 수 있음.
+- 이어갈 때 `docs/MASTER_HANDOFF_2.md`와 이 최신 절을 우선한다. 아래는 11월 16일 과거 기록이며 현재 상태가 아니다.
+
+## 이전 인수인계 — 2026-11-16
 
 > 새 master는 이 문서 → `CLAUDE.md` → `docs/MASTER_BRIEF.md` → `docs/SESSION_PLAN.md` → `docs/SPEC.md` → `docs/DECISIONS.md`(ADR-165~203) → `docs/bible/` 순으로 읽는다. 충돌하면 SPEC이 이기고, 룰 변경은 ADR이 먼저다.
 > 준환(1인 개발자, 한국어, 간결·직접 보고 선호)이 "서브 세션이 뒤죽박죽이다"라고 판단해 **트랙별 git worktree로 분리 → 각 트랙을 끝까지 완성 → master가 병합**하는 방식으로 바꾸기로 했다.
