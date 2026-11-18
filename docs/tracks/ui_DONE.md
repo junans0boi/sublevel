@@ -63,3 +63,13 @@
 - 겹침: 각 Show*가 일부 루트만 숨겼고 내 테스트는 항상 Back()을 거쳐 이동해 못 잡았다. `MainMenu.ShowOnly` 단일 전환 함수 + `ActiveScreenRoots`(항상 1). 테스트 `MenuScreensTests`(모든 화면쌍·탭).
 - 썸네일: 그래픽 모드(run-gfx)로 재생성.
 - 플레이어 검증(Mono review 빌드): `-captureall <dir>` 12단계 전부 activeRoots=1, stage3D=true (`docs/bible/img/ui/player/captureall.json`, 01~12 PNG). `-perflobby`는 절대경로 처리·모든 단계 Player.log(`[perflobby]`)·실패 시 `.fail.txt`. Render P99 10.95 ms(Mono, 조용한 기계 아님 → IL2CPP 빌드 재측정 필요).
+
+## 설정창·Esc 메뉴 로비 언어 통일 (ADR-286·287, 2026-11-17, 브랜치 `claude/ui-settings-7e0605`)
+- 요청: "설정창이 메인 UI와 따로 논다". 로비·메인 메뉴 모습은 바꾸지 않음(`UiPaint`에 토큰·`Seg/SetSeg`만 추가, 기존 줄 수정 0).
+- 추출한 로비 언어: Bg #0B0F14 / Sf #10151C / Pn Sf 82% / Ln #2A3340 1px / Tx #E6ECF2 / T2 #98A5B3 / **Ac #FF6A2B 하나**(선택·행동) / AcS 24% / 상태색 Ok·Wr만. 모서리 패널 16·카드 8·필 = 높이/2, 글자 Noto Sans KR Regular·Bold 16/18/20/22/32, 선택 = 색 + 막대 + ✓, 호버 = 글자색 워시, 모션 UiFx(150/200/300ms, 투명도·소폭 이동, reduced motion 존중).
+- 설정창 새 토큰(전부 기존 토큰에서 파생): `UiPaint.Hover/Press/Well/PnSolid/Off`, 함수 `Seg/SetSeg`. 설정 화면 로컬: `Quiet`(외곽선 필), `SetPrimary`(적용), `SetToggle`(✓), `StyleSlider`(둥근 트랙·주황 채움·둥근 손잡이).
+- 바뀐 것: 패널 16 라운드+Ln, 탭 5개·기본/고급·켜짐/꺼짐이 로비 세그먼트, 단추 필, 행 호버 워시+주황 좌측 막대, 값 상자 Bg+Ln, 슬라이더 둥글게, 스크롤바 둥글게, 키 안내 문구 T2(주황은 행동·선택 전용), 키 대기 중 글자 Ac, 충돌 경고 Wr, 코너 브래킷·청회색 제거. Esc 메뉴 본열(일시정지)도 같은 패널·필 단추, 스크림 로비와 동일, 설정은 UiFx 페이드.
+- 불변: `SelectTab/SelectPage/Row/Apply/Back/Step/Focus` API, 저장 형식, 키 바인딩 동작.
+- 테스트: EditMode 1411/1428 — 실패 17건은 전부 `CharacterAnimatorTests`·`CharacterRosterTests`(이 워크트리에 Roster 프리팹·애니 컨트롤러 생성물이 없음, UI 무관; master 재생성 뒤 확인). 신규 Explicit 캡처 `SettingsCaptureTests` 2/2.
+- 캡처: 전 `/private/tmp/uishots/before`, 후 `/private/tmp/uishots/after2`(탭 6 × 1280×720·1920×1080·2560×1440·1920×1200 × 메인 메뉴 3D / 인게임 Esc = 48장), 대표본 `docs/bible/img/ui/settings/`. 로비·메인 메뉴 전/후 캡처 비교는 **하지 않음**(UiPaint 추가만이라 코드상 동일; 필요하면 UiCaptureTests 전/후 실행).
+- 못 한 것/확인 요망: 키보드 조작은 Esc 닫기만(BACKLOG), 적용 후 변경 있음(주황 적용 단추)·키 대기 상태는 캡처 안 함, 한글 줄바꿈은 4개 해상도에서 넘침 없음(눈으로), WCAG 대비는 T2 on Sf ≈ 7:1·Ac on Sf ≈ 6:1·Bg on Ac ≈ 6:1(계산, 측정 아님).

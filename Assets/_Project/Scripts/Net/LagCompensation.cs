@@ -33,8 +33,11 @@ namespace Game.Net
         public static int Rewinds { get; private set; }
         public static int BodiesMoved { get; private set; }
 
+        // Measurement hook (#401, tests only): (shooter, server time now, server time rewound to) for every Rewind call.
+        public static Action<Combatant, double, double> Probe;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Moved.Clear(); Rewinds = BodiesMoved = 0; }
+        static void ResetStatics() { Moved.Clear(); Rewinds = BodiesMoved = 0; Probe = null; }
 
         public struct Scope : IDisposable
         {
@@ -60,6 +63,7 @@ namespace Game.Net
         public static Scope Rewind(Combatant shooter, Vector3 from, Vector3 dir, float length, double at)
         {
             Moved.Clear();
+            Probe?.Invoke(shooter, Time.timeAsDouble, at);
             double seconds = Time.timeAsDouble - at;
             if (at <= 0.0 || seconds <= 1e-4) return default;
             float reach = NearMeters + FastestMetersPerSecond * (float)seconds;

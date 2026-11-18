@@ -71,18 +71,26 @@ namespace Game.Tests
         }
 
         [Test]
-        public void TheCapCoversAHundredMsRoundTripPlusInterpolation()
+        public void TheCap_IsThirtyHundredths_AndTheDataDefaultAgrees()
         {
-            double dt = 1.0 / 30.0;
-            float needed = 0.1f + LagComp.InterpolationTicks * (float)dt;
-            Assert.Less(needed, LagComp.MaxRewindSeconds);
+            Assert.AreEqual(0.30f, LagComp.MaxRewindSeconds);
+            Assert.AreEqual(LagComp.MaxRewindSeconds, new BallisticsRules().MaxRewindSeconds, "the rules default is the cap");
         }
 
         [Test]
-        public void ViewTick_IsBehindByTheInterpolation_AndStaysAtZero()
+        public void ViewTick_IsBehindByTheInterpolation_PlusTheCopysExtraTick_AndStaysAtZero()
         {
-            Assert.AreEqual(98u, LagComp.ViewTick(100));
-            Assert.AreEqual(0u, LagComp.ViewTick(1));
+            int before = LagComp.ViewDelayTicks;
+            try
+            {
+                LagComp.ViewDelayTicks = LagComp.InterpolationTicks + LagComp.ReplicaExtraTicks;
+                Assert.AreEqual(97u, LagComp.ViewTick(100));
+                Assert.AreEqual(0u, LagComp.ViewTick(1));
+                Assert.AreEqual(0u, LagComp.ViewTick(3), "exactly the delay: tick 0");
+                LagComp.ViewDelayTicks = LagComp.InterpolationTicks; // the old model, what the measurement compares against
+                Assert.AreEqual(98u, LagComp.ViewTick(100));
+            }
+            finally { LagComp.ViewDelayTicks = before; }
         }
     }
 }

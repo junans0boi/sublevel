@@ -74,6 +74,7 @@ namespace Game.Tests
                 lastShot = Time.time;
                 var eye = a.Player.EyePosition;
                 var serverEye = MultiHarness.ReplicaOf(_net.Host, a.Player).EyePosition;
+                Log($"shot {i} shooter eye error {(serverEye - eye).magnitude:F3} m (client {eye}, server {serverEye})");
                 Assert.Less((serverEye - eye).magnitude, 0.3f, $"shot {i}: the server's eye of the shooter is where the client aims from (client {eye}, server {serverEye})");
                 var aim = seen.transform.position + Vector3.up * 0.9f;
                 uint view = compensated ? a.Player.ViewTick : uint.MaxValue; // MaxValue: a claim from the future = no rewind
