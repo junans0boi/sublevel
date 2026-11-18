@@ -56,6 +56,7 @@ namespace Game.Net
         readonly List<Waiting> _waiting = new List<Waiting>();
 
         public int HeldCount => _holds.Count;
+        public string TokenOf(int clientId) => _tokens.TryGetValue(clientId, out var t) ? t : null;
         // Connections whose token the server already knows.
         public int SessionCount => _tokens.Count;
         // A combatant of the match left alone by its player and now run by a bot.

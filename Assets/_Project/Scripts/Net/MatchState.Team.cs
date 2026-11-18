@@ -98,6 +98,17 @@ namespace Game.Net
 
         // The placement a death gives: solo as before (one behind those alive); in a team mode 0 while the victim's
         // team still has someone alive, else the team's placement, which every member hears about.
+        readonly Dictionary<int, int> _serverTeamPlacement = new Dictionary<int, int>();
+
+        // A dead member's place is his team's (0 when his team's place is not known).
+        int ServerTeamPlacementOfId(int objectId)
+        {
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && all[i].ObjectId == objectId && all[i].HasTeam && _serverTeamPlacement.TryGetValue(all[i].TeamId.Value, out int p)) return p;
+            return Mathf.Max(1, _serverTotal); // not known: last place
+        }
+
         int ServerVictimPlacement(Combatant victim)
         {
             if (!ServerTeamMode || !victim.HasTeam) return _serverAlive + 1;
@@ -105,6 +116,7 @@ namespace Game.Net
             int team = victim.TeamId.Value;
             if (TeamStandings.TeamAlive(_serverMembers, team)) return 0;
             int placement = TeamStandings.PlacementOnElimination(_serverMembers);
+            _serverTeamPlacement[team] = placement;
             ServerBroadcast(new TeamPlaced { Team = team, Placement = placement });
             return placement;
         }

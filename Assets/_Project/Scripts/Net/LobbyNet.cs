@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    public struct LobbyHello : IBroadcast { public string Version; public string Name; }
+    public struct LobbyHello : IBroadcast { public string Version; public string Name; public string Token; public string SessionToken; }
     public struct LobbyReject : IBroadcast { public byte Reason; }
     public struct LobbyReady : IBroadcast { public bool Ready; }
     public struct LobbyState : IBroadcast
@@ -47,6 +47,12 @@ namespace Game.Net
         public static string CurrentVersion => Application.version + "/" + Protocol;
 
         public string Version;
+
+        // Login (#389). Client: the launcher's game token (SUBLEVEL_GAME_TOKEN) and the nickname shown for it, null without a login (dev run).
+        // Server: the secret that checks tokens offline (SUBLEVEL_TOKEN_SECRET); without one nobody is asked to log in.
+        public static string AuthToken, AuthNickname, ServerTokenSecret;
+        // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
+        public static readonly System.Collections.Generic.Dictionary<string, long> AccountsBySession = new System.Collections.Generic.Dictionary<string, long>();
         public PhaseKind Phase { get; private set; }
         public string FailureText { get; private set; } = "";
         public bool IsHost { get; private set; }
@@ -262,7 +268,7 @@ namespace Game.Net
             if (_helloPending && SelfId >= 0)
             {
                 _helloPending = false;
-                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = "" });
+                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
             }
             TickQueue();
             if (Phase == PhaseKind.Connecting && Time.unscaledTime > _connectDeadline) Fail(LobbyRules.Unreachable);
@@ -404,8 +410,17 @@ namespace Game.Net
                 conn.Disconnect(false);
                 return;
             }
+            var login = LobbyRules.CheckLogin(ServerTokenSecret, hello.Token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var claims);
+            if (login != JoinResult.Ok)
+            {
+                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)login }, false);
+                conn.Disconnect(false);
+                return;
+            }
+            string name = hello.Name;
+            if (!string.IsNullOrEmpty(ServerTokenSecret)) { if (!string.IsNullOrEmpty(hello.SessionToken)) AccountsBySession[hello.SessionToken] = claims.AccountId; name = claims.Nickname; } // the backend's nickname, not the client's word
             if (IsHost && conn.ClientId == SelfId) _truth.HostId = conn.ClientId; // the host's own client
-            _truth.Add(conn.ClientId, hello.Name);
+            _truth.Add(conn.ClientId, name);
             RefreshBots();
             BroadcastState();
             if (Dedicated) Changed?.Invoke();
