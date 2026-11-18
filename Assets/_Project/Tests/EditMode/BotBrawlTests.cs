@@ -36,9 +36,10 @@ namespace Game.Tests
             Assert.IsFalse(BotPeace.Holds(rules.EarlyPeaceSeconds + 1, 1000, rules), "after the early minutes");
             Assert.IsFalse(BotPeace.Holds(10, 3, rules), "just hurt");
             Assert.IsFalse(BotPeace.Holds(-1, 1000, rules), "not dropped yet: no peace to speak of");
-            Assert.IsTrue(BotPeace.Ignores(true, rules.EarlyPeaceMeters + 1f, rules));
-            Assert.IsFalse(BotPeace.Ignores(true, rules.EarlyPeaceMeters - 1f, rules), "the one next to it is fought");
-            Assert.IsFalse(BotPeace.Ignores(false, 50f, rules));
+            Assert.IsTrue(BotPeace.Ignores(true, rules.EarlyPeaceMeters + 1f, false, rules));
+            Assert.IsFalse(BotPeace.Ignores(true, rules.EarlyPeaceMeters - 1f, false, rules), "an armed one right next to it is fought");
+            Assert.IsTrue(BotPeace.Ignores(true, 0.5f, true, rules), "two with empty hands do not start a fist fight");
+            Assert.IsFalse(BotPeace.Ignores(false, 50f, true, rules));
         }
 
         [Test]

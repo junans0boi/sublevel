@@ -64,6 +64,7 @@ namespace Game.Core
         public static bool Holds(double sinceDrop, double sinceHurt, BotRules rules) =>
             sinceDrop >= 0 && sinceDrop < rules.EarlyPeaceSeconds && sinceHurt > rules.EarlyPeaceHurtSeconds;
 
-        public static bool Ignores(bool peace, float meters, BotRules rules) => peace && meters > rules.EarlyPeaceMeters;
+        // Two bots with nothing in their hands do not start a fist fight in the peace at any distance: those fights killed most bots within seconds of the drop.
+        public static bool Ignores(bool peace, float meters, bool bothUnarmed, BotRules rules) => peace && (bothUnarmed || meters > rules.EarlyPeaceMeters);
     }
 }

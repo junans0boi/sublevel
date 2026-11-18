@@ -105,7 +105,7 @@ namespace Game.Core
 
         // ---- The first minutes (ADR-315): bots farm and leave each other be ----
         public float EarlyPeaceSeconds = 300f;    // after the drop a bot ignores enemies farther than EarlyPeaceMeters, unless it was hurt lately
-        public float EarlyPeaceMeters = 4f;
+        public float EarlyPeaceMeters = 2f;
         public float EarlyPeaceHurtSeconds = 8f;  // hurt this lately: the peace is off for this bot
 
         // ---- Without a weapon (ADR-310, #374) ----
