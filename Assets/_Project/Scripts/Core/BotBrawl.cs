@@ -54,3 +54,16 @@ namespace Game.Core
         public static float Rank(float meters, double deathAge) => meters + (float)deathAge * 0.5f;
     }
 }
+
+namespace Game.Core
+{
+    // The peace of the first minutes (ADR-315): until EarlyPeaceSeconds after the drop a bot does not see enemies farther than EarlyPeaceMeters
+    // as targets unless it was hurt in the last EarlyPeaceHurtSeconds. The ones next to each other still fight; the rest farm.
+    public static class BotPeace
+    {
+        public static bool Holds(double sinceDrop, double sinceHurt, BotRules rules) =>
+            sinceDrop >= 0 && sinceDrop < rules.EarlyPeaceSeconds && sinceHurt > rules.EarlyPeaceHurtSeconds;
+
+        public static bool Ignores(bool peace, float meters, BotRules rules) => peace && meters > rules.EarlyPeaceMeters;
+    }
+}

@@ -8,10 +8,11 @@ namespace Game.Net
     {
         public static readonly List<float> FirstGunSeconds = new List<float>();
         public static int Farming;
+        public static float FirstStartAt = -1f;   // Time.time of the first bot's drop (deaths are counted from it)
         public static int Bots;
 
         [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-        public static void Reset() { FirstGunSeconds.Clear(); Farming = 0; Bots = 0; }
+        public static void Reset() { FirstGunSeconds.Clear(); Farming = 0; FirstStartAt = -1f; Bots = 0; }
 
         // Median of the first-gun times so far (-1 when none).
         public static float MedianFirstGun()

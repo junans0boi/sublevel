@@ -62,6 +62,7 @@ namespace Game.AI
             {
                 _farmStarted = true;
                 _farmStartAt = now;
+                if (BotFarmStats.FirstStartAt < 0f) BotFarmStats.FirstStartAt = now;
                 BotFarmStats.Bots++;
                 BotFarmStats.Farming++;
             }

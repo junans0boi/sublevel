@@ -77,6 +77,7 @@ namespace Game.AI
         LootItem _loot;
         float _maxHp;
         float _nextSense;
+        float _hurtAt = -1000f, _lastHp = float.MaxValue;
         int _noiseSeen;
         int _ignoredLootId = -1;
         float _ignoreLootUntil;
@@ -356,6 +357,7 @@ namespace Game.AI
 
             // Sight: the nearest combatant it can actually see. The one it is already on is kept a little longer,
             // so two targets at similar distances do not make it flip between them.
+            bool peace = _farmStarted && BotPeace.Holds(Time.time - _farmStartAt, Time.time - _hurtAt, rules);
             Combatant seen = null;
             float seenScore = float.MaxValue;
             bool stepHeard = false;
@@ -372,6 +374,8 @@ namespace Game.AI
                 var chest = ChestOf(c);
                 var to = chest - eye;
                 float sqr = to.sqrMagnitude;
+                // The first minutes (ADR-315): far enemies are left be.
+                if (peace && BotPeace.Ignores(true, Mathf.Sqrt(sqr), rules)) continue;
                 bool visible = false;
                 if (sqr <= viewSqr)
                 {
@@ -561,6 +565,8 @@ namespace Game.AI
             _percept.Position = ToVec(transform.position);
             _maxHp = Mathf.Max(_maxHp, _self.Hp.Value);
             _percept.HealthFraction = _self.Hp.Value / _maxHp;
+            if (_self.Hp.Value < _lastHp - 0.01f) _hurtAt = Time.time;
+            _lastHp = _self.Hp.Value;
 
             // A melee weapon is not a gun to the brain: it fights with it like with fists (ADR-073, see Punch).
             var weapon = _self.ActiveWeapon;

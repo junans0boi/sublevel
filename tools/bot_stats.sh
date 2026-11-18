@@ -9,6 +9,7 @@ SECS="${1:-420}"; LEVELS="${2:-easy normal hard}"; SEEDS="${3:-1 2 3}"; shift $(
 BIN="Build/server/SublevelServer.app/Contents/MacOS/Sublevel"
 [[ -x "$BIN" ]] || { echo "no server build: tools/unity.sh build server"; exit 2; }
 OUT="Logs/botstats"; mkdir -p "$OUT" Logs/perf
+export SUBLEVEL_PERF_DIR="$ROOT/Logs/perf"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 for level in $LEVELS; do
   for seed in $SEEDS; do

@@ -32,11 +32,14 @@ namespace Game.Net
             var go = new GameObject("ServerPerfProbe");
             DontDestroyOnLoad(go);
             var probe = go.AddComponent<ServerPerfProbe>();
-            Directory.CreateDirectory("Logs/perf");
+            // A built server's working directory is not the project: SUBLEVEL_PERF_DIR (tools/bot_stats.sh sets it) says where the files go.
+            string dir = System.Environment.GetEnvironmentVariable("SUBLEVEL_PERF_DIR");
+            if (string.IsNullOrEmpty(dir)) dir = "Logs/perf";
+            Directory.CreateDirectory(dir);
             probe._gather = scenario.StartsWith("p3");
-            probe._csv = "Logs/perf/s8_server_" + scenario + ".csv";
+            probe._csv = dir + "/s8_server_" + scenario + ".csv";
             probe._scenario = scenario;
-            probe._statsFile = "Logs/perf/botstats_" + scenario + ".csv";
+            probe._statsFile = dir + "/botstats_" + scenario + ".csv";
             File.WriteAllText(probe._csv, "t,frames,mean_ms,p50_ms,p95_ms,p99_ms,max_ms,heap_mb,combatants,rewinds,bot_ai_mean,bot_ai_p99,sense_mean,sense_p99,loot_mean,loot_p99,doors_mean,doors_p99,path_mean,path_p99\n");
             BotPerf.Enabled = true;
             Combatant.ServerDied += (victim, info) => BotMatchStats.Died(victim.ObjectId, info.Attacker != null ? info.Attacker.ObjectId : -1);
@@ -129,6 +132,7 @@ namespace Game.Net
                 row.Add("deaths_" + LevelNames[l], BotMatchStats.Deaths[l]);
             }
             row.Add("firstGunMedian_all", BotStatsCsv.Percentile(all, 50f)).Add("firstGunP90_all", BotStatsCsv.Percentile(all, 90f));
+            row.Add("deaths3min", BotStatsCsv.CountAtMost(BotMatchStats.DeathSeconds, 180f)).Add("deaths5min", BotStatsCsv.CountAtMost(BotMatchStats.DeathSeconds, 300f)).Add("deathsTotal", BotMatchStats.DeathSeconds.Count);
             row.Add("engagements", BotMatchStats.Engagements);
             row.Add("avgEngageSeconds", BotMatchStats.Engagements > 0 ? BotMatchStats.EngageSeconds / BotMatchStats.Engagements : 0f);
             row.Add("firstEngageArmed", BotStatsCsv.Share(BotMatchStats.FirstEngagesArmed, BotMatchStats.FirstEngages));

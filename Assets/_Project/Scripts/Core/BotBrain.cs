@@ -233,7 +233,10 @@ namespace Game.Core
             bool canFight = armed || p.OtherSlotUsable;
             bool low = p.HealthFraction <= rules.RetreatHealthFraction;
 
-            if (p.EnemyVisible)
+            // An unarmed enemy far off is no reason for an empty-handed bot to drop what it is doing (ADR-314): the fist fights between
+            // bots that both have nothing killed most of them before they found a gun.
+            bool leaveBe = p.EnemyVisible && !canFight && !p.EnemyArmed && BotVec.Distance(p.Position, p.EnemyPosition) > rules.UnarmedFistChaseMeters;
+            if (p.EnemyVisible && !leaveBe)
             {
                 _healReadyAt = -1;
                 intent.Look = true;

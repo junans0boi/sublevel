@@ -103,8 +103,14 @@ namespace Game.Core
         public float PreferShotgunMeters = 7f;
         public float PreferPistolMeters = 20f;
 
+        // ---- The first minutes (ADR-315): bots farm and leave each other be ----
+        public float EarlyPeaceSeconds = 300f;    // after the drop a bot ignores enemies farther than EarlyPeaceMeters, unless it was hurt lately
+        public float EarlyPeaceMeters = 4f;
+        public float EarlyPeaceHurtSeconds = 8f;  // hurt this lately: the peace is off for this bot
+
         // ---- Without a weapon (ADR-310, #374) ----
         public float UnarmedFistMeters = 1.35f;   // an unarmed bot fights an armed enemy this close (ADR-218 punch range)
+        public float UnarmedFistChaseMeters = 12f; // an unarmed bot fights an unarmed enemy only this near; farther away it leaves it be and goes on (ADR-314)
         public float FleeSeconds = 8f;            // a flight counts as lost when the enemy still sees it after this long
         public float LootDashMeters = 10f;        // fleeing, a weapon this close on the ground is picked up first
         public float CorpseLootMeters = 40f;      // goes to where somebody fell if it is this near...
