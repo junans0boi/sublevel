@@ -234,6 +234,7 @@ namespace Game.Net
 
             BuildingLoot.Build(_lootSpawns);
             BotFarmStats.Reset();
+            BotBrawlStats.Reset();
             var plan = PlanLoot();
             for (int i = 0; i < plan.Length; i++)
             {

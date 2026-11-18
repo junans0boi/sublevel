@@ -266,7 +266,9 @@ namespace Game.Tests
         [Test]
         public void UnarmedBot_RunsFromAVisibleEnemy()
         {
-            var intent = Brain().Think(Seeing(Unarmed(0), 15f));
+            var seen = Seeing(Unarmed(0), 15f);
+            seen.EnemyArmed = true; // an unarmed enemy is fought with fists instead (ADR-310)
+            var intent = Brain().Think(seen);
             Assert.AreEqual(BotState.Retreat, intent.State);
             Assert.IsTrue(intent.Sprint);
             Assert.IsFalse(intent.Fire);
