@@ -67,6 +67,7 @@ namespace Game.Core
         public BotVec CoverHide, CoverPeekA, CoverPeekB;
         public bool CoverPeekAValid, CoverPeekBValid;
 
+        public bool IgnoresNoise;      // this bot does not go to heard noises (ADR-312: its fixed roll is above the level's chance)
         public bool EnemyArmed;        // the one in sight holds a gun (ADR-310)
         public bool LootIsWeapon;      // the pickup in view is a weapon
         public bool CorpseActive;      // go to where somebody fell, for what dropped there
@@ -148,6 +149,8 @@ namespace Game.Core
         double _phaseSince, _phaseUntil, _peekDeadline;
         int _side = 1;
         public PeekPhase Phase => _phase;
+        bool _noiseCounted;
+        public int NoiseInvestigations { get; private set; }
         public int PeekCycles { get; private set; }
         public int ExposeEpisodes { get; private set; }
         public int ExposeCutShort { get; private set; }
@@ -221,6 +224,7 @@ namespace Game.Core
             else if (p.Heard)
             {
                 _hasNoise = true;
+                _noiseCounted = false;
                 _noise = p.HeardPosition;
                 _noiseUntil = now + rules.InvestigateSeconds;
             }
@@ -394,10 +398,15 @@ namespace Game.Core
                     if (BotVec.PlanarDistance(p.Position, _lastSeen) <= rules.ArriveMeters || p.Stuck) _hasLastSeen = false;
                     else return Investigate(intent, _lastSeen);
                 }
+                if (_hasNoise && p.IgnoresNoise) _hasNoise = false;
                 if (_hasNoise)
                 {
                     if (BotVec.PlanarDistance(p.Position, _noise) <= rules.ArriveMeters || p.Stuck) _hasNoise = false;
-                    else return Investigate(intent, _noise);
+                    else
+                    {
+                        if (!_noiseCounted) { _noiseCounted = true; NoiseInvestigations++; }
+                        return Investigate(intent, _noise);
+                    }
                 }
             }
 

@@ -105,6 +105,7 @@ namespace Game.AI
         int _ignoredEnemyId = -1;
         float _ignoreEnemyUntil;
         Vector3 _stallFrom;
+        bool _stallCounted;
         float _stallAt;
         float _lastAttackAt = -100f;
         float _hearFactor = 1f;
@@ -320,6 +321,7 @@ namespace Game.AI
             // Each bot has its own level, the setting being the centre of a mix (ADR-245).
             _botIndex = _named;
             _level = BotMix.For(BotLevels.Level, matchSeed, _botIndex);
+            BotMatchStats.Register(_self.ObjectId, (int)_level);
             _rules = BotLevels.For(BotRules.Current, _level);
             if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
@@ -328,6 +330,8 @@ namespace Game.AI
             _rng = new System.Random(seed);
             InitItems();
             HookDeaths();
+            // Whether this bot goes to noises at all: its own fixed roll against the level's chance (ADR-312).
+            _percept.IgnoresNoise = !BotPriority.Investigates(BotPriority.Roll(seed ^ 0x5bd1e995), _rules.InvestigateChance);
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
@@ -706,7 +710,8 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && (intent.State == BotState.Roam || intent.State == BotState.Investigate)));
+            // A noise it is going to comes before the final-region gather (ADR-312): only a roaming bot is pulled by a non-urgent zone goal.
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && intent.State == BotState.Roam));
             if (!zoneMove) _goal = ZoneGoal.None;
 
             if (!intent.Move && !zoneMove)
@@ -1085,6 +1090,7 @@ namespace Game.AI
             if (now - _stallAt < StallSeconds) return;
 
             string reason = StallReason();
+            if (!_stallCounted) { _stallCounted = true; BotMatchStats.StalledBots[(int)_level]++; }
             BotStats.CountStall(reason);
             Debug.Log($"[Bot] {DisplayName} made no headway for {StallSeconds:0} s ({reason}) at {position}; picking a new target");
             // Whatever it was after is dropped: the enemy it could neither reach nor hit, the pass it could not get

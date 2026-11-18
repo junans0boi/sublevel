@@ -54,7 +54,7 @@ namespace Game.AI
         {
             _percept.FarmActive = false;
             // First time it holds a gun: the farming statistic (seconds since the drop).
-            if (_farmStarted && !_gunNoted && _self.HasAnyWeapon) { _gunNoted = true; BotFarmStats.FirstGunSeconds.Add(now - _farmStartAt); }
+            if (_farmStarted && !_gunNoted && _self.HasAnyWeapon) { _gunNoted = true; BotFarmStats.FirstGunSeconds.Add(now - _farmStartAt); BotMatchStats.FirstGun[(int)_level].Add(now - _farmStartAt); }
             if (_farmDone) { TickHint(now); return; }
             var index = BuildingLoot.Index;
             if (index == null || _rules.FarmSeconds <= 0f || !OnNavMesh) return;

@@ -42,8 +42,12 @@ namespace Game.Core
             }
         }
 
+        // Statistics runs (--perf-level): every bot has exactly the set level instead of the mix.
+        public static bool Pure;
+
         public static BotDifficulty For(BotDifficulty setting, int matchSeed, int index)
         {
+            if (Pure) return setting;
             Shares(setting, out int easy, out int normal, out _);
             int roll = new Random(unchecked(matchSeed * 31 + index * 7919 + 5)).Next(100);
             return roll < easy ? BotDifficulty.Easy : roll < easy + normal ? BotDifficulty.Normal : BotDifficulty.Hard;

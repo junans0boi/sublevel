@@ -21,6 +21,11 @@ namespace Game.Core
         public int MaxPlayers;      // 0 = rules.json
         public int Participants;    // 0 = rules.json
         public float GatherX, GatherZ; // --perf-gather X,Z: where the P3 crowd meets
+        public bool HasPerfSeed;
+        public int PerfSeed;           // --perf-seed N: the match, deployment and lockdown seed (3-seed statistics); HasPerfSeed false = the scene's
+        public bool HasPerfLevel;
+        public int PerfLevel;          // --perf-level easy|normal|hard: every bot at that level (0..2); HasPerfLevel false = the settings' mix
+        public bool PerfSquad;         // --perf-squad: the bots-only match is a squad match (teams of four), to measure how teams move
         public bool PerfKeys;          // --perf-keys: every bot starts with one key (measures the key use, not the key loot)
         public float PerfQuick;        // --perf-quick N: pollution table N times faster (PollutionRules.QuickMatch), 0 = real time
         public string Perf;         // null = off; else the scenario name for Logs/perf/s8_server_<name>.csv
@@ -42,7 +47,8 @@ namespace Game.Core
                 string a = args[i];
                 if (a == "--dedicated" || a == "-dedicated") { o.Dedicated = true; continue; }
                 if (a == "--perf-keys") { o.PerfKeys = true; continue; }
-                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--participants" || a == "--perf" || a == "--perf-gather" || a == "--perf-quick" || a == "--start-seconds";
+                if (a == "--perf-squad") { o.PerfSquad = true; continue; }
+                bool known = a == "--port" || a == "--bots" || a == "--region" || a == "--max-players" || a == "--participants" || a == "--perf" || a == "--perf-gather" || a == "--perf-quick" || a == "--perf-seed" || a == "--perf-level" || a == "--start-seconds";
                 if (!known) continue;
                 if (i + 1 >= args.Count) { o.Error = a + " needs a value"; return o; }
                 string v = args[++i];
@@ -72,6 +78,20 @@ namespace Game.Core
                     case "--perf":
                         if (string.IsNullOrWhiteSpace(v)) { o.Error = "--perf is empty"; return o; }
                         o.Perf = v.Trim();
+                        break;
+                    case "--perf-seed":
+                        if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out o.PerfSeed)) { o.Error = "--perf-seed must be 0 or more, got '" + v + "'"; return o; }
+                        o.HasPerfSeed = true;
+                        break;
+                    case "--perf-level":
+                        o.HasPerfLevel = true;
+                        switch (v.Trim().ToLowerInvariant())
+                        {
+                            case "easy": o.PerfLevel = 0; break;
+                            case "normal": o.PerfLevel = 1; break;
+                            case "hard": o.PerfLevel = 2; break;
+                            default: o.Error = "--perf-level must be easy, normal or hard, got '" + v + "'"; return o;
+                        }
                         break;
                     case "--perf-quick":
                         if (!float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out o.PerfQuick) || o.PerfQuick < 1f) { o.Error = "--perf-quick must be 1 or more, got '" + v + "'"; return o; }

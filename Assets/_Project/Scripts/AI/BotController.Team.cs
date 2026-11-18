@@ -107,13 +107,15 @@ namespace Game.AI
             }
 
             if (intent.State != BotState.Roam && intent.State != BotState.Investigate && intent.State != BotState.Loot) return;
-            var leader = Leader();
-            if (leader == null) return;
-            float away = Flat(leader.transform.position - transform.position);
+            // Farming is each bot's own (ADR-312); the squad gathers again once the bots are kitted out.
+            if (_percept.FarmActive) return;
+            // It keeps within BotFollowMeters of the team's centre (ADR-312), not of one leader: the centre of the members on their feet.
+            if (!TeamCentre(out var centre)) return;
+            float away = Flat(centre - transform.position);
             bool far = away > rules.BotRegroupMeters;
             if (away <= rules.BotFollowMeters || (intent.State == BotState.Loot && !far)) return;
             intent.Move = true;
-            intent.MoveTarget = ToVec(leader.transform.position);
+            intent.MoveTarget = ToVec(centre);
             intent.Sprint = far;
             intent.PickUp = false;
         }
@@ -155,6 +157,24 @@ namespace Game.AI
             }
             if (best != null) distance = Mathf.Sqrt(bestSqr);
             return best;
+        }
+
+        // The middle of the teammates on their feet (this bot included); false when it is alone.
+        bool TeamCentre(out Vector3 centre)
+        {
+            centre = default;
+            int n = 0;
+            var all = Combatant.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var c = all[i];
+                if (c == null || !c.IsServerInitialized || !c.Standing || (c != _self && !_self.IsTeammateOf(c))) continue;
+                centre += c.transform.position;
+                n++;
+            }
+            if (n < 2) return false;
+            centre /= n;
+            return true;
         }
 
         // Whom a roaming bot keeps near: the team's player while on its feet, else the lowest-numbered member on its

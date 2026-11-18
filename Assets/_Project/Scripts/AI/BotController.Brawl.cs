@@ -57,8 +57,12 @@ namespace Game.AI
         bool _fistFighting;
 
         // Before the brain: the percept bits for this (ADR-310).
+        bool _heardCounted, _investigatedCounted, _everEngaged, _inEngagement;
+        float _engageStart, _engageLast;
+
         void TickBrawl(float now)
         {
+            if (_percept.Heard && !_heardCounted) { _heardCounted = true; BotBrawlStats.NoiseHeardBots++; }
             if (_percept.EnemyVisible) _lastEnemyAt = now;
             _percept.CorpseActive = false;
             if (_farmStarted && !_farmDone) { _corpseTrip = false; return; }
@@ -117,6 +121,25 @@ namespace Game.AI
         // After the brain thought: the statistics of what it decided.
         void TallyBrawl(float now)
         {
+            // An engagement: Engage with an enemy in sight; it ends when that has not been so for 3 s.
+            bool engaged = _intent.State == BotState.Engage && _percept.EnemyVisible;
+            if (engaged)
+            {
+                if (!_inEngagement)
+                {
+                    _inEngagement = true;
+                    _engageStart = now;
+                    if (!_everEngaged) { _everEngaged = true; BotMatchStats.FirstEngages++; if (_percept.HasWeapon) BotMatchStats.FirstEngagesArmed++; }
+                }
+                _engageLast = now;
+            }
+            else if (_inEngagement && now - _engageLast > 3f)
+            {
+                _inEngagement = false;
+                BotMatchStats.Engagements++;
+                BotMatchStats.EngageSeconds += _engageLast - _engageStart;
+            }
+            if (!_investigatedCounted && _brain.NoiseInvestigations > 0) { _investigatedCounted = true; BotBrawlStats.NoiseInvestigatedBots++; }
             if (_farmDone) BotBrawlStats.StateSeconds[(int)_intent.State] += Time.deltaTime;
             bool unarmed = !_percept.HasWeapon && !_percept.OtherSlotUsable;
             if (_intent.State == BotState.Engage && unarmed && _prevState != BotState.Engage) BotBrawlStats.UnarmedEngages++;

@@ -46,18 +46,21 @@ namespace Game.Net
         // Tests: forces the lockdown seed of the next matches (null = random per match, or the scene seed when the
         // deployment is not random).
         public static int? LockdownSeedOverride;
+        // Statistics runs (--perf-seed): the match seed (loot plan, bot names and levels, bot randomness).
+        public static int? SeedOverride;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
             DeploymentSeedOverride = null;
             LockdownSeedOverride = null;
+            SeedOverride = null;
         }
 
         public Transform[] LootSpawns => _lootSpawns;
         public Transform[] DummySpawns => _dummySpawns;
         public Transform[] BotSpawns => _botSpawns;
-        public int Seed => _seed;
+        public int Seed => SeedOverride ?? _seed;
         // Seeds this match's lockdown plan (closing order, final region): new every match (#77).
         public int LockdownSeed { get; private set; }
         public ushort Port { get; private set; }
@@ -99,7 +102,7 @@ namespace Game.Net
         void Awake()
         {
             Instance = this;
-            LockdownSeed = LockdownSeedOverride ?? (_randomDeployment ? unchecked(_seed * 7919 ^ System.Environment.TickCount ^ (int)System.DateTime.Now.Ticks) : _seed);
+            LockdownSeed = LockdownSeedOverride ?? (_randomDeployment ? unchecked(Seed * 7919 ^ System.Environment.TickCount ^ (int)System.DateTime.Now.Ticks) : Seed);
             // A new match: the bots' stall counts start again.
             BotStats.Clear();
             // Scenes built before the match state existed get one here, so no scene has to be rebuilt for it.
@@ -221,9 +224,9 @@ namespace Game.Net
             var regions = new int[_lootSpawns.Length];
             bool tagged = _lootSpawns.Length > 0;
             for (int i = 0; i < roles.Length; i++) tagged &= LootSpawnName.Parse(_lootSpawns[i].name, out roles[i], out regions[i]);
-            if (!tagged) return GameData.Loot.Plan(_lootSpawns.Length, _seed);
-            var plan = GameData.Loot.PlanByRole(roles, _seed);
-            LootGuarantee.Apply(plan, regions, System.Linq.Enumerable.Max(regions) + 1, GameData.Loot, LootKind.Jerrycan, 1, _seed);
+            if (!tagged) return GameData.Loot.Plan(_lootSpawns.Length, Seed);
+            var plan = GameData.Loot.PlanByRole(roles, Seed);
+            LootGuarantee.Apply(plan, regions, System.Linq.Enumerable.Max(regions) + 1, GameData.Loot, LootKind.Jerrycan, 1, Seed);
             return plan;
         }
 
@@ -238,6 +241,7 @@ namespace Game.Net
             BuildingLoot.Build(_lootSpawns);
             BotFarmStats.Reset();
             BotBrawlStats.Reset();
+            BotMatchStats.Reset();
             var plan = PlanLoot();
             for (int i = 0; i < plan.Length; i++)
             {
@@ -321,7 +325,7 @@ namespace Game.Net
             _expectedPlayersCounted = ExpectedPlayers;
             Layout = TeamLayout.ForMatch(_expectedPlayersCounted, BotCount, TeamMatch.TeamSize, NetSession.PartySizes);
             if (Elevators == null || Elevators.Sites.Count == 0) return;
-            DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(_seed * 397 ^ System.Environment.TickCount) : _seed);
+            DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(Seed * 397 ^ System.Environment.TickCount) : Seed);
             var slots = new ElevatorSlot[Elevators.Sites.Count];
             for (int i = 0; i < slots.Length; i++) slots[i] = new ElevatorSlot(Elevators.Sites[i].Region);
             // A team starts together in one elevator (ADR-072); solo is the plain assignment.
