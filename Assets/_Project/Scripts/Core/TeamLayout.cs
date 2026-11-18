@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    // Who is on which team (ADR-330). Participants are numbered people first, then bots (the order the elevator deployment
+    // Who is on which team (ADR-332). Participants are numbered people first, then bots (the order the elevator deployment
     // counts them in). A party of N people is one team of N and is never topped up with bots; bots form teams of at most
     // `size`, split as evenly as possible (79 bots in fours: 19 teams of 4 and one of 3). Pure.
     public sealed class TeamLayout

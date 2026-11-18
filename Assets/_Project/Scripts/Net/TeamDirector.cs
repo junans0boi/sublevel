@@ -98,7 +98,7 @@ namespace Game.Net
                 else index = expected + _others++;
                 var layout = director != null ? director.Layout : null;
                 int team = layout != null ? layout.TeamOf(index) : Teams.None;
-                // Past the plan (a late joiner, or no elevator plan): a team of one, never squeezed into a bot team (ADR-330).
+                // Past the plan (a late joiner, or no elevator plan): a team of one, never squeezed into a bot team (ADR-332).
                 if (team == Teams.None) { team = (layout != null ? layout.TeamCount : 0) + ++_extraTeams; c.ServerSetTeam(team, 1, _state.ServerNameOf(c)); }
                 else c.ServerSetTeam(team, layout.SlotOf(index), _state.ServerNameOf(c));
             }

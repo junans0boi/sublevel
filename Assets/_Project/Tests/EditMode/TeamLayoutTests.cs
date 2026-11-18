@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Game.Tests
 {
-    // ADR-330: a party is one team of its own size, bots make teams of 4, nobody is topped up.
+    // ADR-332: a party is one team of its own size, bots make teams of 4, nobody is topped up.
     public class TeamLayoutTests
     {
         static readonly TeamRules Rules = new TeamRules();

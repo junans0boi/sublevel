@@ -68,7 +68,7 @@ namespace Game.Net
         public int DeploymentSeed { get; private set; }
         // Server: the elevator index each participant was given (players first, then bots); empty without elevators.
         public IReadOnlyList<int> ElevatorAssignment => _deployment;
-        // Teams of this match (ADR-330): people in parties, bots in fours; set when the match is planned.
+        // Teams of this match (ADR-332): people in parties, bots in fours; set when the match is planned.
         public TeamLayout Layout { get; private set; }
         // Players counted ahead of the bots (participants 0..ExpectedPlayers-1, ADR-055); teams count the same way (ADR-072).
         // In a lobby's match (#160) it is the people the lobby counted.
