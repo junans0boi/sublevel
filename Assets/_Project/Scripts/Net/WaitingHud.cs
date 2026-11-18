@@ -21,16 +21,20 @@ namespace Game.Net
             nm.ClientManager.RegisterBroadcast<WaitingBroadcast>(hud.OnBroadcast);
         }
 
-        void OnDestroy() { if (_nm != null) _nm.ClientManager.UnregisterBroadcast<WaitingBroadcast>(OnBroadcast); }
+        void OnDestroy() { OnIsland = false; if (_nm != null) _nm.ClientManager.UnregisterBroadcast<WaitingBroadcast>(OnBroadcast); }
 
         void OnBroadcast(WaitingBroadcast message, FishNet.Transporting.Channel channel) { _last = message; _at = Time.unscaledTime; }
+
+        // True while the server says the room is open: the player stands on the island, not in an elevator.
+        public static bool OnIsland { get; private set; }
 
         bool Live => _last.Active && Time.unscaledTime - _at <= 3f;
 
         void Update()
         {
-            if (_title == null && !TryBuildBoard()) return;
             bool live = Live;
+            OnIsland = live;
+            if (_title == null && !TryBuildBoard()) return;
             _time.gameObject.SetActive(live); _people.gameObject.SetActive(live); _bungee.gameObject.SetActive(live && _last.BungeeBest > 0f);
             if (!live) { _title.text = "SUBLEVEL"; return; }
             int s = Mathf.CeilToInt(_last.SecondsLeft);

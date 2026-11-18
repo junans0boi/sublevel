@@ -84,6 +84,8 @@ public static partial class WorldBuilder
         deck.Add(new Vector3(t.x, th, t.z), new Vector3(tr * 2f + 3f, 0.5f, tr * 2f + 3f));          // the jump platform
         trim.Add(new Vector3(t.x, th + 1.0f, t.z + tr + 1.5f), new Vector3(tr * 2f + 3f, 0.12f, 0.12f));
         deck.Add(new Vector3(t.x, 0.15f, t.z), new Vector3(tr * 2f + 4f, 0.3f, tr * 2f + 4f));       // a pad under it
+        var pad = WaitingIsland.BungeePad;                                                            // the spot that starts a jump: a bright square
+        trim.Add(new Vector3(pad.x, 0.33f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, 0.06f, WaitingIsland.BungeePadRadius * 2f));
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
         foreach (var b in WaitingIsland.Booths)

@@ -30,7 +30,8 @@ namespace Game.Net
         // The match started its players in elevators (the doors exist on this peer).
         public static bool Deployed => ElevatorDoors.Instance != null;
         // The local player must not move or fire yet: the doors are still closed. PlayerController reads this.
-        public static bool InputBlocked => ElevatorDoors.Instance != null && ElevatorDoors.Instance.DoorsClosed;
+        // Not while people wait on the island (their elevators are shut, they are not in them): see WaitingHud.OnIsland.
+        public static bool InputBlocked => ElevatorDoors.Instance != null && ElevatorDoors.Instance.DoorsClosed && !WaitingHud.OnIsland;
         // Seconds until the doors open (0 once open or without elevators). HUD: "문 열림 N".
         public static float DoorSecondsLeft => ElevatorDoors.Instance != null && ElevatorDoors.Instance.DoorsClosed ? ElevatorDoors.Instance.DoorSecondsLeft : 0f;
         // Protection left for a combatant as this peer knows it (0 = none). HUD: "보호 N초".

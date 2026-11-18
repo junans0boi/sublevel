@@ -18,6 +18,8 @@ namespace Game.Core
         // Local (to the centre) positions of the features. x east, z south.
         public static readonly (float x, float z) Tower = (22f, 4f);          // bungee tower
         public const float TowerRadius = 5f;
+        public static readonly (float x, float z) BungeePad = (22f, 8f);       // stand here a moment to be carried up and jump (#419)
+        public const float BungeePadRadius = 1.6f;
         public static readonly (float x, float z) Board = (0f, -33f);         // the big board, on the north rim facing the middle
         public const float BoardWidth = 22f, BoardHeight = 9f;
         public static readonly (float x, float z)[] Booths =                  // shooting booths (2nd stage), west side

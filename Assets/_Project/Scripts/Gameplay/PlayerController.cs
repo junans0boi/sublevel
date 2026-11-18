@@ -141,6 +141,7 @@ namespace Game.Gameplay
             Camera = Camera.main;
             if (Camera != null) Camera.fieldOfView = _rules.Aim.Hip.Fov;
             _combatant.ShotFired += OnOwnShot;
+            if (GetComponent<BungeeRide>() == null) gameObject.AddComponent<BungeeRide>(); // the waiting island's jump (ADR-386); idle everywhere else
             if (_stance != null) { _stance.ParkourRejected += OnParkourRejected; _stance.Corrected += OnParkourRejected; } // both: end any move, go back
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
@@ -798,7 +799,7 @@ namespace Game.Gameplay
             float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
                 : _aim.Mode == AimMode.Hip && Rig.Mode == ViewMode.FirstPerson ? GameSettings.FirstPersonFov
                 : aimRules.For(_aim.Mode).Fov;
-            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget, ease);
+            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget + BungeeRide.ExtraFov, ease);
 
             // Hide our own body whenever the camera sits at the eyes so it does not block the view; the weapon
             // moves in front of the camera instead.

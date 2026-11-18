@@ -135,6 +135,44 @@ namespace Game.Net
             };
         }
 
+        // ---- bungee (ADR-386, #419) ----
+        readonly BungeeLine _line = new BungeeLine();
+        Combatant _jumper;
+        Vector3 _pad;
+        float _onPadSince = -1f;
+        const float PadHoldSeconds = 0.8f;   // standing on the pad this long starts a jump (when the line is free)
+
+        void TickBungee(double now)
+        {
+            BungeeBest = _line.Best;
+            _pad = new Vector3(WaitingIsland.WorldX(WaitingIsland.BungeePad.x), _deckY, WaitingIsland.WorldZ(WaitingIsland.BungeePad.z));
+            if (_line.Active)
+            {
+                if (_jumper == null || _jumper.Owner == null || !_jumper.Owner.IsValid) { _line.Abort(_line.Jumper, now); _jumper = null; return; }
+                // The server's own copy follows the same curve; the owner's body is driven by its client (BungeeRide).
+                var at = _pad + Vector3.up * (BungeeCurve.Height(_line.ElapsedOf(now)) + 0.1f);
+                if (_jumper.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(at);
+                if (_line.Tick(now)) { Debug.Log($"[WaitingRoom] bungee over, room best {_line.Best:0.0} m"); _jumper = null; }
+                return;
+            }
+            Combatant standing = null;
+            foreach (var kv in _keys)
+            {
+                var c = kv.Key;
+                if (c == null || !c.IsPlayer || c.Dead.Value) continue;
+                var d = c.transform.position - _pad; d.y = 0f;
+                if (d.sqrMagnitude <= WaitingIsland.BungeePadRadius * WaitingIsland.BungeePadRadius) { standing = c; break; }
+            }
+            if (standing == null) { _onPadSince = -1f; return; }
+            if (_onPadSince < 0f) _onPadSince = Time.unscaledTime;
+            if (Time.unscaledTime - _onPadSince < PadHoldSeconds) return;
+            if (_line.TryStart(standing.ObjectId, now) != BungeeLine.Result.Started) return;
+            _jumper = standing;
+            _onPadSince = -1f;
+            if (standing.TryGetComponent<CombatantStance>(out var stance)) stance.ServerBungeeStart(_pad);
+            Debug.Log($"[WaitingRoom] bungee: {standing.name} goes up");
+        }
+
         void Update()
         {
             if (_flow == null || _flow.Phase != WaitingPhase.Waiting) return;
@@ -147,7 +185,7 @@ namespace Game.Net
             }
             double now = Time.unscaledTimeAsDouble;
             bool deploy = _flow.Tick(now);
-            if (!deploy) DriveBots(_flow.Last);
+            if (!deploy) { DriveBots(_flow.Last); TickBungee(now); }
             if (Time.unscaledTime >= _nextSend)
             {
                 _nextSend = Time.unscaledTime + 0.5f;
@@ -168,6 +206,7 @@ namespace Game.Net
 
         void Deploy()
         {
+            if (_line.Active && _jumper != null) _line.Abort(_line.Jumper, Time.unscaledTimeAsDouble); // the departure cuts a jump short; the jumper's own client ends the ride on the corrected place
             Debug.Log($"[WaitingRoom] countdown over ({_flow.Last.Reason}): {_flow.People} people, {_flow.Last.BotsTotal} bots in all, to the elevators");
             foreach (var b in _bots)
                 if (b.OnIsland && b.Body != null) b.Body.transform.SetPositionAndRotation(b.HomePosition, b.HomeRotation);
