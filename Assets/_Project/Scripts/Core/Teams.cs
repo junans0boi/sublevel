@@ -47,8 +47,8 @@ namespace Game.Core
         public float PingMaxMeters = 600f;          // reach of the aim ray (PlayerController.PingDistance)
 
         // ---- Bots in a team ----
-        public float BotFollowMeters = 14f;       // a roaming bot walks back once its leader is farther than this...
-        public float BotRegroupMeters = 35f;      // ...and sprints (dropping loot) beyond this
+        public float BotFollowMeters = 30f;       // a roaming bot walks back once the team's centre is farther than this (ADR-312)...
+        public float BotRegroupMeters = 60f;      // ...and sprints (dropping loot) beyond this
         public float BotReviveSearchMeters = 45f; // goes to a knocked teammate this close
         public float BotReviveCalmSeconds = 2f;   // with no enemy seen for this long
 

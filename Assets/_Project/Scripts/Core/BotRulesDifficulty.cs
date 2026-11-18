@@ -42,6 +42,7 @@ namespace Game.Core
             r.BurstPauseMin *= pause;
             r.BurstPauseMax *= pause;
             r.ThrowIntervalSeconds *= hard ? 0.7f : 1.5f;
+            r.InvestigateChance = hard ? 1f : 0.4f;
             // Cover (ADR-311): the hard bot is out for a shorter time and swaps sides; the easy one waits long behind cover and comes out the same side.
             r.PeekExposeMin *= hard ? 0.75f : 1f; r.PeekExposeMax *= hard ? 0.85f : 1f;
             r.PeekHideMin *= hard ? 0.7f : 1.6f; r.PeekHideMax *= hard ? 0.7f : 1.8f;

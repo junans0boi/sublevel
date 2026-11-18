@@ -328,6 +328,8 @@ namespace Game.AI
             _rng = new System.Random(seed);
             InitItems();
             HookDeaths();
+            // Whether this bot goes to noises at all: its own fixed roll against the level's chance (ADR-312).
+            _percept.IgnoresNoise = !BotPriority.Investigates(BotPriority.Roll(seed ^ 0x5bd1e995), _rules.InvestigateChance);
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
@@ -706,7 +708,8 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && (intent.State == BotState.Roam || intent.State == BotState.Investigate)));
+            // A noise it is going to comes before the final-region gather (ADR-312): only a roaming bot is pulled by a non-urgent zone goal.
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && intent.State == BotState.Roam));
             if (!zoneMove) _goal = ZoneGoal.None;
 
             if (!intent.Move && !zoneMove)

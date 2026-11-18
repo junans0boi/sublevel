@@ -57,8 +57,11 @@ namespace Game.AI
         bool _fistFighting;
 
         // Before the brain: the percept bits for this (ADR-310).
+        bool _heardCounted, _investigatedCounted;
+
         void TickBrawl(float now)
         {
+            if (_percept.Heard && !_heardCounted) { _heardCounted = true; BotBrawlStats.NoiseHeardBots++; }
             if (_percept.EnemyVisible) _lastEnemyAt = now;
             _percept.CorpseActive = false;
             if (_farmStarted && !_farmDone) { _corpseTrip = false; return; }
@@ -117,6 +120,7 @@ namespace Game.AI
         // After the brain thought: the statistics of what it decided.
         void TallyBrawl(float now)
         {
+            if (!_investigatedCounted && _brain.NoiseInvestigations > 0) { _investigatedCounted = true; BotBrawlStats.NoiseInvestigatedBots++; }
             if (_farmDone) BotBrawlStats.StateSeconds[(int)_intent.State] += Time.deltaTime;
             bool unarmed = !_percept.HasWeapon && !_percept.OtherSlotUsable;
             if (_intent.State == BotState.Engage && unarmed && _prevState != BotState.Engage) BotBrawlStats.UnarmedEngages++;

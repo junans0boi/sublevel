@@ -77,6 +77,30 @@ namespace Game.Net
         bool _keysGiven;
 
         // Farming (ADR-294): bots holding a gun, the first-gun median, how many are still farming, buildings with 3+ bots inside.
+        // Squads (ADR-312): each member's distance to its team's centre, sampled every window; median and 90th percentile so far.
+        readonly ServerFrameStats _squad = new ServerFrameStats();
+
+        void LogSquad()
+        {
+            var teams = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<Combatant>>();
+            foreach (var c in Combatant.All)
+            {
+                if (c == null || c.IsPlayer || !c.HasTeam || c.Dead.Value || !c.Standing) continue;
+                int t = c.TeamId.Value;
+                if (!teams.TryGetValue(t, out var list)) teams[t] = list = new System.Collections.Generic.List<Combatant>(4);
+                list.Add(c);
+            }
+            foreach (var list in teams.Values)
+            {
+                if (list.Count < 2) continue;
+                var centre = Vector3.zero;
+                foreach (var c in list) centre += c.transform.position;
+                centre /= list.Count;
+                foreach (var c in list) { var d = c.transform.position - centre; d.y = 0f; _squad.Add(d.magnitude); }
+            }
+            Debug.Log($"[Squad] samples={_squad.Count} teams={teams.Count} medianToCentre={_squad.Percentile(50):F1}m p90={_squad.Percentile(90):F1}m");
+        }
+
         void LogFarm(float now)
         {
             var index = BuildingLoot.Index;
@@ -122,6 +146,8 @@ namespace Game.Net
             for (int k = 0; k < BotPerf.Slots; k++) { line += $",{_bot[k].Mean():F3},{_bot[k].Percentile(99):F3}"; _bot[k].Clear(); }
             Debug.Log("[Perf] " + line);
             LogFarm(now);
+            LogSquad();
+            Debug.Log($"[Noise] botsHeard={BotBrawlStats.NoiseHeardBots} investigated={BotBrawlStats.NoiseInvestigatedBots} share={(BotBrawlStats.NoiseHeardBots > 0 ? (float)BotBrawlStats.NoiseInvestigatedBots / BotBrawlStats.NoiseHeardBots : 0f):P0}");
             Debug.Log($"[Cover] cycles={BotBrawlStats.PeekCycles} exposeEpisodes={BotBrawlStats.ExposeEpisodes} cutShort={BotBrawlStats.ExposeCutShort} avgExpose={(BotBrawlStats.ExposeEpisodes > 0 ? BotBrawlStats.ExposeSeconds / BotBrawlStats.ExposeEpisodes : 0f):F2}s hideShare={(BotBrawlStats.EngagedSeconds > 0f ? BotBrawlStats.HideSeconds / BotBrawlStats.EngagedSeconds : 0f):P0} searches={BotBrawlStats.CoverSearches}");
             Debug.Log($"[Brawl] unarmedEngages={BotBrawlStats.UnarmedEngages} fistFights={BotBrawlStats.FistFights} fleeStarts={BotBrawlStats.FleeStarts} fleeBroke={BotBrawlStats.FleeBroke} fleeCaught={BotBrawlStats.FleeCaught} corpseTrips={BotBrawlStats.CorpseTrips} arrived={BotBrawlStats.CorpseArrived} gaveUp={BotBrawlStats.CorpseGaveUp} retreatShare={BotBrawlStats.StateShare((int)BotState.Retreat):P1} engageShare={BotBrawlStats.StateShare((int)BotState.Engage):P1} roamShare={BotBrawlStats.StateShare((int)BotState.Roam):P1} lootShare={BotBrawlStats.StateShare((int)BotState.Loot):P1}");
             File.AppendAllText(_csv, line + "\n");

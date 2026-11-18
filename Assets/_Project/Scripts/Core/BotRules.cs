@@ -62,6 +62,7 @@ namespace Game.Core
         // ---- Remembering and wandering ----
         public float MemorySeconds = 8f;          // goes to where a lost target was last seen for this long
         public float InvestigateSeconds = 12f;    // goes to a heard noise for this long
+        public float InvestigateChance = 0.7f;    // share of bots that go to noises at all (each bot's own fixed roll, ADR-312; levels: 0.4 / 0.7 / 1.0)
         public float ArriveMeters = 2.5f;
         public float RoamMinMeters = 20f;         // prefers the next point of interest at least this far away
         public float RoamRadius = 35f;            // without points of interest: wander within this
