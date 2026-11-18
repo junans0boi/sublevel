@@ -105,5 +105,20 @@ namespace Game.Tests
             Assert.AreEqual(4f, obelisk, 1e-5f);
             Assert.Less(ordo, obelisk * 0.2f);
         }
+
+        [Test]
+        public void StaggerWander_IsZeroWithoutShake_AndBoundedWithIt()
+        {
+            StaggerWander.Offset(0f, 3.3, out float p0, out float y0);
+            Assert.AreEqual(0f, p0); Assert.AreEqual(0f, y0);
+            float maxP = 0f, maxY = 0f;
+            for (double t = 0; t < 5; t += 0.01)
+            {
+                StaggerWander.Offset(2f, t, out float p, out float y);
+                maxP = System.Math.Max(maxP, System.Math.Abs(p)); maxY = System.Math.Max(maxY, System.Math.Abs(y));
+            }
+            Assert.LessOrEqual(maxP, 2f); Assert.LessOrEqual(maxY, 2f);
+            Assert.Greater(maxP, 1.5f); Assert.Greater(maxY, 1.5f);
+        }
     }
 }

@@ -35,6 +35,18 @@ namespace Game.Core
         }
     }
 
+    // The aim wander a stagger shows on the owner's view (#275): smooth, never beyond +-shakeDeg, zero without a stagger.
+    public static class StaggerWander
+    {
+        public static void Offset(float shakeDeg, double time, out float pitch, out float yaw)
+        {
+            pitch = yaw = 0f;
+            if (shakeDeg <= 0f) return;
+            pitch = shakeDeg * (float)Math.Sin(time * 9.1);
+            yaw = shakeDeg * (float)Math.Sin(time * 7.3 + 1.7);
+        }
+    }
+
     // One victim's current stagger. Hits never add up: a stronger hit replaces the running one, a weaker one is ignored
     // while the stronger lasts, an equal one only renews the time. Server-side: the server owns movement and aim.
     public class StaggerState

@@ -776,13 +776,14 @@ namespace Game.Gameplay
         {
             if (Camera == null) return;
             var aimRules = _rules.Aim;
+            StaggerWander.Offset(Combatant.StaggerShakeDegOf(_combatant), Time.timeAsDouble, out float wanderPitch, out float wanderYaw);
             var view = new ViewState
             {
                 Aim = _aim.Mode,
                 Lean = _combatant.LeanAmount,
                 LeanRollDeg = Rig.IsEyeView(_aim.Mode) ? _rules.Lean.EyeViewRollDeg : _rules.Lean.ThirdPersonRollDeg,
-                RecoilPitch = Mathf.Min(_recoil.Pitch + ScopeControl.SwayPitch, MaxViewPitch - ViewPitch), // never past straight up
-                RecoilYaw = _recoil.Yaw + ScopeControl.SwayYaw,
+                RecoilPitch = Mathf.Min(_recoil.Pitch + ScopeControl.SwayPitch + wanderPitch, MaxViewPitch - ViewPitch), // never past straight up
+                RecoilYaw = _recoil.Yaw + ScopeControl.SwayYaw + wanderYaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
             };
             var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();

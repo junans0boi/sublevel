@@ -246,17 +246,23 @@ namespace Game.Gameplay
         // "4.5" / "11": health per second, one decimal at most.
         public static string DpsText(float dps) => dps.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
-        // "F — 열쇠로 통로 열기 (열쇠 N개)" next to a locked barrier while holding a key.
+        // The key elevator prompt under the banner while standing in a station: insert, close, choose.
         void UpdatePrompt()
         {
-            int key = 0;
+            var me = Combatant.LocalPlayer;
             var keys = KeyHolder.Local;
-            if (key == _promptKey) return;
-            _promptKey = key;
-            bool visible = key != 0;
-            _prompt = visible ? "승강기 열쇠 " + keys.Keys.Value + "개" : "";
+            int station = ElevatorPanel.LocalStation(me);
+            string text = "";
+            if (station >= 0 && _director.Ready)
+            {
+                KeyElevatorNet.LastStatus.TryGetValue(station, out var st);
+                text = PollutionHud.KeyPrompt((KeyPhase)st.Phase, st.Holder == me.ObjectId, keys != null ? keys.Keys.Value : 0, st.Left);
+            }
+            if (text == _prompt) return;
+            _prompt = text;
+            bool visible = text.Length > 0;
             if (_promptBox.activeSelf != visible) _promptBox.SetActive(visible);
-            if (visible) _promptText.text = _prompt;
+            if (visible) _promptText.text = text;
         }
 
         void Build()
