@@ -84,6 +84,12 @@ namespace Game.Net
         readonly Dictionary<int, float> _serverMeters = new Dictionary<int, float>();
         readonly Dictionary<int, Vector3> _serverLastAt = new Dictionary<int, Vector3>();
         float _serverStart;
+        // For the results sent to the backend (#390): what a death or the end decided, and which account a player is.
+        readonly Dictionary<int, int> _serverPlacement = new Dictionary<int, int>();
+        readonly Dictionary<int, float> _serverDiedAt = new Dictionary<int, float>();
+        readonly Dictionary<int, long> _serverAccount = new Dictionary<int, long>();
+        // Server: the match was decided; the people with an account and how they placed (once per match).
+        public static event Action<IReadOnlyList<PlayerResult>> ServerResults;
         int _serverWinnerId = -1;
         string _serverWinnerName = "";
 
@@ -162,6 +168,7 @@ namespace Game.Net
         {
             Instance = null;
             KillPosted = null;
+            ServerResults = null;
             Changed = null;
         }
 
@@ -261,6 +268,9 @@ namespace Game.Net
             if (_serverNames.TryGetValue(c.ObjectId, out string name)) return name;
             if (c.IsPlayer)
             {
+                var keeper = MatchDirector.Instance != null ? MatchDirector.Instance.Sessions : null;
+                string token = keeper != null && c.Owner != null && c.Owner.IsValid ? keeper.TokenOf(c.Owner.ClientId) : null;
+                if (token != null && LobbyNet.AccountsBySession.TryGetValue(token, out long account)) _serverAccount[c.ObjectId] = account;
                 _serverPlayers++;
                 name = _serverPlayers == 1 ? PlayerName : PlayerName + " " + _serverPlayers;
             }
@@ -304,6 +314,8 @@ namespace Game.Net
                 Alive = _serverAlive,
                 Total = _serverTotal,
             };
+            _serverDiedAt[victim.ObjectId] = Time.time;
+            if (entry.VictimPlacement > 0) _serverPlacement[victim.ObjectId] = entry.VictimPlacement;
             // The numbers first, so the screen that the entry opens has them.
             ServerSendStats(victim);
             ServerBroadcast(entry);
@@ -317,8 +329,26 @@ namespace Game.Net
                 var all = Combatant.All;
                 for (int i = 0; i < all.Count; i++)
                     if (all[i] != null && all[i].IsServerInitialized && !_serverDead.Contains(all[i].ObjectId)) ServerSendStats(all[i]);
+                ServerPostResults();
             }
             ServerSendStatus(null);
+        }
+
+        void ServerPostResults()
+        {
+            if (ServerResults == null) return;
+            var rows = new List<PlayerResult>();
+            foreach (var pair in _serverAccount)
+            {
+                int id = pair.Key;
+                int rank = _serverPlacement.TryGetValue(id, out int own) ? own : 0;
+                if (rank == 0 && !_serverDead.Contains(id)) rank = 1; // still alive when it was decided
+                if (rank == 0) rank = ServerTeamPlacementOfId(id);
+                _serverKills.TryGetValue(id, out int kills);
+                float seconds = (_serverDiedAt.TryGetValue(id, out float died) ? died : Time.time) - _serverStart;
+                rows.Add(new PlayerResult(pair.Value, rank, kills, seconds));
+            }
+            if (rows.Count > 0) ServerResults(rows);
         }
 
         void OnServerDamaged(Combatant victim, DamageInfo info, float applied)

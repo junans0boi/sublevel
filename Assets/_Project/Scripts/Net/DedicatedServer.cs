@@ -70,6 +70,7 @@ namespace Game.Net
             if (_options.PerfQuick > 1f) PollutionDirector.RulesOverride = PollutionRules.QuickMatch(_options.PerfQuick);
             if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;
+            ResultsReporter.Start();
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
             Debug.Log($"[Server] starting: port {_options.Port}, bots {(_options.Bots < 0 ? "auto" : _options.Bots.ToString())}, " +
@@ -83,8 +84,11 @@ namespace Game.Net
 
         float _lobbyOpenedAt;
 
+        float _nextPump;
+
         void Update()
         {
+            if (Time.unscaledTime >= _nextPump) { _nextPump = Time.unscaledTime + 5f; ResultsReporter.Pump(); }
             switch (_state)
             {
                 case StateKind.Lobby: TickLobby(); break;
