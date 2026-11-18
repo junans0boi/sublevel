@@ -13,7 +13,14 @@ namespace Game.Net
         {
             LobbyNet.ServerTokenSecret = Environment.GetEnvironmentVariable("SUBLEVEL_TOKEN_SECRET");
             var token = Environment.GetEnvironmentVariable("SUBLEVEL_GAME_TOKEN");
-            if (!string.IsNullOrEmpty(token) && GameToken.Peek(token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var c))
+            if (!string.IsNullOrEmpty(token) && token.StartsWith("sg_", StringComparison.Ordinal))
+            {
+                // The launcher's scoped API token: the nickname comes from /api/me, the join token is fetched per join (LobbyNet.Update).
+                LobbyNet.ApiToken = token;
+                LobbyNet.Backend = HttpBackend.FromEnvironment();
+                LobbyNet.Backend.Me().ContinueWith(t => { if (!t.IsFaulted && t.Result.Ok) LobbyNet.AuthNickname = t.Result.Value.nickname; });
+            }
+            else if (!string.IsNullOrEmpty(token) && GameToken.Peek(token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var c))
             {
                 LobbyNet.AuthToken = token;
                 LobbyNet.AuthNickname = c.Nickname;
