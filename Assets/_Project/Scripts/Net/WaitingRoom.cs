@@ -15,6 +15,7 @@ namespace Game.Net
         public int People;
         public int Total;     // people + bots on the island
         public int Target;    // the match's participants
+        public float BungeeBest; // the highest rebound of this room so far in metres (0 = none yet, #419)
     }
 
     // The waiting phase of a dedicated server's match (ADR-382, #415): people spawn on the island (World scene), the countdown
@@ -88,6 +89,7 @@ namespace Game.Net
             }
         }
 
+        public float BungeeBest { get; set; }   // set by the bungee (#419), shown on the board
         public bool Open => _flow != null && _flow.Phase == WaitingPhase.Waiting;
         public WaitingFlow Flow => _flow;
 
@@ -160,7 +162,7 @@ namespace Game.Net
             var rules = MatchRules.Current ?? new MatchRules();
             _nm.ServerManager.Broadcast(new WaitingBroadcast
             {
-                Active = active, SecondsLeft = active ? _flow.Last.SecondsLeft : 0f, People = _flow.People, Total = _flow.Total, Target = rules.Participants,
+                Active = active, SecondsLeft = active ? _flow.Last.SecondsLeft : 0f, People = _flow.People, Total = _flow.Total, Target = rules.Participants, BungeeBest = BungeeBest,
             }, true, Channel.Unreliable);
         }
 
