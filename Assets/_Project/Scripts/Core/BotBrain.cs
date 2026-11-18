@@ -62,6 +62,11 @@ namespace Game.Core
         public bool FarmActive;        // farming (ADR-294): walk the building's loot points
         public BotVec FarmTarget;
 
+        public BotWeaponStyle WeaponStyle;  // of the weapon in hand (ADR-311)
+        public bool CoverValid;        // a hiding place with a way to shoot again was found (the controller looks for it)
+        public BotVec CoverHide, CoverPeekA, CoverPeekB;
+        public bool CoverPeekAValid, CoverPeekBValid;
+
         public bool EnemyArmed;        // the one in sight holds a gun (ADR-310)
         public bool LootIsWeapon;      // the pickup in view is a weapon
         public bool CorpseActive;      // go to where somebody fell, for what dropped there
@@ -137,6 +142,16 @@ namespace Game.Core
         double _healReadyAt = -1;
         double _retreatSince = -1;
         double _standUntil;
+
+        // The peek cycle (ADR-311).
+        PeekPhase _phase;
+        double _phaseSince, _phaseUntil, _peekDeadline;
+        int _side = 1;
+        public PeekPhase Phase => _phase;
+        public int PeekCycles { get; private set; }
+        public int ExposeEpisodes { get; private set; }
+        public int ExposeCutShort { get; private set; }
+        public double ExposeSeconds { get; private set; }
 
         bool _hasRoam;
         BotVec _roam;
@@ -275,6 +290,8 @@ namespace Game.Core
                     intent.SwitchWeapon = true;
                     return intent;
                 }
+                // The peek cycle (ADR-311): out in the open for a while, behind cover to reload and heal, out again on the other side.
+                if (UseCycle(p) && Peek(p, now, true, ref intent)) return intent;
                 if (p.Reloading || p.Mag <= 0)
                 {
                     // `armed` with an empty magazine means there are rounds in reserve.
@@ -291,7 +308,7 @@ namespace Game.Core
                     return intent;
                 }
 
-                float hold = Math.Min(p.WeaponRange * rules.EngageRangeFactor, rules.PreferredMeters);
+                float hold = BotWeapons.PreferredMeters(p.WeaponStyle, p.WeaponRange, rules);
                 // Closes in until well inside, so it does not start and stop at the edge.
                 _closing = _closing ? distance > hold * rules.HoldInnerFactor : distance > hold;
                 if (_closing)
@@ -338,6 +355,12 @@ namespace Game.Core
                 else if (p.Mag <= 0 && p.Reserve <= 0 && p.OtherSlotUsable) intent.SwitchWeapon = true;
             }
             else if (!p.HasWeapon && p.OtherSlotUsable) intent.SwitchWeapon = true;
+
+            if (_phase != PeekPhase.None)
+            {
+                if (recentThreat && armed && UseCycle(p) && Peek(p, now, false, ref intent)) return intent;
+                if (!(recentThreat && armed && UseCycle(p))) EndPeek(now);
+            }
 
             if (p.Medkits > 0 && p.HealthFraction < rules.HealBelowFraction)
             {
@@ -419,6 +442,77 @@ namespace Game.Core
             intent.LookTarget = where;
             intent.Aim = true;
             return intent;
+        }
+
+        bool UseCycle(in BotPercept p) => _rules.PeekCycle && p.CoverValid && BotWeapons.UsesCover(p.WeaponStyle);
+
+        void EnterExpose(double now) { _phase = PeekPhase.Expose; _phaseSince = now; _phaseUntil = now + Between(_rules.PeekExposeMin, _rules.PeekExposeMax); }
+
+        void EnterHide(double now, bool byTimer = true)
+        {
+            // Only an exposure that ran its time counts toward the average; one cut short (magazine empty) is counted apart.
+            if (_phase == PeekPhase.Expose) { if (byTimer) { ExposeSeconds += now - _phaseSince; ExposeEpisodes++; } else ExposeCutShort++; }
+            _phase = PeekPhase.Hide; _phaseSince = now; _phaseUntil = now + Between(_rules.PeekHideMin, _rules.PeekHideMax);
+        }
+
+        void EnterPeek(double now)
+        {
+            _phase = PeekPhase.Peek; _phaseSince = now; _peekDeadline = now + _rules.PeekMaxSeconds;
+            if (_rules.PeekAlternate) _side = -_side;
+            PeekCycles++;
+        }
+
+        // Leaving the cycle (the enemy is gone or dead): an exposure cut off like that is not counted, only the ones that ended in hiding.
+        void EndPeek(double now) => _phase = PeekPhase.None;
+
+        // Steps the cycle. True when it decided the intent (hiding or coming out); false leaves the rest of the brain to fire or look around.
+        bool Peek(in BotPercept p, double now, bool visible, ref BotIntent intent)
+        {
+            var rules = _rules;
+            switch (_phase)
+            {
+                case PeekPhase.None:
+                    if (!visible) return false;
+                    EnterExpose(now);
+                    return false;
+                case PeekPhase.Expose:
+                    // Its time is up whether or not the enemy is in sight; an empty magazine matters only with one in sight.
+                    if (now >= _phaseUntil || (visible && (p.Mag <= 0 || p.Reloading))) { EnterHide(now, now >= _phaseUntil); goto case PeekPhase.Hide; }
+                    return false;
+                case PeekPhase.Hide:
+                {
+                    bool atHide = BotVec.PlanarDistance(p.Position, p.CoverHide) <= 1.5f;
+                    // Hurt and at the hiding place: the heal rule of the brain takes over until it is done.
+                    if (!visible && atHide && p.Medkits > 0 && p.HealthFraction < rules.HealBelowFraction) return false;
+                    intent.State = BotState.Engage;
+                    intent.Move = !atHide;
+                    intent.MoveTarget = p.CoverHide;
+                    intent.Sprint = !atHide;
+                    intent.Crouch = atHide;
+                    intent.Look = true;
+                    intent.LookTarget = _lastSeen;
+                    if (atHide && !p.Reloading && p.Reserve > 0 && (p.Mag <= 0 || p.Mag < p.MagSize * rules.ReloadBelowFraction)) intent.Reload = true;
+                    if (atHide && now >= _phaseUntil && !p.Reloading && p.Mag > 0) EnterPeek(now);
+                    else if (!atHide && now - _phaseSince > rules.PeekHideMax + 3f) EnterPeek(now);   // never got there: tries the other way
+                    return true;
+                }
+                default: // Peek
+                {
+                    if (visible) { EnterExpose(now); return false; }
+                    if (!p.CoverPeekAValid && !p.CoverPeekBValid) { EndPeek(now); return false; }
+                    // The side it is due on, or the other one when only that one has a line to the enemy.
+                    bool useA = _side > 0 ? (p.CoverPeekAValid || !p.CoverPeekBValid) : (!p.CoverPeekBValid && p.CoverPeekAValid);
+                    var target = useA ? p.CoverPeekA : p.CoverPeekB;
+                    if (now > _peekDeadline) { EnterHide(now); return true; }
+                    intent.State = BotState.Engage;
+                    intent.Move = true;
+                    intent.MoveTarget = target;
+                    intent.Aim = true;
+                    intent.Look = true;
+                    intent.LookTarget = _lastSeen;
+                    return true;
+                }
+            }
         }
 
         void PickRoam(BotVec from, double now)

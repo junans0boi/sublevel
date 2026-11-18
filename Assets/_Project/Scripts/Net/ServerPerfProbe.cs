@@ -122,6 +122,7 @@ namespace Game.Net
             for (int k = 0; k < BotPerf.Slots; k++) { line += $",{_bot[k].Mean():F3},{_bot[k].Percentile(99):F3}"; _bot[k].Clear(); }
             Debug.Log("[Perf] " + line);
             LogFarm(now);
+            Debug.Log($"[Cover] cycles={BotBrawlStats.PeekCycles} exposeEpisodes={BotBrawlStats.ExposeEpisodes} cutShort={BotBrawlStats.ExposeCutShort} avgExpose={(BotBrawlStats.ExposeEpisodes > 0 ? BotBrawlStats.ExposeSeconds / BotBrawlStats.ExposeEpisodes : 0f):F2}s hideShare={(BotBrawlStats.EngagedSeconds > 0f ? BotBrawlStats.HideSeconds / BotBrawlStats.EngagedSeconds : 0f):P0} searches={BotBrawlStats.CoverSearches}");
             Debug.Log($"[Brawl] unarmedEngages={BotBrawlStats.UnarmedEngages} fistFights={BotBrawlStats.FistFights} fleeStarts={BotBrawlStats.FleeStarts} fleeBroke={BotBrawlStats.FleeBroke} fleeCaught={BotBrawlStats.FleeCaught} corpseTrips={BotBrawlStats.CorpseTrips} arrived={BotBrawlStats.CorpseArrived} gaveUp={BotBrawlStats.CorpseGaveUp} retreatShare={BotBrawlStats.StateShare((int)BotState.Retreat):P1} engageShare={BotBrawlStats.StateShare((int)BotState.Engage):P1} roamShare={BotBrawlStats.StateShare((int)BotState.Roam):P1} lootShare={BotBrawlStats.StateShare((int)BotState.Loot):P1}");
             File.AppendAllText(_csv, line + "\n");
             _frames.Clear();

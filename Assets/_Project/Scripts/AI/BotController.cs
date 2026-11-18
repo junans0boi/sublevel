@@ -296,8 +296,10 @@ namespace Game.AI
             FillSelf();
             TickFarm(now);
             TickBrawl(now);
+            TickCover(now);
             _intent = _brain.Think(_percept);
             TallyBrawl(now);
+            TallyCover();
             // Teams (ADR-072): revive a knocked teammate, keep near the leader.
             ApplyTeam(ref _intent, now);
             // Items (ADR-116): heal, boost, throw; blind and burning bodies react.
@@ -567,6 +569,7 @@ namespace Game.AI
             _percept.WeaponRange = weapon != null ? weapon.Range : 0f;
             _percept.Reloading = _self.Reloading.Value;
             _percept.Medkits = HealCount;
+            _percept.WeaponStyle = weapon != null ? BotWeapons.StyleOf((int)weapon.Category, (int)weapon.Ammo, weapon.Auto, weapon.Damage, weapon.FireInterval) : BotWeaponStyle.Rifle;
 
             int otherSlot = _self.OtherWeaponSlot();
             var other = GameData.Weapons.Find(otherSlot >= 0 ? _self.WeaponInSlot(otherSlot) : 0);

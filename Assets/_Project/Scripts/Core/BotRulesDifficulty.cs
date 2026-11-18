@@ -42,6 +42,10 @@ namespace Game.Core
             r.BurstPauseMin *= pause;
             r.BurstPauseMax *= pause;
             r.ThrowIntervalSeconds *= hard ? 0.7f : 1.5f;
+            // Cover (ADR-311): the hard bot is out for a shorter time and swaps sides; the easy one waits long behind cover and comes out the same side.
+            r.PeekExposeMin *= hard ? 0.75f : 1f; r.PeekExposeMax *= hard ? 0.85f : 1f;
+            r.PeekHideMin *= hard ? 0.7f : 1.6f; r.PeekHideMax *= hard ? 0.7f : 1.8f;
+            r.PeekAlternate = hard;
             // Farming (ADR-294): the easy bot farms longest and is told where a weapon is; the hard one kits itself out with armour.
             r.FarmSeconds *= hard ? 180f / 210f : 240f / 210f;
             r.FarmHint = !hard;
