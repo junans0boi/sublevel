@@ -57,9 +57,7 @@ namespace Game.Core
             }
             plan.Bots = BotFill.Plan(plan.Humans, rules.Participants, rules.MinBots);
             // Bot teams: as many as the team size needs, as even as possible (49 bots in fours: 10 teams of 4 and 3 of 3).
-            int botTeams = (plan.Bots + size - 1) / size;
-            for (int i = 0; i < botTeams; i++)
-                plan.Teams.Add(new PlannedTeam { PartyId = -1, Size = plan.Bots / botTeams + (i < plan.Bots % botTeams ? 1 : 0) });
+            foreach (int n in TeamLayout.BotTeamSizes(plan.Bots, size)) plan.Teams.Add(new PlannedTeam { PartyId = -1, Size = n });
             return plan;
         }
     }

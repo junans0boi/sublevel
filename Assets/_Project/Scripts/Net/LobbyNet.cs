@@ -27,18 +27,39 @@ namespace Game.Net
     // A client asks for a place in the matchmaking queue (ADR-258): the mode and how many people its party has (1..team size).
     public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; }
     public struct LobbyQueueCancel : IBroadcast { }
-    public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; public byte Mode; }
+    public struct LobbyStart : IBroadcast
+    {
+        public ushort MatchPort;
+        public int Players;
+        public int Bots;
+        public byte Mode;
+        public int[] PartySizes;
+
+        public static LobbyStart FromPlan(ushort matchPort, TeamMode mode, MatchPlan plan)
+        {
+            var partySizes = new System.Collections.Generic.List<int>();
+            foreach (var team in plan.Teams) if (!team.IsBot) partySizes.Add(team.Size);
+            return new LobbyStart
+            {
+                MatchPort = matchPort,
+                Players = plan.Humans,
+                Bots = plan.Bots,
+                Mode = (byte)mode,
+                PartySizes = partySizes.ToArray()
+            };
+        }
+    }
 
     // The room before a match (#160, ADR-124): its own small NetworkManager (a lobby needs no spawned objects, only
     // broadcasts), separate from the match's. The host runs server + client, a guest only a client. Joining checks the
-    // version and the room's size; the host's start tells everyone the port the match will listen on and how many
-    // people and bots it has, and the lobby is then shut down (Shutdown) while the match scene loads.
+    // version and the room's size; the host's start tells everyone the port, roster totals, and queued party sizes,
+    // then the lobby shuts down while the match scene loads.
     public sealed class LobbyNet : MonoBehaviour
     {
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 1;
+        public const int Protocol = 2; // LobbyStart now carries queue party sizes.
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
@@ -401,7 +422,7 @@ namespace Game.Net
             if (plan.Humans == 0) return;
             _matchStarted = true;
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
-            var start = new LobbyStart { MatchPort = matchPort, Players = plan.Humans, Bots = plan.Bots, Mode = (byte)_queueMode };
+            var start = LobbyStart.FromPlan(matchPort, _queueMode, plan);
             foreach (int id in plan.Placed)
                 if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
             StartInfo = start;
