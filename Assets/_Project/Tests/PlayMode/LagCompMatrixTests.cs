@@ -125,6 +125,14 @@ namespace Game.Tests
             return n - 1; // this editor itself
         }
 
+        // Test-only: how many goal packets the copy's NetworkTransform holds (-1 if unreadable).
+        static int QueueDepth(Component copy)
+        {
+            var nt = copy.GetComponent<FishNet.Component.Transforming.NetworkTransform>();
+            var f = typeof(FishNet.Component.Transforming.NetworkTransform).GetField("_goalDataQueue", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            return nt != null && f != null && f.GetValue(nt) is System.Collections.ICollection q ? q.Count : -1;
+        }
+
         [UnityTest, Timeout(7200000)]
         public IEnumerator Matrix()
         {
@@ -150,6 +158,12 @@ namespace Game.Tests
             onServer.ServerDamageFilter = _ => 0f;
             foreach (var name in new[] { "Cover10", "Cover11" }) { var cover = GameObject.Find(name); if (cover != null) cover.SetActive(false); } // 35 m lane
             yield return NetHarness.WaitUntil(() => a.Player.ActiveWeaponId == Rifle, "weapon in hand", Debug.Log, 10f);
+            // Experiment knob: the copy's interpolation (default 2); the model's view delay follows it.
+            if (ushort.TryParse(Environment.GetEnvironmentVariable("LAGCOMP_INTERP"), out ushort interp) && interp != LagComp.InterpolationTicks)
+            {
+                seen.GetComponent<FishNet.Component.Transforming.NetworkTransform>().SetInterpolation(interp);
+                if (model == "after") LagComp.ViewDelayTicks = interp + LagComp.ReplicaExtraTicks; else LagComp.ViewDelayTicks = interp;
+            }
 
             // Where each scenario stands: (shooter, target lane).
             var near = (shooter: new Vector3(-26f, 0.1f, -2f), lane: new Vector3(-17f, 0.1f, -2f));
@@ -169,7 +183,7 @@ namespace Game.Tests
             var history = _net.HostPlayer.GetComponent<PositionRecorder>().History;
             double probeNow = 0, probeAt = 0; int probeCalls = 0;
             LagCompensation.Probe = (shooter, now, at) => { if (shooter != onServer) return; probeNow = now; probeAt = at; probeCalls++; };
-            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms\n");
+            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms,queue_depth\n");
             string curCond = "", curScenario = ""; int curRep = 0, curShot = 0;
             bool resolved = false, hit = false;
             void On(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Launch) return; resolved = true; hit = s.Victim != null; }
@@ -181,6 +195,7 @@ namespace Game.Tests
                 if (a.Player.ActiveMag < 3) { a.Player.CmdReload(); yield return Frames(3.5f); }
                 resolved = false; probeCalls = 0;
                 var copyPos = seen.transform.position;
+                int depth = QueueDepth(seen); // hypothesis: the copy's interpolation queue sits at 2 or 3 per movement start
                 var aim = copyPos + Vector3.up * 0.9f;
                 double callT = Time.timeAsDouble;
                 a.Player.CmdFire((aim - a.Player.EyePosition).normalized, a.Player.ViewTick);
@@ -191,7 +206,7 @@ namespace Game.Tests
                 if (probeCalls > 0 && TimeShownBy(history, copyPos, out double tShown))
                     extra = $",{Inv((probeNow - probeAt) * 1000)},{Inv((callT - tShown) * 1000)},{Inv((probeAt - tShown) * 1000)}";
                 else if (probeCalls > 0) extra = $",{Inv((probeNow - probeAt) * 1000)},,";
-                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra));
+                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra) + "," + depth);
                 done(resolved && hit);
             }
 
