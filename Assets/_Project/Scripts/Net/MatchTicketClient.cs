@@ -51,7 +51,7 @@ namespace Game.Net
         {
             _busy = true;
             _nextPoll = now + TicketRules.PollSeconds;
-            call.ContinueWith(t => _done.Enqueue(() => { _busy = false; apply(t.IsFaulted ? ApiResult<TicketDto>.Fail(0, "") : t.Result); }));
+            call.ContinueWith(t => _done.Enqueue(() => { _busy = false; apply(t.IsFaulted ? ApiResult<TicketDto>.Fail(0, "") : t.Result); }), TaskContinuationOptions.ExecuteSynchronously);
         }
 
         void Apply(ApiResult<TicketDto> r)

@@ -50,7 +50,7 @@ namespace Game.Net
                 _busy &= ~bit;
                 if (t.IsFaulted || !t.Result.Ok) { if (!t.IsFaulted) LastError = TicketRules.ErrorText(t.Result.Status, t.Result.Error); return; }
                 apply(t.Result); Changed?.Invoke();
-            }));
+            }), TaskContinuationOptions.ExecuteSynchronously);
         }
 
         // Actions: run the call, show the backend's reason when it fails, and refresh everything at the next Tick.
@@ -61,7 +61,7 @@ namespace Game.Net
                 LastError = t.IsFaulted ? TicketRules.ErrorText(0, "") : t.Result.Ok ? "" : SocialRules.ErrorText(t.Result.Status, t.Result.Error);
                 _nextParty = _nextFriends = 0;
                 Changed?.Invoke();
-            }));
+            }), TaskContinuationOptions.ExecuteSynchronously);
         }
 
         public void AddFriend(string nickname) => Act(_b.AddFriend(nickname));
