@@ -115,6 +115,29 @@ namespace Game.Tests
             Assert.IsTrue(Plan.Roads.Where(r => r.Bridge != null).All(r => r.Kind != RoadKind.Path || !r.Bridge.Any(b => b)), "dirt tracks ford, they do not get decks");
         }
 
+        // S10 T3 (#345, ADR-199): a car can use every bridge and the ford.
+        [Test]
+        public void Bridges_are_wide_enough_for_a_car_and_the_ford_is_shallow()
+        {
+            foreach (var b in Plan.Bridges) Assert.GreaterOrEqual(Plan.Roads[b.Road].Width, 8f, b.Name + " width");
+            foreach (var road in Plan.Roads.Where(r => r.Ford != null && r.Ford.Any(f => f)))
+                for (int p = 0; p < road.X.Length; p++)
+                {
+                    if (p >= road.Ford.Length || !road.Ford[p]) continue;
+                    foreach (var river in Plan.Rivers)
+                    {
+                        int near = 0; float best = float.MaxValue;
+                        for (int i = 0; i < river.X.Length; i++)
+                        {
+                            float dx = river.X[i] - road.X[p], dz = river.Z[i] - road.Z[p], d = dx * dx + dz * dz;
+                            if (d < best) { best = d; near = i; }
+                        }
+                        if (best < river.HalfWidth[near] * river.HalfWidth[near])
+                            Assert.LessOrEqual(river.Y[near] - road.Y[p], 0.5f, $"{road.Name} ford depth at point {p}");
+                    }
+                }
+        }
+
         [Test]
         public void Five_vehicle_passes_and_three_foot_passes()
         {

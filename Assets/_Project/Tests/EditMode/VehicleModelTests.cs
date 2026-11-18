@@ -33,6 +33,17 @@ namespace Game.Tests
             Assert.AreEqual(rules.SpringDamper * 1.5f, tuned.SpringDamper, 1e-2f);
         }
 
+        // #350: the model's mass (DirtBike 190) is what the physics uses; the type's 230 is only the default of a model without one.
+        [Test]
+        public void Fit_DirtBike190_WinsOverTheMotorcycleTypeMass()
+        {
+            var type = VehicleRules.MotorcycleDefaults();
+            Assert.AreEqual(230f, type.MassKg);
+            var tuned = new VehicleFit { MassKg = 190f }.Apply(type);
+            Assert.AreEqual(190f, tuned.MassKg);
+            Assert.AreEqual(Vehicles.RestLength(type), Vehicles.RestLength(tuned), 1e-5f, "springs scaled with the mass");
+        }
+
         [Test]
         public void Fit_LeavesTheSharedRulesUntouched()
         {
