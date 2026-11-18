@@ -21,8 +21,10 @@ namespace Game.Core
         public int MaxPlayers;      // 0 = rules.json
         public int Participants;    // 0 = rules.json
         public float GatherX, GatherZ; // --perf-gather X,Z: where the P3 crowd meets
-        public int PerfSeed = -1;      // --perf-seed N: the match, deployment and lockdown seed (3-seed statistics); -1 = the scene's
-        public int PerfLevel = -1;     // --perf-level easy|normal|hard: every bot at that level (0..2); -1 = the settings' mix
+        public bool HasPerfSeed;
+        public int PerfSeed;           // --perf-seed N: the match, deployment and lockdown seed (3-seed statistics); HasPerfSeed false = the scene's
+        public bool HasPerfLevel;
+        public int PerfLevel;          // --perf-level easy|normal|hard: every bot at that level (0..2); HasPerfLevel false = the settings' mix
         public bool PerfSquad;         // --perf-squad: the bots-only match is a squad match (teams of four), to measure how teams move
         public bool PerfKeys;          // --perf-keys: every bot starts with one key (measures the key use, not the key loot)
         public float PerfQuick;        // --perf-quick N: pollution table N times faster (PollutionRules.QuickMatch), 0 = real time
@@ -79,8 +81,10 @@ namespace Game.Core
                         break;
                     case "--perf-seed":
                         if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out o.PerfSeed)) { o.Error = "--perf-seed must be 0 or more, got '" + v + "'"; return o; }
+                        o.HasPerfSeed = true;
                         break;
                     case "--perf-level":
+                        o.HasPerfLevel = true;
                         switch (v.Trim().ToLowerInvariant())
                         {
                             case "easy": o.PerfLevel = 0; break;

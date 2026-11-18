@@ -34,7 +34,7 @@ namespace Game.Tests
             Assert.IsNull(o.Error);
             Assert.AreEqual(2, o.PerfLevel); Assert.AreEqual(2, o.PerfSeed); Assert.IsTrue(o.PerfSquad);
             var none = ServerArgs.Parse(new[] { "--dedicated" });
-            Assert.AreEqual(-1, none.PerfLevel); Assert.AreEqual(-1, none.PerfSeed);
+            Assert.IsFalse(none.HasPerfLevel); Assert.IsFalse(none.HasPerfSeed);
             Assert.IsNotNull(ServerArgs.Parse(new[] { "--perf-level", "brutal" }).Error);
             Assert.IsNotNull(ServerArgs.Parse(new[] { "--perf-seed", "x" }).Error);
         }
