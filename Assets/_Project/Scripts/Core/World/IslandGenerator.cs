@@ -26,6 +26,7 @@ namespace Game.Core
     public static class IslandGenerator
     {
         const float RoadStep = 6f;
+        const int FordCenterPointSpacing = 3; // Samples are 6 m apart, so every point stays within 9 m of a centre and the 15 m flat core
         const float Causeway = 0.8f;
         const float DeckClearance = 1.3f;      // deck above the water
         const float AvenueExtension = 12f;     // the avenue runs this far past the box so the station beside its end is within reach of a road point
@@ -314,10 +315,24 @@ namespace Game.Core
                 var s = shapes[k];
                 for (int r = 0; r < isl.Rivers.Length; r++)
                 {
-                    int first = -1, last = -1;
-                    for (int i = 0; i < s.Length / 2; i++)
-                        if (terrain.River(r, s[i * 2], s[i * 2 + 1], out float d, out _, out float hw, out _, out _) && d < hw + Margin) { if (first < 0) first = i; last = i; }
-                    if (first >= 0) terrain.AddFord(s[(first + last) / 2 * 2], s[(first + last) / 2 * 2 + 1]);
+                    int runStart = -1;
+                    for (int i = 0; i <= s.Length / 2; i++)
+                    {
+                        bool wet = i < s.Length / 2 && terrain.River(r, s[i * 2], s[i * 2 + 1], out float d, out _, out float hw, out _, out _) && d < hw + Margin;
+                        if (wet)
+                        {
+                            if (runStart < 0) runStart = i;
+                        }
+                        else if (runStart >= 0)
+                        {
+                            // Keep disconnected crossings separate: one path can intersect a winding river more than once.
+                            int runEnd = i - 1;
+                            for (int center = runStart; center < runEnd; center += FordCenterPointSpacing)
+                                terrain.AddFord(s[center * 2], s[center * 2 + 1]);
+                            terrain.AddFord(s[runEnd * 2], s[runEnd * 2 + 1]);
+                            runStart = -1;
+                        }
+                    }
                 }
             }
 

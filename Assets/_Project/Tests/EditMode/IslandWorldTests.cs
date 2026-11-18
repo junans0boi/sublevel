@@ -119,6 +119,7 @@ namespace Game.Tests
         [Test]
         public void Bridges_are_wide_enough_for_a_car_and_the_ford_is_shallow()
         {
+            var deepFords = new System.Collections.Generic.List<string>();
             foreach (var b in Plan.Bridges) Assert.GreaterOrEqual(Plan.Roads[b.Road].Width, 8f, b.Name + " width");
             foreach (var road in Plan.Roads.Where(r => r.Ford != null && r.Ford.Any(f => f)))
                 for (int p = 0; p < road.X.Length; p++)
@@ -133,9 +134,13 @@ namespace Game.Tests
                             if (d < best) { best = d; near = i; }
                         }
                         if (best < river.HalfWidth[near] * river.HalfWidth[near])
-                            Assert.LessOrEqual(river.Y[near] - road.Y[p], 0.5f, $"{road.Name} ford depth at point {p}");
+                        {
+                            float depth = river.Y[near] - road.Y[p];
+                            if (depth > 0.5f) deepFords.Add($"{road.Name} point {p}: {depth:F3}m");
+                        }
                     }
                 }
+            Assert.IsEmpty(deepFords, "ford depths over 0.5m: " + string.Join("; ", deepFords));
         }
 
         [Test]
