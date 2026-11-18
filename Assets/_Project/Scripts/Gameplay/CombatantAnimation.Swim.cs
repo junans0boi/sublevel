@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // Swimming (ADR-112, #184/#147), no clip: the body lies as in the crawl (the stance is replicated as prone) but the
-    // legs flutter-kick and the arms crawl-stroke over the water, rate tied to the speed; treading water when still.
+    // Swimming (ADR-112, #184/#147; clips since #236): the UAL Swim_Idle/Fwd clips (Swim state of the Base layer, speed-blended) lie flat
+    // and stroke; the stance is replicated as prone, but the model is not pitched. The dive still dips the head in code.
     // Diving drops the head. Every peer reads the water from the body's position (CombatantSwim), so nothing is sent.
     // The weapon is put away by the server while swimming (CombatantSwim), so the hands are empty.
     public partial class CombatantAnimation
@@ -43,29 +43,8 @@ namespace Game.Gameplay
             var rules = SwimRules.Current;
             float s = _swimAmount;
             // Head down a little while diving (the crawl lifts it by ProneHeadLiftDeg; a positive turn tips it forward).
-            // Level in the water: most of the crawl's chest lift comes off (the head stays a little up), then the dive's dip.
-            Turn(Torso, (rules.LevelDeg + rules.DivePitchDeg * _diveAmount) * s, transform.right);
-            // A little roll with each stroke.
-            Turn(Torso, 10f * Mathf.Sin(_strokePhase * 2f * Mathf.PI) * _effort * s, transform.forward);
-            // Legs: the idle pose's straight legs kick; the shin follows its thigh a little late.
-            float kickScale = Mathf.Lerp(0.45f, 1f, _effort) * s;
-            for (int side = 0; side < 2; side++)
-            {
-                float thigh = Swim.KickThigh(_kickPhase, side, rules) * kickScale;
-                float lag = Swim.KickThigh(_kickPhase - 0.15f, side, rules) * kickScale;
-                PoseLeg(side, side == 0 ? ThighLeft : ThighRight, side == 0 ? ShinLeft : ShinRight, side == 0 ? FootLeft : FootRight,
-                    thigh, 0.5f * (lag - thigh) + 8f * s, transform.right);
-            }
-            // Arms: over the top and back under; treading, held forward and sculling. A little out from the body.
-            for (int side = 0; side < 2; side++)
-            {
-                float stroke = Swim.ArmAngle(_strokePhase, side);
-                float tread = Swim.ArmIdleAngle(_strokePhase * 2f, side);
-                float angle = Mathf.LerpAngle(tread, stroke, Mathf.Clamp01(_effort * 2f));
-                int arm = side == 0 ? ArmLeft : ArmRight;
-                Turn(arm, angle * s, transform.right);
-                Turn(arm, (side == 0 ? -12f : 12f) * s, transform.forward);
-            }
+            // Legs and arms are the UAL swim clips (Swim state, #236); only the dive's head dip is still turned here.
+            Turn(Torso, rules.DivePitchDeg * _diveAmount * s, transform.right);
         }
     }
 }

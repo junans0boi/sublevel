@@ -71,6 +71,13 @@ public static class CharacterControllerBuilder
         crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), gait.UnarmedCrouchSpeed);
         crouch.speedParameter = CombatantAnimation.Pace;
         crouch.speedParameterActive = true;
+        // Swimming (#236, UAL Swim_Idle/Fwd, CC0 C-0004): the clips already lie flat, so the prone pitch and the code kick/stroke are off while it plays.
+        var swim = controller.CreateBlendTreeInController(CombatantAnimation.SwimState, out var swimTree, 0);
+        swimTree.blendType = BlendTreeType.Simple1D;
+        swimTree.blendParameter = CombatantAnimation.Move;
+        swimTree.useAutomaticThresholds = false;
+        swimTree.AddChild(Clip("U_Swim_Idle_Loop"), 0f);
+        swimTree.AddChild(Clip("U_Swim_Fwd_Loop"), CombatantAnimation.SwimClipSpeed);
         // No jump clip yet (gap sheet, ADR-187): the air state holds a still moment of the idle and CombatantAnimation poses the jump on top (ADR-048).
         var air = baseMachine.AddState(CombatantAnimation.Air);
         air.motion = Clip("RifleIdle");
