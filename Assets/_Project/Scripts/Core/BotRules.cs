@@ -85,6 +85,23 @@ namespace Game.Core
         public int FarmBuildingCap = 2;           // at most this many other bots choose the same building (soft)
         public float FarmArriveMeters = 2.5f;     // a loot point counts as visited this close (and within 2.5 m in height)
 
+        // ---- Cover and peeking (ADR-311, #375) ----
+        public bool PeekCycle = true;             // fire from the open for a while, hide to reload and heal, come back out on the other side
+        public float PeekExposeMin = 2f;          // seconds in the open before it hides again...
+        public float PeekExposeMax = 3f;
+        public float PeekHideMin = 1.5f;          // ...and at least this long behind cover (reloading, healing)...
+        public float PeekHideMax = 3f;
+        public float PeekMaxSeconds = 2.5f;       // coming out and still no line to the enemy for this long: hides again
+        public bool PeekAlternate = true;         // comes out on the other side each time (off: always the same side)
+        public float CoverSearchSeconds = 1.5f;   // how often the hiding place is looked for again
+        public int CoverSearchesPerFrame = 2;     // bots that may look for cover in one frame (rays are spread over frames)
+        // Where each kind of gun is fought from: sniper and marksman rifle far, rifle mid, SMG and shotgun close, pistol behind cover.
+        public float PreferSniperMeters = 70f;
+        public float PreferDmrMeters = 45f;
+        public float PreferSmgMeters = 12f;
+        public float PreferShotgunMeters = 7f;
+        public float PreferPistolMeters = 20f;
+
         // ---- Without a weapon (ADR-310, #374) ----
         public float UnarmedFistMeters = 1.35f;   // an unarmed bot fights an armed enemy this close (ADR-218 punch range)
         public float FleeSeconds = 8f;            // a flight counts as lost when the enemy still sees it after this long
