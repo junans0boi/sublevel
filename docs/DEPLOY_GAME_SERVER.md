@@ -27,6 +27,11 @@ sudo ln -sfn /opt/sublevel-game/releases/rN /opt/sublevel-game/current && sudo s
 - **복구**: `systemctl kill -s SIGKILL` → 5초 뒤 새 PID로 active(r1·r2 모두), `SIGTERM`(restart)은 정상 종료 로그. 로그 로테이션은 journald 기본 보관 정책(서버 공용 설정은 건드리지 않음).
 - **미검증**: 사람 접속·판 시작·종료·로비 복귀·포트 재개방, 사람 접속 시 CPU/RSS, 봇 파밍 로그, 공개 IP UDP 차단의 외부 확인, Windows 클라이언트.
 
+## 서버 옵션 vs 80인 규칙 (SPEC §2, ADR-259)
+- 규칙: 판당 80명(사람 최대 64 + 봇 최소 16). 기본값은 `rules.json` `Match`(Participants 80, MinBots 16, MaxPlayers 64).
+- 지금 유닛은 `--bots 5 --max-players 16`(시험용)이라 80인 규칙과 다르다. **권장**: 두 인자를 빼서 기본값을 따른다(사람 1명이면 봇 79가 아니라 MaxBots 상한 내에서 채움).
+- 위험: 2코어 ARM에서 80인 서버 부하는 미측정(Mac M1 측정만 있음). 그래서 단계적으로: ① 지금 인자로 사람 1 + 봇 5 한 판(기능 확인) → ② 인자를 빼 80인 한 판과 CPU 기록 → CPU가 포화면 `--participants 40` 등으로 낮춤. 변경은 `sudo systemctl edit sublevel-game`(ExecStart 재지정) 후 `restart`. 재시작은 사람이 없을 때만.
+
 ## 접속 시험 체크리스트 (준환)
 1. Mac에서 Tailscale 켜짐 확인(`tailscale status`에 `vcn-main`). 클라이언트는 서버와 **같은 커밋**(`r1-cf90ce8`).
 2. 게임 메인 메뉴 → `참가` → `100.97.58.29:7770` 입력 → 로비 진입, 준비(또는 60초 대기).
