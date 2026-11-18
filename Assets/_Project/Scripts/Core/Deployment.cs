@@ -126,6 +126,10 @@ namespace Game.Core
         public int MinBots = 16;
         // The matchmaking queue collects people for this long after the first one joined, then fills the rest with bots (ADR-247).
         public float QueueWindowSeconds = 30f;
+        // The waiting room's countdown (ADR-380): at most this long after the first person came, and this long once the room is full
+        // (only when that is sooner). `--start-seconds` overrides the first one on a dedicated server.
+        public float WaitMaxSeconds = 90f;
+        public float WaitFullSeconds = 15f;
         // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-258).
         // Off in code so tests that set BotCount keep it.
         public bool FillToParticipants = false;
