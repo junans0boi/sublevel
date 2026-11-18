@@ -89,6 +89,15 @@ namespace Game.Gameplay
             else _dirty = true;
         }
 
+        // The backend assigned this server (#392): join it as the 참가 button would.
+        public void JoinServer(string host, ushort port)
+        {
+            _hostMode = false;
+            Show(ViewKind.Connecting);
+            if (!_lobby.Join(host, port)) Show(ViewKind.Failed);
+            else _dirty = true;
+        }
+
         // 나가기 / 뒤로 가기: leaves the room and shows the main column again.
         public void Leave()
         {

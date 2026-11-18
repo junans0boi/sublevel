@@ -72,6 +72,12 @@ namespace Game.Net
         // Login (#389). Client: the launcher's game token (SUBLEVEL_GAME_TOKEN) and the nickname shown for it, null without a login (dev run).
         // Server: the secret that checks tokens offline (SUBLEVEL_TOKEN_SECRET); without one nobody is asked to log in.
         public static string AuthToken, AuthNickname, ServerTokenSecret;
+        // Client: the launcher's scoped API token ("sg_...", 12h) for the backend; it is only ever sent as a Bearer header, never stored or logged. When set, each join first trades it for a fresh 5-minute signed token (AuthToken).
+        public static string ApiToken;
+        public static long AccountId; // from /api/me, 0 until known
+        public static IBackend Backend;
+        // Server: set when the backend decides who plays here (BackendMatchPoller); null = anyone who logged in may join.
+        public static System.Func<long, bool> AssignedCheck;
         // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
         public static readonly System.Collections.Generic.Dictionary<string, long> AccountsBySession = new System.Collections.Generic.Dictionary<string, long>();
         public PhaseKind Phase { get; private set; }
@@ -284,11 +290,25 @@ namespace Game.Net
             return false;
         }
 
+        volatile bool _tokenAsked, _tokenAnswered;
+        volatile string _freshToken;
+
         void Update()
         {
-            if (_helloPending && SelfId >= 0)
+            if (_helloPending && SelfId >= 0 && !Dedicated && !string.IsNullOrEmpty(ApiToken) && Backend != null && !_tokenAnswered)
+            {
+                if (!_tokenAsked)
+                {
+                    _tokenAsked = true;
+                    Backend.ServerToken().ContinueWith(t => { _freshToken = t.IsFaulted || !t.Result.Ok ? "" : t.Result.Value; _tokenAnswered = true; });
+                }
+            }
+            else if (_helloPending && SelfId >= 0)
             {
                 _helloPending = false;
+                _tokenAsked = _tokenAnswered = false;
+                if (!string.IsNullOrEmpty(_freshToken)) AuthToken = _freshToken;
+                _freshToken = null;
                 _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
             }
             TickQueue();
@@ -435,6 +455,12 @@ namespace Game.Net
             if (login != JoinResult.Ok)
             {
                 _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)login }, false);
+                conn.Disconnect(false);
+                return;
+            }
+            if (!string.IsNullOrEmpty(ServerTokenSecret) && AssignedCheck != null && !AssignedCheck(claims.AccountId))
+            {
+                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)JoinResult.NotAssigned }, false);
                 conn.Disconnect(false);
                 return;
             }

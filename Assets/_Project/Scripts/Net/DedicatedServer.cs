@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using FishNet;
 using Game.Core;
 using UnityEngine;
@@ -66,6 +67,7 @@ namespace Game.Net
             if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;
             ResultsReporter.Start();
+            BackendMatchPoller.Start();
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
             Debug.Log($"[Server] starting: port {_options.Port}, bots {(_options.Bots < 0 ? "auto" : _options.Bots.ToString())}, " +
@@ -83,6 +85,7 @@ namespace Game.Net
 
         void Update()
         {
+            BackendMatchPoller.Tick(Time.unscaledTimeAsDouble);
             if (Time.unscaledTime >= _nextPump) { _nextPump = Time.unscaledTime + 5f; ResultsReporter.Pump(); }
             switch (_state)
             {
@@ -163,6 +166,9 @@ namespace Game.Net
             var start = _lobby.StartInfo;
             if (_lobby.StartMode != TeamMode.Solo || _lobby.QueueMode != TeamMode.Solo) TeamMatch.Mode = _lobby.StartMode;
             Debug.Log($"[Server] match starting: {start.Players} players, {start.Bots} bots, port {start.MatchPort}");
+            ResultsReporter.CurrentMatchId = BackendMatchPoller.Pick(LobbyNet.AccountsBySession.Values.ToList());
+            ResultsReporter.Reported = false;
+            if (ResultsReporter.CurrentMatchId != null) Debug.Log("[Server] backend match " + ResultsReporter.CurrentMatchId);
             NetSession.Begin(_lobby);
             NetSession.Dedicated = true;
             CloseLobby();
@@ -202,6 +208,9 @@ namespace Game.Net
         void EndMatch()
         {
             Debug.Log("[Server] match over, back to the lobby");
+            if (!ResultsReporter.Reported) BackendMatchPoller.Finish(ResultsReporter.CurrentMatchId);
+            ResultsReporter.CurrentMatchId = null;
+            LobbyNet.AccountsBySession.Clear();
             NetSession.Reset();
             _state = StateKind.Returning;
             SceneManager.LoadScene(IdleScene);
