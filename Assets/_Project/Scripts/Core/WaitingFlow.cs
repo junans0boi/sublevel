@@ -62,6 +62,9 @@ namespace Game.Core
         // The deployment index of this person (their place in the order they came), -1 if unknown.
         public int DeploymentIndex(int id) => _order.IndexOf(id);
 
+        // Nothing hurts anyone on the island (fists, shots, blasts, falls, cars): the damage of one hit while `phase` runs (ADR-383, #416).
+        public static float DamageIn(WaitingPhase phase, float amount) => phase == WaitingPhase.Waiting ? 0f : amount;
+
         // A stray's nearest legal place (server authority); the same point when it already stands inside.
         public static (float x, float z) Clamp(float x, float z) { WaitingIsland.Clamp(ref x, ref z); return (x, z); }
     }

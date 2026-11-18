@@ -64,7 +64,18 @@ namespace Game.Net
             return true;
         }
 
-        public void Register(int key, Combatant combatant) { if (combatant != null) _keys[combatant] = key; }
+        // The body joins the room: its damage is held at zero while the room is open (ADR-383, #416); afterwards the filter it had before decides again.
+        public void Register(int key, Combatant combatant)
+        {
+            if (combatant == null) return;
+            _keys[combatant] = key;
+            var previous = combatant.ServerDamageFilter;
+            combatant.ServerDamageFilter = info =>
+            {
+                float amount = previous != null ? previous(info) : info.Amount;
+                return Open ? WaitingFlow.DamageIn(WaitingPhase.Waiting, amount) : amount;
+            };
+        }
 
         void Update()
         {

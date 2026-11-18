@@ -82,6 +82,13 @@ namespace Game.Tests
         }
 
         [Test]
+        public void OnTheIsland_NothingHurts_AfterTheDeploymentItDoes()
+        {
+            Assert.AreEqual(0f, WaitingFlow.DamageIn(WaitingPhase.Waiting, 100f), "a punch, a shot, a blast, a fall: all zero while waiting");
+            Assert.AreEqual(25f, WaitingFlow.DamageIn(WaitingPhase.Deploying, 25f));
+        }
+
+        [Test]
         public void FullRoomOfPeople_HasNoPlaceForTheNext()
         {
             var f = new WaitingFlow(Rules());
