@@ -73,6 +73,7 @@ namespace Game.Net
                 int model = ModelAt(i);
                 if (spot == null || _prefabs == null || model < 0 || model >= _prefabs.Length || _prefabs[model] == null) continue;
                 var vehicle = Instantiate(_prefabs[model], spot.position, spot.rotation);
+                if (vehicle.TryGetComponent<Vehicle>(out var v)) v.ServerSetPaint(VehicleColors.Pick(i, model));
                 _networkManager.ServerManager.Spawn(vehicle);
             }
         }
