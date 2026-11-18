@@ -68,6 +68,8 @@ namespace Game.Net
         public int DeploymentSeed { get; private set; }
         // Server: the elevator index each participant was given (players first, then bots); empty without elevators.
         public IReadOnlyList<int> ElevatorAssignment => _deployment;
+        // Teams of this match (ADR-330): people in parties, bots in fours; set when the match is planned.
+        public TeamLayout Layout { get; private set; }
         // Players counted ahead of the bots (participants 0..ExpectedPlayers-1, ADR-055); teams count the same way (ADR-072).
         // In a lobby's match (#160) it is the people the lobby counted.
         public int ExpectedPlayers => _playerPrefab != null ? Mathf.Max(0, NetSession.Role == NetSession.RoleKind.Host ? NetSession.Players : _expectedPlayers) : 0;
@@ -315,13 +317,14 @@ namespace Game.Net
         // ADR-055 (1)(4): one assignment for everyone who starts the match, players first, then bots.
         void ServerPlanDeployment()
         {
+            _expectedPlayersCounted = ExpectedPlayers;
+            Layout = TeamLayout.For(_expectedPlayersCounted, BotCount, TeamMatch.TeamSize);
             if (Elevators == null || Elevators.Sites.Count == 0) return;
             DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(_seed * 397 ^ System.Environment.TickCount) : _seed);
-            _expectedPlayersCounted = ExpectedPlayers;
             var slots = new ElevatorSlot[Elevators.Sites.Count];
             for (int i = 0; i < slots.Length; i++) slots[i] = new ElevatorSlot(Elevators.Sites[i].Region);
             // A team starts together in one elevator (ADR-072); solo is the plain assignment.
-            _deployment = Game.Core.Teams.Deploy(_expectedPlayersCounted + BotCount, TeamMatch.TeamSize, slots, DeploymentSeed);
+            _deployment = Layout.Deploy(slots, DeploymentSeed);
             _elevatorLoad = new int[slots.Length];
             Debug.Log($"[MatchDirector] elevator start: {_deployment.Length} participants over {slots.Length} elevators, seed {DeploymentSeed}");
         }
