@@ -13,6 +13,9 @@ namespace Game.Net
         const float WindowSeconds = 10f;
 
         readonly ServerFrameStats _frames = new ServerFrameStats();
+        readonly ServerFrameStats _allFrames = new ServerFrameStats();   // the whole run, for the statistics row
+        string _scenario, _statsFile;
+        public static int Seed = -1, Level = -1;
         readonly ServerFrameStats[] _bot = { new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats(), new ServerFrameStats() };
         float _windowStart;
         int _rewindsAtStart;
@@ -32,8 +35,11 @@ namespace Game.Net
             Directory.CreateDirectory("Logs/perf");
             probe._gather = scenario.StartsWith("p3");
             probe._csv = "Logs/perf/s8_server_" + scenario + ".csv";
+            probe._scenario = scenario;
+            probe._statsFile = "Logs/perf/botstats_" + scenario + ".csv";
             File.WriteAllText(probe._csv, "t,frames,mean_ms,p50_ms,p95_ms,p99_ms,max_ms,heap_mb,combatants,rewinds,bot_ai_mean,bot_ai_p99,sense_mean,sense_p99,loot_mean,loot_p99,doors_mean,doors_p99,path_mean,path_p99\n");
             BotPerf.Enabled = true;
+            Combatant.ServerDied += (victim, info) => BotMatchStats.Died(victim.ObjectId, info.Attacker != null ? info.Attacker.ObjectId : -1);
             Combatant.ServerDied += (victim, info) => Debug.Log("[Death] t=" + Time.realtimeSinceStartup.ToString("F0") + " victim_armed=" + (victim.HasAnyWeapon ? 1 : 0) + " cause=" + info.Cause + " attacker=" + (info.Attacker == null ? "none" : (info.Attacker.HasAnyWeapon ? "armed" : "unarmed")) + " weapon=" + info.WeaponId);
             probe._windowStart = Time.realtimeSinceStartup;
             probe._rewindsAtStart = LagCompensation.Rewinds;
@@ -101,6 +107,39 @@ namespace Game.Net
             Debug.Log($"[Squad] samples={_squad.Count} teams={teams.Count} medianToCentre={_squad.Percentile(50):F1}m p90={_squad.Percentile(90):F1}m");
         }
 
+        static readonly string[] LevelNames = { "easy", "normal", "hard" };
+
+        // The 80-player statistics row (ADR-313, #377): one file per scenario, rewritten every window, so the last window's row is the run's.
+        void WriteStatsRow(float now)
+        {
+            var row = new BotStatsCsv().Add("scenario", _scenario).Add("level", Level >= 0 ? LevelNames[Level] : "mix").Add("seed", Seed).Add("seconds", now);
+            int bots = 0, stalled = 0;
+            var all = new System.Collections.Generic.List<float>();
+            for (int l = 0; l < BotMatchStats.Levels; l++) { bots += BotMatchStats.Bots[l]; stalled += BotMatchStats.StalledBots[l]; all.AddRange(BotMatchStats.FirstGun[l]); }
+            row.Add("bots", bots);
+            // Bots that held a gun within 4 minutes of the drop, of all bots of the level (the dead count in the total).
+            row.Add("armed4min_all", BotStatsCsv.Share(BotStatsCsv.CountAtMost(all, 240f), bots));
+            for (int l = 0; l < BotMatchStats.Levels; l++)
+            {
+                var guns = BotMatchStats.FirstGun[l];
+                row.Add("bots_" + LevelNames[l], BotMatchStats.Bots[l]);
+                row.Add("armed4min_" + LevelNames[l], BotStatsCsv.Share(BotStatsCsv.CountAtMost(guns, 240f), BotMatchStats.Bots[l]));
+                row.Add("firstGunMedian_" + LevelNames[l], BotStatsCsv.Percentile(guns, 50f));
+                row.Add("kills_" + LevelNames[l], BotMatchStats.Kills[l]);
+                row.Add("deaths_" + LevelNames[l], BotMatchStats.Deaths[l]);
+            }
+            row.Add("firstGunMedian_all", BotStatsCsv.Percentile(all, 50f)).Add("firstGunP90_all", BotStatsCsv.Percentile(all, 90f));
+            row.Add("engagements", BotMatchStats.Engagements);
+            row.Add("avgEngageSeconds", BotMatchStats.Engagements > 0 ? BotMatchStats.EngageSeconds / BotMatchStats.Engagements : 0f);
+            row.Add("firstEngageArmed", BotStatsCsv.Share(BotMatchStats.FirstEngagesArmed, BotMatchStats.FirstEngages));
+            row.Add("stalledBots", BotStatsCsv.Share(stalled, bots));
+            row.Add("peekCycles", BotBrawlStats.PeekCycles).Add("avgExpose", BotBrawlStats.ExposeEpisodes > 0 ? BotBrawlStats.ExposeSeconds / BotBrawlStats.ExposeEpisodes : 0f);
+            row.Add("hideShare", BotBrawlStats.EngagedSeconds > 0f ? BotBrawlStats.HideSeconds / BotBrawlStats.EngagedSeconds : 0f);
+            row.Add("noiseInvestigated", BotStatsCsv.Share(BotBrawlStats.NoiseInvestigatedBots, BotBrawlStats.NoiseHeardBots));
+            row.Add("frameMeanMs", _allFrames.Mean()).Add("frameP99Ms", _allFrames.Percentile(99f)).Add("combatantsLeft", Combatant.All.Count);
+            File.WriteAllText(_statsFile, row.Header + "\n" + row.Line + "\n");
+        }
+
         void LogFarm(float now)
         {
             var index = BuildingLoot.Index;
@@ -137,6 +176,7 @@ namespace Game.Net
                 else if (Time.realtimeSinceStartup - _matchStart >= GatherAfterSeconds && BotsWithAgent() >= 0.9f * BotCount()) { _gathered = true; Gather(); }
             }
             _frames.Add(Time.unscaledDeltaTime * 1000f);
+            _allFrames.Add(Time.unscaledDeltaTime * 1000f);
             for (int k = 0; k < BotPerf.Slots; k++) _bot[k].Add(BotPerf.TakeMs(k));
             float now = Time.realtimeSinceStartup;
             if (now - _windowStart < WindowSeconds) return;
@@ -151,6 +191,7 @@ namespace Game.Net
             Debug.Log($"[Cover] cycles={BotBrawlStats.PeekCycles} exposeEpisodes={BotBrawlStats.ExposeEpisodes} cutShort={BotBrawlStats.ExposeCutShort} avgExpose={(BotBrawlStats.ExposeEpisodes > 0 ? BotBrawlStats.ExposeSeconds / BotBrawlStats.ExposeEpisodes : 0f):F2}s hideShare={(BotBrawlStats.EngagedSeconds > 0f ? BotBrawlStats.HideSeconds / BotBrawlStats.EngagedSeconds : 0f):P0} searches={BotBrawlStats.CoverSearches}");
             Debug.Log($"[Brawl] unarmedEngages={BotBrawlStats.UnarmedEngages} fistFights={BotBrawlStats.FistFights} fleeStarts={BotBrawlStats.FleeStarts} fleeBroke={BotBrawlStats.FleeBroke} fleeCaught={BotBrawlStats.FleeCaught} corpseTrips={BotBrawlStats.CorpseTrips} arrived={BotBrawlStats.CorpseArrived} gaveUp={BotBrawlStats.CorpseGaveUp} retreatShare={BotBrawlStats.StateShare((int)BotState.Retreat):P1} engageShare={BotBrawlStats.StateShare((int)BotState.Engage):P1} roamShare={BotBrawlStats.StateShare((int)BotState.Roam):P1} lootShare={BotBrawlStats.StateShare((int)BotState.Loot):P1}");
             File.AppendAllText(_csv, line + "\n");
+            WriteStatsRow(now);
             _frames.Clear();
             _windowStart = now;
             _rewindsAtStart = LagCompensation.Rewinds;

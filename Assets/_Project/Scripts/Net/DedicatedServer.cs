@@ -63,6 +63,10 @@ namespace Game.Net
             MatchRules.Current.MaxPlayers = Math.Min(MatchRules.Current.MaxPlayers, MatchRules.Current.MaxHumans);
             ServerPerfProbe.GiveKeys = _options.PerfKeys;
             if (_options.PerfSquad) TeamMatch.Mode = TeamMode.Squad;
+            ServerPerfProbe.Seed = _options.PerfSeed;
+            ServerPerfProbe.Level = _options.PerfLevel;
+            if (_options.PerfSeed >= 0) { MatchDirector.SeedOverride = _options.PerfSeed; MatchDirector.DeploymentSeedOverride = _options.PerfSeed; MatchDirector.LockdownSeedOverride = _options.PerfSeed; }
+            if (_options.PerfLevel >= 0) { BotLevels.Level = (BotDifficulty)_options.PerfLevel; BotMix.Pure = true; }
             if (_options.PerfQuick > 1f) PollutionDirector.RulesOverride = PollutionRules.QuickMatch(_options.PerfQuick);
             if (_options.Perf != null) { { ServerPerfProbe.GatherX = _options.GatherX; ServerPerfProbe.GatherZ = _options.GatherZ; } ServerPerfProbe.Start(_options.Perf); LobbyNet.AllowEmptyStart = true; }
             PollutionDirector.FinalRegionOverride = _options.Region;

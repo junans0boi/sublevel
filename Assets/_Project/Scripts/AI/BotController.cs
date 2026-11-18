@@ -105,6 +105,7 @@ namespace Game.AI
         int _ignoredEnemyId = -1;
         float _ignoreEnemyUntil;
         Vector3 _stallFrom;
+        bool _stallCounted;
         float _stallAt;
         float _lastAttackAt = -100f;
         float _hearFactor = 1f;
@@ -320,6 +321,7 @@ namespace Game.AI
             // Each bot has its own level, the setting being the centre of a mix (ADR-245).
             _botIndex = _named;
             _level = BotMix.For(BotLevels.Level, matchSeed, _botIndex);
+            BotMatchStats.Register(_self.ObjectId, (int)_level);
             _rules = BotLevels.For(BotRules.Current, _level);
             if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
@@ -1088,6 +1090,7 @@ namespace Game.AI
             if (now - _stallAt < StallSeconds) return;
 
             string reason = StallReason();
+            if (!_stallCounted) { _stallCounted = true; BotMatchStats.StalledBots[(int)_level]++; }
             BotStats.CountStall(reason);
             Debug.Log($"[Bot] {DisplayName} made no headway for {StallSeconds:0} s ({reason}) at {position}; picking a new target");
             // Whatever it was after is dropped: the enemy it could neither reach nor hit, the pass it could not get
