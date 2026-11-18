@@ -204,7 +204,7 @@ namespace Game.Tests
             var history = _net.HostPlayer.GetComponent<PositionRecorder>().History;
             double probeNow = 0, probeAt = 0; int probeCalls = 0;
             LagCompensation.Probe = (shooter, now, at) => { if (shooter != onServer) return; probeNow = now; probeAt = at; probeCalls++; };
-            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms,queue_depth,view_tick,shown_tick,claim_tick\n");
+            var shotsCsv = new StringBuilder("model,condition,rep,scenario,shot,hit,model_ms,copy_delay_ms,dt_ms,queue_depth,view_tick,shown_tick,claim_tick,mag,ended_on_x_y_z,eye_err_m\n");
             string curCond = "", curScenario = ""; int curRep = 0, curShot = 0;
             // Per-frame trace of the copy's queue depth and how late it shows the body, for every moving leg (hypothesis: depth steps 2<->3 per leg).
             StringBuilder frames = null; int curLeg = 0; float legStart = 0f;
@@ -220,14 +220,22 @@ namespace Game.Tests
                 };
             }
             bool resolved = false, hit = false;
-            void On(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Launch) return; resolved = true; hit = s.Victim != null; }
+            string endInfo = "";
+            void On(in Combatant.ShotResult s) { if (s.Phase == Combatant.ShotPhase.Launch) return; resolved = true; hit = s.Victim != null; endInfo = $"{s.Hit};{Inv(s.End.x)};{Inv(s.End.y)};{Inv(s.End.z)}"; }
             a.Player.ShotResolved += On;
 
             // One aimed shot at what the shooter sees (compensated); reports hit/miss.
             IEnumerator Fire(Action<bool> done)
             {
-                if (a.Player.ActiveMag < 3) { a.Player.CmdReload(); yield return Frames(3.5f); }
-                resolved = false; probeCalls = 0;
+                if (a.Player.ActiveMag < 3)
+                {
+                    // The strafing target must stand still while we reload: 3.5 s of walking carried it to the lane's end, behind the wall
+                    // (every other shot after a reload ended on the wall at x -19.98: a harness artifact, not the compensation).
+                    var moveWas = _net.HostInput.Frame.Move; _net.HostInput.Frame.Move = Vector2.zero;
+                    a.Player.CmdReload(); yield return Frames(3.5f);
+                    _net.HostInput.Frame.Move = moveWas;
+                }
+                resolved = false; probeCalls = 0; endInfo = "";
                 var copyPos = seen.transform.position;
                 int depth = QueueDepth(seen); // hypothesis: the copy's interpolation queue sits at 2 or 3 per movement start
                 var aim = copyPos + Vector3.up * 0.9f;
@@ -242,7 +250,7 @@ namespace Game.Tests
                 if (probeCalls > 0 && TimeShownBy(history, copyPos, out double tShown))
                     extra = $",{Inv((probeNow - probeAt) * 1000)},{Inv((callT - tShown) * 1000)},{Inv((probeAt - tShown) * 1000)}";
                 else if (probeCalls > 0) extra = $",{Inv((probeNow - probeAt) * 1000)},,";
-                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra) + "," + depth + $",{a.Player.ViewTick},{shown},{claim}");
+                shotsCsv.AppendLine($"{model},{curCond},{curRep},{curScenario},{curShot++},{(resolved && hit ? 1 : 0)}" + (extra == ",," ? ",,," : extra) + "," + depth + $",{a.Player.ViewTick},{shown},{claim},{a.Player.ActiveMag},{endInfo},{Inv((MultiHarness.ReplicaOf(_net.Host, a.Player).EyePosition - a.Player.EyePosition).magnitude)}");
                 done(resolved && hit);
             }
 
