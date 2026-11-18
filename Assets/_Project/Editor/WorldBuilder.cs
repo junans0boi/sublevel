@@ -131,6 +131,7 @@ public static partial class WorldBuilder
         Debug.Log($"[WorldBuilder] elevator shafts: {stations.Count} shafts and cars, {holes} terrain cells opened over them");
         int rocks = BuildRocks(plan, ground, world.transform, navSources);
         BuildOffshore(plan, ground, world.transform);
+        BuildWaitingIsland(plan, world.transform, store);
         BuildVegetation(plan, ground, terrain, world.transform, store, navSources);
         BuildDressing(plan, ground, world.transform, store, navSources, lots);
         Debug.Log($"[WorldBuilder] structures built at {total.Elapsed.TotalSeconds:F1} s: {store.Count} generated meshes, {store.Triangles} triangles in them");
