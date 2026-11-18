@@ -271,6 +271,7 @@ namespace Game.Gameplay
                 K(fight, "투척물 전환", BindAction.CycleThrowable, "가진 투척물 종류를 바꿉니다."),
                 K(fight, "회복", BindAction.Heal, "붕대·구급 키트·구급상자 중 알맞은 것으로 체력을 회복합니다."),
                 K(fight, "부스트", BindAction.Boost, "가진 부스트 아이템 가운데 가장 작은 것을 마십니다. 차에서는 연료통을 씁니다."),
+                K(fight, "방독", BindAction.GasCover, "방독 필터나 해독제를 씁니다. 해독제가 있으면 먼저 쓰고, 최종 구역에서는 효과가 없습니다."),
                 K(other, "줍기·상호작용", BindAction.Interact, "물건을 줍거나 열쇠로 통로 차단기를 엽니다."),
                 K(other, "시점 전환", BindAction.ToggleView, "1인칭과 3인칭을 바꿉니다."),
                 K(other, "인벤토리", BindAction.Inventory, "가방과 주변 물건을 엽니다."),

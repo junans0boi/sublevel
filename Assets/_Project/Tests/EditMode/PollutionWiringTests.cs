@@ -229,5 +229,38 @@ namespace Game.Tests
             sys.Tick(11 + 91, states, events);
             Assert.AreEqual(KeyPhase.Idle, sys.Station(0).Phase);
         }
+
+        [Test]
+        public void HudSlot_MapsLevelSecondsRegionKeysAndChip()
+        {
+            var warn = new PollutionHudModel { BannerVisible = true, BannerRegion = 1, BannerSeconds = 74.2f };
+            var v = PollutionHud.ToHazard(warn, "해안", 2, PollutionChipFlag.Held);
+            Assert.AreEqual(HazardWarn.Warning, v.Warn);
+            Assert.AreEqual(75, v.SecondsToClose);
+            Assert.AreEqual("해안", v.Region);
+            Assert.AreEqual(2, v.Keys);
+            Assert.AreEqual(HudChip.Held, v.Chip);
+            warn.BannerSeconds = 20f;
+            Assert.AreEqual(HazardWarn.Imminent, PollutionHud.ToHazard(warn, "해안", 0, PollutionChipFlag.None).Warn);
+            Assert.AreEqual(HazardWarn.Sealed, PollutionHud.ToHazard(new PollutionHudModel { InGas = true }, "", 0, PollutionChipFlag.None).Warn);
+            var none = PollutionHud.ToHazard(default, "x", 0, PollutionChipFlag.None);
+            Assert.AreEqual(HazardWarn.None, none.Warn);
+            Assert.AreEqual(-1, none.SecondsToClose);
+            Assert.AreEqual("", none.Region);
+        }
+
+        [Test]
+        public void GasLine_ShowsDamageAndCover_EmptyOutsideTheGas()
+        {
+            Assert.AreEqual("", PollutionHud.GasLine(default));
+            var h = new PollutionHudModel { InGas = true, Dps = 4.5f };
+            Assert.AreEqual("오염 중 · 초당 4.5", PollutionHud.GasLine(h));
+            h.CoverSeconds = 42f;
+            Assert.AreEqual("오염 중 · 초당 4.5 · 방독 0:42", PollutionHud.GasLine(h));
+            h.CoverIsAntidote = true;
+            StringAssert.Contains("해독 0:42", PollutionHud.GasLine(h));
+            h.CoverUseless = true;
+            StringAssert.Contains("효과 없음", PollutionHud.GasLine(h));
+        }
     }
 }
