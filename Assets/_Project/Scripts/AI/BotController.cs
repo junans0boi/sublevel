@@ -264,6 +264,7 @@ namespace Game.AI
             if (_self.Dead.Value)
             {
                 if (Farming) EndFarm();
+                TallyDeath();
                 if (_agent != null && _agent.enabled) _agent.enabled = false;
                 return;
             }
@@ -294,7 +295,9 @@ namespace Game.AI
             ApplyBlindness(now);
             FillSelf();
             TickFarm(now);
+            TickBrawl(now);
             _intent = _brain.Think(_percept);
+            TallyBrawl(now);
             // Teams (ADR-072): revive a knocked teammate, keep near the leader.
             ApplyTeam(ref _intent, now);
             // Items (ADR-116): heal, boost, throw; blind and burning bodies react.
@@ -322,6 +325,7 @@ namespace Game.AI
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
             InitItems();
+            HookDeaths();
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
@@ -406,6 +410,7 @@ namespace Game.AI
             {
                 _percept.EnemyId = seen.ObjectId;
                 _percept.EnemyPosition = ToVec(ChestOf(seen));
+                _percept.EnemyArmed = seen.HasAnyWeapon;
             }
 
             // Hearing: gunshots and whatever else was emitted since the last time. The nearest one counts.
@@ -421,6 +426,7 @@ namespace Game.AI
                 var at = new Vector3(noise.X, noise.Y, noise.Z);
                 float sqr = (at - eye).sqrMagnitude;
                 float heardRadius = noise.Radius * _hearFactor;
+                if (noise.Kind == NoiseKind.Gunshot && sqr <= heardRadius * heardRadius) { _shotAt = at; _shotTime = Time.time; } // for the corpse trip (ADR-310)
                 if (sqr > heardRadius * heardRadius || sqr >= heardSqr) continue;
                 // A closed door on the way muffles it: the radius shrinks for each one (G11, ADR-104).
                 int shut = DoorSystem.ClosedBetween(at, eye);
@@ -523,6 +529,7 @@ namespace Game.AI
             _percept.LootVisible = true;
             _percept.LootId = _loot.ObjectId;
             _percept.LootPosition = ToVec(_loot.transform.position);
+            _percept.LootIsWeapon = _loot.Kind.Value == (int)LootKind.Weapon;
         }
 
         // A helmet or vest better than the one worn (the server takes only a better piece).
@@ -696,7 +703,7 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && (intent.State == BotState.Roam || intent.State == BotState.Investigate)));
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && (intent.State == BotState.Roam || intent.State == BotState.Investigate)));
             if (!zoneMove) _goal = ZoneGoal.None;
 
             if (!intent.Move && !zoneMove)
@@ -720,7 +727,8 @@ namespace Game.AI
                 if (now >= _coverUntil)
                 {
                     _coverUntil = now + CoverSeconds;
-                    _hasCover = FindCover(threat, out _cover);
+                    // Empty-handed it runs for a place out of the enemy's sight (ADR-310); with a gun it looks for cover as before.
+                    _hasCover = !_percept.HasWeapon && !_percept.OtherSlotUsable ? FindFleeCover(threat, out _cover) : FindCover(threat, out _cover);
                 }
                 if (_hasCover) target = _cover;
             }

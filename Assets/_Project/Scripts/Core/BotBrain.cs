@@ -61,6 +61,11 @@ namespace Game.Core
 
         public bool FarmActive;        // farming (ADR-294): walk the building's loot points
         public BotVec FarmTarget;
+
+        public bool EnemyArmed;        // the one in sight holds a gun (ADR-310)
+        public bool LootIsWeapon;      // the pickup in view is a weapon
+        public bool CorpseActive;      // go to where somebody fell, for what dropped there
+        public BotVec CorpseTarget;
     }
 
     // What the bot wants to do this moment. The controller turns it into movement and server calls.
@@ -217,7 +222,9 @@ namespace Game.Core
                 intent.Threat = p.EnemyPosition;
                 float distance = BotVec.Distance(p.Position, p.EnemyPosition);
 
-                bool wantsOut = !canFight || (low && p.Medkits > 0 && now >= _standUntil);
+                // Empty-handed (ADR-310): fists against one who has none or is within a punch, otherwise break the line of sight.
+                bool fist = !canFight && (!p.EnemyArmed || distance <= rules.UnarmedFistMeters);
+                bool wantsOut = (!canFight && !fist) || (low && p.Medkits > 0 && now >= _standUntil);
                 if (wantsOut && canFight)
                 {
                     // A retreat that never breaks line of sight is worse than fighting back.
@@ -228,6 +235,17 @@ namespace Game.Core
                         _retreatSince = -1;
                         wantsOut = false;
                     }
+                }
+                // Running or brawling, and a weapon lies close by: that comes first.
+                if ((wantsOut || fist) && !canFight && p.LootVisible && p.LootIsWeapon && BotVec.Distance(p.Position, p.LootPosition) <= rules.LootDashMeters)
+                {
+                    intent.State = BotState.Loot;
+                    intent.Move = true;
+                    intent.Sprint = true;
+                    intent.MoveTarget = p.LootPosition;
+                    intent.LootId = p.LootId;
+                    intent.PickUp = BotVec.Distance(p.Position, p.LootPosition) <= rules.PickupMeters;
+                    return intent;
                 }
                 if (wantsOut)
                 {
@@ -243,6 +261,15 @@ namespace Game.Core
                 intent.State = BotState.Engage;
                 intent.Aim = true;
                 intent.SecondsOnTarget = (float)(now - _spottedAt);
+                if (fist)
+                {
+                    // Closes in on the enemy; the controller punches when it is in reach.
+                    intent.Aim = false;
+                    intent.Move = true;
+                    intent.MoveTarget = p.EnemyPosition;
+                    intent.Sprint = distance > 6f;
+                    return intent;
+                }
                 if (!armed)
                 {
                     intent.SwitchWeapon = true;
@@ -368,6 +395,12 @@ namespace Game.Core
             {
                 intent.Move = true;
                 intent.MoveTarget = p.FarmTarget;
+                return intent;
+            }
+            if (p.CorpseActive)
+            {
+                intent.Move = true;
+                intent.MoveTarget = p.CorpseTarget;
                 return intent;
             }
             bool arrived = _hasRoam && BotVec.PlanarDistance(p.Position, _roam) <= rules.ArriveMeters;

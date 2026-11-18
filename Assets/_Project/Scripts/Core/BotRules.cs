@@ -85,6 +85,15 @@ namespace Game.Core
         public int FarmBuildingCap = 2;           // at most this many other bots choose the same building (soft)
         public float FarmArriveMeters = 2.5f;     // a loot point counts as visited this close (and within 2.5 m in height)
 
+        // ---- Without a weapon (ADR-310, #374) ----
+        public float UnarmedFistMeters = 1.35f;   // an unarmed bot fights an armed enemy this close (ADR-218 punch range)
+        public float FleeSeconds = 8f;            // a flight counts as lost when the enemy still sees it after this long
+        public float LootDashMeters = 10f;        // fleeing, a weapon this close on the ground is picked up first
+        public float CorpseLootMeters = 40f;      // goes to where somebody fell if it is this near...
+        public float CorpseMemorySeconds = 60f;   // ...and that was this recently...
+        public float CorpseQuietSeconds = 6f;     // ...and no shots have been heard near it for this long
+        public float CorpseGiveUpSeconds = 25f;   // a trip to a place that long without arriving is dropped
+
         // ---- Fighting like a player (ADR-117) ----
         public float StrafeMeters = 3f;           // sidesteps this far while shooting (0 = stands still)
         public float StrafeMinSeconds = 0.8f;     // then changes side after a time in this range
