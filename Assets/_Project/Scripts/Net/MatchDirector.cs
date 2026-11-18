@@ -292,6 +292,7 @@ namespace Game.Net
                 var combatant = bot.GetComponent<Combatant>();
                 if (combatant != null && State != null) State.ServerSetName(combatant, BotNames.For(Seed, number - 1));
                 if (inElevator) ServerProtect(combatant);
+                if (inElevator && _waiting != null) _waiting.AddBot(combatant, position, rotation);
             }
         }
 

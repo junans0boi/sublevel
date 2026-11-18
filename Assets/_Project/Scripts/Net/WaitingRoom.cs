@@ -32,6 +32,62 @@ namespace Game.Net
         float _nextSend;
         readonly Dictionary<Combatant, int> _keys = new Dictionary<Combatant, int>();
 
+        // The match's bots wait hidden in their elevator cars; the schedule (ADR-384) moves some of them onto the island, which walk about
+        // there, and at the deployment they all go back to their cars. The brain of a held bot is paused (SpawnProtection), the walk is driven here.
+        sealed class WaitingBot
+        {
+            public Combatant Body; public Vector3 HomePosition; public Quaternion HomeRotation;
+            public bool OnIsland; public Vector3 Target; public float PickAt;
+        }
+        readonly List<WaitingBot> _bots = new List<WaitingBot>();
+        const float BotWalkSpeed = 1.3f;
+        public int BotsOnIsland { get { int n = 0; foreach (var b in _bots) if (b.OnIsland) n++; return n; } }
+
+        public void AddBot(Combatant body, Vector3 home, Quaternion homeRotation)
+        {
+            if (body == null) return;
+            _bots.Add(new WaitingBot { Body = body, HomePosition = home, HomeRotation = homeRotation });
+            Register(-1 - _bots.Count, body);
+        }
+
+        void DriveBots(CountdownState cd)
+        {
+            int want = Mathf.Min(_bots.Count, WaitingBotSchedule.BotsAt(cd.Elapsed, _flow.MaxSeconds > 0f ? _flow.MaxSeconds : (MatchRules.Current ?? new MatchRules()).WaitMaxSeconds,
+                cd.BotsTotal, _flow.People, (MatchRules.Current ?? new MatchRules()).Participants));
+            int onIsland = BotsOnIsland;
+            for (int i = 0; i < _bots.Count && onIsland < want; i++)
+            {
+                var b = _bots[i];
+                if (b.OnIsland || b.Body == null) continue;
+                var spot = _flow.PlaceBot(i);
+                if (spot == null) break;
+                b.OnIsland = true; onIsland++;
+                b.Body.transform.SetPositionAndRotation(new Vector3(spot.Value.x, _deckY + 0.1f, spot.Value.z), Quaternion.Euler(0f, (i * 137) % 360, 0f));
+                b.PickAt = Time.time + 1f + (i % 5);
+                b.Target = b.Body.transform.position;
+            }
+            _flow.SetBots(onIsland);
+            float dt = Time.deltaTime;
+            foreach (var b in _bots)
+            {
+                if (!b.OnIsland || b.Body == null) continue;
+                var p = b.Body.transform.position;
+                if (Time.time >= b.PickAt)
+                {
+                    // Stroll to a random place of the island (outside the booth and tower pads), then stand a while.
+                    float a = Random.value * Mathf.PI * 2f, r = 6f + Random.value * 26f;
+                    float tx = WaitingIsland.CentreX + Mathf.Cos(a) * r, tz = WaitingIsland.CentreZ + Mathf.Sin(a) * r;
+                    WaitingIsland.Clamp(ref tx, ref tz);
+                    b.Target = new Vector3(tx, p.y, tz);
+                    b.PickAt = Time.time + 4f + Random.value * 8f;
+                }
+                var d = b.Target - p; d.y = 0f;
+                if (d.sqrMagnitude < 0.04f) continue;
+                var step = d.normalized * Mathf.Min(d.magnitude, BotWalkSpeed * dt);
+                b.Body.transform.SetPositionAndRotation(p + step, Quaternion.Slerp(b.Body.transform.rotation, Quaternion.LookRotation(d), 6f * dt));
+            }
+        }
+
         public bool Open => _flow != null && _flow.Phase == WaitingPhase.Waiting;
         public WaitingFlow Flow => _flow;
 
@@ -83,11 +139,13 @@ namespace Game.Net
             // Presence: a person whose connection is gone stays on the island for the reconnect window but does not count.
             foreach (var kv in _keys)
             {
+                if (kv.Key != null && !kv.Key.IsPlayer) continue; // bots are not people
                 bool here = kv.Key != null && kv.Key.Owner != null && kv.Key.Owner.IsValid && !kv.Key.Dead.Value;
                 if (here) _flow.Join(kv.Value); else _flow.Leave(kv.Value);
             }
             double now = Time.unscaledTimeAsDouble;
             bool deploy = _flow.Tick(now);
+            if (!deploy) DriveBots(_flow.Last);
             if (Time.unscaledTime >= _nextSend)
             {
                 _nextSend = Time.unscaledTime + 0.5f;
@@ -109,9 +167,11 @@ namespace Game.Net
         void Deploy()
         {
             Debug.Log($"[WaitingRoom] countdown over ({_flow.Last.Reason}): {_flow.People} people, {_flow.Last.BotsTotal} bots in all, to the elevators");
+            foreach (var b in _bots)
+                if (b.OnIsland && b.Body != null) b.Body.transform.SetPositionAndRotation(b.HomePosition, b.HomeRotation);
             foreach (var kv in _keys)
             {
-                if (kv.Key == null) continue;
+                if (kv.Key == null || !kv.Key.IsPlayer) continue;
                 int index = _flow.DeploymentIndex(kv.Value);
                 _director.ServerDeployFromIsland(kv.Key, index);
             }

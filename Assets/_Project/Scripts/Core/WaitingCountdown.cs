@@ -11,6 +11,7 @@ namespace Game.Core
         public bool Done;           // start the match now
         public float SecondsLeft;
         public StartReason Reason;  // Full: the short deadline of a full room ended it; TimeUp: the max time (or the end of the clock in general)
+        public float Elapsed;       // seconds since the first person came (0 while nobody is there)
         public int BotsTotal;       // bots the match gets in all (BotFill.Plan); the waiting bots already there count towards it
     }
 
@@ -29,6 +30,8 @@ namespace Game.Core
             _rules = rules;
             _max = overrideMaxSeconds >= 0f ? overrideMaxSeconds : rules.WaitMaxSeconds;
         }
+
+        public float MaxSeconds => _max;
 
         public void Reset() { _openedAt = double.NaN; _fullAt = double.NaN; }
 
@@ -54,6 +57,7 @@ namespace Game.Core
             return new CountdownState
             {
                 Running = true,
+                Elapsed = (float)Math.Max(0.0, now - _openedAt),
                 Done = done,
                 SecondsLeft = left,
                 Reason = done ? (fullWins ? StartReason.Full : StartReason.TimeUp) : StartReason.None,

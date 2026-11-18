@@ -27,6 +27,25 @@ namespace Game.Core
 
         public WaitingFlow(MatchRules rules, float startSecondsOverride = -1f) { _countdown = new WaitingCountdown(rules, startSecondsOverride); }
 
+        public float MaxSeconds => _countdown.MaxSeconds;
+
+        // A standing place for a waiting bot (key: any id not used by a person); the same place again for the same key. Not counted as a person.
+        public (float x, float z)? PlaceBot(int key)
+        {
+            int botKey = int.MinValue + key;
+            if (!_spot.TryGetValue(botKey, out int s))
+            {
+                var used = new HashSet<int>(_spot.Values);
+                s = -1;
+                for (int i = _spawns.Count - 1; i >= 0; i--) if (!used.Contains(i)) { s = i; break; } // bots take the far end, people the near one
+                if (s < 0) return null;
+                _spot[botKey] = s;
+            }
+            return _spawns[s];
+        }
+
+        public void FreeBot(int key) => _spot.Remove(int.MinValue + key);
+
         // Where this person stands: a free place on the island, the same one on a return. Null when the room has no free place.
         public (float x, float z)? Join(int id)
         {

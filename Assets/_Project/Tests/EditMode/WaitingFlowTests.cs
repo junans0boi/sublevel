@@ -82,6 +82,19 @@ namespace Game.Tests
         }
 
         [Test]
+        public void WaitingBots_TakeOtherPlacesThanPeople_AndAreNotPeople()
+        {
+            var f = new WaitingFlow(Rules());
+            var person = f.Join(1);
+            var bot = f.PlaceBot(0);
+            Assert.AreNotEqual(person, bot);
+            Assert.AreEqual(bot, f.PlaceBot(0), "the same bot keeps its place");
+            Assert.AreEqual(1, f.People);
+            f.FreeBot(0);
+            Assert.AreEqual(bot, f.PlaceBot(5), "a freed place is taken again");
+        }
+
+        [Test]
         public void OnTheIsland_NothingHurts_AfterTheDeploymentItDoes()
         {
             Assert.AreEqual(0f, WaitingFlow.DamageIn(WaitingPhase.Waiting, 100f), "a punch, a shot, a blast, a fall: all zero while waiting");
