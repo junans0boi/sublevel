@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "UnarmedCrouch", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "UnarmedCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]
@@ -98,7 +98,7 @@ namespace Game.Tests
                 }
             Assert.GreaterOrEqual(clips.Count, 15);
             foreach (var (state, clip) in clips) Assert.IsTrue(clip.isHumanMotion, $"{state}/{clip.name} must be a Humanoid clip so every roster model plays it");
-            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop" };
+            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
             foreach (var (_, clip) in clips)
                 if (loops.Contains(clip.name)) Assert.IsTrue(clip.isLooping, clip.name + " loops");
             foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross" })
@@ -269,7 +269,7 @@ namespace Game.Tests
             _animator.SetFloat("Move", 3f);
             foreach (var (layer, state, upper) in new[]
             {
-                (Base, "Locomotion", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
+                (Base, "Locomotion", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
                 (Upper, "Aim", 1f), (Upper, "PunchRight", 1f), (Upper, "PunchLeft", 1f),
             })
             {
