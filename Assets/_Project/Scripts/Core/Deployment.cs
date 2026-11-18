@@ -130,6 +130,8 @@ namespace Game.Core
         // (only when that is sooner). `--start-seconds` overrides the first one on a dedicated server.
         public float WaitMaxSeconds = 90f;
         public float WaitFullSeconds = 15f;
+        // A dedicated server's match starts with everybody on the waiting island (ADR-382). Off in code so tests keep the elevator start.
+        public bool UseWaitingIsland = false;
         // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-258).
         // Off in code so tests that set BotCount keep it.
         public bool FillToParticipants = false;

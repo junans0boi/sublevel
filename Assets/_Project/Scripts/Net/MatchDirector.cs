@@ -98,6 +98,7 @@ namespace Game.Net
         bool _guestWasUp;
         // Server: holds a dropped player's combatant for a reconnect, then hands it to a bot (#166).
         public SessionKeeper Sessions { get; private set; }
+        WaitingRoom _waiting;   // the island phase before the elevators (ADR-382); null = people start in the elevators
 
         void Awake()
         {
@@ -130,6 +131,7 @@ namespace Game.Net
             if (sky == null) sky = gameObject.AddComponent<SkySync>();
             sky.Bind(_networkManager);
             _networkManager.ServerManager.OnServerConnectionState += OnServerState;
+            if (!NetSession.Dedicated) WaitingHud.Attach(_networkManager);
             _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             _networkManager.ServerManager.RegisterBroadcast<LookBroadcast>(OnLook, false);
             _networkManager.ClientManager.OnClientConnectionState += SendLook;
@@ -237,6 +239,7 @@ namespace Game.Net
             Sessions = SessionKeeper.Attach(_networkManager);
             NetPulseServer.Attach(_networkManager);
             ServerPlanDeployment();
+            _waiting = HasElevators ? WaitingRoom.TryCreate(this, _networkManager) : null;
 
             BuildingLoot.Build(_lootSpawns);
             BotFarmStats.Reset();
@@ -379,7 +382,7 @@ namespace Game.Net
         {
             // Nobody came to play (a server without its own client): the bots are not kept in the dark for ever.
             float wait = NetSession.Role == NetSession.RoleKind.Host ? LobbyWaitSeconds : PlayerWaitSeconds;
-            if (Elevators != null && _serverStartedAt >= 0f && !Elevators.ServerScheduled && Time.time - _serverStartedAt > wait)
+            if (Elevators != null && _serverStartedAt >= 0f && !Elevators.ServerScheduled && Time.time - _serverStartedAt > wait && !(_waiting != null && _waiting.Open))
                 Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
             if (_guestRetryAt >= 0f && Time.time >= _guestRetryAt)
             {
@@ -455,6 +458,15 @@ namespace Game.Net
         {
             // Scenes with elevators: the deployment decides (ADR-055). Others: the spawn points in turn.
             // Players beyond the expected ones (-1) take the least occupied elevator instead of a bot's place.
+            // The waiting island first (ADR-382): everybody stands there until the countdown sends them to the elevators.
+            if (_waiting != null && _waiting.Open && _waiting.TryPlace(connection.ClientId, out var islandPosition, out var islandRotation))
+            {
+                var waiting = Instantiate(PlayerPrefabFor(connection, out var waitingLook), islandPosition, islandRotation);
+                SetLook(waiting, waitingLook);
+                _networkManager.ServerManager.Spawn(waiting, connection);
+                _waiting.Register(connection.ClientId, waiting.GetComponent<Combatant>());
+                return;
+            }
             int index = _playersPlaced < _expectedPlayersCounted ? _playersPlaced : -1;
             if (TryElevatorFor(index, out var position, out var rotation, out _))
             {
@@ -473,6 +485,23 @@ namespace Game.Net
             var player = Instantiate(PlayerPrefabFor(connection, out var look), point.position, point.rotation);
             SetLook(player, look);
             _networkManager.ServerManager.Spawn(player, connection);
+        }
+
+        // The countdown ended: this person goes from the island into the elevator the deployment gave them (their joining order),
+        // and the owner's body follows (server correction); the doors are scheduled once for everybody (ServerOpenDoorsAfterWaiting).
+        public void ServerDeployFromIsland(Combatant person, int index)
+        {
+            if (person == null || !TryElevatorFor(index, out var position, out var rotation, out _)) return;
+            _playersPlaced++;
+            person.transform.SetPositionAndRotation(position, rotation);
+            if (person.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(position);
+            if (person.TryGetComponent<CombatantStance>(out var stance)) stance.ServerCorrect(position);
+            ServerProtect(person);
+        }
+
+        public void ServerOpenDoorsAfterWaiting()
+        {
+            if (Elevators != null) Elevators.ServerScheduleOpen(DeploymentRules.Current.DoorDelaySeconds);
         }
 
         // Server-side. Solo has no revival: restarting reloads the match scene.

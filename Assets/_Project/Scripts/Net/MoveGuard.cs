@@ -57,6 +57,9 @@ namespace Game.Net
             return true;
         }
 
+        // The server moved this body itself (waiting island -> elevator): that place is the good one now.
+        public void ServerRelocate(Vector3 to) => Accept(to);
+
         void Accept(Vector3 to)
         {
             _good = to;
@@ -72,6 +75,20 @@ namespace Game.Net
             float dt = (float)(now - _sampled);
             _sampled = now;
             var p = transform.position;
+            // Waiting on the island (ADR-382): the server keeps people inside it, whatever the client says.
+            if (WaitingRoom.Current != null && WaitingRoom.Current.Open && !_combatant.Dead.Value)
+            {
+                float cx = p.x, cz = p.z;
+                WaitingIsland.Clamp(ref cx, ref cz);
+                if (cx != p.x || cz != p.z)
+                {
+                    var back = new Vector3(cx, p.y, cz);
+                    transform.position = back;
+                    _good = back; _pending = false; _suspectAt = double.NegativeInfinity;
+                    _stance.ServerCorrect(back);
+                    return;
+                }
+            }
             // Carried by a car (its speed is the car's) or dead: nothing to compare. The next place is taken as good.
             if (_combatant.Dead.Value || VehicleSeat.IsAttached(_combatant)) { _good = p; _pending = false; return; }
             var d = p - _good;

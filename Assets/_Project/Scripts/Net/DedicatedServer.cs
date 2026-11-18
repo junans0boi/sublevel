@@ -25,6 +25,8 @@ namespace Game.Net
         LobbyNet _lobby;
         StateKind _state;
         float _lobbyRetryAt;
+        // --start-seconds as given (negative = the data value); the waiting island reads it too.
+        public static float StartSecondsOverride = -1f;
         WaitingCountdown _countdown;   // the lobby's countdown (ADR-380)
         float _nextCountdownLog;
         float _matchStartedAt;
@@ -49,6 +51,7 @@ namespace Game.Net
             DontDestroyOnLoad(go);
             Instance = go.AddComponent<DedicatedServer>();
             Instance._options = options;
+            StartSecondsOverride = options.StartSeconds;
         }
 
         void Start()
