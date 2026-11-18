@@ -18,7 +18,7 @@ namespace Game.Net
                 // The launcher's scoped API token: the nickname comes from /api/me, the join token is fetched per join (LobbyNet.Update).
                 LobbyNet.ApiToken = token;
                 LobbyNet.Backend = HttpBackend.FromEnvironment();
-                LobbyNet.Backend.Me().ContinueWith(t => { if (!t.IsFaulted && t.Result.Ok) LobbyNet.AuthNickname = t.Result.Value.nickname; });
+                LobbyNet.Backend.Me().ContinueWith(t => { if (!t.IsFaulted && t.Result.Ok) { LobbyNet.AuthNickname = t.Result.Value.nickname; LobbyNet.AccountId = t.Result.Value.id; } });
             }
             else if (!string.IsNullOrEmpty(token) && GameToken.Peek(token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var c))
             {

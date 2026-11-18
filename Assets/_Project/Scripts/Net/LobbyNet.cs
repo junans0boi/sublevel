@@ -74,6 +74,7 @@ namespace Game.Net
         public static string AuthToken, AuthNickname, ServerTokenSecret;
         // Client: the launcher's scoped API token ("sg_...", 12h) for the backend; it is only ever sent as a Bearer header, never stored or logged. When set, each join first trades it for a fresh 5-minute signed token (AuthToken).
         public static string ApiToken;
+        public static long AccountId; // from /api/me, 0 until known
         public static IBackend Backend;
         // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
         public static readonly System.Collections.Generic.Dictionary<string, long> AccountsBySession = new System.Collections.Generic.Dictionary<string, long>();

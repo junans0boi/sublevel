@@ -23,6 +23,9 @@ namespace Game.Net
         public int Port { get; private set; }
         public int Bots { get; private set; }
         public event Action Changed;
+        // A party member who did not start the match still has to join it: while Watching and idle, an existing ticket of the party is adopted.
+        public bool Watching;
+        string _consumedId;
 
         public MatchTicketClient(IBackend backend) { _backend = backend; }
 
@@ -40,9 +43,25 @@ namespace Game.Net
             if (id != null) _backend.CancelTicket(id); // best effort: the backend also expires it after 45s without polling
         }
 
+        // The joined match was handled: back to idle without telling the backend; its ticket is not adopted again.
+        public void Consume() { _consumedId = _ticketId; _ticketId = null; State = StateKind.Idle; Text = ""; Changed?.Invoke(); }
+
         public void Tick(double now)
         {
             while (_done.TryDequeue(out var a)) a();
+            if (State == StateKind.Idle && Watching && !_busy && now >= _nextPoll)
+            {
+                _busy = true; _nextPoll = now + TicketRules.PollSeconds;
+                _backend.CurrentTicket().ContinueWith(t => _done.Enqueue(() =>
+                {
+                    _busy = false;
+                    if (State != StateKind.Idle || t.IsFaulted || !t.Result.Ok || t.Result.Value == null) return;
+                    var v = t.Result.Value;
+                    if (v.id == _consumedId || (v.status != "queued" && v.status != "matched")) return;
+                    State = StateKind.Queued; Apply(t.Result);
+                }), TaskContinuationOptions.ExecuteSynchronously);
+                return;
+            }
             if (State != StateKind.Queued || _busy || _ticketId == null || now < _nextPoll) return;
             Run(_backend.CurrentTicket(), r => Apply(r), now);
         }

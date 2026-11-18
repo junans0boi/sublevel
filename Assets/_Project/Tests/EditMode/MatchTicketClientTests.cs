@@ -80,5 +80,30 @@ namespace Game.Tests
             Assert.AreEqual("1.2.3.4", e.ticket.match.server.host); Assert.AreEqual(7770, e.ticket.match.server.port);
             Assert.AreEqual("", e.ticket.queue?.reason ?? "");
         }
+
+        [Test]
+        public void PartyMember_AdoptsLeadersTicket_JoinsOnce()
+        {
+            var f = new Fake(); f.Answers.Enqueue(Matched());
+            var c = new MatchTicketClient(f) { Watching = true };
+            c.Tick(0); c.Tick(0.1);
+            Assert.AreEqual(MatchTicketClient.StateKind.Matched, c.State);
+            c.Consume();
+            c.Tick(5); c.Tick(5.1);
+            Assert.AreEqual(MatchTicketClient.StateKind.Idle, c.State, "the same ticket is not adopted twice");
+        }
+
+        [Test]
+        public void BackendQueue_PartyOfTwo_JoinsAssignedServerWithPartySize()
+        {
+            var f = new Fake(); f.Answers.Enqueue(Queued()); f.Answers.Enqueue(Matched());
+            var social = new SocialClient(f);
+            string joined = null; int size = 0;
+            var q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), social, (h, p, n) => { joined = h + ":" + p; size = n; });
+            q.RequestStart(TeamMode.Squad, 2);
+            q.Tick(0); q.Tick(1e6); q.Tick(1e6 + 1); // RequestStart reads the real clock
+            Assert.AreEqual("100.97.58.29:7770", joined); Assert.AreEqual(2, size);
+            Assert.IsFalse(q.Waiting);
+        }
     }
 }
