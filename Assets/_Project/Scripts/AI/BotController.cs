@@ -105,6 +105,7 @@ namespace Game.AI
         int _ignoredEnemyId = -1;
         float _ignoreEnemyUntil;
         Vector3 _stallFrom;
+        bool _stallCounted;
         float _stallAt;
         float _lastAttackAt = -100f;
         float _hearFactor = 1f;
@@ -235,17 +236,36 @@ namespace Game.AI
         void OnDisable()
         {
             All.Remove(this);
+            if (Farming) EndFarm();
             if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
         }
 
         float _nextDoor;
+        const float DoorInterval = 0.25f;
+        const int PathsPerFrame = 2;
+        static int _pathFrame, _pathsThisFrame;
+
+        static bool TakePathSlot()
+        {
+            if (_pathFrame != Time.frameCount) { _pathFrame = Time.frameCount; _pathsThisFrame = 0; }
+            return _pathsThisFrame++ < PathsPerFrame;
+        }
 
         void Update()
+        {
+            long t0 = BotPerf.Begin();
+            UpdateBot();
+            BotPerf.End(BotPerf.Ai, t0);
+        }
+
+        void UpdateBot()
         {
             if (!_self.IsServerInitialized) return;
             if (!_ready) Init();
             if (_self.Dead.Value)
             {
+                if (Farming) EndFarm();
+                TallyDeath();
                 if (_agent != null && _agent.enabled) _agent.enabled = false;
                 return;
             }
@@ -261,17 +281,26 @@ namespace Game.AI
             if (now >= _nextSense)
             {
                 _nextSense = now + _rules.SenseInterval;
+                long ts = BotPerf.Begin();
                 Sense();
+                BotPerf.End(BotPerf.Sense, ts);
             }
             // Bots open a closed door in their way (G11, ADR-104).
             if (now >= _nextDoor)
             {
-                _nextDoor = now + 0.25f;
+                _nextDoor = now + DoorInterval;
+                long td = BotPerf.Begin();
                 DoorSystem.ServerBotOpen(transform.position, OnNavMesh && _agent.velocity.sqrMagnitude > 0.04f ? _agent.velocity : transform.forward);
+                BotPerf.End(BotPerf.Doors, td);
             }
             ApplyBlindness(now);
             FillSelf();
+            TickFarm(now);
+            TickBrawl(now);
+            TickCover(now);
             _intent = _brain.Think(_percept);
+            TallyBrawl(now);
+            TallyCover();
             // Teams (ADR-072): revive a knocked teammate, keep near the leader.
             ApplyTeam(ref _intent, now);
             // Items (ADR-116): heal, boost, throw; blind and burning bodies react.
@@ -292,6 +321,7 @@ namespace Game.AI
             // Each bot has its own level, the setting being the centre of a mix (ADR-245).
             _botIndex = _named;
             _level = BotMix.For(BotLevels.Level, matchSeed, _botIndex);
+            BotMatchStats.Register(_self.ObjectId, (int)_level);
             _rules = BotLevels.For(BotRules.Current, _level);
             if (!ReferenceEquals(_rules, BotRules.Current)) _hearFactor = _rules.GunshotHearingRadius / Mathf.Max(1f, BotRules.Current.GunshotHearingRadius);
             _keys = GetComponent<KeyHolder>();
@@ -299,9 +329,15 @@ namespace Game.AI
             int seed = unchecked(matchSeed * 31 + _self.ObjectId * 104729 + 5);
             _rng = new System.Random(seed);
             InitItems();
+            HookDeaths();
+            // Whether this bot goes to noises at all: its own fixed roll against the level's chance (ADR-312).
+            _percept.IgnoresNoise = !BotPriority.Investigates(BotPriority.Roll(seed ^ 0x5bd1e995), _rules.InvestigateChance);
             _brain = new BotBrain(_rules, unchecked(seed * 7 + 1)) { PointsOfInterest = _points, RoamFilter = RoamAllowed };
             _route = new NavMeshPath();
             _noiseSeen = BotNoise.Count;
+            // Phase spread (ADR-290): bots that start together would sense and check doors on the same frame for ever.
+            _nextSense = Time.time + (float)_rng.NextDouble() * _rules.SenseInterval;
+            _nextDoor = Time.time + (float)_rng.NextDouble() * DoorInterval;
             _maxHp = Mathf.Max(1f, _self.Hp.Value);
             _named++;
             DisplayName = BotNames.For(matchSeed, _botIndex);
@@ -380,6 +416,7 @@ namespace Game.AI
             {
                 _percept.EnemyId = seen.ObjectId;
                 _percept.EnemyPosition = ToVec(ChestOf(seen));
+                _percept.EnemyArmed = seen.HasAnyWeapon;
             }
 
             // Hearing: gunshots and whatever else was emitted since the last time. The nearest one counts.
@@ -395,6 +432,7 @@ namespace Game.AI
                 var at = new Vector3(noise.X, noise.Y, noise.Z);
                 float sqr = (at - eye).sqrMagnitude;
                 float heardRadius = noise.Radius * _hearFactor;
+                if (noise.Kind == NoiseKind.Gunshot && sqr <= heardRadius * heardRadius) { _shotAt = at; _shotTime = Time.time; } // for the corpse trip (ADR-310)
                 if (sqr > heardRadius * heardRadius || sqr >= heardSqr) continue;
                 // A closed door on the way muffles it: the radius shrinks for each one (G11, ADR-104).
                 int shut = DoorSystem.ClosedBetween(at, eye);
@@ -418,7 +456,9 @@ namespace Game.AI
                 _percept.HeardPosition = ToVec(heardAt);
             }
 
+            long tl = BotPerf.Begin();
             SenseLoot(eye);
+            BotPerf.End(BotPerf.Loot, tl);
         }
 
         // A clear line from the eyes to that point on that combatant.
@@ -432,6 +472,8 @@ namespace Game.AI
             if (!Physics.Raycast(eye, to / distance, out var hit, distance + 0.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) return false;
             return hit.collider.GetComponentInParent<Combatant>() == target;
         }
+
+        readonly List<LootItem> _lootNear = new List<LootItem>();
 
         void SenseLoot(Vector3 eye)
         {
@@ -448,7 +490,8 @@ namespace Game.AI
             float bestSqr = rules.LootRadius * rules.LootRadius;
             bool bestIsWeapon = false;
             var feet = transform.position;
-            var items = LootItem.All;
+            var items = _lootNear;
+            BotLootGrid.Near(feet, rules.LootRadius, items);
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
@@ -487,10 +530,12 @@ namespace Game.AI
                 bestSqr = sqr;
                 bestIsWeapon = isWeapon;
             }
+            AdoptRemembered(now);
             if (_loot == null) return;
             _percept.LootVisible = true;
             _percept.LootId = _loot.ObjectId;
             _percept.LootPosition = ToVec(_loot.transform.position);
+            _percept.LootIsWeapon = _loot.Kind.Value == (int)LootKind.Weapon;
         }
 
         // A helmet or vest better than the one worn (the server takes only a better piece).
@@ -528,6 +573,7 @@ namespace Game.AI
             _percept.WeaponRange = weapon != null ? weapon.Range : 0f;
             _percept.Reloading = _self.Reloading.Value;
             _percept.Medkits = HealCount;
+            _percept.WeaponStyle = weapon != null ? BotWeapons.StyleOf((int)weapon.Category, (int)weapon.Ammo, weapon.Auto, weapon.Damage, weapon.FireInterval) : BotWeaponStyle.Rifle;
 
             int otherSlot = _self.OtherWeaponSlot();
             var other = GameData.Weapons.Find(otherSlot >= 0 ? _self.WeaponInSlot(otherSlot) : 0);
@@ -664,7 +710,8 @@ namespace Game.AI
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || intent.State == BotState.Roam || intent.State == BotState.Investigate);
+            // A noise it is going to comes before the final-region gather (ADR-312): only a roaming bot is pulled by a non-urgent zone goal.
+            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && intent.State == BotState.Roam));
             if (!zoneMove) _goal = ZoneGoal.None;
 
             if (!intent.Move && !zoneMove)
@@ -688,7 +735,8 @@ namespace Game.AI
                 if (now >= _coverUntil)
                 {
                     _coverUntil = now + CoverSeconds;
-                    _hasCover = FindCover(threat, out _cover);
+                    // Empty-handed it runs for a place out of the enemy's sight (ADR-310); with a gun it looks for cover as before.
+                    _hasCover = !_percept.HasWeapon && !_percept.OtherSlotUsable ? FindFleeCover(threat, out _cover) : FindCover(threat, out _cover);
                 }
                 if (_hasCover) target = _cover;
             }
@@ -704,9 +752,14 @@ namespace Game.AI
             bool waypointDone = _routing && !_agent.pathPending && _agent.remainingDistance <= WaypointReachedMeters;
             // No route last time: a long search is not run again every frame.
             if (far && !_hasDestination && now < _routeRetryAt) return;
-            if (!_hasDestination || now >= _nextRepath || waypointDone || (target - _destination).sqrMagnitude > moveLimit * moveLimit)
+            bool replan = !_hasDestination || now >= _nextRepath || waypointDone || (target - _destination).sqrMagnitude > moveLimit * moveLimit;
+            // At most PathsPerFrame bots plan a route in one frame (ADR-290): the rest keep walking the old one and plan on the next.
+            // A bot with no destination yet always plans (it would stand still otherwise).
+            if (replan && _hasDestination && !TakePathSlot()) replan = false;
+            if (replan)
             {
-                _nextRepath = now + (far ? RouteRepathSeconds : RepathSeconds);
+                // Spread by +-20 % (ADR-290): paths planned on the same second would land on the same frame.
+                _nextRepath = now + (far ? RouteRepathSeconds : RepathSeconds) * (0.8f + 0.4f * (float)_rng.NextDouble());
                 if (!_hasDestination)
                 {
                     _progressFrom = transform.position;
@@ -715,7 +768,10 @@ namespace Game.AI
                 _hasDestination = true;
                 _destination = target;
                 _routing = false;
-                if (!SnapToNavMesh(target, far, out var onMesh))
+                long tp = BotPerf.Begin();
+                bool snapped = SnapToNavMesh(target, far, out var onMesh);
+                BotPerf.End(BotPerf.Path, tp);
+                if (!snapped)
                 {
                     GiveUp(intent, now);
                     return;
@@ -723,7 +779,10 @@ namespace Game.AI
                 var next = onMesh;
                 if (far)
                 {
-                    if (!NextWaypoint(onMesh, out next))
+                    tp = BotPerf.Begin();
+                    bool waypoint = NextWaypoint(onMesh, out next);
+                    BotPerf.End(BotPerf.Path, tp);
+                    if (!waypoint)
                     {
                         _routeRetryAt = now + RouteRepathSeconds;
                         GiveUp(intent, now);
@@ -731,7 +790,10 @@ namespace Game.AI
                     }
                     _routing = true;
                 }
-                if (!_agent.SetDestination(next))
+                tp = BotPerf.Begin();
+                bool set = _agent.SetDestination(next);
+                BotPerf.End(BotPerf.Path, tp);
+                if (!set)
                 {
                     GiveUp(intent, now);
                     return;
@@ -1028,6 +1090,7 @@ namespace Game.AI
             if (now - _stallAt < StallSeconds) return;
 
             string reason = StallReason();
+            if (!_stallCounted) { _stallCounted = true; BotMatchStats.StalledBots[(int)_level]++; }
             BotStats.CountStall(reason);
             Debug.Log($"[Bot] {DisplayName} made no headway for {StallSeconds:0} s ({reason}) at {position}; picking a new target");
             // Whatever it was after is dropped: the enemy it could neither reach nor hit, the pass it could not get

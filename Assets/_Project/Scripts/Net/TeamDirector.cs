@@ -17,7 +17,7 @@ namespace Game.Net
 
         readonly HashSet<int> _assigned = new HashSet<int>();
         readonly List<TeamMember> _members = new List<TeamMember>();
-        int _players, _others, _lateJoiners;
+        int _players, _others, _lateJoiners, _extraTeams;
         float _nextNames;
         MatchState _state;
 
@@ -85,7 +85,6 @@ namespace Game.Net
         void AssignNewcomers(List<Combatant> all)
         {
             if (_assigned.Count == all.Count) return;
-            int size = TeamRules.Current.SizeOf(Mode);
             var director = MatchDirector.Instance;
             int expected = director != null ? director.ExpectedPlayers : 1;
             for (int i = 0; i < all.Count; i++)
@@ -97,7 +96,11 @@ namespace Game.Net
                 if (c.IsPlayer && _players < expected) index = _players++;
                 else if (c.IsPlayer) index = expected + (director != null ? director.BotCount : _others) + _lateJoiners++;
                 else index = expected + _others++;
-                c.ServerSetTeam(Teams.TeamOf(index, size), Teams.SlotOf(index, size), _state.ServerNameOf(c));
+                var layout = director != null ? director.Layout : null;
+                int team = layout != null ? layout.TeamOf(index) : Teams.None;
+                // Past the plan (a late joiner, or no elevator plan): a team of one, never squeezed into a bot team (ADR-332).
+                if (team == Teams.None) { team = (layout != null ? layout.TeamCount : 0) + ++_extraTeams; c.ServerSetTeam(team, 1, _state.ServerNameOf(c)); }
+                else c.ServerSetTeam(team, layout.SlotOf(index), _state.ServerNameOf(c));
             }
         }
 

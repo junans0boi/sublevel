@@ -98,8 +98,29 @@ namespace Game.Gameplay
             if (Instance == this) Instance = null;
         }
 
+        // Backend matchmaking and friends (#391/#392), only with a launcher login (LobbyNet.Backend).
+        SocialClient _social;
+        BackendMatchQueue _backendQueue;
+        (TeamMode mode, int size)? _afterJoin;
+        public SocialClient Social => _social;
+        FriendsPanel _friends;
+
+        void StartBackend()
+        {
+            if (LobbyNet.Backend == null || _social != null) return;
+            _social = new SocialClient(LobbyNet.Backend);
+            _backendQueue = new BackendMatchQueue(new MatchTicketClient(LobbyNet.Backend), _social, (host, port, size) =>
+            {
+                _afterJoin = (size > 1 ? TeamMode.Squad : TeamMode.Solo, size);
+                _lobbyScreen.JoinServer(host, (ushort)port);
+            });
+        }
+
         void Update()
         {
+            if (_social == null) StartBackend();
+            if (_social != null && _friends == null && _root != null) _friends = FriendsPanel.Build(_root.transform, _social);
+            if (_social != null) { _social.Tick(Time.unscaledTimeAsDouble); _backendQueue.Tick(Time.unscaledTimeAsDouble); }
             SyncQueue();
             if (CharacterShown && !ModalShown) _charScreen.Tick();
             if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }
@@ -310,13 +331,22 @@ namespace Game.Gameplay
         // 파티 시작 uses the server's queue while this menu is connected to a server as a client (LobbyNet in a lobby, not hosting);
         // otherwise it is the local start (solo against bots).
         LobbyNet _queueLobby;
+        bool _backendAttached;
         void SyncQueue()
         {
             if (_lobbyPanel == null || _lobbyScreen == null) return;
             var lobby = _lobbyScreen.Lobby;
             bool client = lobby != null && lobby.Phase == LobbyNet.PhaseKind.InLobby && !lobby.IsHost;
-            if (client && _queueLobby != lobby) { _queueLobby = lobby; _lobbyPanel.AttachQueue(new MatchQueueAdapter(new MatchmakingClient(lobby))); }
-            else if (!client && _queueLobby != null) { _queueLobby = null; _lobbyPanel.AttachQueue(null); }
+            if (client && _queueLobby != lobby)
+            {
+                _queueLobby = lobby;
+                var server = new MatchQueueAdapter(new MatchmakingClient(lobby));
+                _lobbyPanel.AttachQueue(server);
+                // Assigned by the backend: ask the server's queue for a place at once (the party's size, as the backend counted it).
+                if (_afterJoin.HasValue) { server.RequestStart(_afterJoin.Value.mode, _afterJoin.Value.size); _afterJoin = null; }
+            }
+            else if (!client && _queueLobby != null) { _queueLobby = null; _lobbyPanel.AttachQueue(_backendQueue); }
+            else if (!client && _queueLobby == null && _backendQueue != null && !_backendAttached) { _backendAttached = true; _lobbyPanel.AttachQueue(_backendQueue); }
         }
 
         public void Quit()
@@ -372,7 +402,7 @@ namespace Game.Gameplay
         void BuildMain(Transform parent)
         {
             // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
-            _lobbyPanel = LobbyPanel.Build(this, parent, ShowTrainingEntry, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => Toast("새 알림이 없습니다."));
+            _lobbyPanel = LobbyPanel.Build(this, parent, ShowTrainingEntry, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => { if (_friends != null) _friends.Toggle(); else Toast("새 알림이 없습니다. (로그인하면 친구·파티를 쓸 수 있습니다.)"); });
             _main = _lobbyPanel.Root.gameObject;
 
             // 커스텀 모드 (adopted mockup): room rules, 방 만들기, 코드로 참가.

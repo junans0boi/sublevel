@@ -26,7 +26,7 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
-        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed", UnarmedCrouch = "UnarmedCrouch";
+        public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed", UnarmedCrouch = "UnarmedCrouch", SwimState = "Swim";
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
         public const string BreathState = "Breath", FlinchState = "Flinch";
@@ -54,6 +54,7 @@ namespace Game.Gameplay
         const float PunchHold = 0.5f;          // the upper layer shows the punch this long
         const float PunchWeightPerSecond = 50f; // a punch is quick: the layer comes up faster than for a weapon
         const float StepMinSpeed = 0.6f;
+        public const float SwimClipSpeed = 2.5f; // ground speed (m/s) the UAL swim stroke was made for: the Swim tree blends idle -> stroke up to it
         const float AirPhasePerSecond = 1.5f;  // how fast the jump pose moves between rise, fall and landing
         const float StepPauseAfterLanding = 0.15f;
         const float TakeoffAttackShare = 0.3f; // of the take-off push spent getting into it
@@ -282,16 +283,15 @@ namespace Game.Gameplay
             // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
             _legTurnShown = _legs.TurnDeg * (1f - _prone);
             var proneRules = StanceRules.Current;
-            // Lying is the prone clip (ADR-231); only swimming still lies as the pitched body (it has no clip and is posed in .Swim.cs).
+            // Lying is the prone clip (ADR-231); swimming is the Swim tree (UAL, #236), already flat: the body is not pitched for either.
             _proneClip = _prone * (1f - _swimAmount);
-            float pitched = _prone - _proneClip;
+            const float pitched = 0f;
             _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * pitched, Vector3.right)
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             // Slow walk (Ctrl, ADR-065 (3)): its speed falls between the walk and run clips, whose cycles do not line up,
             // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
             bool slowWalk = !dead && _stance != null && _stance.SlowWalk.Value && !_legs.Backward && _walkClipSpeed > 0f;
             float shown = slowWalk ? Mathf.Min(speed, _walkClipSpeed) : speed;
-            if (_swimAmount > 0.01f) shown = 0f; // swimming: the idle pose under the stroke and kick (PoseSwim), not the crawl
             _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
@@ -320,7 +320,7 @@ namespace Game.Gameplay
             {
                 // The flinch is an additive layer on top of whatever plays, so a hit no longer replaces the pose.
                 if (hit) { _animator.CrossFadeInFixedTime(FlinchState, 0.03f, AdditiveLayer, 0f); _additive = FlinchState; _flinchUntil = Time.time + FlinchShare * FlinchClipLength(); }
-                SetBase(_proneClip > 0.5f && !showAir ? Prone : showAir ? Air : Locomotion);
+                SetBase(_swimAmount > 0.5f ? SwimState : _proneClip > 0.5f && !showAir ? Prone : showAir ? Air : Locomotion);
             }
             _animator.SetFloat(_airPhaseId, _airPhase);
             TrackJumpPose(dead);

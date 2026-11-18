@@ -16,6 +16,7 @@ namespace Game.Gameplay
         public bool Reload;
         public bool Interact;
         public bool Boost;         // J: drink the smallest boost item carried
+        public bool GasCover;      // Y: use a gas filter or antidote (ADR-237)
         public bool InteractHeld;  // F held: reviving a knocked teammate (ADR-072)
         public bool ToggleView;
         public bool AimHeld;       // aim key (right button): hold = shoulder, tap = toggle sights
@@ -86,6 +87,7 @@ namespace Game.Gameplay
             f.Inventory = KeyBinds.Pressed(BindAction.Inventory);
             f.Heal = KeyBinds.Pressed(BindAction.Heal);
             f.Boost = KeyBinds.Pressed(BindAction.Boost);
+            f.GasCover = KeyBinds.Pressed(BindAction.GasCover);
             f.Crouch = KeyBinds.Pressed(BindAction.Crouch);
             f.Prone = KeyBinds.Pressed(BindAction.Prone);
             f.FreeLook = KeyBinds.Held(BindAction.FreeLook);

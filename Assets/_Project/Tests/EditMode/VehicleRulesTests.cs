@@ -133,6 +133,15 @@ namespace Game.Tests
             Assert.AreEqual(0.85f, Vehicles.TopSpeed(true, Car) / Vehicles.TopSpeed(false, Car), 1e-4f);
         }
 
+        // World car at (1395, 22, 1839) sat on a side slope rolling back 0.004 m/s: the zero-crossing clamp turned its pull into 0.2 m/s2 and it never moved.
+        [Test]
+        public void Throttle_OnASlopeWhileCreepingBackSlowly_StillPullsFully()
+        {
+            float top = Vehicles.TopSpeed(false, Car);
+            Assert.AreEqual(Car.EngineAccel, Vehicles.DriveAccel(-0.0043f, 1f, top, 7f, Dt, Car), 1e-4f, "forward");
+            Assert.AreEqual(-Car.EngineAccel * Car.ReverseAccelFactor, Vehicles.DriveAccel(0.0043f, -1f, top, 7f, Dt, Car), 1e-4f, "reverse");
+        }
+
         [Test]
         public void Braking_NeverReversesWithinAStep()
         {

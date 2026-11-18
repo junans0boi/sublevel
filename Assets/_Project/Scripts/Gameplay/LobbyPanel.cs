@@ -510,7 +510,7 @@ namespace Game.Gameplay
 
             // Reason line, call panel, state button.
             string waiting = Party.WaitingLine();
-            if (search && _queue != null) _reason.text = QueueText.Line(_queue.State, _queue.Waiting);
+            if (search && _queue != null) _reason.text = _queue.Note ?? QueueText.Line(_queue.State, _queue.Waiting);
             else if (search) _reason.text = member ? "파티장이 매칭을 시작했습니다. 취소는 파티장만 할 수 있습니다." : "매칭 중입니다. 사람이 더 들어오면 봇이 줄어듭니다.";
             else if (solo) _reason.text = "바로 시작할 수 있습니다. 부족한 인원은 봇이 채웁니다.";
             else if (member) _reason.text = Party.Members[IndexOf(Self)].Ready ? "준비 완료. 파티장이 시작하면 매칭이 시작됩니다." : "준비를 누르면 파티장이 시작할 수 있습니다.";

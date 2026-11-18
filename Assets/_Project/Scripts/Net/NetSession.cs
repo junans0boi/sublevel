@@ -15,6 +15,8 @@ namespace Game.Net
         // Host: the people the lobby counted (placed first in the elevators) and the bots that fill the match; -1 = the rules' own.
         public static int Players = 1;
         public static int Bots = -1;
+        // Queue match starts: one size for each human party, in participant order. Empty when the lobby has no party data.
+        public static int[] PartySizes = new int[0];
 
         // Names this player across reconnects to a match (#166): the server hands the same combatant back to the same token.
         public static readonly string Token = System.Guid.NewGuid().ToString("N");
@@ -32,6 +34,7 @@ namespace Game.Net
             Port = 0;
             Players = 1;
             Bots = -1;
+            PartySizes = new int[0];
             Dedicated = false;
         }
 
@@ -44,6 +47,7 @@ namespace Game.Net
             Port = start.MatchPort;
             Players = start.Players;
             Bots = start.Bots;
+            PartySizes = start.PartySizes != null ? (int[])start.PartySizes.Clone() : new int[0];
         }
     }
 }

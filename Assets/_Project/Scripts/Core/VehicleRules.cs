@@ -198,21 +198,23 @@ namespace Game.Core
         {
             throttle = Math.Max(-1f, Math.Min(1f, throttle));
             float a;
+            bool pull = false; // the engine, not a brake, makes `a`
             if (throttle > 0.01f)
             {
                 if (forwardSpeed < -0.5f) a = r.BrakeDecel * throttle;
-                else if (forwardSpeed < topSpeed) a = r.EngineAccel * accelFactor * throttle * Fade(Math.Max(0f, forwardSpeed) / Math.Max(0.1f, topSpeed));
+                else if (forwardSpeed < topSpeed) { pull = true; a = r.EngineAccel * accelFactor * throttle * Fade(Math.Max(0f, forwardSpeed) / Math.Max(0.1f, topSpeed)); }
                 else a = -Math.Min(r.OverSpeedDecel, (forwardSpeed - topSpeed) / Math.Max(1e-4f, dt));
             }
             else if (throttle < -0.01f)
             {
                 float t = -throttle;
                 if (forwardSpeed > 0.5f) a = -r.BrakeDecel * t;
-                else if (-forwardSpeed < reverseTop) a = -r.EngineAccel * r.ReverseAccelFactor * t * Fade(Math.Max(0f, -forwardSpeed) / Math.Max(0.1f, reverseTop));
+                else if (-forwardSpeed < reverseTop) { pull = true; a = -r.EngineAccel * r.ReverseAccelFactor * t * Fade(Math.Max(0f, -forwardSpeed) / Math.Max(0.1f, reverseTop)); }
                 else a = Math.Min(r.OverSpeedDecel, (-forwardSpeed - reverseTop) / Math.Max(1e-4f, dt));
             }
             else a = -Math.Sign(forwardSpeed) * r.CoastDecel;
-            return NoThroughZero(a, forwardSpeed, dt);
+            // Pulling away from a slow creep (a slope rolls the car by hundredths of a m/s) must not be clipped as braking.
+            return pull && Math.Abs(forwardSpeed) < CreepSpeed ? a : NoThroughZero(a, forwardSpeed, dt);
         }
 
         // Slows the car toward a standstill by up to `decel` (m/s²) without reversing it.
@@ -230,6 +232,7 @@ namespace Game.Core
 
         // 1 at a standstill, falling steeply near the top speed (so the car gets close to it in reasonable time).
         const float StandstillSpeed = 1e-3f; // m/s
+        const float CreepSpeed = 0.03f; // m/s
 
         static float Fade(float fraction)
         {

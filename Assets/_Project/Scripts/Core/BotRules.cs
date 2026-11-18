@@ -62,6 +62,7 @@ namespace Game.Core
         // ---- Remembering and wandering ----
         public float MemorySeconds = 8f;          // goes to where a lost target was last seen for this long
         public float InvestigateSeconds = 12f;    // goes to a heard noise for this long
+        public float InvestigateChance = 0.7f;    // share of bots that go to noises at all (each bot's own fixed roll, ADR-312; levels: 0.4 / 0.7 / 1.0)
         public float ArriveMeters = 2.5f;
         public float RoamMinMeters = 20f;         // prefers the next point of interest at least this far away
         public float RoamRadius = 35f;            // without points of interest: wander within this
@@ -75,6 +76,41 @@ namespace Game.Core
         public int HealItemsWanted = 4;           // bandages + first-aid kits it keeps picking up (ADR-116)
         public int BoostWanted = 2;               // per boost item type
         public int ThrowablesWanted = 2;          // per throwable type
+
+        // ---- Farming (ADR-294): right after the drop a bot walks the loot points of a nearby building until it is kitted out ----
+        public float FarmSeconds = 210f;          // longest it farms (Normal; the levels scale it: 240 / 210 / 180)
+        public bool FarmHint = true;              // out of time and unarmed: it is told where the nearest weapon lies
+        public int FarmMags = 1;                  // ready needs a gun with this many magazines of rounds (mag + reserve)
+        public int FarmArmorPieces = 0;           // ...and this many armour pieces worn (0..2)
+        public int FarmHealItems = 1;             // ...and this many healing items (medkits, bandages, first-aid kits)
+        public int FarmBuildingCap = 2;           // at most this many other bots choose the same building (soft)
+        public float FarmArriveMeters = 2.5f;     // a loot point counts as visited this close (and within 2.5 m in height)
+
+        // ---- Cover and peeking (ADR-311, #375) ----
+        public bool PeekCycle = true;             // fire from the open for a while, hide to reload and heal, come back out on the other side
+        public float PeekExposeMin = 2f;          // seconds in the open before it hides again...
+        public float PeekExposeMax = 3f;
+        public float PeekHideMin = 1.5f;          // ...and at least this long behind cover (reloading, healing)...
+        public float PeekHideMax = 3f;
+        public float PeekMaxSeconds = 2.5f;       // coming out and still no line to the enemy for this long: hides again
+        public bool PeekAlternate = true;         // comes out on the other side each time (off: always the same side)
+        public float CoverSearchSeconds = 1.5f;   // how often the hiding place is looked for again
+        public int CoverSearchesPerFrame = 2;     // bots that may look for cover in one frame (rays are spread over frames)
+        // Where each kind of gun is fought from: sniper and marksman rifle far, rifle mid, SMG and shotgun close, pistol behind cover.
+        public float PreferSniperMeters = 70f;
+        public float PreferDmrMeters = 45f;
+        public float PreferSmgMeters = 12f;
+        public float PreferShotgunMeters = 7f;
+        public float PreferPistolMeters = 20f;
+
+        // ---- Without a weapon (ADR-310, #374) ----
+        public float UnarmedFistMeters = 1.35f;   // an unarmed bot fights an armed enemy this close (ADR-218 punch range)
+        public float FleeSeconds = 8f;            // a flight counts as lost when the enemy still sees it after this long
+        public float LootDashMeters = 10f;        // fleeing, a weapon this close on the ground is picked up first
+        public float CorpseLootMeters = 40f;      // goes to where somebody fell if it is this near...
+        public float CorpseMemorySeconds = 60f;   // ...and that was this recently...
+        public float CorpseQuietSeconds = 6f;     // ...and no shots have been heard near it for this long
+        public float CorpseGiveUpSeconds = 25f;   // a trip to a place that long without arriving is dropped
 
         // ---- Fighting like a player (ADR-117) ----
         public float StrafeMeters = 3f;           // sidesteps this far while shooting (0 = stands still)

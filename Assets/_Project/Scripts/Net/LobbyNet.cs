@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    public struct LobbyHello : IBroadcast { public string Version; public string Name; }
+    public struct LobbyHello : IBroadcast { public string Version; public string Name; public string Token; public string SessionToken; }
     public struct LobbyReject : IBroadcast { public byte Reason; }
     public struct LobbyReady : IBroadcast { public bool Ready; }
     public struct LobbyState : IBroadcast
@@ -27,18 +27,39 @@ namespace Game.Net
     // A client asks for a place in the matchmaking queue (ADR-258): the mode and how many people its party has (1..team size).
     public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; }
     public struct LobbyQueueCancel : IBroadcast { }
-    public struct LobbyStart : IBroadcast { public ushort MatchPort; public int Players; public int Bots; public byte Mode; }
+    public struct LobbyStart : IBroadcast
+    {
+        public ushort MatchPort;
+        public int Players;
+        public int Bots;
+        public byte Mode;
+        public int[] PartySizes;
+
+        public static LobbyStart FromPlan(ushort matchPort, TeamMode mode, MatchPlan plan)
+        {
+            var partySizes = new System.Collections.Generic.List<int>();
+            foreach (var team in plan.Teams) if (!team.IsBot) partySizes.Add(team.Size);
+            return new LobbyStart
+            {
+                MatchPort = matchPort,
+                Players = plan.Humans,
+                Bots = plan.Bots,
+                Mode = (byte)mode,
+                PartySizes = partySizes.ToArray()
+            };
+        }
+    }
 
     // The room before a match (#160, ADR-124): its own small NetworkManager (a lobby needs no spawned objects, only
     // broadcasts), separate from the match's. The host runs server + client, a guest only a client. Joining checks the
-    // version and the room's size; the host's start tells everyone the port the match will listen on and how many
-    // people and bots it has, and the lobby is then shut down (Shutdown) while the match scene loads.
+    // version and the room's size; the host's start tells everyone the port, roster totals, and queued party sizes,
+    // then the lobby shuts down while the match scene loads.
     public sealed class LobbyNet : MonoBehaviour
     {
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 1;
+        public const int Protocol = 2; // LobbyStart now carries queue party sizes.
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
@@ -47,6 +68,18 @@ namespace Game.Net
         public static string CurrentVersion => Application.version + "/" + Protocol;
 
         public string Version;
+
+        // Login (#389). Client: the launcher's game token (SUBLEVEL_GAME_TOKEN) and the nickname shown for it, null without a login (dev run).
+        // Server: the secret that checks tokens offline (SUBLEVEL_TOKEN_SECRET); without one nobody is asked to log in.
+        public static string AuthToken, AuthNickname, ServerTokenSecret;
+        // Client: the launcher's scoped API token ("sg_...", 12h) for the backend; it is only ever sent as a Bearer header, never stored or logged. When set, each join first trades it for a fresh 5-minute signed token (AuthToken).
+        public static string ApiToken;
+        public static long AccountId; // from /api/me, 0 until known
+        public static IBackend Backend;
+        // Server: set when the backend decides who plays here (BackendMatchPoller); null = anyone who logged in may join.
+        public static System.Func<long, bool> AssignedCheck;
+        // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
+        public static readonly System.Collections.Generic.Dictionary<string, long> AccountsBySession = new System.Collections.Generic.Dictionary<string, long>();
         public PhaseKind Phase { get; private set; }
         public string FailureText { get; private set; } = "";
         public bool IsHost { get; private set; }
@@ -257,12 +290,26 @@ namespace Game.Net
             return false;
         }
 
+        volatile bool _tokenAsked, _tokenAnswered;
+        volatile string _freshToken;
+
         void Update()
         {
-            if (_helloPending && SelfId >= 0)
+            if (_helloPending && SelfId >= 0 && !Dedicated && !string.IsNullOrEmpty(ApiToken) && Backend != null && !_tokenAnswered)
+            {
+                if (!_tokenAsked)
+                {
+                    _tokenAsked = true;
+                    Backend.ServerToken().ContinueWith(t => { _freshToken = t.IsFaulted || !t.Result.Ok ? "" : t.Result.Value; _tokenAnswered = true; });
+                }
+            }
+            else if (_helloPending && SelfId >= 0)
             {
                 _helloPending = false;
-                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = "" });
+                _tokenAsked = _tokenAnswered = false;
+                if (!string.IsNullOrEmpty(_freshToken)) AuthToken = _freshToken;
+                _freshToken = null;
+                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
             }
             TickQueue();
             if (Phase == PhaseKind.Connecting && Time.unscaledTime > _connectDeadline) Fail(LobbyRules.Unreachable);
@@ -378,7 +425,7 @@ namespace Game.Net
             if (plan.Humans == 0) return;
             _matchStarted = true;
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
-            var start = new LobbyStart { MatchPort = matchPort, Players = plan.Humans, Bots = plan.Bots, Mode = (byte)_queueMode };
+            var start = LobbyStart.FromPlan(matchPort, _queueMode, plan);
             foreach (int id in plan.Placed)
                 if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
             StartInfo = start;
@@ -404,8 +451,23 @@ namespace Game.Net
                 conn.Disconnect(false);
                 return;
             }
+            var login = LobbyRules.CheckLogin(ServerTokenSecret, hello.Token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var claims);
+            if (login != JoinResult.Ok)
+            {
+                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)login }, false);
+                conn.Disconnect(false);
+                return;
+            }
+            if (!string.IsNullOrEmpty(ServerTokenSecret) && AssignedCheck != null && !AssignedCheck(claims.AccountId))
+            {
+                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)JoinResult.NotAssigned }, false);
+                conn.Disconnect(false);
+                return;
+            }
+            string name = hello.Name;
+            if (!string.IsNullOrEmpty(ServerTokenSecret)) { if (!string.IsNullOrEmpty(hello.SessionToken)) AccountsBySession[hello.SessionToken] = claims.AccountId; name = claims.Nickname; } // the backend's nickname, not the client's word
             if (IsHost && conn.ClientId == SelfId) _truth.HostId = conn.ClientId; // the host's own client
-            _truth.Add(conn.ClientId, hello.Name);
+            _truth.Add(conn.ClientId, name);
             RefreshBots();
             BroadcastState();
             if (Dedicated) Changed?.Invoke();
