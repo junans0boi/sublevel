@@ -25,7 +25,7 @@ namespace Game.Net
         public MatchQueueState Queue; // matchmaking (ADR-249): who waits, how long is left
     }
     // A client asks for a place in the matchmaking queue (ADR-258): the mode and how many people its party has (1..team size).
-    public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; }
+    public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; public long PartyId; }
     public struct LobbyQueueCancel : IBroadcast { }
     public struct LobbyStart : IBroadcast
     {
@@ -76,6 +76,8 @@ namespace Game.Net
         public static string ApiToken;
         public static long AccountId; // from /api/me, 0 until known
         public static IBackend Backend;
+        // Client: the backend party this player queues with (0 = alone); the server turns one party's requests into one ticket.
+        public static long QueuePartyId;
         // Server: set when the backend decides who plays here (BackendMatchPoller); null = anyone who logged in may join.
         public static System.Func<long, bool> AssignedCheck;
         // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
@@ -366,6 +368,10 @@ namespace Game.Net
         // Dedicated server: the queue of people who pressed start. Whoever asked is placed by the composer when the window ends;
         // clients that never asked stay in the room as before (ready/timer flow).
         MatchQueue _queue;
+        readonly QueueParties _parties = new QueueParties();
+        readonly System.Collections.Generic.Dictionary<int, string> _sessionOf = new System.Collections.Generic.Dictionary<int, string>();
+        // Server: the session tokens of the people placed in the match, in team order (a party's members side by side).
+        public System.Collections.Generic.List<string> PlannedSessions { get; } = new System.Collections.Generic.List<string>();
         TeamMode _queueMode;
         float _nextQueueState = -1f;
         public bool QueueActive => _queue != null && _queue.Tickets.Count > 0;
@@ -375,7 +381,7 @@ namespace Game.Net
         public bool RequestMatch(TeamMode mode, int partySize)
         {
             if (Phase != PhaseKind.InLobby || IsHost || _nm == null) return false;
-            _nm.ClientManager.Broadcast(new LobbyQueueRequest { Mode = (byte)mode, PartySize = (byte)Mathf.Clamp(partySize, 1, 4) });
+            _nm.ClientManager.Broadcast(new LobbyQueueRequest { Mode = (byte)mode, PartySize = (byte)Mathf.Clamp(partySize, 1, 4), PartyId = QueuePartyId });
             return true;
         }
 
@@ -394,12 +400,23 @@ namespace Game.Net
             if (_queue.Tickets.Count == 0) _queueMode = mode; // the first one decides the mode of this match
             else if (mode != _queueMode) return;               // another mode waits for its own window (not queued here)
             int size = mode == TeamMode.Solo ? 1 : Mathf.Clamp(req.PartySize, 1, MatchComposer.TeamSizeOf(mode, TeamRules.Current));
+            long party = mode == TeamMode.Solo ? 0 : req.PartyId; // in solo everybody is alone
+            var added = _parties.Add(conn.ClientId, party);
+            if (added == QueueParties.AddResult.Duplicate) return;
+            if (added == QueueParties.AddResult.JoinedTicket) { PushQueueState(); return; } // the party's ticket is already waiting
             if (_queue.Enqueue(conn.ClientId, size, Time.unscaledTimeAsDouble)) PushQueueState();
+            else _parties.Remove(conn.ClientId, out _);
         }
 
         void OnQueueCancel(NetworkConnection conn, LobbyQueueCancel cancel, Channel channel)
         {
-            if (_queue != null && _queue.Leave(conn.ClientId, Time.unscaledTimeAsDouble)) PushQueueState();
+            LeaveQueue(conn.ClientId);
+        }
+
+        // A connection leaves the queue (cancelled or dropped); its party's ticket goes only when nobody of the party is left.
+        void LeaveQueue(int clientId)
+        {
+            if (_parties.Remove(clientId, out int ticket) && _queue != null && _queue.Leave(ticket, Time.unscaledTimeAsDouble)) PushQueueState();
         }
 
         void PushQueueState()
@@ -426,8 +443,13 @@ namespace Game.Net
             _matchStarted = true;
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
             var start = LobbyStart.FromPlan(matchPort, _queueMode, plan);
-            foreach (int id in plan.Placed)
-                if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
+            PlannedSessions.Clear();
+            foreach (int ticket in plan.Placed)
+                foreach (int id in _parties.Members(ticket))
+                {
+                    if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
+                    if (_sessionOf.TryGetValue(id, out var token)) PlannedSessions.Add(token);
+                }
             StartInfo = start;
             StartMode = _queueMode;
             HasStarted = true;
@@ -468,6 +490,7 @@ namespace Game.Net
             if (!string.IsNullOrEmpty(ServerTokenSecret)) { if (!string.IsNullOrEmpty(hello.SessionToken)) AccountsBySession[hello.SessionToken] = claims.AccountId; name = claims.Nickname; } // the backend's nickname, not the client's word
             if (IsHost && conn.ClientId == SelfId) _truth.HostId = conn.ClientId; // the host's own client
             _truth.Add(conn.ClientId, name);
+            if (!string.IsNullOrEmpty(hello.SessionToken)) _sessionOf[conn.ClientId] = hello.SessionToken;
             RefreshBots();
             BroadcastState();
             if (Dedicated) Changed?.Invoke();
@@ -484,7 +507,8 @@ namespace Game.Net
         {
             if (args.ConnectionState != RemoteConnectionState.Stopped || !_truth.Contains(args.ConnectionId)) return;
             _truth.Remove(args.ConnectionId);
-            if (_queue != null && _queue.Leave(args.ConnectionId, Time.unscaledTimeAsDouble)) PushQueueState();
+            _sessionOf.Remove(args.ConnectionId);
+            LeaveQueue(args.ConnectionId);
             RefreshBots();
             BroadcastState();
             if (Dedicated) Changed?.Invoke();

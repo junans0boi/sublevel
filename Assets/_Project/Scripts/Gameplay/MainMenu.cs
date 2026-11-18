@@ -111,6 +111,7 @@ namespace Game.Gameplay
             _social = new SocialClient(LobbyNet.Backend);
             _backendQueue = new BackendMatchQueue(new MatchTicketClient(LobbyNet.Backend), _social, (host, port, size) =>
             {
+                LobbyNet.QueuePartyId = _social.Party != null ? _social.Party.id : 0;
                 _afterJoin = (size > 1 ? TeamMode.Squad : TeamMode.Solo, size);
                 _lobbyScreen.JoinServer(host, (ushort)port);
             });
