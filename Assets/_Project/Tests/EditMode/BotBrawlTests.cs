@@ -53,6 +53,14 @@ namespace Game.Tests
         }
 
         [Test]
+        public void A_weapon_close_by_comes_before_a_fist_fight()
+        {
+            var p = Unarmed(10f, false);
+            p.LootVisible = true; p.LootIsWeapon = true; p.LootId = 4; p.LootPosition = new BotVec(-4, 0, 0);
+            Assert.AreEqual(BotState.Loot, Brain().Think(p).State);
+        }
+
+        [Test]
         public void A_bot_with_a_gun_is_not_made_to_fight_with_fists()
         {
             var p = Unarmed(10f, false);

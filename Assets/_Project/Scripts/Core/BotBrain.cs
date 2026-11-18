@@ -236,8 +236,8 @@ namespace Game.Core
                         wantsOut = false;
                     }
                 }
-                // Running, and a weapon lies close by: that comes first.
-                if (wantsOut && !canFight && p.LootVisible && p.LootIsWeapon && BotVec.Distance(p.Position, p.LootPosition) <= rules.LootDashMeters)
+                // Running or brawling, and a weapon lies close by: that comes first.
+                if ((wantsOut || fist) && !canFight && p.LootVisible && p.LootIsWeapon && BotVec.Distance(p.Position, p.LootPosition) <= rules.LootDashMeters)
                 {
                     intent.State = BotState.Loot;
                     intent.Move = true;
