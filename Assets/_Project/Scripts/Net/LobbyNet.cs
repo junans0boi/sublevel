@@ -76,6 +76,8 @@ namespace Game.Net
         public static string ApiToken;
         public static long AccountId; // from /api/me, 0 until known
         public static IBackend Backend;
+        // Server: set when the backend decides who plays here (BackendMatchPoller); null = anyone who logged in may join.
+        public static System.Func<long, bool> AssignedCheck;
         // Server: the backend account behind each player's session token (NetSession.Token), which also names the player in the match (people without a login are absent).
         public static readonly System.Collections.Generic.Dictionary<string, long> AccountsBySession = new System.Collections.Generic.Dictionary<string, long>();
         public PhaseKind Phase { get; private set; }
@@ -453,6 +455,12 @@ namespace Game.Net
             if (login != JoinResult.Ok)
             {
                 _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)login }, false);
+                conn.Disconnect(false);
+                return;
+            }
+            if (!string.IsNullOrEmpty(ServerTokenSecret) && AssignedCheck != null && !AssignedCheck(claims.AccountId))
+            {
+                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)JoinResult.NotAssigned }, false);
                 conn.Disconnect(false);
                 return;
             }

@@ -16,6 +16,9 @@ namespace Game.Net
     [Serializable] public class InviteFromDto { public long account_id; public string nickname; }
     [Serializable] public class InviteDto { public long party_id; public InviteFromDto from; }
     [Serializable] public class InvitesDto { public InviteDto[] invites = new InviteDto[0]; }
+    [Serializable] public class AccountDto { public long account_id; public string nickname; }
+    [Serializable] public class ServerMatchDto { public string id, status; public int bots; public AccountDto[] accounts = new AccountDto[0]; }
+    [Serializable] public class ServerMatchesDto { public ServerMatchDto[] matches = new ServerMatchDto[0]; }
     [Serializable] public class MeDto { public long id; public string nickname; }
     [Serializable] public class TokenEnvelope { public string token; }
     [Serializable] public class TicketEnvelope { public TicketDto ticket; }

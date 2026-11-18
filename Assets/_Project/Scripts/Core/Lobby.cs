@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    public enum JoinResult : byte { Ok = 0, VersionMismatch = 1, Full = 2, MatchStarted = 3, LoginRequired = 4, LoginExpired = 5 }
+    public enum JoinResult : byte { Ok = 0, VersionMismatch = 1, Full = 2, MatchStarted = 3, LoginRequired = 4, LoginExpired = 5, NotAssigned = 6 }
 
     // Lobby rules (#160, ADR-124): who may join, how many bots fill the match, when it can start. Pure.
     public static class LobbyRules
@@ -39,6 +39,7 @@ namespace Game.Core
                 case JoinResult.Full: return "방이 가득 찼다.";
                 case JoinResult.MatchStarted: return "이미 매치가 시작되었다.";
                 case JoinResult.LoginRequired: return "로그인이 필요하다. 런처에서 로그인한 뒤 실행하자.";
+                case JoinResult.NotAssigned: return "이 서버에 배정된 판이 없다. 매칭을 다시 시작하자.";
                 case JoinResult.LoginExpired: return "로그인이 만료되었다. 런처에서 다시 실행하자.";
                 default: return "";
             }

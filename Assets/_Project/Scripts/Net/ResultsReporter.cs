@@ -20,6 +20,9 @@ namespace Game.Net
         static int _flushing;
 
         public static bool Enabled => _outbox != null;
+        // The backend's id of the running match (BackendMatchPoller.Pick), so the backend closes its slot when the results arrive; null = make one.
+        public static string CurrentMatchId;
+        public static bool Reported;
 
         public static void Start()
         {
@@ -37,7 +40,8 @@ namespace Game.Net
         {
             if (_outbox == null) return;
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            string id = "m-" + DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH-mm-ss'Z'") + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
+            string id = CurrentMatchId ?? "m-" + DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH-mm-ss'Z'") + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
+            Reported = true;
             _outbox.Enqueue(id, ResultsRules.Json(id, "battle-royale", now, rows));
             Debug.Log($"[Server] results: {rows.Count} people queued for the backend ({id})");
             Pump();
