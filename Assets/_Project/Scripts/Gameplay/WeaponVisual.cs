@@ -259,8 +259,9 @@ namespace Game.Gameplay
         bool _propAtEye;
 
         // First person melee (MeleeVisual moves the model): the right hand closed on the grip where the third-person hand
-        // holds it, the left arm kept low and out of view (#219).
-        public void PlaceMeleeArms(Transform model, int id)
+        // holds it, the left arm kept low and out of view at rest; swinging (`swing` 0..1), it comes up and round with the
+        // turning torso (`torso`, world rotation of the turned chest) so the body is seen to put itself into the blow (#219).
+        public void PlaceMeleeArms(Transform model, int id, float swing = 0f, Quaternion? torso = null)
         {
             var arms = Arms();
             if (arms == null || _eyeCamera == null) return;
@@ -268,7 +269,9 @@ namespace Game.Gameplay
             arms.SetVisible(true);
             var grip = model.position + model.rotation * _gripRest[id];
             arms.Place(cam, 1, grip, cam.right * 0.6f + cam.up * 0.5f, 1f);
-            arms.Place(cam, 0, FirstPersonArms.Shoulder(cam, 0) + cam.rotation * new Vector3(0.1f, -0.5f, 0.1f), cam.up * 0.4f - cam.right * 0.5f, 0.4f, false);
+            var body = torso ?? cam.rotation;
+            var leftHand = Vector3.Lerp(new Vector3(0.1f, -0.5f, 0.1f), new Vector3(0.16f, -0.3f, 0.3f), swing);
+            arms.Place(cam, 0, FirstPersonArms.Shoulder(cam, 0) + body * leftHand, cam.up * 0.4f - cam.right * 0.5f, 0.4f + 0.5f * swing, false);
         }
 
         // Nothing aimed: the hands with a throwable, a bandage or a bottle, or reaching for loot (#220 #221 #212).

@@ -64,7 +64,10 @@ public static class MeleeKit
     // Turned so a fist grip holds it in the aiming pose (character facing +Z, forearm forward, palm in): the handle
     // stands up through the fist; a slashing blade has its edge to the left (it leads the sweep), a chopping head
     // faces forward (it leads the chop). With the arm hanging, the handle then points forward.
-    static Quaternion InHand(int id) => IsChop(id) ? Quaternion.identity : Quaternion.LookRotation(Vector3.left, Vector3.up);
+    // The edge is turned halfway to the front (#219): straight to the left, the flat faced forward and back, so with the arm hanging the
+    // blade was edge-on to a side view and read as a needle; now the carried blade shows most of its width from the side and the sweep
+    // still leads with the edge.
+    static Quaternion InHand(int id) => IsChop(id) ? Quaternion.identity : Quaternion.LookRotation((Vector3.left + Vector3.forward).normalized, Vector3.up);
 
     // Lying on the ground: blades and the bar on their flat side, the pan on its bottom.
     static Quaternion OnGround(int id) => id == MeleeMeshes.Pan

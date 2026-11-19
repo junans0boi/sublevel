@@ -34,32 +34,50 @@ public static class CharacterControllerBuilder
         controller.AddParameter(CombatantAnimation.AirPhase, AnimatorControllerParameterType.Float);
         controller.AddParameter(new AnimatorControllerParameter { name = CombatantAnimation.ActionSpeed, type = AnimatorControllerParameterType.Float, defaultFloat = 1f });
 
-        // 0 Base.
+        // Local ground velocity (m/s, x right, z forward) for the 8-way trees (ADR-391).
+        controller.AddParameter(CombatantAnimation.MoveX, AnimatorControllerParameterType.Float);
+        controller.AddParameter(CombatantAnimation.MoveZ, AnimatorControllerParameterType.Float);
+
+        // 0 Base. Locomotion (long gun at the hip), LocomotionAim (aiming) and Unarmed are 2D freeform-directional trees on the local
+        // velocity: each clip sits at its own ground velocity, so the blend matches the ground in every direction (ADR-391, #302). Forward
+        // and back are the UAL walk/jog/sprint (ADR-390); sideways and diagonal are the Mixamo strafe set (C-0011), whose upper body faces
+        // ahead while the legs step across.
         controller.AddLayer("Base");
-        var locomotion = controller.CreateBlendTreeInController(CombatantAnimation.Locomotion, out var tree, 0);
-        tree.blendType = BlendTreeType.Simple1D;
-        tree.blendParameter = CombatantAnimation.Move;
-        tree.useAutomaticThresholds = false;
-        tree.AddChild(Clip("RifleWalkBack"), -gait.BackSpeed);
-        tree.AddChild(Clip("RifleIdle"), 0f);
-        tree.AddChild(Clip("RifleWalk"), gait.WalkSpeed);
-        tree.AddChild(Clip("RifleRun"), gait.RunSpeed);
-        locomotion.speedParameter = CombatantAnimation.Pace; // the legs alone play faster when the character outruns its clips
-        locomotion.speedParameterActive = true;
+        AnimatorState Tree2D(string name, (string clip, Vector2 at, bool reverse, bool mirror)[] children)
+        {
+            var state = controller.CreateBlendTreeInController(name, out var t, 0);
+            t.blendType = BlendTreeType.FreeformDirectional2D;
+            t.blendParameter = CombatantAnimation.MoveX;
+            t.blendParameterY = CombatantAnimation.MoveZ;
+            foreach (var c in children) t.AddChild(Clip(c.clip), c.at);
+            t.children = t.children.Select((c, k) => { if (children[k].reverse) c.timeScale = -1f; c.mirror = children[k].mirror; return c; }).ToArray();
+            state.speedParameter = CombatantAnimation.Pace; // the legs alone play faster when the character outruns its clips
+            state.speedParameterActive = true;
+            return state;
+        }
+        var g = gait;
+        (string, Vector2, bool, bool) C(string clip, Vector2 at, bool reverse = false, bool mirror = false) => (clip, at, reverse, mirror);
+        var forwardBack = new[]
+        {
+            C("U_Walk_Loop", new Vector2(0f, g.UnarmedWalkSpeed)), C("U_Jog_Fwd_Loop", new Vector2(0f, g.UnarmedRunSpeed)), C("U_Sprint_Loop", new Vector2(0f, g.SprintSpeed)),
+            C("U_Walk_Loop", new Vector2(0f, -g.UnarmedWalkSpeed), true), C("U_Jog_Fwd_Loop", new Vector2(0f, -g.UnarmedRunSpeed), true),
+        };
+        // The Mixamo backward diagonals shuffle low and slid 2.4-2.8 m/s: backing off at an angle is the back-pedal with the legs turned.
+        string[] rifleRuns = { "Rifle_RunRight", "Rifle_RunLeft", "Rifle_RunForwardRight", "Rifle_RunForwardLeft" };
+        var locomotion = Tree2D(CombatantAnimation.Locomotion, new[] { C("RifleIdle", Vector2.zero) }.Concat(forwardBack)
+            .Concat(new[] { C("Rifle_WalkStrafeRight", g.Strafe["Rifle_WalkStrafeRight"]), C("Rifle_WalkStrafeLeft", g.Strafe["Rifle_WalkStrafeLeft"]) })
+            .Concat(rifleRuns.Select(n => C(n, g.Strafe[n]))).ToArray());
         var baseMachine = controller.layers[0].stateMachine;
         baseMachine.defaultState = locomotion;
-        // Bare hands (ADR-255): the UAL walk and jog. The armed tree above is all rifle poses; without a weapon the hands hang and swing.
-        var unarmed = controller.CreateBlendTreeInController(CombatantAnimation.Unarmed, out var unarmedTree, 0);
-        unarmedTree.blendType = BlendTreeType.Simple1D;
-        unarmedTree.blendParameter = CombatantAnimation.Move;
-        unarmedTree.useAutomaticThresholds = false;
-        unarmedTree.AddChild(Clip("U_Walk_Loop"), -gait.UnarmedWalkSpeed);
-        unarmedTree.children = unarmedTree.children.Select((c, i) => { if (i == 0) c.timeScale = -1f; return c; }).ToArray(); // back-pedal = the walk played backwards
-        unarmedTree.AddChild(Clip("U_Idle_Loop"), 0f);
-        unarmedTree.AddChild(Clip("U_Walk_Loop"), gait.UnarmedWalkSpeed);
-        unarmedTree.AddChild(Clip("U_Jog_Fwd_Loop"), gait.UnarmedRunSpeed);
-        unarmed.speedParameter = CombatantAnimation.Pace;
-        unarmed.speedParameterActive = true;
+        // Aiming: the aimed sidesteps instead of the running ones; the gun is shouldered by code as before.
+        Tree2D(CombatantAnimation.LocomotionAim, new[] { C("RifleIdle", Vector2.zero) }.Concat(forwardBack)
+            .Concat(new[] { "Rifle_AimStrafeRight", "Rifle_RunForwardRight", "Rifle_RunForwardLeft" }.Select(n => C(n, g.Strafe[n])))
+            // The aimed sidestep to the left drags its feet (slid ~3 m/s at any pace): the right one mirrored instead.
+            .Concat(new[] { C("Rifle_AimStrafeRight", g.AimLeftMirrored, mirror: true) }).ToArray());
+        // Bare hands (ADR-255): the UAL walk/jog/sprint ahead and behind, the Mixamo bare-handed strafes to the sides (no diagonal clip: the
+        // freeform blend mixes the neighbours).
+        Tree2D(CombatantAnimation.Unarmed, new[] { C("U_Idle_Loop", Vector2.zero) }.Concat(forwardBack)
+            .Concat(new[] { "Unarmed_WalkStrafeRight", "Unarmed_WalkStrafeLeft", "Unarmed_RunStrafeRight", "Unarmed_RunStrafeLeft" }.Select(n => C(n, g.Strafe[n]))).ToArray());
         // Bare-handed crouch (UAL): a real crouch at the capsule's height, so the code knee bend is not used (CombatantAnimation._clipCrouch).
         var crouch = controller.CreateBlendTreeInController(CombatantAnimation.UnarmedCrouch, out var crouchTree, 0);
         crouchTree.blendType = BlendTreeType.Simple1D;

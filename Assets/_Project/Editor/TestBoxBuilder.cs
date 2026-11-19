@@ -248,9 +248,11 @@ public static class TestBoxBuilder
         Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
         Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
         SetArray(animation, "_jumpBones", visual.JumpBones);
-        Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
-        Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
-        Set(animation, "_walkClipSpeed", p => p.floatValue = visual.Gait.WalkSpeed);
+        Set(animation, "_sprintClipSpeed", p => p.floatValue = visual.Gait.SprintSpeed);
+        var gaitArrays = new[] { ("_dirsRifle", visual.Gait.DirsRifle), ("_topsRifle", visual.Gait.TopsRifle), ("_dirsAim", visual.Gait.DirsAim), ("_topsAim", visual.Gait.TopsAim),
+            ("_dirsUnarmed", visual.Gait.DirsUnarmed), ("_topsUnarmed", visual.Gait.TopsUnarmed) };
+        foreach (var (field, top) in gaitArrays)
+            Set(animation, field, p => { p.arraySize = top.Length; for (int i = 0; i < top.Length; i++) p.GetArrayElementAtIndex(i).floatValue = top[i]; });
         Set(animation, "_unarmedWalkSpeed", p => p.floatValue = visual.Gait.UnarmedWalkSpeed);
         Set(animation, "_unarmedRunSpeed", p => p.floatValue = visual.Gait.UnarmedRunSpeed);
         Set(animation, "_unarmedCrouchSpeed", p => p.floatValue = visual.Gait.UnarmedCrouchSpeed);

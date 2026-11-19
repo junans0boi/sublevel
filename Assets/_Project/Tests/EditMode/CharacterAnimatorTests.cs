@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "Unarmed", "UnarmedCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "LocomotionAim", "Unarmed", "UnarmedCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]
@@ -98,7 +98,7 @@ namespace Game.Tests
                 }
             Assert.GreaterOrEqual(clips.Count, 15);
             foreach (var (state, clip) in clips) Assert.IsTrue(clip.isHumanMotion, $"{state}/{clip.name} must be a Humanoid clip so every roster model plays it");
-            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
+            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
             foreach (var (_, clip) in clips)
                 if (loops.Contains(clip.name)) Assert.IsTrue(clip.isLooping, clip.name + " loops");
             foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross" })
@@ -106,19 +106,24 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Locomotion_BlendsBackPedal_Idle_Walk_AndRun_BySpeed()
+        public void EightWayTrees_PlaceEveryClipAtItsOwnGroundVelocity_AroundAllEightDirections()
         {
-            var tree = Controller().layers[Base].stateMachine.defaultState.motion as BlendTree;
-            Assert.IsNotNull(tree);
-            Assert.AreEqual(BlendTreeType.Simple1D, tree.blendType, "direction comes from turning the legs (ADR-190 fallback until the 2D blend is verified)");
-            var c = tree.children;
-            Assert.IsTrue(c.Any(x => x.threshold == 0f) && c.Any(x => x.threshold < -0.5f));
-            Assert.AreEqual(2, c.Count(x => x.threshold > 0.5f), "walk and run");
-            Assert.AreEqual(c.Length, c.Select(x => x.motion).Distinct().Count());
-            float walk = c.Where(x => x.threshold > 0.01f).Min(x => x.threshold), run = c.Max(x => x.threshold);
-            Assert.That(walk, Is.InRange(0.8f, 2.5f), "walk clip ground speed (m/s)");
-            Assert.That(run, Is.InRange(2.5f, 8f), "run clip ground speed (m/s)");
-            Assert.Greater(run, walk * 1.5f);
+            foreach (var name in new[] { "Locomotion", "LocomotionAim", "Unarmed" })
+            {
+                var tree = Controller().layers[Base].stateMachine.states.Select(s => s.state).First(s => s.name == name).motion as BlendTree;
+                Assert.IsNotNull(tree, name);
+                Assert.AreEqual(BlendTreeType.FreeformDirectional2D, tree.blendType, name + ": 2D on the local velocity (ADR-391, #302)");
+                Assert.AreEqual("MoveX", tree.blendParameter); Assert.AreEqual("MoveZ", tree.blendParameterY);
+                var c = tree.children;
+                Assert.IsTrue(c.Any(x => x.position == Vector2.zero), name + ": a standing clip");
+                float Reach(float deg) { var d = new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad)); return c.Where(x => x.position.sqrMagnitude > 0.01f && Vector2.Angle(x.position, d) <= 30f).Select(x => Vector2.Dot(x.position, d)).DefaultIfEmpty(0f).Max(); }
+                Assert.That(Reach(0f), Is.InRange(6f, 9f), name + ": the sprint ahead (m/s, at least the game's 6.3)");
+                Assert.Greater(Reach(180f), 4f, name + ": the back-pedal reaches a run");
+                Assert.Greater(Reach(90f), 1.5f, name + ": a sidestep to the right");
+                Assert.Greater(Reach(-90f), 1.5f, name + ": a sidestep to the left");
+                Assert.IsTrue(c.Any(x => x.position.y < -0.5f && x.timeScale < 0f), name + ": back-pedal = a forward cycle played backwards");
+                if (name != "Unarmed") foreach (float deg in new[] { 45f, -45f }) Assert.Greater(Reach(deg), 3f, $"{name}: a diagonal run at {deg} deg");
+            }
         }
 
         [Test]
@@ -143,7 +148,7 @@ namespace Game.Tests
         [Test]
         public void WalkCycle_LiftsEachFoot_AndSwingsTheLegsAtLeastAThirdOfAMetreApart()
         {
-            _animator.SetFloat("Move", 1.2f);
+            _animator.SetFloat("MoveZ", 1.2f);
             float minZ = float.MaxValue, maxZ = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
             Pose(Base, "Locomotion", 0f);
             for (int i = 0; i < 40; i++)
@@ -236,11 +241,11 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Unarmed_Jog_SwingsBothArmsPastTheHips_WhichTheRifleRunNeverDoes()
+        public void Unarmed_Jog_SwingsBothArmsPastTheHips_WhichTheRifleIdleNeverDoes()
         {
             float Swing(string state, float move)
             {
-                _animator.SetFloat("Move", move);
+                _animator.SetFloat("MoveZ", move);
                 Pose(Base, state, 0f);
                 float behind = float.MaxValue;
                 for (int i = 0; i < 40; i++)
@@ -251,7 +256,7 @@ namespace Game.Tests
                 return behind;
             }
             Assert.Less(Swing("Unarmed", 3.5f), -0.05f, "bare hands: an arm swings back past the hips");
-            Assert.Greater(Swing("Locomotion", 3f), 0.1f, "rifle run: both hands stay in front on the gun");
+            Assert.Greater(Swing("Locomotion", 0f), 0.1f, "rifle idle: both hands in front on the gun (moving, the code hold places them, ADR-390)");
         }
 
         // Which way the body faces, read from the shoulder line (right of the root = +x): 1 = the way the model faces, -1 = turned round.
@@ -266,10 +271,10 @@ namespace Game.Tests
         {
             // Player report: standing and walking bare-handed the body faced backwards, and a punch twisted the waist the other way. The clips of
             // other files (UAL) carry their own forward axis, which the import must not keep.
-            _animator.SetFloat("Move", 3f);
+            _animator.SetFloat("Move", 3f); _animator.SetFloat("MoveZ", 3f);
             foreach (var (layer, state, upper) in new[]
             {
-                (Base, "Locomotion", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
+                (Base, "Locomotion", 0f), (Base, "LocomotionAim", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
                 (Upper, "Aim", 1f), (Upper, "PunchRight", 1f), (Upper, "PunchLeft", 1f),
             })
             {
@@ -285,6 +290,41 @@ namespace Game.Tests
                 Assert.Greater(mean, 0.85f, $"{state}: on average the body faces the way the model faces (shoulder-line facing, 1 = forward)");
                 Assert.Greater(worst, 0.5f, $"{state}: no frame is turned more than 60 degrees from the model's facing");
             }
+        }
+    
+
+        // #223: running sideways the chest faces ahead and the legs step across (not the forward run turned sideways, "crab walk").
+        [Test]
+        public void Sidesteps_KeepTheShouldersFacingAhead_WhileTheFeetCrossSideways()
+        {
+            foreach (var (state, x) in new[] { ("Locomotion", 4.5f), ("Locomotion", -4.5f), ("LocomotionAim", 2.5f), ("LocomotionAim", -2.5f), ("Unarmed", 4.5f), ("Unarmed", -4.5f) })
+            {
+                _animator.SetFloat("MoveX", x); _animator.SetFloat("MoveZ", 0f);
+                Pose(Base, state, 0f);
+                float facing = 0f, minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+                for (int i = 0; i < 30; i++)
+                {
+                    _animator.Update(0.03f);
+                    facing += FacingDot() / 30f;
+                    float dx = Local(S.LeftFoot).x - Local(S.RightFoot).x, dz = Local(S.LeftFoot).z - Local(S.RightFoot).z;
+                    minX = Mathf.Min(minX, dx); maxX = Mathf.Max(maxX, dx); minZ = Mathf.Min(minZ, dz); maxZ = Mathf.Max(maxZ, dz);
+                }
+                Debug.Log($"[AnimTest] sidestep {state} x {x}: facing {facing:F2}, feet apart sideways {minX:F2}..{maxX:F2}, front-back {minZ:F2}..{maxZ:F2}");
+                // The shoulders are squared to the aim in code over the clip (checked in play by GaitSurveyTests: facing >= 0.8 every way).
+                Assert.Greater(maxX - minX, maxZ - minZ, $"{state} {x}: the feet move sideways more than front to back");
+            }
+        }
+    
+
+        [Test]
+        public void NearestDirection_TakesTheShortWayRound()
+        {
+            var dirs = new[] { -94f, -45f, 0f, 42f, 88f, 180f };
+            Assert.AreEqual(2, CombatantAnimation.NearestDirection(dirs, 10f));
+            Assert.AreEqual(3, CombatantAnimation.NearestDirection(dirs, 30f));
+            Assert.AreEqual(5, CombatantAnimation.NearestDirection(dirs, -175f), "the short way round");
+            Assert.AreEqual(5, CombatantAnimation.NearestDirection(dirs, -135f), "backing off at an angle: the back-pedal wins a near tie with the sidestep");
+            Assert.AreEqual(0, CombatantAnimation.NearestDirection(dirs, -100f));
         }
     }
 }

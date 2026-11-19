@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Game.Gameplay;
@@ -60,7 +61,12 @@ public static class CharacterKit
     {
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
-        public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed;                     // the bare-handed walk and jog clips (m/s)
+        public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed, SprintSpeed;        // the bare-handed walk, jog, crouch and sprint clips (m/s)
+        public System.Collections.Generic.Dictionary<string, Vector2> Strafe;                   // each strafe clip's ground velocity (m/s, x right, z forward)
+        // Each 8-way tree's clip directions (deg, 0 = forward, right positive) and the fastest clip along each (m/s): the legs are turned to the
+        // nearest one so a single direction's clips play (ADR-391); Locomotion, LocomotionAim, Unarmed.
+        public float[] DirsRifle, TopsRifle, DirsAim, TopsAim, DirsUnarmed, TopsUnarmed;
+        public Vector2 AimLeftMirrored; // the aimed right sidestep mirrored: its velocity
         // Punch states (ADR-255): which clip each hand plays (the Jab/Cross swapped, or mirrored, until the right fist goes out for PunchRight and the left for
         // PunchLeft), and the second in the clip when that fist is furthest out (the hit).
         public bool PunchSwap, MirrorRight, MirrorLeft;
@@ -174,6 +180,26 @@ public static class CharacterKit
                 WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack"),
                 UnarmedWalkSpeed = Speed("U_Walk_Loop"), UnarmedRunSpeed = Speed("U_Jog_Fwd_Loop"), UnarmedCrouchSpeed = Speed("U_Crouch_Fwd_Loop"),
             };
+            // The sprint runs on its toes, which the ankle-height test above reads as a slow stance (it measured 5.2, the same as the jog, and
+            // the shown stride outran the ground by ~4 m/s, ADR-390). Its mid-stance speed, as a ratio to the jog's, scales the jog (~1.45).
+            gait.SprintSpeed = gait.UnarmedRunSpeed * MidStanceSpeed(CharacterControllerBuilder.Clip("U_Sprint_Loop"), def, go) / MidStanceSpeed(CharacterControllerBuilder.Clip("U_Jog_Fwd_Loop"), def, go);
+            gait.Strafe = new System.Collections.Generic.Dictionary<string, Vector2>();
+            foreach (var n in CharacterAnimClips.StrafeNames)
+            {
+                var vel = StanceVelocity(CharacterControllerBuilder.Clip(n), def, go);
+                // The direction is in the clip's name; a sign the other way means the import turned it round.
+                bool left = n.Contains("Left"), back = n.Contains("Backward"), fwd = n.Contains("Forward");
+                if ((left ? vel.x >= 0f : vel.x <= 0f) || (fwd && vel.y <= 0f) || (back && vel.y >= 0f))
+                    throw new System.Exception($"strafe clip {n} measured going {vel}, not the way its name says");
+                gait.Strafe[n] = vel;
+                Debug.Log($"[CharacterKit] strafe {n}: {vel.x:F2}, {vel.y:F2} m/s");
+            }
+            var fb = new[] { new Vector2(0f, gait.SprintSpeed), new Vector2(0f, -gait.UnarmedRunSpeed) };
+            Vector2 S(string n) => gait.Strafe[n];
+            (gait.DirsRifle, gait.TopsRifle) = Directions(fb.Concat(new[] { "Rifle_RunForwardRight", "Rifle_RunRight", "Rifle_RunLeft", "Rifle_RunForwardLeft" }.Select(S)));
+            gait.AimLeftMirrored = new Vector2(-S("Rifle_AimStrafeRight").x, S("Rifle_AimStrafeRight").y);
+            (gait.DirsAim, gait.TopsAim) = Directions(fb.Concat(new[] { "Rifle_RunForwardRight", "Rifle_AimStrafeRight", "Rifle_RunForwardLeft" }.Select(S)).Concat(new[] { gait.AimLeftMirrored }));
+            (gait.DirsUnarmed, gait.TopsUnarmed) = Directions(fb.Concat(new[] { "Unarmed_RunStrafeRight", "Unarmed_RunStrafeLeft" }.Select(S)));
             var walk = CharacterControllerBuilder.Clip("RifleWalk");
             float low = float.MaxValue, high = float.MinValue;
             for (int i = 0; i <= 48; i++)
@@ -188,13 +214,69 @@ public static class CharacterKit
             }
             gait.FootPlantHeight = low + (high - low) * 0.25f;
             gait.FootLiftHeight = low + (high - low) * 0.55f;
-            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} m/s");
+            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} sprint {gait.SprintSpeed:F2} m/s");
             Debug.Log($"[CharacterKit] gait: walk {gait.WalkSpeed:F2} run {gait.RunSpeed:F2} back {gait.BackSpeed:F2} m/s, foot height {low:F3}..{high:F3} m");
+            if (gait.SprintSpeed <= gait.UnarmedRunSpeed || gait.UnarmedRunSpeed <= gait.WalkSpeed) // the trees' thresholds must rise walk < jog < sprint
+                throw new System.Exception($"gait measurement out of order: walk {gait.WalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} sprint {gait.SprintSpeed:F2}");
             if (gait.RunSpeed < 1f || gait.WalkSpeed < 0.3f || gait.RunSpeed <= gait.WalkSpeed || high - low < 0.03f)
                 throw new System.Exception("gait measurement looks wrong; the locomotion clips may not carry root motion");
             return gait;
         }
         finally { Object.DestroyImmediate(go); }
+    }
+
+    // Ground velocity of an in-place cycle that may go any way: the planted foot's median velocity against the hips (x, z), reversed.
+    static Vector2 StanceVelocity(AnimationClip clip, CharacterDef def, GameObject go)
+    {
+        const int samples = 240;
+        float dt = clip.length / samples;
+        var vx = new List<float>(); var vz = new List<float>();
+        foreach (var foot in new[] { def.Sockets.LeftFoot, def.Sockets.RightFoot })
+        {
+            var p = new Vector3[samples + 1];
+            for (int i = 0; i <= samples; i++)
+            {
+                clip.SampleAnimation(def.Animator.gameObject, i * dt);
+                p[i] = go.transform.InverseTransformPoint(foot.position) - go.transform.InverseTransformPoint(def.Sockets.Hips.position);
+                p[i].y = go.transform.InverseTransformPoint(foot.position).y;
+            }
+            float low = p.Min(q => q.y), high = p.Max(q => q.y), down = low + 0.25f * (high - low);
+            for (int i = 1; i <= samples; i++)
+                if (p[i].y < down && p[i - 1].y < down) { vx.Add((p[i].x - p[i - 1].x) / dt); vz.Add((p[i].z - p[i - 1].z) / dt); }
+        }
+        if (vx.Count == 0) return Vector2.zero;
+        vx.Sort(); vz.Sort();
+        return -new Vector2(vx[vx.Count / 2], vz[vz.Count / 2]);
+    }
+
+    // The directions of a tree's fastest clips (deg, 0 = forward, right positive), sorted, and each one's ground speed.
+    static (float[] dirs, float[] tops) Directions(IEnumerable<Vector2> clips)
+    {
+        var list = clips.Select(c => (deg: Mathf.Atan2(c.x, c.y) * Mathf.Rad2Deg, speed: c.magnitude)).OrderBy(c => c.deg).ToArray();
+        return (list.Select(c => c.deg).ToArray(), list.Select(c => c.speed).ToArray());
+    }
+
+    // How fast the foot passes under the hips while it is down (mid-stance, where heel strike and push-off do not distort it), mean of both
+    // feet: an in-place cycle's ground speed. Only its ratio between two clips is used.
+    static float MidStanceSpeed(AnimationClip clip, CharacterDef def, GameObject go)
+    {
+        const int samples = 240;
+        float dt = clip.length / samples, sum = 0f;
+        int n = 0;
+        foreach (var foot in new[] { def.Sockets.LeftFoot, def.Sockets.RightFoot })
+        {
+            var y = new float[samples + 1]; var z = new float[samples + 1];
+            for (int i = 0; i <= samples; i++)
+            {
+                clip.SampleAnimation(def.Animator.gameObject, i * dt);
+                var p = go.transform.InverseTransformPoint(foot.position);
+                y[i] = p.y; z[i] = p.z - go.transform.InverseTransformPoint(def.Sockets.Hips.position).z;
+            }
+            float low = y.Min(), high = y.Max();
+            for (int i = 1; i <= samples; i++)
+                if ((z[i - 1] > 0f) != (z[i] > 0f) && y[i] < low + 0.35f * (high - low)) { sum += Mathf.Abs(z[i] - z[i - 1]) / dt; n++; }
+        }
+        return n > 0 ? sum / n : 1f;
     }
 
     // Ground speed of an in-place cycle: the speed at which a foot near its lowest point moves back along the model's z.

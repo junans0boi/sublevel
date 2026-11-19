@@ -225,13 +225,28 @@ namespace Game.Tests
             Assert.Greater(local.z, 0.1f, "in front of the camera");
             Assert.Greater(local.x, 0f, "on the right");
             Assert.Less(local.y, 0f, "below the eyes");
+            // #219: held upright at the face, the blade covered half the view. Its screen box now stays in the lower right.
+            var camera = PlayerController.Local.Camera;
+            var mf = model.GetComponent<MeshFilter>();
+            float minX = 1f, maxX = 0f, minY = 1f, maxY = 0f;
+            foreach (var vertex in mf.sharedMesh.vertices)
+            {
+                var v = camera.WorldToViewportPoint(mf.transform.TransformPoint(vertex));
+                minX = Mathf.Min(minX, v.x); maxX = Mathf.Max(maxX, v.x); minY = Mathf.Min(minY, v.y); maxY = Mathf.Max(maxY, v.y);
+            }
+            float cover = (Mathf.Clamp01(maxX) - Mathf.Clamp01(minX)) * (Mathf.Clamp01(maxY) - Mathf.Clamp01(minY));
+            Debug.Log($"[Melee] first-person machete screen box x {minX:F2}..{maxX:F2} y {minY:F2}..{maxY:F2}, cover {cover:F2}");
+            Assert.Less(maxY, 0.7f, "the blade's tip stays well below the top of the view");
+            Assert.Greater(minX, 0.4f, "the weapon stays in the right part of the view, clear of the crosshair's left");
 
+            Shot(camera, "fp_rest");
             yield return Click();
             float peak = 0f;
-            float end = Time.time + 0.5f;
+            float end = Time.time + 0.5f, nextShot = Time.time + 0.06f; int shot = 0;
             while (Time.time < end)
             {
                 peak = Mathf.Max(peak, visual.Phase.Weight);
+                if (Time.time >= nextShot && shot < 4) { Shot(camera, $"fp_swing_{shot++}"); nextShot += 0.07f; }
                 yield return null;
             }
             Assert.Greater(peak, 0.9f, "the swing played at the eye");
@@ -249,6 +264,19 @@ namespace Game.Tests
             yield return null;
             Assert.AreEqual(Pan, me.WeaponInSlot(Loadout.MeleeSlot));
             Assert.AreEqual(before + 1, CountLoot(Machete), "the machete lies on the ground");
+        }
+
+        // Review picture through a camera, off screen -> Logs/meleeshots/<name>.png (#219).
+        static void Shot(Camera cam, string name)
+        {
+            var rt = new RenderTexture(960, 540, 24);
+            var old = cam.targetTexture;
+            cam.targetTexture = rt; cam.Render(); cam.targetTexture = old;
+            var tex = new Texture2D(960, 540, TextureFormat.RGB24, false);
+            RenderTexture.active = rt; tex.ReadPixels(new Rect(0, 0, 960, 540), 0, 0); RenderTexture.active = null;
+            System.IO.Directory.CreateDirectory("Logs/meleeshots");
+            System.IO.File.WriteAllBytes($"Logs/meleeshots/{name}.png", tex.EncodeToPNG());
+            UnityEngine.Object.Destroy(tex); rt.Release(); UnityEngine.Object.Destroy(rt);
         }
 
         static int CountLoot(int weaponId)
