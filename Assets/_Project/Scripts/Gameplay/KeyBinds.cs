@@ -10,7 +10,7 @@ namespace Game.Gameplay
     {
         MoveForward, MoveBack, MoveLeft, MoveRight, Sprint, Jump, AutoRun, SlowWalk, Crouch, Prone, LeanLeft, LeanRight, FreeLook,
         Fire, Aim, Reload, FireMode, Slot1, Slot2, Slot3, Slot4, Slot5, Holster, Throw, CycleThrowable, Heal, Boost,
-        Interact, ToggleView, Inventory, Map, Ping, Menu, NetStats, Carry, Emote, Headlights, GasCover,
+        Interact, ToggleView, Inventory, Map, Ping, Menu, NetStats, Carry, Emote, Headlights, GasCover, Inspect,
     }
 
     // Which key or mouse button each action uses. A binding is a code: an Input System `Key` value, or MouseBase + the
@@ -46,6 +46,7 @@ namespace Game.Gameplay
             Set(BindAction.ToggleView, Key.V); Set(BindAction.Inventory, Key.Tab); Set(BindAction.Map, Key.M);
             d[(int)BindAction.Ping] = MouseBase + 2; Set(BindAction.Menu, Key.Escape); Set(BindAction.NetStats, Key.F3);
             Set(BindAction.Carry, Key.K); Set(BindAction.Emote, Key.N); Set(BindAction.Headlights, Key.L); Set(BindAction.GasCover, Key.Y);
+            Set(BindAction.Inspect, Key.I);
             return d;
         }
 

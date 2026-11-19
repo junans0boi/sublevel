@@ -64,6 +64,65 @@ namespace Game.Gameplay
             fit = ok ? _fitByWeaponId[weaponId] : default;
             return ok;
         }
+        // Where spent cases leave the weapon shown this frame (#199), at the eye or in the hand: the right side of the
+        // receiver a little above and ahead of the grip (behind it on the bullpup), and the weapon's right, up and forward.
+        public bool TryEjectionPort(out Vector3 port, out Vector3 right, out Vector3 up, out Vector3 forward)
+        {
+            int id = _shown;
+            port = right = up = forward = default;
+            if (id <= 0 || id >= _fitByWeaponId.Length || id >= _modelsByWeaponId.Length || _modelsByWeaponId[id] == null
+                || !_modelsByWeaponId[id].activeInHierarchy || _fitByWeaponId[id].Rotation == default) return false;
+            var fit = _fitByWeaponId[id];
+            var model = _modelsByWeaponId[id].transform;
+            // The fitted frame: x right, y up, z along the muzzle.
+            var basis = model.rotation * Quaternion.Inverse(fit.Rotation);
+            right = basis * Vector3.right; up = basis * Vector3.up; forward = basis * Vector3.forward;
+            var grip = model.position + model.rotation * _gripRest[id];
+            var center = model.position + basis * fit.CenterOffset;
+            bool pistol = fit.Size.z < 0.4f;
+            float ahead = id == BullpupId ? -0.17f : pistol ? 0.02f : 0.07f;
+            float above = pistol ? 0.045f : 0.06f;
+            // Sideways from the middle of the model (the grip hangs under its centre line), out to its right face.
+            float side = Vector3.Dot(center - grip, right) + fit.Size.x * 0.45f;
+            port = grip + right * side + up * above + forward * ahead;
+            return true;
+        }
+        const int BullpupId = 3; // the Warden: its action sits behind the grip
+
+        // The magazine of a weapon model as a piece of its own (#200): OnGun is drawn on the gun (hidden while the
+        // reload has it in the hand), Mesh/Materials draw the one in the hand, Rotation and Scale turn the weapon frame
+        // into the mesh's, Center is the mesh's middle in its own space.
+        public sealed class Magazine
+        {
+            public GameObject OnGun;
+            public Mesh Mesh;
+            public Material[] Materials;
+            public Quaternion Rotation;
+            public Vector3 Scale, Center;
+        }
+
+        Magazine[] _mags;
+        bool[] _magTried;
+
+        // The magazine of weapon `id`: the model's "Magazine" piece, split off its mesh when the prefab was built
+        // (MagazineKit) or a block standing in for it; null when it has none (pistols, the break-action shotgun).
+        public Magazine MagazineOf(int id)
+        {
+            if (id <= 0 || id >= _modelsByWeaponId.Length || _modelsByWeaponId[id] == null || id >= _fitByWeaponId.Length) return null;
+            if (_mags == null) { _mags = new Magazine[_modelsByWeaponId.Length]; _magTried = new bool[_modelsByWeaponId.Length]; }
+            if (_magTried[id]) return _mags[id];
+            _magTried[id] = true;
+            var model = _modelsByWeaponId[id].transform;
+            var fit = _fitByWeaponId[id];
+            if (fit.Rotation == default) return null;
+            Transform piece = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true)) if (t.name == "Magazine") { piece = t; break; }
+            if (piece == null || !piece.TryGetComponent(out MeshFilter filter) || !piece.TryGetComponent(out MeshRenderer renderer) || filter.sharedMesh == null) return null;
+            var basis = model.rotation * Quaternion.Inverse(fit.Rotation);
+            return _mags[id] = new Magazine { OnGun = piece.gameObject, Mesh = filter.sharedMesh, Materials = renderer.sharedMaterials,
+                Rotation = Quaternion.Inverse(basis) * piece.rotation, Scale = piece.lossyScale, Center = filter.sharedMesh.bounds.center };
+        }
+
         // True while the weapon at the eye (and the optic on it) is not drawn because a magnified scope fills the view.
         public bool HiddenForScope => _hiddenModel != 0;
 
@@ -172,8 +231,11 @@ namespace Game.Gameplay
             var model = _modelsByWeaponId[wanted].transform;
             // Reload and draw: the weapon dips and tips (same motion as third person), the magazine shows in hand (#200).
             var act = _anim != null ? _anim.ActionShown : default;
-            center += new Vector3(0f, -act.Down * 1.6f, 0f);
-            var actTurn = Quaternion.Euler(act.PitchDeg * 0.7f, 0f, -act.RollDeg * 0.9f);
+            // A magazine reload comes up toward the middle of the view and rolls over so the well and the hand at it are
+            // in sight (#200); a draw still dips.
+            float reload = _anim != null && _anim.ReloadProgress >= 0f ? Mathf.Clamp01(act.PitchDeg / 18f) : 0f;
+            center += new Vector3(0f, -act.Down * 1.6f * (1f - reload), 0f) + new Vector3(-0.08f, 0.07f, -0.03f) * reload;
+            var actTurn = Quaternion.Euler(act.PitchDeg * 0.7f - 22f * reload, -12f * reload, -act.RollDeg * 0.9f - 25f * reload);
             var origin = center - fit.CenterOffset; // the model's origin in camera space
 
             // The view model's own motion (#217), turning about the right hand.
@@ -218,7 +280,8 @@ namespace Game.Gameplay
             {
                 if (_arms != null) _arms.SetVisible(false);
                 if (_propAtEye && _anim != null) { var p = _anim.Props(); if (p != null) p.Hide(); _propAtEye = false; }
-                if (_anim != null) _anim.ShowMagAt(false, Vector3.zero, Quaternion.identity);
+                // Only the eye view's own magazine: in third person CombatantAnimation shows it, after which this ran and hid it.
+                if (_anim != null && _eyeCamera != null) _anim.ShowMagAt(false, Vector3.zero, Quaternion.identity);
                 return;
             }
             var pose = _anim.ItemPose;

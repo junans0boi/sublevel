@@ -608,6 +608,7 @@ namespace Game.Gameplay
             Turn(ArmRight, reach, transform.right);
             PoseGait();
             PoseRifle();
+            PoseClipMagazine();
             PoseMelee();
             PoseItems();
             PoseLedge();

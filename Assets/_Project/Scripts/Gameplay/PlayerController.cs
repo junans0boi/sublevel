@@ -264,7 +264,7 @@ namespace Game.Gameplay
             {
                 if (InParkour) AbortParkour();
                 f.Sprint = f.Jump = f.Crouch = f.Prone = f.AimHeld = f.FireHeld = f.FirePressed = f.LeanLeft = f.LeanRight = false;
-                f.Interact = f.Reload = f.Heal = f.Boost = f.GasCover = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
+                f.Interact = f.Reload = f.Heal = f.Boost = f.GasCover = f.Inspect = f.Holster = f.FireMode = f.CycleThrowable = f.AutoRun = false;
                 f.ThrowHeld = f.ThrowPressed = f.ThrowReleased = false;
                 f.SelectSlot = -1;
                 // Carried on a teammate's back (ADR-129): no crawling of its own, it rides where the carrier goes.
@@ -483,6 +483,7 @@ namespace Game.Gameplay
             if (f.Heal) _combatant.CmdUseMedkit();
             if (f.Boost) GetComponent<CombatantHealing>()?.RequestBoost();
             if (f.GasCover) GetComponent<KeyHolder>()?.RequestGasCover();
+            if (f.Inspect && TryGetComponent(out CombatantAnimation inspectAnim)) inspectAnim.StartInspect();
             if (f.CycleThrowable) GetComponent<ThrowableUser>()?.RequestCycle();
             if (f.Ping) PingAtCrosshair();
             // No shooting (or punching) while free looking: the camera is not where the weapon points (PUBG-like).
@@ -777,7 +778,13 @@ namespace Game.Gameplay
             if (_swimming) { _burstLeft = 0; return; }
             var weapon = _combatant.ActiveWeapon;
             // A shell-by-shell reload gives way to a shot (ADR-089).
-            if (weapon == null || (_combatant.Reloading.Value && !weapon.ReloadsByShell) || _combatant.ActiveMag <= 0) { _burstLeft = 0; return; }
+            if (weapon == null || (_combatant.Reloading.Value && !weapon.ReloadsByShell) || _combatant.ActiveMag <= 0)
+            {
+                // A trigger pulled on an empty magazine clicks (#288, own ears: the press is not sent anywhere).
+                if (f.FirePressed && weapon != null && _combatant.ActiveMag <= 0 && !_combatant.Reloading.Value && TryGetComponent(out CombatantAudio dry)) dry.PlayDryFire();
+                _burstLeft = 0;
+                return;
+            }
             // Automatic weapons set to single shots (B) fire once per click, and no faster than the server allows;
             // in burst mode a click fires the whole burst.
             var mode = _combatant.ActiveFireMode;

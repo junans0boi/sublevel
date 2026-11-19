@@ -8,6 +8,16 @@ using UnityEngine;
 // tools/unity.sh run WeaponProbe.Report: bounds (world, after import) and triangle counts of every gun model (ADR-217).
 public static class WeaponProbe
 {
+    // tools/unity.sh run WeaponProbe.Reimport: imports every gun model again under the current AssetImportRules and
+    // reports which are readable (none should be outside MagazineKit's split, #200).
+    public static void Reimport()
+    {
+        foreach (var path in Directory.GetFiles("Assets/_Project/Art/Weapons", "*.fbx", SearchOption.AllDirectories))
+            AssetDatabase.ImportAsset(path.Replace('\\', '/'), ImportAssetOptions.ForceUpdate);
+        foreach (var path in Directory.GetFiles("Assets/_Project/Art/Weapons", "*.fbx", SearchOption.AllDirectories).OrderBy(p => p))
+            Debug.Log($"WPN {Path.GetFileName(path)} readable={((ModelImporter)AssetImporter.GetAtPath(path.Replace('\\', '/'))).isReadable}");
+    }
+
     public static void Report()
     {
         foreach (var path in Directory.GetFiles("Assets/_Project/Art/Weapons", "*.fbx", SearchOption.AllDirectories).OrderBy(p => p))

@@ -22,8 +22,6 @@ namespace Game.Gameplay
         [SerializeField] AudioSource _bodySource;
         [SerializeField] AudioClip[] _shotByWeapon = new AudioClip[0];
         [SerializeField] AudioClip[] _reloadByWeapon = new AudioClip[0];
-        // Playback pitch per weapon id (missing entries play at 1). The Sentinel reuses the rifle shot, pitched lower for a heavier crack.
-        [SerializeField] float[] _shotPitchByWeapon = { 1f, 1f, 1f, 1f, 1f, 0.72f };
         [SerializeField] AudioClip[] _footsteps = new AudioClip[0];
         [SerializeField] AudioClip[] _hits = new AudioClip[0];
         [SerializeField] float _shotVolume = 0.8f;
@@ -52,6 +50,26 @@ namespace Game.Gameplay
         bool _wasReloading;
         float _lastHp;
         int _nextFootstep;
+        // Last take of each gunshot layer (WeaponSounds.VariantOf), so the same take never plays twice in a row (#287).
+        int _nearTake, _farTake, _tailTake, _ricochetTake;
+        bool _indoors;
+        float _indoorsAt = -10f;
+        AudioSource _impactSource; // moved to where a ricochet happens
+        AudioSource _tailSource;   // indoor tail layer (#287), with its own low-pass
+        AudioLowPassFilter _tailMuffle;
+        CombatantHealing _healing; // may be missing
+        CombatantSwim _swim;       // may be missing
+        bool _wasHealing, _wasSwimming;
+        float _nextStrokeAt, _lastGruntAt = -10f;
+        double _lastRicochet = double.NegativeInfinity;
+        const float IndoorRefreshSeconds = 0.5f, StrokeSeconds = 1.1f, GruntCooldown = 0.6f, MinGruntDamage = 4f;
+        [SerializeField] float _tailVolume = 0.8f;
+        [SerializeField] float _dryFireVolume = 0.5f;
+        [SerializeField] float _ricochetVolume = 0.55f;
+        [SerializeField] float _gruntVolume = 0.55f;
+        [SerializeField] float _healVolume = 0.5f;
+        [SerializeField] float _pickupVolume = 0.4f;
+        [SerializeField] float _swimVolume = 0.5f;
 
         // Counters so tests can tell that sounds were triggered without listening.
         public int ShotsPlayed { get; private set; }
@@ -67,6 +85,15 @@ namespace Game.Gameplay
         public int NearShotsPlayed { get; private set; }
         public int FarShotsPlayed { get; private set; }
         public int WhizzesPlayed { get; private set; }
+        public int TailsPlayed { get; private set; }
+        public int DryFiresPlayed { get; private set; }
+        public int RicochetsPlayed { get; private set; }
+        public int GruntsPlayed { get; private set; }
+        public int HealsPlayed { get; private set; }
+        public int PickupsPlayed { get; private set; }
+        public int SwimStrokesPlayed { get; private set; }
+        // The take (WeaponSounds.VariantOf index) of the last near layer, for the tests.
+        public int LastNearTake => _nearTake;
         // Hook for suppressors (G7): this combatant's shots sound as if SoundRules.SuppressedDistanceFactor times further.
         public bool Suppressed { get; set; }
         CombatantOptics _gear;
@@ -87,6 +114,8 @@ namespace Game.Gameplay
                 _distantShot = _weaponSource.gameObject.AddComponent<AudioLowPassFilter>();
                 _farSource = SpatialAudio.Apply(ChildSource(_weaponSource.transform, "FarShotAudio", _weaponSource), SpatialAudio.Category.Gunshot);
                 _farMuffle = _farSource.gameObject.AddComponent<AudioLowPassFilter>();
+                _tailSource = SpatialAudio.Apply(ChildSource(_weaponSource.transform, "TailAudio", _weaponSource), SpatialAudio.Category.Gunshot);
+                _tailMuffle = _tailSource.gameObject.AddComponent<AudioLowPassFilter>();
             }
             if (_bodySource != null)
             {
@@ -94,8 +123,13 @@ namespace Game.Gameplay
                 _stepRangeApplied = SpatialAudio.For(SpatialAudio.Category.Body).Max;
                 _stepMuffle = _stepSource.gameObject.AddComponent<AudioLowPassFilter>();
                 _whizSource = SpatialAudio.Apply(ChildSource(transform, "WhizAudio", _bodySource), SpatialAudio.Category.Body);
+                _impactSource = SpatialAudio.Apply(ChildSource(transform, "ImpactAudio", _bodySource), SpatialAudio.Category.Impact);
             }
+            _healing = GetComponent<CombatantHealing>();
+            _swim = GetComponent<CombatantSwim>();
             _combatant.ShotFired += OnShot;
+            _combatant.ShotResolved += OnShotResolved;
+            _animation.GestureStarted += OnGesture;
             _combatant.Punched += OnPunch;
             _animation.FootDown += OnFootDown;
             _animation.Landed += OnLanded;
@@ -104,6 +138,8 @@ namespace Game.Gameplay
         void OnDestroy()
         {
             _combatant.ShotFired -= OnShot;
+            _combatant.ShotResolved -= OnShotResolved;
+            _animation.GestureStarted -= OnGesture;
             _combatant.Punched -= OnPunch;
             _animation.FootDown -= OnFootDown;
             _animation.Landed -= OnLanded;
@@ -181,8 +217,6 @@ namespace Game.Gameplay
             var occ = OcclusionToListener(_weaponSource.transform.position, false);
             scale *= occ.Gain;
             cutoff = Mathf.Min(cutoff, occ.CutoffHz);
-            if (_distantShot != null) _distantShot.cutoffFrequency = cutoff;
-            if (_farMuffle != null) _farMuffle.cutoffFrequency = cutoff;
             SpatialAudio.NoteLoud(Mathf.Clamp01(near * scale)); // ambient beds duck under gunfire (#194)
             bool played = false;
             // Recorded gun sounds by weapon class (ADR-250); weapons without an entry, or a build without the clips,
@@ -190,19 +224,37 @@ namespace Game.Gameplay
             bool hasSound = WeaponSounds.TryGet(weapon, out var gun);
             var nearSet = hasSound ? GunSet(Suppressed ? WeaponSounds.SuppressedNear : WeaponSounds.NearPrefix(gun.Class)) : NoClips;
             var farSet = hasSound && !Suppressed ? GunSet(WeaponSounds.FarPrefix(gun.Class)) : NoClips;
-            var nearClip = nearSet.Length > 0 ? nearSet[Random.Range(0, nearSet.Length)] : ClipFor(_shotByWeapon, weapon);
-            float nearPitch = nearSet.Length > 0 ? gun.Pitch : PitchFor(_shotPitchByWeapon, weapon);
+            // Each layer plays one of its takes: every clip as cut, then pitched and filtered (#287, at least three).
+            _nearTake = WeaponSounds.NextVariant(nearSet.Length, _nearTake, Random.value);
+            var nv = WeaponSounds.VariantOf(nearSet.Length, _nearTake);
+            var nearClip = nearSet.Length > 0 ? nearSet[nv.Clip] : ClipFor(_shotByWeapon, weapon);
+            float nearPitch = nearSet.Length > 0 ? gun.Pitch : 1f;
             float loud = nearSet.Length > 0 ? gun.Loudness : 1f;
-            if (near > 0f && Play(_weaponSource, nearClip, _shotVolume * loud * near * scale, nearPitch))
+            if (_distantShot != null) _distantShot.cutoffFrequency = Mathf.Min(cutoff, nv.CutoffHz);
+            if (near > 0f && Play(_weaponSource, nearClip, _shotVolume * loud * near * scale, nearPitch * nv.Pitch))
             {
                 NearShotsPlayed++;
                 played = true;
             }
-            var farClip = farSet.Length > 0 ? farSet[Random.Range(0, farSet.Length)] : ClipFor(FarShotClips, weapon);
-            if (far > 0f && Play(_farSource, farClip, _shotVolume * loud * far * scale, farSet.Length > 0 ? nearPitch : 1f))
+            _farTake = WeaponSounds.NextVariant(farSet.Length, _farTake, Random.value);
+            var fv = WeaponSounds.VariantOf(farSet.Length, _farTake);
+            var farClip = farSet.Length > 0 ? farSet[fv.Clip] : ClipFor(FarShotClips, weapon);
+            if (_farMuffle != null) _farMuffle.cutoffFrequency = Mathf.Min(cutoff, fv.CutoffHz);
+            if (far > 0f && Play(_farSource, farClip, _shotVolume * loud * far * scale, farSet.Length > 0 ? nearPitch * fv.Pitch : 1f))
             {
                 FarShotsPlayed++;
                 played = true;
+            }
+            // Third layer: the room's tail when the shooter is under a roof (the ambient beds' roof rule, #287), through the
+            // same distance and occlusion filter as the far layer.
+            float tail = hasSound ? WeaponSounds.TailLevel(ShooterIndoors(), near, far) : 0f;
+            var tailSet = tail > 0f ? GunSet(WeaponSounds.IndoorTail) : NoClips;
+            if (tailSet.Length > 0)
+            {
+                _tailTake = WeaponSounds.NextVariant(tailSet.Length, _tailTake, Random.value);
+                var tv = WeaponSounds.VariantOf(tailSet.Length, _tailTake);
+                if (_tailMuffle != null) _tailMuffle.cutoffFrequency = Mathf.Min(cutoff, tv.CutoffHz);
+                if (Play(_tailSource, tailSet[tv.Clip], _shotVolume * _tailVolume * loud * tail * scale, nearPitch * tv.Pitch)) TailsPlayed++;
             }
             if (played) ShotsPlayed++;
         }
@@ -314,9 +366,12 @@ namespace Game.Gameplay
         {
             // Melee weapon swings have their own sounds (MeleeAudio, ADR-073).
             if (_hits.Length == 0 || punch.WeaponId != 0) return;
-            var clip = _hits[Random.Range(0, _hits.Length)];
             bool landed = punch.Victim != null;
-            if (Play(_bodySource, clip, landed ? _punchImpactVolume : _punchSwingVolume, landed ? 1f : _punchSwingPitch)) PunchesPlayed++;
+            // A miss is the recorded swing, quicker and higher than a weapon's (#288); older builds keep the pitched hit clip.
+            var swing = SfxSet(WeaponSounds.MeleeSwing);
+            var clip = landed || swing.Length == 0 ? _hits[Random.Range(0, _hits.Length)] : swing[Random.Range(0, swing.Length)];
+            float pitch = landed ? 1f : swing.Length > 0 ? 1.3f : _punchSwingPitch;
+            if (Play(_bodySource, clip, landed ? _punchImpactVolume : _punchSwingVolume, pitch)) PunchesPlayed++;
         }
 
         // Reloads play on the body source: heard as far as footsteps, not as far as shots.
@@ -332,8 +387,95 @@ namespace Game.Gameplay
 
             float hp = _combatant.Hp.Value;
             if (hp < _lastHp && _hits.Length > 0 && Play(_bodySource, _hits[Random.Range(0, _hits.Length)], _hitVolume)) HitsPlayed++;
+            // A real wound draws a grunt from the one hit (#288), not every tick of gas or bleeding.
+            if (_lastHp - hp >= MinGruntDamage && hp > 0f && Time.time - _lastGruntAt >= GruntCooldown)
+            {
+                var grunts = SfxSet(WeaponSounds.PainGrunt);
+                if (grunts.Length > 0 && Play(_bodySource, grunts[Random.Range(0, grunts.Length)], _gruntVolume)) { GruntsPlayed++; _lastGruntAt = Time.time; }
+            }
             _lastHp = hp;
+
+            // Healing starts with the bandage tearing open (replicated use, so everyone near hears it).
+            bool healing = _healing != null && _healing.Using;
+            if (healing && !_wasHealing && PlayOne(_bodySource, WeaponSounds.HealStart, _healVolume)) HealsPlayed++;
+            _wasHealing = healing;
+
+            // Swimming: strokes while moving through the water, the first one at once on getting in.
+            bool swimming = _swim != null && _swim.InWater && !_combatant.Dead.Value;
+            if (swimming)
+            {
+                var v = _motion != null ? _motion.LocalVelocity : Vector3.zero;
+                bool moving = new Vector2(v.x, v.z).magnitude > 0.5f;
+                if ((!_wasSwimming || moving) && Time.time >= _nextStrokeAt && PlayOne(_stepSource != null ? _stepSource : _bodySource, WeaponSounds.SwimStroke, _swimVolume))
+                {
+                    SwimStrokesPlayed++;
+                    _nextStrokeAt = Time.time + StrokeSeconds * Random.Range(0.9f, 1.1f);
+                }
+            }
+            _wasSwimming = swimming;
         }
+
+        // The click of a trigger on an empty chamber (#288): the local player's own fire press with nothing in the magazine.
+        public void PlayDryFire()
+        {
+            var set = GunSet(WeaponSounds.DryFire);
+            if (set.Length > 0 && Play(_bodySource, set[Random.Range(0, set.Length)], _dryFireVolume)) DryFiresPlayed++;
+        }
+
+        // The rummage of a hand going into loot (own view: the pickup gesture is the local player's).
+        void OnGesture(HandGesture g)
+        {
+            if (g == HandGesture.Pickup && PlayOne(_bodySource, WeaponSounds.Pickup, _pickupVolume)) PickupsPlayed++;
+        }
+
+        // A miss that hits something hard may whine off it (#288), heard from where it struck.
+        void OnShotResolved(in Combatant.ShotResult shot)
+        {
+            if (shot.Phase == Combatant.ShotPhase.Launch || shot.Victim != null || shot.Hit == ShotHit.None || _impactSource == null) return;
+            float chance = CasingRules.RicochetChance(shot.Surface);
+            if (chance <= 0f || Time.timeAsDouble - _lastRicochet < PelletWindow) return; // one roll per shot (a shotgun's pellets)
+            _lastRicochet = Time.timeAsDouble;
+            if (Random.value >= chance || SpatialAudio.DistanceToListener(shot.End) > SpatialAudio.For(SpatialAudio.Category.Impact).Max) return;
+            var set = GunSet(WeaponSounds.Ricochet);
+            if (set.Length == 0) return;
+            _ricochetTake = WeaponSounds.NextVariant(set.Length, _ricochetTake, Random.value);
+            var take = WeaponSounds.VariantOf(set.Length, _ricochetTake);
+            _impactSource.transform.position = shot.End;
+            if (Play(_impactSource, set[take.Clip], _ricochetVolume, take.Pitch)) RicochetsPlayed++;
+        }
+
+        // Whether this combatant stands under a roof, re-checked at most every IndoorRefreshSeconds (five rays).
+        bool ShooterIndoors()
+        {
+            if (Time.time - _indoorsAt < IndoorRefreshSeconds) return _indoors;
+            _indoorsAt = Time.time;
+            return _indoors = AmbientBeds.UnderRoof(transform.position + Vector3.up * 1.6f);
+        }
+
+        // One of the Resources/Sfx clips starting with `prefix`, at random.
+        bool PlayOne(AudioSource source, string prefix, float volume)
+        {
+            var set = SfxSet(prefix);
+            return set.Length > 0 && Play(source, set[Random.Range(0, set.Length)], volume);
+        }
+
+        static readonly Dictionary<string, AudioClip[]> SfxSets = new Dictionary<string, AudioClip[]>();
+
+        static AudioClip[] SfxSet(string prefix)
+        {
+            if (!SfxSets.TryGetValue(prefix, out var set))
+            {
+                SfxSets[prefix] = set = Array.FindAll(Resources.LoadAll<AudioClip>("Sfx"), c => c.name.StartsWith(prefix, StringComparison.Ordinal));
+                Array.Sort(set, (a, b) => string.CompareOrdinal(a.name, b.name));
+            }
+            return set;
+        }
+
+        // The Resources/Shots clips starting with `prefix` (spent cases play WeaponSounds.Casing from here).
+        public static AudioClip[] Clips(string prefix) => GunSet(prefix);
+
+        // Clip lists by prefix for the tests (Resources/Shots then Resources/Sfx).
+        public static int ClipCount(string prefix) => GunSet(prefix).Length + SfxSet(prefix).Length;
 
         // Occlusion of this combatant's sounds toward the ear, probed at most every SoundOcclusion.RefreshSeconds and
         // only within ProbeRange (ADR-251); the frame's ray allowance is shared by everyone.
@@ -359,9 +501,6 @@ namespace Game.Gameplay
 
         static AudioClip ClipFor(AudioClip[] byWeapon, int weaponId) =>
             weaponId >= 0 && weaponId < byWeapon.Length ? byWeapon[weaponId] : null;
-
-        static float PitchFor(float[] byWeapon, int weaponId) =>
-            byWeapon != null && weaponId >= 0 && weaponId < byWeapon.Length && byWeapon[weaponId] > 0f ? byWeapon[weaponId] : 1f;
 
         static bool Play(AudioSource source, AudioClip clip, float volume, float pitch = 1f)
         {

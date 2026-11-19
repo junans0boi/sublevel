@@ -64,6 +64,19 @@ namespace Game.Gameplay
         // The weapon in the hands for the poses: the active one, or the one being put away.
         public int HeldId => _itemHidesWeapon ? 0 : _combatant.ActiveWeaponId != 0 ? _combatant.ActiveWeaponId : _holsterId;
         public ActionPose ActionShown { get; private set; }
+        // Weapon inspection (#200): 0..1 through it, -1 when not inspecting. Cosmetic and local (own view): not replicated.
+        public float InspectProgress { get; private set; } = -1f;
+        float _inspectStart = -10f;
+        int _inspectId;
+
+        // The inspect key: a firearm in hand, nothing else going on with it.
+        public void StartInspect()
+        {
+            int id = HeldId;
+            var def = id != 0 ? GameData.Weapons.Find(id) : null;
+            if (def == null || def.IsMelee || ReloadProgress >= 0f || DrawProgress < 1f || HolsterProgress < 1f) return;
+            _inspectStart = Time.time; _inspectId = id;
+        }
 
         // How much of the two-handed long gun hold is shown (0..1) and how far it is raised (0 low ready, 1 shouldered).
         public float RifleHoldShown => _rifle;
@@ -244,6 +257,41 @@ namespace Game.Gameplay
             DrawProgress = Mathf.Clamp01((Time.time - _drawStart) / _drawSeconds);
             HolsterProgress = _holsterId != 0 && id == 0 ? Mathf.Clamp01((Time.time - _holsterStart) / HolsterSeconds) : 1f;
             if (HolsterProgress >= 1f) _holsterId = 0;
+            // A reload, a switch or a shot (the kick) ends the inspection.
+            float inspect = (Time.time - _inspectStart) / ReloadMotion.InspectSeconds;
+            if (reloading || id != _inspectId || _kick > 0.5f) _inspectStart = -10f;
+            InspectProgress = _inspectStart >= 0f && inspect < 1f ? inspect : -1f;
+            // Every frame, also while the reload clip carries the arms (ADR-188) and the hold is off: the eye view's arms
+            // and the magazine read it.
+            CurrentAction();
+        }
+
+        int _clipMag; // 0 on the gun, 1 in the hand at the well, 2 in the hand away, 3 seated
+        float _clipToWell;
+        // For the review shots: the magazine's phase in a third person reload clip, and the palm's distance to the well (m).
+        public int ClipMagPhase => _clipMag;
+        public GameObject ReloadMagModel => _magModel;
+        public float ClipMagToWell => _clipToWell;
+        public const float ClipMagOut = 0.12f, ClipMagIn = 0.47f;
+
+        // Third person while the reload clip carries both hands (the hold is off): the magazine rides in the left hand
+        // from when it leaves the well to when it is seated (#200), held upright like the gun's.
+        void PoseClipMagazine()
+        {
+            if (_actionWeight < 0.5f || _wrist == null || _wrist[0] == null || _weapons == null || _weapons.AtEye) return;
+            var hand = _wrist[0];
+            // The palm: a little past the wrist toward the fingers (the first child bone).
+            var palm = hand.childCount > 0 ? Vector3.Lerp(hand.position, hand.GetChild(0).position, 0.6f) : hand.position;
+            // The clip has its own timing (measured on the standing clip, ReloadStand: the hand is at the well around 0.1,
+            // away at the pouch 0.22..0.42, back at the well about 0.47, then up to the charging handle). The crouched and
+            // prone clips are assumed to follow it.
+            var mag = _weapons.MagazineOf(HeldId);
+            _clipMag = ReloadProgress < 0f || mag == null ? 0 : ReloadProgress < ClipMagOut ? 0 : ReloadProgress < ClipMagIn ? (ReloadProgress < 0.22f ? 1 : 2) : 3;
+            if (mag != null) _clipToWell = Vector3.Distance(palm, mag.OnGun.transform.TransformPoint(mag.Mesh.bounds.center));
+            bool inHand = _clipMag == 1 || _clipMag == 2;
+            if (!inHand) { ShowMag(false, Vector3.zero, Quaternion.identity, false); return; }
+            var turn = _weapons.TryEjectionPort(out _, out _, out var up, out var forward) ? Quaternion.LookRotation(forward, up) : transform.rotation;
+            ShowMag(true, palm, turn, PistolInHand(HeldId));
         }
 
         // The reload or draw pose for this frame (identity when neither is on).
@@ -254,12 +302,17 @@ namespace Game.Gameplay
                 a = ReloadMotion.Reload(_reloadKind == ReloadKind.Shell ? Mathf.Clamp01(Mathf.Min(1f, (Time.time - _reloadStart) / 0.3f)) : ReloadProgress, _reloadKind, Time.time - _reloadStart);
             else if (HolsterProgress < 1f) a = ReloadMotion.Draw(1f - HolsterProgress);
             else if (DrawProgress < 1f) a = ReloadMotion.Draw(DrawProgress);
+            else if (InspectProgress >= 0f) a = ReloadMotion.Inspect(InspectProgress);
             ActionShown = a;
             return a;
         }
 
         void ShowMag(bool visible, Vector3 at, Quaternion turn, bool pistol)
         {
+            // The gun's own magazine, split off its model (#200): off the gun while the hand holds it, back on when seated.
+            var mag = visible || _magShownOnGun != null ? (_weapons != null ? _weapons.MagazineOf(HeldId) : null) : null;
+            if (_magShownOnGun != null && (mag == null || _magShownOnGun != mag.OnGun)) { _magShownOnGun.SetActive(true); _magShownOnGun = null; }
+            if (mag != null && mag.OnGun != null) { mag.OnGun.SetActive(!visible); _magShownOnGun = visible ? mag.OnGun : null; }
             if (visible && _magModel == null)
             {
                 var model = _weapons != null ? _weapons.ModelFor(HeldId) : null;
@@ -269,13 +322,28 @@ namespace Game.Gameplay
                 Destroy(_magModel.GetComponent<Collider>());
                 if (source != null) _magModel.GetComponent<Renderer>().sharedMaterial = source.sharedMaterial;
                 _magModel.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _cubeMesh = _magModel.GetComponent<MeshFilter>().sharedMesh;
             }
             if (_magModel == null) return;
             _magModel.SetActive(visible);
             if (!visible) return;
+            var filter = _magModel.GetComponent<MeshFilter>();
+            var renderer = _magModel.GetComponent<MeshRenderer>();
+            if (mag != null && mag.Mesh != null)
+            {
+                // The split magazine itself, in the weapon's own frame, its middle at the hand.
+                if (filter.sharedMesh != mag.Mesh) { filter.sharedMesh = mag.Mesh; renderer.sharedMaterials = mag.Materials; }
+                var rot = turn * mag.Rotation;
+                _magModel.transform.localScale = mag.Scale;
+                _magModel.transform.SetPositionAndRotation(at - rot * Vector3.Scale(mag.Scale, mag.Center), rot);
+                return;
+            }
+            if (filter.sharedMesh != _cubeMesh) filter.sharedMesh = _cubeMesh;
             _magModel.transform.localScale = pistol ? new Vector3(0.025f, 0.07f, 0.04f) : new Vector3(0.035f, 0.11f, 0.06f);
             _magModel.transform.SetPositionAndRotation(at, turn);
         }
+        GameObject _magShownOnGun; // the gun magazine hidden while the hand holds it
+        Mesh _cubeMesh;
 
         // First person: the magazine rides in a spot low on the left of the view while the reload swaps it.
         public void ShowMagAtEye(Transform cam, bool visible) =>

@@ -9,6 +9,8 @@ public class AssetImportRules : AssetPostprocessor
     public const string AudioRoot = "Assets/_Project/Audio/";
     public const string HdriRoot = ArtRoot + "HDRI/";
     public const string CharacterRoot = ArtRoot + "Characters/";
+    // The one model MagazineKit is reading right now (null otherwise).
+    public static string ReadableWhileSplitting;
     public const int MaxTextureSize = 2048;
     public const float CharacterSmoothingAngle = 75f;
 
@@ -60,7 +62,8 @@ public class AssetImportRules : AssetPostprocessor
     {
         if (!assetPath.StartsWith(ArtRoot)) return;
         var importer = (ModelImporter)assetImporter;
-        importer.isReadable = false;
+        // Never readable in a build; only MagazineKit opens one model for the moment it splits the magazine off (#200).
+        importer.isReadable = assetPath == ReadableWhileSplitting;
         importer.meshCompression = ModelImporterMeshCompression.Medium;
         importer.importCameras = false;
         importer.importLights = false;

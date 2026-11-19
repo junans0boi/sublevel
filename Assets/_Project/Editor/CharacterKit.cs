@@ -10,7 +10,7 @@ using UnityEngine;
 public static class CharacterKit
 {
     public const string DefaultRoster = "MixamoSwat";
-    const string WeaponDir = "Assets/_Project/Art/Weapons/";
+    public const string WeaponDir = "Assets/_Project/Art/Weapons/";
 
     // One row per weapon id (ADR-032 names): model file, length in meters, whether the model's muzzle points
     // along -X, and where the model's center sits relative to the wrist (forward, up) in the aiming pose.
@@ -229,6 +229,7 @@ public static class CharacterKit
     // Adds the character under `parent`, standing at its origin and facing its forward, with all weapons attached but hidden.
     public static Visual AddTo(Transform parent, string rosterId = DefaultRoster)
     {
+        MagazineKit.Prepare(); // before any gun is placed (it may import the gun models again)
         var go = RosterInstance(rosterId);
         go.name = "Visual";
         var def = go.GetComponent<CharacterDef>();
@@ -250,6 +251,8 @@ public static class CharacterKit
             weaponModel.transform.position += target - SceneLook.WorldBounds(weaponModel).center;
             var bounds = SceneLook.WorldBounds(weaponModel);
             fits[weapon.Id] = new WeaponVisual.Fit { Rotation = weaponModel.transform.rotation, CenterOffset = bounds.center - weaponModel.transform.position, Size = bounds.size };
+            // The magazine as its own piece for the reload (#200); weapons are fitted muzzle along world +Z.
+            MagazineKit.Apply(weaponModel, weapon, hand.position, Quaternion.identity);
             weaponModel.transform.SetParent(hand, true);
             models[weapon.Id] = weaponModel;
         }

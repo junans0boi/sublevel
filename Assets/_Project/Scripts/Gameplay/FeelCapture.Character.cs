@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
@@ -115,8 +116,9 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.3f);
         }
 
-        IEnumerator Burst(string name, float[] times, Action start, bool fp = true)
+        IEnumerator Burst(string name, float[] times, Action start, bool fp = true, params Watch[] views)
         {
+            if (views == null || views.Length == 0) views = new[] { Watch.Side };
             if (!Want(name)) yield break;
             float t0 = Time.time;
             start?.Invoke();
@@ -125,8 +127,156 @@ namespace Game.Gameplay
                 while (Time.time - t0 < at) yield return null;
                 var animLog = PlayerController.Local.GetComponent<CombatantAnimation>();
                 Debug.Log($"[FeelCapture] {name} want {at:F2} real {Time.time - t0:F3} holster {animLog.HolsterProgress:F2} draw {animLog.DrawProgress:F2} held {animLog.HeldId} reload {animLog.ReloadProgress:F2}");
-                yield return Views($"{name}_t{Mathf.RoundToInt(at * 100):0000}", fp, Watch.Side);
+                yield return Views($"{name}_t{Mathf.RoundToInt(at * 100):0000}", fp, views);
             }
+        }
+
+        // Fire once (held for automatic fire) and leave the trigger after `seconds` of game time.
+        IEnumerator Shoot(float seconds)
+        {
+            _frame.FirePressed = _frame.FireHeld = true;
+            float t0 = Time.time;
+            while (Time.time - t0 < seconds) yield return null;
+            _frame.FirePressed = _frame.FireHeld = false;
+        }
+
+        IEnumerator ToView(PlayerController pc, ViewMode mode)
+        {
+            if (pc.Rig.Mode == mode) yield break;
+            pc.Rig.ToggleMode();
+            float end = Time.realtimeSinceStartup + 1.5f;
+            var self = pc.GetComponent<Combatant>();
+            while (Time.realtimeSinceStartup < end && mode == ViewMode.FirstPerson && (pc.Camera.transform.position - self.EyePosition).magnitude > 0.1f) yield return null;
+            for (int k = 0; k < 4; k++) yield return null;
+        }
+
+        IEnumerator CaseShots(Combatant me, PlayerController pc, Vector3 home, Vector3 run, int id, string tag)
+        {
+            string name = "r5_weapon_casing_" + tag;
+            yield return Equip(me, id);
+            pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+            yield return new WaitForSeconds(0.5f);
+            var fx = me.GetComponent<CasingFx>();
+            int before = fx.Ejected;
+            // Third person, close on the port from the right: the case leaving and flying.
+            yield return ToView(pc, ViewMode.ThirdPerson);
+            Time.timeScale = 0.1f;
+            float t0 = Time.time;
+            StartCoroutine(Shoot(0.02f));
+            int n = 0;
+            foreach (var at in new[] { 0.03f, 0.08f, 0.13f, 0.18f })
+            {
+                while (Time.time - t0 < at) yield return null;
+                _watch = Watch.Port;
+                yield return VShot($"{name}_tp_{n++}_t{Mathf.RoundToInt(at * 100):000}");
+            }
+            _watch = Watch.Game;
+            Time.timeScale = 1f;
+            yield return new WaitForSeconds(0.6f);
+            // First person: one frame just after the shot.
+            yield return ToView(pc, ViewMode.FirstPerson);
+            Time.timeScale = 0.1f;
+            t0 = Time.time;
+            StartCoroutine(Shoot(0.02f));
+            while (Time.time - t0 < 0.05f) yield return null;
+            yield return VShot(name + "_fpp");
+            Time.timeScale = 1f;
+            yield return ToView(pc, ViewMode.ThirdPerson);
+            // On the ground: a few more shots, then close on where they lie, first concrete, then a dirt patch.
+            foreach (var ground in new[] { "concrete", "dirt" })
+            {
+                GameObject patch = null;
+                if (ground == "dirt")
+                {
+                    patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    patch.transform.position = home + Vector3.up * 0.01f;
+                    patch.transform.localScale = new Vector3(6f, 0.02f, 6f);
+                    patch.AddComponent<SurfaceIdTag>().Id = SurfaceId.Dirt;
+                    var r = patch.GetComponent<Renderer>();
+                    var block = new MaterialPropertyBlock();
+                    block.SetColor("_BaseColor", new Color(0.33f, 0.25f, 0.17f));
+                    r.SetPropertyBlock(block);
+                    yield return null;
+                }
+                if (me.ActiveMag < 4)
+                {
+                    // A full magazine first (the Breacher holds five).
+                    _frame.Reload = true;
+                    float by = Time.realtimeSinceStartup + 2f;
+                    while (!me.Reloading.Value && Time.realtimeSinceStartup < by) yield return null;
+                    _frame.Reload = false;
+                    by = Time.realtimeSinceStartup + 6f;
+                    while (me.Reloading.Value && Time.realtimeSinceStartup < by) yield return null;
+                    yield return new WaitForSeconds(0.3f);
+                }
+                for (int k = 0; k < 4; k++) { yield return Shoot(0.05f); yield return new WaitForSeconds(id == 4 ? 0.6f : 0.25f); }
+                yield return new WaitForSeconds(0.5f);
+                var right = Vector3.Cross(Vector3.up, run).normalized;
+                if (!CasingPool.TryRestingCenter(out var spot)) spot = home + right * 0.9f;
+                _fixFrom = spot + right * 0.5f + Vector3.up * 0.55f - run * 0.3f;
+                _fixAt = spot;
+                _watch = Watch.Fixed;
+                yield return VShot($"{name}_ground_{ground}");
+                _watch = Watch.Game;
+                if (patch != null) Destroy(patch);
+                yield return new WaitForSeconds(CasingRules.LifeSeconds);
+            }
+            Debug.Log($"[FeelCapture] {name}: ejected {fx.Ejected - before} live {CasingPool.Live} sounds {CasingPool.SoundsPlayed}");
+        }
+
+        IEnumerator ReloadShots(Combatant me, PlayerController pc, Vector3 home, Vector3 run, int id, string tag)
+        {
+            string name = "r5_weapon_reload_" + tag;
+            yield return Equip(me, id);
+            var def = GameData.Weapons.Find(id);
+            var anim = me.GetComponent<CombatantAnimation>();
+            // Out of the well, gone (hand at the belt), going in, seated.
+            var at = new[] { ReloadMotion.MagOutAt + 0.04f, 0.4f, ReloadMotion.MagInAt - 0.04f, 0.92f };
+            var label = new[] { "0out", "1gone", "2in", "3done" };
+            foreach (var mode in new[] { ViewMode.ThirdPerson, ViewMode.FirstPerson })
+            {
+                pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+                yield return ToView(pc, mode);
+                yield return new WaitForSeconds(1.5f); // past a bolt action's cycle
+                yield return Shoot(0.3f);
+                yield return new WaitForSeconds(0.6f);
+                Time.timeScale = 0.25f;
+                _frame.Reload = true;
+                float startBy = Time.realtimeSinceStartup + 3f;
+                while (anim.ReloadProgress < 0f && Time.realtimeSinceStartup < startBy) yield return null;
+                _frame.Reload = false;
+                if (anim.ReloadProgress < 0f) Debug.LogWarning($"[FeelCapture] {name}: the reload did not start");
+                for (int k = 0; k < at.Length; k++)
+                {
+                    if (mode == ViewMode.ThirdPerson && anim.ActionLayerWeight > 0.3f)
+                    {
+                        // The reload clip has its own timing: follow the magazine (out at the well, away, coming back, seated).
+                        float by = Time.realtimeSinceStartup + 20f;
+                        float awayAt = -1f;
+                        while (anim.ReloadProgress >= 0f && Time.realtimeSinceStartup < by)
+                        {
+                            int ph = anim.ClipMagPhase;
+                            if (k == 0 && ph >= 1) break;
+                            if (k == 1) { if (ph >= 2 && awayAt < 0f) awayAt = Time.time; if (awayAt >= 0f && Time.time - awayAt > 0.12f) break; if (ph >= 3) break; }
+                            if (k == 2 && ph >= 3) break;
+                            if (k == 3 && anim.ReloadProgress >= at[k]) break;
+                            yield return null;
+                        }
+                    }
+                    else
+                        while (anim.ReloadProgress >= 0f && anim.ReloadProgress < at[k]) yield return null;
+                    var mag = me.GetComponent<WeaponVisual>().MagazineOf(id);
+                    Debug.Log($"[FeelCapture] {name} {mode} {label[k]}: progress {anim.ReloadProgress:F2} magInHand {anim.ActionShown.MagInHand} clip {anim.ClipMagPhase}/{anim.ClipMagToWell:F2} onGun {(mag != null ? mag.OnGun.activeInHierarchy.ToString() : "none")} mesh {(mag != null ? mag.Mesh.name + " " + mag.Mesh.bounds.size.ToString("F3") + " x" + mag.Scale.ToString("F2") : "")}");
+                    var held = anim.ReloadMagModel;
+                    if (held != null) Debug.Log($"[FeelCapture]   held mag active {held.activeInHierarchy} at cam {pc.Camera.transform.InverseTransformPoint(held.transform.position).ToString("F2")} bounds {held.GetComponent<Renderer>().bounds.size.ToString("F2")} layer {held.layer} mesh {held.GetComponent<MeshFilter>().sharedMesh.name}");
+                    _watch = mode == ViewMode.ThirdPerson ? Watch.Port : Watch.Game;
+                    yield return VShot($"{name}_{(mode == ViewMode.ThirdPerson ? "tp" : "fpp")}_{label[k]}");
+                    _watch = Watch.Game;
+                }
+                Time.timeScale = 1f;
+                yield return new WaitForSeconds(def.ReloadSeconds(0) + 0.3f);
+            }
+            yield return ToView(pc, ViewMode.ThirdPerson);
         }
 
         IEnumerator CharShots(Combatant me)
@@ -346,7 +496,25 @@ namespace Game.Gameplay
             _frame.LeanLeft = _frame.LeanRight = _frame.AimHeld = false;
             yield return new WaitForSeconds(0.5f);
 
-            // E. reload per weapon.
+            // r5 weapon effects (#199 #200): cases leaving the port (third person close from the right side, 4 frames
+            // 0.05 s apart, and one first person frame), cases lying on concrete and on dirt, and the magazine leaving,
+            // gone, going in and seated in third and first person. Slowed so each frame lands inside the motion.
+            if (Want("r5_weapon_casing_rifle") || Want("r5_weapon_casing_pistol") || Want("r5_weapon_casing_shotgun") || Want("r5_weapon_reload_mesh_rifle") || Want("r5_weapon_reload_block_sniper") || Want("r5_weapon_inspect"))
+            {
+                foreach (var (id, tag) in new[] { (9, "rifle"), (1, "pistol"), (4, "shotgun") })
+                    if (Want("r5_weapon_casing_" + tag)) yield return CaseShots(me, pc, home, run, id, tag);
+                foreach (var (id, tag) in new[] { (9, "mesh_rifle"), (5, "block_sniper") })
+                    if (Want("r5_weapon_reload_" + tag)) yield return ReloadShots(me, pc, home, run, id, tag);
+                if (Want("r5_weapon_inspect")) yield return Equip(me, 9);
+                pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+                yield return new WaitForSeconds(0.5f);
+                var inspectAnim = me.GetComponent<CombatantAnimation>();
+                float inspectSecs = ReloadMotion.InspectSeconds;
+                yield return Burst("r5_weapon_inspect", new[] { 0.1f, 0.3f, 0.55f, 0.7f }.Select(k => k * inspectSecs).ToArray(), () => inspectAnim.StartInspect(), false, Watch.Side);
+                yield return new WaitForSeconds(1f);
+            }
+
+            // E. reload per weapon.            // E. reload per weapon.
             foreach (var (id, tag) in new[] { (3, "rifle"), (1, "pistol"), (4, "shotgun"), (2, "smg"), (5, "sniper") })
             {
                 yield return Equip(me, id);
