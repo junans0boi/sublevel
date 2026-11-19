@@ -25,6 +25,11 @@ namespace Game.Net
     {
         // While set, MoveGuard keeps people inside the island and the match flow does not open the doors yet.
         public static WaitingRoom Current { get; private set; }
+        // Tests: a host in the editor runs the waiting phase too (a real server turns it on with NetSession.Dedicated).
+        public static bool ForceEnabled;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { ForceEnabled = false; Current = null; }
 
         MatchDirector _director;
         NetworkManager _nm;
@@ -96,7 +101,7 @@ namespace Game.Net
         public static WaitingRoom TryCreate(MatchDirector director, NetworkManager nm)
         {
             var rules = MatchRules.Current ?? new MatchRules();
-            if (!NetSession.Dedicated || !rules.UseWaitingIsland) return null;
+            if (!(NetSession.Dedicated || ForceEnabled) || !rules.UseWaitingIsland) return null;
             var island = GameObject.Find("WaitingIsland");
             if (island == null) { Debug.LogWarning("[WaitingRoom] the scene has no WaitingIsland (rebuild World): people start in the elevators"); return null; }
             var room = director.gameObject.AddComponent<WaitingRoom>();
