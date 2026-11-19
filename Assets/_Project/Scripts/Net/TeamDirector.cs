@@ -91,9 +91,18 @@ namespace Game.Net
             {
                 var c = all[i];
                 if (c == null || !c.IsServerInitialized || _assigned.Contains(c.ObjectId)) continue;
+                int planned = c.IsPlayer ? PlannedIndex(c) : -1;
+                // The player's token may still be on its way: wait a little before treating a planned match's player as unplanned.
+                if (planned == PendingToken)
+                {
+                    if (!_firstSeen.TryGetValue(c.ObjectId, out float seen)) _firstSeen[c.ObjectId] = seen = Time.time;
+                    if (Time.time - seen < TokenWaitSeconds) continue;
+                    planned = -1;
+                }
                 _assigned.Add(c.ObjectId);
                 int index;
-                if (c.IsPlayer && _players < expected) index = _players++;
+                if (planned >= 0) index = planned;
+                else if (c.IsPlayer && NetSession.PlannedSessions.Length == 0 && _players < expected) index = _players++;
                 else if (c.IsPlayer) index = expected + (director != null ? director.BotCount : _others) + _lateJoiners++;
                 else index = expected + _others++;
                 var layout = director != null ? director.Layout : null;
@@ -102,6 +111,22 @@ namespace Game.Net
                 if (team == Teams.None) { team = (layout != null ? layout.TeamCount : 0) + ++_extraTeams; c.ServerSetTeam(team, 1, _state.ServerNameOf(c)); }
                 else c.ServerSetTeam(team, layout.SlotOf(index), _state.ServerNameOf(c));
             }
+        }
+
+        // The place a planned player has in the layout: the queue planned who stands on which team (a party side by side), and the
+        // player's session token tells which of them this is. -1: not planned (a late joiner, or a match without a queue plan).
+        const int PendingToken = -2;
+        const float TokenWaitSeconds = 3f;
+        readonly Dictionary<int, float> _firstSeen = new Dictionary<int, float>();
+
+        static int PlannedIndex(Combatant c)
+        {
+            var order = NetSession.PlannedSessions;
+            var keeper = MatchDirector.Instance != null ? MatchDirector.Instance.Sessions : null;
+            if (order.Length == 0) return -1;
+            if (keeper == null || c.Owner == null || !c.Owner.IsValid) return PendingToken;
+            string token = keeper.TokenOf(c.Owner.ClientId);
+            return token == null ? PendingToken : System.Array.IndexOf(order, token);
         }
 
         // Knocked members of a team with nobody left on its feet die: nobody could revive them.

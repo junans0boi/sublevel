@@ -327,7 +327,9 @@ namespace Game.Net
         void ServerPlanDeployment()
         {
             _expectedPlayersCounted = ExpectedPlayers;
-            Layout = TeamLayout.ForMatch(_expectedPlayersCounted, BotCount, TeamMatch.TeamSize, NetSession.PartySizes);
+            Layout = TeamMatch.FillTeamsInOrder
+                ? TeamLayout.For(_expectedPlayersCounted + BotCount, 0, TeamMatch.TeamSize)
+                : TeamLayout.ForMatch(_expectedPlayersCounted, BotCount, TeamMatch.TeamSize, NetSession.PartySizes);
             if (Elevators == null || Elevators.Sites.Count == 0) return;
             DeploymentSeed = DeploymentSeedOverride ?? (_randomDeployment ? unchecked(Seed * 397 ^ System.Environment.TickCount) : Seed);
             var slots = new ElevatorSlot[Elevators.Sites.Count];

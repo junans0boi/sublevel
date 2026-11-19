@@ -72,7 +72,6 @@ namespace Game.Gameplay
         const float MaxViewPitch = 89f;
 
         bool _autoRun;
-        bool _autoRunSprint; // auto-run was started while sprinting
         bool _sprintOverruled; // C or Z pressed during this sprint: it no longer gets the body up
         float _lastMoveY;
         bool _sentSlowWalk;
@@ -308,13 +307,12 @@ namespace Game.Gameplay
             if (f.AutoRun)
             {
                 _autoRun = !_autoRun;
-                _autoRunSprint = _autoRun && f.Sprint; // started during a sprint: it keeps the sprint speed (#177)
             }
             bool freshForwardBack = Mathf.Abs(f.Move.y) > 0.1f && Mathf.Abs(_lastMoveY) <= 0.1f;
             _lastMoveY = f.Move.y;
             if (freshForwardBack || aim != AimMode.Hip || UiFocus.Current == UiScreen.Menu || SpawnProtection.InputBlocked
                 || ExternalControl || ResultScreen.BlocksGameplay) _autoRun = false;
-            if (!_autoRun) _autoRunSprint = false;
+            float inputY = f.Move.y;
             if (_autoRun) f.Move.y = 1f;
 
             if (InParkour)
@@ -342,7 +340,10 @@ namespace Game.Gameplay
             // Healing is walk-only, and a jump ends it (ADR-099).
             bool healing = CombatantHealing.IsUsing(_combatant);
             if (healing && (f.Jump || _jumpCancels)) GetComponent<CombatantHealing>().RequestCancel();
-            bool sprint = (f.Sprint || _autoRunSprint) && f.Move.y > 0.1f && aim == AimMode.Hip && !AimKeyDown && !firing && !SlowWalking && !ExternalControl && !healing;
+            bool canSprint = AutoRunRules.CanSprint(aim == AimMode.Hip, AimKeyDown, firing, SlowWalking, ExternalControl, healing);
+            // Auto-run is always a sprint (ADR-350): when a sprint is not allowed it ends instead of walking on.
+            if (_autoRun && !canSprint) { _autoRun = false; f.Move.y = inputY; }
+            bool sprint = (f.Sprint || _autoRun) && f.Move.y > 0.1f && canSprint;
 
             // Space in front of an obstacle vaults or climbs instead of jumping (standing or crouched, on the ground).
             if (f.Jump && !ExternalControl && _stance != null && _controller.isGrounded && BodyStance != Stance.Prone && TryStartParkour())
@@ -777,13 +778,14 @@ namespace Game.Gameplay
         {
             if (Camera == null) return;
             var aimRules = _rules.Aim;
+            StaggerWander.Offset(Combatant.StaggerShakeDegOf(_combatant), Time.timeAsDouble, out float wanderPitch, out float wanderYaw);
             var view = new ViewState
             {
                 Aim = _aim.Mode,
                 Lean = _combatant.LeanAmount,
                 LeanRollDeg = Rig.IsEyeView(_aim.Mode) ? _rules.Lean.EyeViewRollDeg : _rules.Lean.ThirdPersonRollDeg,
-                RecoilPitch = Mathf.Min(_recoil.Pitch + ScopeControl.SwayPitch, MaxViewPitch - ViewPitch), // never past straight up
-                RecoilYaw = _recoil.Yaw + ScopeControl.SwayYaw,
+                RecoilPitch = Mathf.Min(_recoil.Pitch + ScopeControl.SwayPitch + wanderPitch, MaxViewPitch - ViewPitch), // never past straight up
+                RecoilYaw = _recoil.Yaw + ScopeControl.SwayYaw + wanderYaw,
                 ShoulderAimDistance = aimRules.ShoulderCameraDistance,
             };
             var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();

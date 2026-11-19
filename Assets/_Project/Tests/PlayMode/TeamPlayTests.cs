@@ -38,6 +38,7 @@ namespace Game.Tests
         IEnumerator Load(TeamMode mode)
         {
             TeamMatch.Mode = mode;
+            TeamMatch.FillTeamsInOrder = true; // these tests need teammates in a one-player match (ADR-332 would make it a team of one)
             _input = new ScriptedInput();
             PlayerController.InputOverride = _input;
             SceneManager.LoadScene("World");
@@ -63,6 +64,7 @@ namespace Game.Tests
         {
             PlayerController.InputOverride = null;
             TeamMatch.Mode = TeamMode.Solo;
+            TeamMatch.FillTeamsInOrder = false;
             BotRules.Current = GameData.Rules.Bot;
             TeamRules.Current = GameData.Rules.Team;
             SceneManager.LoadScene("Bootstrap");
@@ -299,7 +301,7 @@ namespace Game.Tests
         [UnityTest]
         public IEnumerator PingOnAnEnemy_IsEnemySpotted_AndTheOwnMapMarkerIsShared()
         {
-            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f };
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f, PingMaxMeters = 3000f }; // the world is big now: the other team spawns ~1200 m away, beyond the default 600 m reach
             yield return Load(TeamMode.Squad);
             yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
             MapMarker.Clear();

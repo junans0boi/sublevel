@@ -111,6 +111,7 @@ namespace Game.Gameplay
             _social = new SocialClient(LobbyNet.Backend);
             _backendQueue = new BackendMatchQueue(new MatchTicketClient(LobbyNet.Backend), _social, (host, port, size) =>
             {
+                LobbyNet.QueuePartyId = _social.Party != null ? _social.Party.id : 0;
                 _afterJoin = (size > 1 ? TeamMode.Squad : TeamMode.Solo, size);
                 _lobbyScreen.JoinServer(host, (ushort)port);
             });
@@ -157,7 +158,7 @@ namespace Game.Gameplay
             if (_lobbyPanel != null)
             {
                 // The lobby root already carries a CanvasGroup (fade/screen switch); AddComponent would return null and abort the load.
-                var group = _lobbyPanel.Root.gameObject.GetComponent<CanvasGroup>() ?? _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>();
+                if (!_lobbyPanel.Root.gameObject.TryGetComponent(out CanvasGroup group)) group = _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>(); // ?? would not catch the editor's fake-null from GetComponent
                 group.interactable = false;
             }
             SceneManager.LoadSceneAsync(scene);
