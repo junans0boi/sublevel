@@ -46,6 +46,7 @@ namespace Game.Gameplay
         int _promptKey = int.MinValue;
         string _text = "";
         string _prompt = "";
+        int _limitSeen = int.MinValue;
 
         // ---- Read-only state for tests and the HUD ----
 
@@ -152,6 +153,12 @@ namespace Game.Gameplay
             {
                 _director = PollutionDirector.Instance;
                 if (_director == null) return;
+            }
+            var keys = KeyHolder.Local;
+            if (keys != null && keys.RideLimitHits.Value != _limitSeen)
+            {
+                if (_limitSeen != int.MinValue) Say("이 팀은 승강기를 이미 " + PollutionRules.Current.MaxRidesPerTeam + "번 사용했습니다", UiKit.Danger, MessageSeconds);
+                _limitSeen = keys.RideLimitHits.Value;
             }
             UpdateStatus();
             UpdateBanner();

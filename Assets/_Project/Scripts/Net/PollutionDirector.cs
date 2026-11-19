@@ -33,9 +33,12 @@ namespace Game.Net
         public static PollutionRules RulesOverride;
         // The pollution runs the match instead of the lockdown (T10 flips this on and removes ZoneDirector).
         public static bool AutoStart = true;
+        // Tests of the old free elevator ride set this; otherwise the pollution means keys only (ADR-360).
+        public static bool AllowFreeRides;
+        public static bool FreeRidesBlocked => !AllowFreeRides && Instance != null && Instance.Ready;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Instance = null; GridSource = null; MapRegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = true; }
+        static void ResetStatics() { Instance = null; GridSource = null; MapRegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = true; AllowFreeRides = false; }
 
         NetworkManager _network;
         bool _bound;
@@ -116,7 +119,10 @@ namespace Game.Net
         {
             var director = MatchDirector.Instance;
             if (director == null) return;
-            var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules);
+            var teams = new HashSet<int>();
+            foreach (var c in Combatant.All) if (c != null) teams.Add(TeamKey(c));
+            int teamCount = director.Layout != null ? director.Layout.TeamCount : teams.Count; // 0 = unknown: the old 6..8
+            var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules, teamCount);
             var rng = new System.Random(unchecked(seed * 17 + 5));
             var cells = new List<int>();
             foreach (var k in plan)

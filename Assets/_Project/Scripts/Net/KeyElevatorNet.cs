@@ -97,6 +97,7 @@ namespace Game.Net
             var holder = c.GetComponent<KeyHolder>();
             if (holder == null || holder.Keys.Value <= 0) return false;
             var r = _system.Insert(station, pollution.Now, c.ObjectId, TeamKey(c), true, pollution.States);
+            if (r == KeyResult.RideLimit) holder.RideLimitHits.Value++;
             if (r != KeyResult.Ok) return false;
             holder.ServerConsumeKey();
             _system.Board(station, c.ObjectId);

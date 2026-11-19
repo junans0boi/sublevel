@@ -74,7 +74,7 @@ namespace Game.Gameplay
             }
             // With the pollution running the elevators are the key elevators (ADR-170): F inserts a key, F again closes the
             // doors, then the usual tap/hold picks and sends the ride. Otherwise the old free ride (training, tests).
-            bool keyMode = PollutionDirector.Instance != null && PollutionDirector.Instance.Ready;
+            bool keyMode = PollutionDirector.FreeRidesBlocked;
             if (keyMode)
             {
                 var holder = KeyHolder.Local;

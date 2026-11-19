@@ -46,6 +46,7 @@ namespace Game.Tests
         {
             _input = new ScriptedInput();
             PlayerController.InputOverride = _input;
+            PollutionDirector.AllowFreeRides = true; // these test the old free ride
             BotRules.Current = new BotRules { TargetsPlayers = false };
             SceneManager.LoadScene("World");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 40f, "local player in World");
@@ -60,6 +61,7 @@ namespace Game.Tests
         public IEnumerator TearDown()
         {
             PlayerController.InputOverride = null;
+            PollutionDirector.AllowFreeRides = false;
             if (_savedRules != null) DeploymentRules.Current = _savedRules;
             BotRules.Current = new BotRules();
             SceneManager.LoadScene("Bootstrap");
