@@ -104,8 +104,9 @@ namespace Game.Core
         public float PreferPistolMeters = 20f;
 
         // ---- The first minutes (ADR-315): bots farm and leave each other be ----
-        public float EarlyPeaceSeconds = 180f;    // after the drop a bot ignores enemies farther than EarlyPeaceMeters, unless it was hurt lately
-        public float EarlyPeaceMeters = 1f;
+        public float EarlyPeaceSeconds = 230f;    // after the drop a bot ignores enemies farther than EarlyPeaceMeters, unless it was hurt lately
+        public float EarlyPeaceSpreadSeconds = 160f; // each bot's peace is this much longer by its own fixed share (so the shooting ramps up instead of starting at once)
+        public float EarlyPeaceMeters = 0f;
         public float EarlyPeaceHurtSeconds = 8f;  // hurt by somebody this lately: it fights that one back
 
         // ---- Without a weapon (ADR-310, #374) ----

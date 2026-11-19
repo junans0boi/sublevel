@@ -361,7 +361,7 @@ namespace Game.AI
             // so two targets at similar distances do not make it flip between them.
             // Before the farm starts (still in the elevator or just out of it) the peace holds too; only a map with loot buildings has one.
             bool peace = BuildingLoot.Index != null && rules.FarmSeconds > 0f
-                && (!_farmStarted || BotPeace.Holds(Time.time - _farmStartAt, 1e9, rules));
+                && (!_farmStarted || BotPeace.Holds(Time.time - _farmStartAt, 1e9, rules, BotPriority.Roll(_self.ObjectId * 7919 + 17) * rules.EarlyPeaceSpreadSeconds));
             bool avenging = Time.time - _hurtAt <= rules.EarlyPeaceHurtSeconds;
             Combatant seen = null;
             float seenScore = float.MaxValue;
