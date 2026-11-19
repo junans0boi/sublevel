@@ -18,8 +18,25 @@ namespace Game.Core
         // Local (to the centre) positions of the features. x east, z south.
         public static readonly (float x, float z) Tower = (22f, 4f);          // bungee tower
         public const float TowerRadius = 5f;
-        public static readonly (float x, float z) BungeePad = (22f, 8f);       // stand here a moment to be carried up and jump (#419)
+        // The top of the tower (ADR-387): a square platform at BungeeCurve.Top, a lift beside it (BungeeLift), and a railed bridge
+        // west to the jump board, which stands right over the landing pad on the deck.
+        public const float TopHalf = 4.7f;                                      // the platform is 9.4 m square
+        public static readonly (float x, float z) Lift = (22f, 11f);           // the cage lift (north of the tower)
+        public const float LiftShaftHalf = 1.6f;
+        public static readonly (float x, float z) BungeePad = (12f, 4f);       // the landing pad on the deck = the jump board up top
         public const float BungeePadRadius = 1.6f;
+        public const float JumpBoardRadius = 0.9f;                              // stand this close to the board's middle to jump
+        public const float BridgeHalfWidth = 0.8f;
+        public static float BridgeStartX => Tower.x - TopHalf;
+        public static float BridgeEndX => BungeePad.x - JumpBoardRadius;
+
+        // Is this place (local x/z) on the top floor: the platform, the lift landing between it and the shaft, or the bridge and board.
+        public static bool OnBungeeTop(float lx, float lz)
+        {
+            if (Math.Abs(lx - Tower.x) <= TopHalf && Math.Abs(lz - Tower.z) <= TopHalf) return true;
+            if (Math.Abs(lx - Lift.x) <= LiftShaftHalf && lz >= Tower.z + TopHalf - 0.1f && lz <= Lift.z + LiftShaftHalf) return true;
+            return lx >= BridgeEndX - 0.05f && lx <= BridgeStartX + 0.1f && Math.Abs(lz - BungeePad.z) <= BridgeHalfWidth;
+        }
         public static readonly (float x, float z) Board = (0f, -33f);         // the big board, on the north rim facing the middle
         public const float BoardWidth = 22f, BoardHeight = 9f;
         public static readonly (float x, float z)[] Booths =                  // shooting booths (2nd stage), west side
@@ -78,6 +95,8 @@ namespace Game.Core
         static bool Blocked(float lx, float lz, float pad)
         {
             if (Near(lx, lz, Tower.x, Tower.z, TowerRadius + pad)) return true;
+            if (Near(lx, lz, Lift.x, Lift.z, LiftShaftHalf + 1f + pad)) return true;
+            if (Near(lx, lz, BungeePad.x, BungeePad.z, BungeePadRadius + pad)) return true;   // nobody stands where the jumper lands
             if (Near(lx, lz, Elevator.x, Elevator.z, ElevatorRadius + pad)) return true;
             foreach (var b in Booths) if (Near(lx, lz, b.x, b.z, BoothRadius + pad)) return true;
             return Math.Abs(lx - Board.x) < BoardWidth * 0.5f + pad && lz < Board.z + 6f;

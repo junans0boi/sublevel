@@ -23,7 +23,8 @@ namespace Game.Tests
             _oldFlag = MatchRules.Current.UseWaitingIsland;
             MatchRules.Current.UseWaitingIsland = true;
             WaitingRoom.ForceEnabled = true;
-            DedicatedServer.StartSecondsOverride = 12f;     // a short countdown for the test
+            // A short countdown for the deployment test; the lift and the jump need the room open longer.
+            DedicatedServer.StartSecondsOverride = TestContext.CurrentContext.Test.Name.Contains("Deploys") ? 12f : 120f;
             PlayerController.InputOverride = new NoPlayerInput();
             SceneManager.LoadScene("World");
             float end = Time.realtimeSinceStartup + 90f;
@@ -88,18 +89,75 @@ namespace Game.Tests
             Assert.AreEqual(before, me.Hp.Value, 1e-3f, "a hit does nothing while waiting");
         }
 
+        static float DeckY => GameObject.Find("WaitingIsland").transform.position.y;
+        static Vector3 Local(float lx, float y, float lz) => new Vector3(WaitingIsland.WorldX(lx), y, WaitingIsland.WorldZ(lz));
+
         [UnityTest, Timeout(300000)]
-        public IEnumerator Bungee_CarriesThePlayerUp_AndDoesNotHurt()
+        public IEnumerator Lift_GoesUpFast_AndBackDown_WithoutAGuardCorrection()
         {
             var me = Combatant.LocalPlayer;
-            float hp = me.Hp.Value;
-            float deckY = me.transform.position.y;
+            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();   // as on the dedicated server
+            float hp = me.Hp.Value, deck = DeckY;
+            int corrections = MoveGuard.Corrections;
+            var lift = WaitingIsland.Lift;
+            PlayerController.Local.Teleport(Local(lift.x, deck + 0.1f, lift.z));
+            float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 6f, left = -1f, arrived = -1f;
+            while (arrived < 0f)
+            {
+                Assert.Less(Time.realtimeSinceStartup, end, "the lift took them up within one cycle, now at +" + (me.transform.position.y - deck) + " m");
+                float h = me.transform.position.y - deck;
+                if (left < 0f && h > 0.8f) left = Time.realtimeSinceStartup;
+                if (h > BungeeCurve.Top - 0.5f) arrived = Time.realtimeSinceStartup;
+                yield return null;
+            }
+            Assert.Less(arrived - left, BungeeLift.TravelSeconds + 0.6f, "an express: 60 m in about five seconds");
+            yield return new WaitForSeconds(1f);
+            Assert.Greater(me.transform.position.y - deck, BungeeCurve.Top - 0.5f, "stands on the top landing after the ride");
+            // Staying in the car: the next trip takes them down again.
+            end = Time.realtimeSinceStartup + BungeeLift.Cycle + 6f;
+            while (me.transform.position.y - deck > 1.5f) { Assert.Less(Time.realtimeSinceStartup, end, "the lift took them down"); yield return null; }
+            Assert.AreEqual(corrections, MoveGuard.Corrections, "the guard did not take the 15 m/s ride for a cheat");
+            Assert.AreEqual(hp, me.Hp.Value, 1e-3f);
+        }
+
+        [UnityTest, Timeout(300000)]
+        public IEnumerator Jump_FromTheBoard_FallsBouncesAndLandsOnThePad_Unhurt()
+        {
+            var me = Combatant.LocalPlayer;
+            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();
+            float hp = me.Hp.Value, deck = DeckY;
+            int corrections = MoveGuard.Corrections;
             var pad = WaitingIsland.BungeePad;
-            PlayerController.Local.Teleport(new Vector3(WaitingIsland.WorldX(pad.x), deckY, WaitingIsland.WorldZ(pad.z)));
-            float top = deckY, end = Time.realtimeSinceStartup + 9f;
-            while (Time.realtimeSinceStartup < end) { top = Mathf.Max(top, me.transform.position.y); yield return null; }
-            Assert.Greater(top - deckY, BungeeCurve.Top - 3f, "carried up to the platform, reached +" + (top - deckY) + " m");
+            PlayerController.Local.Teleport(Local(pad.x, deck + BungeeCurve.Top + 0.1f, pad.z));
+            float low = float.MaxValue, end = Time.realtimeSinceStartup + 2f + BungeeCurve.Duration + 3f;
+            bool fell = false;
+            while (Time.realtimeSinceStartup < end)
+            {
+                float h = me.transform.position.y - deck;
+                low = Mathf.Min(low, h);
+                if (h < BungeeCurve.Top - 10f) fell = true;
+                yield return null;
+            }
+            Assert.IsTrue(fell, "jumped after standing on the board");
+            Assert.That(low, Is.InRange(1.5f, 6f), "the lowest point is a few metres over the pad (the lowering ends on it)");
+            var p = me.transform.position;
+            Assert.Less(p.y - deck, 1.5f, "back on the deck");
+            Assert.Less(Vector2.Distance(new Vector2(p.x, p.z), new Vector2(WaitingIsland.WorldX(pad.x), WaitingIsland.WorldZ(pad.z))), 2f, "on the landing pad");
             Assert.AreEqual(hp, me.Hp.Value, 1e-3f, "no damage from the jump");
+            Assert.AreEqual(corrections, MoveGuard.Corrections, "the guard did not take the fall for a cheat");
+        }
+
+        [UnityTest, Timeout(300000)]
+        public IEnumerator FallingFromTheTower_IsPutBackOnTheDeck_Unhurt()
+        {
+            var me = Combatant.LocalPlayer;
+            float hp = me.Hp.Value, deck = DeckY;
+            var tw = WaitingIsland.Tower;
+            PlayerController.Local.Teleport(Local(tw.x - 8f, deck + 30f, tw.z - 8f));   // in the air beside the tower, not on its top floor
+            yield return new WaitForSeconds(0.6f);
+            Assert.Less(me.transform.position.y - deck, 2.5f, "put back on the deck at once, now +" + (me.transform.position.y - deck) + " m");
+            yield return new WaitForSeconds(0.5f);
+            Assert.AreEqual(hp, me.Hp.Value, 1e-3f);
         }
     }
 }

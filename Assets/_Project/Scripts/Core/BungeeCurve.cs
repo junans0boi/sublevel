@@ -1,21 +1,22 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game.Core
 {
-    // The bungee jump as a fixed curve (ADR-386, #419): no rope physics. Height above the pad as a function of the seconds since the
-    // jump began: carried up to the platform, a beat on the edge, a free fall for the length of the rope, then a damped bounce, and
-    // a gentle lowering back to the pad. Pure and deterministic, so the server, the jumper's client and the tests agree.
+    // The bungee jump as a fixed curve (ADR-386/387, #419): no rope physics. Height above the landing pad (the deck under the jump
+    // board) as a function of the seconds since the jump began: a beat on the board at the top, a free fall for the length of the
+    // rope, a damped bounce, and a gentle lowering to the pad. People reach the top by the lift (BungeeLift). Pure and
+    // deterministic, so the server, the jumper's client and the tests agree.
     public static class BungeeCurve
     {
-        public const float Top = 24f;             // the platform's height above the pad
-        public const float Rope = 11f;            // free fall before the rope pulls
+        public const float Top = 60f;             // the platform's height above the pad
+        public const float Rope = 35f;            // free fall before the rope pulls
         public const float Gravity = 9.81f;
-        public const float AscentSeconds = 4f;
-        public const float HoldSeconds = 1.2f;
-        public const float BouncePeriod = 3f;     // of the spring after the rope pulled
-        public const float Damping = 0.25f;       // fraction of critical
-        public const float SettleBelow = 0.2f;    // metres: the bounce is over when its swing is below this
-        public const float LowerSeconds = 2.5f;
+        public const float HoldSeconds = 0.4f;
+        public const float BouncePeriod = 6f;     // of the spring after the rope pulled
+        public const float Damping = 0.4f;        // fraction of critical (lowest point about 4 m above the pad)
+        public const float SettleBelow = 0.3f;    // metres: the bounce is over when its swing is below this
+        public const float LowerSeconds = 3.5f;
 
         static readonly double W = 2.0 * Math.PI / BouncePeriod;
         static readonly double Wd = W * Math.Sqrt(1.0 - Damping * Damping);
@@ -26,14 +27,13 @@ namespace Game.Core
 
         public static float FallSeconds => (float)Math.Sqrt(2.0 * Rope / Gravity);
         public static float BounceSeconds => (float)(Math.Log(Math.Sqrt(A * A + B * B) / SettleBelow) / (Damping * W));
-        public static float Duration => AscentSeconds + HoldSeconds + FallSeconds + BounceSeconds + LowerSeconds;
+        public static float Duration => HoldSeconds + FallSeconds + BounceSeconds + LowerSeconds;
         public static float RestHeight => (float)(Top - Deq);
 
         public static float Height(float t)
         {
-            if (t <= 0f) return 0f;
-            float t1 = AscentSeconds, t2 = t1 + HoldSeconds, t3 = t2 + FallSeconds, t4 = t3 + BounceSeconds, t5 = t4 + LowerSeconds;
-            if (t < t1) { float u = t / t1; return Top * u * u * (3f - 2f * u); }
+            if (t <= 0f) return Top;
+            float t2 = HoldSeconds, t3 = t2 + FallSeconds, t4 = t3 + BounceSeconds, t5 = t4 + LowerSeconds;
             if (t < t2) return Top;
             if (t < t3) { float tau = t - t2; return Top - 0.5f * Gravity * tau * tau; }
             if (t < t4) return Top - Dist(t - t3);
@@ -58,6 +58,84 @@ namespace Game.Core
                 return best;
             }
         }
+    }
+
+    public enum LiftPhase { OpenBottom, Rising, OpenTop, Descending }
+
+    // The open steel cage lift beside the bungee tower (ADR-387): it runs a fixed cycle from the moment the waiting room opens, doors
+    // open at the bottom, a fast ride up (a high-rise express: S-curve start and stop, cruise ~15 m/s, 60 m in ~4.8 s), doors open
+    // at the top, the same ride down. Who stands in the cage when the doors close rides (at most Capacity). Pure; the caller passes
+    // the seconds since the room opened.
+    public static class BungeeLift
+    {
+        public const int Capacity = 4;
+        public const float DoorSeconds = 6f;          // doors open at each end
+        public const float CruiseSpeed = 15f;         // m/s
+        public const float EaseSeconds = 0.8f;        // the S-curve start and stop
+        public const float HalfSize = 1.4f;           // the cage floor is 2.8 m square (the boarding footprint)
+
+        public static float Height => BungeeCurve.Top;
+        // Distance covered by one ease ramp: speed follows smoothstep(0..1) over EaseSeconds, so the ramp covers half of cruise*ease.
+        public static float TravelSeconds => 2f * EaseSeconds + (Height - CruiseSpeed * EaseSeconds) / CruiseSpeed;
+        public static float Cycle => 2f * (DoorSeconds + TravelSeconds);
+
+        // Metres covered after t seconds of a ride (0..Height), speed continuous and zero at both ends.
+        public static float Travelled(float t)
+        {
+            float T = TravelSeconds, ramp = CruiseSpeed * EaseSeconds * 0.5f;
+            if (t <= 0f) return 0f;
+            if (t >= T) return Height;
+            if (t < EaseSeconds) { float u = t / EaseSeconds; return CruiseSpeed * EaseSeconds * (u * u * u - 0.5f * u * u * u * u); }
+            if (t > T - EaseSeconds) return Height - Travelled(T - t);
+            return ramp + CruiseSpeed * (t - EaseSeconds);
+        }
+
+        // Speed (m/s, positive) after t seconds of a ride.
+        public static float Speed(float t)
+        {
+            float T = TravelSeconds;
+            if (t <= 0f || t >= T) return 0f;
+            if (t < EaseSeconds) { float u = t / EaseSeconds; return CruiseSpeed * u * u * (3f - 2f * u); }
+            if (t > T - EaseSeconds) return Speed(T - t);
+            return CruiseSpeed;
+        }
+
+        public static LiftPhase Phase(double sinceOpen, out float into)
+        {
+            float c = (float)(sinceOpen % Cycle); if (c < 0f) c += Cycle;
+            if (c < DoorSeconds) { into = c; return LiftPhase.OpenBottom; }
+            c -= DoorSeconds;
+            if (c < TravelSeconds) { into = c; return LiftPhase.Rising; }
+            c -= TravelSeconds;
+            if (c < DoorSeconds) { into = c; return LiftPhase.OpenTop; }
+            into = c - DoorSeconds; return LiftPhase.Descending;
+        }
+
+        // The cage floor's height above the deck.
+        public static float CarHeight(double sinceOpen)
+        {
+            switch (Phase(sinceOpen, out float into))
+            {
+                case LiftPhase.OpenBottom: return 0f;
+                case LiftPhase.Rising: return Travelled(into);
+                case LiftPhase.OpenTop: return Height;
+                default: return Height - Travelled(into);
+            }
+        }
+
+        public static bool DoorsOpen(double sinceOpen) { var p = Phase(sinceOpen, out _); return p == LiftPhase.OpenBottom || p == LiftPhase.OpenTop; }
+
+        // The riders of one trip: those in the cage when the doors close, first come first served, at most Capacity.
+        public static List<T> Board<T>(IEnumerable<T> inCage)
+        {
+            var riders = new List<T>(Capacity);
+            foreach (var x in inCage) { if (riders.Count == Capacity) break; riders.Add(x); }
+            return riders;
+        }
+
+        // A waiting person who is up in the air and not on the top floor (platform, bridge, lift landing), not riding and not jumping,
+        // has fallen: the server puts them back on the deck at once (damage is zero anyway, ADR-383).
+        public static bool FellOff(float heightAboveDeck, bool onTopFloor) => heightAboveDeck > 2.5f && !onTopFloor;
     }
 
     // Who may jump (ADR-386): one at a time, a short pause after each jump. Pure; the caller passes the clock.

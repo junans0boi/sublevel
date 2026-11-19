@@ -20,8 +20,9 @@ public static partial class WorldBuilder
         public int Boxes { get { int n = 0; foreach (var b in Batches) n += b.Boxes; return n; } }
     }
 
-    const float WaitingWallHeight = 15f, WaitingDeckThickness = 1.2f;
-    const int WaitingWallSegments = 40, WaitingDomeRings = 4;
+    const float WaitingWallHeight = 20f, WaitingDeckThickness = 1.2f;
+    const float WaitingDomeRise = 60f;   // ADR-387: the dome clears the 60 m bungee tower by ~8 m above it, the apex is 80 m
+    const int WaitingWallSegments = 40, WaitingDomeRings = 6;
 
     static void BuildWaitingIsland(WorldPlan plan, Transform parent, WorldMeshes.Store store)
     {
@@ -75,7 +76,7 @@ public static partial class WorldBuilder
             float t0 = ring / (float)WaitingDomeRings, t1 = (ring + 1) / (float)WaitingDomeRings;
             float p0 = t0 * Mathf.PI * 0.5f, p1 = t1 * Mathf.PI * 0.5f, pm = (p0 + p1) * 0.5f;
             float rr0 = R * Mathf.Cos(p0), rr1 = R * Mathf.Cos(p1), rm = (rr0 + rr1) * 0.5f;
-            float h0 = WaitingWallHeight + R * 0.55f * Mathf.Sin(p0), h1 = WaitingWallHeight + R * 0.55f * Mathf.Sin(p1), hm = (h0 + h1) * 0.5f;
+            float h0 = WaitingWallHeight + WaitingDomeRise * Mathf.Sin(p0), h1 = WaitingWallHeight + WaitingDomeRise * Mathf.Sin(p1), hm = (h0 + h1) * 0.5f;
             float slope = Mathf.Atan2(h1 - h0, rr0 - rr1) * Mathf.Rad2Deg;      // panel rises towards the middle
             int n = WaitingWallSegments;   // the same number on every ring; the inner ones overlap, so no gap shows between panels
             for (int i = 0; i < n; i++)
@@ -88,24 +89,70 @@ public static partial class WorldBuilder
             frame.AddCylinder(new Vector3(0f, h1 - 0.15f, 0f), Mathf.Max(0.6f, rr1), 0.3f, 32);
         }
 
-        // Bungee tower: four legs, cross bracing, a jump platform on top (T7 drives the jump).
-        var t = WaitingIsland.Tower; float tr = 3.2f, th = 24f;
+        // Bungee tower (ADR-386/387): four legs and cross bracing up to a railed platform at BungeeCurve.Top, an open steel-cage lift
+        // on its north side (exposed shaft, the car is its own object the clients move), and a railed bridge west to the jump board,
+        // which hangs right over the landing pad. Colliders are plain boxes (the blob meshes cannot make mesh colliders).
+        var t = WaitingIsland.Tower; float tr = 3.2f, th = BungeeCurve.Top, half = WaitingIsland.TopHalf;
+        var cols = Child(root, "BungeeColliders");
         for (int i = 0; i < 4; i++)
         {
             float sx = (i & 1) == 0 ? -tr : tr, sz = (i & 2) == 0 ? -tr : tr;
-            frame.Add(new Vector3(t.x + sx, th * 0.5f, t.z + sz), new Vector3(0.5f, th, 0.5f));
+            frame.Add(new Vector3(t.x + sx, th * 0.5f, t.z + sz), new Vector3(0.6f, th, 0.6f));
+            WaitingCollider(cols, new Vector3(t.x + sx, th * 0.5f, t.z + sz), new Vector3(0.6f, th, 0.6f));
         }
-        for (float y = 3f; y < th; y += 4f)
+        for (float y = 3f; y < th - 1f; y += 5f)
             for (int side = 0; side < 4; side++)
             {
                 bool alongX = side < 2; float s = (side & 1) == 0 ? -tr : tr;
                 frame.Add(alongX ? new Vector3(t.x, y, t.z + s) : new Vector3(t.x + s, y, t.z), alongX ? new Vector3(tr * 2f, 0.25f, 0.25f) : new Vector3(0.25f, 0.25f, tr * 2f));
+                // a diagonal in each bay: the tower reads as a lattice from below
+                float a = Mathf.Atan2(5f, tr * 2f) * Mathf.Rad2Deg, len = Mathf.Sqrt(25f + tr * tr * 4f);
+                frame.Add(alongX ? new Vector3(t.x, y + 2.5f, t.z + s) : new Vector3(t.x + s, y + 2.5f, t.z),
+                    alongX ? new Vector3(len, 0.18f, 0.18f) : new Vector3(0.18f, 0.18f, len), alongX ? Quaternion.Euler(0f, 0f, a) : Quaternion.Euler(a, 0f, 0f));
             }
-        deck.Add(new Vector3(t.x, th, t.z), new Vector3(tr * 2f + 3f, 0.5f, tr * 2f + 3f));          // the jump platform
-        trim.Add(new Vector3(t.x, th + 1.0f, t.z + tr + 1.5f), new Vector3(tr * 2f + 3f, 0.12f, 0.12f));
-        deck.Add(new Vector3(t.x, 0.15f, t.z), new Vector3(tr * 2f + 4f, 0.3f, tr * 2f + 4f));       // a pad under it
-        var pad = WaitingIsland.BungeePad;                                                            // the spot that starts a jump: a bright square
-        trim.Add(new Vector3(pad.x, 0.33f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, 0.06f, WaitingIsland.BungeePadRadius * 2f));
+        deck.Add(new Vector3(t.x, th - 0.25f, t.z), new Vector3(half * 2f, 0.5f, half * 2f));        // the platform, its floor at th
+        WaitingCollider(cols, new Vector3(t.x, th - 0.25f, t.z), new Vector3(half * 2f, 0.5f, half * 2f));
+        deck.Add(new Vector3(t.x, 0.15f, t.z), new Vector3(tr * 2f + 4f, 0.3f, tr * 2f + 4f));       // a footing under the tower
+        // Railings round the platform: open only to the lift landing (north) and the bridge (west).
+        float liftGap = WaitingIsland.LiftShaftHalf, bridgeGap = WaitingIsland.BridgeHalfWidth;
+        WaitingRail(trim, cols, new Vector3(t.x - half, th, t.z - half), new Vector3(t.x + half, th, t.z - half));                        // south
+        WaitingRail(trim, cols, new Vector3(t.x + half, th, t.z - half), new Vector3(t.x + half, th, t.z + half));                        // east
+        WaitingRail(trim, cols, new Vector3(t.x - half, th, t.z + half), new Vector3(WaitingIsland.Lift.x - liftGap, th, t.z + half));    // north, beside the lift
+        WaitingRail(trim, cols, new Vector3(WaitingIsland.Lift.x + liftGap, th, t.z + half), new Vector3(t.x + half, th, t.z + half));
+        WaitingRail(trim, cols, new Vector3(t.x - half, th, t.z - half), new Vector3(t.x - half, th, WaitingIsland.BungeePad.z - bridgeGap)); // west, beside the bridge
+        WaitingRail(trim, cols, new Vector3(t.x - half, th, WaitingIsland.BungeePad.z + bridgeGap), new Vector3(t.x - half, th, t.z + half));
+        // The bridge to the jump board: railed both sides, open at the end (the only way down besides the lift).
+        float bx0 = WaitingIsland.BridgeEndX, bx1 = WaitingIsland.BridgeStartX, bz = WaitingIsland.BungeePad.z;
+        wood.Add(new Vector3((bx0 + bx1) * 0.5f, th - 0.1f, bz), new Vector3(bx1 - bx0, 0.2f, bridgeGap * 2f));
+        WaitingCollider(cols, new Vector3((bx0 + bx1) * 0.5f, th - 0.1f, bz), new Vector3(bx1 - bx0, 0.2f, bridgeGap * 2f));
+        frame.Add(new Vector3((bx0 + bx1) * 0.5f, th - 0.45f, bz), new Vector3(bx1 - bx0, 0.5f, 0.3f));    // the girder under it
+        WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz - bridgeGap), new Vector3(bx1, th, bz - bridgeGap));
+        WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz + bridgeGap), new Vector3(bx1, th, bz + bridgeGap));
+        var pad = WaitingIsland.BungeePad;
+        band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: gold
+        trim.Add(new Vector3(pad.x, 0.33f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, 0.06f, WaitingIsland.BungeePadRadius * 2f)); // the landing pad below
+
+        // The lift: an exposed shaft of four posts and hoops, a landing grate at the top between the shaft and the platform, and the car.
+        var lp = WaitingIsland.Lift; float sh = WaitingIsland.LiftShaftHalf;
+        for (int i = 0; i < 4; i++)
+        {
+            float sx = (i & 1) == 0 ? -sh : sh, sz = (i & 2) == 0 ? -sh : sh;
+            frame.Add(new Vector3(lp.x + sx, (th + 4f) * 0.5f, lp.z + sz), new Vector3(0.3f, th + 4f, 0.3f));
+        }
+        for (float y = 6f; y < th + 4f; y += 6f)
+        {
+            frame.Add(new Vector3(lp.x, y, lp.z + sh), new Vector3(sh * 2f, 0.15f, 0.15f)); frame.Add(new Vector3(lp.x, y, lp.z - sh), new Vector3(sh * 2f, 0.15f, 0.15f));
+            frame.Add(new Vector3(lp.x + sh, y, lp.z), new Vector3(0.15f, 0.15f, sh * 2f)); frame.Add(new Vector3(lp.x - sh, y, lp.z), new Vector3(0.15f, 0.15f, sh * 2f));
+        }
+        frame.Add(new Vector3(lp.x, th + 4f, lp.z), new Vector3(sh * 2f + 0.4f, 0.4f, sh * 2f + 0.4f));          // the head of the shaft
+        float landZ0 = t.z + half, landZ1 = lp.z + sh;
+        wood.Add(new Vector3(lp.x, th - 0.1f, (landZ0 + landZ1) * 0.5f), new Vector3(sh * 2f, 0.2f, landZ1 - landZ0)); // the top landing
+        WaitingCollider(cols, new Vector3(lp.x, th - 0.1f, (landZ0 + landZ1) * 0.5f), new Vector3(sh * 2f, 0.2f, landZ1 - landZ0));
+        WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ0), new Vector3(lp.x - sh, th, landZ1));
+        WaitingRail(trim, cols, new Vector3(lp.x + sh, th, landZ0), new Vector3(lp.x + sh, th, landZ1));
+        WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
+        deck.Add(new Vector3(lp.x, 0.1f, lp.z), new Vector3(sh * 2f + 1f, 0.2f, sh * 2f + 1f));                    // the ground sill
+        BuildBungeeLiftCar(root, store, steel.Material, accent.Material, planks.Material, steel.Tile, accent.Tile, planks.Tile);
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
         foreach (var b in WaitingIsland.Booths)
@@ -147,6 +194,9 @@ public static partial class WorldBuilder
         // Interior light: the sun does not reach under the dome.
         var lightGo = new GameObject("IslandLight"); lightGo.transform.SetParent(root, false); lightGo.transform.localPosition = new Vector3(0f, 14f, 0f);
         var light = lightGo.AddComponent<Light>(); light.type = LightType.Point; light.range = 60f; light.intensity = 260f; light.color = new Color(1f, 0.93f, 0.82f); light.shadows = LightShadows.None;
+        // A lamp over the tower top: the platform, the bridge and the board read from the deck and from up there.
+        var topLamp = new GameObject("TowerTopLight"); topLamp.transform.SetParent(root, false); topLamp.transform.localPosition = new Vector3(WaitingIsland.Tower.x - 4f, BungeeCurve.Top + 6f, WaitingIsland.Tower.z + 2f);
+        var tl = topLamp.AddComponent<Light>(); tl.type = LightType.Point; tl.range = 26f; tl.intensity = 90f; tl.color = new Color(1f, 0.9f, 0.75f); tl.shadows = LightShadows.None;
         // Lamps round the hall at head height: warm, so the plaster reads as a lit amusement hall, not a dark shed.
         for (int i = 0; i < 8; i++)
         {
@@ -156,6 +206,50 @@ public static partial class WorldBuilder
             l.color = i % 2 == 0 ? new Color(1f, 0.82f, 0.55f) : new Color(0.7f, 0.85f, 1f);
         }
         Debug.Log($"[WorldBuilder] waiting island at ({cx:F0}, {cz:F0}), radius {R:F0} m: {deck.Boxes + frame.Boxes + wall.Boxes + wood.Boxes + trim.Boxes} boxes");
+    }
+
+    // A railing from a to b on a floor at a.y: a top rail at 1.1 m and a mid rail (visual), one collider box 1.2 m high.
+    static void WaitingRail(WorldMeshes.BoxBatch trim, Transform cols, Vector3 a, Vector3 b)
+    {
+        var mid = (a + b) * 0.5f; var d = b - a; float len = d.magnitude; if (len < 0.05f) return;
+        bool alongX = Mathf.Abs(d.x) > Mathf.Abs(d.z);
+        var size = alongX ? new Vector3(len, 0.08f, 0.08f) : new Vector3(0.08f, 0.08f, len);
+        trim.Add(mid + Vector3.up * 1.1f, size); trim.Add(mid + Vector3.up * 0.55f, size);
+        for (float u = 0f; u <= len + 0.01f; u += 1.5f) trim.Add(a + d / len * u + Vector3.up * 0.55f, new Vector3(0.08f, 1.1f, 0.08f));
+        WaitingCollider(cols, mid + Vector3.up * 0.6f, alongX ? new Vector3(len, 1.2f, 0.15f) : new Vector3(0.15f, 1.2f, len));
+    }
+
+    static void WaitingCollider(Transform parent, Vector3 centre, Vector3 size)
+    {
+        var go = new GameObject("Box"); go.transform.SetParent(parent, false); go.transform.localPosition = centre;
+        go.AddComponent<BoxCollider>().size = size; go.isStatic = true;
+    }
+
+    // The cage car of the bungee lift (ADR-387): a floor, corner posts, a roof and open bar sides so the riders see out; "Doors" (bars
+    // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. No colliders (the riders are
+    // driven by BungeeRide; the top landing has its own floor).
+    static void BuildBungeeLiftCar(Transform root, WorldMeshes.Store store, Material steel, Material accent, Material planks, Vector2 steelTile, Vector2 accentTile, Vector2 planksTile)
+    {
+        var lp = WaitingIsland.Lift; float h = BungeeLift.HalfSize, H = 2.6f;
+        var car = Child(root, "BungeeLiftCar"); car.localPosition = new Vector3(lp.x, 0f, lp.z);
+        var bars = new WorldMeshes.BoxBatch(steelTile); var floor = new WorldMeshes.BoxBatch(planksTile); var lamp = new WorldMeshes.BoxBatch(accentTile); var doors = new WorldMeshes.BoxBatch(steelTile);
+        floor.Add(new Vector3(0f, 0.08f, 0f), new Vector3(h * 2f, 0.16f, h * 2f));
+        bars.Add(new Vector3(0f, H, 0f), new Vector3(h * 2f + 0.1f, 0.12f, h * 2f + 0.1f));
+        for (int i = 0; i < 4; i++) { float sx = (i & 1) == 0 ? -h : h, sz = (i & 2) == 0 ? -h : h; bars.Add(new Vector3(sx, H * 0.5f, sz), new Vector3(0.12f, H, 0.12f)); }
+        foreach (float sx in new[] { -h, h })                     // east and west sides: bars, open between
+        {
+            bars.Add(new Vector3(sx, 1.05f, 0f), new Vector3(0.06f, 0.06f, h * 2f)); bars.Add(new Vector3(sx, 0.3f, 0f), new Vector3(0.06f, 0.06f, h * 2f));
+            for (float z = -h + 0.4f; z < h; z += 0.4f) bars.Add(new Vector3(sx, H * 0.5f, z), new Vector3(0.04f, H, 0.04f));
+        }
+        lamp.Add(new Vector3(0f, H - 0.12f, 0f), new Vector3(1.2f, 0.06f, 0.3f));
+        foreach (float sz in new[] { -h, h })                     // the gates north (ground side) and south (platform side)
+            for (float x = -h + 0.25f; x < h; x += 0.25f) doors.Add(new Vector3(x, H * 0.5f, sz), new Vector3(0.04f, H - 0.2f, 0.04f));
+        AddWaitingMesh(car, store, "Bars", bars, steel, false); AddWaitingMesh(car, store, "Floor", floor, planks, false); AddWaitingMesh(car, store, "Lamp", lamp, accent, false);
+        var doorRoot = Child(car, "Doors");
+        AddWaitingMesh(doorRoot, store, "Gates", doors, steel, false);
+        foreach (var r in car.GetComponentsInChildren<Transform>(true)) r.gameObject.isStatic = false;
+        var l = new GameObject("CarLight"); l.transform.SetParent(car, false); l.transform.localPosition = new Vector3(0f, H - 0.3f, 0f);
+        var light = l.AddComponent<Light>(); light.type = LightType.Point; light.range = 6f; light.intensity = 6f; light.shadows = LightShadows.None;
     }
 
     static void AddWaitingMesh(Transform parent, WorldMeshes.Store store, string name, WorldMeshes.BoxBatch batch, Material material, bool collide) // shortcut: blob meshes are not readable for MeshCollider; the deck BoxCollider + the server clamp keep people in

@@ -50,12 +50,15 @@ namespace Game.Net
         {
             double now = Time.timeAsDouble;
             float meters = (to - transform.position).magnitude;
+            if (CarriedOnIsland) { Accept(to); return true; }   // the lift and the jump move the body fast on purpose (ADR-387)
             if (!TrustTeleports && !InputGuard.TeleportOk(meters, now - _lastTeleport, GameData.Rules.Guard))
                 return ServerGuard.Refuse(GuardKind.Teleport, _combatant, $"teleport {meters:F1} m, {now - _lastTeleport:F2} s after the last");
             _lastTeleport = now;
             Accept(to);
             return true;
         }
+
+        bool CarriedOnIsland => WaitingRoom.Current != null && WaitingRoom.Current.Carries(_combatant);
 
         // The server moved this body itself (waiting island -> elevator): that place is the good one now.
         public void ServerRelocate(Vector3 to) => Accept(to);
@@ -89,8 +92,9 @@ namespace Game.Net
                     return;
                 }
             }
-            // Carried by a car (its speed is the car's) or dead: nothing to compare. The next place is taken as good.
-            if (_combatant.Dead.Value || VehicleSeat.IsAttached(_combatant)) { _good = p; _pending = false; return; }
+            // Carried by a car (its speed is the car's), by the island's lift or bungee (ADR-387: up to ~26 m/s, the server drives the
+            // same curve), or dead: nothing to compare. The next place is taken as good.
+            if (_combatant.Dead.Value || VehicleSeat.IsAttached(_combatant) || CarriedOnIsland) { _good = p; _pending = false; return; }
             var d = p - _good;
             if (_pending)
             {

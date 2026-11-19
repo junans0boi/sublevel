@@ -93,6 +93,7 @@ namespace Game.Gameplay
 
         static AudioClip Hum => _hum != null ? _hum : (_hum = Resources.Load<AudioClip>("Sfx/elev_travel_loop") ?? Make("ElevatorHum", SynthHum()));
         static AudioClip Clunk => _clunk != null ? _clunk : (_clunk = Make("ElevatorClunk", SynthClunk()));
+        public static AudioClip ArrivalChime => Chime;   // the bungee lift reuses it (ADR-387)
         static AudioClip Chime => _chime != null ? _chime : (_chime = Resources.Load<AudioClip>("Sfx/elev_arrive_chime") ?? Make("ElevatorChime", SynthChime()));
 
         static AudioClip Make(string name, float[] samples)

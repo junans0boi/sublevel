@@ -48,6 +48,7 @@ namespace Game.Net
         {
             bool live = Live;
             OnIsland = live;
+            MoveLiftCar(live);
             if (_title == null && !TryBuildBoard()) return;
             _time.gameObject.SetActive(live); _people.gameObject.SetActive(live); _bungee.gameObject.SetActive(live && _last.BungeeBest > 0f);
             if (!live) { _title.text = "SUBLEVEL"; return; }
@@ -56,6 +57,23 @@ namespace Game.Net
             _time.text = $"{s / 60}:{s % 60:00}";
             _people.text = $"{_last.Total} / {_last.Target} ON BOARD";
             _bungee.text = $"BUNGEE BEST  {_last.BungeeBest:0.0} m";
+        }
+
+        // The bungee lift's cage (ADR-387) follows the server's cycle clock: the car and its shut doors are drawn here, the riders' bodies
+        // are moved by their own BungeeRide. Before the first broadcast (or after the room closed) the car waits at the bottom, doors open.
+        Transform _car, _carDoors;
+        void MoveLiftCar(bool live)
+        {
+            if (_car == null)
+            {
+                var island = GameObject.Find("WaitingIsland");
+                var car = island != null ? island.transform.Find("BungeeLiftCar") : null;
+                if (car == null) return;
+                _car = car; _carDoors = car.Find("Doors");
+            }
+            double t = live ? _last.LiftClock + (_preview ? 0f : Time.unscaledTime - _at) : 0.0;
+            var p = _car.localPosition; p.y = Game.Core.BungeeLift.CarHeight(t); _car.localPosition = p;
+            if (_carDoors != null) _carDoors.gameObject.SetActive(!Game.Core.BungeeLift.DoorsOpen(t));
         }
 
         // The island is part of the World scene; its board spot is WaitingIsland.Board (Core). Built once the island object exists.
