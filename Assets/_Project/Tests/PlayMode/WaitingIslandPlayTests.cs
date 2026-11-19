@@ -92,6 +92,70 @@ namespace Game.Tests
         static float DeckY => GameObject.Find("WaitingIsland").transform.position.y;
         static Vector3 Local(float lx, float y, float lz) => new Vector3(WaitingIsland.WorldX(lx), y, WaitingIsland.WorldZ(lz));
 
+        // The r5 report: the cage's floor sat inside the ground sill (and the landing pad floated over the deck), so it looked sunk below ground.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator LiftCarFloor_RestsOnTheDeck_AboveTheSill_UnderTheFeet()
+        {
+            float deck = DeckY;
+            var car = GameObject.Find("WaitingIsland").transform.Find("BungeeLiftCar");
+            Assert.IsNotNull(car, "the World scene has the lift car");
+            float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 2f;
+            while (BungeeLift.Phase(WaitingRoom.Current.LiftSinceOpen, out _) != LiftPhase.OpenBottom || WaitingRoom.Current.LiftSinceOpen < 1f)
+            { Assert.Less(Time.realtimeSinceStartup, end, "the car came to the bottom"); yield return null; }
+            var lift = WaitingIsland.Lift;
+            PlayerController.Local.Teleport(Local(lift.x, deck + 0.1f, lift.z));
+            yield return new WaitForSeconds(0.5f);
+            var floor = car.Find("Floor").GetComponent<MeshRenderer>().bounds;
+            float top = floor.max.y - deck, feet = Combatant.LocalPlayer.transform.position.y - deck;
+            Debug.Log($"[WaitingIslandPlayTests] car floor {floor.min.y - deck:0.000}..{top:0.000} m over the deck, sill top {WaitingIsland.LiftSillTop:0.000}, feet {feet:0.000}");
+            Assert.Greater(top, WaitingIsland.LiftSillTop + 0.03f, "the car floor shows above the sill");
+            Assert.Less(top, 0.15f, "the car floor is a low step, not a box");
+            Assert.GreaterOrEqual(floor.min.y - deck, -0.05f, "nothing of the car floor is below the deck");
+            Assert.Less(Mathf.Abs(feet - top), 0.15f, "the rider stands on the car floor, not sunk in it");
+        }
+
+        // Review shots (third person, the feet, the car floor and the deck together). Run on purpose with
+        //   ISLAND_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.WaitingIslandPlayTests.CaptureLiftAndPad
+        [UnityTest, Explicit, Category("Capture"), Timeout(300000)]
+        public IEnumerator CaptureLiftAndPad()
+        {
+            string folder = System.Environment.GetEnvironmentVariable("ISLAND_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = System.IO.Path.Combine(Application.dataPath, "../Logs/island-shots");
+            System.IO.Directory.CreateDirectory(folder);
+            float deck = DeckY;
+            float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 2f;
+            while (BungeeLift.Phase(WaitingRoom.Current.LiftSinceOpen, out _) != LiftPhase.OpenBottom || WaitingRoom.Current.LiftSinceOpen < 1f)
+            { Assert.Less(Time.realtimeSinceStartup, end, "the car came to the bottom"); yield return null; }
+            var cam = new GameObject("IslandShotCamera").AddComponent<Camera>();
+            cam.enabled = false;
+            if (PlayerController.Local.Camera != null) cam.CopyFrom(PlayerController.Local.Camera);
+            cam.fieldOfView = 55f;
+            var lift = WaitingIsland.Lift; var pad = WaitingIsland.BungeePad;
+            var shots = new (string name, Vector3 at, Vector3 eye)[]
+            {
+                ("lift_car_bottom", Local(lift.x, deck + 0.1f, lift.z), Local(lift.x - 3.2f, deck + 1.9f, lift.z + 4.2f)),
+                ("lift_car_low", Local(lift.x, deck + 0.1f, lift.z), Local(lift.x - 2.6f, deck + 0.6f, lift.z + 3.0f)),
+                ("bungee_pad", Local(pad.x, deck + 0.1f, pad.z), Local(pad.x - 3.5f, deck + 1.8f, pad.z + 3.5f)),
+            };
+            foreach (var s in shots)
+            {
+                PlayerController.Local.Teleport(s.at);
+                yield return new WaitForSeconds(0.8f);
+                var look = Combatant.LocalPlayer.transform.position + Vector3.up * 0.5f;
+                cam.transform.SetPositionAndRotation(s.eye, Quaternion.LookRotation(look - s.eye));
+                const int w = 1280, h = 720;
+                var rt = RenderTexture.GetTemporary(w, h, 24, RenderTextureFormat.ARGB32);
+                cam.targetTexture = rt; cam.Render(); cam.targetTexture = null;
+                var active = RenderTexture.active; RenderTexture.active = rt;
+                var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0); tex.Apply();
+                RenderTexture.active = active; RenderTexture.ReleaseTemporary(rt);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder, s.name + ".png"), tex.EncodeToPNG());
+            }
+            Object.Destroy(cam.gameObject);
+            Debug.Log("[WaitingIslandPlayTests] shots in " + folder);
+        }
+
         [UnityTest, Timeout(300000)]
         public IEnumerator Lift_GoesUpFast_AndBackDown_WithoutAGuardCorrection()
         {

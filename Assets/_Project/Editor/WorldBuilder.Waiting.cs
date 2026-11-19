@@ -137,7 +137,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz + bridgeGap), new Vector3(bx1, th, bz + bridgeGap));
         var pad = WaitingIsland.BungeePad;
         band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: gold
-        trim.Add(new Vector3(pad.x, 0.33f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, 0.06f, WaitingIsland.BungeePadRadius * 2f)); // the landing pad below
+        trim.Add(new Vector3(pad.x, WaitingIsland.PadTop * 0.5f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, WaitingIsland.PadTop, WaitingIsland.BungeePadRadius * 2f)); // the landing pad below
 
         // The lift: an exposed shaft of four posts and hoops, a landing grate at the top between the shaft and the platform, and the car.
         var lp = WaitingIsland.Lift; float sh = WaitingIsland.LiftShaftHalf;
@@ -158,7 +158,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ0), new Vector3(lp.x - sh, th, landZ1));
         WaitingRail(trim, cols, new Vector3(lp.x + sh, th, landZ0), new Vector3(lp.x + sh, th, landZ1));
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
-        deck.Add(new Vector3(lp.x, 0.1f, lp.z), new Vector3(sh * 2f + 1f, 0.2f, sh * 2f + 1f));                    // the ground sill
+        deck.Add(new Vector3(lp.x, WaitingIsland.LiftSillTop * 0.5f, lp.z), new Vector3(sh * 2f + 1f, WaitingIsland.LiftSillTop, sh * 2f + 1f)); // the ground sill: flush, under the car floor
         BuildBungeeLiftCar(root, store, steel.Material, accent.Material, planks.Material, steel.Tile, accent.Tile, planks.Tile);
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
@@ -240,7 +240,7 @@ public static partial class WorldBuilder
         var lp = WaitingIsland.Lift; float h = BungeeLift.HalfSize, H = 2.6f;
         var car = Child(root, "BungeeLiftCar"); car.localPosition = new Vector3(lp.x, 0f, lp.z);
         var bars = new WorldMeshes.BoxBatch(steelTile); var floor = new WorldMeshes.BoxBatch(planksTile); var lamp = new WorldMeshes.BoxBatch(accentTile); var doors = new WorldMeshes.BoxBatch(steelTile);
-        floor.Add(new Vector3(0f, 0.08f, 0f), new Vector3(h * 2f, 0.16f, h * 2f));
+        floor.Add(new Vector3(0f, WaitingIsland.CarFloorTop * 0.5f, 0f), new Vector3(h * 2f, WaitingIsland.CarFloorTop, h * 2f));
         bars.Add(new Vector3(0f, H, 0f), new Vector3(h * 2f + 0.1f, 0.12f, h * 2f + 0.1f));
         for (int i = 0; i < 4; i++) { float sx = (i & 1) == 0 ? -h : h, sz = (i & 2) == 0 ? -h : h; bars.Add(new Vector3(sx, H * 0.5f, sz), new Vector3(0.12f, H, 0.12f)); }
         foreach (float sx in new[] { -h, h })                     // east and west sides: bars, open between
