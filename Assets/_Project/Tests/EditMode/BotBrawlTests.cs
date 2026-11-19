@@ -55,6 +55,18 @@ namespace Game.Tests
         }
 
         [Test]
+        public void An_empty_handed_farmer_starts_no_fist_fight_but_still_runs_and_punches_when_cornered()
+        {
+            var rules = new BotRules();
+            var near = Unarmed(5f, false); near.NoBrawl = true;
+            Assert.AreNotEqual(BotState.Engage, new BotBrain(rules, 11).Think(near).State, "an unarmed enemy 5 m away is left be");
+            var armed = Unarmed(15f, true); armed.NoBrawl = true;
+            Assert.AreEqual(BotState.Retreat, new BotBrain(rules, 11).Think(armed).State, "an armed one is run from");
+            var cornered = Unarmed(1.2f, true); cornered.NoBrawl = true;
+            Assert.AreEqual(BotState.Engage, new BotBrain(rules, 11).Think(cornered).State, "within a punch of an armed one: fists");
+        }
+
+        [Test]
         public void Unarmed_against_an_armed_enemy_runs_unless_it_is_within_a_punch()
         {
             Assert.AreEqual(BotState.Retreat, Brain().Think(Unarmed(15f, true)).State);

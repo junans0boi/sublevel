@@ -77,7 +77,8 @@ namespace Game.AI
         LootItem _loot;
         float _maxHp;
         float _nextSense;
-        float _hurtAt = -1000f, _lastHp = -1f;
+        float _hurtAt = -1000f;
+        int _attackerId = -1;   // who hurt it last (ADR-315): in the peace it fights back at that one only
         int _noiseSeen;
         int _ignoredLootId = -1;
         float _ignoreLootUntil;
@@ -297,6 +298,7 @@ namespace Game.AI
             ApplyBlindness(now);
             FillSelf();
             TickFarm(now);
+            _percept.NoBrawl = BuildingLoot.Index != null && _rules.FarmSeconds > 0f && !_percept.HasWeapon && !_percept.OtherSlotUsable;
             TickBrawl(now);
             TickCover(now);
             _intent = _brain.Think(_percept);
@@ -359,7 +361,8 @@ namespace Game.AI
             // so two targets at similar distances do not make it flip between them.
             // Before the farm starts (still in the elevator or just out of it) the peace holds too; only a map with loot buildings has one.
             bool peace = BuildingLoot.Index != null && rules.FarmSeconds > 0f
-                && (_farmStarted ? BotPeace.Holds(Time.time - _farmStartAt, Time.time - _hurtAt, rules) : Time.time - _hurtAt > rules.EarlyPeaceHurtSeconds);
+                && (!_farmStarted || BotPeace.Holds(Time.time - _farmStartAt, 1e9, rules));
+            bool avenging = Time.time - _hurtAt <= rules.EarlyPeaceHurtSeconds;
             Combatant seen = null;
             float seenScore = float.MaxValue;
             bool stepHeard = false;
@@ -377,7 +380,7 @@ namespace Game.AI
                 var to = chest - eye;
                 float sqr = to.sqrMagnitude;
                 // The first minutes (ADR-315): far enemies are left be.
-                if (peace && BotPeace.Ignores(true, Mathf.Sqrt(sqr), !_self.HasAnyWeapon && !c.HasAnyWeapon, rules)) continue;
+                if (peace && !(avenging && c.ObjectId == _attackerId) && BotPeace.Ignores(true, Mathf.Sqrt(sqr), !_self.HasAnyWeapon && !c.HasAnyWeapon, rules)) continue;
                 bool visible = false;
                 if (sqr <= viewSqr)
                 {
@@ -567,8 +570,6 @@ namespace Game.AI
             _percept.Position = ToVec(transform.position);
             _maxHp = Mathf.Max(_maxHp, _self.Hp.Value);
             _percept.HealthFraction = _self.Hp.Value / _maxHp;
-            if (_lastHp >= 0f && _self.Hp.Value < _lastHp - 0.01f) _hurtAt = Time.time;
-            _lastHp = _self.Hp.Value;
 
             // A melee weapon is not a gun to the brain: it fights with it like with fists (ADR-073, see Punch).
             var weapon = _self.ActiveWeapon;

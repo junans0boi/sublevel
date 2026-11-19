@@ -133,6 +133,8 @@ namespace Game.Net
             }
             row.Add("firstGunMedian_all", BotStatsCsv.Percentile(all, 50f)).Add("firstGunP90_all", BotStatsCsv.Percentile(all, 90f));
             row.Add("deaths3min", BotStatsCsv.CountAtMost(BotMatchStats.DeathSeconds, 180f)).Add("deaths5min", BotStatsCsv.CountAtMost(BotMatchStats.DeathSeconds, 300f)).Add("deathsTotal", BotMatchStats.DeathSeconds.Count);
+            // The survivors minute by minute since the drop (of the bots): the curve the match is meant to follow (ADR-315).
+            for (int minute = 1; minute <= 8; minute++) row.Add("alive" + minute + "min", bots - BotStatsCsv.CountAtMost(BotMatchStats.DeathSeconds, minute * 60f));
             row.Add("engagements", BotMatchStats.Engagements);
             row.Add("avgEngageSeconds", BotMatchStats.Engagements > 0 ? BotMatchStats.EngageSeconds / BotMatchStats.Engagements : 0f);
             row.Add("firstEngageArmed", BotStatsCsv.Share(BotMatchStats.FirstEngagesArmed, BotMatchStats.FirstEngages));
