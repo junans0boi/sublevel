@@ -301,7 +301,7 @@ namespace Game.Tests
         [UnityTest]
         public IEnumerator PingOnAnEnemy_IsEnemySpotted_AndTheOwnMapMarkerIsShared()
         {
-            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f };
+            TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f, PingMaxMeters = 3000f }; // the world is big now: the other team spawns ~1200 m away, beyond the default 600 m reach
             yield return Load(TeamMode.Squad);
             yield return WaitUntil(() => !SpawnProtection.InputBlocked, 30f, "the doors open");
             MapMarker.Clear();
