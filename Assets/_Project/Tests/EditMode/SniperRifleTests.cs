@@ -97,7 +97,7 @@ namespace Game.Tests
             Assert.That(weapon.Weight, Is.InRange(1f, 2f), "rare");
             Assert.Greater(loot.Entries.Single(e => e.Kind == LootKind.Ammo && e.Ammo == AmmoType.Rifle762).Weight, 0f);
             Assert.AreEqual(2f, loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == X8).Weight);
-            Assert.AreEqual(1f, loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == X16).Weight);
+            Assert.AreEqual(2f, loot.Entries.Single(e => e.Kind == LootKind.Optic && e.Optic == X16).Weight);
         }
     }
 }
