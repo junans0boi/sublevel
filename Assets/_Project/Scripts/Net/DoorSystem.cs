@@ -58,6 +58,7 @@ namespace Game.Net
             _network.ServerManager.RegisterBroadcast<DoorToggleRequest>(OnRequest);
             _network.SceneManager.OnClientLoadedStartScenes += OnClientLoaded;
             BuildFromMap();
+            Debug.Log($"[Doors] {_doors.Count} doors built");
         }
 
         bool ServerActive => _network != null && _network.IsServerStarted;
@@ -135,6 +136,33 @@ namespace Game.Net
             return b;
         }
 
+        Vector3 At(int index) => new Vector3(_xs[index], _ys[index], _zs[index]);
+
+        void EnsureGrid()
+        {
+            if (_gridCount == _doors.Count) return;
+            _grid.Rebuild(_xs, _zs, _doors.Count);
+            _gridCount = _doors.Count;
+        }
+
+        // Every peer builds its own door list; another platform's float rounding (the ARM64 server against a Mac client)
+        // can make one door more or less and shift the numbers after it. So a message names the door by number and place,
+        // and the receiver goes by the place when the two disagree. -1: no door of ours stands there.
+        public int Resolve(int index, Vector3 at)
+        {
+            if (index >= 0 && index < _doors.Count && (At(index) - at).sqrMagnitude < 0.25f) return index;
+            EnsureGrid();
+            _grid.Query(at.x, at.z, 1f, _near);
+            int best = -1;
+            float bestSqr = 1f;
+            foreach (int i in _near)
+            {
+                float sqr = (At(i) - at).sqrMagnitude;
+                if (sqr < bestSqr) { best = i; bestSqr = sqr; }
+            }
+            return best;
+        }
+
         // ---- Using a door ----
 
         // The index of the door F reaches from these eyes, or -1.
@@ -159,7 +187,12 @@ namespace Game.Net
             int index = self.Pick(eye, look);
             if (index < 0) return false;
             if (me.IsServerInitialized) self.ServerToggle(index, me.transform.position);
-            else if (self._network != null) self._network.ClientManager.Broadcast(new DoorToggleRequest { Index = index });
+            else
+            {
+                // Through the connection that owns this body (a test process runs several).
+                var network = me.NetworkManager != null ? me.NetworkManager : self._network;
+                if (network != null) network.ClientManager.Broadcast(new DoorToggleRequest { Index = index, At = self.At(index) });
+            }
             return true;
         }
 
@@ -178,7 +211,7 @@ namespace Game.Net
             var door = _doors[index];
             if (door.State == state) return;
             door.Set(state);
-            if (ServerActive) _network.ServerManager.Broadcast(new DoorChanged { Index = index, State = (byte)state });
+            if (ServerActive) _network.ServerManager.Broadcast(new DoorChanged { Index = index, At = At(index), State = (byte)state });
         }
 
         // Server: the door takes `amount` damage (ADR-147); true when that broke it. Every client is told.
@@ -198,7 +231,7 @@ namespace Game.Net
                 return true;
             }
             door.SetHp(hp);
-            if (self.ServerActive) self._network.ServerManager.Broadcast(new DoorDamaged { Index = index, Hp = (ushort)Mathf.CeilToInt(hp) });
+            if (self.ServerActive) self._network.ServerManager.Broadcast(new DoorDamaged { Index = index, At = self.At(index), Hp = (ushort)Mathf.CeilToInt(hp) });
             return false;
         }
 
@@ -208,7 +241,7 @@ namespace Game.Net
             var self = Instance;
             if (self == null || self._network == null || door == null) return;
             int index = self._doors.IndexOf(door);
-            if (index >= 0) self._network.ClientManager.Broadcast(new DoorRamRequest { Index = index, Speed = speed });
+            if (index >= 0) self._network.ClientManager.Broadcast(new DoorRamRequest { Index = index, At = self.At(index), Speed = speed });
         }
 
         // Server: a bot at `position` walking along `heading` opens the closed door right ahead of it.
@@ -219,11 +252,7 @@ namespace Game.Net
             heading.y = 0f;
             var rules = DoorRules.Current;
             float reach = rules.BotReachMeters * rules.BotReachMeters;
-            if (self._gridCount != self._doors.Count)
-            {
-                self._grid.Rebuild(self._xs, self._zs, self._doors.Count);
-                self._gridCount = self._doors.Count;
-            }
+            self.EnsureGrid();
             self._grid.Query(position.x, position.z, rules.BotReachMeters, self._near);
             // Walking the hits in door order, as the scan of the whole list did.
             for (int n = 0; n < self._near.Count; n++)
@@ -264,23 +293,25 @@ namespace Game.Net
         void OnRequest(NetworkConnection connection, DoorToggleRequest request, Channel channel)
         {
             var body = connection != null && connection.FirstObject != null ? connection.FirstObject.GetComponent<Combatant>() : null;
-            if (body == null || body.Dead.Value || request.Index < 0 || request.Index >= _doors.Count) return;
+            int index = Resolve(request.Index, request.At);
+            if (body == null || body.Dead.Value || index < 0) return;
             // Close enough to have pressed F on it (a little slack for network delay).
-            var d = _doors[request.Index].transform.position - body.transform.position;
+            var d = _doors[index].transform.position - body.transform.position;
             d.y = 0f;
             float reach = DoorRules.Current.ReachMeters + 1.5f;
             if (d.sqrMagnitude > reach * reach) return;
-            ServerToggle(request.Index, body.transform.position);
+            ServerToggle(index, body.transform.position);
         }
 
         void OnRam(NetworkConnection connection, DoorRamRequest request, Channel channel)
         {
             var body = connection != null && connection.FirstObject != null ? connection.FirstObject.GetComponent<Combatant>() : null;
-            if (body == null || body.Dead.Value || request.Index < 0 || request.Index >= _doors.Count || float.IsNaN(request.Speed)) return;
+            int index = Resolve(request.Index, request.At);
+            if (body == null || body.Dead.Value || index < 0 || float.IsNaN(request.Speed)) return;
             // The sender's car is at the door: within a car's length of the sender's body.
-            var d = _doors[request.Index].transform.position - body.transform.position;
+            var d = _doors[index].transform.position - body.transform.position;
             if (d.sqrMagnitude > 8f * 8f) return;
-            ServerDamage(_doors[request.Index], Doors.RamDamage(Mathf.Min(request.Speed, 40f), DoorRules.Current));
+            ServerDamage(_doors[index], Doors.RamDamage(Mathf.Min(request.Speed, 40f), DoorRules.Current));
         }
 
         void OnClientLoaded(NetworkConnection connection, bool asServer)
@@ -289,22 +320,23 @@ namespace Game.Net
             for (int i = 0; i < _doors.Count; i++)
             {
                 if (_doors[i].State != DoorState.Closed)
-                    _network.ServerManager.Broadcast(connection, new DoorChanged { Index = i, State = (byte)_doors[i].State, Quiet = true });
+                    _network.ServerManager.Broadcast(connection, new DoorChanged { Index = i, At = At(i), State = (byte)_doors[i].State, Quiet = true });
                 else if (_doors[i].Hp < DoorRules.Current.MaxHp)
-                    _network.ServerManager.Broadcast(connection, new DoorDamaged { Index = i, Hp = (ushort)Mathf.CeilToInt(_doors[i].Hp), Quiet = true });
+                    _network.ServerManager.Broadcast(connection, new DoorDamaged { Index = i, At = At(i), Hp = (ushort)Mathf.CeilToInt(_doors[i].Hp), Quiet = true });
             }
         }
 
         void OnDamaged(DoorDamaged message, Channel channel)
         {
-            if (message.Index < 0 || message.Index >= _doors.Count || ServerActive) return; // the host's own door was set already
-            _doors[message.Index].SetHp(message.Hp, message.Quiet);
+            if (ServerActive) return; // the host's own door was set already
+            int index = Resolve(message.Index, message.At);
+            if (index >= 0) _doors[index].SetHp(message.Hp, message.Quiet);
         }
 
         void OnChanged(DoorChanged message, Channel channel)
         {
-            if (message.Index < 0 || message.Index >= _doors.Count) return;
-            _doors[message.Index].Set((DoorState)message.State, message.Quiet);
+            int index = Resolve(message.Index, message.At);
+            if (index >= 0) _doors[index].Set((DoorState)message.State, message.Quiet);
         }
     }
 }

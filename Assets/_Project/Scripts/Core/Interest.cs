@@ -16,7 +16,7 @@ namespace Game.Core
         public bool Enabled = true;
         // Gunshots are heard to 200 m (SoundRules.FarLayerFull) and scoped targets are seen further: combatants carry both.
         public float CombatantMeters = 300f;
-        public float VehicleMeters = 350f;
+        public float VehicleMeters = 700f; // ADR-480
         public float LootMeters = 100f;
         // Thrown items carry the smoke cloud, the fire and the blast (heard to about 200 m).
         public float ThrownMeters = 200f;

@@ -4,7 +4,7 @@ using NUnit.Framework;
 
 namespace Game.Tests
 {
-    // ADR-198/199 on the island (world.json values): 14 cars + 6 motorcycles, one in every region, off bridges and fords, clear of lots.
+    // ADR-198/199 on the island (world.json values): 22 cars + 10 motorcycles (ADR-480), one in every region, off bridges and fords, clear of lots.
     public class VehicleWorldPlacementTests
     {
         static WorldPlan _plan;
@@ -18,10 +18,10 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Picks20_OneInEveryRegion_SpacingHolds()
+        public void Picks32_OneInEveryRegion_SpacingHolds()
         {
             var got = Picked();
-            Assert.AreEqual(20, got.Count, "14 cars + 6 motorcycles");
+            Assert.AreEqual(32, got.Count, "22 cars + 10 motorcycles (ADR-480)");
             for (int r = 0; r < Plan.Regions.Count; r++)
                 Assert.IsTrue(got.Any(s => Plan.RegionAt(s.X, s.Z) == r), $"region {r} has a vehicle");
             for (int a = 0; a < got.Count; a++)

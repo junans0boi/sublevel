@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using FishNet.Managing;
 using Game.Core;
@@ -257,6 +258,76 @@ namespace Game.Tests
                 return onClient >= onHost;
             }, "the late client holds every loot item", Log, 20f);
             Assert.AreEqual(onHost, onClient);
+        }
+        // r5 playtest (dedicated server, remote client): "the doors do not open". F on a map door from a remote client
+        // reaches the server through the client's own connection, and the server finds the door by its place when its
+        // own list numbers the doors differently (the ARM64 server and the Mac client each build their list).
+        [UnityTest]
+        public IEnumerator RemoteClient_OpensAMapDoor_EvenWhenTheDoorListsDisagree()
+        {
+            RemoteClient remote = null;
+            yield return _net.AddClient(c => remote = c);
+            yield return NetHarness.WaitUntil(() => remote != null && remote.Player != null && MultiHarness.ReplicaOf(_net.Host, remote.Player) != null, "the remote player on both sides", Log, 20f);
+            var onServer = MultiHarness.ReplicaOf(_net.Host, remote.Player);
+            onServer.ServerDamageFilter = _ => 0f;
+            var doors = DoorSystem.Instance;
+            Assert.Greater(doors.ExteriorDoors.Count, 0, "the map has entrance doors");
+            var at = doors.ExteriorDoors[0].Position;
+            int k = doors.Resolve(-1, at);
+            Assert.GreaterOrEqual(k, 0, "the entrance door is in the list");
+            var door = doors[k];
+            Assert.AreEqual(DoorState.Closed, door.State);
+
+            // The remote body 1.2 m in front of the door, put there by the server (as the deployment does).
+            var stand = at + door.Forward * 1.2f + Vector3.up * 0.1f;
+            onServer.transform.position = stand;
+            if (onServer.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(stand);
+            onServer.GetComponent<CombatantStance>().ServerCorrect(stand);
+            yield return NetHarness.WaitUntil(() => (remote.Player.transform.position - stand).sqrMagnitude < 0.25f, "the remote body at the door", Log, 10f);
+            yield return Seconds(0.5f);
+
+            var eye = remote.Player.EyePosition;
+            var look = at - eye;
+            look.y = 0f;
+            Assert.IsFalse(remote.Player.IsServerInitialized, "the remote player is a client object");
+            Assert.IsTrue(DoorSystem.TryInteract(remote.Player, eye, look.normalized), "F reaches the door");
+            yield return NetHarness.WaitUntil(() => door.State != DoorState.Closed, "the server opened the door for the remote client", Log, 5f);
+
+            // The client's list numbers this door one off from the server's: the place decides.
+            int other = (k + 1) % doors.Count;
+            Assert.AreEqual(k, doors.Resolve(other, at), "a wrong number with the right place resolves to the door at that place");
+            remote.Manager.ClientManager.Broadcast(new DoorToggleRequest { Index = other, At = at });
+            yield return NetHarness.WaitUntil(() => door.State == DoorState.Closed, "the door at the place shut, not door #" + other, Log, 5f);
+            Assert.AreEqual(DoorState.Closed, doors[other].State, "the door the wrong number names was not touched");
+            Assert.AreEqual(-1, doors.Resolve(other, new Vector3(-500f, 0f, -500f)), "no door far off the map: nothing is picked");
+        }
+
+        // r5 playtest: "so few cars, none in sight". 80 people get 22 cars + 10 motorcycles (ADR-480), and a remote client
+        // is sent every one within the vehicle interest distance.
+        [UnityTest]
+        public IEnumerator Match_StartsWithEnoughVehicles_AndARemoteClientSeesTheNearOnes()
+        {
+            int want = new VehicleRules().SpawnCount + VehicleRules.MotorcycleDefaults().SpawnCount;
+            Assert.GreaterOrEqual(want, 32, "ADR-480: 32 vehicles for an 80-person match");
+            List<Vehicle> OnServer()
+            {
+                var list = new List<Vehicle>();
+                foreach (var v in Object.FindObjectsByType<Vehicle>(FindObjectsSortMode.None)) if (v.IsServerInitialized) list.Add(v);
+                return list;
+            }
+            yield return NetHarness.WaitUntil(() => OnServer().Count >= want, $"{want} vehicles spawned on the server", Log, 10f);
+            Log($"[Vehicles] server {OnServer().Count}");
+
+            RemoteClient remote = null;
+            yield return _net.AddClient(c => remote = c);
+            yield return NetHarness.WaitUntil(() => remote != null && remote.Player != null, "the remote player", Log, 20f);
+            var onServer = MultiHarness.ReplicaOf(_net.Host, remote.Player);
+            float range = InterestRules.Current.VehicleMeters * 0.9f;
+            int near = 0;
+            foreach (var v in OnServer()) if ((v.transform.position - onServer.transform.position).magnitude < range) near++;
+            int Seen() => remote.Manager.ClientManager.Objects.Spawned.Values.Count(n => n != null && n.GetComponent<Vehicle>() != null);
+            yield return NetHarness.WaitUntil(() => Seen() >= near, $"the remote client sees the {near} vehicles within {range:F0} m", Log, 15f);
+            Log($"[Vehicles] remote sees {Seen()}, {near} within {range:F0} m of it");
         }
     }
 }
