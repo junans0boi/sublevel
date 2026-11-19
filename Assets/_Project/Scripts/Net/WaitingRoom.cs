@@ -103,6 +103,8 @@ namespace Game.Net
         {
             var rules = MatchRules.Current ?? new MatchRules();
             if (!(NetSession.Dedicated || ForceEnabled) || !rules.UseWaitingIsland) return null;
+            // --perf bots-only runs (ADR-323): the countdown needs a person to start its clock, so with nobody there the bots would never drop.
+            if (LobbyNet.AllowEmptyStart) { Debug.Log("[WaitingRoom] --perf: no island, the bots start in the elevators"); return null; }
             var island = GameObject.Find("WaitingIsland");
             if (island == null) { Debug.LogWarning("[WaitingRoom] the scene has no WaitingIsland (rebuild World): people start in the elevators"); return null; }
             var room = director.gameObject.AddComponent<WaitingRoom>();
