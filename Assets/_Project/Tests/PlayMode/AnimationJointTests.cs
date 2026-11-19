@@ -225,9 +225,9 @@ namespace Game.Tests
             }
             hipsFacing /= n; shoulderFacing /= n; legTurn /= n;
             Debug.Log($"[AnimMetrics] diagonal: leg turn {legTurn:F1} hips line {hipsFacing:F1} shoulder line {shoulderFacing:F1} deg from the facing");
-            Assert.That(legTurn, Is.InRange(30f, 65f), "the legs turn towards the motion (a wall in the room can swing the direction, so a range)");
-            Assert.AreEqual(legTurn, hipsFacing, 18f, "the hips line follows the leg turn");
-            Assert.AreEqual(legTurn, hipsFacing - shoulderFacing, 18f, "the shoulders hold the aim while the hips turn");
+            // ADR-391: the diagonal is its own clip; the legs only turn the few degrees onto it, and the shoulders hold the aim.
+            Assert.That(Mathf.Abs(legTurn), Is.LessThan(25f), "the legs turn only onto the nearest clip direction");
+            Assert.AreEqual(0f, shoulderFacing, 15f, "the shoulders hold the aim");
         }
 
         // Which way a left-right pair of joints faces, degrees from the player's facing (right positive).

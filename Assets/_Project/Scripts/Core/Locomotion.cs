@@ -26,7 +26,7 @@ namespace Game.Core
     [Serializable]
     public class GaitRules
     {
-        public float LegPaceFollow = 0.5f; // share of the missing speed made up by playing the legs faster; the rest is foot slide
+        public float LegPaceFollow = 1f; // share of the missing speed made up by playing the legs faster; the rest is foot slide (ADR-391: 0.5 left the slower strafes dragging ~3 m/s)
         public float MaxLegPace = 1.75f;
         // The character has no sidestep clips: the legs turn toward the way it moves and run forward or backward,
         // while the upper body keeps facing the aim (ADR-049).

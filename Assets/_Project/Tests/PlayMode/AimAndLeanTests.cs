@@ -318,8 +318,8 @@ namespace Game.Tests
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
             yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.That(turn, Is.InRange(30f, GameData.Rules.Gait.MaxLegTurnDeg + 0.5f), "forward-right: the legs are turned towards the right (the walls can swing it to the full turn)");
-            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn: the legs point where the body goes");
+            // ADR-391: forward-right is its own clip; the legs turn only onto the nearest clip direction (a wall can swing it a little).
+            Assert.That(Mathf.Abs(turn), Is.LessThan(25f), "forward-right: the diagonal clip, not the forward run turned");
             Assert.AreEqual(shouldersForward, shoulders, 12f, "the shoulders still face the aim");
 
             _input.Frame.Move = new Vector2(-1, 0);
@@ -327,8 +327,7 @@ namespace Game.Tests
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
             yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(-GameData.Rules.Gait.MaxLegTurnDeg, turn, 8f, "sideways to the left: legs turned as far as the waist allows");
-            Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn");
+            Assert.That(Mathf.Abs(turn), Is.LessThan(25f), "sideways to the left: the sidestep clip, not the forward run turned (#223)");
             Assert.AreEqual(shouldersForward, shoulders, 12f);
 
             // With the weapon up it must point where the player aims, moving or not.

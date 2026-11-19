@@ -24,6 +24,40 @@ public static class CharacterAnimClips
         "RiflePullOut", "RiflePutAway", "RifleDeath",
     };
 
+    // Mixamo strafe and diagonal runs (ledger C-0011, ADR-391): Humanoid on the Swat avatar like the rifle clips above, but the FBX files
+    // stay out of git (no redistribution of the originals): restored from AssetStaging/Mixamo/Strafe; their .meta files are committed.
+    public const string StrafeDir = Dir + "/Strafe";
+    const string StrafeStaging = "AssetStaging/Mixamo/Strafe";
+    public static readonly string[] StrafeNames =
+    {
+        "Rifle_RunLeft", "Rifle_RunRight", "Rifle_RunForwardLeft", "Rifle_RunForwardRight", "Rifle_RunBackwardLeft", "Rifle_RunBackwardRight",
+        "Rifle_WalkStrafeLeft", "Rifle_WalkStrafeRight", "Rifle_AimStrafeLeft", "Rifle_AimStrafeRight",
+        "Unarmed_RunStrafeLeft", "Unarmed_RunStrafeRight", "Unarmed_WalkStrafeLeft", "Unarmed_WalkStrafeRight",
+    };
+    static bool IsStrafe(string name) => System.Array.IndexOf(StrafeNames, name) >= 0;
+
+    static void SyncStrafe(Avatar avatar, StringBuilder log)
+    {
+        Directory.CreateDirectory(StrafeDir);
+        foreach (var n in StrafeNames)
+        {
+            string path = $"{StrafeDir}/{n}.fbx";
+            if (!File.Exists(path))
+            {
+                string src = $"{StrafeStaging}/{n}.fbx";
+                if (!File.Exists(src)) throw new FileNotFoundException("Mixamo strafe clip missing (ledger C-0011): " + src);
+                File.Copy(src, path);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            }
+            var imp = (ModelImporter)AssetImporter.GetAtPath(path);
+            if (log != null || imp.animationType != ModelImporterAnimationType.Human || imp.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel || LoadClip(n) == null)
+            {
+                string line = Configure(path, n, null);
+                log?.AppendLine(line);
+            }
+        }
+    }
+
     // Quaternius Universal Animation Library 1 (CC0, ledger C-0004): the bare-handed set the Mixamo rifle clips lack (ADR-255).
     // The FBX stays out of git like the roster models (.gitignore); its .meta is committed. Source folder: SUBLEVEL_UBC_DIR's sibling UAL1.
     public const string UalPath = "Assets/_Project/Art/Characters/Ual/UAL1_Standard.fbx";
@@ -78,6 +112,7 @@ public static class CharacterAnimClips
         var avatar = SwatAvatar();
         if (avatar == null || !avatar.isHuman) throw new System.Exception("Roster_Swat avatar missing or not Humanoid (run CharacterImport.SyncStaging)");
         SyncUal();
+        SyncStrafe(avatar, null);
         foreach (var n in Names)
         {
             var imp = (ModelImporter)AssetImporter.GetAtPath($"{Dir}/{n}.fbx");
@@ -91,6 +126,7 @@ public static class CharacterAnimClips
         var avatar = SwatAvatar();
         if (avatar == null || !avatar.isHuman) { Debug.LogError("Roster_Swat avatar missing or not humanoid (run CharacterImport.SyncStaging)"); EditorApplication.Exit(1); return; }
         SyncUal();
+        SyncStrafe(avatar, sb);
         foreach (var n in Names) sb.AppendLine(Configure($"{Dir}/{n}.fbx", n, avatar));
         AssetDatabase.SaveAssets();
         Directory.CreateDirectory("Logs");
@@ -103,19 +139,24 @@ public static class CharacterAnimClips
     {
         var imp = (ModelImporter)AssetImporter.GetAtPath(path);
         imp.animationType = ModelImporterAnimationType.Human;
-        imp.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
-        imp.sourceAvatar = avatar;
+        // The strafe clips were taken on another Mixamo character (Ch35, no eye bones): the Swat avatar does not match its hierarchy, so
+        // each builds its own; Humanoid retargets them to every roster model all the same.
+        if (avatar != null) { imp.avatarSetup = ModelImporterAvatarSetup.CopyFromOther; imp.sourceAvatar = avatar; }
+        else imp.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
         imp.importAnimation = true;
         imp.materialImportMode = ModelImporterMaterialImportMode.None;
         var clips = imp.defaultClipAnimations;
         if (clips.Length == 0) return path + ": NO CLIP";
         var c = clips[0];
         c.name = name;
-        c.loopTime = Loops.Contains(name);
+        c.loopTime = Loops.Contains(name) || IsStrafe(name);
         c.loopPose = c.loopTime;
         // Root motion is discarded at runtime (applyRootMotion=false); rotation and height stay as authored so crouch / prone keep their level.
         c.lockRootRotation = true; c.lockRootHeightY = true; c.lockRootPositionXZ = false;
         c.keepOriginalOrientation = true; c.keepOriginalPositionY = true; c.keepOriginalPositionXZ = true;
+        // Another character's file (strafes, own avatar): its root height is in that body's units and sank the feet 5-9 cm into the floor;
+        // the height is taken from the feet instead.
+        if (avatar == null) { c.keepOriginalPositionY = false; c.heightFromFeet = true; }
         imp.clipAnimations = new[] { c };
         imp.SaveAndReimport();
         var clip = LoadClip(name);
@@ -124,5 +165,5 @@ public static class CharacterAnimClips
 
     // Clips named U_* come from the UAL file, the rest from their own Mixamo file.
     public static AnimationClip LoadClip(string name) =>
-        AssetDatabase.LoadAllAssetsAtPath(name.StartsWith("U_") ? UalPath : $"{Dir}/{name}.fbx").OfType<AnimationClip>().FirstOrDefault(c => c.name == name);
+        AssetDatabase.LoadAllAssetsAtPath(name.StartsWith("U_") ? UalPath : IsStrafe(name) ? $"{StrafeDir}/{name}.fbx" : $"{Dir}/{name}.fbx").OfType<AnimationClip>().FirstOrDefault(c => c.name == name);
 }

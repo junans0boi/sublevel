@@ -26,6 +26,7 @@ namespace Game.Gameplay
     [RequireComponent(typeof(Combatant), typeof(CombatantMotion))]
     public partial class CombatantAnimation : MonoBehaviour
     {
+        public const string LocomotionAim = "LocomotionAim", MoveX = "MoveX", MoveZ = "MoveZ"; // 8-way trees on the local velocity (ADR-391)
         public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed", UnarmedCrouch = "UnarmedCrouch", SwimState = "Swim";
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
@@ -78,6 +79,11 @@ namespace Game.Gameplay
         // Ground speed the clips were authored for (m/s), measured when the character was built. The sprint clip tops both
         // locomotion trees; the jog played backwards ends their back-pedal (ADR-390).
         [SerializeField] float _sprintClipSpeed = 6.5f;
+        // Each 8-way tree's clip directions (deg, 0 = forward, right positive) and the ground speed of the fastest clip along each, measured
+        // when the character was built (ADR-391).
+        [SerializeField] float[] _dirsRifle, _topsRifle, _dirsAim, _topsAim, _dirsUnarmed, _topsUnarmed;
+        float _snapTurn; // legs turned onto the nearest clip direction of the 8-way tree (deg, right positive)
+        float _clipDir;  // that clip direction (deg): 0 or 180 = the UAL cycles, anything else a Mixamo strafe
         // The bare-handed walk and jog clips' ground speed (ADR-255), and the second in each punch clip when the fist is furthest out (the hit).
         [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f, _unarmedCrouchSpeed = 1.2f;
         [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
@@ -94,7 +100,7 @@ namespace Game.Gameplay
         Quaternion _hipsRest; // hips relative to the model in the pose the prefab was saved in (weapon aimed forward)
         readonly Vector3[] _footOwnPosition = new Vector3[2], _footLeftAtPosition = new Vector3[2];
         readonly bool[] _footMoved = new bool[2];
-        int _move, _pace, _airPhaseId;
+        int _move, _pace, _airPhaseId, _moveX, _moveZ;
         float _airPhase;
         bool _inAir;
         float _landUntil = -1f; // touched down: the landing pose is held until this time
@@ -145,7 +151,7 @@ namespace Game.Gameplay
         public int PunchesShown { get; private set; }
         // Speed fed to the legs (negative = back-pedalling) and how far they are turned from the facing, right positive.
         public float MoveDrive => _animator != null ? _animator.GetFloat(_move) : 0f;
-        public float LegTurnDeg => _legs.TurnDeg;
+        public float LegTurnDeg => _legTurnShown;
         // How far the knees are tucked up in the air and how deep a landing is being absorbed, both 0..1.
         public float JumpTuck => _tuck;
         public float LandDip => _dip;
@@ -174,6 +180,8 @@ namespace Game.Gameplay
             _leftContact = new FootContact(_footPlantHeight, _footLiftHeight);
             _rightContact = new FootContact(_footPlantHeight, _footLiftHeight);
             _move = Animator.StringToHash(Move);
+            _moveX = Animator.StringToHash(MoveX);
+            _moveZ = Animator.StringToHash(MoveZ);
             if (_animator != null)
             {
                 _modelRest = _animator.transform.localRotation;
@@ -279,8 +287,19 @@ namespace Game.Gameplay
             bool parkour = !dead && _stance != null && _stance.Parkour.Value != 0 && !OnLedge; // the ledge has its own pose (.Ledge.cs)
             _parkour = Mathf.MoveTowards(_parkour, parkour ? 1f : 0f, ParkourRules.Current.PosePerSecond * Time.deltaTime);
             _prone = proneAmount * proneAmount * (3f - 2f * proneAmount);
-            // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn.
-            _legTurnShown = _legs.TurnDeg * (1f - _prone);
+            // Lying, the body always faces where it looks (it crawls, it does not run sideways): no leg turn. The 8-way trees step sideways
+            // and diagonally themselves (ADR-391): only the forward-only trees (bare-handed crouch, swimming) still turn the legs.
+            // The 8-way trees: the legs turn the few degrees onto the nearest clip direction, so one direction's clips play at a time
+            // (blending the UAL forward cycle with a Mixamo side cycle of another cadence crossed the feet, ~7 m/s slide).
+            float oldTrees = Mathf.Max(_clipCrouch, _swimAmount);
+            var dirs = _unarmedBody ? _dirsUnarmed : Aiming ? _dirsAim : _dirsRifle;
+            var tops = _unarmedBody ? _topsUnarmed : Aiming ? _topsAim : _topsRifle;
+            bool eightWay = dirs != null && dirs.Length > 0 && tops != null && tops.Length == dirs.Length;
+            int nearest = eightWay ? NearestDirection(dirs, Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg) : -1;
+            float snapTarget = eightWay && speed >= GameData.Rules.Gait.LegTurnMinSpeed ? Mathf.DeltaAngle(dirs[nearest], Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg) : 0f;
+            _snapTurn = Mathf.MoveTowards(_snapTurn, snapTarget, GameData.Rules.Gait.LegTurnDegPerSecond * Time.deltaTime);
+            _clipDir = nearest >= 0 && speed >= GameData.Rules.Gait.LegTurnMinSpeed ? dirs[nearest] : 0f;
+            _legTurnShown = (1f - _prone) * Mathf.Lerp(_snapTurn, _legs.TurnDeg, oldTrees);
             var proneRules = StanceRules.Current;
             // Lying is the prone clip (ADR-231); swimming is the Swim tree (UAL, #236), already flat: the body is not pitched for either.
             _proneClip = _prone * (1f - _swimAmount);
@@ -289,6 +308,10 @@ namespace Game.Gameplay
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             // Every speed, slow walk included, is the blend at that speed: the walk, jog and sprint are one library's cycles and line up (ADR-390).
             _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
+            // The velocity as the turned legs see it.
+            var legV = Quaternion.AngleAxis(-_snapTurn, Vector3.up) * new Vector3(v.x, 0f, v.z);
+            _animator.SetFloat(_moveX, legV.x, BlendDamp, Time.deltaTime);
+            _animator.SetFloat(_moveZ, legV.z, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
             // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-255).
@@ -296,7 +319,7 @@ namespace Game.Gameplay
             _unarmedBody = (HeldId == 0 || HoldsMelee) && _seated < 0.5f;
             // Each tree's thresholds are its clips' own ground speeds, so up to the fastest clip the blend already matches the
             // ground (pace 1); only beyond it do the legs speed up (ADR-390).
-            float clipSpeed = Mathf.Clamp(speed, 0.01f, _legs.Backward ? _unarmedRunSpeed : _sprintClipSpeed);
+            float clipSpeed = Mathf.Clamp(speed, 0.01f, nearest >= 0 ? tops[nearest] : _legs.Backward ? _unarmedRunSpeed : _sprintClipSpeed);
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
@@ -463,7 +486,7 @@ namespace Game.Gameplay
         void SetBase(string state)
         {
             bool tree = state == Locomotion;
-            string wanted = !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Locomotion;
+            string wanted = !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Aiming ? LocomotionAim : Locomotion;
             if (_base == state && _baseShown == wanted) return;
             // Down to and up from the ground is slower than a step.
             _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
@@ -472,6 +495,17 @@ namespace Game.Gameplay
         }
 
         string _baseShown = Locomotion; // the animator state actually playing for _base
+        bool Aiming => _combatant.AimMode != AimMode.Hip;
+
+        // Pure: index of the direction (deg, any range) nearest to `deg`, the short way round. Straight ahead and straight back (the UAL
+        // cycles, which take a turned leg best) win anything within 10 deg of a tie.
+        public static int NearestDirection(float[] dirs, float deg)
+        {
+            float Cost(int i) { float d = Mathf.Abs(Mathf.DeltaAngle(dirs[i], deg)); float a = Mathf.Abs(Mathf.DeltaAngle(dirs[i], 0f)); return a < 1f || a > 179f ? d : d + 10f; }
+            int best = 0;
+            for (int i = 1; i < dirs.Length; i++) if (Cost(i) < Cost(best)) best = i;
+            return best;
+        }
         float _flinchLength;
         float FlinchClipLength()
         {
@@ -551,14 +585,26 @@ namespace Game.Gameplay
             // Armed, the legs are the same UAL cycles past a standstill (ADR-390): square their pelvis too while moving (the planted foot slid
             // sideways ~1.5 m/s), but leave the rifle idle's own stance alone.
             bool pelvisFixed = _unarmedBody && _prone < 0.001f && !_combatant.Dead.Value;
-            float pelvisFix = pelvisFixed ? 1f : _prone < 0.001f && _seated < 0.5f && !_combatant.Dead.Value
-                ? Mathf.Clamp01(new Vector2(_motion.LocalVelocity.x, _motion.LocalVelocity.z).magnitude / 1.5f) : 0f;
+            var lv = _motion.LocalVelocity;
+            float lspeed = new Vector2(lv.x, lv.z).magnitude;
+            float pelvisFix = pelvisFixed ? 1f : _prone < 0.001f && _seated < 0.5f && !_combatant.Dead.Value ? Mathf.Clamp01(lspeed / 1.5f) : 0f;
+            // Only the forward/back (UAL) part: a sidestep clip turns its hips into the step on purpose (ADR-391).
+            // Squaring a strafe clip's hips swung its planted feet round in arcs (the backward diagonal slid ~7 m/s).
+            pelvisFix *= Mathf.Clamp01((Mathf.Abs(Mathf.Cos(_clipDir * Mathf.Deg2Rad)) - 0.95f) / 0.05f);
             float hipsYawNow = HipsYaw();
             if (pelvisFix > 0f) Turn(Pelvis, -hipsYawNow * pelvisFix, transform.up);
             // The clip's shoulders counter-twist the hips by far more than a person does: take most of that swing out (shoulder line measured on the posed arms).
             float turnBack = -_legTurnShown + (_combatant.Dead.Value ? 0f : -hipsYawNow * (1f - pelvisFix) * _upperWeight);
             // About the model's own up: the character's up while standing, along the ground while lying.
             Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
+            // A sidestep or diagonal clip turns the chest with the step (~15 deg off the aim on the rifle diagonal): square the shoulders back
+            // to the aim, all of it with a gun, as with bare hands below (ADR-391).
+            float strafeShare = 1f - Mathf.Clamp01((Mathf.Abs(Mathf.Cos(_clipDir * Mathf.Deg2Rad)) - 0.95f) / 0.05f);
+            if (!pelvisFixed && strafeShare > 0f && _prone < 0.001f && !_combatant.Dead.Value && _bones[ArmLeft] != null && _bones[ArmRight] != null)
+            {
+                var across = transform.InverseTransformDirection(_bones[ArmRight].position - _bones[ArmLeft].position);
+                Turn(Torso, -strafeShare * Mathf.Atan2(-across.z, across.x) * Mathf.Rad2Deg, transform.up);
+            }
             if (pelvisFixed && Time.time >= _punchUntil && _bones[ArmLeft] != null && _bones[ArmRight] != null)
             {
                 var across = transform.InverseTransformDirection(_bones[ArmRight].position - _bones[ArmLeft].position);

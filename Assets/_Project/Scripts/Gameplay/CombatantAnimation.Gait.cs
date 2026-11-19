@@ -14,7 +14,8 @@ namespace Game.Gameplay
         const float TurnThighDeg = 24f, TurnShinDeg = 34f, TurnStepStillSpeed = 0.5f;
         const float PlantRayUp = 0.5f, PlantRayLength = 1.1f, PlantMaxRaise = 0.3f, PlantMaxLower = 0.4f, PlantMaxBelowOrigin = 0.3f, PlantContact = 0.03f, PlantMaxSplit = 0.12f;
         const float PlantTiltMaxDeg = 35f; // the slope limit's walkable range (ADR-195: 35 deg walkable, 40 hard)
-        const float PlantFadeHeight = 0.12f, PlantSmoothPerSecond = 16f, PlantMinMove = 0.004f;
+        const float PlantFadeHeight = 0.05f, // was 0.12: low Mixamo sidestep swings were pulled down and dragged over the floor (ADR-391)
+                   PlantSmoothPerSecond = 16f, PlantMinMove = 0.004f;
         const float CrawlMetersPerCycle = 1.1f, CrawlRollDeg = 5f, CrawlKneeDeg = 25f;
         const float JumpStrideThighDeg = 28f, JumpStrideShinDeg = 20f, JumpStrideSpeed = 3.5f;
 

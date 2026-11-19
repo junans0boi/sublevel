@@ -44,12 +44,12 @@ public static class CharacterAnimProbe
     // Foot paths of the locomotion clips (120 samples a cycle, model space): tools/unity.sh run CharacterAnimProbe.Feet -> Logs/anim_feet.csv
     public static void Feet()
     {
-        var sb = new StringBuilder("clip,len,t,hipsZ,footLY,footLZ,footRY,footRZ,toeLY,toeLZ,toeRY,toeRZ\n");
+        var sb = new StringBuilder("clip,len,t,hipsZ,footLY,footLZ,footRY,footRZ,toeLY,toeLZ,toeRY,toeRZ,hipsX,footLX,footRX\n");
         var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>($"{CharacterRoster.PrefabDir}/Roster_MixamoSwat.prefab"));
         var s = go.GetComponent<CharacterDef>().Sockets;
         var anim = go.GetComponent<CharacterDef>().Animator;
         Transform toeL = anim.GetBoneTransform(HumanBodyBones.LeftToes), toeR = anim.GetBoneTransform(HumanBodyBones.RightToes);
-        foreach (var name in new[] { "RifleWalk", "RifleRun", "RifleWalkBack", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop" })
+        foreach (var name in new[] { "RifleWalk", "RifleRun", "RifleWalkBack", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop" }.Concat(CharacterAnimClips.StrafeNames))
         {
             var clip = CharacterAnimClips.LoadClip(name);
             for (int i = 0; i <= 120; i++)
@@ -57,7 +57,7 @@ public static class CharacterAnimProbe
                 float t = clip.length * i / 120f;
                 clip.SampleAnimation(go.GetComponent<CharacterDef>().Animator.gameObject, t);
                 Vector3 L(Transform x) => go.transform.InverseTransformPoint(x.position);
-                sb.AppendLine(string.Join(",", name, clip.length.ToString("F3"), t.ToString("F3"), L(s.Hips).z.ToString("F3"), L(s.LeftFoot).y.ToString("F3"), L(s.LeftFoot).z.ToString("F3"), L(s.RightFoot).y.ToString("F3"), L(s.RightFoot).z.ToString("F3"), L(toeL).y.ToString("F3"), L(toeL).z.ToString("F3"), L(toeR).y.ToString("F3"), L(toeR).z.ToString("F3")));
+                sb.AppendLine(string.Join(",", name, clip.length.ToString("F3"), t.ToString("F3"), L(s.Hips).z.ToString("F3"), L(s.LeftFoot).y.ToString("F3"), L(s.LeftFoot).z.ToString("F3"), L(s.RightFoot).y.ToString("F3"), L(s.RightFoot).z.ToString("F3"), L(toeL).y.ToString("F3"), L(toeL).z.ToString("F3"), L(toeR).y.ToString("F3"), L(toeR).z.ToString("F3"), L(s.Hips).x.ToString("F3"), L(s.LeftFoot).x.ToString("F3"), L(s.RightFoot).x.ToString("F3")));
             }
         }
         Object.DestroyImmediate(go);

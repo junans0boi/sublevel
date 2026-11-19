@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Game.Core;
 using Game.Gameplay;
@@ -83,6 +84,8 @@ namespace Game.Tests
             ("B", new Vector2(0, -1), false), ("BL", new Vector2(-1, -1), false), ("L", new Vector2(-1, 0), false), ("FL", new Vector2(-1, 1), false),
             ("SprintF", new Vector2(0, 1), true), ("SprintFR", new Vector2(1, 1), true),
         };
+        // Rifle only, aiming over the shoulder (the aimed sidesteps, ADR-391).
+        static readonly (string name, Vector2 move, bool sprint)[] AimScenarios = { ("AimR", new Vector2(1, 0), false), ("AimL", new Vector2(-1, 0), false), ("AimF", new Vector2(0, 1), false) };
 
         [UnityTest]
         public IEnumerator BareHands_EightWaysAndSprint_PlantedFootDoesNotSkate() { yield return Survey("bare", false); }
@@ -102,13 +105,14 @@ namespace Game.Tests
             Directory.CreateDirectory("Logs/gaitsurvey");
             var csv = new StringBuilder();
             string path = $"Logs/gaitsurvey/{Tag}.csv";
-            if (!File.Exists(path)) csv.AppendLine("loadout,scenario,speed,stance,slideMean,slideP90,flightShare,stepsPerSec,hipBob,chestRollRange,legTurn,pace,move");
+            if (!File.Exists(path)) csv.AppendLine("loadout,scenario,facing,speed,stance,slideMean,slideP90,flightShare,stepsPerSec,hipBob,chestRollRange,legTurn,pace,move");
             var failures = new List<string>();
             float slideSum = 0f; int slideCount = 0;
             var frameLog = new StringBuilder();
-            foreach (var (name, move, sprint) in Scenarios)
+            foreach (var (name, move, sprint) in rifle ? Scenarios.Concat(AimScenarios) : Scenarios)
             {
                 _input.Frame.Move = Vector2.zero; _input.Frame.Sprint = false;
+                _input.Frame.AimHeld = name.StartsWith("Aim");
                 // Travel always runs along +x through the open strip south of the spawn wall: face so the input's direction points there.
                 float inputDeg = Mathf.Atan2(move.x, move.y) * Mathf.Rad2Deg;
                 _input.Frame.Look = new Vector2(Mathf.DeltaAngle(_pc.Yaw, 90f - inputDeg), 0f);
@@ -120,7 +124,10 @@ namespace Game.Tests
 
                 var slides = new List<float>();
                 var footTrack = new[] { new List<(float h, float v)>(), new List<(float h, float v)>() };
-                int frames = 0, flight = 0, steps = 0; float hipLo = 999f, hipHi = -999f, rollLo = 999f, rollHi = -999f, speed = 0f, legTurn = 0f, pace = 0f, mv = 0f;
+                var ankleTrack = new[] { new List<(float h, float v)>(), new List<(float h, float v)>() };
+                var ankles = new[] { RigBones.Bone(_me, HumanBodyBones.LeftFoot), RigBones.Bone(_me, HumanBodyBones.RightFoot) };
+                var lastAnkle = new[] { ankles[0].position, ankles[1].position };
+                int frames = 0, flight = 0, steps = 0; float facing = 0f, hipLo = 999f, hipHi = -999f, rollLo = 999f, rollHi = -999f, speed = 0f, legTurn = 0f, pace = 0f, mv = 0f;
                 // The toes: a running foot rolls onto them, so the ankle moves on while the toes stay planted.
                 var feet = new[] { RigBones.Bone(_me, HumanBodyBones.LeftToes) ?? RigBones.Bone(_me, HumanBodyBones.LeftFoot), RigBones.Bone(_me, HumanBodyBones.RightToes) ?? RigBones.Bone(_me, HumanBodyBones.RightFoot) };
                 var last = new[] { feet[0].position, feet[1].position };
@@ -142,6 +149,9 @@ namespace Game.Tests
                         var d = feet[s].position - last[s]; d.y = 0f;
                         if (down[s] && wasDown[s]) slides.Add(d.magnitude / dt);
                         footTrack[s].Add((h, d.magnitude / dt));
+                        var da = ankles[s].position - lastAnkle[s]; da.y = 0f;
+                        ankleTrack[s].Add((ankles[s].position.y - ground, da.magnitude / dt));
+                        lastAnkle[s] = ankles[s].position;
                         frameLog.AppendLine($"{loadout},{name},{Time.time - start:F3},{s},{h:F3},{d.magnitude / dt:F2},{d.x / dt:F2}");
                         if (down[s] && !wasDown[s]) steps++;
                         last[s] = feet[s].position; wasDown[s] = down[s];
@@ -152,6 +162,7 @@ namespace Game.Tests
                     hipLo = Mathf.Min(hipLo, hip); hipHi = Mathf.Max(hipHi, hip);
                     var across = _pc.transform.InverseTransformDirection(RigBones.Bone(_me, HumanBodyBones.RightUpperArm).position - RigBones.Bone(_me, HumanBodyBones.LeftUpperArm).position);
                     float roll = Mathf.Atan2(across.y, new Vector2(across.x, across.z).magnitude) * Mathf.Rad2Deg;
+                    facing += Vector3.Dot(Vector3.Cross(new Vector3(across.x, 0f, across.z).normalized, Vector3.up), Vector3.forward);
                     rollLo = Mathf.Min(rollLo, roll); rollHi = Mathf.Max(rollHi, roll);
                     var v = _me.GetComponent<CombatantMotion>().LocalVelocity;
                     speed += new Vector2(v.x, v.z).magnitude; legTurn += _anim.LegTurnDeg; pace += anim.GetFloat(CombatantAnimation.Pace); mv += anim.GetFloat(CombatantAnimation.Move);
@@ -160,26 +171,36 @@ namespace Game.Tests
                 slides.Sort();
                 // Stance speed: how fast each foot moves over the floor while it is down (within 2 cm of the lowest it got in this run, so
                 // clips that plant the sole at different heights compare fairly); a stride that matches the ground speed holds it still (0).
+                // A foot pivoting on its toes or its heel has one end still: while either end is down, the slower end's speed counts.
                 float stance = 0f;
-                foreach (var list in footTrack)
+                for (int s = 0; s < 2; s++)
                 {
-                    float low = float.MaxValue; foreach (var f in list) low = Mathf.Min(low, f.h);
+                    var toe = footTrack[s]; var ank = ankleTrack[s];
+                    float lowT = float.MaxValue, lowA = float.MaxValue;
+                    foreach (var f in toe) lowT = Mathf.Min(lowT, f.h);
+                    foreach (var f in ank) lowA = Mathf.Min(lowA, f.h);
                     float sum = 0f; int n = 0;
-                    for (int i = 1; i < list.Count; i++) if (list[i].h < low + 0.02f && list[i - 1].h < low + 0.02f) { sum += list[i].v; n++; }
+                    for (int i = 1; i < toe.Count; i++)
+                    {
+                        bool toeDown = toe[i].h < lowT + 0.02f && toe[i - 1].h < lowT + 0.02f, heelDown = ank[i].h < lowA + 0.02f && ank[i - 1].h < lowA + 0.02f;
+                        if (toeDown || heelDown) { sum += Mathf.Min(toeDown ? toe[i].v : float.MaxValue, heelDown ? ank[i].v : float.MaxValue); n++; }
+                    }
                     stance += (n > 0 ? sum / n : 0f) / 2f;
                 }
                 float slideMean = 0f; foreach (var s in slides) slideMean += s; slideMean = slides.Count > 0 ? slideMean / slides.Count : 0f;
                 float p90 = slides.Count > 0 ? slides[(int)(slides.Count * 0.9f)] : 0f;
                 float elapsed = Time.time - start;
-                csv.AppendLine(string.Join(",", loadout, name, (speed / frames).ToString("F2"), stance.ToString("F2"), slideMean.ToString("F2"), p90.ToString("F2"), ((float)flight / frames).ToString("F2"),
+                csv.AppendLine(string.Join(",", loadout, name, (facing / frames).ToString("F2"), (speed / frames).ToString("F2"), stance.ToString("F2"), slideMean.ToString("F2"), p90.ToString("F2"), ((float)flight / frames).ToString("F2"),
                     (steps / elapsed).ToString("F2"), (hipHi - hipLo).ToString("F3"), (rollHi - rollLo).ToString("F1"), (legTurn / frames).ToString("F0"), (pace / frames).ToString("F2"), (mv / frames).ToString("F2")));
                 Debug.Log($"[GaitSurvey] {loadout} {name}: speed {speed / frames:F2} stance {stance:F2} slide mean {slideMean:F2} p90 {p90:F2} flight {(float)flight / frames:F2} steps/s {steps / elapsed:F2} hip bob {hipHi - hipLo:F3} chest roll {rollHi - rollLo:F1} legTurn {legTurn / frames:F0} pace {pace / frames:F2}");
                 Strip(shots, $"Logs/gaitsurvey/{Tag}_{loadout}_{name}.png");
+                // #223: whichever way it goes, the chest faces the aim (shoulder line; 1 = straight ahead).
+                if (facing / frames < 0.8f) failures.Add($"{loadout} {name} shoulders turned off the aim (facing {facing / frames:F2})");
                 if (speed / frames > 2.5f) { slideSum += stance; slideCount++; if (stance > MaxSlide) failures.Add($"{loadout} {name} stance foot slides {stance:F2} m/s"); }
             }
             File.AppendAllText(path, csv.ToString());
             File.AppendAllText($"Logs/gaitsurvey/{Tag}_frames.csv", frameLog.ToString());
-            _input.Frame.Move = Vector2.zero;
+            _input.Frame.Move = Vector2.zero; _input.Frame.AimHeld = false;
             Debug.Log($"[GaitSurvey] {loadout}: mean stance slide {slideSum / Mathf.Max(1, slideCount):F2} m/s over {slideCount} running scenarios");
             Assert.IsEmpty(failures, "planted foot skates more than " + MaxSlide + " m/s");
             Assert.LessOrEqual(slideSum / Mathf.Max(1, slideCount), MaxMeanSlide, "mean planted-foot slide over the 8 ways and sprint (m/s)");
