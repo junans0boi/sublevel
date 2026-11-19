@@ -125,6 +125,51 @@ namespace Game.Tests
             Debug.Log("[DoorCapture] shots in " + folder);
         }
 
+        // ADR-480 review shots: a parked vehicle on its road shoulder from a player's height, and the same spot from 60 m up.
+        //   DOOR_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.DoorCaptureTests.CaptureRoadVehicle
+        [UnityTest, Timeout(180000)]
+        public IEnumerator CaptureRoadVehicle()
+        {
+            string folder = Environment.GetEnvironmentVariable("DOOR_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = "Logs/doorshots";
+            folder = System.IO.Path.GetFullPath(folder);
+            Directory.CreateDirectory(folder);
+            PlayerController.InputOverride = new Idle();
+            SceneManager.LoadScene("World");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null || FindObjectsCount() == 0)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player or vehicles");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var pc = PlayerController.Local;
+            Combatant.LocalPlayer.ServerDamageFilter = _ => 0f;
+            var vehicles = UnityEngine.Object.FindObjectsByType<Vehicle>(FindObjectsSortMode.InstanceID);
+            Debug.Log($"[VehicleCapture] {vehicles.Length} vehicles in the match");
+            var v = vehicles[0];
+            var at = v.transform.position;
+            pc.Teleport(at - v.transform.forward * 14f + Vector3.up * 0.5f);
+            yield return new WaitForSeconds(2.0f); // the map streams in around the player
+            var go = new GameObject("VehicleShotCamera");
+            var cam = go.AddComponent<Camera>();
+            cam.enabled = false;
+            if (pc.Camera != null) cam.CopyFrom(pc.Camera);
+            cam.fieldOfView = 60f;
+            var shot = go.AddComponent<LateShot>();
+            var eye = at - v.transform.forward * 9f + v.transform.right * 4f + Vector3.up * 1.7f;
+            cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(at + Vector3.up * 0.6f - eye));
+            shot.Cam = cam; shot.Path = System.IO.Path.Combine(folder, "vehicle_roadside.png");
+            yield return null; yield return null;
+            eye = at + new Vector3(-40f, 60f, -40f);
+            cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(at - eye));
+            shot.Path = System.IO.Path.Combine(folder, "vehicle_aerial.png");
+            yield return null; yield return null;
+            Debug.Log("[VehicleCapture] shots in " + folder);
+        }
+
+        static int FindObjectsCount() => UnityEngine.Object.FindObjectsByType<Vehicle>(FindObjectsSortMode.None).Length;
+
         // ADR-147: one map door whole, splintered, hinge-cracked and broken (planks in the air, then the empty doorway).
         [UnityTest, Timeout(180000)]
         public IEnumerator CaptureDamagedAndBrokenDoor()

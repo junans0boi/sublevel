@@ -57,7 +57,7 @@ tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   # 플랫폼 �
    값이 manifest의 `files.<플랫폼>.sha256`과 같고 크기(바이트)가 `size`와 같아야 한다.
 
 ## 5. 버전 규칙 (현재 상태)
-- 게임 서버의 접속 허용 값은 `LobbyNet.CurrentVersion` = `Application.version` + `/` + `LobbyNet.Protocol`(지금 `1.0/3`, `ProjectSettings` `bundleVersion` 1.0, `Protocol` 3 — ADR-322, 통합 r5). 다르면 로비가 거절한다.
+- 게임 서버의 접속 허용 값은 `LobbyNet.CurrentVersion` = `Application.version` + `/` + `LobbyNet.Protocol`(지금 `1.0/4`, `ProjectSettings` `bundleVersion` 1.0, `Protocol` 4 — ADR-480, 문 메시지에 위치 추가). 다르면 로비가 거절한다.
 - 릴리스 폴더 이름(`version`)은 `release.sh`에서 **런처가 새 파일인지 비교하는 라벨**(`<시각>-<커밋>`)이다. `launcher-api.md`는 "`version`이 게임 서버 허용 값과 같아야 한다"고 적었지만 지금 둘은 다르다 → **정하지 않음**(아래 남은 것). 프로토콜이 바뀌면 서버와 클라이언트를 연달아 배포한다.
 
 ## 6. 체크리스트 (릴리스 1회)

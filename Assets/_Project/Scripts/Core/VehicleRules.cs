@@ -31,7 +31,7 @@ namespace Game.Core
             SeatCount = 2, MassKg = 230f, MaxSpeedKmh = 105f, BoostMaxKmh = 120f, ReverseMaxKmh = 8f, EngineAccel = 7.5f,
             BrakeDecel = 8f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 4f, SuspensionTravel = 0.25f, SpringStrength = 14000f,
             SpringDamper = 1300f, WheelRadius = 0.31f, TyreGrip = 1.1f, CentreOfMassHeight = 0.55f,
-            SpawnCount = 6, RightingSeconds = 2f, RightingLiftMeters = 0.6f, DrownDepth = 0.6f, HandbrakeDecel = 6f,
+            SpawnCount = 10, RightingSeconds = 2f, RightingLiftMeters = 0.6f, DrownDepth = 0.6f, HandbrakeDecel = 6f,
             SteerDegPerSecond = 130f, SteerReturnDegPerSecond = 180f,
         };
 
@@ -119,7 +119,7 @@ namespace Game.Core
         public float AstrideArmDeg = 72f;      // hands forward to the bars
 
         // ---- Spawning ----
-        public int SpawnCount = 14;   // ADR-198: cars; motorcycles 6 (MotorcycleDefaults)
+        public int SpawnCount = 22;   // ADR-480 (was ADR-198 14): cars; motorcycles 10 (MotorcycleDefaults)
         public float ParkingSpacingMeters = 40f;
 
         // ---- Seated pose (CombatantAnimation, no clips) ----

@@ -19,8 +19,8 @@ namespace Game.Tests
             Assert.IsTrue(Interest.Observes(R, InterestKind.Loot, false, Body(99f), false));
             Assert.IsFalse(Interest.Observes(R, InterestKind.Loot, false, Body(101f), false), "loot is only sent near");
             Assert.IsFalse(Interest.Observes(R, InterestKind.Thrown, false, Body(201f), false));
-            Assert.IsFalse(Interest.Observes(R, InterestKind.Vehicle, false, Body(351f), false));
-            Assert.IsTrue(Interest.Observes(R, InterestKind.Vehicle, false, Body(349f), false));
+            Assert.IsFalse(Interest.Observes(R, InterestKind.Vehicle, false, Body(701f), false));
+            Assert.IsTrue(Interest.Observes(R, InterestKind.Vehicle, false, Body(699f), false));
         }
 
         [Test]

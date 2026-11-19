@@ -12,6 +12,7 @@ namespace Game.Net
     public struct DoorChanged : IBroadcast
     {
         public int Index;
+        public Vector3 At; // the door's place: DoorSystem.Resolve finds it when the peers' lists disagree
         public byte State;
         public bool Quiet;
     }
@@ -20,6 +21,7 @@ namespace Game.Net
     public struct DoorDamaged : IBroadcast
     {
         public int Index;
+        public Vector3 At; // the door's place: DoorSystem.Resolve finds it when the peers' lists disagree
         public ushort Hp;
         public bool Quiet;
     }
@@ -28,6 +30,7 @@ namespace Game.Net
     public struct DoorRamRequest : IBroadcast
     {
         public int Index;
+        public Vector3 At; // the door's place: DoorSystem.Resolve finds it when the peers' lists disagree
         public float Speed;
     }
 
@@ -35,6 +38,7 @@ namespace Game.Net
     public struct DoorToggleRequest : IBroadcast
     {
         public int Index;
+        public Vector3 At; // the door's place: DoorSystem.Resolve finds it when the peers' lists disagree
     }
 
     // One hinged door in an opening of a building (ADR-104, G11). The panel is a box that turns about its hinge and
