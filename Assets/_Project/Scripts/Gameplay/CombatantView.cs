@@ -56,6 +56,11 @@ namespace Game.Gameplay
         BulletSurface[] _impactSurface;
         int _nextImpact;
 
+        // Blood trail of this combatant (#197): when a bullet last hit it, where the last drop fell, whether its pool is down.
+        float _lastBodyHit = float.NegativeInfinity, _nextDrip;
+        Vector3 _lastDrip = new Vector3(float.MaxValue, 0f, 0f);
+        bool _pooled;
+
         // Per shot (a shotgun's pellets are one shot): what the local player has already been told.
         bool _hitShown, _killShown, _headShown, _damageShown;
 
@@ -83,6 +88,7 @@ namespace Game.Gameplay
             _combatant.ShotResolved += OnShot;
             _combatant.Punched += OnPunch;
             _fxRoot = new GameObject("ShotFx").transform;
+            ImpactFx.Use(_dustMaterial, _glowMaterial);
             if (GetComponent<BackpackVisual>() == null) gameObject.AddComponent<BackpackVisual>(); // ADR-091
             if (GetComponent<ArmorVisual>() == null) gameObject.AddComponent<ArmorVisual>(); // #179: worn helmet and vest
             if (GetComponent<AttachmentVisual>() == null) gameObject.AddComponent<AttachmentVisual>(); // ADR-120
@@ -176,7 +182,7 @@ namespace Game.Gameplay
             // A bullet still flying shows its muzzle now and its impact when it lands (ADR-098).
             if (shot.Phase == Combatant.ShotPhase.Impact)
             {
-                if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal, shot.Surface);
+                if (shot.Hit != ShotHit.None) ShowImpact(shot, dir);
                 Confirm(shot);
                 return;
             }
@@ -188,7 +194,7 @@ namespace Game.Gameplay
             }
             if (shot.Phase == Combatant.ShotPhase.Launch) return;
             ShowTracer(_muzzle, shot.End);
-            if (shot.Hit != ShotHit.None) ShowImpact(shot.End, shot.Normal, shot.Surface);
+            if (shot.Hit != ShotHit.None) ShowImpact(shot, dir);
             Confirm(shot);
         }
 
@@ -203,6 +209,7 @@ namespace Game.Gameplay
             {
                 DamageDirectionsShown++;
                 Hud.DamageFrom(transform.position);
+                PlayerController.Shake(CameraShake.Hit(punch.Head) * 0.7f);
             }
             if (_combatant != local) return;
             HitConfirms++;
@@ -281,6 +288,25 @@ namespace Game.Gameplay
             line.widthMultiplier = width;
         }
 
+        // The flash and dust of an impact, the hole it leaves, what flies off, or blood on a body; a splash instead
+        // when the shot went into water first (the ground under it is not seen).
+        void ShowImpact(in Combatant.ShotResult shot, Vector3 dir)
+        {
+            if (shot.Surface != BulletSurface.Body && ImpactFx.WaterOnPath(shot.Origin, shot.End, out var splash))
+            {
+                ImpactFx.Splash(splash);
+                return;
+            }
+            ShowImpact(shot.End, shot.Normal, shot.Surface);
+            if (shot.Surface != BulletSurface.Body) ImpactFx.Debris(shot.End, shot.Normal.sqrMagnitude > 1e-6f ? shot.Normal.normalized : -dir, dir, shot.Surface);
+            else if (shot.Victim != null)
+            {
+                ImpactFx.Blood(shot.End, dir, shot.Head, shot.Victim.transform);
+                var victimView = shot.Victim.GetComponent<CombatantView>();
+                if (victimView != null) victimView._lastBodyHit = Time.time;
+            }
+        }
+
         void ShowImpact(Vector3 point, Vector3 normal, BulletSurface surface)
         {
             int i = _nextImpact;
@@ -296,7 +322,7 @@ namespace Game.Gameplay
             PlaceImpact(i, ViewCamera());
             ImpactsShown++;
             LastImpactSurface = surface;
-            BulletMarks.Add(point, normal, look, _dustMaterial); // stays on walls and ground (#152)
+            BulletMarks.Add(point, normal, surface, look); // stays on walls and ground (#152, #198)
         }
 
         // Returns false when the impact has run its course.
@@ -311,6 +337,7 @@ namespace Game.Gameplay
             var look = ImpactLooks.Of(_impactSurface[i]);
             _impactDust[i].localScale = Vector3.one * (_fx.DustSize * look.DustSize * Mathf.Lerp(1f, _fx.DustGrowth, k));
             var color = look.Dust;
+            if (_impactSurface[i] == BulletSurface.Body && GameSettings.Blood == BloodLevel.Off) color = new Color(0.55f, 0.53f, 0.5f, color.a); // 피 효과 끔: no red mist
             color.a *= 1f - k;
             _block.SetColor(BaseColorId, color);
             _impactDustRenderer[i].SetPropertyBlock(_block);
@@ -338,6 +365,7 @@ namespace Game.Gameplay
                 DamageDirectionsShown++;
                 Hud.DamageFrom(transform.position);
                 if (PlayerController.Local != null) PlayerController.Local.TakeAimPunch(); // ADR-090
+                PlayerController.Shake(CameraShake.Hit(shot.Head)); // ADR-471, view only
             }
             if (_combatant != local) return;
             // One marker per shot; a later pellet of the same shot that kills or lands on the head upgrades it.
@@ -388,6 +416,29 @@ namespace Game.Gameplay
                 _impactFlashRenderer[i].enabled = false;
                 _impactDustRenderer[i].enabled = false;
             }
+            Bleed();
+        }
+
+        // A hit body drips for a while and a knocked one bleeds on (drops while it moves); where it goes down a pool
+        // stays (#197). Client only, nothing the server reads.
+        void Bleed()
+        {
+            if (!_combatant.IsClientStarted) return;
+            bool down = _combatant.Dead.Value || _combatant.Knocked.Value;
+            if (!down) _pooled = false;
+            else if (!_pooled)
+            {
+                _pooled = true;
+                ImpactFx.Drip(transform.position, Random.Range(0.9f, 1.3f), transform);
+            }
+            if (_combatant.Dead.Value || Time.time < _nextDrip) return;
+            if (!BloodRules.Drips(GameSettings.Blood, _combatant.Knocked.Value, Time.time - _lastBodyHit)) return;
+            var feet = transform.position;
+            if ((feet - _lastDrip).sqrMagnitude < BloodRules.DripMinMeters * BloodRules.DripMinMeters) return;
+            _nextDrip = Time.time + BloodRules.DripEverySeconds * Random.Range(0.7f, 1.3f);
+            _lastDrip = feet;
+            var side = Random.insideUnitCircle * 0.2f;
+            ImpactFx.Drip(feet + new Vector3(side.x, 0f, side.y), Random.Range(0.12f, 0.22f), transform);
         }
     }
 }

@@ -21,11 +21,11 @@ namespace Game.Tests
         }
 
         [Test]
-        public void MarksStayOnWallsAndGround_NotOnBodiesGlassOrCars()
+        public void MarksStayOnWallsGroundAndGlass_NotOnBodiesOrCars()
         {
-            foreach (var s in new[] { BulletSurface.Ground, BulletSurface.Concrete, BulletSurface.Wood, BulletSurface.Metal })
+            foreach (var s in new[] { BulletSurface.Ground, BulletSurface.Concrete, BulletSurface.Wood, BulletSurface.Metal, BulletSurface.Glass })
                 Assert.Greater(ImpactLooks.Of(s).Mark.a, 0f, s.ToString());
-            foreach (var s in new[] { BulletSurface.Body, BulletSurface.Glass, BulletSurface.Vehicle })
+            foreach (var s in new[] { BulletSurface.Body, BulletSurface.Vehicle })
                 Assert.AreEqual(0f, ImpactLooks.Of(s).Mark.a, s.ToString());
         }
 

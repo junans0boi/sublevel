@@ -29,6 +29,7 @@ namespace Game.Gameplay
         BotDifficulty, // ADR-117
         DayTime, Weather, // ADR-119
         NetStats,         // ADR-128
+        CameraShake, Blood, // ADR-470, ADR-471
     }
 
     // One row of the settings screen: where it shows, what it says and how its value is stored.
@@ -218,6 +219,12 @@ namespace Game.Gameplay
             Add(Choice(SettingId.Weather, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "날씨",
                 "무작위: 매치마다 날씨가 달라집니다. 비와 안개는 시야를 줄입니다.",
                 "settings.weather", new[] { "무작위", "맑음", "비", "안개" }, 1)); // default 맑음 (ADR-210)
+            Add(Slider(SettingId.CameraShake, SettingsTab.Gameplay, SettingsPage.Basic, "효과", "화면 흔들림",
+                "근처 폭발, 피격, 높은 곳 착지, 자기 사격 때 화면이 흔들리는 세기입니다. 0%면 흔들리지 않습니다. 조준점에는 영향이 없습니다.",
+                "settings.cameraShake", 0f, 1f, 0.05f, 1f, SliderFormat.Unit01Percent));
+            Add(Choice(SettingId.Blood, SettingsTab.Gameplay, SettingsPage.Basic, "효과", "피 효과",
+                "피격 시 튀는 피와 바닥·벽의 핏자국입니다. 적게는 튀는 양이 줄고 벽 핏자국이 없으며, 끄면 피가 보이지 않습니다.",
+                "settings.blood", new[] { "끔", "적게", "보통" }, 2));
             return rows;
         }
 
