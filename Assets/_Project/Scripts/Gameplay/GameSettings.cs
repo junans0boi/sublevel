@@ -177,6 +177,8 @@ namespace Game.Gameplay
         public static bool ShowDamageDirection => GetToggle(SettingId.DamageDirection);
         public static bool ShowKillFeed => GetToggle(SettingId.KillFeed);
         public static bool ShowNetStats => GetToggle(SettingId.NetStats);
+        public static float CameraShake => Values[(int)SettingId.CameraShake]; // 0..1 (ADR-471)
+        public static Game.Core.BloodLevel Blood => (Game.Core.BloodLevel)Mathf.Clamp(GetIndex(SettingId.Blood), 0, 2); // ADR-470
         public static Game.Core.DayTimeChoice DayTimeSetting => (Game.Core.DayTimeChoice)GetIndex(SettingId.DayTime);
         public static Game.Core.WeatherChoice WeatherSetting => (Game.Core.WeatherChoice)GetIndex(SettingId.Weather);
 

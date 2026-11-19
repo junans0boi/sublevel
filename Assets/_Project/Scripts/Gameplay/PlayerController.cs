@@ -67,6 +67,11 @@ namespace Game.Gameplay
         GameRules _rules;
         AimInput _aim;
         readonly ViewRecoil _recoil = new ViewRecoil();
+        // Camera trauma (ADR-471): added on top of the placed camera after Update and taken off again before the next,
+        // so nothing that aims from the camera ever sees it.
+        readonly CameraShake _shake = new CameraShake();
+        Quaternion _shakeApplied = Quaternion.identity;
+        bool _shakeOn;
         readonly ShotGrouper _ownShots = new ShotGrouper(0.03);
         const float StanceResendSeconds = 0.3f;
         const float MaxViewPitch = 89f;
@@ -195,6 +200,7 @@ namespace Game.Gameplay
         void Update()
         {
             if (!_owner) return;
+            RemoveShake();
             var f = _input.Read();
             if (SettingsScreen.KeyCaptureActive) f = new PlayerInputFrame { SelectSlot = -1 }; // the key being rebound is not a command
             // Screens that take over the mouse: the keys that open and close them still work; over the inventory and
@@ -687,6 +693,7 @@ namespace Game.Gameplay
         void ReportFall()
         {
             float dropped = _fall.Tick(_controller.isGrounded, transform.position.y);
+            if (dropped > 0f) _shake.Add(CameraShake.Landing(dropped));
             if (_stance == null || dropped <= FallRules.Current.SafeMeters) return;
             if (IsServerInitialized) _stance.ServerReportFall(dropped);
             else _stance.CmdReportFall(dropped);
@@ -704,6 +711,42 @@ namespace Game.Gameplay
             // The weapon's pattern (ADR-089), seeded per match and player so a replayed match kicks the same way.
             float factor = _rules.Aim.For(_aim.Mode).RecoilFactor * _rules.Recoil.StanceFactor(BodyStance);
             RecoilPattern.Kick(_recoil, weapon, _recoilRng, factor, _rules.Recoil, FittedMods);
+            _shake.Add(CameraShake.OwnShot(weapon.Damage, weapon.Pellets) * factor);
+        }
+
+        // Adds camera trauma to the local player's view (a hit taken, a punch).
+        public static void Shake(float trauma)
+        {
+            if (Local != null) Local._shake.Add(trauma);
+        }
+
+        // A blast somewhere: the local view shakes by how near it is (ADR-471). `scale` 1 = a frag grenade.
+        public static void ShakeFromBlast(Vector3 centre, float scale)
+        {
+            if (Local == null) return;
+            var from = Local.Camera != null ? Local.Camera.transform.position : Local.transform.position;
+            Local._shake.Add(CameraShake.Blast(Vector3.Distance(from, centre), scale));
+        }
+
+        public float ShakeTrauma => _shake.Trauma;
+
+        void RemoveShake()
+        {
+            if (!_shakeOn) return;
+            _shakeOn = false;
+            if (Camera != null) Camera.transform.rotation *= Quaternion.Inverse(_shakeApplied);
+        }
+
+        // After every Update has placed the camera and aimed from it.
+        void LateUpdate()
+        {
+            if (!_owner || Camera == null) return;
+            _shake.Tick(Time.deltaTime);
+            if (_shake.Trauma <= 0f) return;
+            _shake.Offset(Time.timeAsDouble, GameSettings.CameraShake, out float pitch, out float yaw, out float roll);
+            _shakeApplied = Quaternion.Euler(-pitch, yaw, roll);
+            Camera.transform.rotation *= _shakeApplied;
+            _shakeOn = true;
         }
 
         // ADR-090: a hit on this player throws the view; a vest makes it smaller. Called once per shot that lands.

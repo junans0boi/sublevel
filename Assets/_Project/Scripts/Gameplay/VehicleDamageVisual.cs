@@ -218,6 +218,7 @@ namespace Game.Gameplay
             ExplosionsShown++;
             var b = _damage.LocalBounds();
             var centre = b.center + Vector3.up * b.extents.y * 0.5f;
+            PlayerController.ShakeFromBlast(transform.TransformPoint(centre), 1.2f); // ADR-471
             if (_softGlow != null)
             {
                 if (_flashPs == null)

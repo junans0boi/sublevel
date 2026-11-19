@@ -398,6 +398,7 @@ namespace Game.Gameplay
         {
             LastBlastCentre = centre;
             BlastsShown++;
+            PlayerController.ShakeFromBlast(centre, flash ? 0.4f : 1f); // ADR-471
             if (_blastSource != null && _blastClip != null)
             {
                 _blastSource.transform.position = centre;
