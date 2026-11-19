@@ -291,8 +291,10 @@ namespace Game.Net
                 number++;
                 var combatant = bot.GetComponent<Combatant>();
                 if (combatant != null && State != null) State.ServerSetName(combatant, BotNames.For(Seed, number - 1));
-                if (inElevator) ServerProtect(combatant);
+                // The island's damage filter first, protection in front of it: the other way round SpawnProtection re-chains onto the
+                // room's wrapper of itself and any damage recurses forever (StackOverflow, r5 integration).
                 if (inElevator && _waiting != null) _waiting.AddBot(combatant, position, rotation);
+                if (inElevator) ServerProtect(combatant);
             }
         }
 
