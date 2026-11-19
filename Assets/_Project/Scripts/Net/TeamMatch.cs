@@ -11,6 +11,9 @@ namespace Game.Net
     {
         public static TeamMode Mode { get; set; } = TeamMode.Solo;
 
+        // Tests only: fill teams in arrival order (player + bot mates), the pre-ADR-332 layout, for tests that need teammates in a one-player match.
+        public static bool FillTeamsInOrder { get; set; }
+
         public static bool IsTeamMode => Mode != TeamMode.Solo;
         public static int TeamSize => TeamRules.Current.SizeOf(Mode);
 
@@ -18,6 +21,7 @@ namespace Game.Net
         static void ResetStatics()
         {
             Mode = TeamMode.Solo;
+            FillTeamsInOrder = false;
             var args = Environment.GetCommandLineArgs();
             for (int i = 0; i + 1 < args.Length; i++)
                 if (args[i] == "-mode" && Teams.TryParse(args[i + 1], out var mode)) Mode = mode;

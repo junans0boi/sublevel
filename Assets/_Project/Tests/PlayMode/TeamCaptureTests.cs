@@ -24,6 +24,7 @@ namespace Game.Tests
         {
             PlayerController.InputOverride = null;
             TeamMatch.Mode = TeamMode.Solo;
+            TeamMatch.FillTeamsInOrder = false;
             BotRules.Current = GameData.Rules.Bot;
             TeamRules.Current = GameData.Rules.Team;
             SceneManager.LoadScene("Bootstrap");
@@ -53,6 +54,7 @@ namespace Game.Tests
             folder = Path.GetFullPath(folder);
             Directory.CreateDirectory(folder);
             TeamMatch.Mode = TeamMode.Squad;
+            TeamMatch.FillTeamsInOrder = true; // needs teammates in a one-player match (ADR-332)
             BotRules.Current = new BotRules { TargetsPlayers = false };
             TeamRules.Current = new TeamRules { ReviveSeconds = 1.5f, DownInvulnerableSeconds = 0f, BotReviveSearchMeters = 0f };
             var input = new HarnessInput();
