@@ -3,7 +3,7 @@
   "title": "봇",
   "order": 32,
   "group": "콘텐츠",
-  "summary": "봇은 순수 규칙 두뇌(BotBrain) + 서버에서 NavMeshAgent로 걷는 컨트롤러다. 지금 한 판은 최대 16명(사람+봇 15), 이름은 '봇 N'. 계획은 50명이며, 시가전·산악 행동은 아직 없다.",
+  "summary": "봇은 순수 규칙 두뇌(BotBrain) + 서버에서 NavMeshAgent로 걷는 컨트롤러다. 한 판은 사람+봇 80명(MinBots 16, 사람 최대 64), 이름은 가상 닉네임 풀, 난이도는 봇별 혼합. 차량 운전·창문/옥상 NavMeshLink·시야 기반 은닉은 없다(BACKLOG).",
   "status": "confirmed",
   "parts": [
     {
@@ -295,8 +295,9 @@
       "type": "prose",
       "title": "난이도 보충",
       "paragraphs": [
-        "시야각은 어려움 x1.05, 쉬움 x0.85(최대 170도). 버스트 휴식은 어려움 x0.7, 쉬움 x1.3. 투척 간격은 어려움 x0.7, 쉬움 x1.5. 설정 화면에서 고르며 매치 전체에 적용된다(GameSettings.ApplyLive). 봇별로 섞는 난이도는 지금 없다."
-      ]
+        "시야각은 어려움 x1.05, 쉬움 x0.85(최대 170도). 버스트 휴식은 어려움 x0.7, 쉬움 x1.3. 투척 간격은 어려움 x0.7, 쉬움 x1.5. 설정 화면 값이 혼합의 중심이고, 봇마다 매치 시드+번호로 단계를 하나 뽑아 판 내내 고정한다(BotMix, ADR-245): 쉬움 설정 50/40/10%, 보통 20/60/20%, 어려움 10/40/50%(쉬움/보통/어려움). `--perf-level`이면 혼합 없이 모두 같은 단계(BotMix.Pure)."
+      ],
+      "source": "Assets/_Project/Scripts/Core/BotNames.cs BotMix; Assets/_Project/Scripts/AI/BotController.cs:323"
     },
     {
       "type": "table",
@@ -479,18 +480,18 @@
           "status": "confirmed",
           "source": "Assets/_Project/Data/Resources/GameData/rules.json Match",
           "what": "한 판 최대 인원(사람+봇)",
-          "now": 16,
-          "plan": 50,
-          "note": "계획 50: docs/research/MASTER_PLAN.md:9. 사람 수가 달라도 같은 규칙"
+          "now": 80,
+          "plan": 80,
+          "note": "Participants 80 = MaxParticipantsLimit(ADR-168·241·259). 사람은 최대 64(Participants−MinBots)"
         },
         {
           "id": "c2",
           "status": "confirmed",
-          "source": "Assets/_Project/Data/Resources/GameData/rules.json Match",
-          "what": "기본 봇 수",
-          "now": 15,
+          "source": "Assets/_Project/Data/Resources/GameData/rules.json Match; Assets/_Project/Scripts/Core/Deployment.cs BotFill",
+          "what": "봇 수",
+          "now": "max(16, 80 − 사람 수)",
           "plan": "사람 수에 맞춰 채움",
-          "note": "MaxBots 23 (상한)"
+          "note": "BotFill.Plan(Deployment.cs), MinBots 16·MaxBots 79. 엘리베이터 슬롯을 넘으면 잘림(MatchDirector). BotCount 15는 FillToParticipants false일 때(테스트)만"
         },
         {
           "id": "c3",
@@ -498,8 +499,8 @@
           "source": "docs/research/06_missed_items.md:16",
           "what": "인구 밀도",
           "now": "약 48명/km²(31명/0.65km²)",
-          "plan": "50명/3.2km² = 15.5명/km²",
-          "note": "조사 06은 31명 기준으로 계산함(출처 그대로). 맵을 키우면 밀도가 10~20배 줄어 교전 빈도가 달라진다."
+          "plan": "80명 기준 미계산",
+          "note": "조사 06은 31명 기준으로 계산함(출처 그대로). 현재 맵 면적으로 다시 계산 필요."
         },
         {
           "id": "c4",
@@ -536,17 +537,91 @@
         {
           "id": "nm",
           "status": "confirmed",
-          "source": "Assets/_Project/Scripts/AI/BotController.cs:302; MatchDirector.cs:255",
+          "source": "Assets/_Project/Scripts/Core/BotNames.cs; AI/BotController.cs:343; Net/MatchDirector.cs:290",
           "what": "봇 이름",
-          "value": "'봇 ' + 번호",
-          "note": "이름 풀 없음, 번호만"
+          "value": "가상 닉네임 풀 64개(한국어 16·영어 48)에서 매치 시드로 섞어 번호 순으로 배정",
+          "note": "한 판 안에서 중복 없음. 풀을 넘는 번호는 이름 뒤에 숫자(예: 하늘2). ADR-245"
         },
         {
           "id": "np",
-          "status": "proposed",
-          "what": "이름 풀(제안)",
-          "value": "한국어·영어 가상 닉네임 60개 이상(실존 인물·브랜드·스트리머 이름 금지), 중복 없이 시드로 뽑기",
-          "note": "50명 판에서 '봇 N'이면 봇이 티 난다. 일부 플레이어 닉네임 형식(성+숫자 등)을 섞는다."
+          "status": "confirmed",
+          "what": "이름 규칙",
+          "value": "실존 인물·브랜드·스트리머 이름 금지",
+          "note": "구현됨(BotNames.Pool)",
+          "source": "Assets/_Project/Scripts/Core/BotNames.cs:5"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "오염·열쇠 행동 (BotPollutionPlan, ADR-245)",
+      "columns": [
+        {
+          "key": "what",
+          "label": "항목",
+          "kind": "text"
+        },
+        {
+          "key": "easy",
+          "label": "쉬움",
+          "kind": "text"
+        },
+        {
+          "key": "normal",
+          "label": "보통",
+          "kind": "text"
+        },
+        {
+          "key": "hard",
+          "label": "어려움",
+          "kind": "text"
+        }
+      ],
+      "rows": [
+        {
+          "id": "pl1",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotPollutionPlan.cs:11",
+          "what": "경고 뒤 반응 지연(봇별 0~최대, 시드 고정)",
+          "easy": "최대 45초",
+          "normal": "최대 25초",
+          "hard": "최대 10초"
+        },
+        {
+          "id": "pl2",
+          "status": "confirmed",
+          "source": "BotPollutionPlan.cs:18-25",
+          "what": "구역을 떠나는 조건",
+          "easy": "오염 확정·전선 접근이면 즉시, 확정 40초 전이면 지연과 무관하게 출발",
+          "normal": "같음",
+          "hard": "같음"
+        },
+        {
+          "id": "pl3",
+          "status": "confirmed",
+          "source": "BotPollutionPlan.cs:29; AI/BotController.cs:928",
+          "what": "열쇠를 가진 봇이 경고 때 열쇠를 쓸 확률(봇별 고정)",
+          "easy": "50%",
+          "normal": "80%",
+          "hard": "100%"
+        },
+        {
+          "id": "pl4",
+          "status": "confirmed",
+          "source": "BotPollutionPlan.cs:34-37",
+          "what": "최종 구역을 아는 시점",
+          "easy": "경고·오염 구역 수 ≥ ceil(구역 수×2/3)",
+          "normal": "같음",
+          "hard": "같음"
+        },
+        {
+          "id": "pl5",
+          "status": "confirmed",
+          "source": "Assets/_Project/Scripts/Core/BotPriority.cs:31-32",
+          "what": "소리 난 곳으로 가는 봇 비율",
+          "easy": "40%",
+          "normal": "70%",
+          "hard": "100%"
         }
       ]
     },
@@ -610,7 +685,7 @@
           "id": "b6",
           "status": "proposed",
           "beh": "소리 구분: 총소리 방향, 실내/실외 가림",
-          "why": "50명이 동시에 쏘면 청취가 폭주",
+          "why": "80명이 동시에 쏘면 청취가 폭주",
           "dep": "서버 소리 이벤트 관심 영역 제한(MASTER_PLAN.md:43)"
         },
         {
@@ -635,15 +710,15 @@
       "items": [
         {
           "id": "db1",
-          "q": "50명 중 봇 비율은?",
+          "q": "80명 중 봇 비율은?",
           "options": [
-            "사람 수 무관하게 항상 50명으로 채움",
+            "사람 수 무관하게 항상 80명으로 채움",
             "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장)",
             "고정 비율"
           ],
           "recommended": "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장)",
           "status": "confirmed",
-          "answer": "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "answer": "사람이 적으면 봇으로 채우고 많으면 줄임(최소 봇 수 보장) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능] → 구현: BotFill(MinBots 16)",
           "why": "MASTER_PLAN.md:9 '사람 수가 달라도 같은 규칙'과 맞고, 서버 CPU 상한을 지키기 쉽다."
         },
         {
@@ -655,7 +730,7 @@
           ],
           "recommended": "봇별 혼합(보통 중심, 쉬움·어려움 소수)",
           "status": "confirmed",
-          "answer": "봇별 혼합(보통 중심, 쉬움·어려움 소수) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
+          "answer": "봇별 혼합(보통 중심, 쉬움·어려움 소수) [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능] → 구현: BotMix(ADR-245)",
           "why": "한 판 안에서 실력 차이가 있어야 사람 같고, 초보도 이길 수 있다. 구현은 BotLevels.For를 봇별로 부르는 정도."
         },
         {
@@ -691,8 +766,8 @@
           ],
           "recommended": "가상 닉네임 풀",
           "status": "confirmed",
-          "answer": "가상 닉네임 풀 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
-          "why": "50명 판에서 봇이 한눈에 티 난다. 실존 이름 금지."
+          "answer": "가상 닉네임 풀 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능] → 구현: BotNames(ADR-245)",
+          "why": "80명 판에서 봇이 한눈에 티 난다. 실존 이름 금지."
         }
       ]
     }

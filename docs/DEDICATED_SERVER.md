@@ -22,7 +22,7 @@ tools/unity.sh build server-linux-arm64   # Build/server-linux-arm64/SublevelSer
 ```bash
 Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
   -batchmode -nographics -logFile "$PWD/Logs/server.log" \
-  --dedicated --port 7770 --bots 15 --region C --max-players 16 --start-seconds 60
+  --dedicated --port 7770 --region C --start-seconds 60
 ```
 
 (Windows: `SublevelServer.exe -batchmode -nographics -logFile server.log --dedicated ...`)
@@ -31,11 +31,15 @@ Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
 |---|---|---|
 | `--dedicated` | 전용 서버로 실행 | (없으면 일반 게임) |
 | `--port N` | 로비 포트(1..65534). 매치는 **N+1**(쓰는 중이면 빈 포트)에서 열린다. 방화벽에서 두 포트를 연다 | 7770 |
-| `--bots N` | 매치를 채울 봇 수(0..49) | 사람이 늘면 줄며 전체 16명을 채움 |
+| `--bots N` | 매치를 채울 봇 수(0..79 = `MatchRules.MaxBotsLimit`) | 자동: `BotFill` = max(`MinBots` 16, `Participants` 80 − 사람 수). 맵 엘리베이터 슬롯 수를 넘으면 잘림(`MatchDirector`) |
 | `--region ID` | 매치의 **최종 구역**(`A` 산악, `B` 습지, `C` 마을, `D` 공장, 또는 0부터의 번호). 모르는 값이면 경고 후 무시 | 무작위 |
-| `--max-players N` | 한 방의 사람 수(1..40 = Participants−MinBots) | rules.json `Match.MaxPlayers`(16) |
-| `--participants N` | 사람+봇 합계(2..50), 슬라이스·측정용. 봇은 사람이 비운 만큼 채우되 `MinBots`(10) 미만으로 안 줄어듦 | rules.json `Match.Participants`(50) |
+| `--max-players N` | 한 방의 사람 수(1..64 = `Participants`−`MinBots`, `MatchRules.MaxHumans`) | rules.json `Match.MaxPlayers`(64) |
+| `--participants N` | 사람+봇 합계(2..80 = `MatchRules.MaxParticipantsLimit`), 슬라이스·측정용. 봇은 사람이 비운 만큼 채우되 `MinBots`(16) 미만으로 안 줄어듦 | rules.json `Match.Participants`(80) |
 | `--start-seconds N` | 첫 사람이 들어온 뒤 N초가 지나면 준비 안 한 사람이 있어도 시작(0 = 끔) | 60 |
+
+측정용 인자(ADR-242, `ServerArgs.cs`): `--perf NAME`(프레임 통계 → `Logs/perf/s8_server_NAME.csv`), `--perf-seed N`, `--perf-level easy|normal|hard`(모든 봇 같은 난이도, 혼합 끔), `--perf-quick N`(오염 N배 빠르게, N≥1), `--perf-gather X,Z`, `--perf-squad`, `--perf-keys`.
+
+값 출처: `Assets/_Project/Data/Resources/GameData/rules.json` "Match"(`Participants` 80, `MinBots` 16, `MaxPlayers` 64, `MaxBots` 79, `BotCount` 15는 `FillToParticipants` true라 메뉴·서버 매치에선 안 씀, `QueueWindowSeconds` 30, `ReconnectSeconds` 60), 상한 상수는 `Assets/_Project/Scripts/Core/Deployment.cs` `MatchRules`.
 
 잘못된 값은 `[Server] --port must be ...` 오류를 로그에 남기고 종료 코드 2로 끝난다(추측해서 고치지 않는다).
 `-logFile -`는 로그를 표준 출력으로 보낸다. 서버가 하는 일은 모두 `[Server]` 접두사로 남는다.
@@ -51,6 +55,12 @@ Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
 
 - EditMode `ServerArgsTests`(인자 파싱·시간 규칙).
 - PlayMode `DedicatedServerPlayTests`: `Build/server`가 있으면 위 서버를 인자와 함께 실제로 띄우고(127.0.0.1만), 이 프로세스의 클라이언트가 로비로 들어가 준비 → 시작 → World 접속(플레이어 1 + 봇 2가 보임) → 나가면 서버가 빈 매치를 알아채고 로비로 돌아오는지 → `SIGTERM`으로 깨끗이 끝나는지 본다. 빌드가 없으면 건너뛴다.
+
+## 동시 방 수 계산법
+
+한 프로세스 = 방 1개 = 매치 1개(ADR-127). 방마다 포트 2개(로비 N, 매치 N+1)를 쓰므로 프로세스마다 `--port`를 2씩 띄워(7770, 7772, ...) 방화벽에 모두 연다.
+
+동시 방 수 = min(코어 수 ÷ 방당 코어, 메모리 ÷ 방당 메모리, 업링크 ÷ 방당 서버 송신). 방당 값의 한도 제안은 `docs/research/server_perf_budget_proposal.md`(80인: 서버 평균 프레임 ≤10 ms, 메모리 ≤1.5 GB, 서버 송신 ≤6 Mbit/s, 클라당 ≤15 KB/s). 80인 실측은 아직 없다(클라당 대역폭 실측은 16인+봇 20의 8.5 KB/s뿐, `docs/PERF_BUDGET.md` 네트워크 절). 실측이 나오면 이 식에 넣는다.
 
 ## 아직 확인하지 않은 것
 

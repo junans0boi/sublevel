@@ -3,7 +3,7 @@
   "title": "네트워크",
   "order": 60,
   "group": "기술",
-  "summary": "Fish-Net 4.7.3/Tugboat 30 Hz, 소유자 권위 이동+서버 권위 전투, 관심 영역, 자체 LagComp, 전용 서버, 대역폭 실측과 50명 요구·위험.",
+  "summary": "Fish-Net 4.7.3/Tugboat 30 Hz, 소유자 권위 이동+서버 권위 전투, 관심 영역, 자체 LagComp, 전용 서버, 대역폭 실측(16인)과 80명 요구·위험.",
   "status": "confirmed",
   "parts": [
     {
@@ -287,13 +287,13 @@
       "type": "prose",
       "title": "전용 서버 문서 요약",
       "paragraphs": [
-        "빌드: `tools/unity.sh build server` (macOS Mono, 약 1분) / server-win은 미검증. 실행: `--dedicated --port 7770 --bots 15 --region C --max-players 16 --start-seconds 60` + `-batchmode -nographics`. 끝: 결정 20초 뒤 / 모두 떠난 지 30초 뒤 / 150초간 아무도 안 옴 → 로비로 복귀. SIGTERM에 정상 종료. 잘못된 인자는 코드 2로 종료."
+        "빌드: `tools/unity.sh build server`(macOS Mono) / `server-linux-arm64`(오라클 ARM) / server-win은 미검증. 실행: `--dedicated --port 7770 --region C --start-seconds 60` + `-batchmode -nographics`(`--bots` 0..79·`--max-players` 1..64·`--participants` 2..80, 생략하면 rules.json Match). 끝: 결정 20초 뒤 / 모두 떠난 지 30초 뒤 / 150초간 아무도 안 옴 → 로비로 복귀. SIGTERM에 정상 종료. 잘못된 인자는 코드 2로 종료."
       ],
       "bullets": [
         "아직 확인하지 않은 것: Windows 서버 빌드·실행, 다른 기기 접속(방화벽·NAT), 두 사람 이상, 서버 CPU·메모리 예산(PERF_BUDGET에 서버 항목 없음), 장시간 운영.",
-        "한 프로세스에 방 하나라 50명 방을 여러 개 운영하려면 프로세스 여러 개를 띄우는 구조다(추정)."
+        "한 프로세스에 방 하나라 80명 방을 여러 개 운영하려면 프로세스(포트 2개씩)를 여러 개 띄운다. 동시 방 수 계산법은 docs/DEDICATED_SERVER.md '동시 방 수 계산법'."
       ],
-      "source": "docs/DEDICATED_SERVER.md:1-60; Assets/_Project/Scripts/Core/ServerArgs.cs:71-83"
+      "source": "docs/DEDICATED_SERVER.md; Assets/_Project/Scripts/Core/ServerArgs.cs"
     },
     {
       "type": "table",
@@ -351,17 +351,17 @@
         {
           "id": "b_est",
           "status": "proposed",
-          "case": "50명 + 봇(가정)",
-          "bps": 12000,
-          "see": "관측 인원이 36→50으로 늘면 선형 증가로 가정한 값. 서버 송신 총량은 클라이언트 수만큼 곱해져 사람 50명이면 약 600 KB/s(약 5 Mbit/s)로 추정. 사람이 서로 모이는 결승에서는 더 크다.",
-          "source": "계산 추정(외삽, 실측 아님)"
+          "case": "80명(가정)",
+          "bps": "미측정",
+          "see": "80인 실측 없음. 옛 50명 외삽(12,000 B/s·서버 약 5 Mbit/s)은 폐기. 제안 한도: 클라당 ≤15 KB/s, 서버 송신 ≤6 Mbit/s(docs/research/server_perf_budget_proposal.md).",
+          "source": "docs/research/server_perf_budget_proposal.md"
         }
       ],
       "note": ""
     },
     {
       "type": "table",
-      "title": "50명 요구와 위험 (계획)",
+      "title": "80명 요구와 위험 (계획)",
       "columns": [
         {
           "key": "area",
@@ -416,9 +416,9 @@
           "id": "n_elev",
           "status": "proposed",
           "area": "엘리베이터 슬롯",
-          "risk": "현재 13대 < 16명. 50명은 슬롯 60 필요.",
-          "plan": "C2안 승강장 20곳x3.",
-          "source": "docs/research/06_missed_items.md:N10"
+          "risk": "승강기는 팀당 1기라 판의 봇 수가 승강기 수×팀 크기−사람으로 잘린다(ADR-260, MatchDirector 경고). 솔로 80명이면 80칸이 필요.",
+          "plan": "현재 맵 승강기 수와 대조(서버 로그 '[MatchDirector] ... capped' 확인).",
+          "source": "docs/DECISIONS.md ADR-260; Assets/_Project/Scripts/Net/MatchDirector.cs:307-309"
         },
         {
           "id": "n_cheat",
@@ -433,8 +433,8 @@
           "status": "proposed",
           "area": "틱·대역폭 예산",
           "risk": "목표값이 없다(MASTER_PLAN '근거 없음').",
-          "plan": "플레이어당 다운 약 10~15 KB/s, 업 약 2~3 KB/s를 1차 목표로 측정 뒤 확정(제안, 근거 없음).",
-          "source": "docs/research/MASTER_PLAN.md:66"
+          "plan": "제안 한도 클라당 ≤15 KB/s·서버 송신 ≤6 Mbit/s(`tools/perf/perf_verdict.py`로 판정). 80인 실측 뒤 확정.",
+          "source": "docs/research/server_perf_budget_proposal.md"
         },
         {
           "id": "n_phys",
@@ -494,7 +494,7 @@
           "id": "t_50",
           "status": "proposed",
           "name": "헤드리스 부하 시험(제안)",
-          "desc": "헤드리스 클라이언트 N개(예 49+1)로 서버 CPU·대역폭·틱 지연 측정. CI에는 최소 버전(예 8+봇)만.",
+          "desc": "헤드리스 클라이언트 N개(예 63+1)로 서버 CPU·대역폭·틱 지연 측정. 봇만 80인 측정은 `--perf p0|p3 --participants 80 --bots 79`(docs/research/bot_perf_b1_2026-11-17.md). CI에는 최소 버전(예 8+봇)만.",
           "source": "docs/research/MASTER_PLAN.md:68"
         },
         {
@@ -512,9 +512,9 @@
       "items": [
         {
           "id": "nd_cap",
-          "q": "50명 서버 구조",
+          "q": "80명 서버 구조",
           "options": [
-            "프로세스 1개에 50명 방",
+            "프로세스 1개에 80명 방",
             "프로세스 여러 개(방당 1개)로 확장"
           ],
           "recommended": "프로세스 방당 1개",
@@ -533,7 +533,7 @@
           "recommended": "30 Hz 유지",
           "status": "confirmed",
           "answer": "30 Hz 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
-          "why": "50명에서 서버 비용을 줄이려면 올리지 않는다. 사격 판정은 LagComp 보정이 있으므로 30 Hz로 충분하다고 본다(추정, 측정 필요)."
+          "why": "80명에서 서버 비용을 줄이려면 올리지 않는다. 사격 판정은 LagComp 보정이 있으므로 30 Hz로 충분하다고 본다(추정, 측정 필요)."
         },
         {
           "id": "nd_budget",
@@ -545,7 +545,7 @@
           "recommended": "측정 뒤 결정",
           "status": "open",
           "answer": "",
-          "why": "근거 없는 수치를 고정하지 않는다(MASTER_PLAN §3-5)."
+          "why": "근거 없는 수치를 고정하지 않는다(MASTER_PLAN §3-5). 제안: 클라당 ≤15 KB/s(server_perf_budget_proposal.md). 실측: 16인+봇 20에서 8.5 KB/s. 80인 실측 뒤 사람이 확정(ADR-176)."
         },
         {
           "id": "nd_door",
