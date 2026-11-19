@@ -106,14 +106,16 @@ namespace Game.Net
             return text;
         }
 
-        // The font's own material draws with ZTest Always (GUI/Text Shader), so the board text showed through the dome from outside.
+        // The font's own material (GUI/Text Shader) draws with ZTest Always, so the board text showed through the dome, the tower and the
+        // cage; a material property does not change that, so the text gets a small depth-tested shader of its own (Resources/Shaders).
         static Material _boardMaterial;
         static Material BoardMaterial(Font font)
         {
             if (_boardMaterial == null)
             {
-                _boardMaterial = new Material(font.material) { name = "WaitingBoardText" };
-                _boardMaterial.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.LessEqual);
+                var shader = Resources.Load<Shader>("Shaders/WaitingBoardText");
+                _boardMaterial = shader != null ? new Material(shader) { mainTexture = font.material.mainTexture } : new Material(font.material);
+                _boardMaterial.name = "WaitingBoardText";
             }
             return _boardMaterial;
         }

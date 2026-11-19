@@ -96,11 +96,13 @@ namespace Game.Tests
         public IEnumerator Lift_GoesUpFast_AndBackDown_WithoutAGuardCorrection()
         {
             var me = Combatant.LocalPlayer;
-            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();   // as on the dedicated server
             float hp = me.Hp.Value, deck = DeckY;
-            int corrections = MoveGuard.Corrections;
             var lift = WaitingIsland.Lift;
             PlayerController.Local.Teleport(Local(lift.x, deck + 0.1f, lift.z));
+            yield return null;
+            // The guard as on the dedicated server, added after the test's own teleport (a host does not announce it).
+            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();
+            int corrections = MoveGuard.Corrections;
             float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 6f, left = -1f, arrived = -1f;
             while (arrived < 0f)
             {
@@ -124,22 +126,23 @@ namespace Game.Tests
         public IEnumerator Jump_FromTheBoard_FallsBouncesAndLandsOnThePad_Unhurt()
         {
             var me = Combatant.LocalPlayer;
-            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();
             float hp = me.Hp.Value, deck = DeckY;
-            int corrections = MoveGuard.Corrections;
             var pad = WaitingIsland.BungeePad;
             PlayerController.Local.Teleport(Local(pad.x, deck + BungeeCurve.Top + 0.1f, pad.z));
-            float low = float.MaxValue, end = Time.realtimeSinceStartup + 2f + BungeeCurve.Duration + 3f;
+            yield return null;
+            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();
+            int corrections = MoveGuard.Corrections;
+            float low = float.MaxValue, end = Time.realtimeSinceStartup + 2f + BungeeCurve.Duration + 3f, fellAt = -1f;
             bool fell = false;
             while (Time.realtimeSinceStartup < end)
             {
                 float h = me.transform.position.y - deck;
-                low = Mathf.Min(low, h);
-                if (h < BungeeCurve.Top - 10f) fell = true;
+                if (h < BungeeCurve.Top - 10f && !fell) { fell = true; fellAt = Time.realtimeSinceStartup; }
+                if (fell && Time.realtimeSinceStartup - fellAt < BungeeCurve.BouncePeriod) low = Mathf.Min(low, h);   // the first dip, before the lowering
                 yield return null;
             }
             Assert.IsTrue(fell, "jumped after standing on the board");
-            Assert.That(low, Is.InRange(1.5f, 6f), "the lowest point is a few metres over the pad (the lowering ends on it)");
+            Assert.That(low, Is.InRange(1.5f, 6f), "the lowest point of the bounce is a few metres over the pad");
             var p = me.transform.position;
             Assert.Less(p.y - deck, 1.5f, "back on the deck");
             Assert.Less(Vector2.Distance(new Vector2(p.x, p.z), new Vector2(WaitingIsland.WorldX(pad.x), WaitingIsland.WorldZ(pad.z))), 2f, "on the landing pad");

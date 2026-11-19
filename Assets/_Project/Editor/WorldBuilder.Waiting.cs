@@ -86,7 +86,13 @@ public static partial class WorldBuilder
                 var rot = Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f) * Quaternion.Euler(slope, 0f, 0f);   // outwards goes down: the panel rises towards the middle
                 dome.Add(new Vector3(Mathf.Cos(am) * rm, hm, Mathf.Sin(am) * rm), new Vector3(chord, 0.35f, len + 0.4f), rot);
             }
-            frame.AddCylinder(new Vector3(0f, h1 - 0.15f, 0f), Mathf.Max(0.6f, rr1), 0.3f, 32);
+            // A steel hoop under the ring's upper edge: a ring of short beams (a capped cylinder here was a solid disc over the hall).
+            if (rr1 > 1f)
+                for (int i = 0; i < n; i++)
+                {
+                    float am = (i + 0.5f) * Mathf.PI * 2f / n, chord = 2f * rr1 * Mathf.Sin(Mathf.PI / n) + 0.1f;
+                    frame.Add(new Vector3(Mathf.Cos(am) * (rr1 - 0.3f), h1 - 0.35f, Mathf.Sin(am) * (rr1 - 0.3f)), new Vector3(chord, 0.3f, 0.3f), Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f));
+                }
         }
 
         // Bungee tower (ADR-386/387): four legs and cross bracing up to a railed platform at BungeeCurve.Top, an open steel-cage lift
@@ -105,7 +111,8 @@ public static partial class WorldBuilder
             {
                 bool alongX = side < 2; float s = (side & 1) == 0 ? -tr : tr;
                 frame.Add(alongX ? new Vector3(t.x, y, t.z + s) : new Vector3(t.x + s, y, t.z), alongX ? new Vector3(tr * 2f, 0.25f, 0.25f) : new Vector3(0.25f, 0.25f, tr * 2f));
-                // a diagonal in each bay: the tower reads as a lattice from below
+                // a diagonal in each bay below the platform: the tower reads as a lattice from below
+                if (y + 5f > th - 0.5f) continue;
                 float a = Mathf.Atan2(5f, tr * 2f) * Mathf.Rad2Deg, len = Mathf.Sqrt(25f + tr * tr * 4f);
                 frame.Add(alongX ? new Vector3(t.x, y + 2.5f, t.z + s) : new Vector3(t.x + s, y + 2.5f, t.z),
                     alongX ? new Vector3(len, 0.18f, 0.18f) : new Vector3(0.18f, 0.18f, len), alongX ? Quaternion.Euler(0f, 0f, a) : Quaternion.Euler(a, 0f, 0f));
@@ -238,12 +245,12 @@ public static partial class WorldBuilder
         for (int i = 0; i < 4; i++) { float sx = (i & 1) == 0 ? -h : h, sz = (i & 2) == 0 ? -h : h; bars.Add(new Vector3(sx, H * 0.5f, sz), new Vector3(0.12f, H, 0.12f)); }
         foreach (float sx in new[] { -h, h })                     // east and west sides: bars, open between
         {
-            bars.Add(new Vector3(sx, 1.05f, 0f), new Vector3(0.06f, 0.06f, h * 2f)); bars.Add(new Vector3(sx, 0.3f, 0f), new Vector3(0.06f, 0.06f, h * 2f));
-            for (float z = -h + 0.4f; z < h; z += 0.4f) bars.Add(new Vector3(sx, H * 0.5f, z), new Vector3(0.04f, H, 0.04f));
+            bars.Add(new Vector3(sx, 1.05f, 0f), new Vector3(0.05f, 0.05f, h * 2f));
+            for (float z = -h + 0.7f; z < h - 0.1f; z += 0.7f) bars.Add(new Vector3(sx, H * 0.5f, z), new Vector3(0.03f, H, 0.03f));   // thin and wide apart: the view is the point
         }
         lamp.Add(new Vector3(0f, H - 0.12f, 0f), new Vector3(1.2f, 0.06f, 0.3f));
         foreach (float sz in new[] { -h, h })                     // the gates north (ground side) and south (platform side)
-            for (float x = -h + 0.25f; x < h; x += 0.25f) doors.Add(new Vector3(x, H * 0.5f, sz), new Vector3(0.04f, H - 0.2f, 0.04f));
+            for (float x = -h + 0.56f; x < h - 0.1f; x += 0.56f) doors.Add(new Vector3(x, H * 0.5f, sz), new Vector3(0.03f, H - 0.2f, 0.03f));
         AddWaitingMesh(car, store, "Bars", bars, steel, false); AddWaitingMesh(car, store, "Floor", floor, planks, false); AddWaitingMesh(car, store, "Lamp", lamp, accent, false);
         var doorRoot = Child(car, "Doors");
         AddWaitingMesh(doorRoot, store, "Gates", doors, steel, false);

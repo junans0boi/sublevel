@@ -24,12 +24,16 @@ public static class WaitingIslandCapture
             var botPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/M1/Bot_MixamoAdam.prefab");
             var spots = WaitingIsland.SpawnPoints();
             var crowd = new GameObject("CaptureCrowd");
+            var idle = CharacterAnimClips.LoadClip("U_Idle_Loop");
             if (botPrefab != null)
                 for (int i = 0; i < 14; i++)
                 {
                     var spot = spots[i * 3 % spots.Count];
                     var bot = (GameObject)PrefabUtility.InstantiatePrefab(botPrefab, crowd.transform);
                     bot.transform.SetPositionAndRotation(new Vector3(spot.x, y + 0.1f, spot.z), Quaternion.Euler(0f, i * 53f, 0f));
+                    // The editor does not run the Animator: pose them with the unarmed idle the game plays (else a T-pose).
+                    var anim = bot.GetComponentInChildren<Animator>();
+                    if (idle != null && anim != null) idle.SampleAnimation(anim.gameObject, i * 0.37f % idle.length);
                 }
             Shot(cam, "island_outside", new Vector3(cx + 105f, y + 42f, cz + 105f), new Vector3(cx, y + 30f, cz));
             Shot(cam, "island_inside_board", new Vector3(cx, y + 1.7f, cz + 18f), new Vector3(cx, y + 7f, cz - 33f));
@@ -48,10 +52,10 @@ public static class WaitingIslandCapture
             Shot(cam, "bungee_tower_wide", new Vector3(L(-24f), y + 1.7f, Z(-14f)), new Vector3(L(tw.x), y + 28f, Z(tw.z)));
             Shot(cam, "bungee_lift_gate", new Vector3(L(lift.x - 2f), y + 1.7f, Z(lift.z + 7f)), new Vector3(L(lift.x), y + 1.6f, Z(lift.z)));
             if (car != null) { var cp = car.localPosition; cp.y = BungeeCurve.Top * 0.55f; car.localPosition = cp; car.Find("Doors")?.gameObject.SetActive(true); }
-            Shot(cam, "bungee_lift_rising", new Vector3(L(lift.x - 0.6f), y + BungeeCurve.Top * 0.55f + 1.7f, Z(lift.z + 0.6f)), new Vector3(L(-10f), y + 14f, Z(-8f)));
+            Shot(cam, "bungee_lift_rising", new Vector3(L(lift.x - 0.5f), y + BungeeCurve.Top * 0.55f + 1.7f, Z(lift.z + 0.3f)), new Vector3(L(-12f), y + 12f, Z(24f)));   // away from the tower: the hall through the cage
             if (car != null) { var cp = car.localPosition; cp.y = BungeeCurve.Top; car.localPosition = cp; car.Find("Doors")?.gameObject.SetActive(false); }
             Shot(cam, "bungee_top_platform", new Vector3(L(lift.x + 0.5f), top + 1.7f, Z(lift.z - 1f)), new Vector3(L(pad.x), top + 0.5f, Z(pad.z)));
-            Shot(cam, "bungee_jump_board", new Vector3(L(pad.x + 2.8f), top + 1.7f, Z(pad.z)), new Vector3(L(pad.x - 2f), y, Z(pad.z + 0.5f)));
+            Shot(cam, "bungee_jump_board", new Vector3(L(pad.x - 0.7f), top + 1.6f, Z(pad.z)), new Vector3(L(pad.x - 16f), y, Z(pad.z + 3f)));   // at the board's edge: the drop, the pad and the hall ahead
             Shot(cam, "bungee_falling", new Vector3(L(pad.x), y + BungeeCurve.Top - 22f, Z(pad.z + 0.3f)), new Vector3(L(pad.x + 0.5f), y, Z(pad.z)));
             Shot(cam, "bungee_bottom", new Vector3(L(pad.x), y + BungeeCurve.Bottom + 0.3f, Z(pad.z)), new Vector3(L(pad.x + 12f), y + 0.5f, Z(pad.z + 6f)));
             Shot(cam, "bungee_up_from_pad", new Vector3(L(pad.x + 4f), y + 1.7f, Z(pad.z + 3f)), new Vector3(L(pad.x), top, Z(pad.z)));
