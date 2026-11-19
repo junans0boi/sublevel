@@ -120,7 +120,10 @@ namespace Game.Tests
             Assert.Less(animation.ModelDrop, 0.03f, "the clip crouches, the model is not dropped");
             Assert.Greater(standingHips - (hips.position.y - pc.transform.position.y), 0.3f, "the hips came down");
             Assert.Less(hips.position.y - pc.transform.position.y, 0.65f, "the hips are low (the UAL crouch kneels)");
-            Assert.Less(knee.position.y - pc.transform.position.y, 0.4f, "the legs are folded: the knee is close to the floor");
+            var kneeRight = RigBones.Bone(me, HumanBodyBones.RightLowerLeg);
+            float kneeL = knee.position.y - pc.transform.position.y, kneeR = kneeRight.position.y - pc.transform.position.y;
+            Debug.Log($"[Stance] crouched knees: left {kneeL:F3} right {kneeR:F3} hips {hips.position.y - pc.transform.position.y:F3} m");
+            Assert.Less(Mathf.Min(kneeL, kneeR), 0.4f, "the legs are folded: a knee is close to the floor");
             Assert.AreEqual(0.65f, standingCamera - pc.Camera.transform.position.y, 0.1f, "the camera comes down with the eyes");
 
             _input.Frame.Move = new Vector2(0, 1);

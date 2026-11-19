@@ -14,8 +14,14 @@ namespace Game.Gameplay
     public class MeleeVisual : MonoBehaviour
     {
         // Camera space: x right, y up, z forward. The grip's spot and the model's turn when nothing is swung.
-        [SerializeField] Vector3 _restPosition = new Vector3(0.2f, -0.24f, 0.42f);
-        [SerializeField] Vector3 _restEuler = new Vector3(15f, -12f, 0f);
+        // Low on the right with the head tipped forward (#219: held upright at the face, the blade filled half the view as a flat plate).
+        [SerializeField] Vector3 _restPosition = new Vector3(0.28f, -0.2f, 0.45f);
+        [SerializeField] Vector3 _restEuler = new Vector3(55f, 32f, 0f);
+        // At rest the blade is also turned about its own length so its edge, not its flat, faces the eye (the flat read as a plate).
+        [SerializeField] float _restSpinDeg = 45f;
+        // The body turns with a swing (#219): weapon and arms are carried round a point at the chest by the third-person torso twist and pitch.
+        [SerializeField] Vector3 _chestPivot = new Vector3(0f, -0.45f, 0f);
+        [SerializeField] float _torsoShare = 1f;
         // Slash: sideways travel per unit of sweep (x) and lift / push forward at full swing (y, z); the blade is
         // tipped forward and rolled over toward level while swinging, and turned with the sweep.
         [SerializeField] Vector3 _slashTravel = new Vector3(0.2f, 0.1f, 0.08f);
@@ -88,11 +94,14 @@ namespace Game.Gameplay
                 euler = new Vector3(Mathf.Lerp(_restEuler.x, _slashPitchDeg, w), _restEuler.y + _slashEdgeYawDeg - pose.ArmSweepDeg * _slashYawPerSweep,
                     Mathf.Lerp(_restEuler.z, _slashRollDeg, w));
             }
+            // The torso's turn this frame (positive twist = to the right, positive pitch = forward), about the chest.
+            var torso = Quaternion.AngleAxis(pose.TorsoTwistDeg * _torsoShare * w, Vector3.up) * Quaternion.AngleAxis(pose.TorsoPitchDeg * _torsoShare * w, Vector3.right);
+            position = _chestPivot + torso * (position - _chestPivot);
             var t = model.transform;
-            t.rotation = cam.rotation * Quaternion.Euler(euler);
+            t.rotation = cam.rotation * torso * Quaternion.Euler(euler) * Quaternion.AngleAxis(_restSpinDeg * (1f - w), Vector3.up);
             t.position = cam.position + cam.rotation * position;
             PlacedAtEye = true;
-            _weaponVisual.PlaceMeleeArms(t, id);
+            _weaponVisual.PlaceMeleeArms(t, id, w, cam.rotation * torso);
         }
     }
 }
