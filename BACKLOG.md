@@ -12,3 +12,4 @@
 - UI: 게임 착용 장비(ArmorVisual·BackpackVisual, LootMeshes)가 반구·상자 모양이라 캐릭터와 어울리지 않음 — 문제 목록·제안 `docs/tracks/ui_GEAR_VISUAL_NOTES.md`
 - 차량: 오토바이 R0·고개 근처 가중 배치(ADR-198) 미구현
 - [애니] 스윙 발 클리어런스 IK: 계단·경사 걷기에서 스윙 발목이 단 모서리·경사면 안으로 들어감(15모델 5~17cm, FootPlantSurveyTests), 월드 Terrain 위 직접 측정 (ADR-262)
+- 훈련장: TrainingRange.unity·ZoneD.unity의 Match에 없는 스크립트(guid 5381414d…) — 실행 시 'referenced script is missing' 경고
