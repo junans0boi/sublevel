@@ -79,7 +79,7 @@ namespace Game.Tests
             new Vector2(to.x - from.x, to.z - from.z).magnitude / seconds;
 
         [UnityTest]
-        public IEnumerator AutoRun_WalksForwardWithNoKeyHeld_SprintsWithShift_AndStopsOnS()
+        public IEnumerator AutoRun_SprintsForwardWithNoKeyHeld_AndStopsOnS()
         {
             yield return LoadTestBox();
             var pc = PlayerController.Local;
@@ -92,13 +92,9 @@ namespace Game.Tests
             float t0 = Time.time;
             yield return new WaitForSeconds(0.5f);
             float speed = PlanarSpeedOver(p0, pc.transform.position, Time.time - t0);
-            Assert.AreEqual(4.7f, speed, 0.5f, "walking speed with empty hands, no key held");
+            Assert.Greater(speed, 5.5f, "sprint speed with no key held (ADR-350)");
+            Assert.IsTrue(pc.Sprinting, "auto-run is a sprint");
             Assert.Greater(pc.transform.position.z - p0.z, 2f, "straight ahead (north)");
-
-            _input.Frame.Sprint = true;
-            yield return new WaitForSeconds(0.2f);
-            Assert.IsTrue(pc.Sprinting, "Shift sprints during auto-run");
-            _input.Frame.Sprint = false;
 
             // A press of S ends it; let go, the character stands.
             _input.Frame.Move = new Vector2(0f, -1f);
@@ -124,34 +120,6 @@ namespace Game.Tests
             yield return null;
             Assert.IsFalse(pc.AutoRunning, "the pause menu cancels auto-run");
             UiFocus.Close();
-        }
-
-        // #177: = pressed during a sprint keeps the sprint after Shift and W are let go.
-        [UnityTest]
-        public IEnumerator AutoRun_StartedDuringASprint_KeepsSprintSpeed()
-        {
-            yield return LoadTestBox();
-            var pc = PlayerController.Local;
-            yield return StandAt(pc, new Vector3(-6f, 0.1f, -27f));
-
-            _input.Frame.Move = new Vector2(0f, 1f);
-            _input.Frame.Sprint = true;
-            yield return WaitUntil(() => pc.Sprinting, 1f, "sprinting");
-            _input.Frame.AutoRun = true;
-            yield return WaitUntil(() => pc.AutoRunning, 1f, "auto-run on");
-            _input.Frame.Move = Vector2.zero;
-            _input.Frame.Sprint = false;
-            yield return new WaitForSeconds(0.4f);
-            Assert.IsTrue(pc.Sprinting, "auto-run started in a sprint keeps sprinting");
-            var p0 = pc.transform.position;
-            float t0 = Time.time;
-            yield return new WaitForSeconds(0.4f);
-            Assert.Greater(PlanarSpeedOver(p0, pc.transform.position, Time.time - t0), 5.5f, "sprint speed, not the 4.7 m/s run");
-
-            _input.Frame.AutoRun = true; // = again: off
-            yield return WaitUntil(() => !pc.AutoRunning, 1f, "auto-run off");
-            yield return new WaitForSeconds(0.2f);
-            Assert.IsFalse(pc.Sprinting);
         }
 
         [UnityTest]

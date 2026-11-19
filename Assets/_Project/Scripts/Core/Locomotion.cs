@@ -88,7 +88,7 @@ namespace Game.Core
         public float LowTwistDeg = 15f, AimTwistDeg = 25f; // torso turned right (left shoulder forward)
         public float MoveFullSpeed = 4f;   // m/s at which the moving low ready is fully shown
         // Body: torso pitched forward with speed (more sprinting), rolled into a sidestep, leaning into a start.
-        public float RunTorsoPitchDeg = 5f, SprintTorsoPitchDeg = 17f;
+        public float RunTorsoPitchDeg = 5f, SprintTorsoPitchDeg = 12f;
         public float StrafeRollDegPerMps = 1.2f, MaxStrafeRollDeg = 6f;
         public float AccelPitchDegPerMps2 = 0.4f, MaxAccelPitchDeg = 6f;
         // Weapon bob over a stride (two steps per locomotion cycle): down at each step, side to side once per cycle.
@@ -96,7 +96,7 @@ namespace Game.Core
         // A shot kicks the weapon back and the muzzle up for a moment.
         public float KickBackMeters = 0.05f, KickPitchDeg = 5f, KickSeconds = 0.12f;
         // Sprinting: how much of the left hand's grip is let go (0 keeps it on the handguard, 1 swings free) (#222).
-        public float SprintSupportRelease = 0.9f;
+        public float SprintSupportRelease = 0f; // player report 2026-11-19: the freed left arm stuck out ahead with an open hand; both hands stay on the gun
 
         // A hand gun in both hands (#218): closer in and higher than a rifle, muzzle only slightly down at low ready.
         public static RifleHoldRules Pistol() => new RifleHoldRules
@@ -109,7 +109,7 @@ namespace Game.Core
             AimGripX = -0.03f, AimGripY = 0.04f, AimGripZ = 0.32f,
             LowTwistDeg = 8f, AimTwistDeg = 12f,
             BobDownMeters = 0.015f, BobSideMeters = 0.01f, BobRollDeg = 1.5f,
-            KickBackMeters = 0.03f, KickPitchDeg = 8f, SprintSupportRelease = 0.5f,
+            KickBackMeters = 0.03f, KickPitchDeg = 8f, SprintSupportRelease = 0f,
         };
     }
 
