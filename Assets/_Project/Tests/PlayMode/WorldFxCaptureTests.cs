@@ -94,7 +94,11 @@ namespace Game.Tests
             PlayerController.InputOverride = input;
             SceneManager.LoadScene("World");
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 60f, "the local player in World");
-            yield return new WaitForSeconds(3f);
+            // The elevator ride: wait for its doors to open (bots spawn with the players).
+            float doors = Time.realtimeSinceStartup + 60f;
+            while (!SpawnProtection.InputBlocked && Time.realtimeSinceStartup < doors) yield return null;
+            yield return WaitUntil(() => !SpawnProtection.InputBlocked, 60f, "the elevator doors to open");
+            yield return new WaitForSeconds(1f);
             var pc = PlayerController.Local;
             var me = Combatant.LocalPlayer;
             me.ServerDamageFilter = _ => 0f;
@@ -124,19 +128,22 @@ namespace Game.Tests
             float best = float.MaxValue;
             foreach (var c in Combatant.All)
             {
-                if (c == null || c.IsPlayer || c.Dead.Value || c.GetComponentInChildren<CombatantRagdoll>() == null) continue;
+                if (c == null || c.IsPlayer || c.Dead.Value || c.GetComponentInChildren<CombatantRagdoll>(true) == null) continue;
                 float dd = (c.transform.position - start).sqrMagnitude;
                 if (dd < best) { best = dd; victim = c; }
             }
-            Assert.IsNotNull(victim, "a living bot with a ragdoll in World");
+            int bots = 0; foreach (var c in Combatant.All) if (c != null && !c.IsPlayer) bots++;
+            Assert.IsNotNull(victim, $"a living bot with a ragdoll in World ({bots} bots)");
             foreach (var part in victim.GetComponents<MonoBehaviour>())
                 if (part.GetType().Name == "BotController") part.enabled = false;
             victim.ServerDamageFilter = _ => 0f;
+            if (victim.TryGetComponent<SpawnProtection>(out var guard)) guard.ServerEnd(); // fresh out of the elevator: shots would not land yet
             var standAt = Ground(wall - dir * 1.6f);
             victim.transform.SetPositionAndRotation(standAt, Quaternion.LookRotation(-dir));
             pc.Teleport(Ground(standAt - dir * 7f) + Vector3.up * 0.1f);
             Physics.SyncTransforms();
             yield return new WaitForSeconds(1f);
+            Debug.Log($"[WorldFxCapture] victim {victim.name} at {victim.transform.position} (placed {standAt}), player {me.transform.position}");
 
             var cam = new GameObject("WorldFxCam").AddComponent<Camera>();
             cam.enabled = false;
@@ -150,24 +157,30 @@ namespace Game.Tests
                 Assert.IsTrue(me.ServerFire(at - me.EyePosition), "fired at " + at);
             }
             var chest = victim.transform.position + Vector3.up * 1.15f;
+            if (Physics.Raycast(me.EyePosition, chest - me.EyePosition, out var probe, 30f, ~0, QueryTriggerInteraction.Ignore))
+                Debug.Log($"[WorldFxCapture] eye {me.EyePosition} -> chest {chest}: first hit {probe.collider.name} (layer {probe.collider.gameObject.layer}) at {probe.point}, combatant {probe.collider.GetComponentInParent<Combatant>()}");
             int stains = ImpactFx.BloodStains, bursts = ImpactFx.DebrisBursts;
             for (int i = 0; i < 4; i++) yield return Fire(chest + new Vector3(0f, UnityEngine.Random.Range(-0.25f, 0.3f), 0f) + side * UnityEngine.Random.Range(-0.1f, 0.1f));
             for (int i = 0; i < 5; i++) yield return Fire(wall + side * UnityEngine.Random.Range(0.7f, 1.6f) * (i % 2 == 0 ? 1f : -1f) + Vector3.up * UnityEngine.Random.Range(-0.6f, 0.6f));
             yield return new WaitForSeconds(0.8f);
             Debug.Log($"[WorldFxCapture] blood stains +{ImpactFx.BloodStains - stains}, debris bursts +{ImpactFx.DebrisBursts - bursts}");
 
-            var rig = victim.GetComponentInChildren<CombatantRagdoll>();
+            var rig = victim.GetComponentInChildren<CombatantRagdoll>(true);
             victim.ServerDamageFilter = null;
             victim.ServerTakeDamage(Mathf.Max(0f, victim.Hp.Value - 1f));
             yield return null;
             yield return Fire(victim.transform.position + Vector3.up * 1.15f);
             yield return WaitUntil(() => victim.Dead.Value, 3f, "the shot to kill");
             yield return WaitUntil(() => rig.Simulating, 2f, "the ragdoll");
-            yield return new WaitForSeconds(0.25f);
-            var sceneAt = standAt - dir * 3.2f + side * 2.4f + Vector3.up * 1.8f;
-            Save(cam, P("w1_shot_blood_ragdoll_falling.png"), sceneAt, standAt + Vector3.up * 0.7f, 55f);
+            yield return new WaitForSeconds(0.3f);
+            var sceneAt = standAt - dir * 3.4f + side * 2.2f + Vector3.up * 1.7f;
+            Save(cam, P("w1_shot_blood_ragdoll_falling.png"), sceneAt, rig.Hips.position, 50f);
             yield return new WaitForSeconds(2.5f);
-            Save(cam, P("w1_shot_blood_ragdoll.png"), sceneAt, standAt + Vector3.up * 0.5f, 55f);
+            var body = rig.Hips.position;
+            Save(cam, P("w1_shot_blood_ragdoll.png"), sceneAt, body + dir * 0.6f, 55f);
+            Save(cam, P("w1_ragdoll_close.png"), body - dir * 1.8f + side * 1.2f + Vector3.up * 1.6f, body, 50f);
+            var head = victim.GetComponentInChildren<Animator>(true);
+            Debug.Log($"[WorldFxCapture] victim animator enabled {(head != null && head.enabled)}, head bone y {(head != null && head.isHuman ? head.GetBoneTransform(HumanBodyBones.Head).position.y - standAt.y : -1f):F2} above the feet");
             Debug.Log($"[WorldFxCapture] ragdoll simulating {rig.Simulating} frozen {rig.Frozen} hips {rig.Hips.position} diedAt {standAt}");
 
             // ---- 2. spent cases ----
@@ -181,7 +194,10 @@ namespace Game.Tests
             Save(cam, P("w2_casings_flight.png"), gunAt + right * 1.6f - pc.transform.forward * 0.4f + Vector3.up * 0.2f, gunAt + right * 0.5f, 50f);
             yield return new WaitForSeconds(1.2f);
             var feet = me.transform.position;
-            Save(cam, P("w2_casings_ground.png"), feet + right * 1.2f + Vector3.up * 1.1f - pc.transform.forward * 0.6f, feet + right * 0.9f, 50f);
+            bool resting = CasingPool.TryRestingCenter(out var restAt);
+            if (!resting) restAt = feet + right * 1.2f;
+            Save(cam, P("w2_casings_ground.png"), restAt + right * 0.9f + Vector3.up * 1.0f - pc.transform.forward * 0.5f, restAt, 45f);
+            Debug.Log($"[WorldFxCapture] resting cases {resting} at {restAt}");
             Debug.Log($"[WorldFxCapture] cases ejected +{me.GetComponent<CasingFx>().Ejected - ejected}, live {CasingPool.Live}");
             Assert.Greater(me.GetComponent<CasingFx>().Ejected, ejected, "the rifle threw cases");
 
