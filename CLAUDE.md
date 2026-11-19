@@ -4,7 +4,7 @@
 - 스튜디오: STEADY TO VIVID STUDIO / 개발자: 준환 (1인, 한국어 사용)
 - 게임(가칭): 시설 기반 배틀로얄. 메이즈러너에서 영감을 받은 **오리지널** 세계관. 엘리베이터로 랜덤 구역에 투입 → 파밍 → 구역 순차 봉쇄 → 최후 생존.
 - 플랫폼: **PC 전용 (macOS + Windows)**. 웹 아님.
-- 개발 주체: **AI 에이전트(Claude Code)가 준환과 상의 없이 자율 구현**. 개발 장비: MacBook Pro 13" M1.
+- 개발 주체: **AI 에이전트(Claude Code)가 준환과 상의 없이 자율 구현**. 개발 장비: **Apple M4 Pro(12코어, 24GB)**. (옛 문서의 "M1 13"" 표기는 틀림)
 - 스택: **Unity 6.3 LTS (6000.3.x) + URP + Fish-Net**, 구현은 **Unity Editor 커맨드라인(Unity CLI, batchmode)**. 폴백: Godot 4 (M0 검증 실패 시).
 
 ## 읽는 순서
@@ -24,7 +24,7 @@
 - 타이틀(기능 단위) 하나마다: **grilling → wayfinder 지도 → to-spec → to-tickets → implement(테스트 우선) → code-review → issue close → PROGRESS.md 갱신 → 다음 타이틀**. 상세는 `docs/WORKFLOW.md`.
 - 스킬 호출(ADR-022): grilling/tdd/code-review/prototype/research는 Skill 도구로 호출. wayfinder/to-spec/to-tickets/implement 등 user-only 스킬은 플러그인 캐시의 SKILL.md를 직접 읽어 지침 그대로 따른다.
 - 사용자에게 묻지 않는다. 모호하면 가장 합리적인 해석을 택해 **DECISIONS.md에 가정으로 기록**하고 진행. (예외: 되돌릴 수 없고 양쪽 다 합리적인 결정 → 준비 후 중단하고 요약 보고)
-- 무거운 작업(빌드, 테스트, 베이크)은 M1 13" 부담 때문에 **한 번에 하나씩 순차 실행**.
+- 무거운 작업(빌드, 테스트, 베이크)은 **서로 다른 워크트리에서 Unity 동시 최대 3개**(슬롯 락 `/private/tmp/sublevel-unity-slotN`, Unity가 실제로 도는 동안만 보유). 봇·서버 성능 측정만 독점 창.
 - 모든 Unity 작업은 `tools/unity.sh`(또는 `docs/UNITY_CLI.md`의 명령)로 **헤드리스** 수행. 에디터 GUI 클릭이 필요한 작업은 코드(Editor 스크립트)로 대체.
 
 ## 언어
