@@ -103,6 +103,7 @@ namespace Game.Gameplay
         float _landedAt = float.NegativeInfinity;
         float _push, _tuck, _dip; // 0..1: take-off push, knees tucked up, landing absorbed
         float _drop;              // how far the model is lowered right now (m)
+        CombatantRagdoll _ragdoll; // missing on a prefab built before ADR-395: the death clip only
         CombatantStance _stance;  // missing on a prefab built before stances existed: never crouches
         float _legLength = FallbackLegLength;
         float _footFixTotal;      // how far GroundCrouchedFeet has the crouched model moved down (carried into next frame's placement)
@@ -194,6 +195,7 @@ namespace Game.Gameplay
                 if (slot >= 0) _bones[slot] = _jumpBones[i];
             }
             _stance = GetComponent<CombatantStance>();
+            _ragdoll = GetComponentInChildren<CombatantRagdoll>(true);
             FindHead();
             FindArms();
             if (_footLeft != null && _footRight != null)
@@ -260,6 +262,8 @@ namespace Game.Gameplay
         void UpdateBody()
         {
             if (_animator == null) return;
+            // A ragdoll owns the bones (ADR-395): the death state stays the logical one, nothing is posed.
+            if (_ragdoll != null && _ragdoll.Active) { _base = Death; return; }
             UpdateLod();
             bool dead = _combatant.Dead.Value;
             float hp = _combatant.Hp.Value;
@@ -515,7 +519,7 @@ namespace Game.Gameplay
         // After the animator has posed the skeleton: read the feet, then turn the torso and pose the jump on top.
         void LateUpdateBody()
         {
-            if (_animator == null) return;
+            if (_animator == null || (_ragdoll != null && _ragdoll.Active)) return;
             if (_footLeft != null && _footRight != null)
             {
                 // Heights as the clip has them: without the landing dip.
