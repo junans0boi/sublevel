@@ -233,6 +233,7 @@ public static class CharacterKit
         var go = RosterInstance(rosterId);
         go.name = "Visual";
         var def = go.GetComponent<CharacterDef>();
+        RagdollRigBuilder.Add(go, def); // in the bind pose, before any clip is sampled (ADR-395)
         var model = def.Animator.transform;
         var s = def.Sockets;
 

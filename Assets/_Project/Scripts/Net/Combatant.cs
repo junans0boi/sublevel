@@ -90,6 +90,22 @@ namespace Game.Net
         // Raised on every client for each projectile: (origin, end point).
         public event Action<Vector3, Vector3> ShotFired;
 
+        // Client only (ADR-395): the last hit this body took as this side saw it, for the ragdoll's push. Pellets of
+        // one shotgun shot (same moment) add up in LastHitCount. Nothing new travels: it is read off the shot/punch effects.
+        public Vector3 LastHitDirection { get; private set; }
+        public Vector3 LastHitPoint { get; private set; }
+        public float LastHitTime { get; private set; } = float.NegativeInfinity;
+        public int LastHitCount { get; private set; }
+
+        void NoteHit(Vector3 direction, Vector3 point)
+        {
+            if (Time.time - LastHitTime > 0.05f) { LastHitCount = 0; LastHitDirection = Vector3.zero; }
+            LastHitDirection += direction.sqrMagnitude > 1e-8f ? direction.normalized : Vector3.zero;
+            LastHitPoint = point;
+            LastHitTime = Time.time;
+            LastHitCount++;
+        }
+
         // The same projectile with what it ended on, for effects and hit confirmation. Raised right after ShotFired.
         public struct ShotResult
         {
@@ -886,6 +902,8 @@ namespace Game.Net
             if (!IsClientStarted) return;
             bool impact = (hit & ShotImpactBit) != 0;
             if (!impact) ShotFired?.Invoke(origin, end);
+            if (victim != null && (hit & ShotLaunchBit) == 0 && (hit & ShotHitMask) >= (int)ShotHit.Combatant)
+                victim.GetComponent<Combatant>()?.NoteHit(end - origin, end);
             if (ShotResolved == null) return;
             var shot = new ShotResult
             {
@@ -905,14 +923,18 @@ namespace Game.Net
         [ObserversRpc(RunLocally = true)]
         void RpcPunch(byte info, NetworkObject victim, int weaponId)
         {
-            if (!IsClientStarted || Punched == null) return;
+            if (!IsClientStarted) return;
+            var struck = victim != null ? victim.GetComponent<Combatant>() : null;
+            if (struck != null && ((info >> PunchHitShift) & PunchHitMask) >= (int)ShotHit.Combatant)
+                struck.NoteHit(struck.transform.position - transform.position, struck.transform.position + Vector3.up);
+            if (Punched == null) return;
             var punch = new PunchResult
             {
                 WeaponId = weaponId,
                 Right = (info & PunchRightBit) != 0,
                 Hit = (ShotHit)((info >> PunchHitShift) & PunchHitMask),
                 Zone = (HitZone)(info >> PunchZoneShift),
-                Victim = victim != null ? victim.GetComponent<Combatant>() : null,
+                Victim = struck,
             };
             Punched.Invoke(in punch);
         }
