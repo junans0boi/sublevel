@@ -377,13 +377,14 @@ namespace Game.Tests
             brainType.GetField("_keyDecision", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(brain, 1);
             Func<string, int> stat = n => (int)brainType.GetField(n, BindingFlags.Public | BindingFlags.Static).GetValue(null);
 
-            // Into the station; a key on the floor a step away.
+            // Into the station; a key on the car floor a step away. Inside the car: its doors stand 1.1 m ahead of the spawn and a
+            // station an earlier ride used has them shut, so a key beyond them is out of the bot's sight (BotController.Blocked).
             Assert.IsTrue(UnityEngine.AI.NavMesh.SamplePosition(sites[station].Spawn, out var onMesh, 2.5f, UnityEngine.AI.NavMesh.AllAreas));
             var agent = bot.GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent != null && agent.enabled) Assert.IsTrue(agent.Warp(onMesh.position));
             else bot.transform.position = onMesh.position;
             var fwd = Quaternion.Euler(0f, sites[station].YawDeg, 0f) * Vector3.forward;
-            MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Key, Amount = 1 }, onMesh.position + fwd * 1.2f + Vector3.up * 0.3f);
+            MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Key, Amount = 1 }, onMesh.position + fwd * 0.5f + Vector3.up * 0.3f);
             int insertsBefore = stat("KeyInsertOk"), ridesBefore = stat("KeyRides");
 
             yield return WaitUntil(() => holder.Keys.Value > 0 || stat("KeyInsertOk") > insertsBefore, 20f, "the bot to pick the key up");
