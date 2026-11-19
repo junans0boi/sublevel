@@ -46,7 +46,8 @@ namespace Game.Gameplay
             _ticket.Changed += () => StateChanged?.Invoke(State);
         }
 
-        public MatchQueueState State => new MatchQueueState { Open = _ticket.State == MatchTicketClient.StateKind.Queued, Started = _ticket.State == MatchTicketClient.StateKind.Matched };
+        // Matched only names the server to join; the match itself starts in that server's queue, so matching goes on (never Started here).
+        public MatchQueueState State => new MatchQueueState { Open = _ticket.State == MatchTicketClient.StateKind.Queued || _ticket.State == MatchTicketClient.StateKind.Matched };
         public bool Waiting => _ticket.State == MatchTicketClient.StateKind.Queued || _ticket.State == MatchTicketClient.StateKind.Matched;
         public string Note => _ticket.State == MatchTicketClient.StateKind.Idle ? null : _ticket.Text;
         public event Action<MatchQueueState> StateChanged;

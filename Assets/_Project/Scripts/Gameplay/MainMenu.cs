@@ -113,7 +113,8 @@ namespace Game.Gameplay
             {
                 LobbyNet.QueuePartyId = _social.Party != null ? _social.Party.id : 0;
                 _afterJoin = (size > 1 ? TeamMode.Squad : TeamMode.Solo, size);
-                _lobbyScreen.JoinServer(host, (ushort)port);
+                _quietJoin = true;
+                _lobbyScreen.JoinQuietly(host, (ushort)port);
             });
         }
 
@@ -333,10 +334,17 @@ namespace Game.Gameplay
         // otherwise it is the local start (solo against bots).
         LobbyNet _queueLobby;
         bool _backendAttached;
+        bool _quietJoin; // connected to the backend's server without the room panels: its failure is shown here
         void SyncQueue()
         {
             if (_lobbyPanel == null || _lobbyScreen == null) return;
             var lobby = _lobbyScreen.Lobby;
+            if (_quietJoin && lobby != null && lobby.Phase == LobbyNet.PhaseKind.Failed)
+            {
+                _quietJoin = false;
+                _afterJoin = null;
+                _lobbyPanel.MatchingFailed(lobby.FailureText);
+            }
             bool client = lobby != null && lobby.Phase == LobbyNet.PhaseKind.InLobby && !lobby.IsHost;
             if (client && _queueLobby != lobby)
             {

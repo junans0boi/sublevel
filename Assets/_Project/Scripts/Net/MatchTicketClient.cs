@@ -25,7 +25,7 @@ namespace Game.Net
         public event Action Changed;
         // A party member who did not start the match still has to join it: while Watching and idle, an existing ticket of the party is adopted.
         public bool Watching;
-        string _consumedId;
+        static string _consumedId; // static: the menu (and this client) is rebuilt after a match, the joined ticket must stay consumed
 
         public MatchTicketClient(IBackend backend) { _backend = backend; }
 
@@ -33,7 +33,15 @@ namespace Game.Net
         {
             if (State == StateKind.Queued || _busy) return;
             State = StateKind.Queued; Text = "매칭 요청 중…"; Host = null; _ticketId = null; Changed?.Invoke();
-            Run(_backend.CreateTicket(mode), r => Apply(r), now);
+            Run(_backend.CreateTicket(mode), r => ApplyCreate(r, now), now);
+        }
+
+        // Already holding a ticket (the last match was never closed at the backend: a server without BACKEND_BASE_URL never reports it):
+        // carry on with that ticket, whose server is the one to join, instead of failing every start until the backend times it out.
+        void ApplyCreate(ApiResult<TicketDto> r, double now)
+        {
+            if (!r.Ok && r.Error == "already_queued" && State == StateKind.Queued) { Run(_backend.CurrentTicket(), c => Apply(c.Ok ? c : r), now); return; }
+            Apply(r);
         }
 
         public void Cancel(double now)
@@ -42,6 +50,8 @@ namespace Game.Net
             State = StateKind.Idle; Text = ""; _ticketId = null; Changed?.Invoke();
             if (id != null) _backend.CancelTicket(id); // best effort: the backend also expires it after 45s without polling
         }
+
+        public static void ForgetConsumed() => _consumedId = null; // tests
 
         // The joined match was handled: back to idle without telling the backend; its ticket is not adopted again.
         public void Consume() { _consumedId = _ticketId; _ticketId = null; State = StateKind.Idle; Text = ""; Changed?.Invoke(); }

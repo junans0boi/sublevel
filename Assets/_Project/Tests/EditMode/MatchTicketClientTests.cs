@@ -31,6 +31,8 @@ namespace Game.Tests
             public Task<ApiResult<string>> ServerToken() => Task.FromResult(ApiResult<string>.Success("t"));
         }
 
+        [SetUp] public void Fresh() => MatchTicketClient.ForgetConsumed();
+
         static ApiResult<TicketDto> Queued(string reason = "", int pos = 0, int fill = 10) => ApiResult<TicketDto>.Success(new TicketDto { id = "t-1", status = "queued", queue = new QueueDto { reason = reason, position = pos, fill_in_s = fill, players = 2 } });
         static ApiResult<TicketDto> Matched() => ApiResult<TicketDto>.Success(new TicketDto { id = "t-1", status = "matched", match = new MatchDto { id = "m-1", server = new ServerDto { host = "100.97.58.29", port = 7770 }, bots = 5 } });
 
@@ -79,6 +81,30 @@ namespace Game.Tests
             var e = UnityEngine.JsonUtility.FromJson<TicketEnvelope>("{\"ticket\":{\"id\":\"t-9\",\"mode\":\"battle-royale\",\"status\":\"matched\",\"party_size\":2,\"match\":{\"id\":\"m-1\",\"status\":\"active\",\"server\":{\"host\":\"1.2.3.4\",\"port\":7770},\"bots\":5,\"players\":3}}}");
             Assert.AreEqual("1.2.3.4", e.ticket.match.server.host); Assert.AreEqual(7770, e.ticket.match.server.port);
             Assert.AreEqual("", e.ticket.queue?.reason ?? "");
+        }
+
+        // r5 playtest: the server never closed the first match at the backend, so the second start got 409 already_queued and the
+        // player never got a match. The client now carries on with the ticket it already holds and joins its server.
+        [Test]
+        public void SecondStart_AlreadyQueued_AdoptsTheHeldTicket()
+        {
+            var f = new Fake(); f.Answers.Enqueue(Matched());
+            var c = new MatchTicketClient(f);
+            c.Start("battle-royale", 0); c.Tick(0.1);
+            c.Consume();
+            f.Answers.Enqueue(ApiResult<TicketDto>.Fail(409, "already_queued")); f.Answers.Enqueue(Matched());
+            c.Start("battle-royale", 10); c.Tick(10.1); c.Tick(10.2);
+            Assert.AreEqual(MatchTicketClient.StateKind.Matched, c.State, c.Text);
+            Assert.AreEqual("100.97.58.29", c.Host);
+        }
+
+        [Test]
+        public void AlreadyQueued_WithoutATicket_ShowsReason()
+        {
+            var f = new Fake(); f.Answers.Enqueue(ApiResult<TicketDto>.Fail(409, "already_queued")); f.Answers.Enqueue(ApiResult<TicketDto>.Fail(404, "no_ticket"));
+            var c = new MatchTicketClient(f); c.Start("battle-royale", 0); c.Tick(0.1); c.Tick(0.2);
+            Assert.AreEqual(MatchTicketClient.StateKind.Failed, c.State);
+            Assert.AreEqual(TicketRules.ErrorText(409, "already_queued"), c.Text);
         }
 
         [Test]
