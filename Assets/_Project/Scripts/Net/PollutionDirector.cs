@@ -134,7 +134,8 @@ namespace Game.Net
             }
         }
 
-        void Start() { TryBind(); Started?.Invoke(this); }
+        // The key elevators exist on clients too: their status broadcast arrives there (the panel reads it).
+        void Start() { TryBind(); if (GetComponent<KeyElevatorNet>() == null) gameObject.AddComponent<KeyElevatorNet>(); Started?.Invoke(this); }
 
         void OnDestroy()
         {

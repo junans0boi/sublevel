@@ -72,6 +72,29 @@ namespace Game.Gameplay
                 _wasHeld = _fired = false;
                 return false;
             }
+            // With the pollution running the elevators are the key elevators (ADR-170): F inserts a key, F again closes the
+            // doors, then the usual tap/hold picks and sends the ride. Otherwise the old free ride (training, tests).
+            bool keyMode = PollutionDirector.Instance != null && PollutionDirector.Instance.Ready;
+            if (keyMode)
+            {
+                var holder = KeyHolder.Local;
+                KeyElevatorNet.LastStatus.TryGetValue(station, out var st);
+                var phase = (KeyPhase)st.Phase;
+                bool mine = holder != null && st.Holder == me.ObjectId;
+                if (phase == KeyPhase.Idle)
+                {
+                    _heldFor = Hold01 = 0f; _wasHeld = _fired = false;
+                    if (!pressed || holder == null || holder.Keys.Value <= 0) return false;
+                    holder.CmdKeyInsert(station);
+                    return true;
+                }
+                if (phase == KeyPhase.DoorOpen && mine)
+                {
+                    if (pressed) holder.CmdKeyClose();
+                    return pressed;
+                }
+                if (!(phase == KeyPhase.Selecting && mine)) { _heldFor = Hold01 = 0f; _wasHeld = _fired = false; return false; }
+            }
             rides.States(States);
             ElevatorTravel.Destinations(rides.RegionOfStation(station), States, Choices);
             Selected = ElevatorTravel.KeepSelection(Selected, Choices);
@@ -86,7 +109,7 @@ namespace Game.Gameplay
                 if (_heldFor >= need)
                 {
                     _fired = true;
-                    rides.RequestRide(station, Selected);
+                    if (keyMode) KeyHolder.Local.CmdKeySelect(Selected); else rides.RequestRide(station, Selected);
                 }
             }
             else if (!held)
