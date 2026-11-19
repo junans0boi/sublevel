@@ -57,12 +57,21 @@ namespace Game.Gameplay
         {
             tier = Mathf.Clamp(tier, 1, 3);
             if (Palettes.TryGetValue(tier, out var m) && m != null) return m;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Standard");
+            return Palettes[tier] = PaletteWith(shader, tier);
+        }
+
+        // Null without a shader: a dedicated server build has none (Dedicated Server Optimizations) and draws nothing.
+        public static Material PaletteWith(Shader shader, int tier)
+        {
+            if (shader == null) return null;
+            tier = Mathf.Clamp(tier, 1, 3);
             var c = new Color[3]; Colors(LootKind.Helmet, tier, c);
             var tex = new Texture2D(3, 1, TextureFormat.RGB24, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, name = "WornGearPalette" + tier };
             tex.SetPixels(c); tex.Apply();
-            m = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "WornGear" + tier };
+            var m = new Material(shader) { name = "WornGear" + tier };
             m.SetTexture("_BaseMap", tex); m.SetTexture("_MainTex", tex); m.SetFloat("_Smoothness", 0.2f);
-            Palettes[tier] = m;
             return m;
         }
 

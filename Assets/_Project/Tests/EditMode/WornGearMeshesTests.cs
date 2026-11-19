@@ -69,5 +69,15 @@ namespace Game.Tests
                     Assert.AreEqual(0f, b.min.y, 0.01f, k + " rests on the floor");
                 }
         }
+
+        [Test]
+        public void Palette_WithoutShader_IsNull_NotAnException()
+        {
+            // A dedicated server build has no shaders (Dedicated Server Optimizations): ArmorVisual must get null, not throw.
+            Assert.IsNull(WornGearMeshes.PaletteWith(null, 2));
+            var m = WornGearMeshes.PaletteWith(Shader.Find("Universal Render Pipeline/Lit"), 2);
+            Assert.IsNotNull(m);
+            Object.DestroyImmediate(m);
+        }
     }
 }
