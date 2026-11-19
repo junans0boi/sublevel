@@ -13,6 +13,7 @@
 - 2026-11-19 문서(claude/docs-r5): `DEDICATED_SERVER.md` 인자 범위를 80인 기준(--bots 0..79, --max-players 1..64, --participants 2..80, MinBots 16)으로 고치고 동시 방 수 계산법 추가. 정의서 bots/network를 BotNames·BotMix·BotPollutionPlan 구현과 80인 기준으로 갱신(`python3 tools/bible_build.py`). BACKLOG에 봇 차량 운전·NavMeshLink·은닉(#340).
 - 2026-11-19 문서(claude/docs-r5): `AUDIO.md`에 현재 연결 상태 표, 정의서 audio를 Freesound 녹음(S-0008~0045) 기준으로 갱신, ledger S-0001~0007에 교체/사용 표시, RISKS에 크레딧 원 제목 상표 질문(#293).
 - 2026-11-19 문서(claude/docs-r5): RISKS에 법적·운영 표(처리방침·약관·등급분류·미성년자·OAuth 심사·로그 보관·리전, 담당 준환·시점 B/C 전)와 수집 항목 목록 초안(#394).
+- 2026-11-19 문서(claude/docs-r5): `docs/RELEASE.md` 릴리스 절차(release.sh → release_upload.sh → manifest/verify, 서버 경로, sha256 3회 대조, 버전 규칙 현황). 실제 Mac zip 업로드·버전 규칙 결정은 남음(#402).
 
 아래는 이전 기록이다.
 
