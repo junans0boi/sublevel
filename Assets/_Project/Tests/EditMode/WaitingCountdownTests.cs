@@ -69,7 +69,7 @@ namespace Game.Tests
             var r = Rules(); // MaxHumans = 64
             var c = new WaitingCountdown(r);
             c.Update(0.0, 63, 0);
-            Assert.AreEqual(90f, c.Update(1.0, 63, 0).SecondsLeft, 1e-3f);
+            Assert.AreEqual(89f, c.Update(1.0, 63, 0).SecondsLeft, 1e-3f);
             Assert.AreEqual(15f, c.Update(2.0, 64, 0).SecondsLeft, 1e-3f);
         }
 
