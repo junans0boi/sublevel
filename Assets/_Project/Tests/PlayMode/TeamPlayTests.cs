@@ -38,6 +38,7 @@ namespace Game.Tests
         IEnumerator Load(TeamMode mode)
         {
             TeamMatch.Mode = mode;
+            TeamMatch.FillTeamsInOrder = true; // these tests need teammates in a one-player match (ADR-332 would make it a team of one)
             _input = new ScriptedInput();
             PlayerController.InputOverride = _input;
             SceneManager.LoadScene("World");
@@ -63,6 +64,7 @@ namespace Game.Tests
         {
             PlayerController.InputOverride = null;
             TeamMatch.Mode = TeamMode.Solo;
+            TeamMatch.FillTeamsInOrder = false;
             BotRules.Current = GameData.Rules.Bot;
             TeamRules.Current = GameData.Rules.Team;
             SceneManager.LoadScene("Bootstrap");
