@@ -26,6 +26,8 @@ namespace Game.Gameplay
         const float RoofClearance = 0.3f;
         const float CabinLightOverEye = 0.55f; // up under the roof: the own arms and shoulders right by it were blown out white
         const float CabinLightBehindEye = 0.9f; // behind the head, so the dash and wheel get an even wash instead of a hot spot (#99)
+        // A car's seat eye sits low behind the dash: the view only is raised so the road past the bonnet is in the frame, not just the wheel and the dash top.
+        public const float CarEyeRaise = 0.10f;
         const float CollisionRadius = 0.25f;
         const float DistanceChangePerSecond = 8f;
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -93,6 +95,7 @@ namespace Game.Gameplay
                 var eye = _combatant.EyePosition;
                 if (_animation != null && _animation.HeadEye(out var head)) eye += Vector3.ProjectOnPlane(head - eye, vehicle.transform.up);
                 eye += GripsInView(vehicle, eye);
+                if (!vehicle.IsMotorcycle) eye += vehicle.transform.up * CarEyeRaise;
                 cam.transform.SetPositionAndRotation(eye, look);
                 cam.fieldOfView = DrivingFov;
                 _distance = 0f;
@@ -130,6 +133,9 @@ namespace Game.Gameplay
             _player.LookAt(_combatant.EyePosition + dir * 30f);
         }
 
+        // The headlamp beams (VehicleLights, runtime) are cones metres long: counted in the bounds they pushed the chase pivot 7 m ahead and 3.8 m up, so the camera sat over the car looking away from it.
+        public static bool IsLightBeam(Renderer r) => r.name == "Beam" || (r.transform.parent != null && r.transform.parent.name == "Headlamps");
+
         // The model's bounds in the vehicle's own space from its meshes (not the renderers' world boxes: those grow with the
         // yaw the vehicle happens to have, which made the distance depend on how it was parked). Renderers only, no occupants.
         public static Bounds LocalBounds(Transform t)
@@ -138,7 +144,7 @@ namespace Game.Gameplay
             bool any = false;
             foreach (var r in t.GetComponentsInChildren<Renderer>())
             {
-                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer || r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly) continue;
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer || r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly || IsLightBeam(r)) continue;
                 Bounds b;
                 if (r is SkinnedMeshRenderer sk) b = sk.localBounds;
                 else if (r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) b = mf.sharedMesh.bounds;
@@ -158,7 +164,7 @@ namespace Game.Gameplay
         // top about the lower third of the frame), within MaxCarDrop. A motorcycle's bars sit lower and nearer: the
         // same lowering (GripsBikeDeg, MaxBikeDrop) brings them to the bottom edge looking straight ahead (#143). Never
         // moved back: that puts the rider's own back in front of the view (tried: the back covers the road).
-        const float GripsCarDeg = 24f, MaxCarDrop = 0.12f, GripsBikeDeg = 36f, MaxBikeDrop = 0.22f;
+        const float GripsCarDeg = 24f, MaxCarDrop = 0f, GripsBikeDeg = 36f, MaxBikeDrop = 0.22f;
 
         Vector3 GripsInView(Vehicle vehicle, Vector3 eye)
         {

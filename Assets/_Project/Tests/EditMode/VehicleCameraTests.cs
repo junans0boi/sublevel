@@ -41,6 +41,29 @@ namespace Game.Tests
             Debug.Log($"[camera] {name}: length {l0:F2} m, chase distance {d0:F2} m");
         }
 
+        // Headlamp beams are added at run time (VehicleLights) as long cones: they must not move the chase pivot (the third-person camera ended up over the car, looking away).
+        [Test]
+        public void LocalBounds_IgnoresHeadlampBeams([ValueSource(nameof(Cars))] string name)
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(Dir + name + ".prefab"));
+            try
+            {
+                var before = VehicleCamera.LocalBounds(go.transform);
+                var lamps = new GameObject("Headlamps").transform;
+                lamps.SetParent(go.transform, false);
+                var beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                beam.name = "Beam";
+                Object.DestroyImmediate(beam.GetComponent<Collider>());
+                beam.transform.SetParent(lamps, false);
+                beam.transform.localPosition = new Vector3(0f, 0.3f, 9f);
+                beam.transform.localScale = new Vector3(8f, 7f, 8f);
+                var after = VehicleCamera.LocalBounds(go.transform);
+                Assert.AreEqual(before.max.z, after.max.z, 1e-3f, name + " front");
+                Assert.AreEqual(before.max.y, after.max.y, 1e-3f, name + " top");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
         [Test]
         public void ChaseDistance_Motorcycle_InItsOwnRange([ValueSource(nameof(Bikes))] string name)
         {

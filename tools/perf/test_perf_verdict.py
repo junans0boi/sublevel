@@ -13,5 +13,18 @@ class Verdict(unittest.TestCase):
         self.assertEqual(rows["load_s"], "UNMEASURED")
 
 
+
+class NavmeshGate(unittest.TestCase):
+    def test_size_is_added_in_mb(self):
+        import os, tempfile
+        from navmesh_gate import with_navmesh_mb
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"x" * 2 * 1024 * 1024)
+        try:
+            self.assertEqual(with_navmesh_mb({"bot_ms": 1}, f.name), {"bot_ms": 1, "navmesh_mb": 2.0})
+        finally:
+            os.unlink(f.name)
+
+
 if __name__ == "__main__":
     unittest.main()
