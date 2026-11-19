@@ -38,7 +38,7 @@ namespace Game.Core
             return Entries[Entries.Length - 1];
         }
 
-        // What a spawn point of a role (ADR-256) may hold. W weapon, A ammunition, H healing and boosts, G protection, O optics and attachments (ADR-481), X anything.
+        // What a spawn point of a role (ADR-256) may hold. W weapon, A ammunition, H healing and boosts, G protection, O optics and attachments (ADR-483), X anything.
         public static bool Fits(LootKind kind, char role)
         {
             switch (role)
@@ -140,7 +140,7 @@ namespace Game.Core
             return turned;
         }
 
-        // ADR-481: the role mix (ADR-256) left optics and attachments to the 'X' points only, so an island held about ten scopes. This share of the
+        // ADR-483: the role mix (ADR-256) left optics and attachments to the 'X' points only, so an island held about ten scopes. This share of the
         // points that hold neither a weapon nor the kind already is turned into it (rolled by the table's weights among the kind's entries, role 'O').
         public const float OpticShare = 0.2f;
 

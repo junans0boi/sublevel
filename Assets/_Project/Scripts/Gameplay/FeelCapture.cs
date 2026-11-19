@@ -1208,7 +1208,7 @@ namespace Game.Gameplay
                 if (agent != null) agent.enabled = false;
             }
             yield return new WaitForSeconds(4f); // the elevator door
-            // ADR-481: the scopes the match itself laid out (not the ones spawned below), and the nearest one on its floor.
+            // ADR-483: the scopes the match itself laid out (not the ones spawned below), and the nearest one on its floor.
             LootItem natural = null;
             var perId = new int[9];
             foreach (var item in LootItem.All)

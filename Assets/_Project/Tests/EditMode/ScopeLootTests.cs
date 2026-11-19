@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Game.Tests
 {
-    // ADR-481: an island match held about ten scopes (optics rolled only at 'X' points). With the optic share every scope kind lies on the island,
+    // ADR-483: an island match held about ten scopes (optics rolled only at 'X' points). With the optic share every scope kind lies on the island,
     // and a scope fitted to a gun narrows the aim field of view.
     public class ScopeLootTests
     {
