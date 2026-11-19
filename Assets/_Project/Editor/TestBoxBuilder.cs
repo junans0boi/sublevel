@@ -248,9 +248,7 @@ public static class TestBoxBuilder
         Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
         Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
         SetArray(animation, "_jumpBones", visual.JumpBones);
-        Set(animation, "_forwardClipSpeed", p => p.floatValue = visual.Gait.RunSpeed);
-        Set(animation, "_backClipSpeed", p => p.floatValue = visual.Gait.BackSpeed);
-        Set(animation, "_walkClipSpeed", p => p.floatValue = visual.Gait.WalkSpeed);
+        Set(animation, "_sprintClipSpeed", p => p.floatValue = visual.Gait.SprintSpeed);
         Set(animation, "_unarmedWalkSpeed", p => p.floatValue = visual.Gait.UnarmedWalkSpeed);
         Set(animation, "_unarmedRunSpeed", p => p.floatValue = visual.Gait.UnarmedRunSpeed);
         Set(animation, "_unarmedCrouchSpeed", p => p.floatValue = visual.Gait.UnarmedCrouchSpeed);

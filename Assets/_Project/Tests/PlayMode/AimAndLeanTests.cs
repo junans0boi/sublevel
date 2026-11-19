@@ -318,7 +318,7 @@ namespace Game.Tests
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
             yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.That(turn, Is.InRange(30f, 65f), "forward-right: the legs are turned towards the right");
+            Assert.That(turn, Is.InRange(30f, GameData.Rules.Gait.MaxLegTurnDeg + 0.5f), "forward-right: the legs are turned towards the right (the walls can swing it to the full turn)");
             Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn: the legs point where the body goes");
             Assert.AreEqual(shouldersForward, shoulders, 12f, "the shoulders still face the aim");
 
@@ -327,7 +327,7 @@ namespace Game.Tests
             yield return Average("UpperLeg.L", "UpperLeg.R", a => hips = a);
             yield return AverageTurn(a => turn = a);
             yield return Average("UpperArm.L", "UpperArm.R", a => shoulders = a);
-            Assert.AreEqual(-60f, turn, 8f, "sideways to the left: legs turned as far as the waist allows");
+            Assert.AreEqual(-GameData.Rules.Gait.MaxLegTurnDeg, turn, 8f, "sideways to the left: legs turned as far as the waist allows");
             Assert.AreEqual(turn, hips, 18f, "the hips line follows the leg turn");
             Assert.AreEqual(shouldersForward, shoulders, 12f);
 

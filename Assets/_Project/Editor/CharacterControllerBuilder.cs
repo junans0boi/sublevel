@@ -40,10 +40,17 @@ public static class CharacterControllerBuilder
         tree.blendType = BlendTreeType.Simple1D;
         tree.blendParameter = CombatantAnimation.Move;
         tree.useAutomaticThresholds = false;
-        tree.AddChild(Clip("RifleWalkBack"), -gait.BackSpeed);
+        // Player report "the run looks stupid" (ADR-390): RifleRun is a crouched shuffle authored at ~3 m/s and RifleWalkBack a ~1 m/s
+        // step, so at the game's 4.5-6 m/s the feet skated (back-pedal 2.8 m/s). Past the walk the legs are the UAL jog and sprint, whose
+        // strides match the ground; the long gun is held by code over the base layer (ADR-083), so their arm swing never shows.
+        // The walk is UAL's too: a Mixamo walk blended with a UAL jog crossed the legs (their cycles start on different feet).
+        tree.AddChild(Clip("U_Jog_Fwd_Loop"), -gait.UnarmedRunSpeed);
+        tree.AddChild(Clip("U_Walk_Loop"), -gait.UnarmedWalkSpeed);
+        tree.children = tree.children.Select((c, i) => { if (i <= 1) c.timeScale = -1f; return c; }).ToArray(); // back-pedal = the walk and jog played backwards
         tree.AddChild(Clip("RifleIdle"), 0f);
-        tree.AddChild(Clip("RifleWalk"), gait.WalkSpeed);
-        tree.AddChild(Clip("RifleRun"), gait.RunSpeed);
+        tree.AddChild(Clip("U_Walk_Loop"), gait.UnarmedWalkSpeed);
+        tree.AddChild(Clip("U_Jog_Fwd_Loop"), gait.UnarmedRunSpeed);
+        tree.AddChild(Clip("U_Sprint_Loop"), gait.SprintSpeed);
         locomotion.speedParameter = CombatantAnimation.Pace; // the legs alone play faster when the character outruns its clips
         locomotion.speedParameterActive = true;
         var baseMachine = controller.layers[0].stateMachine;
@@ -53,11 +60,13 @@ public static class CharacterControllerBuilder
         unarmedTree.blendType = BlendTreeType.Simple1D;
         unarmedTree.blendParameter = CombatantAnimation.Move;
         unarmedTree.useAutomaticThresholds = false;
+        unarmedTree.AddChild(Clip("U_Jog_Fwd_Loop"), -gait.UnarmedRunSpeed);
         unarmedTree.AddChild(Clip("U_Walk_Loop"), -gait.UnarmedWalkSpeed);
-        unarmedTree.children = unarmedTree.children.Select((c, i) => { if (i == 0) c.timeScale = -1f; return c; }).ToArray(); // back-pedal = the walk played backwards
+        unarmedTree.children = unarmedTree.children.Select((c, i) => { if (i <= 1) c.timeScale = -1f; return c; }).ToArray(); // back-pedal = the walk and jog played backwards
         unarmedTree.AddChild(Clip("U_Idle_Loop"), 0f);
         unarmedTree.AddChild(Clip("U_Walk_Loop"), gait.UnarmedWalkSpeed);
         unarmedTree.AddChild(Clip("U_Jog_Fwd_Loop"), gait.UnarmedRunSpeed);
+        unarmedTree.AddChild(Clip("U_Sprint_Loop"), gait.SprintSpeed); // sprint (6.3 m/s) no longer plays the jog sped up
         unarmed.speedParameter = CombatantAnimation.Pace;
         unarmed.speedParameterActive = true;
         // Bare-handed crouch (UAL): a real crouch at the capsule's height, so the code knee bend is not used (CombatantAnimation._clipCrouch).

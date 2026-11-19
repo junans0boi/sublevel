@@ -98,7 +98,7 @@ namespace Game.Tests
                 }
             Assert.GreaterOrEqual(clips.Count, 15);
             foreach (var (state, clip) in clips) Assert.IsTrue(clip.isHumanMotion, $"{state}/{clip.name} must be a Humanoid clip so every roster model plays it");
-            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
+            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
             foreach (var (_, clip) in clips)
                 if (loops.Contains(clip.name)) Assert.IsTrue(clip.isLooping, clip.name + " loops");
             foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross" })
@@ -113,12 +113,15 @@ namespace Game.Tests
             Assert.AreEqual(BlendTreeType.Simple1D, tree.blendType, "direction comes from turning the legs (ADR-190 fallback until the 2D blend is verified)");
             var c = tree.children;
             Assert.IsTrue(c.Any(x => x.threshold == 0f) && c.Any(x => x.threshold < -0.5f));
-            Assert.AreEqual(2, c.Count(x => x.threshold > 0.5f), "walk and run");
-            Assert.AreEqual(c.Length, c.Select(x => x.motion).Distinct().Count());
-            float walk = c.Where(x => x.threshold > 0.01f).Min(x => x.threshold), run = c.Max(x => x.threshold);
+            Assert.AreEqual(3, c.Count(x => x.threshold > 0.5f), "walk, jog and sprint (ADR-390)");
+            var forward = c.Where(x => x.threshold > 0.01f).Select(x => x.threshold).ToArray();
+            CollectionAssert.IsOrdered(forward, "thresholds rise with speed");
+            float walk = forward.Min(), run = forward.Max();
             Assert.That(walk, Is.InRange(0.8f, 2.5f), "walk clip ground speed (m/s)");
-            Assert.That(run, Is.InRange(2.5f, 8f), "run clip ground speed (m/s)");
-            Assert.Greater(run, walk * 1.5f);
+            Assert.That(run, Is.InRange(6f, 9f), "sprint clip ground speed (m/s): at least the game's 6.3 m/s sprint, so the feet do not skate");
+            float back = c.Min(x => x.threshold);
+            Assert.Less(back, -4f, "the back-pedal reaches the run speed (the 1 m/s step skated at 4.5 m/s)");
+            Assert.AreEqual(-1f, c.First(x => x.threshold == back).timeScale, "the run back-pedal is the jog played backwards");
         }
 
         [Test]
@@ -236,7 +239,7 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Unarmed_Jog_SwingsBothArmsPastTheHips_WhichTheRifleRunNeverDoes()
+        public void Unarmed_Jog_SwingsBothArmsPastTheHips_WhichTheRifleIdleNeverDoes()
         {
             float Swing(string state, float move)
             {
@@ -251,7 +254,7 @@ namespace Game.Tests
                 return behind;
             }
             Assert.Less(Swing("Unarmed", 3.5f), -0.05f, "bare hands: an arm swings back past the hips");
-            Assert.Greater(Swing("Locomotion", 3f), 0.1f, "rifle run: both hands stay in front on the gun");
+            Assert.Greater(Swing("Locomotion", 0f), 0.1f, "rifle idle: both hands in front on the gun (moving, the code hold places them, ADR-390)");
         }
 
         // Which way the body faces, read from the shoulder line (right of the root = +x): 1 = the way the model faces, -1 = turned round.

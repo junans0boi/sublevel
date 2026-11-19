@@ -75,10 +75,9 @@ namespace Game.Gameplay
         [SerializeField] Transform[] _jumpBones;
         // Lying (ADR-231): how far ahead of the model's origin the head joint is in the prone clip, measured when the character was built.
         [SerializeField] float _proneHeadAhead = 0.8f;
-        // Ground speed the clips were authored for (m/s), measured when the character was built.
-        [SerializeField] float _forwardClipSpeed = 5f;
-        [SerializeField] float _backClipSpeed = 4f;
-        [SerializeField] float _walkClipSpeed = 1.3f; // the walk clip alone (the slow walk plays it, sped up)
+        // Ground speed the clips were authored for (m/s), measured when the character was built. The sprint clip tops both
+        // locomotion trees; the jog played backwards ends their back-pedal (ADR-390).
+        [SerializeField] float _sprintClipSpeed = 6.5f;
         // The bare-handed walk and jog clips' ground speed (ADR-255), and the second in each punch clip when the fist is furthest out (the hit).
         [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f, _unarmedCrouchSpeed = 1.2f;
         [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
@@ -288,19 +287,16 @@ namespace Game.Gameplay
             const float pitched = 0f;
             _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * pitched, Vector3.right)
                 * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
-            // Slow walk (Ctrl, ADR-065 (3)): its speed falls between the walk and run clips, whose cycles do not line up,
-            // so a blend of the two never sets a foot down. It plays the walk clip alone, a little faster.
-            bool slowWalk = !dead && _stance != null && _stance.SlowWalk.Value && !_legs.Backward && _walkClipSpeed > 0f;
-            float shown = slowWalk ? Mathf.Min(speed, _walkClipSpeed) : speed;
-            _animator.SetFloat(_move, _legs.Backward ? -shown : shown, BlendDamp, Time.deltaTime);
+            // Every speed, slow walk included, is the blend at that speed: the walk, jog and sprint are one library's cycles and line up (ADR-390).
+            _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
 
             // Only the legs speed up to keep pace with the ground; weapon handling keeps its own timing.
             // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-255).
             // Seated, the arms are placed on the grips by code (PoseSeated) from the clip's forward hands; the bare-handed tree's swinging arms start too far away.
             _unarmedBody = (HeldId == 0 || HoldsMelee) && _seated < 0.5f;
-            float clipSpeed = _unarmedBody
-                ? (_legs.Backward || slowWalk ? _unarmedWalkSpeed : _unarmedRunSpeed)
-                : _legs.Backward ? _backClipSpeed : slowWalk ? _walkClipSpeed : _forwardClipSpeed;
+            // Each tree's thresholds are its clips' own ground speeds, so up to the fastest clip the blend already matches the
+            // ground (pace 1); only beyond it do the legs speed up (ADR-390).
+            float clipSpeed = Mathf.Clamp(speed, 0.01f, _legs.Backward ? _unarmedRunSpeed : _sprintClipSpeed);
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
@@ -552,11 +548,15 @@ namespace Game.Gameplay
             // (Not for the dead: the death clip turns the hips on purpose.)
             // (A long gun squares the shoulders itself, PoseRifle.)
             // Bare hands: the jog/walk clip yaws the pelvis (with a bias), which reads as running sideways: turn the whole body back from the hips.
+            // Armed, the legs are the same UAL cycles past a standstill (ADR-390): square their pelvis too while moving (the planted foot slid
+            // sideways ~1.5 m/s), but leave the rifle idle's own stance alone.
             bool pelvisFixed = _unarmedBody && _prone < 0.001f && !_combatant.Dead.Value;
+            float pelvisFix = pelvisFixed ? 1f : _prone < 0.001f && _seated < 0.5f && !_combatant.Dead.Value
+                ? Mathf.Clamp01(new Vector2(_motion.LocalVelocity.x, _motion.LocalVelocity.z).magnitude / 1.5f) : 0f;
             float hipsYawNow = HipsYaw();
-            if (pelvisFixed) Turn(Pelvis, -hipsYawNow, transform.up);
+            if (pelvisFix > 0f) Turn(Pelvis, -hipsYawNow * pelvisFix, transform.up);
             // The clip's shoulders counter-twist the hips by far more than a person does: take most of that swing out (shoulder line measured on the posed arms).
-            float turnBack = -_legTurnShown + (_combatant.Dead.Value ? 0f : pelvisFixed ? 0f : -hipsYawNow * _upperWeight);
+            float turnBack = -_legTurnShown + (_combatant.Dead.Value ? 0f : -hipsYawNow * (1f - pelvisFix) * _upperWeight);
             // About the model's own up: the character's up while standing, along the ground while lying.
             Turn(Torso, turnBack, _prone > 0.001f ? _animator.transform.up : transform.up);
             if (pelvisFixed && Time.time >= _punchUntil && _bones[ArmLeft] != null && _bones[ArmRight] != null)

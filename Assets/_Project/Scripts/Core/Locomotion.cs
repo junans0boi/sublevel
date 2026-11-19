@@ -30,7 +30,7 @@ namespace Game.Core
         public float MaxLegPace = 1.75f;
         // The character has no sidestep clips: the legs turn toward the way it moves and run forward or backward,
         // while the upper body keeps facing the aim (ADR-049).
-        public float MaxLegTurnDeg = 60f;
+        public float MaxLegTurnDeg = 80f; // ADR-390: 60 left a pure sidestep 30 deg off the legs (feet slid sideways ~2.5 m/s)
         public float LegTurnDegPerSecond = 360f;
         public float LegTurnMinSpeed = 0.5f;   // slower than this the legs face forward
     }
