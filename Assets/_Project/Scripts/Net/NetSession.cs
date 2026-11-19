@@ -17,6 +17,8 @@ namespace Game.Net
         public static int Bots = -1;
         // Queue match starts: one size for each human party, in participant order. Empty when the lobby has no party data.
         public static int[] PartySizes = new int[0];
+        // Dedicated server: session tokens of the planned people in team order, so a party lands on its own team whatever order it connects in.
+        public static string[] PlannedSessions = new string[0];
 
         // Names this player across reconnects to a match (#166): the server hands the same combatant back to the same token.
         public static readonly string Token = System.Guid.NewGuid().ToString("N");
@@ -35,6 +37,7 @@ namespace Game.Net
             Players = 1;
             Bots = -1;
             PartySizes = new int[0];
+            PlannedSessions = new string[0];
             Dedicated = false;
         }
 
@@ -48,6 +51,7 @@ namespace Game.Net
             Players = start.Players;
             Bots = start.Bots;
             PartySizes = start.PartySizes != null ? (int[])start.PartySizes.Clone() : new int[0];
+            PlannedSessions = lobby.PlannedSessions.ToArray();
         }
     }
 }
