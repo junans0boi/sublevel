@@ -42,7 +42,19 @@ namespace Game.Tests
             Assert.AreEqual(180f, BotLevels.For(normal, BotDifficulty.Hard).FarmSeconds, 0.01f);
             Assert.IsTrue(BotLevels.For(normal, BotDifficulty.Easy).FarmHint);
             Assert.IsTrue(normal.FarmHint);
-            Assert.IsFalse(BotLevels.For(normal, BotDifficulty.Hard).FarmHint);
+            Assert.IsTrue(BotLevels.For(normal, BotDifficulty.Hard).FarmHint, "ADR-321: every level gets the hint");
+        }
+
+        [Test]
+        public void An_unarmed_bot_gets_the_weapon_hint_after_farming_or_after_the_hint_time()
+        {
+            var r = new BotRules();
+            Assert.IsFalse(BotFarm.HintDue(false, false, r.FarmHintSeconds - 1f, r), "still farming, early");
+            Assert.IsTrue(BotFarm.HintDue(false, false, r.FarmHintSeconds, r), "still farming, hint time reached");
+            Assert.IsTrue(BotFarm.HintDue(false, true, 0f, r), "farming over");
+            Assert.IsFalse(BotFarm.HintDue(true, true, 999f, r), "armed");
+            r.FarmHint = false;
+            Assert.IsFalse(BotFarm.HintDue(false, true, 999f, r), "hint off");
         }
 
         [Test]

@@ -11,6 +11,7 @@ namespace Game.Net
         public static readonly List<float>[] FirstGun = { new List<float>(), new List<float>(), new List<float>() };
         public static int Engagements, FirstEngages, FirstEngagesArmed;
         public static float EngageSeconds;
+        public static readonly List<float> DeathSeconds = new List<float>();   // of bots, since the drop
         static readonly Dictionary<int, int> LevelOfId = new Dictionary<int, int>();
 
         [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -20,6 +21,7 @@ namespace Game.Net
             Engagements = FirstEngages = FirstEngagesArmed = 0;
             EngageSeconds = 0f;
             LevelOfId.Clear();
+            DeathSeconds.Clear();
         }
 
         public static void Register(int objectId, int level) { LevelOfId[objectId] = level; Bots[level]++; }
@@ -29,7 +31,7 @@ namespace Game.Net
         // A bot died: the one who shot it (when a bot) and the bot itself are credited per level.
         public static void Died(int victimId, int attackerId)
         {
-            if (LevelOfId.TryGetValue(victimId, out int v)) Deaths[v]++;
+            if (LevelOfId.TryGetValue(victimId, out int v)) { Deaths[v]++; if (BotFarmStats.FirstStartAt >= 0f) DeathSeconds.Add(UnityEngine.Time.time - BotFarmStats.FirstStartAt); }
             if (attackerId >= 0 && attackerId != victimId && LevelOfId.TryGetValue(attackerId, out int a)) Kills[a]++;
         }
     }

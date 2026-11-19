@@ -29,6 +29,46 @@ namespace Game.Tests
         }
 
         [Test]
+        public void The_first_minutes_are_peaceful_beyond_a_few_metres_unless_hurt()
+        {
+            var rules = new BotRules();
+            Assert.IsTrue(BotPeace.Holds(10, 1000, rules));
+            Assert.IsFalse(BotPeace.Holds(rules.EarlyPeaceSeconds + 1, 1000, rules), "after the early minutes");
+            Assert.IsFalse(BotPeace.Holds(10, 3, rules), "just hurt");
+            Assert.IsFalse(BotPeace.Holds(-1, 1000, rules), "not dropped yet: no peace to speak of");
+            Assert.IsTrue(BotPeace.Holds(rules.EarlyPeaceSeconds + 10, 1000, rules, 60f), "a bot with its own extra share is still at peace");
+            Assert.IsFalse(BotPeace.Holds(rules.EarlyPeaceSeconds + 70, 1000, rules, 60f));
+            Assert.IsTrue(BotPeace.Ignores(true, rules.EarlyPeaceMeters + 1f, false, rules));
+            Assert.IsFalse(BotPeace.Ignores(true, rules.EarlyPeaceMeters - 1f, false, rules), "an armed one right next to it is fought");
+            Assert.IsTrue(BotPeace.Ignores(true, 0.5f, true, rules), "two with empty hands do not start a fist fight");
+            Assert.IsFalse(BotPeace.Ignores(false, 50f, true, rules));
+        }
+
+        [Test]
+        public void Unarmed_leaves_a_far_unarmed_enemy_be()
+        {
+            var rules = new BotRules();
+            var p = Unarmed(rules.UnarmedFistChaseMeters + 8f, false);
+            p.LootVisible = true; p.LootIsWeapon = true; p.LootId = 3; p.LootPosition = new BotVec(0, 0, -20);
+            var intent = new BotBrain(rules, 11).Think(p);
+            Assert.AreEqual(BotState.Loot, intent.State, "it goes on to the weapon instead of running at the enemy");
+            Assert.AreEqual(3, intent.LootId);
+            Assert.AreEqual(BotState.Engage, new BotBrain(rules, 11).Think(Unarmed(rules.UnarmedFistChaseMeters - 2f, false)).State, "near enough: fists");
+        }
+
+        [Test]
+        public void An_empty_handed_farmer_starts_no_fist_fight_but_still_runs_and_punches_when_cornered()
+        {
+            var rules = new BotRules();
+            var near = Unarmed(5f, false); near.NoBrawl = true;
+            Assert.AreNotEqual(BotState.Engage, new BotBrain(rules, 11).Think(near).State, "an unarmed enemy 5 m away is left be");
+            var armed = Unarmed(15f, true); armed.NoBrawl = true;
+            Assert.AreEqual(BotState.Retreat, new BotBrain(rules, 11).Think(armed).State, "an armed one is run from");
+            var cornered = Unarmed(1.2f, true); cornered.NoBrawl = true;
+            Assert.AreEqual(BotState.Engage, new BotBrain(rules, 11).Think(cornered).State, "within a punch of an armed one: fists");
+        }
+
+        [Test]
         public void Unarmed_against_an_armed_enemy_runs_unless_it_is_within_a_punch()
         {
             Assert.AreEqual(BotState.Retreat, Brain().Think(Unarmed(15f, true)).State);

@@ -29,6 +29,16 @@ namespace Game.AI
         {
             Combatant.ServerDied -= OnSomebodyDied;
             Combatant.ServerDied += OnSomebodyDied;
+            Combatant.ServerDamaged -= OnSomebodyHurt;
+            Combatant.ServerDamaged += OnSomebodyHurt;
+        }
+
+        // A bot was hurt by somebody: in the peace it goes after that one only (ADR-315).
+        static void OnSomebodyHurt(Combatant who, DamageInfo info, float amount)
+        {
+            if (who == null || info.Attacker == null || info.Attacker == who || !who.TryGetComponent(out BotController bot)) return;
+            bot._hurtAt = Time.time;
+            bot._attackerId = info.Attacker.ObjectId;
         }
 
         static void OnSomebodyDied(Combatant who, DamageInfo info)

@@ -68,6 +68,7 @@ namespace Game.Core
         public bool CoverPeekAValid, CoverPeekBValid;
 
         public bool IgnoresNoise;      // this bot does not go to heard noises (ADR-312: its fixed roll is above the level's chance)
+        public bool NoBrawl;           // no gun yet and farming: it starts no fist fight, only runs or leaves be (ADR-315)
         public bool EnemyArmed;        // the one in sight holds a gun (ADR-310)
         public bool LootIsWeapon;      // the pickup in view is a weapon
         public bool CorpseActive;      // go to where somebody fell, for what dropped there
@@ -233,7 +234,10 @@ namespace Game.Core
             bool canFight = armed || p.OtherSlotUsable;
             bool low = p.HealthFraction <= rules.RetreatHealthFraction;
 
-            if (p.EnemyVisible)
+            // An unarmed enemy far off is no reason for an empty-handed bot to drop what it is doing (ADR-314): the fist fights between
+            // bots that both have nothing killed most of them before they found a gun.
+            bool leaveBe = p.EnemyVisible && !canFight && !p.EnemyArmed && (p.NoBrawl || BotVec.Distance(p.Position, p.EnemyPosition) > rules.UnarmedFistChaseMeters);
+            if (p.EnemyVisible && !leaveBe)
             {
                 _healReadyAt = -1;
                 intent.Look = true;

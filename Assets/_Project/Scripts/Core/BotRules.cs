@@ -80,6 +80,7 @@ namespace Game.Core
         // ---- Farming (ADR-294): right after the drop a bot walks the loot points of a nearby building until it is kitted out ----
         public float FarmSeconds = 210f;          // longest it farms (Normal; the levels scale it: 240 / 210 / 180)
         public bool FarmHint = true;              // out of time and unarmed: it is told where the nearest weapon lies
+        public float FarmHintSeconds = 150f;      // ...or unarmed this long after the drop, still farming (ADR-321)
         public int FarmMags = 1;                  // ready needs a gun with this many magazines of rounds (mag + reserve)
         public int FarmArmorPieces = 0;           // ...and this many armour pieces worn (0..2)
         public int FarmHealItems = 1;             // ...and this many healing items (medkits, bandages, first-aid kits)
@@ -103,8 +104,15 @@ namespace Game.Core
         public float PreferShotgunMeters = 7f;
         public float PreferPistolMeters = 20f;
 
+        // ---- The first minutes (ADR-315): bots farm and leave each other be ----
+        public float EarlyPeaceSeconds = 230f;    // after the drop a bot ignores enemies farther than EarlyPeaceMeters, unless it was hurt lately
+        public float EarlyPeaceSpreadSeconds = 160f; // each bot's peace is this much longer by its own fixed share (so the shooting ramps up instead of starting at once)
+        public float EarlyPeaceMeters = 0f;
+        public float EarlyPeaceHurtSeconds = 8f;  // hurt by somebody this lately: it fights that one back
+
         // ---- Without a weapon (ADR-310, #374) ----
         public float UnarmedFistMeters = 1.35f;   // an unarmed bot fights an armed enemy this close (ADR-218 punch range)
+        public float UnarmedFistChaseMeters = 12f; // an unarmed bot fights an unarmed enemy only this near; farther away it leaves it be and goes on (ADR-314)
         public float FleeSeconds = 8f;            // a flight counts as lost when the enemy still sees it after this long
         public float LootDashMeters = 10f;        // fleeing, a weapon this close on the ground is picked up first
         public float CorpseLootMeters = 40f;      // goes to where somebody fell if it is this near...

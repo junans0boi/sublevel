@@ -77,6 +77,8 @@ namespace Game.AI
         LootItem _loot;
         float _maxHp;
         float _nextSense;
+        float _hurtAt = -1000f;
+        int _attackerId = -1;   // who hurt it last (ADR-315): in the peace it fights back at that one only
         int _noiseSeen;
         int _ignoredLootId = -1;
         float _ignoreLootUntil;
@@ -296,6 +298,7 @@ namespace Game.AI
             ApplyBlindness(now);
             FillSelf();
             TickFarm(now);
+            _percept.NoBrawl = BuildingLoot.Index != null && _rules.FarmSeconds > 0f && !_percept.HasWeapon && !_percept.OtherSlotUsable;
             TickBrawl(now);
             TickCover(now);
             _intent = _brain.Think(_percept);
@@ -356,6 +359,10 @@ namespace Game.AI
 
             // Sight: the nearest combatant it can actually see. The one it is already on is kept a little longer,
             // so two targets at similar distances do not make it flip between them.
+            // Before the farm starts (still in the elevator or just out of it) the peace holds too; only a map with loot buildings has one.
+            bool peace = BuildingLoot.Index != null && rules.FarmSeconds > 0f
+                && (!_farmStarted || BotPeace.Holds(Time.time - _farmStartAt, 1e9, rules, BotPriority.Roll(_self.ObjectId * 7919 + 17) * rules.EarlyPeaceSpreadSeconds));
+            bool avenging = Time.time - _hurtAt <= rules.EarlyPeaceHurtSeconds;
             Combatant seen = null;
             float seenScore = float.MaxValue;
             bool stepHeard = false;
@@ -372,6 +379,8 @@ namespace Game.AI
                 var chest = ChestOf(c);
                 var to = chest - eye;
                 float sqr = to.sqrMagnitude;
+                // The first minutes (ADR-315): far enemies are left be.
+                if (peace && !(avenging && c.ObjectId == _attackerId) && BotPeace.Ignores(true, Mathf.Sqrt(sqr), !_self.HasAnyWeapon && !c.HasAnyWeapon, rules)) continue;
                 bool visible = false;
                 if (sqr <= viewSqr)
                 {
