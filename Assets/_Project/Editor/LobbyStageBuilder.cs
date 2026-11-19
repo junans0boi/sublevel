@@ -190,9 +190,24 @@ public static class LobbyStageBuilder
 
     // 96 x 128 (rendered at 2x) head-and-shoulders pictures of the 15 roster models under the lobby's own lights, saved for the
     // 외형 screen: Resources/Ui/RosterThumbs/<ModelId>.png.
+    // Thumbs only, from the saved MainMenu scene: tools/unity.sh run-gfx LobbyStageBuilder.RenderThumbs
+    public static void RenderThumbs()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(MainMenuBuilder.ScenePath);
+        var stage = Object.FindFirstObjectByType<LobbyStage>();
+        RenderRosterThumbs(stage, stage.Camera);
+        EditorApplication.Exit(0);
+    }
+
     static void RenderRosterThumbs(LobbyStage stage, Camera lobbyCamera)
     {
         const string dir = "Assets/_Project/Resources/Ui/RosterThumbs";
+        // -nographics (tools/unity.sh run) renders nothing: writing then would replace the pictures with flat grey (r5.1).
+        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+        {
+            Debug.LogWarning("[LobbyStageBuilder] no graphics device: roster thumbnails kept as they are (run-gfx LobbyStageBuilder.RenderThumbs)");
+            return;
+        }
         Directory.CreateDirectory(dir);
         var camGo = new GameObject("ThumbCam");
         var cam = camGo.AddComponent<Camera>();
