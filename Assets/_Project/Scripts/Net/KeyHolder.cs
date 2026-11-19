@@ -23,6 +23,8 @@ namespace Game.Net
         // The cover in force, on the match clock, so the owner's HUD can show what is left (0 = none).
         // Counts the inserts the elevator refused because the team has used it twice (ADR-360): the owner shows a notice.
         public readonly SyncVar<int> RideLimitHits = new SyncVar<int>();
+        // Key rides this combatant's team has finished (ADR-360), for the prompt.
+        public readonly SyncVar<int> TeamKeyRides = new SyncVar<int>();
         public readonly SyncVar<float> CoverUntil = new SyncVar<float>();
         public readonly SyncVar<float> CoverFactor = new SyncVar<float>();
 

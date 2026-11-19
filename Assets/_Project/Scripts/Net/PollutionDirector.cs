@@ -113,8 +113,11 @@ namespace Game.Net
         public ChipResult ServerDepositChips(Combatant carrier, int boxRegion) =>
             Chips.DepositAll(carrier.ObjectId, Now, boxRegion, States, Rules);
 
-        // Keys of the match (ADR-170): 6-8, biased toward late regions, the first ones in supply crates (the crates
-        // are the supply director's: until it takes them over they lie as loot like the rest).
+        // Keys still waiting in supply crates: each crate opened puts one of them out with its items (SPEC 5-2).
+        public int ServerCrateKeys { get; private set; }
+        public bool ServerTakeCrateKey() { if (ServerCrateKeys <= 0) return false; ServerCrateKeys--; return true; }
+
+        // Keys of the match (ADR-170/360): ceil(teams x 0.65), biased toward late regions, the first ones in supply crates.
         void ServerSpawnKeys(PollutionGrid grid, int regionCount, int seed)
         {
             var director = MatchDirector.Instance;
@@ -125,8 +128,10 @@ namespace Game.Net
             var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules, teamCount);
             var rng = new System.Random(unchecked(seed * 17 + 5));
             var cells = new List<int>();
+            ServerCrateKeys = 0;
             foreach (var k in plan)
             {
+                if (k.InSupplyCrate) { ServerCrateKeys++; continue; } // handed out by the next supply crates opened (ServerTakeCrateKey)
                 cells.Clear();
                 for (int i = 0; i < grid.Count; i++) if (grid.IsLand(i) && grid.Region[i] == k.Region) cells.Add(i);
                 for (int tries = 0; tries < 12 && cells.Count > 0; tries++)

@@ -240,5 +240,13 @@ namespace Game.Tests
             Assert.AreEqual(KeyResult.RideLimit, sys.Insert(0, now, 1, 7, true, all));
             Assert.AreEqual(KeyResult.Ok, sys.Insert(1, now, 2, 8, true, all), "another team is unaffected");
         }
+
+        [Test]
+        public void Prompt_SaysTheTeamRidesAreUsedUp()
+        {
+            Assert.AreEqual("F — 열쇠 삽입 (열쇠 2개)", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 2, 0f, 1));
+            Assert.AreEqual("팀 승강 횟수를 모두 사용함", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 2, 0f, 0));
+            Assert.AreEqual("", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 0, 0f, 0), "no key, no prompt");
+        }
     }
 }

@@ -87,11 +87,12 @@ namespace Game.Core
         }
 
         // What the key prompt says at a station ("" = nothing): insert, close the doors, pick the destination.
-        public static string KeyPrompt(KeyPhase phase, bool isHolder, int keys, float secondsLeft)
+        // `ridesLeft`: key rides the team still has (ADR-360); 0 = used up, the key cannot start a ride.
+        public static string KeyPrompt(KeyPhase phase, bool isHolder, int keys, float secondsLeft, int ridesLeft = int.MaxValue)
         {
             switch (phase)
             {
-                case KeyPhase.Idle: return keys > 0 ? "F — 열쇠 삽입 (열쇠 " + keys + "개)" : "";
+                case KeyPhase.Idle: return keys <= 0 ? "" : ridesLeft <= 0 ? "팀 승강 횟수를 모두 사용함" : "F — 열쇠 삽입 (열쇠 " + keys + "개)";
                 case KeyPhase.DoorOpen: return isHolder ? "F — 문 닫기 · 탑승 " + Clock(secondsLeft) : "승강기 대기 중 " + Clock(secondsLeft);
                 case KeyPhase.Selecting: return isHolder ? "F — 행선지 선택, 길게 눌러 출발 " + Clock(secondsLeft) : "행선지 선택 중";
                 case KeyPhase.Recharging: return "전력 충전 중 " + Clock(secondsLeft);

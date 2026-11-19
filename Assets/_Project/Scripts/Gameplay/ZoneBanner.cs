@@ -12,7 +12,7 @@ namespace Game.Gameplay
     public class ZoneBanner : MonoBehaviour
     {
         const int SortOrder = 2;                    // above the HUD and the kill feed
-        const float Top = 116f; // below the compass and its heading readout
+        const float Top = 192f; // below the compass and the hazard slot (Hud: 120 + 64 high), which it overlapped
         const float BannerWidth = 780f, BannerHeight = 58f;
         const float PromptWidth = 560f, PromptHeight = 42f, PromptGap = 8f;
         const float MessageSeconds = 5f;
@@ -263,7 +263,8 @@ namespace Game.Gameplay
             if (station >= 0 && _director.Ready)
             {
                 KeyElevatorNet.LastStatus.TryGetValue(station, out var st);
-                text = PollutionHud.KeyPrompt((KeyPhase)st.Phase, st.Holder == me.ObjectId, keys != null ? keys.Keys.Value : 0, st.Left);
+                text = PollutionHud.KeyPrompt((KeyPhase)st.Phase, st.Holder == me.ObjectId, keys != null ? keys.Keys.Value : 0, st.Left,
+                    keys != null ? PollutionRules.Current.MaxRidesPerTeam - keys.TeamKeyRides.Value : int.MaxValue);
             }
             if (text == _prompt) return;
             _prompt = text;

@@ -234,6 +234,8 @@ namespace Game.Net
             if (director == null) return false;
             var rules = SupplyRules.Current;
             var items = SupplyPlan.Contents(GameData.SupplyLoot, rules.ItemCount, crate.Seed);
+            if (PollutionDirector.Instance != null && PollutionDirector.Instance.ServerTakeCrateKey())
+                items.Add(new LootEntry { Kind = LootKind.Key, Amount = 1 });
             for (int i = 0; i < items.Count; i++)
             {
                 LootScatter.RingOffset(i, items.Count, rules.RingRadius, out float x, out float z);

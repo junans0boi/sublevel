@@ -164,6 +164,7 @@ namespace Game.Net
                     var holder = c != null ? c.GetComponent<KeyHolder>() : null;
                     if (holder != null) holder.ServerAdd(1);
                 }
+                if (e.Event == KeyEvent.RideEnded) ServerTellTeam(Find(e.Holder));
                 SendStatus(e.Station);
             }
             if (Time.unscaledTime >= _nextSend)
@@ -171,6 +172,15 @@ namespace Game.Net
                 _nextSend = Time.unscaledTime + 1f;
                 for (int i = 0; i < _system.Count; i++) if (_system.Station(i).Phase != KeyPhase.Idle) SendStatus(i);
             }
+        }
+
+        // The holder's team learns how many key rides it has used (the holder may have died on the way: then nobody is told).
+        void ServerTellTeam(Combatant holder)
+        {
+            if (holder == null) return;
+            int team = TeamKey(holder), rides = _system.RidesOf(team);
+            foreach (var c in Combatant.All)
+                if (c != null && TeamKey(c) == team && c.TryGetComponent(out KeyHolder k)) k.TeamKeyRides.Value = rides;
         }
 
         void SendStatus(int station)

@@ -165,7 +165,7 @@ namespace Game.Gameplay
 
             // The ride (the car itself goes down and up, ADR-079): a band above the centre with where it goes.
             var band = new Vector2(0.5f, 0.5f);
-            var transit = UiKit.Rect("ElevatorTransit", canvasRoot, band, band, new Vector2(0f, 200f), new Vector2(520f, 84f));
+            var transit = UiKit.Rect("ElevatorTransit", canvasRoot, band, band, new Vector2(0f, 200f), new Vector2(520f, 108f)); // two lines of 24 px bold Korean need ~90 px
             UiKit.Box(transit, UiKit.Panel);
             UiKit.Frame(transit, 1f, UiKit.SteelDim);
             p._transitText = UiKit.Label(UiKit.Fill("Text", transit), "", 24, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
@@ -236,13 +236,15 @@ namespace Game.Gameplay
             }
 
             int cooldown = Mathf.CeilToInt(rides.LocalCooldownLeft);
+            bool keyChoosing = KeyElevatorNet.LastStatus.TryGetValue(station, out var keyStatus) && (KeyPhase)keyStatus.Phase == KeyPhase.Selecting && keyStatus.Holder == me.ObjectId;
             int footerKey = !ElevatorTravel.Runs(here >= 0 && here < States.Count ? States[here] : ZoneState.Safe) ? -1
-                : Choices.Count == 0 ? -2 : cooldown;
+                : Choices.Count == 0 ? -2 : PollutionDirector.FreeRidesBlocked && !keyChoosing ? -3 : cooldown;
             if (footerKey != _footerKey)
             {
                 _footerKey = footerKey;
                 _footer.text = footerKey == -1 ? "운행 중지 · 봉쇄된 지역"
                     : footerKey == -2 ? "갈 수 있는 지역 없음"
+                    : footerKey == -3 ? "열쇠 승강기 · 팀당 " + PollutionRules.Current.MaxRidesPerTeam + "회"
                     : cooldown > 0 ? "재사용 대기 " + cooldown + "초"
                     : "F 목적지 변경 · F 길게 출발";
             }

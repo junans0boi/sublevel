@@ -62,6 +62,7 @@ namespace Game.Tests
         {
             PlayerController.InputOverride = null;
             PollutionDirector.AllowFreeRides = false;
+            PollutionDirector.RulesOverride = null; // the Timed rules of one test must not run the next one's pollution
             if (_savedRules != null) DeploymentRules.Current = _savedRules;
             BotRules.Current = new BotRules();
             SceneManager.LoadScene("Bootstrap");
