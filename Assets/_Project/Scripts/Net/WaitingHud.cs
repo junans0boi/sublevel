@@ -84,8 +84,20 @@ namespace Game.Net
             var text = go.AddComponent<TextMesh>();
             text.font = font; text.fontSize = 64; text.characterSize = size * 0.35f; text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center;
             text.color = color; text.richText = false;
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            go.GetComponent<MeshRenderer>().sharedMaterial = BoardMaterial(font);
             return text;
+        }
+
+        // The font's own material draws with ZTest Always (GUI/Text Shader), so the board text showed through the dome from outside.
+        static Material _boardMaterial;
+        static Material BoardMaterial(Font font)
+        {
+            if (_boardMaterial == null)
+            {
+                _boardMaterial = new Material(font.material) { name = "WaitingBoardText" };
+                _boardMaterial.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.LessEqual);
+            }
+            return _boardMaterial;
         }
 
         // The same time on the screen, for a person who is not looking at the board.

@@ -67,6 +67,9 @@ namespace Game.Tests
         public IEnumerator CannotLeaveTheIsland_ServerPutsThemBack()
         {
             var me = Combatant.LocalPlayer;
+            // The dedicated server guards every person (all remote); the host's own body is unguarded, so the test adds the guard.
+            if (!me.TryGetComponent<MoveGuard>(out _)) me.gameObject.AddComponent<MoveGuard>();
+            yield return new WaitForSeconds(MoveGuard.Interval * 2f);
             var p = me.transform.position;
             PlayerController.Local.Teleport(new Vector3(WaitingIsland.CentreX + 70f, p.y, WaitingIsland.CentreZ));
             yield return new WaitForSeconds(1.2f);
