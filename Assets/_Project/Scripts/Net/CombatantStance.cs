@@ -363,6 +363,34 @@ namespace Game.Net
         [TargetRpc]
         void TargetCorrect(NetworkConnection connection, Vector3 back) => Corrected?.Invoke(back);
 
+        // The bungee jump of the waiting island (#419): the server tells the owner where the pad is; the owner plays the fixed curve
+        // (Core/BungeeCurve) from there, the server follows the same curve for its own copy.
+        public event Action<Vector3> BungeeBegan;
+
+        [Server]
+        public void ServerBungeeStart(Vector3 pad)
+        {
+            if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) BungeeBegan?.Invoke(pad);
+            else TargetBungeeStart(Owner, pad);
+        }
+
+        [TargetRpc]
+        void TargetBungeeStart(NetworkConnection connection, Vector3 pad) => BungeeBegan?.Invoke(pad);
+
+        // The bungee lift (ADR-387): the server took this body on a ride from `from` (feet) up or down by BungeeLift.Height; the owner
+        // plays the same S-curve from there.
+        public event Action<Vector3, bool> LiftBegan;
+
+        [Server]
+        public void ServerLiftStart(Vector3 from, bool up)
+        {
+            if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) LiftBegan?.Invoke(from, up);
+            else TargetLiftStart(Owner, from, up);
+        }
+
+        [TargetRpc]
+        void TargetLiftStart(NetworkConnection connection, Vector3 from, bool up) => LiftBegan?.Invoke(from, up);
+
         // The owner moved itself on purpose (elevator ride, leaving a vehicle): the server's last good place moves too.
         // Checked by MoveGuard.TryTeleport (#170).
         [ServerRpc]

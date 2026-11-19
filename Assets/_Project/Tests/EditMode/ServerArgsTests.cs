@@ -17,7 +17,8 @@ namespace Game.Tests
             Assert.AreEqual(-1, o.Bots);
             Assert.IsNull(o.Region);
             Assert.AreEqual(0, o.MaxPlayers);
-            Assert.AreEqual(60f, o.StartSeconds);
+            Assert.AreEqual(ServerArgs.DefaultStartSeconds, o.StartSeconds);
+            Assert.Less(o.StartSeconds, 0f, "no argument: the countdown length comes from the data (ADR-380)");
             Assert.IsNull(o.Error);
         }
 
@@ -77,15 +78,6 @@ namespace Game.Tests
             Assert.IsTrue(ServerRules.ShouldEndMatch(100, true, ServerRules.EmptySeconds, 0));
             Assert.IsFalse(ServerRules.ShouldEndMatch(ServerRules.NobodyCameSeconds - 1, false, 999, 0), "a match nobody reached yet is waited for");
             Assert.IsTrue(ServerRules.ShouldEndMatch(ServerRules.NobodyCameSeconds, false, 0, 0));
-        }
-
-        [Test]
-        public void AutoStart_NeedsPeople_AndATimer()
-        {
-            Assert.IsFalse(ServerRules.ShouldAutoStart(60, 59, 2));
-            Assert.IsTrue(ServerRules.ShouldAutoStart(60, 60, 1));
-            Assert.IsFalse(ServerRules.ShouldAutoStart(60, 600, 0), "nobody there, nothing to start");
-            Assert.IsFalse(ServerRules.ShouldAutoStart(0, 600, 3), "timer switched off");
         }
     }
 }

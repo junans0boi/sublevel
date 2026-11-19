@@ -25,7 +25,10 @@ namespace Game.Net
         LobbyNet _lobby;
         StateKind _state;
         float _lobbyRetryAt;
-        float _firstJoinAt = -1f;
+        // --start-seconds as given (negative = the data value); the waiting island reads it too.
+        public static float StartSecondsOverride = -1f;
+        WaitingCountdown _countdown;   // the lobby's countdown (ADR-380)
+        float _nextCountdownLog;
         float _matchStartedAt;
         bool _everHadPeople;
         float _emptySince = -1f;
@@ -48,6 +51,7 @@ namespace Game.Net
             DontDestroyOnLoad(go);
             Instance = go.AddComponent<DedicatedServer>();
             Instance._options = options;
+            StartSecondsOverride = options.StartSeconds;
         }
 
         void Start()
@@ -76,7 +80,7 @@ namespace Game.Net
             Application.runInBackground = true;
             Application.targetFrameRate = 60; // headless, but the tick should not spin a core
             Debug.Log($"[Server] starting: port {_options.Port}, bots {(_options.Bots < 0 ? "auto" : _options.Bots.ToString())}, " +
-                      $"region {(_options.Region ?? "random")}, max players {MatchRules.Current.MaxPlayers}, start timer {_options.StartSeconds}s, version {LobbyNet.CurrentVersion}");
+                      $"region {(_options.Region ?? "random")}, max players {MatchRules.Current.MaxPlayers}, start timer {(_options.StartSeconds >= 0f ? _options.StartSeconds : MatchRules.Current.WaitMaxSeconds)}s (full room {MatchRules.Current.WaitFullSeconds}s), version {LobbyNet.CurrentVersion}");
             // Whatever scene the build opened with (the main menu) is not needed here.
             if (SceneManager.GetActiveScene().name != IdleScene && Application.CanStreamedLevelBeLoaded(IdleScene)) SceneManager.LoadScene(IdleScene);
             _lobbyRetryAt = 0f;
@@ -127,17 +131,23 @@ namespace Game.Net
                 _lobby.StartMatch(true);
                 return;
             }
-            if (people == 0) { _firstJoinAt = -1f; return; }
-            if (_firstJoinAt < 0f) _firstJoinAt = Time.unscaledTime;
+            _countdown ??= new WaitingCountdown(MatchRules.Current, _options.StartSeconds);
+            var cd = _countdown.Update(Time.unscaledTimeAsDouble, people, 0); // waiting bots join with the island (ADR-380 T5)
+            if (people == 0) { _nextCountdownLog = 0f; return; }
             if (_lobby.CanStart)
             {
                 Debug.Log("[Server] everyone is ready, starting");
                 _lobby.StartMatch();
             }
-            else if (ServerRules.ShouldAutoStart(_options.StartSeconds, Time.unscaledTime - _firstJoinAt, people))
+            else if (cd.Done)
             {
-                Debug.Log("[Server] start timer over, starting without waiting for the rest");
+                Debug.Log($"[Server] countdown over ({cd.Reason}): {people} people, {cd.BotsTotal} bots, starting");
                 _lobby.StartMatch(true);
+            }
+            else if (Time.unscaledTime >= _nextCountdownLog)
+            {
+                _nextCountdownLog = Time.unscaledTime + 10f;
+                Debug.Log($"[Server] countdown: {people} people, {cd.SecondsLeft:0}s left");
             }
         }
 
@@ -146,7 +156,8 @@ namespace Game.Net
             _lobby = gameObject.AddComponent<LobbyNet>();
             _lobby.MatchStarting += OnMatchStarting;
             _lobbyOpenedAt = Time.unscaledTime;
-            _firstJoinAt = -1f;
+            _countdown = null;
+            _nextCountdownLog = 0f;
             _lastPeople = 0;
             if (_lobby.StartDedicated(_options.Port))
             {

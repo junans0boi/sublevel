@@ -35,7 +35,7 @@ Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
 | `--region ID` | 매치의 **최종 구역**(`A` 산악, `B` 습지, `C` 마을, `D` 공장, 또는 0부터의 번호). 모르는 값이면 경고 후 무시 | 무작위 |
 | `--max-players N` | 한 방의 사람 수(1..64 = `Participants`−`MinBots`, `MatchRules.MaxHumans`) | rules.json `Match.MaxPlayers`(64) |
 | `--participants N` | 사람+봇 합계(2..80 = `MatchRules.MaxParticipantsLimit`), 슬라이스·측정용. 봇은 사람이 비운 만큼 채우되 `MinBots`(16) 미만으로 안 줄어듦 | rules.json `Match.Participants`(80) |
-| `--start-seconds N` | 첫 사람이 들어온 뒤 N초가 지나면 준비 안 한 사람이 있어도 시작(0 = 끔) | 60 |
+| `--start-seconds N` | 첫 사람이 들어온 뒤 최대 N초 카운트다운(가득 차면 `WaitFullSeconds` 15초로 단축, ADR-380; 0 = 시간 제한 없음) | 데이터 `Match.WaitMaxSeconds`(90) |
 
 측정용 인자(ADR-242, `ServerArgs.cs`): `--perf NAME`(프레임 통계 → `Logs/perf/s8_server_NAME.csv`), `--perf-seed N`, `--perf-level easy|normal|hard`(모든 봇 같은 난이도, 혼합 끔), `--perf-quick N`(오염 N배 빠르게, N≥1), `--perf-gather X,Z`, `--perf-squad`, `--perf-keys`.
 

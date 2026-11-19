@@ -11,7 +11,7 @@ namespace Game.Core
     //   --max-players N        people in one room (1..64), default from rules.json
     //   --participants N       people + bots in the match (2..80), default rules.json Match.Participants (slice and measurement runs)
     //   --perf NAME            write server frame-time stats to Logs/perf/s8_server_NAME.csv (ADR-242)
-    //   --start-seconds N      start this long after the first person joined even if not all are ready (0 = never), default 60
+    //   --start-seconds N      start this long after the first person joined even if not all are ready (0 = never), default: rules.json Match.WaitMaxSeconds (90)
     public struct ServerOptions
     {
         public bool Dedicated;
@@ -36,7 +36,7 @@ namespace Game.Core
     public static class ServerArgs
     {
         public const ushort DefaultPort = 7770;
-        public const float DefaultStartSeconds = 60f;
+        public const float DefaultStartSeconds = -1f; // negative = the data value (MatchRules.WaitMaxSeconds, ADR-380)
 
         public static ServerOptions Parse(IReadOnlyList<string> args)
         {
@@ -124,9 +124,5 @@ namespace Game.Core
             if (everHadPeople) return emptyFor >= EmptySeconds;
             return matchSeconds >= NobodyCameSeconds;
         }
-
-        // True when the lobby should start although not everyone is ready (the start timer, 0 = off).
-        public static bool ShouldAutoStart(float startSeconds, float sinceFirstJoin, int people)
-            => startSeconds > 0f && people > 0 && sinceFirstJoin >= startSeconds;
     }
 }
