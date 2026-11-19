@@ -3,11 +3,11 @@
 ## 1. 승인된 소스
 | 소스 | 라이선스 | 용도 | 주의 |
 |---|---|---|---|
-| Sonniss GameAudioGDC 번들 | 로열티프리, 출처 표기 불필요, 상업 가능 | 총성, 폭발, 환경음, 사이렌 등 대량 | 2026 번들 약 7.47GB/347+ 파일. **AI 학습 목적 사용 금지 조항** 준수. 약관 원문을 ledger에 보관 |
+| Sonniss GameAudioGDC 번들(미사용, 약관은 사람 확인) | 로열티프리, 출처 표기 불필요, 상업 가능 | 총성, 폭발, 환경음, 사이렌 등 대량 | 2026 번들 약 7.47GB/347+ 파일. **AI 학습 목적 사용 금지 조항** 준수. 약관 원문을 ledger에 보관 |
 | BigSoundBank | CC0 (3,500+) | 환경음, 생활음 | |
 | OpenGameArt 사운드 | 파일별 | CC0/CC-BY만 | CC-BY는 크레딧 |
 | itch.io 총성 팩 | 제작자별 | 약관 확인 | |
-| Freesound | **CC0 우선**. CC-BY는 ledger+크레딧 화면 반영 시에만(ADR-177) | 보충 효과음 | NC·ND·불명은 사용 안 함. 다운로드는 준환이 로그인해 직접 |
+| Freesound | **CC0 우선**. CC-BY는 ledger+크레딧 화면 반영 시에만(ADR-177) | **주 소스(사용 중, S-0008~0045)** | NC·ND·불명은 사용 안 함. 다운로드는 준환이 로그인해 직접. CC BY 3.0 1건(S-0035)은 `Credits.cs` |
 | Kenney 오디오 | CC0 | UI/보조 | |
 
 ## 2. 제외
@@ -32,3 +32,17 @@ TunePocket, ElevenLabs 무료 플랜 산출물(상업 제약/약관 불명확), 
 1. 라이선스 확인 → `Assets/_Project/Audio/<카테고리>/` 저장 → `ASSET_LEDGER.md` 기록(번들 단위로 약관 원문 첨부).
 2. 번들에서 쓰는 파일만 프로젝트에 포함(용량 관리).
 3. 네트워크 차단으로 다운로드 불가 시 `blocked`(사람이 제공).
+
+## 6. 현재 연결 상태 (2026-11-19, 코드 기준)
+| 소리 | 지금 재생되는 것 | 옛 소스 |
+|---|---|---|
+| 총성 근거리·원거리 | Freesound 녹음 `gun_<계열>_near/far_*`(S-0023~0031), 소음기·실내 꼬리·빈 격발·탄피 | S-0001: 원거리 폴백만 |
+| 장전 | `gun_reload_pistol`(S-0035, CC BY 3.0)·`gun_reload_rifle`(S-0032)·`gun_shotgun_pump`(S-0029) | S-0002: 프리팹 폴백만 |
+| 탄 스침 | `whiz_fs_*`(S-0036·0037) + 합성 `whiz_000~002`(S-0005)가 섞임 | S-0005 사용 중 |
+| 발소리 | 표면 14개 폴더 `step_*`(S-0008~0022), 나머지 4표면은 대신할 표면 소리 | S-0003·0004: 재생 안 됨 |
+| 문 열림·닫힘 | `door_fs_*`(S-0044) | S-0006: 폴백만 |
+| 유리·차량·엘리베이터 | `Resources/Sfx/*`(S-0038~0043·0045), 파일 없으면 합성 | — |
+| 근접 타격·명중 확인 | Kenney impactPunch·impactBell(S-0003) | 사용 중 |
+| 환경음·근접 휘두름·문 노크/부서짐·불·천둥 | 코드 합성(S-0007 등) | 사용 중 |
+
+코드: `Core/WeaponSounds.cs`, `Gameplay/CombatantAudio.cs`, `Gameplay/DoorAudio.cs`, `Gameplay/GlassFx.cs`, `Gameplay/VehicleAudio.cs`, `Gameplay/ElevatorAudio.cs`. 교체된 옛 파일은 저장소에 남아 있다(제거는 별도 작업).

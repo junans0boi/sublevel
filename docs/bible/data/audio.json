@@ -3,7 +3,7 @@
   "title": "사운드",
   "order": 61,
   "group": "기술",
-  "summary": "현재 오디오(믹서 없음, 합성음 다수, 표면 6종과 이름 파싱 결함), '스타워즈 같다'는 불만, 목표 공간음향 설계, 후보 소스, 청취 시트 계획, 표면 태그 14종, 소리 이벤트 목록.",
+  "summary": "현재 오디오(믹서 없음, Freesound 녹음 S-0008~0045로 발소리·총성·장전·문·유리·차량·엘리베이터 교체, 환경음·폭발 등은 합성), '스타워즈 같다'는 불만, 목표 공간음향 설계, 후보 소스, 청취 시트, 표면 태그, 소리 이벤트 목록.",
   "status": "confirmed",
   "parts": [
     {
@@ -63,73 +63,73 @@
           "id": "c_step",
           "status": "confirmed",
           "part": "발소리",
-          "now": "표면 6종(Concrete, Metal, Wood, Grass, Dirt, Water) x Resources/Steps/<표면> 클립 5개(물 4개)를 이름순 정렬해 랜덤 재생. 범위 = 40 m x 자세계수 x 질주 1.25 x 표면 음량.",
-          "gap": "아래 '표면 판정 결함' 참고.",
-          "source": "Assets/_Project/Scripts/Core/SoundRules.cs:7,62-64; Assets/_Project/Scripts/Gameplay/CombatantAudio.cs:200-210"
+          "now": "표면 18종(SurfaceId) 중 14개 폴더(Resources/Steps/<표면>, Freesound CC0 S-0008~0022)의 step_* 클립을 이름순 정렬해 랜덤 재생. 폴더가 없는 표면(카펫·금속 격자·유리·양철 지붕 등)은 대신할 표면 소리를 작게(SurfaceSounds.StepFolder). 범위 = 40 m x 자세계수 x 질주 1.25 x 표면 음량.",
+          "gap": "옛 Kenney·OpenGameArt 발소리는 이름이 step_이 아니라 재생되지 않는다(파일 삭제는 남음).",
+          "source": "Assets/_Project/Scripts/Gameplay/CombatantAudio.cs StepClips; Assets/_Project/Scripts/Core/World/SurfaceId.cs; docs/ASSET_LEDGER.md S-0008~0022"
         },
         {
           "id": "c_shot",
           "status": "confirmed",
           "part": "총성",
-          "now": "근거리 4종(권총·SMG·소총·산탄총, CC0 라이브러리를 잘라 사용) + 원거리 5종(저격 포함, 같은 라이브러리의 mid distance 녹음을 모노 변환·저역 통과·저음 반사 2개 추가해 파생).",
-          "gap": "원본이 한 라이브러리의 단발 녹음이라 변형이 적다. Sentinel(저격 대용)은 소총 소리를 낮은 피치로 재사용(CombatantAudio.cs:25). 매 발 랜덤 피치 지터(PitchJitter) 적용, 변형 개수는 무기당 1개 추정.",
-          "source": "docs/ASSET_LEDGER.md:39; Assets/_Project/Scripts/Core/SoundRules.cs:76-98"
+          "now": "Freesound CC0 녹음(S-0023~0031)을 잘라 계열별 근거리·원거리(권총·SMG·소총·DMR·저격·산탄총, LMG는 소총 녹음을 낮은 피치로) + 소음기 근거리·실내 꼬리·빈 격발·탄피. 무기별 피치·음량은 WeaponSounds.Table.",
+          "gap": "옛 The Free Firearm Sound Library 원거리(S-0001)는 폴백만(모든 계열에 녹음이 있어 사실상 안 씀).",
+          "source": "Assets/_Project/Scripts/Core/WeaponSounds.cs; Assets/_Project/Audio/Weapons/Freesound; tools/sound_shots.json"
         },
         {
           "id": "c_reload",
           "status": "confirmed",
           "part": "장전",
-          "now": "OpenGameArt CC0 3개(권총·소총·산탄총). 다른 무기가 어느 것을 쓰는지는 확인 필요.",
-          "gap": "탄피·격발 공이·빈 탄창 소리 없음(확인 필요).",
-          "source": "docs/ASSET_LEDGER.md:40"
+          "now": "계열별 녹음 장전(ADR-250): 권총 gun_reload_pistol(S-0035, CC BY 3.0 크레딧), 산탄총 펌프, 나머지 소총 장전(WeaponSounds.ReloadName).",
+          "gap": "옛 OpenGameArt 장전(S-0002)은 프리팹 폴백만.",
+          "source": "Assets/_Project/Scripts/Gameplay/CombatantAudio.cs ReloadClip; docs/ASSET_LEDGER.md S-0032~0035"
         },
         {
           "id": "c_glass",
           "status": "confirmed",
           "part": "유리 깨짐",
-          "now": "파일 없음. 노이즈와 짧은 고음 톤을 코드로 합성한 0.9초 충돌음 + 파편 14개.",
-          "gap": "유리 두께별 변형 없음. 합성음이라 인공적으로 들릴 가능성(추정, 준환 지적 '스타워즈'와 일치).",
-          "source": "Assets/_Project/Scripts/Gameplay/GlassFx.cs:7-17"
+          "now": "녹음 glass_break_01(S-0045, ADR-252) + 파편 14개. 파일이 없으면 합성 충돌음으로 폴백.",
+          "gap": "유리 두께별 변형 없음.",
+          "source": "Assets/_Project/Scripts/Gameplay/GlassFx.cs:118"
         },
         {
           "id": "c_door",
           "status": "confirmed",
           "part": "문",
-          "now": "자체 합성 wav 6개(열림 3: 삐걱, 닫힘 3: 쿵+딸깍), 고정 시드 잡음·톱니파.",
-          "gap": "합성음.",
-          "source": "docs/ASSET_LEDGER.md:44; tools/derive_g11_audio.py:1-5"
+          "now": "녹음 door_fs_open_01·door_fs_close_01(S-0044, ADR-252). 녹음이 있으면 그것만 재생, 없으면 옛 합성 wav(S-0006). 노크·부서짐은 합성(DoorFx).",
+          "gap": "열림·닫힘 각 1개라 변형이 적다(피치 지터만).",
+          "source": "Assets/_Project/Scripts/Gameplay/DoorAudio.cs Recorded; docs/ASSET_LEDGER.md S-0044"
         },
         {
           "id": "c_whiz",
           "status": "confirmed",
           "part": "탄 스침",
-          "now": "합성: 1.2 ms 딱 소리 + 음높이가 내려가는 공명 대역 잡음, 3개.",
-          "gap": "음높이가 내려가는 공명 잡음은 SF 레이저 소리와 비슷하다(추정). '스타워즈' 느낌의 유력한 후보.",
-          "source": "docs/ASSET_LEDGER.md:43; tools/derive_g4_audio.py:1-5"
+          "now": "녹음 whiz_fs_*(S-0036·0037)와 옛 합성 whiz_000~002(S-0005)가 같은 whiz_ 접두사라 섞여 재생된다.",
+          "gap": "합성 스침을 빼려면 S-0005 파일 제거가 필요(사람 청취 뒤).",
+          "source": "Assets/_Project/Scripts/Gameplay/CombatantAudio.cs WhizClips"
         },
         {
           "id": "c_synth",
           "status": "confirmed",
           "part": "그 외 코드 합성",
-          "now": "엘리베이터, 차량 엔진·경적·타이어, 근접, 투척 폭발, 천둥(StormFx), 앰비언스, 차량 파손 등이 코드로 합성된다.",
-          "gap": "'녹음 없음, 합성 위주'라서 실물감이 약하다.",
-          "source": "Scripts/Gameplay 검색(AudioClip.Create 사용 파일 10개)"
+          "now": "녹음으로 바뀐 것: 차량 엔진·경적·타이어·충돌(S-0038~0041), 엘리베이터 이동·도착(S-0042·0043) — 파일이 없을 때만 합성. 여전히 합성: 환경음(AmbientBeds), 근접 휘두름, 문 노크·부서짐, 불 타는 소리, 천둥(StormFx), 차량 파손 등.",
+          "gap": "환경음·폭발은 아직 녹음이 없다.",
+          "source": "Scripts/Gameplay AudioClip.Create 사용 파일 10개; VehicleAudio.cs:153-159; ElevatorAudio.cs:94-96"
         },
         {
           "id": "c_foley",
           "status": "confirmed",
           "part": "발소리 원본",
-          "now": "Kenney Impact Sounds의 footstep_concrete/grass/wood, 흙·자갈은 footstep_snow, 금속은 impactMetal_light를 대신 사용. 피격은 impactPunch.",
-          "gap": "눈 발소리를 흙에 쓰는 등 표면과 소리가 어긋난다(코드/ledger에서 확인한 사실). 같은 팩이라 질감이 단일하다.",
-          "source": "docs/ASSET_LEDGER.md:41"
+          "now": "발소리는 Freesound CC0(S-0008~0022). Kenney Impact Sounds(S-0003)는 근접 타격 impactPunch·프라이팬 impactBell·명중/처치 확인음으로만 남음.",
+          "gap": "",
+          "source": "Assets/_Project/Editor/MeleeKit.cs:11; Assets/_Project/Editor/TestBoxBuilder.cs:223-224"
         },
         {
           "id": "c_files",
           "status": "confirmed",
           "part": "오디오 파일 수",
-          "now": "wav 약 57개(발소리 29, 문 6, 총성 9, 재장전 3, 스침 3, 피격·종 7) — 라이선스 모두 CC0 또는 자체 제작(ledger S-0001~6).",
-          "gap": "Sonniss·Freesound는 아직 미사용.",
-          "source": "Assets/_Project/Audio (파일 수 계산)"
+          "now": "Freesound 녹음 파일 120개(Weapons/Freesound 25, Foley/Freesound 95; 발소리 step_* 86) — ledger S-0008~0045. CC BY 3.0 1건(S-0035)은 Credits.cs 크레딧. 옛 S-0001~0007은 ledger에 교체/사용 여부 표시.",
+          "gap": "Sonniss는 미사용(a_son 미정). 교체된 옛 파일은 아직 저장소에 있다.",
+          "source": "Assets/_Project/Audio (파일 수 계산); docs/ASSET_LEDGER.md"
         },
         {
           "id": "c_pool",
@@ -347,12 +347,12 @@
       "rows": [
         {
           "id": "s_fs",
-          "status": "proposed",
+          "status": "confirmed",
           "name": "Freesound",
-          "lic": "파일별. CC0 필터만(AUDIO.md). CC-BY는 크레딧 가능 여부 미정(MASTER_PLAN)",
+          "lic": "CC0 우선, CC-BY는 ledger+Credits.cs 반영 시에만(ADR-177)",
           "use": "발소리·유리·생활음 보충",
-          "risk": "미검증. 파일 하나마다 CC0 확인과 ledger 기록 필요. 다운로드는 준환 승인(전역 규칙).",
-          "source": "docs/AUDIO.md:5-12"
+          "risk": "사용 중: S-0008~0045(CC BY 3.0 1건). 다운로드는 준환 로그인.",
+          "source": "docs/AUDIO.md; docs/ASSET_LEDGER.md"
         },
         {
           "id": "s_sn",
@@ -378,7 +378,7 @@
           "name": "OpenGameArt",
           "lic": "파일별, CC0만(AUDIO.md는 CC0/CC-BY)",
           "use": "보충",
-          "risk": "미검증. 현재 재장전·물 발소리가 여기서 왔다.",
+          "risk": "옛 재장전·물 발소리(S-0002·0004)가 여기서 왔고 지금은 Freesound로 교체됨.",
           "source": "docs/AUDIO.md:5-12"
         },
         {
@@ -643,7 +643,7 @@
           "who": "Body 범위 안의 모두(+봇 14 m)",
           "rad": "달리기 40, 질주 x1.25, 앉기 x0.4, 느린걷기 x0.25, 엎드림 x0.1; 표면 x0.75~1.3",
           "layers": "표면 클립 1겹(+신발 층 제안)",
-          "now": "구현됨(6표면). 봇 청취 반경 14 m(rules.json Bot).",
+          "now": "구현됨(표면 18종, 녹음 14폴더). 봇 청취 반경 14 m(rules.json Bot).",
           "source": "Assets/_Project/Scripts/Core/SoundRules.cs:14-37; Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:25"
         },
         {
@@ -662,8 +662,8 @@
           "ev": "탄 스침",
           "who": "탄이 3 m 안으로 지나간 사람(사수 6 m 이내 제외)",
           "rad": "3",
-          "layers": "합성 1겹",
-          "now": "구현됨(합성).",
+          "layers": "녹음+합성 섞임 1겹",
+          "now": "구현됨(녹음 S-0036·0037 + 합성 S-0005).",
           "source": "Assets/_Project/Scripts/Core/SoundRules.cs:101"
         },
         {
@@ -672,8 +672,8 @@
           "ev": "유리 깨짐",
           "who": "Impact 범위 3~60 m, 봇 40 m",
           "rad": "60",
-          "layers": "합성 1겹 + 파편",
-          "now": "구현됨(합성). 두께별 변형은 제안.",
+          "layers": "녹음 1겹 + 파편",
+          "now": "구현됨(녹음 S-0045, 합성 폴백).",
           "source": "Assets/_Project/Scripts/Gameplay/GlassFx.cs:7-17; Assets/_Project/Data/Resources/GameData/rules.json:Bot GlassHearingRadius"
         },
         {
@@ -683,8 +683,8 @@
           "who": "Body 범위(제안) 내",
           "rad": "추정 40 이하(확인 필요)",
           "layers": "파일 1겹",
-          "now": "합성 wav.",
-          "source": "docs/ASSET_LEDGER.md:44"
+          "now": "녹음(S-0044), 합성 폴백.",
+          "source": "Assets/_Project/Scripts/Gameplay/DoorAudio.cs"
         },
         {
           "id": "e_expl",
@@ -703,7 +703,7 @@
           "who": "Vehicle 범위, 경적은 봇 60 m",
           "rad": "6~150",
           "layers": "엔진 루프+경적 루프",
-          "now": "합성 루프.",
+          "now": "녹음 루프(S-0038~0041), 합성 폴백.",
           "source": "Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:28; Assets/_Project/Scripts/Core/VehicleFxRules.cs"
         },
         {
@@ -713,7 +713,7 @@
           "who": "Elevator 범위",
           "rad": "3~60",
           "layers": "합성",
-          "now": "구현됨(합성).",
+          "now": "녹음(S-0042·0043), 합성 폴백.",
           "source": "Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:29"
         },
         {
@@ -801,8 +801,8 @@
           ],
           "recommended": "CC0만",
           "status": "confirmed",
-          "answer": "CC0만 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]",
-          "why": "AUDIO.md는 Freesound에서 CC-BY를 쓰지 않는다. 크레딧 화면(CreditsScreen)은 이미 CC BY 4.0 차량으로 쓰고 있어 기술적으로는 가능. 준환 결정."
+          "answer": "CC-BY 허용(크레딧 화면에 표기) — 준환 결정 2026-11-16(ADR-177). 사용 1건: S-0035 Glock19_reload(Fr3yr, CC BY 3.0).",
+          "why": "Freesound는 CC0 우선, CC-BY는 ledger 기록 + Credits.cs 반영 시에만."
         },
         {
           "id": "a_son",

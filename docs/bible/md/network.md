@@ -1,6 +1,6 @@
 # 네트워크
 
-> 상태: 확정 · 요약: Fish-Net 4.7.3/Tugboat 30 Hz, 소유자 권위 이동+서버 권위 전투, 관심 영역, 자체 LagComp, 전용 서버, 대역폭 실측과 50명 요구·위험.
+> 상태: 확정 · 요약: Fish-Net 4.7.3/Tugboat 30 Hz, 소유자 권위 이동+서버 권위 전투, 관심 영역, 자체 LagComp, 전용 서버, 대역폭 실측(16인)과 80명 요구·위험.
 
 ## Fish-Net 구성
 
@@ -51,10 +51,10 @@
 
 ## 전용 서버 문서 요약
 
-빌드: `tools/unity.sh build server` (macOS Mono, 약 1분) / server-win은 미검증. 실행: `--dedicated --port 7770 --bots 15 --region C --max-players 16 --start-seconds 60` + `-batchmode -nographics`. 끝: 결정 20초 뒤 / 모두 떠난 지 30초 뒤 / 150초간 아무도 안 옴 → 로비로 복귀. SIGTERM에 정상 종료. 잘못된 인자는 코드 2로 종료.
+빌드: `tools/unity.sh build server`(macOS Mono) / `server-linux-arm64`(오라클 ARM) / server-win은 미검증. 실행: `--dedicated --port 7770 --region C --start-seconds 60` + `-batchmode -nographics`(`--bots` 0..79·`--max-players` 1..64·`--participants` 2..80, 생략하면 rules.json Match). 끝: 결정 20초 뒤 / 모두 떠난 지 30초 뒤 / 150초간 아무도 안 옴 → 로비로 복귀. SIGTERM에 정상 종료. 잘못된 인자는 코드 2로 종료.
 
 - 아직 확인하지 않은 것: Windows 서버 빌드·실행, 다른 기기 접속(방화벽·NAT), 두 사람 이상, 서버 CPU·메모리 예산(PERF_BUDGET에 서버 항목 없음), 장시간 운영.
-- 한 프로세스에 방 하나라 50명 방을 여러 개 운영하려면 프로세스 여러 개를 띄우는 구조다(추정).
+- 한 프로세스에 방 하나라 80명 방을 여러 개 운영하려면 프로세스(포트 2개씩)를 여러 개 띄운다. 동시 방 수 계산법은 docs/DEDICATED_SERVER.md '동시 방 수 계산법'.
 
 ## 대역폭 실측 (16명 + 봇 20)
 
@@ -64,9 +64,9 @@
 | 확정 | 관심 영역 켬 | 8497 | 20.7 / 30 / 5.0 | docs/PERF_BUDGET.md:145-157 |
 | 확정 | 7명 + 봇 20, 켬 | 6249 | 10.2 / 12 / 4.5 | docs/PERF_BUDGET.md:145-157 |
 | 확정 | 봇 12 + 사람 4 한 매치 79초 평균 | 8300 | 클라이언트 4명 모두 약 8.1~8.2 KiB/s | docs/MP_AUDIT_MATCH.md:21-23 |
-| 제안 | 50명 + 봇(가정) | 12000 | 관측 인원이 36→50으로 늘면 선형 증가로 가정한 값. 서버 송신 총량은 클라이언트 수만큼 곱해져 사람 50명이면 약 600 KB/s(약 5 Mbit/s)로 추정. 사람이 서로 모이는 결승에서는 더 크다. | 계산 추정(외삽, 실측 아님) |
+| 제안 | 80명(가정) | 미측정 | 80인 실측 없음. 옛 50명 외삽(12,000 B/s·서버 약 5 Mbit/s)은 폐기. 제안 한도: 클라당 ≤15 KB/s, 서버 송신 ≤6 Mbit/s(docs/research/server_perf_budget_proposal.md). | docs/research/server_perf_budget_proposal.md |
 
-## 50명 요구와 위험 (계획)
+## 80명 요구와 위험 (계획)
 
 | 상태 | 영역 | 위험/요구 | 제안 | 근거 |
 |---|---|---|---|---|
@@ -74,9 +74,9 @@
 | 제안 | 루팅 스폰 폭주 | 루팅 약 1,500개를 서버 시작에 전부 NetworkObject로 스폰하면 접속 직후 폭주. | 플레이어 접근 시 지연 스폰 또는 지역 단위. | docs/research/06_missed_items.md:I9 |
 | 제안 | 봇 서버 CPU | 봇은 서버 전용 시뮬. 많을수록 CPU 증가(감지 레이캐스트 0.15초, NavMesh 경로). | 봇 AI LOD(먼 봇은 낮은 틱, 사람 없는 지역은 거의 정지). | docs/research/MASTER_PLAN.md:62-63 |
 | 제안 | 늦은 접속 | 접속 시 열린 문·깨진 유리 상태를 한꺼번에 보내므로 건물 수에 선형. | 건물 단위 지연 전송. 전송량 측정. | docs/MP_AUDIT_WORLD.md:7-8 |
-| 제안 | 엘리베이터 슬롯 | 현재 13대 < 16명. 50명은 슬롯 60 필요. | C2안 승강장 20곳x3. | docs/research/06_missed_items.md:N10 |
+| 제안 | 엘리베이터 슬롯 | 승강기는 팀당 1기라 판의 봇 수가 승강기 수×팀 크기−사람으로 잘린다(ADR-260, MatchDirector 경고). 솔로 80명이면 80칸이 필요. | 현재 맵 승강기 수와 대조(서버 로그 '[MatchDirector] ... capped' 확인). | docs/DECISIONS.md ADR-260; Assets/_Project/Scripts/Net/MatchDirector.cs:307-309 |
 | 제안 | 치트·정보 은닉 | 서버 판정·이동 속도 검증은 있음(ADR-142). 시야 밖 적 정보는 관심 영역 300 m 안이면 전송됨. | 시야 기반 은닉은 비용이 커서 우선순위 낮음(제안). | docs/research/MASTER_PLAN.md:67-68 |
-| 제안 | 틱·대역폭 예산 | 목표값이 없다(MASTER_PLAN '근거 없음'). | 플레이어당 다운 약 10~15 KB/s, 업 약 2~3 KB/s를 1차 목표로 측정 뒤 확정(제안, 근거 없음). | docs/research/MASTER_PLAN.md:66 |
+| 제안 | 틱·대역폭 예산 | 목표값이 없다(MASTER_PLAN '근거 없음'). | 제안 한도 클라당 ≤15 KB/s·서버 송신 ≤6 Mbit/s(`tools/perf/perf_verdict.py`로 판정). 80인 실측 뒤 확정. | docs/research/server_perf_budget_proposal.md |
 | 제안 | 물리 비용 | 건물 콜라이더가 많아지면 SyncTransforms·Raycast 비용 증가. | 건물당 콜라이더 수 상한 테스트. | docs/research/06_missed_items.md:I10 |
 
 ## 테스트 계획
@@ -87,20 +87,20 @@
 | 확정 | InterestBandwidthTests | 16+봇 20 대역폭 실측(PlayMode, 에디터 batchmode 한 프로세스). | docs/PERF_BUDGET.md:147 |
 | 확정 | MatchDedicatedEndToEndTests | 서버(--bots 8 --max-players 4)와 클라이언트 1 별도 프로세스로 로비~World~복귀 250초 통과. | docs/MP_AUDIT_MATCH.md:38-45 |
 | 확정 | ReplicationCombatTests 12개 | 원격 시점 사격·탄도·관통·투척·늦은 접속. | docs/DECISIONS.md:140 (ADR-130) |
-| 제안 | 헤드리스 부하 시험(제안) | 헤드리스 클라이언트 N개(예 49+1)로 서버 CPU·대역폭·틱 지연 측정. CI에는 최소 버전(예 8+봇)만. | docs/research/MASTER_PLAN.md:68 |
+| 제안 | 헤드리스 부하 시험(제안) | 헤드리스 클라이언트 N개(예 63+1)로 서버 CPU·대역폭·틱 지연 측정. 봇만 80인 측정은 `--perf p0\|p3 --participants 80 --bots 79`(docs/research/bot_perf_b1_2026-11-17.md). CI에는 최소 버전(예 8+봇)만. | docs/research/MASTER_PLAN.md:68 |
 | 제안 | 도시 규모 재측정(제안) | InterestBandwidthTests를 건물 200동·루팅 1,500·봇 30 시나리오로 확장, 합격선은 ADR로. | docs/research/06_missed_items.md:I9,N6 |
 
 ## 정해야 할 것
 
-- [x] **50명 서버 구조** (확정) → 프로세스 방당 1개 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
-  - 선택지: 프로세스 1개에 50명 방 / 프로세스 여러 개(방당 1개)로 확장  · 추천: 프로세스 방당 1개
+- [x] **80명 서버 구조** (확정) → 프로세스 방당 1개 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+  - 선택지: 프로세스 1개에 80명 방 / 프로세스 여러 개(방당 1개)로 확장  · 추천: 프로세스 방당 1개
   - 근거: 현재 구조가 이미 한 프로세스=한 방. 서버 CPU 측정 뒤 동시 방 수 결정.
 - [x] **틱레이트** (확정) → 30 Hz 유지 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
   - 선택지: 30 Hz 유지 / 60 Hz / 20 Hz  · 추천: 30 Hz 유지
-  - 근거: 50명에서 서버 비용을 줄이려면 올리지 않는다. 사격 판정은 LagComp 보정이 있으므로 30 Hz로 충분하다고 본다(추정, 측정 필요).
+  - 근거: 80명에서 서버 비용을 줄이려면 올리지 않는다. 사격 판정은 LagComp 보정이 있으므로 30 Hz로 충분하다고 본다(추정, 측정 필요).
 - [ ] **대역폭 목표** (미정) 
   - 선택지: 다운 15 KB/s 이하 / 측정 뒤 결정  · 추천: 측정 뒤 결정
-  - 근거: 근거 없는 수치를 고정하지 않는다(MASTER_PLAN §3-5).
+  - 근거: 근거 없는 수치를 고정하지 않는다(MASTER_PLAN §3-5). 제안: 클라당 ≤15 KB/s(server_perf_budget_proposal.md). 실측: 16인+봇 20에서 8.5 KB/s. 80인 실측 뒤 사람이 확정(ADR-176).
 - [x] **문·유리 방송 방식** (확정) → 건물 소속+관심 영역 필터 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
   - 선택지: 건물 소속+관심 영역 필터 / 전역 유지  · 추천: 건물 소속+관심 영역 필터
   - 근거: 06 문서 D10 권장.
