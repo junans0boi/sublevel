@@ -108,6 +108,30 @@ namespace Game.Tests
             Assert.AreEqual(0, MoveGuard.Corrections);
         }
 
+        // r5 playtest: the island countdown moves everybody into the elevators (WaitingRoom -> MatchDirector.ServerDeployFromIsland:
+        // ServerRelocate + ServerCorrect). The owner's body follows and echoes CmdTeleported for the 2.5 km jump; that echo is no cheat.
+        [UnityTest, Timeout(240000)]
+        public IEnumerator ServerMove_FarAway_IsNotRefusedAsATeleport()
+        {
+            yield return PlaceInArena(10f);
+            Net.Simulate(Remote);
+            var server = RemoteOnHost;
+            MoveGuard.TrustTeleports = false;
+            MoveGuard.ResetStats();
+            ServerGuard.ResetStats();
+            var to = server.transform.position + new Vector3(2500f, 0f, 0f);
+            server.transform.position = to;
+            server.GetComponent<MoveGuard>().ServerRelocate(to);
+            server.GetComponent<CombatantStance>().ServerCorrect(to);
+            yield return Until(() => Flat(Remote.Player.transform.position - to) < 2f, "the owner's body followed the server");
+            yield return Seconds(2f);
+            Log($"after the server's move: {ServerGuard.Summary()}");
+            Assert.AreEqual(0, ServerGuard.Count(GuardKind.Teleport), "the owner's echo of the server's own move is not refused");
+            Assert.Less(Flat(server.transform.position - to), 2f, "the server's body stays where the server put it");
+        }
+
+        static float Flat(Vector3 d) => new Vector2(d.x, d.z).magnitude;
+
         [UnityTest, Timeout(240000)]
         public IEnumerator CheatingRequests_AreRefused_Counted_AndChangeNothing()
         {

@@ -98,6 +98,14 @@ namespace Game.Gameplay
             else _dirty = true;
         }
 
+        // The backend assigned this server (#392): connect without the custom room's panels; the lobby panel keeps showing the matching.
+        public void JoinQuietly(string host, ushort port)
+        {
+            _hostMode = false;
+            Show(ViewKind.Hidden);
+            _lobby.Join(host, port);
+        }
+
         // 나가기 / 뒤로 가기: leaves the room and shows the main column again.
         public void Leave()
         {

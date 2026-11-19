@@ -51,6 +51,8 @@ namespace Game.Net
             double now = Time.timeAsDouble;
             float meters = (to - transform.position).magnitude;
             if (CarriedOnIsland) { Accept(to); return true; }   // the lift and the jump move the body fast on purpose (ADR-387)
+            // The owner arriving where the server itself put it (island -> elevator, any ServerCorrect) echoes CmdTeleported: no jump at all.
+            if ((to - _good).sqrMagnitude < MoveReconcile.SlackMeters * MoveReconcile.SlackMeters) { Accept(to); return true; }
             if (!TrustTeleports && !InputGuard.TeleportOk(meters, now - _lastTeleport, GameData.Rules.Guard))
                 return ServerGuard.Refuse(GuardKind.Teleport, _combatant, $"teleport {meters:F1} m, {now - _lastTeleport:F2} s after the last");
             _lastTeleport = now;

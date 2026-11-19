@@ -127,6 +127,40 @@ namespace Game.Tests
             Assert.AreEqual(LobbyRules.Unreachable, guest.FailureText);
         }
 
+        // r5 playtest: one menu's room, two matches in a row against a dedicated server. After the first match the server opens a
+        // new room on the same port (DedicatedServer.OpenLobby); the same client LobbyNet joins again, queues, and is started again.
+        [UnityTest, Timeout(60000)]
+        public IEnumerator DedicatedQueue_TwoMatchesInARow_SameClientRoom()
+        {
+            float window = _rules.QueueWindowSeconds;
+            _rules.QueueWindowSeconds = 1f;
+            try
+            {
+                ushort port = _port++;
+                var client = NewRoom();
+                for (int round = 1; round <= 2; round++)
+                {
+                    var server = NewRoom();
+                    Assert.IsTrue(server.StartDedicated(port), "server room " + round);
+                    Assert.IsTrue(client.Join("127.0.0.1", port));
+                    yield return NetHarness.WaitUntil(() => client.Phase == LobbyNet.PhaseKind.InLobby && server.PlayerCount == 1, "in the room, round " + round, Log);
+                    int starts = 0;
+                    System.Action counted = () => starts++;
+                    client.MatchStarting += counted;
+                    Assert.IsTrue(client.RequestMatch(TeamMode.Solo, 1), "queued, round " + round);
+                    yield return NetHarness.WaitUntil(() => server.QueueActive, "the server queued it, round " + round, Log);
+                    yield return NetHarness.WaitUntil(() => starts == 1, "the match starts, round " + round, Log, 15f);
+                    client.MatchStarting -= counted;
+                    Assert.AreEqual(1, client.StartInfo.Players);
+                    // The menu leaves the room for the match; the server closes its room and later opens a new one.
+                    client.Shutdown();
+                    server.Shutdown();
+                    yield return null;
+                }
+            }
+            finally { _rules.QueueWindowSeconds = window; }
+        }
+
         [UnityTest]
         public IEnumerator GuestLeaving_FreesItsPlaceInTheRoom()
         {

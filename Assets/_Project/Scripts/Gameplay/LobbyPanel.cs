@@ -79,6 +79,13 @@ namespace Game.Gameplay
         }
 
         public bool HasQueue => _queue != null;
+
+        // Matchmaking broke off (the assigned server could not be reached, or dropped us): back to the start button with a line why.
+        public void MatchingFailed(string why)
+        {
+            if (Party.CancelMatch(Self)) _menu.Toast(why);
+            Refresh();
+        }
         void OnQueueChanged(MatchQueueState s) => _queueDirty = true;
 
         // Replaces the party (capture and later the real party feed) and redraws.
@@ -434,6 +441,7 @@ namespace Game.Gameplay
                     {
                         if (!_queue.RequestStart(Party.Mode, Party.Count)) { _menu.Toast(QueueText.NotConnected); return; }
                         Party.Start(Self);
+                        _matchSeconds = 0f;
                         break;
                     }
                     if (Party.Mode != TeamMode.Solo) { _menu.Toast("스쿼드 매치는 팀 규칙 병합 뒤에 열립니다."); return; }
@@ -453,7 +461,13 @@ namespace Game.Gameplay
         {
             if (_queueDirty) { _queueDirty = false; if (_queue != null && _queue.State.Started) Party.MatchFound(); Refresh(); }
 
-            if (Party.Matching) { _matchSeconds += dt; _seven.text = PartyLobby.Clock((int)_matchSeconds); }
+            if (Party.Matching)
+            {
+                int shown = (int)_matchSeconds;
+                _matchSeconds += dt;
+                // The clock is also on the state button (매칭 취소 · mm:ss), which only Refresh writes: a new second redraws it.
+                if ((int)_matchSeconds != shown) Refresh();
+            }
             var kb = Keyboard.current;
             if (kb != null && Root.gameObject.activeInHierarchy && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) OnStatus();
         }
