@@ -1,6 +1,6 @@
 # 사운드
 
-> 상태: 확정 · 요약: 현재 오디오(믹서 없음, 합성음 다수, 표면 6종과 이름 파싱 결함), '스타워즈 같다'는 불만, 목표 공간음향 설계, 후보 소스, 청취 시트 계획, 표면 태그 14종, 소리 이벤트 목록.
+> 상태: 확정 · 요약: 현재 오디오(믹서 없음, Freesound 녹음 S-0008~0045로 발소리·총성·장전·문·유리·차량·엘리베이터 교체, 환경음·폭발 등은 합성), '스타워즈 같다'는 불만, 목표 공간음향 설계, 후보 소스, 청취 시트, 표면 태그, 소리 이벤트 목록.
 
 ## 현재 오디오 시스템 인벤토리
 
@@ -10,15 +10,15 @@
 | 확정 | 3D 공간화 | 완전 3D(spatialBlend 1), 사용자 정의 감쇠 곡선(min/d 후 최대 거리에서 0), 도플러 없음. 범주별 거리(최소~최대 m): Body 2~40, Gunshot 12~750, Explosion 15~800, Vehicle 6~150, Elevator 3~60, Impact 3~60. | 좌우 패닝만 있고 높이(층)·차폐·잔향이 없다. HRTF/공간화 플러그인 사용 여부는 확인 필요. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:5-30 |
 | 확정 | 총성 거리 처리 | 근거리층(30 m까지 단독)과 원거리층(200 m부터 단독)을 등출력 교차 페이드, 50 m부터 저역 통과 22 kHz → 1.2 kHz, 소음기는 4배 먼 소리로 취급. | 실내/실외 꼬리 구분 없음, 건물 사이 반사 없음(06 문서 N4). | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:21,45-50; Assets/_Project/Scripts/Core/SoundRules.cs:76-98 |
 | 확정 | 환경음 | 바람·새(낮)·귀뚜라미(밤)·물가·실내 룸톤을 전부 코드로 합성(AudioClip.Create), 지역 종류·지붕·해안 근접으로 섞고 총성에 덕킹(NoteLoud). | 지역 종류가 4개뿐, 도심 소음·원거리 총성 반향 없음. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:94-110; Assets/_Project/Scripts/Gameplay/AmbientBeds.cs:5-12 |
-| 확정 | 발소리 | 표면 6종(Concrete, Metal, Wood, Grass, Dirt, Water) x Resources/Steps/<표면> 클립 5개(물 4개)를 이름순 정렬해 랜덤 재생. 범위 = 40 m x 자세계수 x 질주 1.25 x 표면 음량. | 아래 '표면 판정 결함' 참고. | Assets/_Project/Scripts/Core/SoundRules.cs:7,62-64; Assets/_Project/Scripts/Gameplay/CombatantAudio.cs:200-210 |
-| 확정 | 총성 | 근거리 4종(권총·SMG·소총·산탄총, CC0 라이브러리를 잘라 사용) + 원거리 5종(저격 포함, 같은 라이브러리의 mid distance 녹음을 모노 변환·저역 통과·저음 반사 2개 추가해 파생). | 원본이 한 라이브러리의 단발 녹음이라 변형이 적다. Sentinel(저격 대용)은 소총 소리를 낮은 피치로 재사용(CombatantAudio.cs:25). 매 발 랜덤 피치 지터(PitchJitter) 적용, 변형 개수는 무기당 1개 추정. | docs/ASSET_LEDGER.md:39; Assets/_Project/Scripts/Core/SoundRules.cs:76-98 |
-| 확정 | 장전 | OpenGameArt CC0 3개(권총·소총·산탄총). 다른 무기가 어느 것을 쓰는지는 확인 필요. | 탄피·격발 공이·빈 탄창 소리 없음(확인 필요). | docs/ASSET_LEDGER.md:40 |
-| 확정 | 유리 깨짐 | 파일 없음. 노이즈와 짧은 고음 톤을 코드로 합성한 0.9초 충돌음 + 파편 14개. | 유리 두께별 변형 없음. 합성음이라 인공적으로 들릴 가능성(추정, 준환 지적 '스타워즈'와 일치). | Assets/_Project/Scripts/Gameplay/GlassFx.cs:7-17 |
-| 확정 | 문 | 자체 합성 wav 6개(열림 3: 삐걱, 닫힘 3: 쿵+딸깍), 고정 시드 잡음·톱니파. | 합성음. | docs/ASSET_LEDGER.md:44; tools/derive_g11_audio.py:1-5 |
-| 확정 | 탄 스침 | 합성: 1.2 ms 딱 소리 + 음높이가 내려가는 공명 대역 잡음, 3개. | 음높이가 내려가는 공명 잡음은 SF 레이저 소리와 비슷하다(추정). '스타워즈' 느낌의 유력한 후보. | docs/ASSET_LEDGER.md:43; tools/derive_g4_audio.py:1-5 |
-| 확정 | 그 외 코드 합성 | 엘리베이터, 차량 엔진·경적·타이어, 근접, 투척 폭발, 천둥(StormFx), 앰비언스, 차량 파손 등이 코드로 합성된다. | '녹음 없음, 합성 위주'라서 실물감이 약하다. | Scripts/Gameplay 검색(AudioClip.Create 사용 파일 10개) |
-| 확정 | 발소리 원본 | Kenney Impact Sounds의 footstep_concrete/grass/wood, 흙·자갈은 footstep_snow, 금속은 impactMetal_light를 대신 사용. 피격은 impactPunch. | 눈 발소리를 흙에 쓰는 등 표면과 소리가 어긋난다(코드/ledger에서 확인한 사실). 같은 팩이라 질감이 단일하다. | docs/ASSET_LEDGER.md:41 |
-| 확정 | 오디오 파일 수 | wav 약 57개(발소리 29, 문 6, 총성 9, 재장전 3, 스침 3, 피격·종 7) — 라이선스 모두 CC0 또는 자체 제작(ledger S-0001~6). | Sonniss·Freesound는 아직 미사용. | Assets/_Project/Audio (파일 수 계산) |
+| 확정 | 발소리 | 표면 18종(SurfaceId) 중 14개 폴더(Resources/Steps/<표면>, Freesound CC0 S-0008~0022)의 step_* 클립을 이름순 정렬해 랜덤 재생. 폴더가 없는 표면(카펫·금속 격자·유리·양철 지붕 등)은 대신할 표면 소리를 작게(SurfaceSounds.StepFolder). 범위 = 40 m x 자세계수 x 질주 1.25 x 표면 음량. | 옛 Kenney·OpenGameArt 발소리는 이름이 step_이 아니라 재생되지 않는다(파일 삭제는 남음). | Assets/_Project/Scripts/Gameplay/CombatantAudio.cs StepClips; Assets/_Project/Scripts/Core/World/SurfaceId.cs; docs/ASSET_LEDGER.md S-0008~0022 |
+| 확정 | 총성 | Freesound CC0 녹음(S-0023~0031)을 잘라 계열별 근거리·원거리(권총·SMG·소총·DMR·저격·산탄총, LMG는 소총 녹음을 낮은 피치로) + 소음기 근거리·실내 꼬리·빈 격발·탄피. 무기별 피치·음량은 WeaponSounds.Table. | 옛 The Free Firearm Sound Library 원거리(S-0001)는 폴백만(모든 계열에 녹음이 있어 사실상 안 씀). | Assets/_Project/Scripts/Core/WeaponSounds.cs; Assets/_Project/Audio/Weapons/Freesound; tools/sound_shots.json |
+| 확정 | 장전 | 계열별 녹음 장전(ADR-250): 권총 gun_reload_pistol(S-0035, CC BY 3.0 크레딧), 산탄총 펌프, 나머지 소총 장전(WeaponSounds.ReloadName). | 옛 OpenGameArt 장전(S-0002)은 프리팹 폴백만. | Assets/_Project/Scripts/Gameplay/CombatantAudio.cs ReloadClip; docs/ASSET_LEDGER.md S-0032~0035 |
+| 확정 | 유리 깨짐 | 녹음 glass_break_01(S-0045, ADR-252) + 파편 14개. 파일이 없으면 합성 충돌음으로 폴백. | 유리 두께별 변형 없음. | Assets/_Project/Scripts/Gameplay/GlassFx.cs:118 |
+| 확정 | 문 | 녹음 door_fs_open_01·door_fs_close_01(S-0044, ADR-252). 녹음이 있으면 그것만 재생, 없으면 옛 합성 wav(S-0006). 노크·부서짐은 합성(DoorFx). | 열림·닫힘 각 1개라 변형이 적다(피치 지터만). | Assets/_Project/Scripts/Gameplay/DoorAudio.cs Recorded; docs/ASSET_LEDGER.md S-0044 |
+| 확정 | 탄 스침 | 녹음 whiz_fs_*(S-0036·0037)와 옛 합성 whiz_000~002(S-0005)가 같은 whiz_ 접두사라 섞여 재생된다. | 합성 스침을 빼려면 S-0005 파일 제거가 필요(사람 청취 뒤). | Assets/_Project/Scripts/Gameplay/CombatantAudio.cs WhizClips |
+| 확정 | 그 외 코드 합성 | 녹음으로 바뀐 것: 차량 엔진·경적·타이어·충돌(S-0038~0041), 엘리베이터 이동·도착(S-0042·0043) — 파일이 없을 때만 합성. 여전히 합성: 환경음(AmbientBeds), 근접 휘두름, 문 노크·부서짐, 불 타는 소리, 천둥(StormFx), 차량 파손 등. | 환경음·폭발은 아직 녹음이 없다. | Scripts/Gameplay AudioClip.Create 사용 파일 10개; VehicleAudio.cs:153-159; ElevatorAudio.cs:94-96 |
+| 확정 | 발소리 원본 | 발소리는 Freesound CC0(S-0008~0022). Kenney Impact Sounds(S-0003)는 근접 타격 impactPunch·프라이팬 impactBell·명중/처치 확인음으로만 남음. |  | Assets/_Project/Editor/MeleeKit.cs:11; Assets/_Project/Editor/TestBoxBuilder.cs:223-224 |
+| 확정 | 오디오 파일 수 | Freesound 녹음 파일 120개(Weapons/Freesound 25, Foley/Freesound 95; 발소리 step_* 86) — ledger S-0008~0045. CC BY 3.0 1건(S-0035)은 Credits.cs 크레딧. 옛 S-0001~0007은 ledger에 교체/사용 여부 표시. | Sonniss는 미사용(a_son 미정). 교체된 옛 파일은 아직 저장소에 있다. | Assets/_Project/Audio (파일 수 계산); docs/ASSET_LEDGER.md |
 | 제안 | 동시 발음·압축 | 정책 문서만: 동시 발음 32개, Vorbis 70%, 긴 앰비언스 스트리밍. | 구현 여부는 확인하지 않았다. | docs/AUDIO.md:31-34 |
 
 ## 표면 판정 결함 (이름 파싱)
@@ -57,10 +57,10 @@
 
 | 상태 | 소스 | 라이선스(문서 기준) | 용도 | 주의 | 근거 |
 |---|---|---|---|---|---|
-| 제안 | Freesound | 파일별. CC0 필터만(AUDIO.md). CC-BY는 크레딧 가능 여부 미정(MASTER_PLAN) | 발소리·유리·생활음 보충 | 미검증. 파일 하나마다 CC0 확인과 ledger 기록 필요. 다운로드는 준환 승인(전역 규칙). | docs/AUDIO.md:5-12 |
+| 확정 | Freesound | CC0 우선, CC-BY는 ledger+Credits.cs 반영 시에만(ADR-177) | 발소리·유리·생활음 보충 | 사용 중: S-0008~0045(CC BY 3.0 1건). 다운로드는 준환 로그인. | docs/AUDIO.md; docs/ASSET_LEDGER.md |
 | 제안 | Sonniss GameAudioGDC 번들 | 로열티프리·상업 가능, 출처 표기 불필요(AUDIO.md 기준) | 총성·폭발·환경음·사이렌 대량 | 미검증. 2026 번들 약 7.47 GB. AI 학습 목적 사용 금지 조항. 원본 단독 재배포 금지(확인 필요). 약관 원문을 ledger에 보관. 번들 다운로드는 사람이 한다. | docs/AUDIO.md:5-12; docs/research/MASTER_PLAN.md:49 |
 | 제안 | Kenney Audio | CC0 | UI·보조 | 미검증(스타일이 단순). 이미 임팩트 사운드 팩 일부 사용 중. | docs/AUDIO.md:5-12 |
-| 제안 | OpenGameArt | 파일별, CC0만(AUDIO.md는 CC0/CC-BY) | 보충 | 미검증. 현재 재장전·물 발소리가 여기서 왔다. | docs/AUDIO.md:5-12 |
+| 제안 | OpenGameArt | 파일별, CC0만(AUDIO.md는 CC0/CC-BY) | 보충 | 옛 재장전·물 발소리(S-0002·0004)가 여기서 왔고 지금은 Freesound로 교체됨. | docs/AUDIO.md:5-12 |
 | 제안 | BigSoundBank | CC0(3,500+) | 환경음·생활음 | 미검증. | docs/AUDIO.md:5-12 |
 | 제안 | itch.io 총성 팩 | 제작자별 | 총성 | 약관 개별 확인. | docs/AUDIO.md:5-12 |
 | 제안 | 직접 합성(다층) | 자체 제작 | 총성 대안: 폭발음+금속+꼬리 | 실제 총기 녹음이 없을 때의 현실적 대안(MASTER_PLAN). 이미 쓰는 합성음이 불만의 원인이라 질을 따져야 함. | docs/research/MASTER_PLAN.md:50 |
@@ -100,14 +100,14 @@
 
 | 상태 | 이벤트 | 듣는 사람 | 반경(m) | 층(레이어) | 현재 | 근거 |
 |---|---|---|---|---|---|---|
-| 확정 | 발소리 | Body 범위 안의 모두(+봇 14 m) | 달리기 40, 질주 x1.25, 앉기 x0.4, 느린걷기 x0.25, 엎드림 x0.1; 표면 x0.75~1.3 | 표면 클립 1겹(+신발 층 제안) | 구현됨(6표면). 봇 청취 반경 14 m(rules.json Bot). | Assets/_Project/Scripts/Core/SoundRules.cs:14-37; Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:25 |
+| 확정 | 발소리 | Body 범위 안의 모두(+봇 14 m) | 달리기 40, 질주 x1.25, 앉기 x0.4, 느린걷기 x0.25, 엎드림 x0.1; 표면 x0.75~1.3 | 표면 클립 1겹(+신발 층 제안) | 구현됨(표면 18종, 녹음 14폴더). 봇 청취 반경 14 m(rules.json Bot). | Assets/_Project/Scripts/Core/SoundRules.cs:14-37; Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:25 |
 | 확정 | 총성 | 관찰자(관심 영역 300 m), 봇 80 m | 12~750(감쇠), 소음기 x4 멀리 | 근거리 + 원거리 2겹(제안: 중거리·실내/실외 꼬리 3겹) | 2겹 구현. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:26; Assets/_Project/Scripts/Core/SoundRules.cs:76-98 |
-| 확정 | 탄 스침 | 탄이 3 m 안으로 지나간 사람(사수 6 m 이내 제외) | 3 | 합성 1겹 | 구현됨(합성). | Assets/_Project/Scripts/Core/SoundRules.cs:101 |
-| 확정 | 유리 깨짐 | Impact 범위 3~60 m, 봇 40 m | 60 | 합성 1겹 + 파편 | 구현됨(합성). 두께별 변형은 제안. | Assets/_Project/Scripts/Gameplay/GlassFx.cs:7-17; Assets/_Project/Data/Resources/GameData/rules.json:Bot GlassHearingRadius |
-| 확정 | 문 열림/닫힘 | Body 범위(제안) 내 | 추정 40 이하(확인 필요) | 파일 1겹 | 합성 wav. | docs/ASSET_LEDGER.md:44 |
+| 확정 | 탄 스침 | 탄이 3 m 안으로 지나간 사람(사수 6 m 이내 제외) | 3 | 녹음+합성 섞임 1겹 | 구현됨(녹음 S-0036·0037 + 합성 S-0005). | Assets/_Project/Scripts/Core/SoundRules.cs:101 |
+| 확정 | 유리 깨짐 | Impact 범위 3~60 m, 봇 40 m | 60 | 녹음 1겹 + 파편 | 구현됨(녹음 S-0045, 합성 폴백). | Assets/_Project/Scripts/Gameplay/GlassFx.cs:7-17; Assets/_Project/Data/Resources/GameData/rules.json:Bot GlassHearingRadius |
+| 확정 | 문 열림/닫힘 | Body 범위(제안) 내 | 추정 40 이하(확인 필요) | 파일 1겹 | 녹음(S-0044), 합성 폴백. | Assets/_Project/Scripts/Gameplay/DoorAudio.cs |
 | 확정 | 폭발(수류탄·차량) | Explosion 범위 | 15~800 | 합성 | 구현됨(합성). | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:27 |
-| 확정 | 차량 엔진·경적 | Vehicle 범위, 경적은 봇 60 m | 6~150 | 엔진 루프+경적 루프 | 합성 루프. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:28; Assets/_Project/Scripts/Core/VehicleFxRules.cs |
-| 확정 | 엘리베이터 | Elevator 범위 | 3~60 | 합성 | 구현됨(합성). | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:29 |
+| 확정 | 차량 엔진·경적 | Vehicle 범위, 경적은 봇 60 m | 6~150 | 엔진 루프+경적 루프 | 녹음 루프(S-0038~0041), 합성 폴백. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:28; Assets/_Project/Scripts/Core/VehicleFxRules.cs |
+| 확정 | 엘리베이터 | Elevator 범위 | 3~60 | 합성 | 녹음(S-0042·0043), 합성 폴백. | Assets/_Project/Scripts/Gameplay/SpatialAudio.cs:29 |
 | 확정 | 장전 | Body 범위 | 2~40 | 파일 1겹 | 3종, 몸 소스로 재생(발소리만큼만 들림, CombatantAudio.cs:279). 탄창·격발 분리는 제안. | docs/ASSET_LEDGER.md:40; Assets/_Project/Scripts/Gameplay/CombatantAudio.cs:279 |
 | 확정 | 근접·주먹 | Body 범위 | 2~40 | 합성+impactPunch | 구현됨. | Assets/_Project/Scripts/Gameplay/MeleeAudio.cs |
 | 제안 | 부위별 피격 | 피격자(전부), 근처 Body 범위(제안) | Body | 머리/몸/다리 3종 | 제안. | docs/research/MASTER_PLAN.md:41 |
@@ -118,9 +118,9 @@
 
 ## 정해야 할 것
 
-- [x] **CC-BY 소리를 크레딧 화면에 올려 쓸 것인가** (확정) → CC0만 [준환 위임 일괄 확정 2026-11-16: 추천안 적용 — 검토 후 변경 가능]
+- [x] **CC-BY 소리를 크레딧 화면에 올려 쓸 것인가** (확정) → CC-BY 허용(크레딧 화면에 표기) — 준환 결정 2026-11-16(ADR-177). 사용 1건: S-0035 Glock19_reload(Fr3yr, CC BY 3.0).
   - 선택지: CC0만 / CC-BY 허용(크레딧 화면에 표기)  · 추천: CC0만
-  - 근거: AUDIO.md는 Freesound에서 CC-BY를 쓰지 않는다. 크레딧 화면(CreditsScreen)은 이미 CC BY 4.0 차량으로 쓰고 있어 기술적으로는 가능. 준환 결정.
+  - 근거: Freesound는 CC0 우선, CC-BY는 ledger 기록 + Credits.cs 반영 시에만.
 - [ ] **Sonniss 번들 사용** (미정) 
   - 선택지: 사람이 번들 약관 읽고 다운로드 / 사용 안 함  · 추천: 사람이 약관 확인 뒤 사용
   - 근거: 상업 가능·표기 불필요지만 7.47 GB, 원본 재배포 금지, AI 학습 금지 조항. 규칙 3상 에이전트는 다운로드·약관 동의 불가.

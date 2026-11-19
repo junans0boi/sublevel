@@ -11,6 +11,7 @@
 - #424는 실제 파티 구성원과 매치 참가자의 안정적인 매핑·종단 검증이 남음. 로비 프로토콜이 2이므로 서버도 같은 버전으로 갱신해야 함.
 
 - 2026-11-19 문서(claude/docs-r5): `DEDICATED_SERVER.md` 인자 범위를 80인 기준(--bots 0..79, --max-players 1..64, --participants 2..80, MinBots 16)으로 고치고 동시 방 수 계산법 추가. 정의서 bots/network를 BotNames·BotMix·BotPollutionPlan 구현과 80인 기준으로 갱신(`python3 tools/bible_build.py`). BACKLOG에 봇 차량 운전·NavMeshLink·은닉(#340).
+- 2026-11-19 문서(claude/docs-r5): `AUDIO.md`에 현재 연결 상태 표, 정의서 audio를 Freesound 녹음(S-0008~0045) 기준으로 갱신, ledger S-0001~0007에 교체/사용 표시, RISKS에 크레딧 원 제목 상표 질문(#293).
 
 아래는 이전 기록이다.
 
