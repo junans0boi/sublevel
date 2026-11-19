@@ -28,9 +28,23 @@ namespace Game.Net
         // True while the server says the room is open: the player stands on the island, not in an elevator.
         public static bool OnIsland { get; private set; }
 
-        bool Live => _last.Active && Time.unscaledTime - _at <= 3f;
+        bool _preview;
+        bool Live => _preview || (_last.Active && Time.unscaledTime - _at <= 3f);
+
+        // Editor captures: the board as it reads with this broadcast, with no network behind it.
+        public static void Preview(WaitingBroadcast message)
+        {
+            var hud = new GameObject("WaitingHudPreview").AddComponent<WaitingHud>();
+            hud._last = message; hud._preview = true;
+            hud.Update();
+        }
 
         void Update()
+        {
+            Refresh();
+        }
+
+        void Refresh()
         {
             bool live = Live;
             OnIsland = live;
@@ -55,10 +69,10 @@ namespace Game.Net
             var b = Game.Core.WaitingIsland.Board;
             root.localPosition = new Vector3(b.x, 7f, b.z + 0.1f);
             root.localRotation = Quaternion.Euler(0f, 180f, 0f);          // the text faces the middle of the island (+Z)
-            _title = Line(root, font, "Title", 0f, 3.2f, 1.1f, new Color(0.85f, 0.9f, 1f));
-            _time = Line(root, font, "Time", 0f, 0.6f, 2.6f, new Color(1f, 0.82f, 0.25f));
-            _people = Line(root, font, "People", 0f, -2.2f, 1.0f, new Color(0.8f, 1f, 0.85f));
-            _bungee = Line(root, font, "Bungee", 0f, -3.6f, 0.8f, new Color(1f, 0.6f, 0.4f));
+            _title = Line(root, font, "Title", 0f, 3.5f, 0.8f, new Color(0.85f, 0.9f, 1f));
+            _time = Line(root, font, "Time", 0f, 0.7f, 2.0f, new Color(1f, 0.82f, 0.25f));
+            _people = Line(root, font, "People", 0f, -2.0f, 0.75f, new Color(0.8f, 1f, 0.85f));
+            _bungee = Line(root, font, "Bungee", 0f, -3.6f, 0.6f, new Color(1f, 0.6f, 0.4f));
             return true;
         }
 

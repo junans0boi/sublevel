@@ -6,6 +6,20 @@ using UnityEngine;
 // agree with the builder. Frame: the island's centre at WaitingIsland.CentreX/Z on the sea plane.
 public static partial class WorldBuilder
 {
+    // URP lights an object with at most 4 additional lights, so a hall-sized mesh would only ever see the 4 nearest lamps to its centre:
+    // the big pieces are cut into angular sectors, each a mesh of its own that the lamps near it can light.
+    sealed class WaitingSectors
+    {
+        public const int Count = 8;
+        public readonly WorldMeshes.BoxBatch[] Batches = new WorldMeshes.BoxBatch[Count];
+        public WaitingSectors(Vector2 tile) { for (int i = 0; i < Count; i++) Batches[i] = new WorldMeshes.BoxBatch(tile); }
+        WorldMeshes.BoxBatch Pick(Vector3 c) { float a = Mathf.Atan2(c.z, c.x); if (a < 0f) a += Mathf.PI * 2f; return Batches[Mathf.Min(Count - 1, (int)(a / (Mathf.PI * 2f) * Count))]; }
+        public void Add(Vector3 c, Vector3 size) => Pick(c).Add(c, size);
+        public void Add(Vector3 c, Vector3 size, Quaternion r) => Pick(c).Add(c, size, r);
+        public void AddCylinder(Vector3 foot, float radius, float height, int sides) => Batches[0].AddCylinder(foot, radius, height, sides);
+        public int Boxes { get { int n = 0; foreach (var b in Batches) n += b.Boxes; return n; } }
+    }
+
     const float WaitingWallHeight = 15f, WaitingDeckThickness = 1.2f;
     const int WaitingWallSegments = 40, WaitingDomeRings = 4;
 
@@ -16,10 +30,10 @@ public static partial class WorldBuilder
         float deckY = plan.SeaLevel + WaitingIsland.FloorOffset;      // top of the deck
         root.position = new Vector3(cx, deckY, cz);                    // children are in island-local metres, y = 0 at the deck
 
-        var concrete = WorldMaterials.ConcreteDark; var steel = WorldMaterials.PaintedMetal; var rust = WorldMaterials.RustyMetal;
-        var planks = WorldMaterials.PlanksDark; var accent = WorldMaterials.Accent(1);
-        var deck = new WorldMeshes.BoxBatch(concrete.Tile); var frame = new WorldMeshes.BoxBatch(steel.Tile);
-        var wall = new WorldMeshes.BoxBatch(rust.Tile); var wood = new WorldMeshes.BoxBatch(planks.Tile); var trim = new WorldMeshes.BoxBatch(accent.Tile);
+        var concrete = WorldMaterials.ConcreteDark; var steel = WorldMaterials.PaintedMetal; var rust = WorldMaterials.Plaster(0);   // 'rust' = the wall panels: a light plaster so the hall is not black
+        var planks = WorldMaterials.PlanksDark; var accent = WorldMaterials.Accent(1); var navy = WorldMaterials.Accent(4); var gold = WorldMaterials.Accent(2);
+        var deck = new WorldMeshes.BoxBatch(concrete.Tile); var frame = new WaitingSectors(steel.Tile);
+        var wall = new WaitingSectors(rust.Tile); var dome = new WaitingSectors(WorldMaterials.SteelRoof.Tile); var wood = new WorldMeshes.BoxBatch(planks.Tile); var trim = new WorldMeshes.BoxBatch(accent.Tile); var board = new WorldMeshes.BoxBatch(navy.Tile); var band = new WorldMeshes.BoxBatch(gold.Tile);
 
         float R = WaitingIsland.Radius;
         // Deck: a 24-gon disc of slabs + a skirt down into the sea, so no water shows through.
@@ -43,6 +57,12 @@ public static partial class WorldBuilder
             wall.Add(new Vector3(Mathf.Cos(am) * (R - 0.3f), WaitingWallHeight * 0.5f, Mathf.Sin(am) * (R - 0.3f)), new Vector3(chord, WaitingWallHeight, 0.4f), rot);
             frame.Add(new Vector3(Mathf.Cos(a0) * (R - 0.5f), WaitingWallHeight * 0.5f, Mathf.Sin(a0) * (R - 0.5f)), new Vector3(0.6f, WaitingWallHeight, 0.6f));
         }
+        // A gold band round the hall at chest height: the one bright colour of the room besides the lamps.
+        for (int i = 0; i < WaitingWallSegments; i++)
+        {
+            float am = (i + 0.5f) * Mathf.PI * 2f / WaitingWallSegments, r = R - 0.65f, chord = 2f * R * Mathf.Sin(Mathf.PI / WaitingWallSegments) + 0.1f;
+            band.Add(new Vector3(Mathf.Cos(am) * r, 1.5f, Mathf.Sin(am) * r), new Vector3(chord, 0.7f, 0.1f), Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f));
+        }
         // A band of trim lights round the wall at head height.
         for (int i = 0; i < WaitingWallSegments; i++)
         {
@@ -57,13 +77,13 @@ public static partial class WorldBuilder
             float rr0 = R * Mathf.Cos(p0), rr1 = R * Mathf.Cos(p1), rm = (rr0 + rr1) * 0.5f;
             float h0 = WaitingWallHeight + R * 0.55f * Mathf.Sin(p0), h1 = WaitingWallHeight + R * 0.55f * Mathf.Sin(p1), hm = (h0 + h1) * 0.5f;
             float slope = Mathf.Atan2(h1 - h0, rr0 - rr1) * Mathf.Rad2Deg;      // panel rises towards the middle
-            int n = Mathf.Max(6, Mathf.RoundToInt(WaitingWallSegments * Mathf.Cos(pm)));
+            int n = WaitingWallSegments;   // the same number on every ring; the inner ones overlap, so no gap shows between panels
             for (int i = 0; i < n; i++)
             {
                 float am = (i + 0.5f) * Mathf.PI * 2f / n;
-                float chord = 2f * rm * Mathf.Sin(Mathf.PI / n) + 0.3f, len = Vector2.Distance(new Vector2(rr0, h0), new Vector2(rr1, h1)) + 0.3f;
-                var rot = Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f) * Quaternion.Euler(-slope, 0f, 0f);
-                wall.Add(new Vector3(Mathf.Cos(am) * rm, hm, Mathf.Sin(am) * rm), new Vector3(chord, 0.35f, len), rot);
+                float chord = 2f * rr0 * Mathf.Sin(Mathf.PI / n) + 0.5f, len = Vector2.Distance(new Vector2(rr0, h0), new Vector2(rr1, h1)) + 0.3f;
+                var rot = Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f) * Quaternion.Euler(slope, 0f, 0f);   // outwards goes down: the panel rises towards the middle
+                dome.Add(new Vector3(Mathf.Cos(am) * rm, hm, Mathf.Sin(am) * rm), new Vector3(chord, 0.35f, len + 0.4f), rot);
             }
             frame.AddCylinder(new Vector3(0f, h1 - 0.15f, 0f), Mathf.Max(0.6f, rr1), 0.3f, 32);
         }
@@ -98,7 +118,7 @@ public static partial class WorldBuilder
 
         // The big board: a dark panel on a steel frame on the north rim, facing the middle (T6 draws the text).
         var bd = WaitingIsland.Board;
-        wall.Add(new Vector3(bd.x, 7f, bd.z - 0.4f), new Vector3(WaitingIsland.BoardWidth + 1f, WaitingIsland.BoardHeight + 1f, 0.5f));
+        board.Add(new Vector3(bd.x, 7f, bd.z - 0.4f), new Vector3(WaitingIsland.BoardWidth + 1f, WaitingIsland.BoardHeight + 1f, 0.5f));
         frame.Add(new Vector3(bd.x - WaitingIsland.BoardWidth * 0.5f - 0.3f, 4.5f, bd.z), new Vector3(0.6f, 9f, 0.6f));
         frame.Add(new Vector3(bd.x + WaitingIsland.BoardWidth * 0.5f + 0.3f, 4.5f, bd.z), new Vector3(0.6f, 9f, 0.6f));
         trim.Add(new Vector3(bd.x, 7f + WaitingIsland.BoardHeight * 0.5f + 0.6f, bd.z - 0.1f), new Vector3(WaitingIsland.BoardWidth + 1.4f, 0.3f, 0.3f));
@@ -111,10 +131,12 @@ public static partial class WorldBuilder
         trim.Add(new Vector3(el.x, 4.5f, el.z + 2.7f), new Vector3(6.2f, 0.12f, 0.12f));
 
         AddWaitingMesh(root, store, "Deck", deck, concrete.Material, false);
-        AddWaitingMesh(root, store, "Frame", frame, steel.Material, false);
-        AddWaitingMesh(root, store, "Wall", wall, rust.Material, false);
+        for (int i = 0; i < WaitingSectors.Count; i++) AddWaitingMesh(root, store, "Frame" + i, frame.Batches[i], steel.Material, false);
+        for (int i = 0; i < WaitingSectors.Count; i++) { AddWaitingMesh(root, store, "Wall" + i, wall.Batches[i], rust.Material, false); AddWaitingMesh(root, store, "Dome" + i, dome.Batches[i], WorldMaterials.SteelRoof.Material, false); }
         AddWaitingMesh(root, store, "Planks", wood, planks.Material, false);
         AddWaitingMesh(root, store, "Trim", trim, accent.Material, false);
+        AddWaitingMesh(root, store, "BoardBack", board, navy.Material, false);
+        AddWaitingMesh(root, store, "Band", band, gold.Material, false);
 
         // A deck-level collider, so people stand on it even if the mesh collider cooks thin; the walkable area is the server's clamp anyway.
         var floor = new GameObject("DeckCollider"); floor.transform.SetParent(root, false);
@@ -124,7 +146,15 @@ public static partial class WorldBuilder
 
         // Interior light: the sun does not reach under the dome.
         var lightGo = new GameObject("IslandLight"); lightGo.transform.SetParent(root, false); lightGo.transform.localPosition = new Vector3(0f, 14f, 0f);
-        var light = lightGo.AddComponent<Light>(); light.type = LightType.Point; light.range = 70f; light.intensity = 4f; light.color = new Color(1f, 0.93f, 0.82f); light.shadows = LightShadows.None;
+        var light = lightGo.AddComponent<Light>(); light.type = LightType.Point; light.range = 60f; light.intensity = 260f; light.color = new Color(1f, 0.93f, 0.82f); light.shadows = LightShadows.None;
+        // Lamps round the hall at head height: warm, so the plaster reads as a lit amusement hall, not a dark shed.
+        for (int i = 0; i < 8; i++)
+        {
+            float a = i * Mathf.PI * 2f / 8f;
+            var lamp = new GameObject("Lamp" + i); lamp.transform.SetParent(root, false); lamp.transform.localPosition = new Vector3(Mathf.Cos(a) * 24f, 9f, Mathf.Sin(a) * 24f);
+            var l = lamp.AddComponent<Light>(); l.type = LightType.Point; l.range = 34f; l.intensity = 110f; l.shadows = LightShadows.None;
+            l.color = i % 2 == 0 ? new Color(1f, 0.82f, 0.55f) : new Color(0.7f, 0.85f, 1f);
+        }
         Debug.Log($"[WorldBuilder] waiting island at ({cx:F0}, {cz:F0}), radius {R:F0} m: {deck.Boxes + frame.Boxes + wall.Boxes + wood.Boxes + trim.Boxes} boxes");
     }
 
