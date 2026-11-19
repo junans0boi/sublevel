@@ -103,6 +103,20 @@ namespace Game.Gameplay
             else if (bed.Level <= 0.003f && source.isPlaying) source.Stop();
         }
 
+        // Under a roof when the spot overhead and nearly all of a patch round it are covered (a doorway or a gap is not
+        // enough to call it open air; a tree has no collider overhead). Five rays; also the gunshot's indoor tail (#287).
+        public static bool UnderRoof(Vector3 at)
+        {
+            int covered = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                var offset = i == 0 ? Vector3.zero : new Vector3(i == 1 ? 1.5f : i == 2 ? -1.5f : 0f, 0f, i == 3 ? 1.5f : i == 4 ? -1.5f : 0f);
+                if (Physics.Raycast(at + offset, Vector3.up, IndoorProbe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) covered++;
+                if (covered + (4 - i) < 4) return false; // cannot reach four any more
+            }
+            return covered >= 4;
+        }
+
         void Refresh()
         {
             if (!SpatialAudio.ListenerPosition(out var at)) return;
@@ -111,15 +125,7 @@ namespace Game.Gameplay
             if (_roofTick <= 0f)
             {
                 _roofTick = 0.5f;
-                // Under a roof when the spot overhead and nearly all of a patch round it are covered (a doorway or a
-                // gap is not enough to call it open air; a tree has no collider overhead).
-                int covered = 0;
-                for (int i = 0; i < 5; i++)
-                {
-                    var offset = i == 0 ? Vector3.zero : new Vector3(i == 1 ? 1.5f : i == 2 ? -1.5f : 0f, 0f, i == 3 ? 1.5f : i == 4 ? -1.5f : 0f);
-                    if (Physics.Raycast(at + offset, Vector3.up, IndoorProbe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) covered++;
-                }
-                _indoors = covered >= 4;
+                _indoors = UnderRoof(at);
             }
 
             if (_terrain == null) _terrain = Terrain.activeTerrain;

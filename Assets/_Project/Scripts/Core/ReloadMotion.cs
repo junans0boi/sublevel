@@ -17,6 +17,8 @@ namespace Game.Core
     public static class ReloadMotion
     {
         public const float ShellCycleSeconds = 0.75f;
+        // Share of a magazine reload at which the magazine leaves the well and is seated again.
+        public const float MagOutAt = 0.2f, MagInAt = 0.62f;
 
         static float Ramp(float t, float a, float b) => t <= a ? 0f : t >= b ? 1f : (t - a) / (b - a);
         static float Ease(float x) => x * x * (3f - 2f * x);
@@ -53,9 +55,25 @@ namespace Game.Core
             else if (t < 0.78f) { a = wA; u = wU; c = wC; }
             else if (t < 0.92f) { float k = Ease((t - 0.78f) / 0.14f); a = L(wA, rA, k); u = L(wU, rU, k); c = L(wC, rC, k); }
             else { float k = Ease((t - 0.92f) / 0.08f); a = L(rA, hA, k); u = L(rU, hU, k); c = L(rC, hC, k); }
-            // The old magazine leaves the gun with the hand (0.3), the new one rides in it until seated (0.7).
-            p.MagInHand = (t > 0.3f && t < 0.7f);
+            // The hand takes the old magazine out of the well (0.2), swaps it at the belt and seats the new one (0.62):
+            // in between the gun shows an empty well (#200).
+            p.MagInHand = (t > MagOutAt && t < MagInAt);
             p.LeftA = a; p.LeftU = u; p.LeftC = c; p.LeftBlend = blend;
+            return p;
+        }
+
+        // Inspecting (#200, one key, cosmetic): the weapon comes in and rolls its right side up to the eye, then its left
+        // with the support hand cupping the magazine well, then back into the hold. t = 0..1 over InspectSeconds.
+        public const float InspectSeconds = 2.6f;
+        public static ActionPose Inspect(float t)
+        {
+            t = Math.Max(0f, Math.Min(1f, t));
+            float inOut = Ease(Ramp(t, 0f, 0.15f)) * (1f - Ease(Ramp(t, 0.85f, 1f)));
+            // Roll: right side up (negative = top to the left) for the first half, left side up for the second.
+            float side = L(-1f, 1f, Ease(Ramp(t, 0.4f, 0.6f)));
+            var p = new ActionPose { Down = 0.05f * inOut, PitchDeg = -8f * inOut, RollDeg = 55f * side * inOut };
+            float cup = Ease(Ramp(t, 0.45f, 0.6f)) * (1f - Ease(Ramp(t, 0.8f, 0.9f)));
+            p.LeftA = 0.04f; p.LeftU = -0.1f; p.LeftC = 0f; p.LeftBlend = cup;
             return p;
         }
 

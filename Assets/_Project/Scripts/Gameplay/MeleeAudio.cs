@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // Sounds of melee weapon swings (ADR-073); punches stay with CombatantAudio. Every swing makes a whoosh (made
-    // in code from filtered noise, no asset), lower for a heavier, slower weapon. A swing that lands adds a heavy
+    // Sounds of melee weapon swings (ADR-073); punches stay with CombatantAudio. Every swing makes a whoosh (recorded,
+    // #288; filtered noise made in code when the clip is missing), lower for a heavier, slower weapon. A swing that lands adds a heavy
     // impact (Kenney CC0), and the pan also rings (per-weapon clip, indexed by weapon id).
     [RequireComponent(typeof(Combatant))]
     public class MeleeAudio : MonoBehaviour
@@ -69,6 +69,9 @@ namespace Game.Gameplay
         {
             get
             {
+                if (_swoosh != null) return _swoosh;
+                // The recorded swing (#288, Freesound CC0, ledger S-0047); the filtered noise below is the fallback.
+                _swoosh = Resources.Load<AudioClip>("Sfx/" + WeaponSounds.MeleeSwing + "01");
                 if (_swoosh != null) return _swoosh;
                 int count = Mathf.RoundToInt(SwooshSeconds * SampleRate);
                 var data = new float[count];

@@ -26,7 +26,9 @@ namespace Game.Gameplay
         // Hits shown so far (a flinch each).
         public int FlinchesShown { get; private set; }
 
-        public void StartGesture(HandGesture g) { _gesture = g; _gestureStart = Time.time; }
+        public void StartGesture(HandGesture g) { _gesture = g; _gestureStart = Time.time; GestureStarted?.Invoke(g); }
+        // A reach for loot or a door began (CombatantAudio rummages on a pickup).
+        public event System.Action<HandGesture> GestureStarted;
 
         public HandPropView Props()
         {

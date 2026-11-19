@@ -17,7 +17,7 @@ namespace Game.Gameplay
     {
         const float SpawnTimeoutSeconds = 30f;
 
-        enum Watch { Game, Front, Side, Behind, Above, Optic, Fixed, Vehicle, Quarter, LeftSide }
+        enum Watch { Game, Front, Side, Behind, Above, Optic, Fixed, Vehicle, Quarter, LeftSide, Port }
 
         string _folder;
         bool _eleShots; // `-eleshots <folder>`: the elevator start of the outdoor map, frame by frame
@@ -1424,6 +1424,16 @@ namespace Game.Gameplay
                 }
                 pc.Camera.transform.SetPositionAndRotation(from, Quaternion.LookRotation(at - from));
                 pc.Camera.fieldOfView = 50f;
+                return;
+            }
+            // Close on the weapon's ejection port from its right (#199 #200): cases leaving it and falling, the magazine well.
+            if (_watch == Watch.Port && pc.TryGetComponent(out WeaponVisual portView) && portView.TryEjectionPort(out var port, out var pr, out var pu, out var pf))
+            {
+                var camT = pc.Camera.transform;
+                var focus = port + pr * 0.25f - pu * 0.15f;
+                camT.position = focus + pr * 1.1f + pu * 0.35f - pf * 0.35f;
+                camT.rotation = Quaternion.LookRotation(focus - camT.position, Vector3.up);
+                pc.Camera.fieldOfView = 45f;
                 return;
             }
             if (_watch == Watch.Optic)
