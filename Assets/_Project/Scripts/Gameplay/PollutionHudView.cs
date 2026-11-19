@@ -11,6 +11,15 @@ namespace Game.Gameplay
     public class PollutionHudView : MonoBehaviour
     {
         public static PollutionHudModel Model { get; private set; }
+        // Sound hooks (#270): the S5 sound track listens; no clip exists yet, so nothing plays here.
+        public static float GeigerClicksPerSecond { get; private set; }
+        public static event System.Action<float> GeigerRateChanged;
+        public string CoverIconKey { get; private set; } = "";
+        public bool CoverBadgeShown => _badge != null && _badge.activeSelf;
+        GameObject _badge;
+        Image _badgeIcon;
+        Text _badgeText;
+        int _badgeSeconds = -1;
         public string GasText { get; private set; } = "";
         public float TintAlpha => _tint != null ? _tint.color.a : 0f;
 
@@ -35,7 +44,7 @@ namespace Game.Gameplay
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => Model = default;
+        static void ResetStatics() { Model = default; GeigerClicksPerSecond = 0f; GeigerRateChanged = null; }
 
         void Awake()
         {
@@ -43,8 +52,20 @@ namespace Game.Gameplay
             var canvas = UiKit.Canvas("PollutionHudCanvas", 1, false);
             canvas.transform.SetParent(transform, false);
             _tint = UiKit.Box(UiKit.Fill("GasTint", canvas.transform), new Color(0.55f, 0.1f, 0.05f, 0f));
-            _gas = UiKit.Label(UiKit.Rect("GasLine", canvas.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 190f), new Vector2(700f, 40f)),
+            _gas = UiKit.Label(UiKit.Rect("GasLine", canvas.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 236f), new Vector2(700f, 40f)), // above the weapon strip (190 overlapped its top)
                 "", 26, UiKit.Danger, TextAnchor.MiddleCenter, FontStyle.Bold);
+            // The cover badge above the gas line: the filter or antidote icon and the time left, while a cover runs.
+            var badge = UiKit.Rect("CoverBadge", canvas.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 282f), new Vector2(150f, 48f));
+            UiKit.Box(badge, UiKit.Panel);
+            UiKit.Frame(badge, 1f, UiKit.SteelDim);
+            var icon = UiKit.Rect("Icon", badge, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(4f, 0f), new Vector2(42f, 42f));
+            _badgeIcon = icon.gameObject.AddComponent<Image>();
+            _badgeIcon.preserveAspect = true;
+            _badgeIcon.raycastTarget = false;
+            _badgeText = UiKit.Label(UiKit.Rect("Time", badge, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-10f, 0f), new Vector2(92f, 40f)),
+                "", 24, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+            _badge = badge.gameObject;
+            _badge.SetActive(false);
         }
 
         void OnDestroy() => Model = default;
@@ -60,7 +81,8 @@ namespace Game.Gameplay
             _cover.Cover = keys != null ? new GasCover { Until = keys.CoverUntil.Value, Factor = keys.CoverFactor.Value } : default;
             var p = me.transform.position;
             var model = PollutionHud.Build(match, _director.Now, p.x, p.z, _cover);
-            string region = model.BannerVisible ? _director.RegionNameOf(model.BannerRegion) : "";
+            // Sealed in the gas names where the player is, not the next warned region (it read "[봉쇄됨] <a warned region>").
+            string region = model.InGas ? _director.RegionNameOf(_director.RegionIndexAt(p)) : model.BannerVisible ? _director.RegionNameOf(model.BannerRegion) : "";
             Apply(model, region, keys != null ? keys.Keys.Value : 0);
         }
 
@@ -71,9 +93,26 @@ namespace Game.Gameplay
             if (hud != null && hud.Hazard != null) hud.Hazard.Set(PollutionHud.ToHazard(model, region, keys, PollutionChipFlag.None));
             string line = PollutionHud.GasLine(model);
             if (line != GasText) { GasText = line; _gas.text = line; }
+            ShowCover(model);
+            float geiger = PollutionHud.GeigerClicksPerSecond(model);
+            if (!Mathf.Approximately(geiger, GeigerClicksPerSecond)) { GeigerClicksPerSecond = geiger; GeigerRateChanged?.Invoke(geiger); }
             var c = _tint.color;
             float a = model.InGas ? 0.08f + 0.22f * model.Vignette01 : 0f;
             if (!Mathf.Approximately(c.a, a)) { c.a = a; _tint.color = c; }
+        }
+
+        void ShowCover(PollutionHudModel model)
+        {
+            string key = PollutionHud.CoverIconKey(model);
+            if (key != CoverIconKey)
+            {
+                CoverIconKey = key;
+                _badgeIcon.sprite = key.Length > 0 ? ItemIcons.Get(key) : null;
+                _badge.SetActive(key.Length > 0);
+                _badgeSeconds = -1;
+            }
+            int s = Mathf.CeilToInt(model.CoverSeconds);
+            if (key.Length > 0 && s != _badgeSeconds) { _badgeSeconds = s; _badgeText.text = PollutionHud.Clock(model.CoverSeconds); }
         }
     }
 }

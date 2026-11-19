@@ -70,6 +70,8 @@ namespace Game.Gameplay
         readonly ShotGrouper _ownShots = new ShotGrouper(0.03);
         const float StanceResendSeconds = 0.3f;
         const float MaxViewPitch = 89f;
+        // The ride view (ADR-079 car, about 2.2 m square inside): near the door, just under the ceiling, looking back at the rider.
+        public const float RideCameraForward = 0.75f, RideCameraHeight = 1.95f;
 
         bool _autoRun;
         bool _autoRunSprint; // auto-run was started while sprinting
@@ -371,7 +373,8 @@ namespace Game.Gameplay
             float waterDepth = WaterVolume.DepthAt(transform.position, out float waterSurface, out float waterFloor);
             bool wasSwimming = _swimming;
             _waterSurface = waterSurface;
-            _swimming = !ExternalControl && !knocked && !SpawnProtection.InputBlocked && Swim.Swimming(_swimming, waterDepth, SwimRules.Current);
+            _swimming = !ExternalControl && !knocked && !SpawnProtection.InputBlocked && !ElevatorPanel.Riding && !ElevatorCar.Carries(transform.position)
+                && Swim.Swimming(_swimming, waterDepth, SwimRules.Current); // a car below the sea level is dry (it swam, prone, in the shaft)
             if (_swimming) BodyStance = Stance.Prone;
             else if (wasSwimming && BodyStance == Stance.Prone) BodyStance = Stance.Stand;
             bool jump = f.Jump && wasStanding && !ExternalControl; // out of a crouch the key only stands up
@@ -772,6 +775,18 @@ namespace Game.Gameplay
             else _combatant.CmdPunch(direction);
         }
 
+        // The ride view's spot toward `side` from the head, stopping short of walls, door and ceiling.
+        Vector3 RideCameraSpot(Vector3 head, Vector3 side)
+        {
+            var offset = side * RideCameraForward + Vector3.up * (RideCameraHeight - 1.6f);
+            float reach = offset.magnitude;
+            var dir = offset / reach;
+            var hits = Physics.SphereCastAll(head, 0.12f, dir, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits)
+                if (hit.distance > 0f && !hit.transform.IsChildOf(transform)) reach = Mathf.Min(reach, Mathf.Max(0.05f, hit.distance - 0.05f));
+            return head + dir * reach;
+        }
+
         void PlaceCamera()
         {
             if (Camera == null) return;
@@ -788,6 +803,21 @@ namespace Game.Gameplay
             };
             var eye = _combatant.EyePosition + Vector3.down * ParkourEyeDrop();
             Rig.Place(Camera.transform, transform, eye, ViewYaw, ViewPitch, view, Time.deltaTime);
+            // In a riding elevator car the chase camera is pushed into the shut car and shows a wall: the view looks
+            // down from the door corner of the car at the rider instead (input is blocked during the ride anyway).
+            if (ElevatorPanel.Riding && !Rig.IsEyeView(_aim.Mode))
+            {
+                var feet = transform.position;
+                var forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+                // From the head toward that corner, stopping short of the car's walls, door and ceiling: a rider standing
+                // by the door put the camera outside the shut door.
+                var head = feet + Vector3.up * 1.6f;
+                var spot = RideCameraSpot(head, forward);
+                // Pressed against the door: the far corner of the car instead.
+                if ((spot - head).sqrMagnitude < 0.45f * 0.45f) { var back = RideCameraSpot(head, -forward); if ((back - head).sqrMagnitude > (spot - head).sqrMagnitude) spot = back; }
+                Camera.transform.position = spot;
+                Camera.transform.rotation = Quaternion.LookRotation(feet + Vector3.up * 1.0f - Camera.transform.position);
+            }
             if (_swimming)
             {
                 // The chase camera follows the head: over the water while the head is up, under it while diving (#184).

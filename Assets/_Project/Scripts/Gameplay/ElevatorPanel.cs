@@ -59,6 +59,15 @@ namespace Game.Gameplay
             return true;
         }
 
+        // The destinations offered: with keys (ADR-170) any region not contaminated, from anywhere, warned ones included
+        // (KeyElevatorTravel.CanChoose, what the server accepts); otherwise the old free ride's rules.
+        static void FillChoices(int here)
+        {
+            if (!PollutionDirector.FreeRidesBlocked) { ElevatorTravel.Destinations(here, States, Choices); return; }
+            Choices.Clear();
+            for (int r = 0; r < States.Count; r++) if (r != here && States[r] != ZoneState.Closed) Choices.Add(r);
+        }
+
         // F in a station: tap (released before the hold time) = next destination, held = ride. True when the key
         // was the elevator's this frame (no loot pickup then).
         public static bool HandleInteract(Combatant me, bool pressed, bool held, float deltaTime)
@@ -96,7 +105,7 @@ namespace Game.Gameplay
                 if (!(phase == KeyPhase.Selecting && mine)) { _heldFor = Hold01 = 0f; _wasHeld = _fired = false; return false; }
             }
             rides.States(States);
-            ElevatorTravel.Destinations(rides.RegionOfStation(station), States, Choices);
+            FillChoices(rides.RegionOfStation(station));
             Selected = ElevatorTravel.KeepSelection(Selected, Choices);
             bool usable = Selected >= 0 && rides.LocalCooldownLeft <= 0f && !rides.LocalPending;
 
@@ -213,7 +222,7 @@ namespace Game.Gameplay
 
             rides.States(States);
             int here = rides.RegionOfStation(station);
-            ElevatorTravel.Destinations(here, States, Choices);
+            FillChoices(here);
             int selected = ElevatorTravel.KeepSelection(Selected, Choices);
             EnsureRows(States.Count);
             var zones = PollutionDirector.Instance;
@@ -237,7 +246,7 @@ namespace Game.Gameplay
 
             int cooldown = Mathf.CeilToInt(rides.LocalCooldownLeft);
             bool keyChoosing = KeyElevatorNet.LastStatus.TryGetValue(station, out var keyStatus) && (KeyPhase)keyStatus.Phase == KeyPhase.Selecting && keyStatus.Holder == me.ObjectId;
-            int footerKey = !ElevatorTravel.Runs(here >= 0 && here < States.Count ? States[here] : ZoneState.Safe) ? -1
+            int footerKey = !PollutionDirector.FreeRidesBlocked && !ElevatorTravel.Runs(here >= 0 && here < States.Count ? States[here] : ZoneState.Safe) ? -1
                 : Choices.Count == 0 ? -2 : PollutionDirector.FreeRidesBlocked && !keyChoosing ? -3 : cooldown;
             if (footerKey != _footerKey)
             {

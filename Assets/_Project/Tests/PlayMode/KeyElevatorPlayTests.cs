@@ -136,22 +136,27 @@ namespace Game.Tests
             Assert.AreEqual(chosen, rides.LocalDestination);
             yield return new WaitForSeconds(1.5f);
             Assert.IsTrue(Hud.Instance.Elevator.TransitShown, "the ride band shows");
-            if (shotPrefix != null)
-            {
-                // The follow camera sits against the shut car (it showed only a wall): the shot looks from the door
-                // side of the car back at the rider instead.
-                var cam = Camera.main.transform;
-                var me = Combatant.LocalPlayer.transform;
-                Debug.Log($"[KeyPlay] riding camera {cam.position} rider {me.position} distance {Vector3.Distance(cam.position, me.position + Vector3.up * 1.6f):0.00}");
-                var fwd = Vector3.ProjectOnPlane(me.forward, Vector3.up).normalized;
-                cam.position = me.position + fwd * 0.75f + Vector3.up * 1.95f;
-                cam.rotation = Quaternion.LookRotation(me.position + Vector3.up * 1.0f - cam.position);
-                yield return Shot(shotPrefix + "_4_riding");
-            }
+            // The player's own camera rides in the car, by the door under the ceiling, looking at the rider (not into a wall).
+            var cam = Camera.main.transform;
+            var rider = Combatant.LocalPlayer.transform;
+            var toRider = rider.position + Vector3.up * 1.0f - cam.position;
+            Debug.Log($"[KeyPlay] riding camera {cam.position} rider {rider.position} offset {cam.position - rider.position}");
+            Assert.Less(Vector2.Distance(new Vector2(cam.position.x, cam.position.z), new Vector2(rider.position.x, rider.position.z)), 1.0f, "the camera stays inside the car");
+            Assert.That(cam.position.y - rider.position.y, Is.InRange(1.55f, 2.2f), "under the car ceiling");
+            Assert.Greater(Vector3.Dot(cam.forward, toRider.normalized), 0.95f, "looking at the rider");
+            // Nothing between the camera and the rider (it once sat outside the shut door, or in the sea surface).
+            if (Physics.Linecast(cam.position, rider.position + Vector3.up * 1.0f, out var block, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                Assert.IsTrue(block.transform.IsChildOf(rider), "the view of the rider is blocked by " + block.collider.name);
+            Assert.AreNotEqual(Stance.Prone, PlayerController.Local.BodyStance, "riding down is not swimming");
+            if (shotPrefix != null) yield return Shot(shotPrefix + "_4_riding");
             if (shotPrefix != null)
             {
                 yield return WaitUntil(() => !rides.LocalRiding || rides.LocalSecondsLeft < 2.5f, 15f, "near the arrival");
-                if (rides.LocalRiding) yield return Shot(shotPrefix + "_4b_rising");
+                if (rides.LocalRiding)
+                {
+                    Assert.AreNotEqual(Stance.Prone, PlayerController.Local.BodyStance, "riding up a shaft below the sea level is not swimming");
+                    yield return Shot(shotPrefix + "_4b_rising");
+                }
             }
             yield return WaitUntil(() => !rides.LocalRiding, 15f, "the arrival");
             yield return null;
@@ -310,6 +315,10 @@ namespace Game.Tests
             PlayerController.Local.Teleport(sites[dead].Spawn + Vector3.up * 0.05f);
             yield return null;
             yield return null;
+            // A key elevator runs from the gas (the way out): the panel offers the safe regions, not "운행 중지".
+            Assert.IsTrue(Hud.Instance.Elevator.Shown);
+            StringAssert.DoesNotContain("운행 중지", Hud.Instance.Elevator.FooterText);
+            StringAssert.DoesNotContain("중지", Hud.Instance.Elevator.RowText(to), "a safe region is offered");
             Assert.IsTrue(net.ServerInsert(me, dead));
             Assert.IsTrue(net.ServerClose(me));
             yield return WaitUntil(() => net.System.Station(dead).Phase == KeyPhase.Recharging, 5f, "the void use in the gas");

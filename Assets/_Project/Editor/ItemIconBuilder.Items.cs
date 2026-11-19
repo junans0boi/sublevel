@@ -30,6 +30,34 @@ public static partial class ItemIconBuilder
         DrawIcon("syringe", DrawSyringe);
         DrawIcon("flash", DrawFlash);
         DrawIcon("molotov", DrawMolotov);
+        DrawIcon("gas_filter", DrawGasFilter);
+        DrawIcon("antidote", DrawAntidote);
+    }
+
+    // A gas-mask filter canister (#267): a squat green drum, a threaded steel neck on top, a perforated grille face.
+    static void DrawGasFilter(Painter p)
+    {
+        var green = new Color(0.22f, 0.46f, 0.30f);
+        float dx = p.X - 128f;
+        p.Fill(RRect(p.X, p.Y, 128f, 110f, 70f, 62f, 18f), green, Shade(dx, 70f));                       // drum
+        p.Fill(Box(p.X, p.Y, 128f, 150f, 70f, 6f), green * 0.75f, 1f, false);                            // seam band
+        p.Fill(RRect(p.X, p.Y, 128f, 188f, 30f, 18f, 4f), Steel, Shade(dx, 30f));                        // neck
+        if (Mathf.Abs(Mathf.Repeat(p.Y, 8f) - 4f) < 1.2f && Mathf.Abs(p.Y - 188f) < 15f && Mathf.Abs(dx) < 28f) p.Fill(true, Steel * 0.7f); // thread
+        p.Fill(Circle(p.X, p.Y, 128f, 94f, 36f), new Color(0.16f, 0.17f, 0.18f), 1f);                    // grille face
+        bool hole = Circle(Mathf.Repeat(p.X - 128f + 6f, 12f), Mathf.Repeat(p.Y - 94f + 6f, 12f), 6f, 6f, 3f) < 0f;
+        if (hole && Circle(p.X, p.Y, 128f, 94f, 30f) < 0f) p.Fill(true, new Color(0.45f, 0.47f, 0.50f));
+    }
+
+    // An antidote auto-injector (#267): a fat blue pen, a yellow safety cap, a clear window with fluid, an orange tip.
+    static void DrawAntidote(Painter p)
+    {
+        p.Rotate(-35f);
+        float dx = p.X - 128f;
+        p.Fill(RRect(p.X, p.Y, 128f, 126f, 28f, 74f, 14f), new Color(0.20f, 0.62f, 0.78f), Shade(dx, 28f)); // body
+        p.Fill(RRect(p.X, p.Y, 128f, 212f, 22f, 16f, 6f), new Color(0.96f, 0.80f, 0.20f), Shade(dx, 22f));  // safety cap
+        p.Fill(RRect(p.X, p.Y, 128f, 44f, 20f, 12f, 6f), new Color(0.92f, 0.45f, 0.16f), Shade(dx, 20f));   // tip
+        p.Fill(RRect(p.X, p.Y, 128f, 120f, 14f, 30f, 5f), new Color(0.88f, 0.94f, 0.96f), 1f);              // window
+        p.Fill(RRect(p.X, p.Y, 128f, 108f, 9f, 16f, 3f), new Color(0.55f, 0.85f, 0.55f), 1f, false);        // fluid
     }
 
     // A drink can: teal body, a yellow band, steel rims and a pull tab.

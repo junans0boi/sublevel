@@ -25,7 +25,7 @@ namespace Game.Tests
             "optic_reddot", "optic_holo", "optic_2x", "optic_3x", "optic_4x", "optic_6x", "optic_8x", "optic_15x",
             "bandage", "firstaid", "smoke", "key",
             "jerrycan",
-            "drink", "pill", "syringe", "flash", "molotov",
+            "drink", "pill", "syringe", "flash", "molotov", "gas_filter", "antidote",
             "backpack_1", "backpack_2", "backpack_3", // ADR-091
             "att_grip_v", "att_grip_a", "att_grip_c", "att_stock", // ADR-100
             "att_comp", "att_flash", "att_supp", "att_mag", // ADR-102

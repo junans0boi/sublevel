@@ -243,6 +243,8 @@ namespace Game.Tests
             warn.BannerSeconds = 20f;
             Assert.AreEqual(HazardWarn.Imminent, PollutionHud.ToHazard(warn, "해안", 0, PollutionChipFlag.None).Warn);
             Assert.AreEqual(HazardWarn.Sealed, PollutionHud.ToHazard(new PollutionHudModel { InGas = true }, "", 0, PollutionChipFlag.None).Warn);
+            Assert.AreEqual("[봉쇄됨] 해안", PollutionHud.ToHazard(new PollutionHudModel { InGas = true, BannerVisible = true, BannerRegion = 3 }, "해안", 0, PollutionChipFlag.None).Line(),
+                "in the gas the slot names the region the player is in");
             var none = PollutionHud.ToHazard(default, "x", 0, PollutionChipFlag.None);
             Assert.AreEqual(HazardWarn.None, none.Warn);
             Assert.AreEqual(-1, none.SecondsToClose);
@@ -261,6 +263,19 @@ namespace Game.Tests
             StringAssert.Contains("해독 0:42", PollutionHud.GasLine(h));
             h.CoverUseless = true;
             StringAssert.Contains("효과 없음", PollutionHud.GasLine(h));
+        }
+
+        [Test]
+        public void CoverBadgeIcon_AndGeigerRate()
+        {
+            Assert.AreEqual("", PollutionHud.CoverIconKey(default));
+            Assert.AreEqual("gas_filter", PollutionHud.CoverIconKey(new PollutionHudModel { CoverSeconds = 10f }));
+            Assert.AreEqual("antidote", PollutionHud.CoverIconKey(new PollutionHudModel { CoverSeconds = 10f, CoverIsAntidote = true }));
+            Assert.AreEqual(0f, PollutionHud.GeigerClicksPerSecond(default));
+            float light = PollutionHud.GeigerClicksPerSecond(new PollutionHudModel { InGas = true, Dps = 1f });
+            float heavy = PollutionHud.GeigerClicksPerSecond(new PollutionHudModel { InGas = true, Dps = 20f });
+            Assert.Greater(light, 2f);
+            Assert.Greater(heavy, light, "faster in heavier gas");
         }
     }
 }

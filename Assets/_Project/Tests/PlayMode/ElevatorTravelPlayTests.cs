@@ -259,8 +259,13 @@ namespace Game.Tests
             else bot.transform.position = onMesh.position;
             var brain = bot.GetComponent("BotController") as Behaviour;
             Assert.IsNotNull(brain);
+            // A bot rides only with a key (ADR-360, ADR-246b): without one the warned-region walk-out (TryWarnedLeaveTarget)
+            // comes first and the old free bot ride is never reached, so this bot carries a key and is one of those that
+            // use it (the per-bot roll BotPollutionPlan.WantsKey is the tuned dial, 0.5/0.8/1.0 by difficulty).
+            Assert.Greater(bot.GetComponent<KeyHolder>().ServerAdd(1), 0);
+            brain.GetType().GetField("_keyDecision", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(brain, 1);
 
-            float until = Time.realtimeSinceStartup + 8f;
+            float until = Time.realtimeSinceStartup + 20f; // walk in, insert, 6 s for company, close, choose
             while (!rides.ServerRiding(bot))
             {
                 if (Time.realtimeSinceStartup > until)

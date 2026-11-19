@@ -79,6 +79,13 @@ namespace Game.Gameplay
         // What the overlay shows, for tests: the state painted for a region, and the tag under its name.
         public ZoneState ShownState(int region) => region >= 0 && region < _zoneShown.Length ? _zoneShown[region] : ZoneState.Safe;
         public Texture2D ZoneTexture => _zoneTexture;
+        public bool AnyZoneShown => _zoneRect != null && _zoneRect.gameObject.activeSelf;
+        // For tests: texels on the gas front in the last paint, and whether a warned region was painted bright.
+        public int FrontTexels { get; private set; }
+        public bool WarningBright { get; private set; } = true;
+        bool[] _gas;
+        float _nextFront;
+        const float FrontRepaintSeconds = 1f; // the front moves a few metres a second; a texel is about 12 m
         public string NameLabelOf(int region) => region >= 0 && region < _nameText.Count ? _nameText[region].text : "";
         readonly List<Text> _nameText = new List<Text>();
         GameObject _markerRoot;
@@ -272,19 +279,32 @@ namespace Game.Gameplay
                 _zoneShown[i] = now;
                 changed = true;
             }
-            if (!changed) return;
+            bool warned = false, closed = false;
+            foreach (var s in _zoneShown) { warned |= s == ZoneState.Warning; closed |= s == ZoneState.Closed; }
+            bool bright = Minimap.BlinkOn(Time.unscaledTime);
+            bool blink = warned && bright != WarningBright;
+            bool front = closed && Time.unscaledTime >= _nextFront;
+            if (!changed && !blink && !front) return;
+            WarningBright = bright || !warned;
             int n = Minimap.ZoneRes;
+            if (front || changed) { _nextFront = Time.unscaledTime + FrontRepaintSeconds; MarkGas(director, n); }
             var pixels = _zoneTexture.GetRawTextureData<Color32>();
             bool any = false;
+            int frontTexels = 0;
             for (int y = 0; y < n; y++)
                 for (int x = 0; x < n; x++)
                 {
-                    int r = _zoneCell[y * n + x];
+                    int i = y * n + x;
+                    int r = _zoneCell[i];
                     var state = r >= 0 ? _zoneShown[r] : ZoneState.Safe;
                     bool edge = state != ZoneState.Safe && (Cell(x - 1, y) != r || Cell(x + 1, y) != r || Cell(x, y - 1) != r || Cell(x, y + 1) != r);
-                    pixels[y * n + x] = Minimap.ZoneTexel(state, edge, x, y);
+                    var texel = Minimap.ZoneTexel(state, edge, x, y);
+                    if (state == ZoneState.Warning && !WarningBright) texel = Minimap.Dimmed(texel);
+                    if (_gas[i] && (!Gas(x - 1, y) || !Gas(x + 1, y) || !Gas(x, y - 1) || !Gas(x, y + 1))) { texel = Minimap.FrontTexel; frontTexels++; }
+                    pixels[i] = texel;
                     any |= state != ZoneState.Safe;
                 }
+            FrontTexels = frontTexels;
             _zoneTexture.Apply();
             _zoneRect.gameObject.SetActive(any);
             _placedAt = new Vector3(float.NaN, 0f, 0f); // place it
@@ -296,6 +316,36 @@ namespace Game.Gameplay
                 var zc = Minimap.ZoneColour(_zoneShown[i]);
                 _nameText[i].color = tag.Length == 0 ? new Color(UiKit.TextDim.r, UiKit.TextDim.g, UiKit.TextDim.b, 0.8f) : new Color(zc.r, zc.g, zc.b, 1f);
             }
+        }
+
+        // Which overlay texels the gas has reached now (sea never counts; off the overlay counts as gas so the island's
+        // coast is no front).
+        void MarkGas(PollutionDirector director, int n)
+        {
+            if (_gas == null || _gas.Length != n * n) _gas = new bool[n * n];
+            var match = director != null ? director.Match : null;
+            if (match == null || _world == null) { System.Array.Clear(_gas, 0, _gas.Length); return; }
+            var tl = match.Timeline;
+            double now = director.Now;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    int cell = match.CellAt((x + 0.5f) / n * _world.Size, (y + 0.5f) / n * _world.Size);
+                    _gas[y * n + x] = cell >= 0 && !tl.Grid.IsSea(cell) && tl.Contaminated(cell, now);
+                }
+        }
+
+        bool Gas(int x, int y)
+        {
+            int n = Minimap.ZoneRes;
+            if (x < 0 || y < 0 || x >= n || y >= n) return true;
+            if (_gas[y * n + x]) return true;
+            // A sea texel next to the gas is the coast, not the front.
+            var director = PollutionDirector.Instance;
+            var match = director != null ? director.Match : null;
+            if (match == null) return true;
+            int cell = match.CellAt((x + 0.5f) / n * _world.Size, (y + 0.5f) / n * _world.Size);
+            return cell < 0 || match.Timeline.Grid.IsSea(cell);
         }
 
         int Cell(int x, int y)

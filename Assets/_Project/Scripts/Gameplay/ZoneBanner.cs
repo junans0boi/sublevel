@@ -30,7 +30,7 @@ namespace Game.Gameplay
         public static Vector3? SpectatorFeet;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetSpectator() => SpectatorFeet = null;
+        static void ResetSpectator() { SpectatorFeet = null; Siren = null; SirenCount = 0; }
 
         PollutionDirector _director;
         AudioSource _audio;
@@ -72,6 +72,10 @@ namespace Game.Gameplay
             go.transform.SetParent(director.transform, false);
             go.AddComponent<ZoneBanner>();
         }
+
+        // Siren hook (#270, sound in S5): a region was announced on this client. No siren clip exists yet.
+        public static event System.Action<int> Siren;
+        public static int SirenCount { get; private set; }
 
         // Sounds are optional: whoever has the clips hands them over (the master's wiring), else the banner is silent.
         public void SetClips(AudioClip warning, AudioClip lockdown, AudioClip bombardment, AudioClip incoming)
@@ -119,6 +123,8 @@ namespace Game.Gameplay
             {
                 case ZoneState.Warning:
                     Play(_warningClip);
+                    SirenCount++;
+                    Siren?.Invoke(region);
                     break;
                 case ZoneState.Closed:
                     Say(name + " 지역 오염 확정", UiKit.Danger, MessageSeconds);

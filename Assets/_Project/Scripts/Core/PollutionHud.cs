@@ -72,10 +72,17 @@ namespace Game.Core
         {
             Warn = (HazardWarn)(byte)Level(h),
             SecondsToClose = h.BannerVisible ? (int)Math.Ceiling(h.BannerSeconds) : -1,
-            Region = h.BannerVisible ? regionName : "",
+            Region = h.InGas || h.BannerVisible ? regionName : "", // in the gas: the region the player is in (the caller names it)
             Keys = keys,
             Chip = (HudChip)(byte)chip,
         };
+
+        // The cover badge (#270): which item icon shows while a cover runs ("" = none), and its clock.
+        public static string CoverIconKey(PollutionHudModel h) => h.CoverSeconds <= 0f ? "" : h.CoverIsAntidote ? "antidote" : "gas_filter";
+
+        // Geiger hook (#270, sound in S5): clicks per second the counter would make here, 0 outside the gas.
+        // Faster with the damage the player really takes: 2/s at the lightest gas, about 20/s at 20 hp/s.
+        public static float GeigerClicksPerSecond(PollutionHudModel h) => h.InGas ? 2f + 0.9f * Math.Max(0f, h.Dps) : 0f;
 
         // "오염 중 · 초당 4.5 · 방독 0:42" (cover useless in the final region), "" outside the gas.
         public static string GasLine(PollutionHudModel h)
