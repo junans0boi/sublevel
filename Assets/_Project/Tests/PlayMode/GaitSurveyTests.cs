@@ -37,6 +37,9 @@ namespace Game.Tests
         // over the floor ("skating"). The toe roll at push-off reads ~0.8 even on a matched stride, and one scenario varies by ~0.5 run to
         // run. Before ADR-390: mean 2.4, back-pedal and pure sidesteps 2.5-3.5. After: mean ~1.2, every scenario 0.8-2.4.
         public const float MaxMeanSlide = 1.6f, MaxSlide = 3.0f;
+        // The whole sprint clip (ADR-481) runs on its toes, which this test reads as 3.2-3.8 at its matched rate (the old jog/sprint half blend
+        // read 1.6 on the jog's flat foot); slowing it until the number drops makes the cadence the "slow jog" the player reported.
+        public const float MaxSprintSlide = 4.0f;
 
         ScriptedInput _input;
         Combatant _me;
@@ -196,7 +199,7 @@ namespace Game.Tests
                 Strip(shots, $"Logs/gaitsurvey/{Tag}_{loadout}_{name}.png");
                 // #223: whichever way it goes, the chest faces the aim (shoulder line; 1 = straight ahead).
                 if (facing / frames < 0.8f) failures.Add($"{loadout} {name} shoulders turned off the aim (facing {facing / frames:F2})");
-                if (speed / frames > 2.5f) { slideSum += stance; slideCount++; if (stance > MaxSlide) failures.Add($"{loadout} {name} stance foot slides {stance:F2} m/s"); }
+                if (speed / frames > 2.5f) { slideSum += stance; slideCount++; if (stance > (name.StartsWith("Sprint") ? MaxSprintSlide : MaxSlide)) failures.Add($"{loadout} {name} stance foot slides {stance:F2} m/s"); }
             }
             File.AppendAllText(path, csv.ToString());
             File.AppendAllText($"Logs/gaitsurvey/{Tag}_frames.csv", frameLog.ToString());

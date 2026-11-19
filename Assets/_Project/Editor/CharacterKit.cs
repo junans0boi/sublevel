@@ -62,6 +62,9 @@ public static class CharacterKit
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
         public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed, SprintSpeed;        // the bare-handed walk, jog, crouch and sprint clips (m/s)
+        // Where the jog and sprint sit in the trees: the game's run and slowest sprint, not the clips' own speeds, so a run shows the
+        // whole jog and every sprint the whole sprint; each plays at the rate that makes its stride cover its spot's ground (player report "a slow jog", ADR-481).
+        public float RunAt, SprintAt;
         public System.Collections.Generic.Dictionary<string, Vector2> Strafe;                   // each strafe clip's ground velocity (m/s, x right, z forward)
         // Each 8-way tree's clip directions (deg, 0 = forward, right positive) and the fastest clip along each (m/s): the legs are turned to the
         // nearest one so a single direction's clips play (ADR-391); Locomotion, LocomotionAim, Unarmed.
@@ -180,9 +183,13 @@ public static class CharacterKit
                 WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack"),
                 UnarmedWalkSpeed = Speed("U_Walk_Loop"), UnarmedRunSpeed = Speed("U_Jog_Fwd_Loop"), UnarmedCrouchSpeed = Speed("U_Crouch_Fwd_Loop"),
             };
-            // The sprint runs on its toes, which the ankle-height test above reads as a slow stance (it measured 5.2, the same as the jog, and
-            // the shown stride outran the ground by ~4 m/s, ADR-390). Its mid-stance speed, as a ratio to the jog's, scales the jog (~1.45).
-            gait.SprintSpeed = gait.UnarmedRunSpeed * MidStanceSpeed(CharacterControllerBuilder.Clip("U_Sprint_Loop"), def, go) / MidStanceSpeed(CharacterControllerBuilder.Clip("U_Jog_Fwd_Loop"), def, go);
+            // The sprint runs on its toes, which the planted-foot test reads as the jog's 5.2 (ADR-390). Its mid-stance speed (~7.0) is its ground
+            // speed: placed at the game's sprint, GaitSurveyTests' slide was 3.2 m/s played as 7.44 (the old jog-ratio estimate) and 5.0 as 5.2,
+            // which put the clip at ~7.0 (ADR-481).
+            gait.SprintSpeed = MidStanceSpeed(CharacterControllerBuilder.Clip("U_Sprint_Loop"), def, go);
+            var loco = Game.Net.GameData.Rules.Locomotion;
+            gait.RunAt = loco.WalkSpeed;
+            gait.SprintAt = loco.SprintSpeed * Mathf.Min(1f, loco.SmgMoveFactor, loco.RifleMoveFactor, loco.MarksmanMoveFactor, loco.ShotgunMoveFactor);
             gait.Strafe = new System.Collections.Generic.Dictionary<string, Vector2>();
             foreach (var n in CharacterAnimClips.StrafeNames)
             {
@@ -194,7 +201,7 @@ public static class CharacterKit
                 gait.Strafe[n] = vel;
                 Debug.Log($"[CharacterKit] strafe {n}: {vel.x:F2}, {vel.y:F2} m/s");
             }
-            var fb = new[] { new Vector2(0f, gait.SprintSpeed), new Vector2(0f, -gait.UnarmedRunSpeed) };
+            var fb = new[] { new Vector2(0f, gait.SprintAt), new Vector2(0f, -gait.UnarmedRunSpeed) };
             Vector2 S(string n) => gait.Strafe[n];
             (gait.DirsRifle, gait.TopsRifle) = Directions(fb.Concat(new[] { "Rifle_RunForwardRight", "Rifle_RunRight", "Rifle_RunLeft", "Rifle_RunForwardLeft" }.Select(S)));
             gait.AimLeftMirrored = new Vector2(-S("Rifle_AimStrafeRight").x, S("Rifle_AimStrafeRight").y);
@@ -214,10 +221,12 @@ public static class CharacterKit
             }
             gait.FootPlantHeight = low + (high - low) * 0.25f;
             gait.FootLiftHeight = low + (high - low) * 0.55f;
-            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} sprint {gait.SprintSpeed:F2} m/s");
+            Debug.Log($"[CharacterKit] unarmed gait: walk {gait.UnarmedWalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} sprint {gait.SprintSpeed:F2} m/s, placed jog at {gait.RunAt:F2} sprint at {gait.SprintAt:F2}");
             Debug.Log($"[CharacterKit] gait: walk {gait.WalkSpeed:F2} run {gait.RunSpeed:F2} back {gait.BackSpeed:F2} m/s, foot height {low:F3}..{high:F3} m");
-            if (gait.SprintSpeed <= gait.UnarmedRunSpeed || gait.UnarmedRunSpeed <= gait.WalkSpeed) // the trees' thresholds must rise walk < jog < sprint
+            if (gait.SprintSpeed < 3f || gait.UnarmedRunSpeed <= gait.WalkSpeed) // the jog must outpace the walk; the sprint's speed only sets its playback rate
                 throw new System.Exception($"gait measurement out of order: walk {gait.WalkSpeed:F2} jog {gait.UnarmedRunSpeed:F2} sprint {gait.SprintSpeed:F2}");
+            if (gait.SprintAt <= gait.RunAt || gait.RunAt <= gait.UnarmedWalkSpeed) // the trees' thresholds must rise walk < run < sprint
+                throw new System.Exception($"gait thresholds out of order: walk {gait.UnarmedWalkSpeed:F2} run {gait.RunAt:F2} sprint {gait.SprintAt:F2}");
             if (gait.RunSpeed < 1f || gait.WalkSpeed < 0.3f || gait.RunSpeed <= gait.WalkSpeed || high - low < 0.03f)
                 throw new System.Exception("gait measurement looks wrong; the locomotion clips may not carry root motion");
             return gait;
@@ -257,7 +266,7 @@ public static class CharacterKit
     }
 
     // How fast the foot passes under the hips while it is down (mid-stance, where heel strike and push-off do not distort it), mean of both
-    // feet: an in-place cycle's ground speed. Only its ratio between two clips is used.
+    // feet: an in-place cycle's ground speed, for a cycle on its toes.
     static float MidStanceSpeed(AnimationClip clip, CharacterDef def, GameObject go)
     {
         const int samples = 240;

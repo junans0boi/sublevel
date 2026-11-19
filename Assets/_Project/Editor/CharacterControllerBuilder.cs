@@ -43,23 +43,27 @@ public static class CharacterControllerBuilder
         // and back are the UAL walk/jog/sprint (ADR-390); sideways and diagonal are the Mixamo strafe set (C-0011), whose upper body faces
         // ahead while the legs step across.
         controller.AddLayer("Base");
-        AnimatorState Tree2D(string name, (string clip, Vector2 at, bool reverse, bool mirror)[] children)
+        AnimatorState Tree2D(string name, (string clip, Vector2 at, float timeScale, bool mirror)[] children)
         {
             var state = controller.CreateBlendTreeInController(name, out var t, 0);
             t.blendType = BlendTreeType.FreeformDirectional2D;
             t.blendParameter = CombatantAnimation.MoveX;
             t.blendParameterY = CombatantAnimation.MoveZ;
             foreach (var c in children) t.AddChild(Clip(c.clip), c.at);
-            t.children = t.children.Select((c, k) => { if (children[k].reverse) c.timeScale = -1f; c.mirror = children[k].mirror; return c; }).ToArray();
+            t.children = t.children.Select((c, k) => { c.timeScale = children[k].timeScale; c.mirror = children[k].mirror; return c; }).ToArray();
             state.speedParameter = CombatantAnimation.Pace; // the legs alone play faster when the character outruns its clips
             state.speedParameterActive = true;
             return state;
         }
         var g = gait;
-        (string, Vector2, bool, bool) C(string clip, Vector2 at, bool reverse = false, bool mirror = false) => (clip, at, reverse, mirror);
+        (string, Vector2, float, bool) C(string clip, Vector2 at, bool reverse = false, bool mirror = false, float timeScale = 1f) => (clip, at, reverse ? -timeScale : timeScale, mirror);
+        // The jog at the game's run and the sprint at its slowest sprint (ADR-481): between the clip speeds the blend showed a walk-tinged
+        // jog running and half a jog sprinting. Each plays at the rate that makes its stride cover the ground of its spot.
         var forwardBack = new[]
         {
-            C("U_Walk_Loop", new Vector2(0f, g.UnarmedWalkSpeed)), C("U_Jog_Fwd_Loop", new Vector2(0f, g.UnarmedRunSpeed)), C("U_Sprint_Loop", new Vector2(0f, g.SprintSpeed)),
+            C("U_Walk_Loop", new Vector2(0f, g.UnarmedWalkSpeed)),
+            C("U_Jog_Fwd_Loop", new Vector2(0f, g.RunAt), timeScale: g.RunAt / g.UnarmedRunSpeed),
+            C("U_Sprint_Loop", new Vector2(0f, g.SprintAt), timeScale: g.SprintAt / g.SprintSpeed),
             C("U_Walk_Loop", new Vector2(0f, -g.UnarmedWalkSpeed), true), C("U_Jog_Fwd_Loop", new Vector2(0f, -g.UnarmedRunSpeed), true),
         };
         // The Mixamo backward diagonals shuffle low and slid 2.4-2.8 m/s: backing off at an angle is the back-pedal with the legs turned.

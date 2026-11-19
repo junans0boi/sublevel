@@ -248,7 +248,7 @@ public static class TestBoxBuilder
         Set(animation, "_footLeft", p => p.objectReferenceValue = visual.FootLeft);
         Set(animation, "_footRight", p => p.objectReferenceValue = visual.FootRight);
         SetArray(animation, "_jumpBones", visual.JumpBones);
-        Set(animation, "_sprintClipSpeed", p => p.floatValue = visual.Gait.SprintSpeed);
+        Set(animation, "_sprintClipSpeed", p => p.floatValue = visual.Gait.SprintAt); // the tree's top ahead (ADR-481)
         var gaitArrays = new[] { ("_dirsRifle", visual.Gait.DirsRifle), ("_topsRifle", visual.Gait.TopsRifle), ("_dirsAim", visual.Gait.DirsAim), ("_topsAim", visual.Gait.TopsAim),
             ("_dirsUnarmed", visual.Gait.DirsUnarmed), ("_topsUnarmed", visual.Gait.TopsUnarmed) };
         foreach (var (field, top) in gaitArrays)

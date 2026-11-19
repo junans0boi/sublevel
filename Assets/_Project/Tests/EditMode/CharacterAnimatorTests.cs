@@ -117,12 +117,35 @@ namespace Game.Tests
                 var c = tree.children;
                 Assert.IsTrue(c.Any(x => x.position == Vector2.zero), name + ": a standing clip");
                 float Reach(float deg) { var d = new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad)); return c.Where(x => x.position.sqrMagnitude > 0.01f && Vector2.Angle(x.position, d) <= 30f).Select(x => Vector2.Dot(x.position, d)).DefaultIfEmpty(0f).Max(); }
-                Assert.That(Reach(0f), Is.InRange(6f, 9f), name + ": the sprint ahead (m/s, at least the game's 6.3)");
+                Assert.That(Reach(0f), Is.InRange(5.5f, 6.3f), name + ": the sprint ahead, at the game's slowest sprint (m/s, ADR-481)");
                 Assert.Greater(Reach(180f), 4f, name + ": the back-pedal reaches a run");
                 Assert.Greater(Reach(90f), 1.5f, name + ": a sidestep to the right");
                 Assert.Greater(Reach(-90f), 1.5f, name + ": a sidestep to the left");
                 Assert.IsTrue(c.Any(x => x.position.y < -0.5f && x.timeScale < 0f), name + ": back-pedal = a forward cycle played backwards");
                 if (name != "Unarmed") foreach (float deg in new[] { 45f, -45f }) Assert.Greater(Reach(deg), 3f, $"{name}: a diagonal run at {deg} deg");
+            }
+        }
+
+        // Player report "running, but it looks like a slow jog" (ADR-481): the jog sat at its clip speed 5.19 and the sprint at 7.44, so the
+        // game's run (4.7) showed a walk-tinged jog and its sprint (6.0-6.3) half a jog. The run must land on the jog, every sprint on the sprint.
+        [Test]
+        public void ForwardTrees_TheRunPlaysTheJog_EverySprintPlaysTheWholeSprint()
+        {
+            var L = Game.Net.GameData.Rules.Locomotion;
+            float slowestSprint = L.SprintSpeed * Mathf.Min(1f, Mathf.Min(L.SmgMoveFactor, L.RifleMoveFactor), Mathf.Min(L.MarksmanMoveFactor, L.ShotgunMoveFactor));
+            foreach (var name in new[] { "Locomotion", "LocomotionAim", "Unarmed" })
+            {
+                var tree = (BlendTree)Controller().layers[Base].stateMachine.states.Select(s => s.state).First(s => s.name == name).motion;
+                var ahead = tree.children.Where(c => c.position.x == 0f && c.position.y > 0.1f).OrderBy(c => c.position.y).ToArray();
+                Assert.AreEqual(new[] { "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop" }, ahead.Select(c => c.motion.name).ToArray(), name + ": walk, jog, sprint ahead");
+                var jog = ahead[1]; var sprint = ahead[2];
+                Assert.AreEqual(L.WalkSpeed, jog.position.y, 1e-3f, name + ": the jog sits at the game's run");
+                Assert.AreEqual(slowestSprint, sprint.position.y, 1e-3f, name + ": the sprint sits at the slowest sprint, so every gun's sprint is all sprint");
+                foreach (float f in new[] { 1f, L.SmgMoveFactor, L.RifleMoveFactor, L.MarksmanMoveFactor, L.ShotgunMoveFactor })
+                    Assert.GreaterOrEqual(L.SprintSpeed * f, sprint.position.y - 1e-3f, $"{name}: sprint at move factor {f} reaches the sprint clip");
+                // Each plays at its spot's ground: the clip's own speed (spot / time scale) is a running speed (jog ~5.2, sprint ~7.0 m/s).
+                foreach (var c in new[] { jog, sprint })
+                    Assert.That(c.position.y / c.timeScale, Is.InRange(4f, 8f), $"{name}: {c.motion.name} rate fits its own ground speed");
             }
         }
 

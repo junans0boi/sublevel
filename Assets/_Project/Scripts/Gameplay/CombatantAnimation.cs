@@ -76,7 +76,7 @@ namespace Game.Gameplay
         [SerializeField] Transform[] _jumpBones;
         // Lying (ADR-231): how far ahead of the model's origin the head joint is in the prone clip, measured when the character was built.
         [SerializeField] float _proneHeadAhead = 0.8f;
-        // Ground speed the clips were authored for (m/s), measured when the character was built. The sprint clip tops both
+        // Ground speed the clips were authored for (m/s), measured when the character was built. The sprint's spot (ADR-481) tops both
         // locomotion trees; the jog played backwards ends their back-pedal (ADR-390).
         [SerializeField] float _sprintClipSpeed = 6.5f;
         // Each 8-way tree's clip directions (deg, 0 = forward, right positive) and the ground speed of the fastest clip along each, measured
@@ -321,8 +321,8 @@ namespace Game.Gameplay
             // Bare hands (or a melee weapon, posed in code over the base) play the bare-handed clips (ADR-255).
             // Seated, the arms are placed on the grips by code (PoseSeated) from the clip's forward hands; the bare-handed tree's swinging arms start too far away.
             _unarmedBody = (HeldId == 0 || HoldsMelee) && _seated < 0.5f;
-            // Each tree's thresholds are its clips' own ground speeds, so up to the fastest clip the blend already matches the
-            // ground (pace 1); only beyond it do the legs speed up (ADR-390).
+            // Each tree's clips cover the ground of their spot (the jog and sprint are slowed to the game's run and sprint, ADR-481), so up
+            // to the fastest spot the blend already matches the ground (pace 1); only beyond it do the legs speed up (ADR-390).
             float clipSpeed = Mathf.Clamp(speed, 0.01f, nearest >= 0 ? tops[nearest] : _legs.Backward ? _unarmedRunSpeed : _sprintClipSpeed);
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
