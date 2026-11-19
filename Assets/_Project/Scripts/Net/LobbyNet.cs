@@ -59,7 +59,7 @@ namespace Game.Net
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 2; // LobbyStart now carries queue party sizes.
+        public const int Protocol = 3; // r5: waiting-island broadcast + bungee/lift TargetRpcs, key-ride SyncVars (ADR-322).
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
