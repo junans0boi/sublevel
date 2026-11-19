@@ -1208,6 +1208,28 @@ namespace Game.Gameplay
                 if (agent != null) agent.enabled = false;
             }
             yield return new WaitForSeconds(4f); // the elevator door
+            // ADR-481: the scopes the match itself laid out (not the ones spawned below), and the nearest one on its floor.
+            LootItem natural = null;
+            var perId = new int[9];
+            foreach (var item in LootItem.All)
+            {
+                if (item == null || (LootKind)item.Kind.Value != LootKind.Optic || Optics.ZoomOf(item.Optic.Value) <= 1f) continue;
+                perId[item.Optic.Value]++;
+                if (natural == null || (item.transform.position - me.transform.position).sqrMagnitude < (natural.transform.position - me.transform.position).sqrMagnitude) natural = item;
+            }
+            Debug.Log($"[FeelCapture] scopes in the match loot: 2x {perId[3]}, 3x {perId[4]}, 4x {perId[5]}, 6x {perId[6]}, 8x {perId[7]}, 15x {perId[8]}");
+            if (natural != null)
+            {
+                var p = natural.transform.position;
+                pc.Teleport(p + new Vector3(1.5f, 0.1f, 0f));
+                yield return new WaitForSeconds(1.5f);
+                p = natural.transform.position; // settled on its floor
+                _fixFrom = p + new Vector3(0.7f, 0.9f, -0.7f); _fixAt = p; _watch = Watch.Fixed;
+                yield return new WaitForSeconds(0.5f);
+                yield return Shot("n_match_scope_ground");
+                Debug.Log($"[FeelCapture] match scope {LootNames.OfOptic(natural.Optic.Value)} at {p}");
+                _watch = Watch.Game;
+            }
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 3, Amount = 30 });
             me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 5, Amount = 5 });
             me.ServerGive(new LootEntry { Kind = LootKind.Ammo, Ammo = AmmoType.Rifle556, Amount = 90 });
