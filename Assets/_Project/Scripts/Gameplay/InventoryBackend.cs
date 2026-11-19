@@ -204,8 +204,8 @@ namespace Game.Gameplay
                 case LootKind.Drink: return "drink";
                 case LootKind.Pill: return "pill";
                 case LootKind.Syringe: return "syringe";
-                case LootKind.GasFilter: return "pill";     // no icon of their own yet
-                case LootKind.Antidote: return "syringe";
+                case LootKind.GasFilter: return "gas_filter";
+                case LootKind.Antidote: return "antidote";
                 case LootKind.Flash: return "flash";
                 case LootKind.Molotov: return "molotov";
                 case LootKind.Smoke: return "smoke";

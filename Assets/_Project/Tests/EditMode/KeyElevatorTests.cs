@@ -206,5 +206,47 @@ namespace Game.Tests
             Assert.AreEqual(1, KeyElevatorTravel.BotDestination(0, Open, 3), "final region not reachable: the first open one");
             Assert.AreEqual(-1, KeyElevatorTravel.BotDestination(0, none, 1));
         }
+
+        [Test]
+        public void KeyPlan_CountFollowsTeams_CappedAtForty()
+        {
+            Assert.AreEqual(13, KeyPlan.CountFor(20, R));   // squad match, 20 teams
+            Assert.AreEqual(40, KeyPlan.CountFor(80, R));   // solo match: 52 capped
+            Assert.AreEqual(40, KeyPlan.CountFor(500, R));
+            Assert.AreEqual(1, KeyPlan.CountFor(1, R));
+            var order = new[] { 0, 5, 2, 1, 4, 3 };
+            Assert.AreEqual(13, KeyPlan.Plan(7, order, null, R, 20).Length);
+            Assert.AreEqual(40, KeyPlan.Plan(7, order, null, R, 80).Length);
+        }
+
+        [Test]
+        public void System_ATeamMakesTwoRides_ThenTheInsertIsRefused()
+        {
+            var all = new[] { PollutionState.Safe, PollutionState.Safe, PollutionState.Safe };
+            var sys = new KeyElevatorSystem(new[] { 0, 1 }, 8f, R);
+            double now = 0;
+            for (int ride = 0; ride < 2; ride++)
+            {
+                Assert.AreEqual(KeyResult.Ok, sys.Insert(0, now, 1, 7, true, all), "ride " + ride);
+                sys.Board(0, 1);
+                Assert.AreEqual(KeyResult.Ok, sys.CloseDoors(0, now + 1, 1));
+                Assert.AreEqual(KeyResult.Ok, sys.Select(0, now + 2, 1, 1, all));
+                var events = new List<KeyStationEvent>();
+                sys.Tick(now + 2 + 8.5, all, events);
+                Assert.IsTrue(events.Any(e => e.Event == KeyEvent.RideEnded), "ride ended");
+                now += R.TeamCooldownSeconds + R.RechargeSeconds + 100;
+            }
+            Assert.AreEqual(2, sys.RidesOf(7));
+            Assert.AreEqual(KeyResult.RideLimit, sys.Insert(0, now, 1, 7, true, all));
+            Assert.AreEqual(KeyResult.Ok, sys.Insert(1, now, 2, 8, true, all), "another team is unaffected");
+        }
+
+        [Test]
+        public void Prompt_SaysTheTeamRidesAreUsedUp()
+        {
+            Assert.AreEqual("F — 열쇠 삽입 (열쇠 2개)", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 2, 0f, 1));
+            Assert.AreEqual("팀 승강 횟수를 모두 사용함", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 2, 0f, 0));
+            Assert.AreEqual("", PollutionHud.KeyPrompt(KeyPhase.Idle, false, 0, 0f, 0), "no key, no prompt");
+        }
     }
 }

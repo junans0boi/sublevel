@@ -59,6 +59,15 @@ namespace Game.Gameplay
             return true;
         }
 
+        // The destinations offered: with keys (ADR-170) any region not contaminated, from anywhere, warned ones included
+        // (KeyElevatorTravel.CanChoose, what the server accepts); otherwise the old free ride's rules.
+        static void FillChoices(int here)
+        {
+            if (!PollutionDirector.FreeRidesBlocked) { ElevatorTravel.Destinations(here, States, Choices); return; }
+            Choices.Clear();
+            for (int r = 0; r < States.Count; r++) if (r != here && States[r] != ZoneState.Closed) Choices.Add(r);
+        }
+
         // F in a station: tap (released before the hold time) = next destination, held = ride. True when the key
         // was the elevator's this frame (no loot pickup then).
         public static bool HandleInteract(Combatant me, bool pressed, bool held, float deltaTime)
@@ -74,7 +83,7 @@ namespace Game.Gameplay
             }
             // With the pollution running the elevators are the key elevators (ADR-170): F inserts a key, F again closes the
             // doors, then the usual tap/hold picks and sends the ride. Otherwise the old free ride (training, tests).
-            bool keyMode = PollutionDirector.Instance != null && PollutionDirector.Instance.Ready;
+            bool keyMode = PollutionDirector.FreeRidesBlocked;
             if (keyMode)
             {
                 var holder = KeyHolder.Local;
@@ -96,7 +105,7 @@ namespace Game.Gameplay
                 if (!(phase == KeyPhase.Selecting && mine)) { _heldFor = Hold01 = 0f; _wasHeld = _fired = false; return false; }
             }
             rides.States(States);
-            ElevatorTravel.Destinations(rides.RegionOfStation(station), States, Choices);
+            FillChoices(rides.RegionOfStation(station));
             Selected = ElevatorTravel.KeepSelection(Selected, Choices);
             bool usable = Selected >= 0 && rides.LocalCooldownLeft <= 0f && !rides.LocalPending;
 
@@ -165,7 +174,7 @@ namespace Game.Gameplay
 
             // The ride (the car itself goes down and up, ADR-079): a band above the centre with where it goes.
             var band = new Vector2(0.5f, 0.5f);
-            var transit = UiKit.Rect("ElevatorTransit", canvasRoot, band, band, new Vector2(0f, 200f), new Vector2(520f, 84f));
+            var transit = UiKit.Rect("ElevatorTransit", canvasRoot, band, band, new Vector2(0f, 200f), new Vector2(520f, 108f)); // two lines of 24 px bold Korean need ~90 px
             UiKit.Box(transit, UiKit.Panel);
             UiKit.Frame(transit, 1f, UiKit.SteelDim);
             p._transitText = UiKit.Label(UiKit.Fill("Text", transit), "", 24, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
@@ -213,7 +222,7 @@ namespace Game.Gameplay
 
             rides.States(States);
             int here = rides.RegionOfStation(station);
-            ElevatorTravel.Destinations(here, States, Choices);
+            FillChoices(here);
             int selected = ElevatorTravel.KeepSelection(Selected, Choices);
             EnsureRows(States.Count);
             var zones = PollutionDirector.Instance;
@@ -236,13 +245,15 @@ namespace Game.Gameplay
             }
 
             int cooldown = Mathf.CeilToInt(rides.LocalCooldownLeft);
-            int footerKey = !ElevatorTravel.Runs(here >= 0 && here < States.Count ? States[here] : ZoneState.Safe) ? -1
-                : Choices.Count == 0 ? -2 : cooldown;
+            bool keyChoosing = KeyElevatorNet.LastStatus.TryGetValue(station, out var keyStatus) && (KeyPhase)keyStatus.Phase == KeyPhase.Selecting && keyStatus.Holder == me.ObjectId;
+            int footerKey = !PollutionDirector.FreeRidesBlocked && !ElevatorTravel.Runs(here >= 0 && here < States.Count ? States[here] : ZoneState.Safe) ? -1
+                : Choices.Count == 0 ? -2 : PollutionDirector.FreeRidesBlocked && !keyChoosing ? -3 : cooldown;
             if (footerKey != _footerKey)
             {
                 _footerKey = footerKey;
                 _footer.text = footerKey == -1 ? "운행 중지 · 봉쇄된 지역"
                     : footerKey == -2 ? "갈 수 있는 지역 없음"
+                    : footerKey == -3 ? "열쇠 승강기 · 팀당 " + PollutionRules.Current.MaxRidesPerTeam + "회"
                     : cooldown > 0 ? "재사용 대기 " + cooldown + "초"
                     : "F 목적지 변경 · F 길게 출발";
             }

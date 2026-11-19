@@ -91,6 +91,16 @@ namespace Game.Gameplay
             return new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(a * 255f));
         }
 
+        // A warned region blinks on the maps (#270): bright half a second, dim half a second.
+        public const float BlinkPeriod = 1f;
+        public static bool BlinkOn(float time) => Mathf.Repeat(time, BlinkPeriod) < BlinkPeriod * 0.5f;
+
+        // The dim half of the blink: the warned region's texels at a third of their alpha.
+        public static Color32 Dimmed(Color32 c) => new Color32(c.r, c.g, c.b, (byte)(c.a / 3));
+
+        // The gas front (#270): where the gas has really got to, a bright line on the edge of the contaminated cells.
+        public static readonly Color32 FrontTexel = new Color32(255, 70, 30, 255);
+
         // Short tag under a region's name on the minimap; "" while it is safe.
         public static string ZoneTag(ZoneState state)
         {

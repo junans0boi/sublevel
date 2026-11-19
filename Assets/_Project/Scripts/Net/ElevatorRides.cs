@@ -312,6 +312,7 @@ namespace Game.Net
         public bool ServerTryStart(Combatant rider, int station, int region)
         {
             if (rider == null || rider.Dead.Value || rider.Knocked.Value || _doors == null || !ServerActive) return false;
+            if (PollutionDirector.FreeRidesBlocked) return false; // keys only while the pollution runs (ADR-360)
             if (!_doors.ServerScheduled || _doors.ServerDoorsClosed) return false;
             if (MatchDirector.Instance != null && MatchDirector.Instance.State != null && MatchDirector.Instance.State.IsOver) return false;
             if (_trips.ContainsKey(rider.ObjectId) || !InStation(rider, station)) return false;
@@ -378,7 +379,7 @@ namespace Game.Net
         public bool ServerBotRide(Combatant bot, float exitMeters, out Vector3 station)
         {
             station = default;
-            if (bot == null || _doors == null || !ServerActive || _trips.ContainsKey(bot.ObjectId)) return false;
+            if (bot == null || _doors == null || !ServerActive || _trips.ContainsKey(bot.ObjectId) || PollutionDirector.FreeRidesBlocked) return false;
             if (!_doors.ServerScheduled || _doors.ServerDoorsClosed) return false;
             var at = bot.transform.position;
             States(_states);

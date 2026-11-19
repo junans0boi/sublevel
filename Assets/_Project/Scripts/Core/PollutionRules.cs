@@ -40,8 +40,11 @@ namespace Game.Core
         public const string FilterName = "방독 필터", AntidoteName = "해독제";
 
         // ---- Keys (ADR-170) ----
-        public int KeysMin = 6;
+        public int KeysMin = 6;                 // legacy range, used only when the team count is unknown (tests)
         public int KeysMax = 8;
+        public float KeysPerTeam = 0.65f;       // ADR-360: keys = ceil(teams * this), at most KeysCap
+        public int KeysCap = 40;
+        public int MaxRidesPerTeam = 2;         // successful key rides one team may make
         public float KeyBias = 0.5f;            // fewer keys in regions that close early
         public int KeysFromSupplyCrates = 1;    // at least this many of the keys are in supply crates; one more with 50 %
         public float DoorOpenSeconds = 30f;     // doors open, anybody may board

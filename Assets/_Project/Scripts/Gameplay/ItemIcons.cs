@@ -21,6 +21,7 @@ namespace Game.Gameplay
             "bandage", "firstaid", "smoke", "key",
             "jerrycan", // ADR-075
             "drink", "pill", "syringe", // ADR-099
+            "gas_filter", "antidote", // #267
             "flash", // ADR-105
             "molotov", // ADR-110
             "backpack_1", "backpack_2", "backpack_3", // ADR-091

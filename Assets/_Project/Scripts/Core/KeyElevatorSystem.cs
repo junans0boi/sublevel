@@ -20,6 +20,8 @@ namespace Game.Core
         readonly int[] _region;
         readonly KeyElevatorStation[] _stations;
         public readonly KeyCooldowns Cooldowns = new KeyCooldowns();
+        readonly Dictionary<int, int> _rides = new Dictionary<int, int>(); // finished rides by team (ADR-360)
+        public int RidesOf(int team) => _rides.TryGetValue(team, out var n) ? n : 0;
         readonly PollutionRules _rules;
         readonly float _rideSeconds;
 
@@ -41,7 +43,7 @@ namespace Game.Core
             _region[s] >= 0 && _region[s] < states.Count ? states[_region[s]] : PollutionState.Safe;
 
         public KeyResult Insert(int station, double now, int holder, int team, bool hasKey, IReadOnlyList<PollutionState> states) =>
-            _stations[station].Insert(now, holder, team, hasKey, Cooldowns, StateOfStation(station, states), _rules);
+            RidesOf(team) >= _rules.MaxRidesPerTeam ? KeyResult.RideLimit : _stations[station].Insert(now, holder, team, hasKey, Cooldowns, StateOfStation(station, states), _rules);
         public KeyResult Board(int station, int id) => _stations[station].Board(id, _rules);
         public KeyResult Alight(int station, int id) => _stations[station].Alight(id);
         public KeyResult CloseDoors(int station, double now, int id) => _stations[station].CloseDoors(now, id, _rules);
@@ -58,6 +60,7 @@ namespace Game.Core
                 int holder = st.HolderId;
                 // Read before Tick: a ride end resets the station.
                 int dest = st.Destination;
+                int team = st.HolderTeam;
                 var riders = st.Phase == KeyPhase.Riding ? st.Riders.ToArray() : null;
                 var e = st.Tick(now, _rules);
                 if (e == KeyEvent.None) continue;
@@ -65,6 +68,7 @@ namespace Game.Core
                 if (e == KeyEvent.Voided) ev.Refund = st.KeyRefunded;
                 else if (e == KeyEvent.RideEnded)
                 {
+                    _rides[team] = RidesOf(team) + 1;
                     ev.From = _region[i];
                     ev.Arrival = KeyElevatorTravel.ArrivalRegion(_region[i], dest, states);
                     ev.Riders = riders;

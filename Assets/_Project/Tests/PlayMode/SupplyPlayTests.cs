@@ -82,12 +82,17 @@ namespace Game.Tests
             yield return null;
         }
 
+        // The fast pollution confirms a region every few seconds and every stage sends a crate: on a slow machine the
+        // next crate came down while the test still counted the first. One crate is all these tests need.
+        static void NoMoreCrates() => SupplyRules.Current.FirstStage = int.MaxValue;
+
         [UnityTest]
         public IEnumerator StageStart_DropsACrateWithSmoke_WhichOpensIntoItems_AndShowsOnTheMap()
         {
             var supply = SupplyDirector.Instance;
             Assert.IsNotNull(supply, "the supply director installs itself next to the zone director");
             yield return WaitUntil(() => supply.Crates.Count == 1, 15f, "the stage-1 crate");
+            NoMoreCrates();
             var crate = supply.Crates[0];
             Assert.AreEqual(1, supply.DropCount);
             Assert.AreEqual(ZoneState.Safe, _director.StateOf(crate.Region), "it comes down in a region that is still safe");
@@ -119,6 +124,7 @@ namespace Game.Tests
         {
             var supply = SupplyDirector.Instance;
             yield return WaitUntil(() => supply.Crates.Count == 1, 15f, "the stage-1 crate");
+            NoMoreCrates();
             yield return WaitUntil(() => MapScreen.Instance != null, 5f, "the map screen");
             UiFocus.Set(UiScreen.Map);
             yield return null;

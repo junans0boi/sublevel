@@ -176,6 +176,7 @@ namespace Game.Gameplay
             }
 
             RefreshSupply();
+            RefreshZones();
 
             bool has = MapMarker.Has;
             if (_markerRect.gameObject.activeSelf != has)
@@ -205,6 +206,18 @@ namespace Game.Gameplay
         }
 
         // One square marker per crate that has come down and not been opened yet, drawn under the player's marker.
+        RawImage _zones;
+        public bool ZonesShown => _zones != null && _zones.gameObject.activeSelf;
+
+        void RefreshZones()
+        {
+            var minimap = Hud.Instance != null ? Hud.Instance.Minimap : null;
+            var texture = minimap != null ? minimap.ZoneTexture : null;
+            bool on = texture != null && minimap.AnyZoneShown;
+            if (_zones.texture != texture) _zones.texture = texture;
+            if (_zones.gameObject.activeSelf != on) _zones.gameObject.SetActive(on);
+        }
+
         void RefreshSupply()
         {
             var director = SupplyDirector.Instance;
@@ -255,6 +268,11 @@ namespace Game.Gameplay
             picture.texture = texture;
             picture.color = texture != null ? Color.white : Empty;
             picture.raycastTarget = false;
+            // Region states, the blink of a warned region and the gas front (#270): the minimap's overlay over the whole map
+            // (both span the world square 0..Size).
+            _zones = UiKit.Fill("Zones", _map).gameObject.AddComponent<RawImage>();
+            _zones.raycastTarget = false;
+            _zones.gameObject.SetActive(false);
 
             BuildGrid();
             BuildPasses(world);

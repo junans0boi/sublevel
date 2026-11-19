@@ -33,9 +33,12 @@ namespace Game.Net
         public static PollutionRules RulesOverride;
         // The pollution runs the match instead of the lockdown (T10 flips this on and removes ZoneDirector).
         public static bool AutoStart = true;
+        // Tests of the old free elevator ride set this; otherwise the pollution means keys only (ADR-360).
+        public static bool AllowFreeRides;
+        public static bool FreeRidesBlocked => !AllowFreeRides && Instance != null && Instance.Ready;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Instance = null; GridSource = null; MapRegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = true; }
+        static void ResetStatics() { Instance = null; GridSource = null; MapRegionCount = 0; ClientSynced = null; ClientHashMismatch = null; RulesOverride = null; AutoStart = true; AllowFreeRides = false; }
 
         NetworkManager _network;
         bool _bound;
@@ -110,17 +113,25 @@ namespace Game.Net
         public ChipResult ServerDepositChips(Combatant carrier, int boxRegion) =>
             Chips.DepositAll(carrier.ObjectId, Now, boxRegion, States, Rules);
 
-        // Keys of the match (ADR-170): 6-8, biased toward late regions, the first ones in supply crates (the crates
-        // are the supply director's: until it takes them over they lie as loot like the rest).
+        // Keys still waiting in supply crates: each crate opened puts one of them out with its items (SPEC 5-2).
+        public int ServerCrateKeys { get; private set; }
+        public bool ServerTakeCrateKey() { if (ServerCrateKeys <= 0) return false; ServerCrateKeys--; return true; }
+
+        // Keys of the match (ADR-170/360): ceil(teams x 0.65), biased toward late regions, the first ones in supply crates.
         void ServerSpawnKeys(PollutionGrid grid, int regionCount, int seed)
         {
             var director = MatchDirector.Instance;
             if (director == null) return;
-            var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules);
+            var teams = new HashSet<int>();
+            foreach (var c in Combatant.All) if (c != null) teams.Add(TeamKey(c));
+            int teamCount = director.Layout != null ? director.Layout.TeamCount : teams.Count; // 0 = unknown: the old 6..8
+            var plan = KeyPlan.Plan(seed, _match.Timeline.Order, PollutionGridBuilder.LandAreaWeights(grid, regionCount), Rules, teamCount);
             var rng = new System.Random(unchecked(seed * 17 + 5));
             var cells = new List<int>();
+            ServerCrateKeys = 0;
             foreach (var k in plan)
             {
+                if (k.InSupplyCrate) { ServerCrateKeys++; continue; } // handed out by the next supply crates opened (ServerTakeCrateKey)
                 cells.Clear();
                 for (int i = 0; i < grid.Count; i++) if (grid.IsLand(i) && grid.Region[i] == k.Region) cells.Add(i);
                 for (int tries = 0; tries < 12 && cells.Count > 0; tries++)

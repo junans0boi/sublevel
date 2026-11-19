@@ -15,11 +15,20 @@ namespace Game.Core
     {
         // `order`: PollutionOrder.Plan result. `regionWeight`: how much loot each region has (area, loot points);
         // null = equal. Deterministic in the seed.
-        public static KeyPlacement[] Plan(int seed, int[] order, IReadOnlyList<float> regionWeight, PollutionRules rules = null)
+        // How many keys a match with `teams` teams has (ADR-360): ceil(teams * KeysPerTeam), 1..KeysCap.
+        public static int CountFor(int teams, PollutionRules rules = null)
+        {
+            rules = rules ?? PollutionRules.Current;
+            return Math.Max(1, Math.Min(rules.KeysCap, (int)Math.Ceiling(teams * (double)rules.KeysPerTeam - 1e-9)));
+        }
+
+        // `teams` <= 0: the team count is unknown, the old random 6..8.
+        public static KeyPlacement[] Plan(int seed, int[] order, IReadOnlyList<float> regionWeight, PollutionRules rules = null, int teams = 0)
         {
             rules = rules ?? PollutionRules.Current;
             uint rng = unchecked((uint)seed * 2246822519u + 0x2545F491u);
-            int count = rules.KeysMin + (int)(PollutionOrder.Next(ref rng) * (rules.KeysMax - rules.KeysMin + 1));
+            int roll = rules.KeysMin + (int)(PollutionOrder.Next(ref rng) * (rules.KeysMax - rules.KeysMin + 1));
+            int count = teams > 0 ? CountFor(teams, rules) : roll;
             int n = order.Length;
             var w = new double[n];
             for (int k = 0; k < n; k++)
@@ -56,7 +65,7 @@ namespace Game.Core
 
     public enum KeyPhase : byte { Idle = 0, DoorOpen = 1, Selecting = 2, Riding = 3, Recharging = 4 }
     public enum KeyEvent : byte { None = 0, SelectionStarted, Voided, RideEnded, Recharged }
-    public enum KeyResult : byte { Ok, Busy, NoKey, TeamCooldown, NotHolder, HolderNotAboard, CarFull, NotAboard, BadDestination, WrongPhase }
+    public enum KeyResult : byte { Ok, Busy, NoKey, TeamCooldown, NotHolder, HolderNotAboard, CarFull, NotAboard, BadDestination, WrongPhase, RideLimit }
 
     // One station's key elevator (ADR-170 / SPEC 5-2), a pure state machine on server time: insert the key -> doors
     // open 30 s, anybody boards (4 at most) -> the holder closes the doors or the time runs out -> the holder picks

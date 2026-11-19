@@ -12,7 +12,7 @@ namespace Game.Gameplay
     public class ZoneBanner : MonoBehaviour
     {
         const int SortOrder = 2;                    // above the HUD and the kill feed
-        const float Top = 116f; // below the compass and its heading readout
+        const float Top = 192f; // below the compass and the hazard slot (Hud: 120 + 64 high), which it overlapped
         const float BannerWidth = 780f, BannerHeight = 58f;
         const float PromptWidth = 560f, PromptHeight = 42f, PromptGap = 8f;
         const float MessageSeconds = 5f;
@@ -30,7 +30,7 @@ namespace Game.Gameplay
         public static Vector3? SpectatorFeet;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetSpectator() => SpectatorFeet = null;
+        static void ResetSpectator() { SpectatorFeet = null; Siren = null; SirenCount = 0; }
 
         PollutionDirector _director;
         AudioSource _audio;
@@ -46,6 +46,7 @@ namespace Game.Gameplay
         int _promptKey = int.MinValue;
         string _text = "";
         string _prompt = "";
+        int _limitSeen = int.MinValue;
 
         // ---- Read-only state for tests and the HUD ----
 
@@ -71,6 +72,10 @@ namespace Game.Gameplay
             go.transform.SetParent(director.transform, false);
             go.AddComponent<ZoneBanner>();
         }
+
+        // Siren hook (#270, sound in S5): a region was announced on this client. No siren clip exists yet.
+        public static event System.Action<int> Siren;
+        public static int SirenCount { get; private set; }
 
         // Sounds are optional: whoever has the clips hands them over (the master's wiring), else the banner is silent.
         public void SetClips(AudioClip warning, AudioClip lockdown, AudioClip bombardment, AudioClip incoming)
@@ -118,6 +123,8 @@ namespace Game.Gameplay
             {
                 case ZoneState.Warning:
                     Play(_warningClip);
+                    SirenCount++;
+                    Siren?.Invoke(region);
                     break;
                 case ZoneState.Closed:
                     Say(name + " 지역 오염 확정", UiKit.Danger, MessageSeconds);
@@ -152,6 +159,12 @@ namespace Game.Gameplay
             {
                 _director = PollutionDirector.Instance;
                 if (_director == null) return;
+            }
+            var keys = KeyHolder.Local;
+            if (keys != null && keys.RideLimitHits.Value != _limitSeen)
+            {
+                if (_limitSeen != int.MinValue) Say("이 팀은 승강기를 이미 " + PollutionRules.Current.MaxRidesPerTeam + "번 사용했습니다", UiKit.Danger, MessageSeconds);
+                _limitSeen = keys.RideLimitHits.Value;
             }
             UpdateStatus();
             UpdateBanner();
@@ -256,7 +269,8 @@ namespace Game.Gameplay
             if (station >= 0 && _director.Ready)
             {
                 KeyElevatorNet.LastStatus.TryGetValue(station, out var st);
-                text = PollutionHud.KeyPrompt((KeyPhase)st.Phase, st.Holder == me.ObjectId, keys != null ? keys.Keys.Value : 0, st.Left);
+                text = PollutionHud.KeyPrompt((KeyPhase)st.Phase, st.Holder == me.ObjectId, keys != null ? keys.Keys.Value : 0, st.Left,
+                    keys != null ? PollutionRules.Current.MaxRidesPerTeam - keys.TeamKeyRides.Value : int.MaxValue);
             }
             if (text == _prompt) return;
             _prompt = text;
