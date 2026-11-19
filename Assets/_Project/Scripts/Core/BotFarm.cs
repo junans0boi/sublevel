@@ -14,6 +14,10 @@ namespace Game.Core
             return rounds >= magSize * Math.Max(1, rules.FarmMags) && armorPieces >= rules.FarmArmorPieces && healItems >= rules.FarmHealItems;
         }
 
+        // Whether an unarmed bot is told where the nearest weapon lies: once farming is over, or FarmHintSeconds after the drop (ADR-321).
+        public static bool HintDue(bool hasGun, bool farmDone, float sinceDrop, BotRules rules) =>
+            rules.FarmHint && !hasGun && (farmDone || sinceDrop >= rules.FarmHintSeconds);
+
         // The building to farm from (x, z): near, rich for its kind (LootPlacement.KindWeight), not visited, and not already chosen by
         // FarmBuildingCap other bots (teammates do not count against it). `others(b)` = bots of other teams that chose building b.
         // The random jitter spreads bots that start side by side. -1 when there is no building left with loot.

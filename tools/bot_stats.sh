@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 80-player bot statistics (ADR-313, #377): runs the dedicated server bots-only for each level x seed and merges the rows.
 # Usage: tools/bot_stats.sh [seconds=420] [levels="easy normal hard"] [seeds="1 2 3"] [extra server args...]
+# Level "mix" runs the settings' level mix (no --perf-level), so the per-level kills/deaths compare the levels in one match.
 # Needs `tools/unity.sh build server` first. One server at a time (M1 13"); never kills anything but its own server.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,8 +16,9 @@ for level in $LEVELS; do
   for seed in $SEEDS; do
     tag="p0_${level}_s${seed}"
     rm -f "Logs/perf/botstats_${tag}.csv"
+    lvl=(--perf-level "$level"); [[ "$level" == mix ]] && lvl=()
     "$BIN" -batchmode -nographics -logFile "$ROOT/$OUT/${STAMP}_${tag}.log" --dedicated --port 7770 \
-      --perf "$tag" --participants 80 --bots 79 --region C --start-seconds 5 --perf-level "$level" --perf-seed "$seed" "$@" &
+      --perf "$tag" --participants 80 --bots 79 --region C --start-seconds 5 ${lvl[@]+"${lvl[@]}"} --perf-seed "$seed" "$@" &
     pid=$!
     sleep "$SECS"
     kill -TERM "$pid" 2>/dev/null || true; sleep 5; kill -9 "$pid" 2>/dev/null || true

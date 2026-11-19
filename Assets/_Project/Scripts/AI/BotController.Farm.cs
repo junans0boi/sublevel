@@ -7,7 +7,7 @@ namespace Game.AI
 {
     // Farming (ADR-294, #373): right after the drop the bot picks a building near it, walks the loot points of that building
     // one after the other (items are found by sight on the way, SenseLoot), and stops when it is kitted out (BotFarm.Ready)
-    // or its time is up. Out of time and unarmed, the easy and normal bots are told where the nearest weapon lies. Server only.
+    // or its time is up. Out of time (or FarmHintSeconds after the drop) and unarmed, a bot is told where the nearest weapon lies. Server only.
     public partial class BotController
     {
         // Which bots chose which building (a soft reservation: BotRules.FarmBuildingCap others at most, teammates not counted).
@@ -55,7 +55,8 @@ namespace Game.AI
             _percept.FarmActive = false;
             // First time it holds a gun: the farming statistic (seconds since the drop).
             if (_farmStarted && !_gunNoted && _self.HasAnyWeapon) { _gunNoted = true; BotFarmStats.FirstGunSeconds.Add(now - _farmStartAt); BotMatchStats.FirstGun[(int)_level].Add(now - _farmStartAt); }
-            if (_farmDone) { TickHint(now); return; }
+            if (_farmStarted) TickHint(now);
+            if (_farmDone) return;
             var index = BuildingLoot.Index;
             if (index == null || _rules.FarmSeconds <= 0f || !OnNavMesh) return;
             if (!_farmStarted)
@@ -105,10 +106,10 @@ namespace Game.AI
             _percept.FarmActive = false;
         }
 
-        // Out of farming time without a gun: the nearest weapon on the ground is pointed out (easy and normal; BotRules.FarmHint).
+        // Out of farming time, or FarmHintSeconds after the drop, without a gun: the nearest weapon on the ground is pointed out (BotFarm.HintDue).
         void TickHint(float now)
         {
-            if (!_rules.FarmHint || _self.HasAnyWeapon) { _hint = null; return; }
+            if (!BotFarm.HintDue(_self.HasAnyWeapon, _farmDone, now - _farmStartAt, _rules)) { _hint = null; return; }
             if (_hint != null && _hint.IsSpawned) return;
             if (now < _nextHintAt) return;
             _nextHintAt = now + 3f;

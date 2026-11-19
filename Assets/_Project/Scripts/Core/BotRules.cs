@@ -80,6 +80,7 @@ namespace Game.Core
         // ---- Farming (ADR-294): right after the drop a bot walks the loot points of a nearby building until it is kitted out ----
         public float FarmSeconds = 210f;          // longest it farms (Normal; the levels scale it: 240 / 210 / 180)
         public bool FarmHint = true;              // out of time and unarmed: it is told where the nearest weapon lies
+        public float FarmHintSeconds = 150f;      // ...or unarmed this long after the drop, still farming (ADR-321)
         public int FarmMags = 1;                  // ready needs a gun with this many magazines of rounds (mag + reserve)
         public int FarmArmorPieces = 0;           // ...and this many armour pieces worn (0..2)
         public int FarmHealItems = 1;             // ...and this many healing items (medkits, bandages, first-aid kits)
