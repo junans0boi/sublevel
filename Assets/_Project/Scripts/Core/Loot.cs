@@ -38,7 +38,7 @@ namespace Game.Core
             return Entries[Entries.Length - 1];
         }
 
-        // What a spawn point of a role (ADR-256) may hold. W weapon, A ammunition, H healing and boosts, G protection, X anything.
+        // What a spawn point of a role (ADR-256) may hold. W weapon, A ammunition, H healing and boosts, G protection, O optics and attachments (ADR-481), X anything.
         public static bool Fits(LootKind kind, char role)
         {
             switch (role)
@@ -47,6 +47,7 @@ namespace Game.Core
                 case 'A': return kind == LootKind.Ammo;
                 case 'H': return kind == LootKind.Medkit || kind == LootKind.Bandage || kind == LootKind.FirstAidKit || kind == LootKind.Drink || kind == LootKind.Pill || kind == LootKind.Syringe;
                 case 'G': return kind == LootKind.Helmet || kind == LootKind.Vest || kind == LootKind.Backpack;
+                case 'O': return kind == LootKind.Optic;
                 default: return true;
             }
         }
@@ -135,6 +136,32 @@ namespace Game.Core
                     candidates.RemoveAt(pick);
                     have++; turned++;
                 }
+            }
+            return turned;
+        }
+
+        // ADR-481: the role mix (ADR-256) left optics and attachments to the 'X' points only, so an island held about ten scopes. This share of the
+        // points that hold neither a weapon nor the kind already is turned into it (rolled by the table's weights among the kind's entries, role 'O').
+        public const float OpticShare = 0.2f;
+
+        public static int ApplyShare(LootEntry[] plan, LootTable table, char role, LootKind kind, float share, int seed)
+        {
+            if (plan == null || table == null || share <= 0f) return 0;
+            var candidates = new List<int>();
+            int have = 0;
+            for (int i = 0; i < plan.Length; i++)
+            {
+                if (plan[i] != null && plan[i].Kind == kind) have++;
+                else if (plan[i] == null || plan[i].Kind != LootKind.Weapon) candidates.Add(i);
+            }
+            int want = (int)Math.Round(share * (candidates.Count + have)) - have;
+            var rng = new Random(unchecked(seed + 104729));
+            int turned = 0;
+            for (; turned < want && candidates.Count > 0; turned++)
+            {
+                int pick = rng.Next(candidates.Count);
+                plan[candidates[pick]] = table.RollRole(rng, role);
+                candidates.RemoveAt(pick);
             }
             return turned;
         }

@@ -228,6 +228,7 @@ namespace Game.Net
             for (int i = 0; i < roles.Length; i++) tagged &= LootSpawnName.Parse(_lootSpawns[i].name, out roles[i], out regions[i]);
             if (!tagged) return GameData.Loot.Plan(_lootSpawns.Length, Seed);
             var plan = GameData.Loot.PlanByRole(roles, Seed);
+            LootGuarantee.ApplyShare(plan, GameData.Loot, 'O', LootKind.Optic, LootGuarantee.OpticShare, Seed);
             LootGuarantee.Apply(plan, regions, System.Linq.Enumerable.Max(regions) + 1, GameData.Loot, LootKind.Jerrycan, 1, Seed);
             return plan;
         }
