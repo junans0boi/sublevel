@@ -82,6 +82,8 @@ namespace Game.Net
             _dent = _splinter = null;
         }
 
+        static bool Headless => SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null;
+
         // `centre`: the middle of the opening at floor level; `facing`: the wall normal (z). Hinge on the left.
         public static Door Create(Transform parent, int index, Vector3 centre, Quaternion facing, float width, float height)
         {
@@ -98,16 +100,17 @@ namespace Game.Net
             pivot.SetParent(go.transform, false);
             pivot.localPosition = new Vector3(-width / 2f, 0f, 0f);
             door._pivot = pivot;
-            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            // The shader-less dedicated server gets the collider only: a primitive's renderer and the materials there log a
+            // warning each, ~5500 for the map, and journald then drops the match start's lines (r5: no "[Doors]" in the journal).
+            var panel = Headless ? new GameObject("Panel", typeof(BoxCollider)) : GameObject.CreatePrimitive(PrimitiveType.Cube);
             panel.name = "Panel";
             panel.transform.SetParent(pivot, false);
             panel.transform.localPosition = new Vector3(width / 2f, height / 2f, 0f);
             panel.transform.localScale = new Vector3(width - 0.04f, height - 0.03f, rules.PanelThickness);
-            var renderer = panel.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = PanelMaterial();
+            if (!Headless) panel.GetComponent<MeshRenderer>().sharedMaterial = PanelMaterial();
             door._box = panel.GetComponent<BoxCollider>();
             // A dark handle on the free edge, both faces.
-            foreach (float face in new[] { -1f, 1f })
+            if (!Headless) foreach (float face in new[] { -1f, 1f })
             {
                 var knob = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 knob.name = "Handle";
@@ -170,7 +173,7 @@ namespace Game.Net
             if (_damage != null) Destroy(_damage.gameObject);
             _droop = stage >= 2 ? -3f : 0f;
             Apply();
-            if (stage < 1 || stage > 2) return;
+            if (stage < 1 || stage > 2 || Headless) return;
             _damage = new GameObject("Damage").transform;
             _damage.SetParent(_pivot, false);
             var rng = new System.Random(Index * 7919 + 17);
