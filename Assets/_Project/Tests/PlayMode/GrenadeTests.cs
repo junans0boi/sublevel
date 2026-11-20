@@ -60,6 +60,7 @@ namespace Game.Tests
             _input = new ScriptedInput();
             PlayerController.InputOverride = _input;
             SceneManager.LoadScene("TestBox");
+            yield return null; yield return null; // a previous fixture's scene (and its player) is still there until the load goes through
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 15f, "local player spawned");
             yield return null;
             _rulesBefore = ThrowableRules.Current;
