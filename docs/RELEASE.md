@@ -68,6 +68,33 @@ tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   # 플랫폼 �
 5. 서버 교체가 필요하면 `DEPLOY_GAME_SERVER.md`(접속자 확인 후).
 6. 디스크: 서버에서 `df -h /var/www` — 오래된 릴리스 폴더는 사람이 판단해 지운다(스크립트는 지우지 않음).
 
+## 7. GitHub Releases (태그 → 릴리스 노트, ADR-530)
+런처 배포(위 1~6)와 별개로, 저장소마다 **소스 기준 마일스톤**을 GitHub Release로 남긴다.
+
+| 저장소 | 태그 | 워크플로 | 첨부 |
+|---|---|---|---|
+| `sublevel`(공개) | `vX.Y.Z` | `.github/workflows/release.yml` | 없음(아래 조건 전까지) |
+| `sublevel-launcher` | `vX.Y.Z` = `package.json`·`tauri.conf.json` 버전 | `build.yml`(태그면 Release 생성) | Windows NSIS 설치 파일 |
+| `sublevel-backend` | `vX.Y.Z` = `package.json` 버전 | `release.yml`(lint·test 통과 후) | 없음(서버는 `scripts/deploy.sh deploy <태그>`) |
+| `sublevel-web` | `vX.Y.Z` = `package.json` 버전 | `release.yml`(typecheck·build 통과 후) | 없음(서버가 main을 빌드) |
+
+- **노트**: 주석 태그(`git tag -a`)의 메시지 + 이전 `v*` 태그 이후 커밋 목록(최대 100줄)을 워크플로가 붙인다. 비밀 값 없음, `GITHUB_TOKEN`만.
+- **게임 태그와 다른 버전의 관계**: 태그는 소스 마일스톤 이름일 뿐이다. 접속 호환은 계속 `LobbyNet.CurrentVersion`(`bundleVersion`/`Protocol`)이 정하고, 런처 manifest 라벨은 `release.sh --version <이름>`이다. 같은 빌드를 런처로 배포할 때는 `--version <태그>`(예: `v0.2.0`)를 써서 라벨을 맞춘다(허용 문자에 맞음).
+- `v0.*`와 `-` 접미사 태그는 pre-release로 표시한다(게임 워크플로).
+
+### 절차 (게임)
+```bash
+git tag -a v0.2.0 -F notes.md      # notes.md: 요약(한국어) — 태그 메시지가 릴리스 노트 첫머리가 된다
+git push origin v0.2.0             # → Actions가 Release 생성
+```
+
+### 게임 클라이언트 zip을 GitHub Release에 첨부하기 (지금은 하지 않음)
+`tools/release.sh --mac --win --github v0.2.0 --version v0.2.0`이면 빌드 → zip → 파일당 **2 GiB 미만** 확인 → `gh release upload`. 공개 저장소의 Release는 **누구나 받을 수 있는 공개 배포**이므로 아래가 모두 풀리기 전에는 쓰지 않는다(판단은 준환, `RISKS_OPEN_QUESTIONS.md`):
+1. Mixamo 약관 원문 확인(빌드에 Mixamo 캐릭터·애니메이션 포함), Fish-Net 라이선스 검토
+2. 게임물 등급분류 필요 여부(무료 공개 배포)
+3. 개발용 실행 인자(`-feelcapture`·`-autoplay`·`--simulate-ping`) 제거, `placeholder/` 비우기
+4. 크기: Mac 빌드는 압축 전 약 3.5 GB(2026-11-18)라 zip이 2 GiB를 넘을 수 있다. 넘으면 스크립트가 멈춘다
+
 ## 기록
 | 날짜 | 무엇 | 결과 |
 |---|---|---|
