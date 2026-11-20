@@ -256,6 +256,8 @@ public static class TestBoxBuilder
         Set(animation, "_unarmedWalkSpeed", p => p.floatValue = visual.Gait.UnarmedWalkSpeed);
         Set(animation, "_unarmedRunSpeed", p => p.floatValue = visual.Gait.UnarmedRunSpeed);
         Set(animation, "_unarmedCrouchSpeed", p => p.floatValue = visual.Gait.UnarmedCrouchSpeed);
+        Set(animation, "_rifleCrouchSpeed", p => p.floatValue = visual.Gait.RifleCrouchSpeed);
+        Set(animation, "_rifleCrouchBackSpeed", p => p.floatValue = visual.Gait.RifleCrouchBackSpeed);
         Set(animation, "_punchImpactLeft", p => p.floatValue = visual.Gait.PunchLeftImpact);
         Set(animation, "_punchImpactRight", p => p.floatValue = visual.Gait.PunchRightImpact);
         Set(animation, "_proneHeadAhead", p => p.floatValue = visual.ProneHeadAhead);

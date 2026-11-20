@@ -525,9 +525,9 @@ namespace Game.Tests
             Shot("crouch_bare_side", 3f, 1.0f, 0.8f);
             yield return Record("crouch_bare", 0.4f, rows);
             var r = rows[rows.Count - 1];
-            Debug.Log($"[AnimMetrics] crouch bare hands: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} drop {_anim.ModelDrop:F3} footfix {_anim.FootFix:F3}");
+            Debug.Log($"[AnimMetrics] crouch bare hands: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} drop {_anim.ModelDrop:F3}");
             Assert.That(r[3], Is.InRange(0.8f, 1.2f), "head joint height crouched, the UAL crouch (m)");
-            Assert.Less(Mathf.Abs(_anim.ModelDrop) + Mathf.Abs(_anim.FootFix), 0.03f, "the clip is the crouch: no code knee bend or foot fix");
+            Assert.Less(Mathf.Abs(_anim.ModelDrop), 0.03f, "the clip is the crouch: no code knee bend");
             Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");
         }
 
@@ -548,6 +548,8 @@ namespace Game.Tests
             Debug.Log($"[AnimMetrics] crouch: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} palm {r[8]:F3}");
             Assert.That(r[3], Is.InRange(0.9f, 1.3f), "head height crouched (m)");
             Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");
+            Assert.AreEqual("RifleCrouch", _anim.BaseShown, "the rifle crouch is the Mixamo kneel clip (ADR-536, #303)");
+            Assert.Less(Mathf.Abs(_anim.ModelDrop), 0.03f, "the clip is the crouch: no code knee bend");
         }
     }
 }

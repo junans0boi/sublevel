@@ -109,7 +109,7 @@ namespace Game.Gameplay
             var anim = Combatant.LocalPlayer.GetComponent<CombatantAnimation>();
             for (int i = 0; i < 3; i++)
             {
-                Debug.Log($"[FeelCapture] {name} {i}: speed {Combatant.LocalPlayer.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F1} hold {anim.RifleHoldShown:F2} ready {anim.RifleReady:F2} pitch {anim.RiflePose.Pitch:F0} look {pc.Pitch:F0} upper {anim.UpperState} footfix {anim.FootFix:F3} footlow {anim.FootLow:F3} rest {anim.FootRest:F3} y {Combatant.LocalPlayer.transform.position.y:F3} sprinting {pc.Sprinting} {anim.AimGeometry()}");
+                Debug.Log($"[FeelCapture] {name} {i}: speed {Combatant.LocalPlayer.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F1} hold {anim.RifleHoldShown:F2} ready {anim.RifleReady:F2} pitch {anim.RiflePose.Pitch:F0} look {pc.Pitch:F0} upper {anim.UpperState} footlow {anim.FootLow:F3} rest {anim.FootRest:F3} y {Combatant.LocalPlayer.transform.position.y:F3} sprinting {pc.Sprinting} {anim.AimGeometry()}");
                 foreach (var (view, tag) in new[] { (Watch.Side, "side"), (Watch.Quarter, "quarter"), (Watch.LeftSide, "left"), (Watch.Game, "tpp") })
                 {
                     _watch = view;

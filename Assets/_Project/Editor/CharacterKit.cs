@@ -62,6 +62,7 @@ public static class CharacterKit
         public float WalkSpeed, RunSpeed, BackSpeed; // ground speed each clip was authored for (m/s)
         public float FootPlantHeight, FootLiftHeight;                       // above the character's origin
         public float UnarmedWalkSpeed, UnarmedRunSpeed, UnarmedCrouchSpeed, SprintSpeed;        // the bare-handed walk, jog, crouch and sprint clips (m/s)
+        public float RifleCrouchSpeed, RifleCrouchBackSpeed;                                    // the rifle crouch walks ahead and back (m/s, ADR-536)
         // Where the jog and sprint sit in the trees: the game's run and slowest sprint, not the clips' own speeds, so a run shows the
         // whole jog and every sprint the whole sprint; each plays at the rate that makes its stride cover its spot's ground (player report "a slow jog", ADR-481).
         public float RunAt, SprintAt;
@@ -182,6 +183,7 @@ public static class CharacterKit
             {
                 WalkSpeed = Speed("RifleWalk"), RunSpeed = Speed("RifleRun"), BackSpeed = Speed("RifleWalkBack"),
                 UnarmedWalkSpeed = Speed("U_Walk_Loop"), UnarmedRunSpeed = Speed("U_Jog_Fwd_Loop"), UnarmedCrouchSpeed = Speed("U_Crouch_Fwd_Loop"),
+                RifleCrouchSpeed = Speed("RifleCrouchWalk"), RifleCrouchBackSpeed = Speed("RifleCrouchWalkBack"),
             };
             // The sprint runs on its toes, which the planted-foot test reads as the jog's 5.2 (ADR-390). Its mid-stance speed (~7.0) is its ground
             // speed: placed at the game's sprint, GaitSurveyTests' slide was 3.2 m/s played as 7.44 (the old jog-ratio estimate) and 5.0 as 5.2,

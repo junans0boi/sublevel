@@ -28,6 +28,7 @@ namespace Game.Gameplay
     {
         public const string LocomotionAim = "LocomotionAim", MoveX = "MoveX", MoveZ = "MoveZ"; // 8-way trees on the local velocity (ADR-391)
         public const string Locomotion = "Locomotion", Air = "Air", Death = "Death", Prone = "Prone", Unarmed = "Unarmed", UnarmedCrouch = "UnarmedCrouch", SwimState = "Swim";
+        public const string RifleCrouch = "RifleCrouch"; // armed crouch: the Mixamo kneel and crouch walks (ADR-536, #303)
         // Action layer (reload clips) and Additive layer (breathing, hit flinch), ADR-188.
         public const string ActionNone = "None", ReloadStand = "ReloadStand", ReloadCrouch = "ReloadCrouch", ReloadProne = "ReloadProne";
         public const string BreathState = "Breath", FlinchState = "Flinch";
@@ -63,7 +64,6 @@ namespace Game.Gameplay
         const float UnarmedShoulderSwingCut = 0.6f; // share of the bare-hand clips' shoulder twist taken out
         const float LandArmShare = 0.5f;       // of the arm lift shown again while absorbing a landing
         const float FallbackLegLength = 0.9f;  // hip to ankle, when the leg bones are not wired
-        const float MaxFootFix = 0.3f;         // most the crouched model is moved to put the lowest foot on the ground
         // Bones turned in code after the animator has posed them, parents before children.
         const int Torso = 0, ThighLeft = 1, ThighRight = 2, ShinLeft = 3, ShinRight = 4, FootLeft = 5, FootRight = 6,
             ArmLeft = 7, ArmRight = 8, Pelvis = 9, TurnedBones = 10;
@@ -87,6 +87,8 @@ namespace Game.Gameplay
         float _clipDir;  // that clip direction (deg): 0 or 180 = the UAL cycles, anything else a Mixamo strafe
         // The bare-handed walk and jog clips' ground speed (ADR-255), and the second in each punch clip when the fist is furthest out (the hit).
         [SerializeField] float _unarmedWalkSpeed = 1.2f, _unarmedRunSpeed = 3.5f, _unarmedCrouchSpeed = 1.2f;
+        // The rifle crouch walks' ground speed ahead and back (ADR-536).
+        [SerializeField] float _rifleCrouchSpeed = 1.2f, _rifleCrouchBackSpeed = 1.2f;
         [SerializeField] float _punchImpactLeft = 0.15f, _punchImpactRight = 0.15f;
         // Foot height above the character's origin: planted below the first, in the air above the second.
         [SerializeField] float _footPlantHeight = 0.12f;
@@ -115,18 +117,15 @@ namespace Game.Gameplay
         CombatantRagdoll _ragdoll; // missing on a prefab built before ADR-395: the death clip only
         CombatantStance _stance;  // missing on a prefab built before stances existed: never crouches
         float _legLength = FallbackLegLength;
-        float _footFixTotal;      // how far GroundCrouchedFeet has the crouched model moved down (carried into next frame's placement)
         float _footRestHeight;    // the lower foot's height over the character's origin in the saved (standing) pose
         float _crouch;            // 0..1: how much of the crouch is shown
-        float _clipCrouch;        // 0..1: bare-handed crouch is the UAL crouch clips (ADR-255); the code knee bend fades out by this much
-        float _crouchWalk;        // 0..1: how much the crouched body is walking (eased); a walk bends the knees less
+        float _clipCrouch;        // 0..1: how much the crouch trees play (UAL bare-handed ADR-255, Mixamo rifle ADR-536): their own cadence and leg turn
         float _prone;             // 0..1: how much of the lying pose is shown
         float _proneClip;         // the share of it that is the prone clip (all of it unless swimming)
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
         float _seated;            // 0..1: how much of the seated pose is shown (in a car, ADR-065 (5))
         bool _driverPose;         // seated at the wheel: empty hands go to the steering wheel
-        const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
         // up: each turned bone's own rotation is remembered and put back first if the animator has not re-posed it.
         readonly Transform[] _bones = new Transform[TurnedBones];
@@ -170,8 +169,6 @@ namespace Game.Gameplay
         // 0.6 s it takes to get in or out, so it is the same on every side.
         public float SeatedPose => _seated;
         public float ModelDrop => _drop;
-        // How far GroundCrouchedFeet moved the crouched model down this frame (m, negative = up).
-        public float FootFix { get; private set; }
         // Height of the lower ankle over the character's origin right now, and standing at rest (pose review).
         public float FootLow => _footLeft == null || _footRight == null ? 0f : Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
         public float FootRest => _footRestHeight;
@@ -332,8 +329,9 @@ namespace Game.Gameplay
             float pace = Game.Core.Locomotion.LegPace(speed, clipSpeed, GameData.Rules.Gait);
             // Crouched the body moves slower than the clip was made for: play the legs in proportion so the feet do not skate.
             if (_crouch > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.CrouchMinLegPace), _crouch);
-            // The bare-handed crouch clips have their own cadence: pace by their ground speed.
-            if (_clipCrouch > 0.01f) pace = Mathf.Lerp(pace, Game.Core.Locomotion.LegPace(speed, _unarmedCrouchSpeed, GameData.Rules.Gait), _clipCrouch);
+            // The crouch clips have their own cadence: pace by their ground speed.
+            float crouchClipSpeed = _unarmedBody ? _unarmedCrouchSpeed : _legs.Backward ? _rifleCrouchBackSpeed : _rifleCrouchSpeed;
+            if (_clipCrouch > 0.01f) pace = Mathf.Lerp(pace, Game.Core.Locomotion.LegPace(speed, crouchClipSpeed, GameData.Rules.Gait), _clipCrouch);
             // Crawling is the walk clip at a slow pace; at the crawl's low speed the blend also shows only a part of the stride.
             if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
@@ -444,15 +442,10 @@ namespace Game.Gameplay
             // The crouch follows the replicated stance, eased in and out; in the air the tuck takes over from it.
             float crouch = dead || _stance == null ? 0f : _stance.CrouchAmount;
             _crouch = crouch * crouch * (3f - 2f * crouch) * (1f - _tuck);
-            // Walking, the clip already swings the legs, so the crouch bends them less on top of it.
+            // The crouch is clips for every body (ADR-536): they lower the hips themselves, so no code knee bend or model drop.
             var rules = StanceRules.Current;
-            var v = dead ? Vector3.zero : _motion.LocalVelocity;
-            float walk = rules.CrouchWalkFullSpeed <= 0f ? 0f : Mathf.Clamp01(new Vector2(v.x, v.z).magnitude / rules.CrouchWalkFullSpeed);
-            _crouchWalk = Mathf.MoveTowards(_crouchWalk, walk, CrouchWalkBlendPerSecond * Time.deltaTime);
-            _clipCrouch = Mathf.MoveTowards(_clipCrouch, _unarmedBody && _crouch > 0.5f ? 1f : 0f, ClipCrouchPerSecond * Time.deltaTime);
-            float scale = _crouch * (1f - _clipCrouch) * Stances.CrouchBendScale(_crouchWalk, rules.CrouchWalkBend);
-            // Lowered by exactly what the bent knees take off the legs, so the feet stay on the ground.
-            _drop = _dip * jump.LandDropMeters + Stances.CrouchHipDrop(_legLength, rules.CrouchThighDeg * scale, rules.CrouchShinDeg * scale);
+            _clipCrouch = Mathf.MoveTowards(_clipCrouch, _crouch > 0.5f ? 1f : 0f, ClipCrouchPerSecond * Time.deltaTime);
+            _drop = _dip * jump.LandDropMeters;
             // Lying: the spine line rests at body height over the ground and the model is moved back from the capsule,
             // so the head (which the pitch swung forward to the end of the body) ends up under the eyes.
             // Pitched (swim): the spine line lies at body height. Clip: the model's head is moved back to the eyes (the clip lies along +z from the hips).
@@ -461,7 +454,7 @@ namespace Game.Gameplay
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal + _plantDrop) + lying + sitting;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _plantDrop) + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -510,7 +503,7 @@ namespace Game.Gameplay
         void SetBase(string state)
         {
             bool tree = state == Locomotion;
-            string wanted = state == Air ? AirShown() : !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Aiming ? LocomotionAim : Locomotion;
+            string wanted = state == Air ? AirShown() : !tree ? state : _crouch > 0.5f ? (_unarmedBody ? UnarmedCrouch : RifleCrouch) : _unarmedBody ? Unarmed : Aiming ? LocomotionAim : Locomotion;
             if (_base == state && _baseShown == wanted) return;
             // Down to and up from the ground is slower than a step.
             _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
@@ -521,6 +514,7 @@ namespace Game.Gameplay
         string _baseShown = Locomotion; // the animator state actually playing for _base
 
         string AirShown() => _jumpClip == JumpClip.Start ? JumpStart : _jumpClip == JumpClip.Loop ? JumpLoop : _jumpClip == JumpClip.Land ? JumpLand : Air;
+        public string BaseShown => _baseShown;
         bool Aiming => _combatant.AimMode != AimMode.Hip;
 
         // Pure: index of the direction (deg, any range) nearest to `deg`, the short way round. Straight ahead and straight back (the UAL
@@ -575,8 +569,8 @@ namespace Game.Gameplay
             if (_footLeft != null && _footRight != null)
             {
                 // Heights as the clip has them: without the landing dip.
-                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _footFixTotal + _plantDrop);
-                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _footFixTotal + _plantDrop);
+                bool left = _leftContact.Update(transform.InverseTransformPoint(_footLeft.position).y + _drop + _plantDrop);
+                bool right = _rightContact.Update(transform.InverseTransformPoint(_footRight.position).y + _drop + _plantDrop);
                 var v = _motion.LocalVelocity;
                 // The landing has its own sound; a foot settling out of the jump pose is not another step.
                 bool walking = !_combatant.Dead.Value && _base == Locomotion && Time.time > _landUntil + StepPauseAfterLanding && _prone < 0.5f && _seated < 0.5f
@@ -643,14 +637,8 @@ namespace Game.Gameplay
             // limb backward and points the toes down.
             var jump = GameData.Rules.Jump;
             var stanceRules = StanceRules.Current;
-            // Thigh forward and shin back, each measured from vertical; the same scale as the model drop uses.
-            float crouchScale = _crouch * (1f - _clipCrouch) * Stances.CrouchBendScale(_crouchWalk, stanceRules.CrouchWalkBend);
-            float crouchThigh = stanceRules.CrouchThighDeg * crouchScale;
-            float crouchShin = stanceRules.CrouchShinDeg * crouchScale;
-            // A weapon pose keeps the weapon level, so only empty hands hunch forward in a crouch.
-            float crouchPitch = stanceRules.CrouchTorsoPitchDeg * _crouch * (1f - _clipCrouch) * (1f - _upperWeight);
             var parkourRules = ParkourRules.Current;
-            Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push + crouchPitch
+            Turn(Torso, jump.TorsoPitchDeg * _tuck + jump.LandPitchDeg * _dip - jump.TakeoffArchDeg * _push
                 + parkourRules.PoseTorsoPitchDeg * _parkour, transform.right);
             // Lying: the chest and head come back up (a negative turn about the right axis undoes the forward tip).
             Turn(Torso, -stanceRules.ProneHeadLiftDeg * (_prone - _proneClip), transform.right);
@@ -661,14 +649,13 @@ namespace Game.Gameplay
             // Knees up in front, shins folded back under them. The shin turns relative to the thigh, which already
             // leans forward by t, so to point back by s from vertical it turns t + s (a landing uses s = t, i.e.
             // twice the thigh angle). The shin's net swing from vertical is then s, so the foot turns -s to be flat.
-            float thigh = -(jump.TuckThighDeg * _tuck + jump.LandBendDeg * _dip + crouchThigh);
-            float shin = jump.TuckShinDeg * _tuck + 2f * jump.LandBendDeg * _dip + crouchThigh + crouchShin;
-            float foot = jump.TakeoffToeDeg * _push - jump.LandBendDeg * _dip - crouchShin;
+            float thigh = -(jump.TuckThighDeg * _tuck + jump.LandBendDeg * _dip);
+            float shin = jump.TuckShinDeg * _tuck + 2f * jump.LandBendDeg * _dip;
+            float foot = jump.TakeoffToeDeg * _push - jump.LandBendDeg * _dip;
             PoseLeg(0, ThighLeft, ShinLeft, FootLeft, thigh, shin, legRight);
             PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, legRight);
             Turn(FootLeft, foot, legRight);
             Turn(FootRight, foot, legRight);
-            GroundCrouchedFeet();
             // Empty hands: arms out sideways (a weapon pose keeps both arms on the weapon). About the forward
             // axis a positive turn swings a hanging arm out to the right.
             float armLift = jump.ArmLiftDeg * Mathf.Max(_tuck, _dip * LandArmShare) * (1f - Mathf.Max(_upperWeight, _rifle));
@@ -691,20 +678,6 @@ namespace Game.Gameplay
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;
-        }
-
-        // Crouched, the knee bend on top of the walk clip's stride takes off more or less than the drop assumed
-        // (a stride's legs are not upright), which left the feet 0.2 m in the air (#121): the model goes down (or up)
-        // until the lower foot is where a standing foot rests.
-        // The correction is carried into the next frame's placement (Update) so anything drawn between frames agrees.
-        void GroundCrouchedFeet()
-        {
-            if (_crouch * (1f - _clipCrouch) <= 0.001f || _prone > 0.5f || _footLeft == null || _footRight == null) { _footFixTotal = FootFix = 0f; return; }
-            float low = Mathf.Min(transform.InverseTransformPoint(_footLeft.position).y, transform.InverseTransformPoint(_footRight.position).y);
-            low += _plantDrop; // the pelvis drop of the foot plant (a slope) is not the crouch's to undo
-            float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);
-            _animator.transform.position -= transform.up * (total - _footFixTotal);
-            FootFix = _footFixTotal = total;
         }
 
         // Sitting in a car (ADR-065 (5)), no clip: thighs forward to about level, shins down with the feet a little
