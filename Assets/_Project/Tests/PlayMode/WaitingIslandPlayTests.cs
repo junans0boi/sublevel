@@ -119,7 +119,7 @@ namespace Game.Tests
             Assert.Less(Mathf.Abs(feet - top), 0.15f, "the rider stands on the car floor, not sunk in it");
         }
 
-        // ADR-492 (준환 r5.2: "승강기 통과된다"): the cage's sides and the fence of the shaft stop a walker.
+        // ADR-496 (준환 r5.2: "승강기 통과된다"): the cage's sides and the fence of the shaft stop a walker.
         [UnityTest, Timeout(300000)]
         public IEnumerator Lift_CageSides_AndShaftFence_StopAWalker()
         {
@@ -283,7 +283,7 @@ namespace Game.Tests
         }
 
         // The player's camera with the HUD canvases drawn into it (an overlay canvas is not in a camera render).
-        // Review shots of the hoist (ADR-492): the car halfway down with its ropes and counterweight, the drive on the shaft head, and the
+        // Review shots of the hoist (ADR-496): the car halfway down with its ropes and counterweight, the drive on the shaft head, and the
         // fence round the shaft on the deck. Run on purpose with
         //   ISLAND_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.WaitingIslandPlayTests.CaptureHoist
         [UnityTest, Explicit, Category("Capture"), Timeout(300000)]

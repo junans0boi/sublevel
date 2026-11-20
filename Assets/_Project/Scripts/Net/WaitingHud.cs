@@ -96,7 +96,7 @@ namespace Game.Net
 
         static Material Look(string name) => Resources.Load<Material>("WaitingLook/" + name);
 
-        // The island's own materials (ADR-491) on the hall, the tower and the lift car. shortcut: the World scene baked before ADR-491
+        // The island's own materials (ADR-495) on the hall, the tower and the lift car. shortcut: the World scene baked before ADR-495
         // still carries the town's materials, so they are swapped here by name; drop this once World.unity is rebuilt (the builder uses them).
         static void Dress(Transform island)
         {
@@ -111,7 +111,7 @@ namespace Game.Net
             }
         }
 
-        // A call panel (ADR-490/491), built at runtime from WaitingIsland's numbers so the World scene need not be rebuilt: a brushed
+        // A call panel (ADR-490/495), built at runtime from WaitingIsland's numbers so the World scene need not be rebuilt: a brushed
         // steel faceplate (on a slim graphite pillar at the bottom, on the rail at the top) with a small dark window showing the car's
         // floor and one round push button with its arrow (▲ at the bottom, ▼ at the top) that glows while the call stands.
         sealed class CallButton

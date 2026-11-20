@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    // The bungee lift as a site hoist (ADR-492, 준환 r5.2: "승강기 통과된다", "벨트가 돌아가면서 올라가는 것처럼"). Client only, built at
+    // The bungee lift as a site hoist (ADR-496, 준환 r5.2: "승강기 통과된다", "벨트가 돌아가면서 올라가는 것처럼"). Client only, built at
     // runtime beside the call buttons so the World scene need not be rebuilt:
     //  - solid cage sides (the gates only while they are shut, under "Doors"), colliders on the four shaft posts and a mesh fence along
     //    the shaft's east and west sides on the deck, so nobody walks through the lift;

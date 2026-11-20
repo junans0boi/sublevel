@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-// The waiting island's own materials (ADR-491, 준환 r5.2: the lift and the hall should look refined): dark graphite steel for the
+// The waiting island's own materials (ADR-495, 준환 r5.2: the lift and the hall should look refined): dark graphite steel for the
 // frame, tower, shaft, rails and landing pad, light architectural concrete for the walls, pale metal for the dome, brushed stainless
 // for the lift car and the call panels, tread plate for the car floor, amber for the wall band and the jump board. Kept apart from
 // WorldMaterials so the town keeps its own look. They live in Resources so WaitingHud can put them on an island baked before this

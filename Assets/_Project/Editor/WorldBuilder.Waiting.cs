@@ -159,7 +159,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(lp.x + sh, th, landZ0), new Vector3(lp.x + sh, th, landZ1));
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
         deck.Add(new Vector3(lp.x, WaitingIsland.LiftSillTop * 0.5f, lp.z), new Vector3(sh * 2f + 1f, WaitingIsland.LiftSillTop, sh * 2f + 1f)); // the ground sill: flush, under the car floor
-        BuildBungeeLiftCar(root, store, WaitingLook.Stainless, accent.Material, WaitingLook.Tread, steel.Tile, accent.Tile, planks.Tile);   // ADR-491: the island's own look
+        BuildBungeeLiftCar(root, store, WaitingLook.Stainless, accent.Material, WaitingLook.Tread, steel.Tile, accent.Tile, planks.Tile);   // ADR-495: the island's own look
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
         foreach (var b in WaitingIsland.Booths)
@@ -234,7 +234,7 @@ public static partial class WorldBuilder
 
     // The cage car of the bungee lift (ADR-387): a floor, corner posts, a roof and open bar sides so the riders see out; "Doors" (bars
     // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. Its side and gate
-    // colliders, the shaft's post colliders and fence and the hoist drive are added at runtime by Net/LiftHoist (ADR-492).
+    // colliders, the shaft's post colliders and fence and the hoist drive are added at runtime by Net/LiftHoist (ADR-496).
     static void BuildBungeeLiftCar(Transform root, WorldMeshes.Store store, Material steel, Material accent, Material planks, Vector2 steelTile, Vector2 accentTile, Vector2 planksTile)
     {
         var lp = WaitingIsland.Lift; float h = BungeeLift.HalfSize, H = 2.6f;
