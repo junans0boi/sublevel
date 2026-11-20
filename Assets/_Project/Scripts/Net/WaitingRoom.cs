@@ -16,7 +16,15 @@ namespace Game.Net
         public int Total;     // people + bots on the island
         public int Target;    // the match's participants
         public float BungeeBest; // the highest rebound of this room so far in metres (0 = none yet, #419)
-        public float LiftClock;  // seconds since the room opened: the bungee lift's cycle (ADR-387)
+        public byte LiftPhase;   // the bungee lift (ADR-490): its LiftPhase, the seconds into it, and the lit call buttons (1 bottom, 2 top)
+        public float LiftInto;
+        public byte LiftCalls;
+    }
+
+    // Client -> server: F at a call button of the bungee lift (ADR-490). The server checks the sender stands at that button.
+    public struct LiftCallRequest : IBroadcast
+    {
+        public bool Top;
     }
 
     // The waiting phase of a dedicated server's match (ADR-382, #415): people spawn on the island (World scene), the countdown
@@ -44,10 +52,11 @@ namespace Game.Net
         sealed class WaitingBot
         {
             public Combatant Body; public Vector3 HomePosition; public Quaternion HomeRotation;
-            public bool OnIsland; public Vector3 Target; public float PickAt;
+            public bool OnIsland; public Vector3 Target; public float PickAt; public bool ToButton;
         }
         readonly List<WaitingBot> _bots = new List<WaitingBot>();
         const float BotWalkSpeed = 1.3f;
+        const float BotCallChance = 0.08f;   // of a stroll: ends at the lift's call button
         public int BotsOnIsland { get { int n = 0; foreach (var b in _bots) if (b.OnIsland) n++; return n; } }
 
         public void AddBot(Combatant body, Vector3 home, Quaternion homeRotation)
@@ -84,12 +93,19 @@ namespace Game.Net
                     // Stroll to a random place of the island (outside the booth and tower pads), then stand a while.
                     float a = Random.value * Mathf.PI * 2f, r = 6f + Random.value * 26f;
                     float tx = WaitingIsland.CentreX + Mathf.Cos(a) * r, tz = WaitingIsland.CentreZ + Mathf.Sin(a) * r;
+                    // Now and then a bot walks to the lift and presses its call button, through the same server check as a person's F (ADR-490).
+                    b.ToButton = Random.value < BotCallChance;
+                    if (b.ToButton) { var at = CallButtonWorld(false, _deckY); tx = at.x; tz = at.z + 1f; }
                     WaitingIsland.Clamp(ref tx, ref tz);
                     b.Target = new Vector3(tx, p.y, tz);
                     b.PickAt = Time.time + 4f + Random.value * 8f;
                 }
                 var d = b.Target - p; d.y = 0f;
-                if (d.sqrMagnitude < 0.04f) continue;
+                if (d.sqrMagnitude < 0.04f)
+                {
+                    if (b.ToButton) { b.ToButton = false; ServerCall(b.Body, false); }
+                    continue;
+                }
                 var step = d.normalized * Mathf.Min(d.magnitude, BotWalkSpeed * dt);
                 b.Body.transform.SetPositionAndRotation(p + step, Quaternion.Slerp(b.Body.transform.rotation, Quaternion.LookRotation(d), 6f * dt));
             }
@@ -112,11 +128,16 @@ namespace Game.Net
             room._deckY = island.transform.position.y;
             room._flow = new WaitingFlow(rules, DedicatedServer.StartSecondsOverride);
             Current = room;
+            nm.ServerManager.RegisterBroadcast<LiftCallRequest>(room.OnCallRequest);
             Debug.Log($"[WaitingRoom] open: the island at ({WaitingIsland.CentreX:F0}, {WaitingIsland.CentreZ:F0}), countdown {(DedicatedServer.StartSecondsOverride >= 0f ? DedicatedServer.StartSecondsOverride : rules.WaitMaxSeconds):0}s / {rules.WaitFullSeconds:0}s when full");
             return room;
         }
 
-        void OnDestroy() { if (Current == this) Current = null; }
+        void OnDestroy()
+        {
+            if (Current == this) Current = null;
+            if (_nm != null && _nm.ServerManager != null) _nm.ServerManager.UnregisterBroadcast<LiftCallRequest>(OnCallRequest);
+        }
 
         // A place for the person behind `key` (their connection id): where to stand and which way to face (towards the board).
         public bool TryPlace(int key, out Vector3 position, out Quaternion rotation)
@@ -149,14 +170,13 @@ namespace Game.Net
         Vector3 _pad;                 // the landing pad on the deck (world); the jump board is right above it at BungeeCurve.Top
         float _onBoardSince = -1f;
         const float BoardHoldSeconds = 0.8f;   // standing on the board this long jumps (when the line is free)
-        double _openedAt = double.NaN;         // the lift's cycle runs from here
-        LiftPhase _liftPhase = LiftPhase.OpenBottom;
+        LiftCall _lift;                        // made on the first tick (the room's clock)
         sealed class LiftRider { public Combatant Body; public Vector3 From; public bool Up; }
         readonly List<LiftRider> _riders = new List<LiftRider>();
         readonly Dictionary<Combatant, float> _carriedUntil = new Dictionary<Combatant, float>();
         const float CarryTailSeconds = 1f;     // the owner's ride may end a moment after the server's
 
-        public float LiftSinceOpen => double.IsNaN(_openedAt) ? 0f : (float)(Time.unscaledTimeAsDouble - _openedAt);
+        public LiftCall Lift => _lift;
         public int LiftRiders => _riders.Count;
 
         // Being moved by the lift or the jump: MoveGuard does not judge the speed of it (the server drives the same curve).
@@ -184,13 +204,51 @@ namespace Game.Net
             if (c.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(at);
         }
 
+        public static Vector3 CallButtonWorld(bool top, float deckY)
+        {
+            var b = top ? WaitingIsland.CallTop : WaitingIsland.CallBottom;
+            return new Vector3(WaitingIsland.WorldX(b.x), deckY + b.y, WaitingIsland.WorldZ(b.z));
+        }
+
+        // Server: `who` pressed the call button (a client's F, a bot, the host). Refused unless they stand at it, alive and waiting.
+        public bool ServerCall(Combatant who, bool top)
+        {
+            if (who == null || who.Dead.Value || !Open || !_keys.ContainsKey(who)) return false;
+            var d = CallButtonWorld(top, _deckY) - who.transform.position;
+            float rise = d.y; d.y = 0f;
+            float reach = InteractRules.Current.ReachMeters + 1.5f;   // the client's F reach + network slack, as the doors
+            if (d.sqrMagnitude > reach * reach || rise < -1.5f || rise > 3f) return false;
+            if (_lift == null) _lift = new LiftCall(Time.unscaledTimeAsDouble);
+            _lift.Call(top, Time.unscaledTimeAsDouble);
+            Debug.Log($"[WaitingRoom] {who.name} called the lift ({(top ? "top" : "bottom")})");
+            Send(true);   // the light and the ding at once, not at the next half-second
+            return true;
+        }
+
+        void OnCallRequest(FishNet.Connection.NetworkConnection connection, LiftCallRequest request, Channel channel)
+        {
+            var body = connection != null && connection.FirstObject != null ? connection.FirstObject.GetComponent<Combatant>() : null;
+            ServerCall(body, request.Top);
+        }
+
+        bool AnyoneInCage(float floorY)
+        {
+            foreach (var kv in _keys)
+            {
+                var c = kv.Key;
+                if (c != null && c.IsPlayer && !c.Dead.Value && c != _jumper && InCage(c.transform.position, floorY)) return true;
+            }
+            return false;
+        }
+
         void TickLift(double now)
         {
-            if (double.IsNaN(_openedAt)) _openedAt = now;
-            double since = now - _openedAt;
-            var phase = BungeeLift.Phase(since, out float into);
-            if (phase != _liftPhase)
+            if (_lift == null) _lift = new LiftCall(now);
+            var before = _lift.Phase;
+            bool occupied = !_lift.Moving && AnyoneInCage(_deckY + (before == LiftPhase.OpenTop ? BungeeCurve.Top : 0f));
+            if (_lift.Tick(now, occupied))
             {
+                var phase = _lift.Phase;
                 // Doors shut: whoever is in the cage rides (at most Capacity); doors open: the ride is over.
                 if (phase == LiftPhase.Rising || phase == LiftPhase.Descending)
                 {
@@ -217,10 +275,9 @@ namespace Game.Net
                         if (r.Body != null) { Put(r.Body, r.From + Vector3.up * (r.Up ? BungeeLift.Height : -BungeeLift.Height)); Release(r.Body); }
                     _riders.Clear();
                 }
-                _liftPhase = phase;
             }
-            if (_riders.Count == 0 || (phase != LiftPhase.Rising && phase != LiftPhase.Descending)) return;
-            float d = BungeeLift.Travelled(into);
+            if (_riders.Count == 0 || !_lift.Moving) return;
+            float d = BungeeLift.Travelled(_lift.Into(now));
             for (int i = _riders.Count - 1; i >= 0; i--)
             {
                 var r = _riders[i];
@@ -313,7 +370,9 @@ namespace Game.Net
             var rules = MatchRules.Current ?? new MatchRules();
             _nm.ServerManager.Broadcast(new WaitingBroadcast
             {
-                Active = active, SecondsLeft = active ? _flow.Last.SecondsLeft : 0f, People = _flow.People, Total = _flow.Total, Target = rules.Participants, BungeeBest = BungeeBest, LiftClock = LiftSinceOpen,
+                Active = active, SecondsLeft = active ? _flow.Last.SecondsLeft : 0f, People = _flow.People, Total = _flow.Total, Target = rules.Participants, BungeeBest = BungeeBest,
+                LiftPhase = (byte)(_lift != null ? _lift.Phase : LiftPhase.OpenBottom), LiftInto = _lift != null ? _lift.Into(Time.unscaledTimeAsDouble) : 0f,
+                LiftCalls = (byte)(_lift == null ? 0 : (_lift.CalledBottom ? 1 : 0) | (_lift.CalledTop ? 2 : 0)),
             }, true, Channel.Unreliable);
         }
 
