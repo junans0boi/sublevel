@@ -17,6 +17,7 @@ public static class SceneBuilder
         BootstrapPath,
         "Assets/_Project/Scenes/ZoneD.unity",
         "Assets/_Project/Scenes/TrainingRange.unity",
+        "Assets/_Project/Scenes/Race_Snake.unity",   // the event race courses (RaceEvent.Courses, ADR-513)
     };
 
     // The one place that decides which scenes ship. Scenes that have not been generated yet are skipped.

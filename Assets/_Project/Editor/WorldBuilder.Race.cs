@@ -42,30 +42,134 @@ public static partial class WorldBuilder
         }
     }
 
-    // The centre line moved `offset` metres to the left of the driving direction (negative = right), one point per RaceTrack.Path sample.
-    static List<Vector3> RaceLoop(float offset)
+    // A route's centre line moved `offset` metres to the left of the driving direction (negative = right), one point per sample.
+    static List<Vector3> RaceLoop(RaceCourse course, bool branch, float offset)
     {
-        var path = RaceTrack.Path; int n = path.Count;
+        var path = branch ? course.BranchPath : course.Path; int n = path.Count;
         var pts = new List<Vector3>(n);
         for (int i = 0; i < n; i++)
         {
-            var prev = path[(i + n - 1) % n]; var p = path[i]; var next = path[(i + 1) % n];
+            var prev = path[branch ? Mathf.Max(0, i - 1) : (i + n - 1) % n]; var p = path[i]; var next = path[branch ? Mathf.Min(n - 1, i + 1) : (i + 1) % n];
             var d = new Vector2(next.X - prev.X, next.Z - prev.Z).normalized;      // the tangent at the sample
             pts.Add(new Vector3(p.X - d.y * offset, 0f, p.Z + d.x * offset));       // + the left normal (-dz, dx) x offset
         }
         return pts;
     }
 
+    // The batches a circuit is drawn with (one material each), and the colliders' parent.
+    sealed class CircuitKit
+    {
+        public readonly RaceTiles Road, Lines, Red, Grass, Gravel, Tyres, Rails, Navy;
+        public readonly Transform Cols;
+        readonly WorldMaterials.Surface _asphalt = WorldMaterials.Asphalt, _white = WorldMaterials.RaceWhite, _red = WorldMaterials.RaceRed,
+            _grass = WorldMaterials.RaceGrass, _gravel = WorldMaterials.DirtRoad, _rubber = WorldMaterials.Wire, _steel = WorldMaterials.PaintedMetal, _navy = WorldMaterials.Accent(4);
+        public CircuitKit(Transform cols)
+        {
+            Cols = cols;
+            Road = new RaceTiles(_asphalt.Tile); Lines = new RaceTiles(_white.Tile); Red = new RaceTiles(_red.Tile); Grass = new RaceTiles(_grass.Tile);
+            Gravel = new RaceTiles(_gravel.Tile); Tyres = new RaceTiles(_rubber.Tile); Rails = new RaceTiles(_steel.Tile); Navy = new RaceTiles(_navy.Tile);
+        }
+        public void Emit(Transform root, WorldMeshes.Store store)
+        {
+            Road.Emit(root, store, "Road", _asphalt.Material); Lines.Emit(root, store, "Paint", _white.Material); Red.Emit(root, store, "Red", _red.Material);
+            Grass.Emit(root, store, "Grass", _grass.Material); Gravel.Emit(root, store, "Gravel", _gravel.Material); Tyres.Emit(root, store, "Tyres", _rubber.Material);
+            Rails.Emit(root, store, "Rail", _steel.Material); Navy.Emit(root, store, "Navy", _navy.Material);
+        }
+    }
+
+    // A circuit dressed like a real one (ADR-505/513): tarmac, white edge lines, red/white kerbs in every corner, grass run-off along the
+    // straights and gravel outside the corners, a 1 m steel barrier beyond the run-off with a tyre wall in front of it outside the corners.
+    // Both routes of a fork are drawn; a route's side pieces are left out where they would lie on the other route (where they part and
+    // meet). `opening`: an x/z box where the barrier is left open (the island's pit), null = none.
+    static void BuildCircuit(CircuitKit k, RaceCourse course, Rect? opening)
+    {
+        float half = course.Width * 0.5f, edge = half + course.Runoff;
+        foreach (bool branch in course.BranchPath.Count > 0 ? new[] { false, true } : new[] { false })
+        {
+            var path = branch ? course.BranchPath : course.Path; int n = path.Count, last = branch ? n - 1 : n;
+            var mid = RaceLoop(course, branch, 0f); var left = RaceLoop(course, branch, edge + 0.25f); var right = RaceLoop(course, branch, -edge - 0.25f);
+            bool OnOther(Vector3 p, float reach) => course.RouteDistance(!branch, p.x, p.z) < reach;
+            for (int i = 0; i < last; i++)
+            {
+                int j = (i + 1) % n;
+                Vector3 a = mid[i], b = mid[j], m = (a + b) * 0.5f;
+                var yaw = Yaw(a, b); float len = Vector3.Distance(a, b);
+                bool arc = path[i].Radius > 0f && path[j].Radius > 0f; int turn = arc ? path[i].Turn : 0;
+                var side = -Vector3.Cross(Vector3.up, (b - a).normalized);       // the left of the driving direction, as RaceCourse's offsets
+                // On a bend the outer edge is longer than the centre line: stretch the pieces so they meet there (they overlap on the inside;
+                // alternate heights keep the overlaps from flickering; the branch a touch higher where it lies over the main route).
+                float stretch = arc ? 1f + edge / path[i].Radius : 1f, lift = (i & 1) * 0.004f + (branch ? 0.008f : 0f);
+                k.Road.Add(m + Vector3.up * (0.02f + lift), new Vector3(course.Width + 0.4f, 0.04f, len * (arc ? 1f + half / path[i].Radius : 1f) + 0.25f), yaw);
+                foreach (int sgn in new[] { 1, -1 })
+                {
+                    var linePos = m + side * sgn * (half - 0.35f);
+                    if (OnOther(linePos, half + 0.3f)) continue;
+                    k.Lines.Add(linePos + Vector3.up * (0.047f + lift * 0.5f), new Vector3(0.2f, 0.012f, len + 0.3f), yaw);
+                    if (arc) (i % 2 == 0 ? k.Red : k.Lines).Add(m + side * sgn * (half - 0.6f) + Vector3.up * 0.07f, new Vector3(1.2f, 0.06f, len + 0.05f), yaw);
+                    var runPos = m + side * sgn * (half + course.Runoff * 0.5f + 0.1f);
+                    if (OnOther(runPos, half + 0.5f)) continue;
+                    bool outside = arc && sgn == -turn;
+                    (outside ? k.Gravel : k.Grass).Add(runPos + Vector3.up * (0.012f + (i & 1) * 0.002f), new Vector3(course.Runoff + 0.2f, 0.024f, len * stretch + 0.2f), yaw);
+                }
+                for (int s = 0; s < 2; s++)
+                {
+                    var ea = s == 0 ? left[i] : right[i]; var eb = s == 0 ? left[j] : right[j]; var outward = s == 0 ? side : -side;
+                    if (OnOther((ea + eb) * 0.5f, edge + 0.5f)) continue;
+                    if (opening.HasValue && Mathf.Abs(ea.x - eb.x) < 0.01f)
+                    {
+                        var o = opening.Value;
+                        if (ea.x > o.xMin && ea.x < o.xMax && Mathf.Max(ea.z, eb.z) > o.yMin && Mathf.Min(ea.z, eb.z) < o.yMax)
+                        {
+                            // the opening: only the parts of this piece either side of it
+                            float hi = Mathf.Max(ea.z, eb.z), lo = Mathf.Min(ea.z, eb.z);
+                            if (hi - o.yMax > 0.1f) RaceBarrier(k.Rails, k.Cols, new Vector3(ea.x, 0f, hi), new Vector3(ea.x, 0f, o.yMax), 0f, outward);
+                            if (o.yMin - lo > 0.1f) RaceBarrier(k.Rails, k.Cols, new Vector3(ea.x, 0f, o.yMin), new Vector3(ea.x, 0f, lo), 0f, outward);
+                            continue;
+                        }
+                    }
+                    bool tyreSide = arc && (s == 0 ? 1 : -1) == -turn;
+                    RaceBarrier(k.Rails, k.Cols, ea, eb, tyreSide ? 0.9f : 0f, outward);
+                    if (tyreSide) k.Tyres.Cylinder((ea + eb) * 0.5f - outward * 0.65f, 0.38f, 0.95f);
+                }
+            }
+        }
+    }
+
+    // Start/finish: a chequered band across the track at the line, a start-light gantry over it (five red lights), and `slots` painted
+    // grid slots behind it (RaceCourse.GridSpots).
+    static void BuildStart(CircuitKit k, RaceCourse course, int slots)
+    {
+        var (lx, lz, lyaw) = course.PointAt(0f);
+        var rot = Quaternion.Euler(0f, lyaw, 0f); var at = new Vector3(lx, 0f, lz);
+        Vector3 L(float across, float y, float along) => at + rot * new Vector3(across, y, along);
+        float half = course.Width * 0.5f;
+        int cells = Mathf.RoundToInt(course.Width);
+        for (int c = 0; c < cells; c++)
+            for (int r = 0; r < 2; r++)
+                ((c + r) % 2 == 0 ? k.Lines : k.Navy).Add(L(-half + 0.5f + c, 0.055f, -0.5f + r), new Vector3(1f, 0.02f, 1f), rot);
+        foreach (float gx in new[] { -half - 2.5f, half + 2.5f })
+        {
+            k.Rails.Add(L(gx, 3.5f, 0f), new Vector3(0.5f, 7f, 0.5f), rot);
+            RaceCollider(k.Cols, L(gx, 3.5f, 0f), new Vector3(0.5f, 7f, 0.5f), rot);
+        }
+        k.Rails.Add(L(0f, 6.8f, 0f), new Vector3(course.Width + 5.5f, 0.6f, 0.6f), rot);
+        for (int l = 0; l < 5; l++) k.Red.Add(L(-3.2f + l * 1.6f, 6.1f, 0f), new Vector3(0.8f, 0.8f, 0.3f), rot);
+        foreach (var (gx, gz, gyaw) in course.GridSpots(slots))
+        {
+            var g = Quaternion.Euler(0f, gyaw, 0f); var p = new Vector3(gx, 0.055f, gz);
+            k.Lines.Add(p + g * new Vector3(0f, 0f, 2.6f), new Vector3(3f, 0.012f, 0.18f), g);
+            k.Lines.Add(p + g * new Vector3(-1.45f, 0f, 2f), new Vector3(0.12f, 0.012f, 1.2f), g); k.Lines.Add(p + g * new Vector3(1.45f, 0f, 2f), new Vector3(0.12f, 0.012f, 1.2f), g);
+        }
+    }
+
     static void BuildRaceTrack(Transform island, WorldMeshes.Store store)
     {
         var root = Child(island, "RaceTrack");
         var cols = Child(root, "Colliders");
-        var concrete = WorldMaterials.ConcreteDark; var asphalt = WorldMaterials.Asphalt; var wallMat = WorldMaterials.Plaster(0);
-        var roofMat = WorldMaterials.SteelRoof; var steel = WorldMaterials.PaintedMetal; var red = WorldMaterials.RaceRed; var white = WorldMaterials.RaceWhite;
-        var navy = WorldMaterials.Accent(4); var green = WorldMaterials.RaceGrass; var gravel = WorldMaterials.DirtRoad; var rubber = WorldMaterials.Wire;
-        var floor = new RaceTiles(concrete.Tile); var road = new RaceTiles(asphalt.Tile); var walls = new RaceTiles(wallMat.Tile); var roof = new RaceTiles(roofMat.Tile);
-        var rails = new RaceTiles(steel.Tile); var grass = new RaceTiles(green.Tile); var traps = new RaceTiles(gravel.Tile); var tyres = new RaceTiles(rubber.Tile);
-        var lines = new RaceTiles(white.Tile); var kerbRed = new RaceTiles(red.Tile); var navyBits = new RaceTiles(navy.Tile);
+        var concrete = WorldMaterials.ConcreteDark; var wallMat = WorldMaterials.Plaster(0); var roofMat = WorldMaterials.SteelRoof;
+        var floor = new RaceTiles(concrete.Tile); var walls = new RaceTiles(wallMat.Tile); var roof = new RaceTiles(roofMat.Tile);
+        var kit = new CircuitKit(cols);
+        RaceTiles rails = kit.Rails, lines = kit.Lines, kerbRed = kit.Red, navyBits = kit.Navy;
 
         float H = RaceTrack.HallHeight, x0 = RaceTrack.HallX0, x1 = RaceTrack.HallX1, z0 = RaceTrack.HallZ0, z1 = RaceTrack.HallZ1;
         float pz0 = RaceTrack.PitZ0, pz1 = RaceTrack.PitZ1, px1 = RaceTrack.PitX1;
@@ -94,67 +198,10 @@ public static partial class WorldBuilder
         roof.Slab(x0, x1, z0, z1, H + 0.4f, 0.4f);
         for (float x = x0 + 12f; x < x1; x += 12f) rails.Add(new Vector3(x, H - 0.3f, (z0 + z1) * 0.5f), new Vector3(0.4f, 0.6f, z1 - z0));   // roof beams
 
-        // The track, segment by segment along the centre line.
-        var path = RaceTrack.Path; int n = path.Count;
-        float half = RaceTrack.Width * 0.5f, edge = half + RaceTrack.Runoff;
-        var mid = RaceLoop(0f); var left = RaceLoop(edge + 0.25f); var right = RaceLoop(-edge - 0.25f);
-        for (int i = 0; i < n; i++)
-        {
-            int j = (i + 1) % n;
-            Vector3 a = mid[i], b = mid[j], m = (a + b) * 0.5f;
-            var yaw = Yaw(a, b); float len = Vector3.Distance(a, b);
-            bool arc = path[i].Radius > 0f && path[j].Radius > 0f; int turn = arc ? path[i].Turn : 0;
-            var side = -Vector3.Cross(Vector3.up, (b - a).normalized);       // the left of the driving direction, as RaceTrack's offsets
-            // On a bend the outer edge is longer than the centre line: stretch the pieces so they meet there (they overlap on the inside;
-            // alternate heights keep the overlaps from flickering).
-            float stretch = arc ? 1f + edge / path[i].Radius : 1f;
-            road.Add(m + Vector3.up * (0.02f + (i & 1) * 0.004f), new Vector3(RaceTrack.Width + 0.4f, 0.04f, len * (arc ? 1f + half / path[i].Radius : 1f) + 0.25f), yaw);
-            foreach (int sgn in new[] { 1, -1 })
-            {
-                // white edge line; red/white kerbs in the corners; run-off: gravel outside a corner, grass elsewhere
-                lines.Add(m + side * sgn * (half - 0.35f) + Vector3.up * (0.047f + (i & 1) * 0.002f), new Vector3(0.2f, 0.012f, len + 0.3f), yaw);
-                if (arc) (i % 2 == 0 ? kerbRed : lines).Add(m + side * sgn * (half - 0.6f) + Vector3.up * 0.07f, new Vector3(1.2f, 0.06f, len + 0.05f), yaw);
-                bool outside = arc && sgn == -turn;
-                (outside ? traps : grass).Add(m + side * sgn * (half + RaceTrack.Runoff * 0.5f + 0.1f) + Vector3.up * (0.012f + (i & 1) * 0.002f),
-                    new Vector3(RaceTrack.Runoff + 0.2f, 0.024f, len * stretch + 0.2f), yaw);
-            }
-            // Barriers both sides (the main straight's west one is open beside the pit); outside a corner a tyre wall stands in front of it,
-            // and the corner's collider covers the tyres too.
-            for (int k = 0; k < 2; k++)
-            {
-                var ea = k == 0 ? left[i] : right[i]; var eb = k == 0 ? left[j] : right[j]; var outward = k == 0 ? side : -side;
-                if (ea.x > px1 - 1f && ea.x < px1 + 2f && Mathf.Abs(ea.x - eb.x) < 0.01f && Mathf.Max(ea.z, eb.z) > pz0 && Mathf.Min(ea.z, eb.z) < pz1)
-                {
-                    // the pit opening: only the parts of this piece north and south of it
-                    float hi = Mathf.Max(ea.z, eb.z), lo = Mathf.Min(ea.z, eb.z);
-                    if (hi - pz1 > 0.1f) RaceBarrier(rails, cols, new Vector3(ea.x, 0f, hi), new Vector3(ea.x, 0f, pz1), 0f, outward);
-                    if (pz0 - lo > 0.1f) RaceBarrier(rails, cols, new Vector3(ea.x, 0f, pz0), new Vector3(ea.x, 0f, lo), 0f, outward);
-                    continue;
-                }
-                bool tyreSide = arc && (k == 0 ? 1 : -1) == -turn;
-                RaceBarrier(rails, cols, ea, eb, tyreSide ? 0.9f : 0f, outward);
-                if (tyreSide) tyres.Cylinder((ea + eb) * 0.5f - outward * 0.65f, 0.38f, 0.95f);
-            }
-        }
-
-        // Start/finish: a chequered band across the main straight and a start-light gantry over it (five red lights); staggered grid slots behind.
-        float mx = RaceTrack.MainX, lz = RaceTrack.LineZ;
-        for (int c = 0; c < 12; c++)
-            for (int r = 0; r < 2; r++)
-                ((c + r) % 2 == 0 ? lines : navyBits).Add(new Vector3(mx - 5.5f + c, 0.055f, lz - 0.5f + r), new Vector3(1f, 0.02f, 1f));
-        foreach (float gx in new[] { mx - half - 2.5f, mx + half + 2.5f })
-        {
-            rails.Add(new Vector3(gx, 3.5f, lz), new Vector3(0.5f, 7f, 0.5f));
-            RaceCollider(cols, new Vector3(gx, 3.5f, lz), new Vector3(0.5f, 7f, 0.5f), Quaternion.identity);
-        }
-        rails.Add(new Vector3(mx, 6.8f, lz), new Vector3(RaceTrack.Width + 5.5f, 0.6f, 0.6f));
-        for (int l = 0; l < 5; l++) kerbRed.Add(new Vector3(mx - 3.2f + l * 1.6f, 6.1f, lz), new Vector3(0.8f, 0.8f, 0.3f));
-        for (int g = 0; g < 6; g++)
-        {
-            float gz = lz + 8f + g * 8f, gx = mx + (g % 2 == 0 ? -2.8f : 2.8f);
-            lines.Add(new Vector3(gx, 0.055f, gz), new Vector3(3f, 0.012f, 0.18f));
-            lines.Add(new Vector3(gx - 1.45f, 0.055f, gz + 0.6f), new Vector3(0.12f, 0.012f, 1.2f)); lines.Add(new Vector3(gx + 1.45f, 0.055f, gz + 0.6f), new Vector3(0.12f, 0.012f, 1.2f));
-        }
+        // The circuit (shared with the event courses), open to the pit beside the main straight; the start line, gantry and grid slots.
+        BuildCircuit(kit, RaceTrack.Course, new Rect(px1 - 1f, pz0, 3f, pz1 - pz0));
+        BuildStart(kit, RaceTrack.Course, 6);
+        float mx = RaceTrack.MainX, half = RaceTrack.Width * 0.5f, edge = half + RaceTrack.Runoff;
 
         // A grandstand between the hall's west wall and the main straight, north of the pit: stepped rows of seats facing the track.
         float standFront = mx - edge - 0.25f - 2.4f;
@@ -187,12 +234,11 @@ public static partial class WorldBuilder
             RaceCollider(cols, new Vector3(RaceTrack.BollardX, 0.5f, z), new Vector3(0.22f, 1f, 0.22f), Quaternion.identity);
         }
 
-        floor.Emit(root, store, "Floor", concrete.Material); road.Emit(root, store, "Road", asphalt.Material); walls.Emit(root, store, "Wall", wallMat.Material);
-        roof.Emit(root, store, "Roof", roofMat.Material); rails.Emit(root, store, "Rail", steel.Material); grass.Emit(root, store, "Grass", green.Material);
-        traps.Emit(root, store, "Gravel", gravel.Material); tyres.Emit(root, store, "Tyres", rubber.Material); lines.Emit(root, store, "Paint", white.Material);
-        kerbRed.Emit(root, store, "Red", red.Material); navyBits.Emit(root, store, "Navy", navy.Material);
+        floor.Emit(root, store, "Floor", concrete.Material); walls.Emit(root, store, "Wall", wallMat.Material); roof.Emit(root, store, "Roof", roofMat.Material);
+        kit.Emit(root, store);
 
         // Lamps over the track about every 45 m of it, one over the pit (no shadows, like the island's).
+        var path = RaceTrack.Path; int n = path.Count; var mid = RaceLoop(RaceTrack.Course, false, 0f);
         var lamps = new List<Vector3> { new Vector3(44f, 12f, (pz0 + pz1) * 0.5f) };
         float along = 0f, next = 0f;
         for (int i = 0; i < n; i++)

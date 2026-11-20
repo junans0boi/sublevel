@@ -45,6 +45,10 @@ namespace Game.Gameplay
         TrainingEntryScreen _trainingScreen;
         GameObject _training;
         public TrainingEntryScreen TrainingEntry => _trainingScreen;
+        EventEntryScreen _eventScreen;
+        GameObject _event;
+        public EventEntryScreen EventEntry => _eventScreen;
+        public bool EventEntryShown => _event != null && _event.activeSelf;
         public bool TrainingEntryShown => _training != null && _training.activeSelf;
         CustomScreen _customScreen;
         CharacterScreen _charScreen;
@@ -134,6 +138,7 @@ namespace Game.Gameplay
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CustomShown) Back();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && EventEntryShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && LobbyShown) _lobbyScreen.Leave();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && _main != null && _main.activeSelf && !IsLoading) ShowQuit();
         }
@@ -143,6 +148,9 @@ namespace Game.Gameplay
 
         // 훈련장 (#153): the same hosted match without bots and lockdown, always solo.
         public void StartTraining() => Load(TrainingScene, TeamMode.Solo);
+
+        // 이벤트 (ADR-512): a local race on the chosen course, always solo (the event's bots fill the grid).
+        public void StartEvent(Game.Core.RaceEvent.CourseInfo course) => Load(course.Scene, TeamMode.Solo);
 
         void Load(string scene, TeamMode mode)
         {
@@ -307,6 +315,13 @@ namespace Game.Gameplay
             ShowOnly(_training);
         }
 
+        // 이벤트 tab: the event screen (the car race and its courses).
+        public void ShowEventEntry()
+        {
+            if (IsLoading) return;
+            ShowOnly(_event);
+        }
+
         public void ShowQuit() => ShowModal("pop_quit");
 
         // The map window: 게임 모드 선택 창 (mode, view and the map card), the variant for the current choice.
@@ -377,7 +392,7 @@ namespace Game.Gameplay
             }
         }
 
-        GameObject[] ScreenRoots() => new[] { _main, _settings, _credits, _custom, _char, _training };
+        GameObject[] ScreenRoots() => new[] { _main, _settings, _credits, _custom, _char, _training, _event };
 
         void ShowOnly(GameObject target)
         {
@@ -411,7 +426,7 @@ namespace Game.Gameplay
         void BuildMain(Transform parent)
         {
             // The lobby is the entry screen (ADR-245): tabs on top, party above, control panel below.
-            _lobbyPanel = LobbyPanel.Build(this, parent, ShowTrainingEntry, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => { if (_friends != null) _friends.Toggle(); else Toast("새 알림이 없습니다. (로그인하면 친구·파티를 쓸 수 있습니다.)"); });
+            _lobbyPanel = LobbyPanel.Build(this, parent, ShowTrainingEntry, ShowEventEntry, ShowCustom, ShowSettings, ShowCredits, ShowQuit, ShowCharacter, () => { if (_friends != null) _friends.Toggle(); else Toast("새 알림이 없습니다. (로그인하면 친구·파티를 쓸 수 있습니다.)"); });
             _main = _lobbyPanel.Root.gameObject;
 
             // 커스텀 모드 (adopted mockup): room rules, 방 만들기, 코드로 참가.
@@ -421,6 +436,9 @@ namespace Game.Gameplay
             _trainingScreen = new TrainingEntryScreen();
             _training = _trainingScreen.Build(parent, this).gameObject;
             _training.SetActive(false);
+            _eventScreen = new EventEntryScreen();
+            _event = _eventScreen.Build(parent, this).gameObject;
+            _event.SetActive(false);
             _charScreen = new CharacterScreen();
             _char = _charScreen.Build(parent, this).gameObject;
             _char.SetActive(false);

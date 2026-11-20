@@ -33,6 +33,7 @@ namespace Game.Tests
             {
                 ("lobby", menu.Back, () => menu.LobbyHomeShown),
                 ("training", menu.ShowTrainingEntry, () => menu.TrainingEntryShown),
+                ("event", menu.ShowEventEntry, () => menu.EventEntryShown),
                 ("character", menu.ShowCharacter, () => menu.CharacterShown),
                 ("settings", menu.ShowSettings, () => menu.SettingsShown),
                 ("credits", menu.ShowCredits, () => menu.CreditsShown),

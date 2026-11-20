@@ -3,29 +3,48 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    // One driver's lap on the race track (ADR-507): the server feeds its copy of the car's place (RaceTrack.Project) every frame. A lap
-    // starts at the first forward crossing of the line and counts when the car crosses it again after passing the four sectors in order.
+    // One driver's lap on a race course (ADR-507/515): the server feeds its copy of the car's place (RaceCourse.Project) every frame. A lap
+    // starts at the first forward crossing of the line and counts when the car crosses it again after passing every checkpoint in order.
     // Reversing past a sector boundary or jumping over one stops the clock; a lap faster than MinLapSeconds is not real (a teleport).
     public sealed class RaceLap
     {
-        public const float MinLapSeconds = 15f;   // even flat out on boost all the way (29 m/s, no corners) a lap takes about 19 s
+        public const float MinLapSeconds = 15f;   // the island circuit: even flat out on boost all the way (29 m/s, no corners) a lap takes about 19 s
 
-        int _sector = -1, _passed;
-        public bool Timing { get; private set; }
+        readonly RaceCourse _course;
+        int _sector = -1, _passed, _net;
+        public bool Timing { get; private set; }    // the lap in progress is clean so far (its time can count)
         public double Start { get; private set; }
+        public bool Started { get; private set; }   // crossed the line forwards at least once
+        public int Laps { get; private set; }       // laps completed (the race's count: net checkpoints forward, ADR-515)
 
-        // The lap time when this step completes a valid lap, else -1.
+        public RaceLap(RaceCourse course = null) { _course = course ?? RaceTrack.Course; }
+
+        // The lap time when this step completes a clean lap, else -1. A lap counts towards Laps when the car has gone round (checkpoints
+        // passed forward minus backward); its time counts only when nothing went wrong on it (no reversing, no skipped checkpoint).
         public float Step(float s, double now)
         {
-            int sector = RaceTrack.Sector(s);
+            int sector = _course.Sector(s), n = _course.Sectors;
             if (_sector < 0 || sector == _sector) { _sector = sector; return -1f; }
-            bool forward = sector == (_sector + 1) % 4;
+            bool forward = sector == (_sector + 1) % n, back = sector == (_sector + n - 1) % n;
             _sector = sector;
-            if (!forward) { Timing = false; _passed = 0; return -1f; }
+            if (back) { _net--; Timing = false; _passed = 0; return -1f; }
+            if (!forward) { Timing = false; _passed = 0; return -1f; }          // skipped checkpoints: no progress from that
+            _net++;
             if (sector != 0) { _passed++; return -1f; }
-            float lap = Timing && _passed == 3 ? (float)(now - Start) : -1f;
+            if (!Started) { Started = true; _net = 0; Timing = true; Start = now; _passed = 0; return -1f; }
+            float lap = Timing && _passed == n - 1 ? (float)(now - Start) : -1f;
+            if (_net >= (Laps + 1) * n) Laps++;
             Timing = true; Start = now; _passed = 0;
-            return lap >= MinLapSeconds ? lap : -1f;
+            return lap >= _course.MinLapSeconds ? lap : -1f;
+        }
+
+        // How far round the race this is (metres): the race order of drivers who have not finished (ADR-515). Before the first crossing of
+        // the line (on the grid behind it) it is negative; reversing back over the line goes back a lap.
+        public float Progress(float s)
+        {
+            if (!Started) return s - _course.LapLength;
+            int n = _course.Sectors, rounds = _net >= 0 ? _net / n : (_net - n + 1) / n;
+            return rounds * _course.LapLength + s;
         }
     }
 

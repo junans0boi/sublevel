@@ -137,7 +137,9 @@ namespace Game.Net
         public VehicleKind Kind => _kind;
         public bool IsMotorcycle => _kind == VehicleKind.Motorcycle;
         // In the waiting island's race hall (ADR-508): no damage, no fuel use, no crash ejection, no roadkill. Every side judges it from the place.
-        public bool IsRaceCar => RaceTrack.InArea(transform.position.x, transform.position.z);
+        public bool IsRaceCar => EventRace || RaceTrack.InArea(transform.position.x, transform.position.z);
+        // An event race scene is running (ADR-516): every vehicle is a race car, and nobody gets out. Set by the scene's RaceDirector on every side.
+        public static bool EventRace;
         public VehicleRules Rules
         {
             get
@@ -949,6 +951,16 @@ namespace Game.Net
             if (connection != null && Owner == connection) RemoveOwnership();
         }
 
+        // The event race (ADR-514): a racer starts in the driver's seat of their grid car, wherever they stood.
+        [Server]
+        public bool ServerSeatDriver(Combatant c)
+        {
+            if (c == null || !c.IsSpawned || c.Dead.Value || VehicleSeat.IsAttached(c) || Disabled || !IsFree(Vehicles.DriverSeat)) return false;
+            ServerSeat(c, Vehicles.DriverSeat);
+            ServerSetEngine(true);
+            return true;
+        }
+
         // Gets `c` in: the driver's seat if free, else the free seat with the nearest door. Returns the seat, or -1 when
         // refused (dead, already in a vehicle, no door within EnterRange, full, disabled).
         [Server]
@@ -1024,8 +1036,13 @@ namespace Game.Net
 
         // The server puts an unmanned vehicle down somewhere, at rest (a race car back on its grid spot, ADR-506).
         [Server]
-        public void ServerPlace(Vector3 position, Quaternion rotation)
+        public void ServerPlace(Vector3 position, Quaternion rotation) => Place(position, rotation);
+
+        // The side that simulates the vehicle (its driver's client, or the server while nobody drives) puts it down somewhere, at rest: an event
+        // racer's R reset (ADR-516). Ignored elsewhere (the next replicated move would undo it).
+        public void Place(Vector3 position, Quaternion rotation)
         {
+            if (!_simulating && !(IsServerInitialized && !Owner.IsValid)) return;   // the server places only what nobody else simulates
             transform.SetPositionAndRotation(position, rotation);
             _body.position = position; _body.rotation = rotation;
             if (!_body.isKinematic) { _body.linearVelocity = Vector3.zero; _body.angularVelocity = Vector3.zero; }
@@ -1119,14 +1136,14 @@ namespace Game.Net
 
         public void RequestExit(Combatant c)
         {
-            if (c == null) return;
+            if (c == null || EventRace) return;   // no getting out in an event race (ADR-516)
             if (IsServerInitialized) ServerExit(c);
             else CmdExit(c.NetworkObject);
         }
 
         public void RequestSwitch(Combatant c, int seat)
         {
-            if (c == null) return;
+            if (c == null || EventRace) return;   // the racer stays at the wheel (ADR-516)
             if (IsServerInitialized) ServerSwitch(c, seat);
             else CmdSwitch(c.NetworkObject, seat);
         }
@@ -1164,14 +1181,14 @@ namespace Game.Net
         void CmdExit(NetworkObject who, NetworkConnection conn = null)
         {
             var c = Asker(who, conn);
-            if (c != null) ServerExit(c);
+            if (c != null && !EventRace) ServerExit(c);
         }
 
         [ServerRpc(RequireOwnership = false)]
         void CmdSwitch(NetworkObject who, int seat, NetworkConnection conn = null)
         {
             var c = Asker(who, conn);
-            if (c != null) ServerSwitch(c, seat);
+            if (c != null && !EventRace) ServerSwitch(c, seat);
         }
 
         [ServerRpc(RequireOwnership = false)]

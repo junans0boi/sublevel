@@ -5,9 +5,9 @@ namespace Game.Core
 {
     // The race circuit of the waiting island (ADR-505, #438): a sealed hall east of the island, reached through a gate in the island's wall
     // into the pit, where the race cars stand. The circuit is an original layout (no real track copied): a long main straight north past the
-    // pit, a hairpin, esses, a fast right-hander, a chicane and a final corner back onto the straight. It is drawn as a closed polygon of
-    // corner points, each rounded with its own radius (Corners), sampled into a polyline (Path). Pure geometry shared by the builder, the
-    // server and the tests. Coordinates are island-local metres (x east, z south, like WaitingIsland) unless a name says world.
+    // pit, a hairpin, esses, a fast right-hander, a chicane and a final corner back onto the straight (Corners, drawn by RaceCourse). Pure
+    // geometry shared by the builder, the server and the tests. Coordinates are island-local metres (x east, z south, like WaitingIsland)
+    // unless a name says world.
     public static class RaceTrack
     {
         public const float Width = 12f;            // tarmac
@@ -46,101 +46,16 @@ namespace Game.Core
         public static int Cars => Grid.Length;     // ADR-506: measured cost per car, see docs/RACE_SPEC.md
         public static IReadOnlyList<(float x, float z, float yaw)> GridSpots() => Grid;
 
-        // ---- the centre line ----
+        // ---- the centre line (RaceCourse, ADR-513) ----
 
-        // A sample of the centre line: place, distance from the line (start/finish), the radius of the corner it is on (0 on a straight) and
-        // which way that corner turns (+1 towards the left normal, -1 the right, 0 straight). Left normal of a direction (dx, dz) = (-dz, dx).
-        public struct Point { public float X, Z, S, Radius; public int Turn; }
-
-        static Point[] _path;
-        static float _lap;
-        public static IReadOnlyList<Point> Path { get { Build(); return _path; } }
-        public static float LapLength { get { Build(); return _lap; } }
-
-        const float StraightStep = 10f, ArcStepDeg = 4f;
-
-        static void Build()
-        {
-            if (_path != null) return;
-            var raw = new List<Point>();
-            var corner = new List<int>();   // which corner each arc sample belongs to
-            int n = Corners.Length;
-            for (int i = 0; i < n; i++)
-            {
-                var a = Corners[(i + n - 1) % n]; var p = Corners[i]; var b = Corners[(i + 1) % n];
-                float u1x = p.x - a.x, u1z = p.z - a.z, l1 = (float)Math.Sqrt(u1x * u1x + u1z * u1z); u1x /= l1; u1z /= l1;
-                float u2x = b.x - p.x, u2z = b.z - p.z, l2 = (float)Math.Sqrt(u2x * u2x + u2z * u2z); u2x /= l2; u2z /= l2;
-                float cross = u1x * u2z - u1z * u2x, dot = u1x * u2x + u1z * u2z;
-                float th = (float)Math.Atan2(Math.Abs(cross), dot), t = p.r * (float)Math.Tan(th * 0.5f);
-                int turn = cross > 0f ? 1 : -1;
-                float t1x = p.x - u1x * t, t1z = p.z - u1z * t;
-                float cx = t1x - u1z * turn * p.r, cz = t1z + u1x * turn * p.r;      // the centre lies on the inside (left normal x turn)
-                float a0 = (float)Math.Atan2(t1z - cz, t1x - cx);
-                int steps = Math.Max(2, (int)Math.Ceiling(th * 180f / Math.PI / ArcStepDeg));
-                for (int k = 0; k <= steps; k++)
-                {
-                    float ang = a0 + turn * th * k / steps;
-                    raw.Add(new Point { X = cx + p.r * (float)Math.Cos(ang), Z = cz + p.r * (float)Math.Sin(ang), Radius = p.r, Turn = turn });
-                    corner.Add(i);
-                }
-            }
-            // The straights between corners, cut into short pieces (the builder lights and tiles them; Project scans pieces).
-            var pts = new List<Point>();
-            for (int i = 0; i < raw.Count; i++)
-            {
-                var a = raw[i]; var b = raw[(i + 1) % raw.Count];
-                pts.Add(a);
-                if (corner[i] == corner[(i + 1) % raw.Count]) continue;   // within an arc
-                float len = Dist(a, b);
-                int k = (int)Math.Ceiling(len / StraightStep);
-                for (int j = 1; j < k; j++) pts.Add(new Point { X = a.X + (b.X - a.X) * j / k, Z = a.Z + (b.Z - a.Z) * j / k });
-            }
-            float s = 0f;
-            for (int i = 0; i < pts.Count; i++)
-            {
-                var q = pts[i]; q.S = s; pts[i] = q;
-                s += Dist(pts[i], pts[(i + 1) % pts.Count]);
-            }
-            _lap = s;
-            _path = pts.ToArray();
-            // Distances count from the start/finish line.
-            float line = RawProject(MainX, LineZ, out _);
-            for (int i = 0; i < _path.Length; i++) _path[i].S = Wrap(_path[i].S - line);
-        }
-
-        static float Dist(Point a, Point b) { float dx = b.X - a.X, dz = b.Z - a.Z; return (float)Math.Sqrt(dx * dx + dz * dz); }
-        static float Wrap(float s) { s %= _lap; return s < 0f ? s + _lap : s; }
-
-        // Distance along the path (as stored) of the nearest centre-line point, and the offset from it (positive = left of the driving direction).
-        static float RawProject(float lx, float lz, out float offset)
-        {
-            float best = float.MaxValue, bestS = 0f; offset = 0f;
-            for (int i = 0; i < _path.Length; i++)
-            {
-                var a = _path[i]; var b = _path[(i + 1) % _path.Length];
-                float dx = b.X - a.X, dz = b.Z - a.Z, len2 = dx * dx + dz * dz;
-                float u = len2 > 1e-6f ? Math.Max(0f, Math.Min(1f, ((lx - a.X) * dx + (lz - a.Z) * dz) / len2)) : 0f;
-                float px = a.X + dx * u, pz = a.Z + dz * u, ex = lx - px, ez = lz - pz, d2 = ex * ex + ez * ez;
-                if (d2 >= best) continue;
-                best = d2;
-                float len = (float)Math.Sqrt(len2);
-                bestS = a.S + len * u;
-                offset = len > 1e-6f ? (-dz * ex + dx * ez) / len : 0f;
-            }
-            return bestS;
-        }
+        public static readonly RaceCourse Course = new RaceCourse(Corners, Width, Runoff, MainX, LineZ, 4, RaceLap.MinLapSeconds);
+        public static IReadOnlyList<RaceCourse.Point> Path => Course.Path;
+        public static float LapLength => Course.LapLength;
 
         // Distance along the lap from the line (0..LapLength, the race runs north on the main straight) and the offset from the centre line.
-        public static (float s, float offset) Project(float lx, float lz)
-        {
-            Build();
-            float s = RawProject(lx, lz, out float off);
-            return (Wrap(s), off);
-        }
-
-        public static bool OnTrack(float lx, float lz) => Math.Abs(Project(lx, lz).offset) <= Width * 0.5f;
-
-        public static int Sector(float s) => Math.Min(3, Math.Max(0, (int)(s / (LapLength * 0.25f))));
+        public static (float s, float offset) Project(float lx, float lz) => Course.Project(lx, lz);
+        public static bool OnTrack(float lx, float lz) => Course.OnTrack(lx, lz);
+        public static int Sector(float s) => Course.Sector(s);
 
         // ---- the hall ----
 

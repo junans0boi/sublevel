@@ -69,6 +69,43 @@ public static class RaceCapture
         EditorApplication.Exit(code);
     }
 
+    // tools/unity.sh run-gfx RaceCapture.ShootEvent -> Logs/lookdev/event_*.png: each event course from above, the grid, and its sections.
+    public static void ShootEvent()
+    {
+        int code = 0;
+        try
+        {
+            foreach (var info in RaceEvent.Courses)
+            {
+                EditorSceneManager.OpenScene($"Assets/_Project/Scenes/{info.Scene}.unity", OpenSceneMode.Single);
+                var c = info.Course;
+                var cam = new GameObject("CaptureCam").AddComponent<Camera>();
+                cam.fieldOfView = 60; cam.nearClipPlane = 0.05f; cam.farClipPlane = 1500f;
+                SceneLook.EnablePost(cam);
+                var prefabs = Object.FindAnyObjectByType<VehicleSpawner>().CarPrefabs();
+                var grid = c.GridSpots(RaceEvent.Racers);
+                for (int i = 0; i < grid.Count; i++)
+                {
+                    var car = (GameObject)PrefabUtility.InstantiatePrefab(prefabs[i % prefabs.Count].gameObject);
+                    car.transform.SetPositionAndRotation(new Vector3(grid[i].x, 0.05f, grid[i].z), Quaternion.Euler(0f, grid[i].yaw, 0f));
+                }
+                string id = info.Id;
+                Vector3 P(float s, float h, float side = 0f) { var (x, z, yaw) = c.PointAt(s); return new Vector3(x, h, z) + Quaternion.Euler(0f, yaw, 0f) * new Vector3(side, 0f, 0f); }
+                Shot(cam, $"event_{id}_grid", P(-110f, 4f, 4f), P(-20f, 1f));
+                Shot(cam, $"event_{id}_start", P(-12f, 1.3f, -2f), P(60f, 1.5f));
+                Shot(cam, $"event_{id}_quarter", P(c.LapLength * 0.12f, 1.4f), P(c.LapLength * 0.12f + 60f, 1f));
+                Shot(cam, $"event_{id}_half", P(c.LapLength * 0.45f, 1.4f), P(c.LapLength * 0.45f + 60f, 1f));
+                if (c.BranchPath.Count > 0) Shot(cam, $"event_{id}_fork", P(c.ForkS - 40f, 6f), P(c.ForkS + 30f, 0f));
+                Shot(cam, $"event_{id}_south", P(c.LapLength * 0.8f, 1.4f), P(c.LapLength * 0.8f + 60f, 1f));
+                float cx = 0f, cz = 0f; foreach (var p in c.Path) { cx += p.X; cz += p.Z; } cx /= c.Path.Count; cz /= c.Path.Count;
+                Shot(cam, $"event_{id}_aerial", new Vector3(cx, 520f, cz), new Vector3(cx, 0f, cz - 0.1f));
+                Shot(cam, $"event_{id}_oblique", new Vector3(cx - 260f, 200f, cz + 330f), new Vector3(cx, 0f, cz));
+            }
+        }
+        catch (System.Exception e) { Debug.LogError("[RaceCapture] event failed: " + e); code = 1; }
+        EditorApplication.Exit(code);
+    }
+
     static void Put(GameObject car, Vector3 at, float yaw) => car.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
 
     static void Shot(Camera cam, string name, Vector3 from, Vector3 to) => SceneLook.Shot(cam, $"Logs/lookdev/{name}.png", from, to);
