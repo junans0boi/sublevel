@@ -16,6 +16,8 @@
 - 2026-11-19 문서(claude/docs-r5): RISKS에 법적·운영 표(처리방침·약관·등급분류·미성년자·OAuth 심사·로그 보관·리전, 담당 준환·시점 B/C 전)와 수집 항목 목록 초안(#394).
 - 2026-11-19 문서(claude/docs-r5): `docs/RELEASE.md` 릴리스 절차(release.sh → release_upload.sh → manifest/verify, 서버 경로, sha256 3회 대조, 버전 규칙 현황). 실제 Mac zip 업로드·버전 규칙 결정은 남음(#402).
 
+- 2026-11-20 대기 섬 2차(claude/island-range-board, #421·#422, ADR-501·502): 사격장 부스(사대·레인·표적, 서버가 VK-9 대여·회수·발사 허용·표적 판정, 대기 중 버리기·줍기 차단, 봇도 부스 이용)와 전광판 순환(카운트다운/번지 TOP3/사격 TOP3/지역 안내/팁, `SecondsLeft` 기준이라 모든 클라 동일, rules.json `Island` 데이터, 기록은 방 메모리만). 로비 프로토콜 6. 테스트: EditMode 1674(전체 1672 + 애니메이션 2건은 Strafe FBX 복사 후 통과), PlayMode `WaitingIslandPlayTests` 13 + `WaitingRangePlayTests`(호스트+원격 2클라 스모크) 통과. 캡처 `Logs/lookdev/board_page_*.png`, `range_*.png`. World 재생성 필요(부스 지오메트리). lift-button의 `LiftHoist`가 한 프로세스 두 HUD에서 NRE → 한 줄 수정.
+
 아래는 이전 기록이다.
 
 > **2026-11-15 상태 한 줄**: 싱글 PUBG 격차(G1~G20, G17 제외)와 멀티플레이 #158~#172가 끝나 main 9e9c472·ADR-145까지 반영됐고, 열린 이슈는 #2(사람)·#55·#90·#99·#173·#188·#189뿐이다 — 아래 "현재 위치" 이하는 2026-11-13~14 기록이며 최신은 `handoff/RESUME_ON_NEW_MAC.md` 10장.
