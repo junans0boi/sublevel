@@ -230,11 +230,15 @@ namespace Game.Gameplay
             _startRow = UiKit.HangRow("Start", g, 300f, UiKit.MenuButtonHeight, 0f, -160f);
             _startButton = UiKit.Button(_startRow, "시작", 24, () => _lobby.StartMatch());
             _startLabel = _startButton.GetComponentInChildren<Text>();
+            // The host may take the party to the event race instead (ADR-512, #448): the first course.
+            _raceRow = UiKit.HangRow("Race", g, 300f, UiKit.MenuButtonHeight, 0f, -160f);
+            _raceButton = UiKit.Button(_raceRow, "이벤트: 자동차 경주", 22, () => _lobby.StartMatch(false, 1));
             _leaveRow = UiKit.HangRow("Leave", g, 300f, UiKit.MenuButtonHeight, 0f, 160f);
             UiKit.Button(_leaveRow, "나가기", 24, Leave);
         }
 
-        RectTransform _botsRow, _statusRow, _readyRow, _startRow, _leaveRow;
+        RectTransform _botsRow, _statusRow, _readyRow, _startRow, _leaveRow, _raceRow;
+        Button _raceButton;
         readonly GameObject[] _rowHolder = new GameObject[MaxRows];
         float _rowsEnd;
 
@@ -308,6 +312,8 @@ namespace Game.Gameplay
             _startButton.interactable = _lobby.CanStart;
             _startLabel.color = _lobby.CanStart ? UiKit.Text : UiKit.TextDim;
             y += UiKit.MenuButtonHeight;
+            _raceRow.gameObject.SetActive(host);
+            if (host) { y += 10f; Place(_raceRow, y); y += UiKit.MenuButtonHeight; _raceButton.interactable = _lobby.CanStart; }
             _panel.sizeDelta = new Vector2(Width, y + UiKit.MenuPadding);
         }
 

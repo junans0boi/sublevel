@@ -133,12 +133,12 @@ namespace Game.Tests
         }
 
         [Test]
-        public void ShippedRules_HaveKoreanTips_AndTheFivePages()
+        public void ShippedRules_HaveKoreanTips_AndTheSixPages()
         {
             var r = new IslandRules();
             Assert.GreaterOrEqual(r.Tips.Length, 5);
             foreach (var t in r.Tips) Assert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(t, "[가-힣]"), "Korean: " + t);
-            Assert.AreEqual(5, BoardRotation.Parse(r.BoardPages).Length);
+            Assert.AreEqual(6, BoardRotation.Parse(r.BoardPages).Length);   // + the race hall's LAP TOP3 (ADR-509)
         }
     }
 }

@@ -12,6 +12,7 @@ namespace Game.Net
     {
         public string[] BungeeNames; public int[] BungeeScores;   // completed jumps
         public string[] RangeNames; public int[] RangeScores;     // booth target hits
+        public string[] LapNames; public float[] LapSeconds;      // the race hall's best laps, fastest first (ADR-509)
     }
 
     // The shooting range of the island (ADR-501, #421) and the room's records (ADR-502). Server only, part of the waiting room:
@@ -24,7 +25,7 @@ namespace Game.Net
         readonly Dictionary<Combatant, Loan> _loans = new Dictionary<Combatant, Loan>();
         readonly List<Combatant> _loanScratch = new List<Combatant>();
         readonly RoomRecords _rangeRecords = new RoomRecords(), _bungeeRecords = new RoomRecords();
-        int _sentRange = -1, _sentBungee = -1;
+        int _sentRange = -1, _sentBungee = -1, _sentLaps = -1;
         float _nextRecords;
         const float RecordsResendSeconds = 3f;
         const int BoardTop = 3;
@@ -34,7 +35,7 @@ namespace Game.Net
         public bool HasLoan(Combatant c) => c != null && _loans.ContainsKey(c);
         public int KeyOf(Combatant c) => c != null && _keys.TryGetValue(c, out int k) ? k : int.MinValue;
 
-        static string NameOf(Combatant c)
+        internal static string NameOf(Combatant c)
         {
             var state = MatchDirector.Instance != null ? MatchDirector.Instance.State : null;
             string name = state != null ? state.ServerNameOf(c) : "";
@@ -140,8 +141,9 @@ namespace Game.Net
 
         void SendRecords(bool force)
         {
-            if (!force && _rangeRecords.Version == _sentRange && _bungeeRecords.Version == _sentBungee && Time.unscaledTime < _nextRecords) return;
-            _sentRange = _rangeRecords.Version; _sentBungee = _bungeeRecords.Version;
+            int laps = _race != null ? _race.Records.Version : 0;
+            if (!force && _rangeRecords.Version == _sentRange && _bungeeRecords.Version == _sentBungee && laps == _sentLaps && Time.unscaledTime < _nextRecords) return;
+            _sentRange = _rangeRecords.Version; _sentBungee = _bungeeRecords.Version; _sentLaps = laps;
             _nextRecords = Time.unscaledTime + RecordsResendSeconds;
             var bungee = _bungeeRecords.Top(BoardTop); var range = _rangeRecords.Top(BoardTop);
             var m = new WaitingRecordsBroadcast
@@ -151,6 +153,9 @@ namespace Game.Net
             };
             for (int i = 0; i < bungee.Count; i++) { m.BungeeNames[i] = bungee[i].Name; m.BungeeScores[i] = bungee[i].Score; }
             for (int i = 0; i < range.Count; i++) { m.RangeNames[i] = range[i].Name; m.RangeScores[i] = range[i].Score; }
+            var lapTop = _race != null ? _race.Records.Top(BoardTop) : new List<RaceRecords.Entry>();
+            m.LapNames = new string[lapTop.Count]; m.LapSeconds = new float[lapTop.Count];
+            for (int i = 0; i < lapTop.Count; i++) { m.LapNames[i] = string.IsNullOrEmpty(lapTop[i].Name) ? "참가자" : lapTop[i].Name; m.LapSeconds[i] = lapTop[i].Seconds; }
             _nm.ServerManager.Broadcast(m, true, Channel.Reliable);
         }
 

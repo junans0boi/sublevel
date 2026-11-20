@@ -17,6 +17,8 @@ namespace Game.Net
         readonly TextMesh[] _lines = new TextMesh[BoardText.Lines];
         readonly string[] _text = new string[BoardText.Lines];
         List<RecordRow> _bungeeTop = new List<RecordRow>(), _rangeTop = new List<RecordRow>();
+        List<(string name, float seconds)> _lapTop = new List<(string, float)>();
+        IslandLapBroadcast _lap; float _lapAt = -10f;   // the local driver's lap in the race hall (ADR-509)
         int _records;              // bumps with every records broadcast
         string[] _regions;
         (bool live, BoardPage page, int seconds, int total, int target, int bungee, int cycle, int records, int regions) _shown;
@@ -27,6 +29,7 @@ namespace Game.Net
         public BoardPage PageShown { get; private set; }
         public IReadOnlyList<RecordRow> RangeTop => _rangeTop;
         public IReadOnlyList<RecordRow> BungeeTop => _bungeeTop;
+        public IReadOnlyList<(string name, float seconds)> LapTop => _lapTop;
         public string LineShown(int line) => _text[line] ?? "";
 
         public static void Attach(NetworkManager nm)
@@ -36,7 +39,10 @@ namespace Game.Net
             hud._nm = nm;
             nm.ClientManager.RegisterBroadcast<WaitingBroadcast>(hud.OnBroadcast);
             nm.ClientManager.RegisterBroadcast<WaitingRecordsBroadcast>(hud.OnRecords);
+            nm.ClientManager.RegisterBroadcast<IslandLapBroadcast>(hud.OnLap);
         }
+
+        void OnLap(IslandLapBroadcast m, FishNet.Transporting.Channel channel) { _lap = m; _lapAt = Time.unscaledTime; }
 
         void OnDestroy()
         {
@@ -44,11 +50,15 @@ namespace Game.Net
             if (_nm == null) return;
             _nm.ClientManager.UnregisterBroadcast<WaitingBroadcast>(OnBroadcast);
             _nm.ClientManager.UnregisterBroadcast<WaitingRecordsBroadcast>(OnRecords);
+            _nm.ClientManager.UnregisterBroadcast<IslandLapBroadcast>(OnLap);
         }
 
         void OnRecords(WaitingRecordsBroadcast m, FishNet.Transporting.Channel channel)
         {
             _bungeeTop = Rows(m.BungeeNames, m.BungeeScores); _rangeTop = Rows(m.RangeNames, m.RangeScores);
+            _lapTop = new List<(string, float)>();
+            int laps = m.LapNames != null && m.LapSeconds != null ? Mathf.Min(m.LapNames.Length, m.LapSeconds.Length) : 0;
+            for (int i = 0; i < laps; i++) _lapTop.Add((m.LapNames[i], m.LapSeconds[i]));
             _records++;
         }
 
@@ -117,7 +127,7 @@ namespace Game.Net
             else
             {
                 var view = new BoardView { SecondsLeft = _last.SecondsLeft, Total = _last.Total, Target = _last.Target, BungeeBest = _last.BungeeBest,
-                    BungeeTop = _bungeeTop, RangeTop = _rangeTop, Regions = _regions, Tip = BoardRotation.TipAt(cycle, rules.Tips) };
+                    BungeeTop = _bungeeTop, RangeTop = _rangeTop, LapTop = _lapTop, Regions = _regions, Tip = BoardRotation.TipAt(cycle, rules.Tips) };
                 BoardText.Compose(page, view, _text);
             }
             for (int i = 0; i < _lines.Length; i++)
@@ -343,6 +353,12 @@ namespace Game.Net
             if (_style == null) _style = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.UpperCenter, fontStyle = FontStyle.Bold };
             int s = Mathf.CeilToInt(_last.SecondsLeft);
             GUI.Label(new Rect(0, 20, Screen.width, 70), $"Departure in {s / 60}:{s % 60:00}    {_last.Total} / {_last.Target}", _style);
+            // At the wheel in the race hall: the lap in progress, the last and the best (ADR-509).
+            if (Time.unscaledTime - _lapAt <= 1.5f)
+            {
+                float run = _lap.Running >= 0f ? _lap.Running + (Time.unscaledTime - _lapAt) : -1f;
+                GUI.Label(new Rect(0, 62, Screen.width, 40), $"LAP {(run >= 0f ? RaceBoard.Time(run) : "--")}   LAST {(_lap.Last > 0f ? RaceBoard.Time(_lap.Last) : "--")}   BEST {(_lap.Best > 0f ? RaceBoard.Time(_lap.Best) : "--")}", _style);
+            }
         }
     }
 }

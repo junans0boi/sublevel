@@ -99,6 +99,9 @@ namespace Game.Core
             foreach (var c in Courses) if (c.Scene == scene) return c;
             return null;
         }
+        // The scene a lobby's start message names (LobbyStart.Event, ADR-512): course n (1-based), null for the battle royale or an unknown n.
+        public static string SceneForLobby(byte evt) => evt >= 1 && evt <= Courses.Length ? Courses[evt - 1].Scene : null;
+
         public static CourseInfo ById(string id)
         {
             foreach (var c in Courses) if (c.Id == id) return c;

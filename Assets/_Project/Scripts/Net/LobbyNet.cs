@@ -34,6 +34,7 @@ namespace Game.Net
         public int Bots;
         public byte Mode;
         public int[] PartySizes;
+        public byte Event;   // 0 = the battle royale; n = the event race on course n (RaceEvent.Courses[n - 1], ADR-512)
 
         public static LobbyStart FromPlan(ushort matchPort, TeamMode mode, MatchPlan plan)
         {
@@ -59,7 +60,7 @@ namespace Game.Net
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 7; // the bungee's F to come down: CombatantStance.CmdBungeeLower (ADR-498); 6 = waiting-island range records broadcast (ADR-502); 5 = the lift button (ADR-490); 4 = door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
+        public const int Protocol = 8; // the island race hall's laps (IslandLapBroadcast, WaitingRecordsBroadcast lap TOP3, ADR-509) and the event race (RaceStandings, ADR-518); 7 = the bungee's F to come down: CombatantStance.CmdBungeeLower (ADR-498); 6 = waiting-island range records broadcast (ADR-502); 5 = the lift button (ADR-490); 4 = door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
@@ -346,13 +347,16 @@ namespace Game.Net
         // Set by the dedicated server for --perf only: a forced start with nobody in the room (ADR-242).
         public static bool AllowEmptyStart;
 
-        public bool StartMatch(bool force = false)
+        public bool StartMatch(bool force = false) => StartMatch(force, 0);
+
+        // `evt`: the event race course (1-based, RaceEvent.Courses) the party goes to instead of the battle royale (ADR-512, #448).
+        public bool StartMatch(bool force, byte evt)
         {
             if (!(force ? IsHost && Phase == PhaseKind.InLobby && !HasStarted && LobbyRules.MayForceStart(_truth.Count, AllowEmptyStart) : CanStart)) return false;
             _matchStarted = true;
             // The match listens on its own port so the lobby's sockets need not be closed first.
             ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
-            var start = new LobbyStart { MatchPort = matchPort, Players = _truth.Count, Bots = LobbyRules.ClampBots(_truthBots, _truth.Count) };
+            var start = new LobbyStart { MatchPort = matchPort, Players = _truth.Count, Bots = LobbyRules.ClampBots(_truthBots, _truth.Count), Event = evt };
             _nm.ServerManager.Broadcast(start);
             if (Dedicated)
             {

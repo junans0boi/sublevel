@@ -222,6 +222,9 @@ namespace Game.Gameplay
             NetSession.Begin(lobby);
             lobby.Shutdown();
             _lobbyScreen.gameObject.SetActive(false);
+            // The host may have started the event race instead (ADR-512, #448): everyone goes to that course's scene.
+            string race = Game.Core.RaceEvent.SceneForLobby(lobby.StartInfo.Event);
+            if (race != null) { Load(race, TeamMode.Solo); return; }
             Load(MatchScene, (TeamMode)Mathf.Clamp(lobby.StartInfo.Mode, 0, 2)); // a queue match carries its mode
         }
 
