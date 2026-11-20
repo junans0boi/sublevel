@@ -36,7 +36,9 @@ namespace Game.Net
             ExpirePassThrough();
             var r = Rules;
             var velocity = SeenVelocity;
-            if (Vehicles.ToKmh(velocity.magnitude) < r.RoadkillMinKmh) return;
+            // The race hall (ADR-508): nobody is run over, shoved or carried off; a moving race car drives through people on foot.
+            bool race = IsRaceCar;
+            if (race ? velocity.sqrMagnitude < 1f : Vehicles.ToKmh(velocity.magnitude) < r.RoadkillMinKmh) return;
             if (!_bodyBoxReady) MeasureBodyBox();
             var half = _bodyBox.extents + Vector3.one * RoadkillReach;
             int count = Physics.OverlapBoxNonAlloc(transform.TransformPoint(_bodyBox.center), half, RoadkillHits, transform.rotation,
@@ -44,7 +46,14 @@ namespace Game.Net
             for (int i = 0; i < count; i++)
             {
                 var c = RoadkillHits[i].GetComponentInParent<Combatant>();
-                if (c == null || c.Dead.Value || VehicleSeat.IsAttached(c) || _roadkillUntil.ContainsKey(c)) continue;
+                if (c == null || c.Dead.Value || VehicleSeat.IsAttached(c)) continue;
+                if (race)
+                {
+                    if (_simulating && !_roadkillUntil.ContainsKey(c)) SetPassThrough(c, true);
+                    _roadkillUntil[c] = Time.time + PassThroughSeconds;
+                    continue;
+                }
+                if (_roadkillUntil.ContainsKey(c)) continue;
                 var normal = FaceNormal(c.transform.position + Vector3.up * 0.9f);
                 float closing = Vector3.Dot(velocity, normal);
                 if (Vehicles.ToKmh(closing) < r.RoadkillMinKmh) continue;

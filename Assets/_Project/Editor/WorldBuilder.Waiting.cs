@@ -55,19 +55,23 @@ public static partial class WorldBuilder
             float a0 = i * Mathf.PI * 2f / WaitingWallSegments, a1 = (i + 1) * Mathf.PI * 2f / WaitingWallSegments, am = (a0 + a1) * 0.5f;
             float chord = 2f * R * Mathf.Sin((a1 - a0) * 0.5f) + 0.2f;
             var rot = Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f);
+            if (!InRaceGate(Mathf.Cos(a0) * R, Mathf.Sin(a0) * R, 0.5f))   // no column inside the race gate (ADR-505)
+                frame.Add(new Vector3(Mathf.Cos(a0) * (R - 0.5f), WaitingWallHeight * 0.5f, Mathf.Sin(a0) * (R - 0.5f)), new Vector3(0.6f, WaitingWallHeight, 0.6f));
+            if (InRaceGate(Mathf.Cos(am) * R, Mathf.Sin(am) * R)) continue;   // the gate to the race pit
             wall.Add(new Vector3(Mathf.Cos(am) * (R - 0.3f), WaitingWallHeight * 0.5f, Mathf.Sin(am) * (R - 0.3f)), new Vector3(chord, WaitingWallHeight, 0.4f), rot);
-            frame.Add(new Vector3(Mathf.Cos(a0) * (R - 0.5f), WaitingWallHeight * 0.5f, Mathf.Sin(a0) * (R - 0.5f)), new Vector3(0.6f, WaitingWallHeight, 0.6f));
         }
         // A gold band round the hall at chest height: the one bright colour of the room besides the lamps.
         for (int i = 0; i < WaitingWallSegments; i++)
         {
             float am = (i + 0.5f) * Mathf.PI * 2f / WaitingWallSegments, r = R - 0.65f, chord = 2f * R * Mathf.Sin(Mathf.PI / WaitingWallSegments) + 0.1f;
+            if (InRaceGate(Mathf.Cos(am) * R, Mathf.Sin(am) * R)) continue;
             band.Add(new Vector3(Mathf.Cos(am) * r, 1.5f, Mathf.Sin(am) * r), new Vector3(chord, 0.7f, 0.1f), Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f));
         }
         // A band of trim lights round the wall at head height.
         for (int i = 0; i < WaitingWallSegments; i++)
         {
             float am = (i + 0.5f) * Mathf.PI * 2f / WaitingWallSegments, r = R - 0.7f;
+            if (InRaceGate(Mathf.Cos(am) * R, Mathf.Sin(am) * R)) continue;
             trim.Add(new Vector3(Mathf.Cos(am) * r, 3.2f, Mathf.Sin(am) * r), new Vector3(2.8f, 0.25f, 0.15f), Quaternion.Euler(0f, -am * Mathf.Rad2Deg + 90f, 0f));
         }
         // Dome: rings of tilted panels closing the top, a steel hoop under each ring.
@@ -159,6 +163,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(lp.x + sh, th, landZ0), new Vector3(lp.x + sh, th, landZ1));
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
         deck.Add(new Vector3(lp.x, WaitingIsland.LiftSillTop * 0.5f, lp.z), new Vector3(sh * 2f + 1f, WaitingIsland.LiftSillTop, sh * 2f + 1f)); // the ground sill: flush, under the car floor
+        BuildRaceTrack(root, store);   // the race hall east of the gate (ADR-505, #438)
         BuildBungeeLiftCar(root, store, steel.Material, accent.Material, planks.Material, steel.Tile, accent.Tile, planks.Tile);
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.

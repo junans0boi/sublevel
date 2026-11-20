@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishNet.Managing;
 using FishNet.Object;
 using Game.Core;
@@ -41,6 +42,14 @@ namespace Game.Net
         }
 
         public int SpotCount => _spots != null ? _spots.Length : 0;
+
+        // The car models of the map (no motorcycles), in prefab order: the waiting island's race cars (ADR-506).
+        public List<NetworkObject> CarPrefabs()
+        {
+            var list = new List<NetworkObject>();
+            foreach (var p in _prefabs) if (p != null && p.TryGetComponent<Vehicle>(out var v) && v.Kind == VehicleKind.Car) list.Add(p);
+            return list;
+        }
         public int ModelAt(int spot) => _models != null && spot >= 0 && spot < _models.Length ? _models[spot] : 0;
 
         void Awake() => Instance = this;

@@ -75,8 +75,13 @@ namespace Game.Tests
             PlayerController.Local.Teleport(new Vector3(WaitingIsland.CentreX + 70f, p.y, WaitingIsland.CentreZ));
             yield return new WaitForSeconds(1.2f);
             var q = me.transform.position;
+            // ADR-508: back to the nearest walkable place, the island's walk circle or the race pit (east of the island that is the pit).
+            Assert.IsTrue(RaceTrack.Walkable(q.x - WaitingIsland.CentreX, q.z - WaitingIsland.CentreZ), $"pulled back onto the island or into the pit, now {q.x - WaitingIsland.CentreX:0.0}, {q.z - WaitingIsland.CentreZ:0.0}");
+            PlayerController.Local.Teleport(new Vector3(WaitingIsland.CentreX - 70f, p.y, WaitingIsland.CentreZ));
+            yield return new WaitForSeconds(1.2f);
+            q = me.transform.position;
             float d = Vector2.Distance(new Vector2(q.x, q.z), new Vector2(WaitingIsland.CentreX, WaitingIsland.CentreZ));
-            Assert.LessOrEqual(d, WaitingIsland.WalkRadius + 1f, "pulled back inside the walk circle, now " + d + " m from the centre");
+            Assert.LessOrEqual(d, WaitingIsland.WalkRadius + 1f, "west of the island: pulled back inside the walk circle, now " + d + " m from the centre");
         }
 
         [UnityTest, Timeout(300000)]

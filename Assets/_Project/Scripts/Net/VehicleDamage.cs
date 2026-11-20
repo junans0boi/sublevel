@@ -188,7 +188,7 @@ namespace Game.Net
         [Server]
         public void ServerShot(Vector3 origin, Vector3 dir, float length, Collider hit, Vector3 point, float weaponDamage)
         {
-            if (CurrentStage == VehicleDamageStage.Wrecked) return;
+            if (CurrentStage == VehicleDamageStage.Wrecked || _vehicle.IsRaceCar) return;
             var r = Rules;
             if (!_vehicle.IsMotorcycle && TryGlassBand(out var box, out float belt, out float roof))
             {
@@ -276,7 +276,7 @@ namespace Game.Net
         [Server]
         public void ServerBlast(Vector3 centre, Func<float, float> damageAtDistance, float factor)
         {
-            if (CurrentStage == VehicleDamageStage.Wrecked) return;
+            if (CurrentStage == VehicleDamageStage.Wrecked || _vehicle.IsRaceCar) return;
             var r = Rules;
             float distance = DistanceToBody(centre);
             if (distance <= r.InstantWreckRadius) ServerHurt(_health);
@@ -363,7 +363,7 @@ namespace Game.Net
 
         void ServerImpact(float speed, Vector3 local)
         {
-            if (CurrentStage == VehicleDamageStage.Wrecked) return;
+            if (CurrentStage == VehicleDamageStage.Wrecked || _vehicle.IsRaceCar) return;   // race cars take no damage (ADR-508)
             var r = Rules;
             // Capped: a client cannot claim more than MaxReportedImpact, nor a point far off the body.
             speed = Mathf.Clamp(speed, 0f, r.MaxReportedImpact);

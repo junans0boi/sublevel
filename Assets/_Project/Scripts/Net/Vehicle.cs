@@ -136,6 +136,8 @@ namespace Game.Net
 
         public VehicleKind Kind => _kind;
         public bool IsMotorcycle => _kind == VehicleKind.Motorcycle;
+        // In the waiting island's race hall (ADR-508): no damage, no fuel use, no crash ejection, no roadkill. Every side judges it from the place.
+        public bool IsRaceCar => RaceTrack.InArea(transform.position.x, transform.position.z);
         public VehicleRules Rules
         {
             get
@@ -1009,6 +1011,29 @@ namespace Game.Net
         [Server]
         public bool ServerExit(Combatant c) => ServerExit(c, ServerSpeed);
 
+        // Everyone out at once, unhurt (the race cars of the waiting island at the departure, ADR-511).
+        [Server]
+        public void ServerEjectAll()
+        {
+            for (int s = 0; s < SeatCount; s++)
+            {
+                var c = FindCombatant(OccupantId(s));
+                if (c != null) ServerExit(c, 0f);
+            }
+        }
+
+        // The server puts an unmanned vehicle down somewhere, at rest (a race car back on its grid spot, ADR-506).
+        [Server]
+        public void ServerPlace(Vector3 position, Quaternion rotation)
+        {
+            transform.SetPositionAndRotation(position, rotation);
+            _body.position = position; _body.rotation = rotation;
+            if (!_body.isKinematic) { _body.linearVelocity = Vector3.zero; _body.angularVelocity = Vector3.zero; }
+            // Not motion: no velocity is read off the jump when physics takes over, and the watchers snap there instead of sliding.
+            _estimatedVelocity = Vector3.zero; _lastFixedPosition = position; _speedFrom = position;
+            if (TryGetComponent<FishNet.Component.Transforming.NetworkTransform>(out var nt)) nt.Teleport();
+        }
+
         bool ServerExit(Combatant c, float speed)
         {
             int seat = SeatIndexOf(c);
@@ -1035,6 +1060,7 @@ namespace Game.Net
         [Server]
         public void ServerCrash(float speed)
         {
+            if (IsRaceCar) return;
             speed = Mathf.Clamp(speed, 0f, MaxReportedSpeed);
             _crashedUntil = Time.time + Rules.CrashRecoverSeconds;
             for (int s = 0; s < SeatCount; s++)

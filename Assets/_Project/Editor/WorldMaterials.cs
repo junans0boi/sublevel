@@ -276,6 +276,10 @@ public static class WorldMaterials
         ? Set("TrimLight", Src("wall_plaster"), new Color(0.90f, 0.89f, 0.85f), 3f, 1.5f)
         : Set("TrimDark", Src("floor_wood"), new Color(0.42f, 0.32f, 0.24f), 1.2f, 0.6f);
     public static Surface FenceWhite => Set("FenceWhite", Src("floor_wood"), new Color(0.88f, 0.85f, 0.78f), 1.4f, 0.7f);
+    // The race circuit's paint and run-off (ADR-505): line white, kerb red, grass (no new textures, the shared ones tinted).
+    public static Surface RaceWhite => Set("RaceWhite", Src("wall_plaster"), new Color(1f, 1f, 0.98f), 3f, 1.5f);
+    public static Surface RaceRed => Set("RaceRed", Src("wall_plaster"), new Color(0.95f, 0.08f, 0.06f), 3f, 1.5f);
+    public static Surface RaceGrass => Set("RaceGrass", Src("grass"), new Color(0.50f, 0.68f, 0.32f), 4f, 4f, smoothness: 0.2f);
     public static Surface Wire => Set("Wire", "PaintedMetal014", new Color(0.07f, 0.07f, 0.08f), 1f, 1f, smoothness: 0.3f);
     public static Surface BinGreen => Set("BinGreen", "PaintedMetal014", new Color(0.20f, 0.40f, 0.30f), 1f, 1f, smoothness: 0.4f);
     public static Surface Planks => Set("Planks", Src("floor_wood"), Color.white, 2.4f, 1.2f);
