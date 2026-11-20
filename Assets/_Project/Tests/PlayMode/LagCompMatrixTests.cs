@@ -48,6 +48,13 @@ namespace Game.Tests
             var keep = new List<Cond>();
             var names = new HashSet<string>(filter == "clean" ? new[] { "ping0", "ping50", "ping80", "ping100", "ping150" } : filter.Split(','));
             foreach (var c in all) if (names.Contains(c.Name)) keep.Add(c);
+            // #400: custom:<rtt>:<jitterMs>:<loss> adds a profile measured on the real server path.
+            foreach (var n in names)
+            {
+                var p = n.Split(':');
+                if (p.Length == 4 && p[0] == "custom")
+                    keep.Add(new Cond { Name = $"real{p[1]}+jitter{p[2]}+loss{p[3]}", Rtt = long.Parse(p[1]), JitterMs = int.Parse(p[2]), Loss = double.Parse(p[3], CultureInfo.InvariantCulture) });
+            }
             return keep;
         }
 

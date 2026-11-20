@@ -64,7 +64,8 @@ namespace Game.Gameplay
                 _helmet = NewPart("Helmet", fit.Head, fit.HelmetBase, transform.rotation, Vector3.one * fit.HeadScale);
                 // The vest wrapped onto this body and skinned to its torso bones when the body was measured (ADR-520).
                 var body = GearBody.Load(fit.Def.Id);
-                _vestFront = body != null && WornGearMeshes.Baked(LootKind.Vest, 1) != null
+                // isHuman: without a Humanoid avatar (a worktree lacks the gitignored roster FBX) GetBoneTransform throws; keep the rigid vest.
+                _vestFront = body != null && fit.Def.Animator != null && fit.Def.Animator.isHuman && WornGearMeshes.Baked(LootKind.Vest, 1) != null
                     ? new Part { Skin = GearFit.AddRenderer(fit.Def.Animator, "Vest"), Body = body }
                     : NewPart("Vest", fit.Torso, fit.VestCentre, transform.rotation, Vector3.one * fit.TorsoScale);
                 if (_vestFront.Skin != null) { _vestFront.Renderer = _vestFront.Skin; _vestFront.Mount = _vestFront.Skin.transform; }

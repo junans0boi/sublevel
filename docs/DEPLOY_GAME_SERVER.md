@@ -51,3 +51,9 @@ sudo ln -sfn /opt/sublevel-game/releases/rN /opt/sublevel-game/current && sudo s
 3. 판이 시작되고 봇 포함 전투원이 보이는지, 총기 파밍·사격·이동이 정상인지 한 판을 끝까지 플레이. 결과 후 로비로 돌아오는지.
 4. 세션이 도는 동안 에이전트가 서버에서: `ps -o pcpu,rss -p $(systemctl show -p MainPID --value sublevel-game)`을 10초 간격으로, `journalctl -u sublevel-game | grep '\[Server\]'`로 참가·시작·종료·재개방 확인.
 5. 봇 파밍 확인이 필요하면 `--bots 15`로 `ExecStart`를 조정(`sudo systemctl edit`)하고 한 판 중 봇 무장 로그 확인.
+
+## 실제 경로 핑 (#400, 2026-11-20)
+Mac → 서버는 **DERP 중계(tok)**, 직접 연결 아님. ICMP 800회(tailnet): p50 48 / 평균 62 / p95 126 / p99 134 / 최대 315 ms, 손실 0%, 14%가 100 ms 초과(두 봉우리). 시험 결과·비교는 `docs/research/lagcomp_matrix.md` 끝.
+
+## 포털 링크 (#386, 2026-11-20)
+공식 포털(`Steady2Vivid-Web`, Next.js)의 `/work` 맨 위 SUBLEVEL 카드 → `https://sublevel.steady2vivid.kro.kr`. 배포 절차: 포털 저장소 `main`에 push → GitHub Actions `Deploy to Oracle Cloud`(빌드 → SCP → 서버에서 pm2 `steady2vivid-web` 재시작 → Caddy reload). 접속 정보는 저장소 Secrets에만 있다. 확인: `gh run list -R SteadyToVivid/Steady2Vivid-Web -L 1`이 success, `/work`에 sublevel 링크, 두 사이트 200.
