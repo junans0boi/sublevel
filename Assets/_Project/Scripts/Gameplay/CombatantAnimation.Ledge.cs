@@ -34,6 +34,22 @@ namespace Game.Gameplay
             return transform.position + Vector3.up * r.HangDrop + transform.forward * (radius + r.HangGap);
         }
 
+        static readonly RaycastHit[] LedgeHits = new RaycastHit[8];
+
+        // A mantle (ADR-492) starts with no hang: the edge is wherever the top is just ahead of the hands.
+        Vector3 MantleEdge(ParkourRules r)
+        {
+            var edge = EdgeOverBody(r);
+            float above = r.MantleHandHeight + r.MantleAboveHands + 0.3f;
+            var from = new Vector3(edge.x, transform.position.y + above, edge.z) + transform.forward * 0.1f;
+            int n = Physics.RaycastNonAlloc(from, Vector3.down, LedgeHits, above, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float best = float.MaxValue;
+            for (int i = 0; i < n; i++)
+                if (LedgeHits[i].distance < best && !LedgeHits[i].collider.transform.IsChildOf(transform)) best = LedgeHits[i].distance;
+            if (best < float.MaxValue) edge.y = from.y - best;
+            return edge;
+        }
+
         void PoseLedge()
         {
             var r = ParkourRules.Current;
@@ -42,7 +58,7 @@ namespace Game.Gameplay
             else if (move == ParkourMove.LedgeClimb && _ledgeMove != ParkourMove.LedgeClimb)
             {
                 _ledgeClimbAt = Time.time;
-                if (_ledgeMove != ParkourMove.Hang) _ledgeEdge = EdgeOverBody(r);
+                if (_ledgeMove != ParkourMove.Hang) _ledgeEdge = MantleEdge(r);
             }
             if (move != ParkourMove.None || _ledge <= 0f) _ledgeMove = move;
             _ledge = Mathf.MoveTowards(_ledge, move != ParkourMove.None ? 1f : 0f, r.PosePerSecond * Time.deltaTime);

@@ -196,6 +196,23 @@ namespace Game.Tests
             Assert.IsTrue(Parkour.Plausible(0f, Rules.HangDrop + 0.02f, 0.8f, Rules));
         }
 
+        // ADR-492: with Space down, an edge 0.3-2.4 m over the feet (hands at 1.5 m: -1.2..+0.9) is mantled onto,
+        // whatever the ground below.
+        [Test]
+        public void AMantle_CatchesEdgesFromTheWaistToJustOverTheHead_WithRoomOnTop()
+        {
+            Assert.IsTrue(Parkour.CanMantle(Box(0.3f, 2f), Rules), "at the waist");
+            Assert.IsTrue(Parkour.CanMantle(Box(1.5f, 2f), Rules), "at the hands");
+            Assert.IsTrue(Parkour.CanMantle(Box(2.4f, 2f), Rules), "at the top of the reach");
+            Assert.IsFalse(Parkour.CanMantle(Box(0.25f, 2f), Rules), "below the waist: the feet just land on it");
+            Assert.IsFalse(Parkour.CanMantle(Box(2.5f, 2f), Rules), "above the reach");
+            Assert.IsFalse(Parkour.CanMantle(Box(1.2f, 0.4f), Rules), "a thin wall top");
+            Assert.IsFalse(Parkour.CanMantle(Box(1.2f, 2f, clearance: 1.2f), Rules), "a low ceiling over it");
+            Assert.IsFalse(Parkour.CanMantle(new ObstacleProfile(), Rules), "nothing there");
+            // The highest mantle, a little ahead: within what the server believes.
+            Assert.IsTrue(Parkour.Plausible(0f, 2.42f, 1.4f, Rules));
+        }
+
         [Test]
         public void SlowWalk_Is1_7MetresASecond_WhateverIsInTheHands()
         {

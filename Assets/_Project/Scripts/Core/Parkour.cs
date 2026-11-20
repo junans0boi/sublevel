@@ -48,9 +48,17 @@ namespace Game.Core
         public float HangGap = 0.05f;
         public float HangLookDeg = 70f;            // the view turns at most this far from the wall while hanging
         public float LedgeClimbSeconds = 0.8f;
+        // Mantle (ADR-492): in the air with Space pressed or held, an edge the hands reach is caught and climbed onto at
+        // once, wherever the ground below is (a gap between two roofs). The hands are taken at MantleHandHeight over the
+        // feet; an edge from MantleBelowHands under them to MantleAboveHands over them (0.3-2.4 m over the feet) whose
+        // face is within MantleReach of the body is caught. Room on top as for a climb; it takes LedgeClimbSeconds.
+        public float MantleHandHeight = 1.5f;
+        public float MantleBelowHands = 1.2f;
+        public float MantleAboveHands = 0.9f;
+        public float MantleReach = 0.6f;
         // Server sanity check (movement is the owner's, ADR-029): how far a parkour may carry a body.
         public float MaxHorizontalMeters = 3.2f;
-        public float MaxRiseMeters = 2.3f;
+        public float MaxRiseMeters = 2.5f;      // a mantle onto an edge 2.4 m over the feet (ADR-492)
         public float StartToleranceMeters = 1.5f;  // the server's view of a remote owner lags behind
         public float EndToleranceMeters = 0.6f;
         // Pose (CombatantAnimation): knees tucked, torso forward, arms reaching forward and down onto the top.
@@ -107,6 +115,15 @@ namespace Game.Core
             p.Blocked && edgeOverGround >= r.LedgeMinHeight && edgeOverGround <= r.LedgeMaxHeight
             && p.TopHeight >= r.LedgeReachMin && p.TopHeight <= r.LedgeReachMax
             && p.Depth >= r.ClimbMinDepth && p.Clearance >= r.ClimbClearance;
+
+        // Can a body in the air with Space down mantle onto this edge (ADR-492)? `p.TopHeight` is the edge over the feet
+        // now; the ground below does not matter.
+        public static bool CanMantle(in ObstacleProfile p, ParkourRules r)
+        {
+            float overHands = p.TopHeight - r.MantleHandHeight;
+            return p.Blocked && overHands >= -r.MantleBelowHands - 1e-4f && overHands <= r.MantleAboveHands + 1e-4f
+                && p.Depth >= r.ClimbMinDepth && p.Clearance >= r.ClimbClearance;
+        }
 
         // Seconds the move takes; a climb takes longer the higher it goes.
         public static float Duration(ParkourMove move, float topHeight, ParkourRules r)

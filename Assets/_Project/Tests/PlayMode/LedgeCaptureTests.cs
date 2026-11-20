@@ -129,6 +129,78 @@ namespace Game.Tests
             PlayerController.InputOverride = null;
         }
 
+        // ADR-492: a sprint jump across a 2 m gap at a block 1.5 m higher, Space held: the mantle seen from the side.
+        //   LEDGE_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.LedgeCaptureTests.CaptureMantleShots
+        [UnityTest, Timeout(120000)]
+        public IEnumerator CaptureMantleShots()
+        {
+            _folder = Environment.GetEnvironmentVariable("LEDGE_SHOTS");
+            if (string.IsNullOrEmpty(_folder)) _folder = "Logs/ledgeshots";
+            _folder = Path.GetFullPath(_folder);
+            Directory.CreateDirectory(_folder);
+            var input = new Input();
+            PlayerController.InputOverride = input;
+            SceneManager.LoadScene("TestBox");
+            float end = Time.realtimeSinceStartup + 60f;
+            while (PlayerController.Local == null || Combatant.LocalPlayer == null)
+            {
+                if (Time.realtimeSinceStartup > end) Assert.Fail("no local player");
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.5f);
+            var pc = PlayerController.Local;
+            Combatant.LocalPlayer.ServerDamageFilter = _ => 0f;
+            foreach (var (name, center, size) in new[] {
+                ("MantleFrom", new Vector3(0f, 0.5f, -27f), new Vector3(3f, 1f, 5f)),
+                ("MantleTo", new Vector3(0f, 1.25f, -19.5f), new Vector3(3f, 2.5f, 6f)) })
+            {
+                var block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                block.name = name;
+                block.transform.position = center;
+                block.transform.localScale = size;
+            }
+            Physics.SyncTransforms();
+            pc.Teleport(new Vector3(0f, 1.1f, -27.5f));
+            pc.LookAt(new Vector3(0f, 2.6f, 0f));
+            yield return new WaitForSeconds(0.4f);
+
+            var go = new GameObject("MantleShotCamera");
+            _fixed = go.AddComponent<Camera>();
+            _fixed.enabled = false;
+            if (pc.Camera != null) _fixed.CopyFrom(pc.Camera);
+            _fixed.fieldOfView = 50f;
+            _shot = go.AddComponent<LateShot>();
+
+            input.Frame.Sprint = true;
+            input.Frame.Move = new Vector2(0f, 1f);
+            end = Time.realtimeSinceStartup + 3f;
+            while (pc.transform.position.z < -24.85f && Time.realtimeSinceStartup < end) yield return null;
+            input.Frame.Jump = input.Frame.JumpHeld = true;
+            while (pc.ParkourUnderWay != ParkourMove.LedgeClimb && Time.realtimeSinceStartup < end) yield return null;
+            Assert.AreEqual(ParkourMove.LedgeClimb, pc.ParkourUnderWay, "mantling");
+            input.Frame.Move = Vector2.zero;
+            input.Frame.Sprint = input.Frame.JumpHeld = false;
+            float started = Time.time;
+            var side = new Vector3(4.2f, 2.6f, -23.2f);
+            var look = new Vector3(0f, 2.2f, -22.4f);
+            foreach (float when in new[] { 0f, 0.2f, 0.4f, 0.6f })
+            {
+                while (Time.time - started < when && pc.InParkour) yield return null;
+                var anim = Combatant.LocalPlayer.GetComponent<CombatantAnimation>();
+                var animator = Combatant.LocalPlayer.GetComponentInChildren<Animator>();
+                var hand = animator != null ? animator.GetBoneTransform(HumanBodyBones.RightHand) : null;
+                Debug.Log($"[LedgeCapture] mantle {Time.time - started:F2}s: {pc.ParkourUnderWay} at {pc.transform.position}, pose {anim.LedgePose:F2}, right hand {(hand != null ? hand.position.ToString("F2") : "?")}");
+                yield return Shot($"mantle_{(int)(when * 100):000}_side", side, look);
+            }
+            yield return Shot("mantle_060_tpp", null, default);
+            while (pc.InParkour) yield return null;
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("mantle_90_on_top_side", side, look);
+            Debug.Log($"[LedgeCapture] mantle done on top at {pc.transform.position}: {_folder}");
+            Assert.AreEqual(2.5f, pc.transform.position.y, 0.12f, "on top");
+            PlayerController.InputOverride = null;
+        }
+
         // `from` null: through the player's own camera.
         IEnumerator Shot(string name, Vector3? from, Vector3 at)
         {

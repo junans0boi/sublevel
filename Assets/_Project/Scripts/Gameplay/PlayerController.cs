@@ -448,7 +448,7 @@ namespace Game.Gameplay
                 _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
                 ReportFall();
                 if (_controller.isGrounded) _jumpedThisAir = _ledgeLetGo = false;
-                else if (!knocked && TryGrabLedge())
+                else if (!knocked && TryGrabLedge((f.Jump && !jump) || f.JumpHeld)) // a tap that takes off is a jump; the hang then catches (ADR-087)
                 {
                     PlaceCamera();
                     return;
@@ -514,14 +514,19 @@ namespace Game.Gameplay
         }
 
         // In the air facing a high edge the hands can reach (#115): catch it and hang. After a jump, or when falling
-        // past it; standing only (no weapon fire, no stance change while hanging).
-        bool TryGrabLedge()
+        // past it; standing only (no weapon fire, no stance change while hanging). With Space down (`key`), an edge the
+        // hands reach is mantled onto at once, whatever is below (ADR-492).
+        bool TryGrabLedge(bool key)
         {
             var rules = ParkourRules.Current;
-            if (_stance == null || _ledgeLetGo || _combatant.Reviving || BodyStance != Stance.Stand
-                || !(_jumpedThisAir || _verticalVelocity < -rules.LedgeFallSpeed)) return false;
-            var plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
-            if (plan.Move != ParkourMove.Hang) return false;
+            if (_stance == null || _ledgeLetGo || _combatant.Reviving || BodyStance != Stance.Stand) return false;
+            var plan = key ? ParkourProbe.PlanMantle(transform, _controller.radius, _controller.height, Yaw, rules) : default;
+            if (plan.Move != ParkourMove.LedgeClimb)
+            {
+                if (!(_jumpedThisAir || _verticalVelocity < -rules.LedgeFallSpeed)) return false;
+                plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
+                if (plan.Move != ParkourMove.Hang) return false;
+            }
             LastParkourPlan = plan;
             _parkour = plan;
             _parkourT = 0f;
@@ -530,9 +535,10 @@ namespace Game.Gameplay
             _hangYaw = Yaw;
             _controller.enabled = false;
             _verticalVelocity = 0f;
-            transform.position = plan.End;
-            if (IsServerInitialized) _stance.ServerStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
-            else _stance.CmdStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
+            // Hanging: the body holds under the edge. Mantling: it starts against the wall and climbs from there.
+            transform.position = plan.Move == ParkourMove.Hang ? plan.End : plan.Start;
+            if (IsServerInitialized) _stance.ServerStartParkour((int)plan.Move, plan.Start, plan.End, -1);
+            else _stance.CmdStartParkour((int)plan.Move, plan.Start, plan.End, -1);
             return true;
         }
 
