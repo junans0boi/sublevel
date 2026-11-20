@@ -221,7 +221,8 @@ namespace Game.Gameplay
             if (name.Length == 0) return "아이템";
             if (kind == LootKind.Backpack) return LootNames.Of(kind, 0, AmmoType.Pistol9, loot.Tier.Value) + "\n장구류 · 용량 늘림";
             string type = kind == LootKind.Key ? "승강기 열쇠" : kind == LootKind.GasFilter || kind == LootKind.Antidote ? "오염 방호" : kind == LootKind.Smoke || kind == LootKind.Flash || kind == LootKind.Molotov ? "투척물" : kind == LootKind.Jerrycan ? "차량 주유" : "회복";
-            return name + "\n" + type + " · 수량 " + loot.Amount.Value + "개";
+            string heal = GearTips.Heal(Healing.KindOfLoot(kind), HealRules.Current);
+            return name + "\n" + type + (heal.Length > 0 ? " · " + heal : "") + " · 수량 " + loot.Amount.Value + "개";
         }
 
         public static InventoryGearState Gear(Combatant combatant, int slot)
@@ -307,20 +308,20 @@ namespace Game.Gameplay
                 case InventorySourceKind.Ammo:
                     return AmmoName(source.Index) + " 탄약\n보유 " + Reserve(combatant, source.Index) + "발";
                 case InventorySourceKind.Medkit:
-                    return "구급상자\n보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개";
+                    return "구급상자\n" + GearTips.Heal(HealKind.Medkit, HealRules.Current) + " · 보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개";
                 case InventorySourceKind.Grenade:
                     return ThrowableRules.GrenadeName + "\n투척물 · 보유 " + Grenades(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Bandage:
-                    return HealRules.BandageName + "\n보유 " + Bandages(combatant) + "개 · 우클릭 사용";
+                    return HealRules.BandageName + "\n" + GearTips.Heal(HealKind.Bandage, HealRules.Current) + " · 보유 " + Bandages(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.FirstAid:
-                    return HealRules.FirstAidName + "\n보유 " + FirstAids(combatant) + "개 · 우클릭 사용";
+                    return HealRules.FirstAidName + "\n" + GearTips.Heal(HealKind.FirstAid, HealRules.Current) + " · 보유 " + FirstAids(combatant) + "개 · 우클릭 사용";
                 case InventorySourceKind.Smoke:
                     return ThrowableRules.SmokeName + "\n투척물 · 보유 " + Smokes(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Drink:
                 case InventorySourceKind.Pill:
                 case InventorySourceKind.Syringe:
                     var boost = BoostKindOf(source.Kind);
-                    return Healing.NameOf(boost) + "\n보유 " + BoostCount(combatant, boost) + "개 · 우클릭 사용 (J: 가장 작은 것)";
+                    return Healing.NameOf(boost) + "\n" + GearTips.Heal(boost, HealRules.Current) + " · 보유 " + BoostCount(combatant, boost) + "개 · 우클릭 사용 (J: 가장 작은 것)";
                 case InventorySourceKind.Flash:
                     return ThrowableRules.FlashName + "\n투척물 · 보유 " + Flashes(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Molotov:
@@ -330,7 +331,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Weapon:
                     int weaponId = WeaponId(combatant, source.Index);
                     var weapon = GameData.Weapons.Find(weaponId);
-                    return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + (weapon.IsMelee ? "근접 무기" : AmmoName(AmmoIndex(weapon)));
+                    return weapon == null ? "빈 총기 슬롯" : weapon.Name + "\n" + WeaponStats.TooltipText(weapon, FittedParts(combatant, source.Index), OpticRules.Current);
                 case InventorySourceKind.Optic:
                     int opticId = OpticOf(combatant, source.Index);
                     return opticId == 0 ? "" : LootNames.OfOptic(opticId) + "\n" + Attachments.Describe(opticId) + " · 우클릭: 가방으로 분리";
@@ -348,10 +349,37 @@ namespace Game.Gameplay
             }
         }
 
+        // Everything fitted to the weapon in `slot`, packed like Attachments.With (0 = nothing, or no such slot).
+        public static int FittedParts(Combatant combatant, int slot)
+        {
+            int packed = 0;
+            if (slot < 0 || slot >= Loadout.SidearmSlot + 1) return 0;
+            for (int s = 0; s < Attachments.Slots; s++)
+                packed = Attachments.With(packed, (AttachSlot)s, OpticOf(combatant, Attachments.GearIndex(slot, (AttachSlot)s)));
+            return packed;
+        }
+
+        // The gun a tooltip is about, with its fitted parts (ADR-493): a weapon card, or a gun on the ground. Null otherwise.
+        public static WeaponDef GunOf(InventoryDragSource source, Combatant combatant, out int packed)
+        {
+            packed = 0;
+            WeaponDef weapon = null;
+            if (source.Kind == InventorySourceKind.Weapon && source.Index != ThrowableSlot)
+            {
+                weapon = GameData.Weapons.Find(WeaponId(combatant, source.Index));
+                if (weapon != null) packed = FittedParts(combatant, source.Index);
+            }
+            else if (source.Kind == InventorySourceKind.Vicinity && source.Loot != null && (LootKind)source.Loot.Kind.Value == LootKind.Weapon)
+                weapon = GameData.Weapons.Find(source.Loot.WeaponId.Value);
+            return WeaponStats.IsFirearm(weapon) ? weapon : null;
+        }
+
+        static string Reduction(ArmorSlot slot, int tier) => Mathf.Round((ArmorRules.Current.Find(slot, tier)?.Reduction ?? 0f) * 100f).ToString("0");
+
         static string GearDescription(Combatant combatant, int slot, string name)
         {
             var gear = Gear(combatant, slot);
-            return gear.Has ? name + " " + gear.Tier + "단계\n내구도 " + gear.Durability + " / " + gear.MaxDurability : name + "\n비어 있음";
+            return gear.Has ? name + " " + gear.Tier + "단계\n피해 감소 " + Reduction((ArmorSlot)slot, gear.Tier) + "% · 내구도 " + gear.Durability + " / " + gear.MaxDurability : name + "\n비어 있음";
         }
 
         static string DescribeLoot(LootItem loot)
@@ -361,15 +389,14 @@ namespace Game.Gameplay
             {
                 case LootKind.Weapon:
                     var weapon = GameData.Weapons.Find(loot.WeaponId.Value);
-                    if (weapon != null && weapon.IsMelee) return weapon.Name + "\n근접 무기 · 피해 " + weapon.Damage.ToString("0"); // ADR-073
-                    return (weapon != null ? weapon.Name : "무기") + "\n무기 · " +
-                           (weapon != null ? AmmoName(AmmoIndex(weapon)) : "구경 미상") + " · 탄창 " + loot.Amount.Value + "발";
+                    if (weapon == null) return "무기\n무기 · 구경 미상 · 탄창 " + loot.Amount.Value + "발";
+                    return weapon.Name + "\n" + WeaponStats.TooltipText(weapon, 0, OpticRules.Current); // ADR-073, ADR-493
                 case LootKind.Ammo: return AmmoName(loot.Ammo.Value) + " 탄약\n탄약 · 수량 " + loot.Amount.Value + "발";
-                case LootKind.Medkit: return "구급상자\n소모품 · 수량 " + loot.Amount.Value + "개";
+                case LootKind.Medkit: return "구급상자\n회복 · " + GearTips.Heal(HealKind.Medkit, HealRules.Current) + " · 수량 " + loot.Amount.Value + "개";
                 case LootKind.Optic:
                     return LootNames.OfOptic(loot.Optic.Value) + "\n" + Attachments.Describe(loot.Optic.Value);
                 default:
-                    if (TryArmorSlot(loot, out int slot)) return (slot == HelmetSlot ? "헬멧" : "조끼") + "\n장구류";
+                    if (TryArmorSlot(loot, out int slot)) return (slot == HelmetSlot ? "헬멧 " : "조끼 ") + loot.Tier.Value + "단계\n장구류 · " + GearTips.Armor((ArmorSlot)slot, loot.Tier.Value, ArmorRules.Current);
                     return IsGrenade(loot) ? "수류탄\n투척물 · 수량 " + loot.Amount.Value + "개" : ExtraDescription(loot);
             }
         }
