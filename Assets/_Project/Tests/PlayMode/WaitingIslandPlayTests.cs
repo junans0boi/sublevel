@@ -238,11 +238,13 @@ namespace Game.Tests
                 yield return new WaitForSeconds(0.3f);
                 Debug.Log($"[WaitingIslandPlayTests] {(top ? "top" : "bottom")} button: in reach {PlayerController.Local.LiftCallInReach}, prompt '{(Hud.Instance != null ? Hud.Instance.PromptText : "")}'");
                 yield return Shot(folder, top ? "call_button_top" : "call_button_prompt");
+                yield return CloseShot(folder, top ? "call_button_top_close" : "call_button_close", top, deck);
                 if (!top)
                 {
                     input.PressF = true;
                     yield return new WaitForSeconds(0.4f);
                     yield return Shot(folder, "call_button_lit");
+                    yield return CloseShot(folder, "call_button_lit_close", false, deck);
                     float end = Time.realtimeSinceStartup + 15f;
                     while (WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom) { Assert.Less(Time.realtimeSinceStartup, end); yield return null; }
                     yield return new WaitForSeconds(0.6f);
@@ -254,11 +256,24 @@ namespace Game.Tests
         }
 
         // The player's camera with the HUD canvases drawn into it (an overlay canvas is not in a camera render).
-        static IEnumerator Shot(string folder, string name)
+        // The panel up close, from a little right of its face (no HUD).
+        static IEnumerator CloseShot(string folder, string name, bool top, float deck)
+        {
+            var b = top ? WaitingIsland.CallTop : WaitingIsland.CallBottom;
+            var face = Local(b.x, deck + b.y, b.z);
+            var cam = new GameObject("CloseShotCamera").AddComponent<Camera>();
+            cam.enabled = false; cam.nearClipPlane = 0.02f; cam.fieldOfView = 45f;
+            cam.transform.position = face + new Vector3(0.3f, 0.12f, top ? -0.95f : 0.95f);
+            cam.transform.LookAt(face + Vector3.down * 0.05f);
+            yield return Shot(folder, name, cam);
+            Object.Destroy(cam.gameObject);
+        }
+
+        static IEnumerator Shot(string folder, string name, Camera only = null)
         {
             yield return null;
-            var cam = PlayerController.Local.Camera != null ? PlayerController.Local.Camera : Camera.main;
-            var canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            var cam = only != null ? only : PlayerController.Local.Camera != null ? PlayerController.Local.Camera : Camera.main;
+            var canvases = only != null ? new Canvas[0] : Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
             var modes = new RenderMode[canvases.Length];
             for (int i = 0; i < canvases.Length; i++)
             {

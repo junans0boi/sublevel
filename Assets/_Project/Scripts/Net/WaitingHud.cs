@@ -77,6 +77,7 @@ namespace Game.Net
                 var car = island != null ? island.transform.Find("BungeeLiftCar") : null;
                 if (car == null) return;
                 _car = car; _carDoors = car.Find("Doors");
+                Dress(island.transform);
             }
             var phase = live ? (Game.Core.LiftPhase)_last.LiftPhase : Game.Core.LiftPhase.OpenBottom;
             float into = live ? _last.LiftInto + (_preview ? 0f : Time.unscaledTime - _at) : 0f;
@@ -85,17 +86,36 @@ namespace Game.Net
             if (_carDoors != null) _carDoors.gameObject.SetActive(!Game.Core.BungeeLift.DoorsOpenOf(phase, into));
             if (_bottom == null) { _bottom = new CallButton(_car.parent, false); _top = new CallButton(_car.parent, true); }
             bool moving = !Game.Core.BungeeLift.DoorsOpenOf(phase, into);
-            string floor = (h > Game.Core.BungeeLift.Height * 0.5f ? "2" : "1") + (!moving ? "" : phase == Game.Core.LiftPhase.Rising ? " ▲" : " ▼");
+            string floor = (h > Game.Core.BungeeLift.Height * 0.5f ? "2" : "1") + (!moving ? "" : phase == Game.Core.LiftPhase.Rising ? "▲" : "▼");
             _bottom.Show(live && (_last.LiftCalls & 1) != 0, floor);
             _top.Show(live && (_last.LiftCalls & 2) != 0, floor);
         }
 
-        // A call button (ADR-490), built at runtime from WaitingIsland's numbers so the World scene need not be rebuilt: a post (bottom)
-        // or a plate on the rail (top), the lamp that lights while the call stands, and the floor the car is at above it.
+        static Material Look(string name) => Resources.Load<Material>("WaitingLook/" + name);
+
+        // The island's own materials (ADR-491) on the hall, the tower and the lift car. shortcut: the World scene baked before ADR-491
+        // still carries the town's materials, so they are swapped here by name; drop this once World.unity is rebuilt (the builder uses them).
+        static void Dress(Transform island)
+        {
+            Material steel = Look("WaitingSteel"), panel = Look("WaitingPanel"), dome = Look("WaitingDome"), stainless = Look("WaitingStainless"), tread = Look("WaitingTread"), accent = Look("WaitingAccent");
+            if (steel == null) return;
+            foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                string n = r.name; bool inCar = r.transform.parent != island;
+                var m = !inCar && (n.StartsWith("Frame") || n == "Trim" || n == "BoardBack") ? steel : !inCar && n.StartsWith("Wall") ? panel : !inCar && n.StartsWith("Dome") ? dome : !inCar && n == "Band" ? accent
+                    : inCar && (n == "Bars" || n == "Gates") ? stainless : inCar && n == "Floor" ? tread : null;
+                if (m != null) r.sharedMaterial = m;
+            }
+        }
+
+        // A call panel (ADR-490/491), built at runtime from WaitingIsland's numbers so the World scene need not be rebuilt: a brushed
+        // steel faceplate (on a slim graphite pillar at the bottom, on the rail at the top) with a small dark window showing the car's
+        // floor and one round push button with its arrow (▲ at the bottom, ▼ at the top) that glows while the call stands.
         sealed class CallButton
         {
-            readonly Renderer _lamp; readonly Light _glow; readonly TextMesh _floor;
-            static readonly Color Off = new Color(0.25f, 0.22f, 0.2f), On = new Color(1f, 0.72f, 0.2f);
+            readonly Renderer _button; readonly Light _glow; readonly TextMesh _floor, _arrow;
+            static readonly Color Off = new Color(0.78f, 0.80f, 0.82f), On = new Color(1f, 0.78f, 0.35f);
+            static readonly Color ArrowOff = new Color(0.25f, 0.27f, 0.30f), ArrowOn = new Color(0.45f, 0.22f, 0.02f);
 
             public CallButton(Transform island, bool top)
             {
@@ -104,28 +124,40 @@ namespace Game.Net
                 root.SetParent(island, false);
                 root.localPosition = new Vector3(b.x, b.y, b.z);
                 root.localRotation = Quaternion.Euler(0f, top ? 180f : 0f, 0f);   // the face (+Z local) towards whoever presses it
-                var trim = island.Find("Trim")?.GetComponent<Renderer>()?.sharedMaterial;
-                if (!top) Box(root, "Post", new Vector3(0f, -b.y * 0.5f + 0.25f, -0.05f), new Vector3(0.22f, b.y + 0.5f, 0.12f), trim, Color.white);
-                Box(root, "Plate", Vector3.zero, new Vector3(0.18f, 0.28f, 0.04f), trim, new Color(0.15f, 0.15f, 0.16f));
-                _lamp = Box(root, "Lamp", new Vector3(0f, 0f, 0.03f), new Vector3(0.12f, 0.12f, 0.03f), trim, Off);
-                var g = new GameObject("Glow"); g.transform.SetParent(root, false); g.transform.localPosition = new Vector3(0f, 0f, 0.25f);
-                _glow = g.AddComponent<Light>(); _glow.type = LightType.Point; _glow.range = 1.8f; _glow.intensity = 3f; _glow.color = On; _glow.shadows = LightShadows.None; _glow.enabled = false;
-                var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                var t = new GameObject("Floor"); t.transform.SetParent(root, false);
-                t.transform.localPosition = new Vector3(0f, 0.3f, 0.03f); t.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                _floor = t.AddComponent<TextMesh>();
-                _floor.font = font; _floor.fontSize = 64; _floor.characterSize = 0.022f; _floor.anchor = TextAnchor.MiddleCenter; _floor.color = new Color(1f, 0.55f, 0.25f);
-                t.GetComponent<MeshRenderer>().sharedMaterial = BoardMaterial(font);
+                Material steel = Look("WaitingSteel"), stainless = Look("WaitingStainless");
+                if (!top) Part(root, PrimitiveType.Cube, "Pillar", new Vector3(0f, -b.y * 0.5f + 0.3f, -0.05f), new Vector3(0.28f, b.y + 0.6f, 0.08f), steel);
+                Part(root, PrimitiveType.Cube, "Plate", Vector3.zero, new Vector3(0.22f, 0.40f, 0.02f), stainless);
+                Part(root, PrimitiveType.Cube, "Window", new Vector3(0f, 0.12f, 0.012f), new Vector3(0.15f, 0.08f, 0.006f), null).sharedMaterial.color = new Color(0.03f, 0.03f, 0.035f);
+                Part(root, PrimitiveType.Cylinder, "Bezel", new Vector3(0f, -0.05f, 0.012f), new Vector3(0.13f, 0.004f, 0.13f), null).sharedMaterial.color = new Color(0.08f, 0.08f, 0.09f);
+                _button = Part(root, PrimitiveType.Cylinder, "Button", new Vector3(0f, -0.05f, 0.02f), new Vector3(0.105f, 0.008f, 0.105f), null);
+                _button.sharedMaterial.color = Off; _button.sharedMaterial.SetFloat("_Smoothness", 0.7f);
+                var g = new GameObject("Glow"); g.transform.SetParent(root, false); g.transform.localPosition = new Vector3(0f, -0.05f, 0.2f);
+                _glow = g.AddComponent<Light>(); _glow.type = LightType.Point; _glow.range = 1.2f; _glow.intensity = 1.5f; _glow.color = On; _glow.shadows = LightShadows.None; _glow.enabled = false;
+                _floor = Label(root, new Vector3(0f, 0.12f, 0.016f), 0.016f, new Color(1f, 0.6f, 0.2f));
+                _arrow = Label(root, new Vector3(0f, -0.05f, 0.029f), 0.014f, ArrowOff);
+                _arrow.text = top ? "▼" : "▲";
             }
 
-            static Renderer Box(Transform parent, string name, Vector3 at, Vector3 size, Material m, Color c)
+            static Renderer Part(Transform parent, PrimitiveType shape, string name, Vector3 at, Vector3 size, Material m)
             {
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                var go = GameObject.CreatePrimitive(shape);
                 go.name = name; Object.DestroyImmediate(go.GetComponent<Collider>());   // looks only: the server judges the reach
                 go.transform.SetParent(parent, false); go.transform.localPosition = at; go.transform.localScale = size;
+                if (shape == PrimitiveType.Cylinder) go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // its axis out of the plate
                 var r = go.GetComponent<Renderer>();
-                r.sharedMaterial = new Material(m != null ? m : r.sharedMaterial) { color = c };   // its own copy: the lamp changes colour
+                r.sharedMaterial = m != null ? m : new Material(r.sharedMaterial);   // a shared look, or its own copy to colour
                 return r;
+            }
+
+            static TextMesh Label(Transform parent, Vector3 at, float size, Color c)
+            {
+                var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                var t = new GameObject("Label"); t.transform.SetParent(parent, false);
+                t.transform.localPosition = at; t.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                var text = t.AddComponent<TextMesh>();
+                text.font = font; text.fontSize = 64; text.characterSize = size; text.anchor = TextAnchor.MiddleCenter; text.color = c;
+                t.GetComponent<MeshRenderer>().sharedMaterial = BoardMaterial(font);
+                return text;
             }
 
             bool? _lit;
@@ -134,9 +166,11 @@ namespace Game.Net
                 if (_floor.text != floor) _floor.text = floor;
                 if (_lit == lit) return;
                 _lit = lit;
-                _lamp.sharedMaterial.color = lit ? On : Off;
-                if (lit) _lamp.sharedMaterial.EnableKeyword("_EMISSION"); else _lamp.sharedMaterial.DisableKeyword("_EMISSION");   // URP Lit: the lamp glows, not just tints
-                _lamp.sharedMaterial.SetColor("_EmissionColor", lit ? On * 2f : Color.black);
+                var m = _button.sharedMaterial;
+                m.color = lit ? On : Off;
+                if (lit) m.EnableKeyword("_EMISSION"); else m.DisableKeyword("_EMISSION");   // URP Lit: the button glows, not just tints
+                m.SetColor("_EmissionColor", lit ? On * 1.6f : Color.black);
+                _arrow.color = lit ? ArrowOn : ArrowOff;
                 _glow.enabled = lit;
             }
         }

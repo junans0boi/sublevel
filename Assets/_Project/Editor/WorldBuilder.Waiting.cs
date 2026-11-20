@@ -58,7 +58,7 @@ public static partial class WorldBuilder
             wall.Add(new Vector3(Mathf.Cos(am) * (R - 0.3f), WaitingWallHeight * 0.5f, Mathf.Sin(am) * (R - 0.3f)), new Vector3(chord, WaitingWallHeight, 0.4f), rot);
             frame.Add(new Vector3(Mathf.Cos(a0) * (R - 0.5f), WaitingWallHeight * 0.5f, Mathf.Sin(a0) * (R - 0.5f)), new Vector3(0.6f, WaitingWallHeight, 0.6f));
         }
-        // A gold band round the hall at chest height: the one bright colour of the room besides the lamps.
+        // An amber band round the hall at chest height: the one bright colour of the room besides the lamps.
         for (int i = 0; i < WaitingWallSegments; i++)
         {
             float am = (i + 0.5f) * Mathf.PI * 2f / WaitingWallSegments, r = R - 0.65f, chord = 2f * R * Mathf.Sin(Mathf.PI / WaitingWallSegments) + 0.1f;
@@ -136,7 +136,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz - bridgeGap), new Vector3(bx1, th, bz - bridgeGap));
         WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz + bridgeGap), new Vector3(bx1, th, bz + bridgeGap));
         var pad = WaitingIsland.BungeePad;
-        band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: gold
+        band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: amber
         trim.Add(new Vector3(pad.x, WaitingIsland.PadTop * 0.5f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, WaitingIsland.PadTop, WaitingIsland.BungeePadRadius * 2f)); // the landing pad below
 
         // The lift: an exposed shaft of four posts and hoops, a landing grate at the top between the shaft and the platform, and the car.
@@ -159,7 +159,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(lp.x + sh, th, landZ0), new Vector3(lp.x + sh, th, landZ1));
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
         deck.Add(new Vector3(lp.x, WaitingIsland.LiftSillTop * 0.5f, lp.z), new Vector3(sh * 2f + 1f, WaitingIsland.LiftSillTop, sh * 2f + 1f)); // the ground sill: flush, under the car floor
-        BuildBungeeLiftCar(root, store, steel.Material, accent.Material, planks.Material, steel.Tile, accent.Tile, planks.Tile);
+        BuildBungeeLiftCar(root, store, WaitingLook.Stainless, accent.Material, WaitingLook.Tread, steel.Tile, accent.Tile, planks.Tile);   // ADR-491: the island's own look
 
         // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
         foreach (var b in WaitingIsland.Booths)
@@ -185,12 +185,12 @@ public static partial class WorldBuilder
         trim.Add(new Vector3(el.x, 4.5f, el.z + 2.7f), new Vector3(6.2f, 0.12f, 0.12f));
 
         AddWaitingMesh(root, store, "Deck", deck, concrete.Material, false);
-        for (int i = 0; i < WaitingSectors.Count; i++) AddWaitingMesh(root, store, "Frame" + i, frame.Batches[i], steel.Material, false);
-        for (int i = 0; i < WaitingSectors.Count; i++) { AddWaitingMesh(root, store, "Wall" + i, wall.Batches[i], rust.Material, false); AddWaitingMesh(root, store, "Dome" + i, dome.Batches[i], WorldMaterials.SteelRoof.Material, false); }
+        for (int i = 0; i < WaitingSectors.Count; i++) AddWaitingMesh(root, store, "Frame" + i, frame.Batches[i], WaitingLook.Steel, false);
+        for (int i = 0; i < WaitingSectors.Count; i++) { AddWaitingMesh(root, store, "Wall" + i, wall.Batches[i], WaitingLook.Panel, false); AddWaitingMesh(root, store, "Dome" + i, dome.Batches[i], WaitingLook.Dome, false); }
         AddWaitingMesh(root, store, "Planks", wood, planks.Material, false);
-        AddWaitingMesh(root, store, "Trim", trim, accent.Material, false);
-        AddWaitingMesh(root, store, "BoardBack", board, navy.Material, false);
-        AddWaitingMesh(root, store, "Band", band, gold.Material, false);
+        AddWaitingMesh(root, store, "Trim", trim, WaitingLook.Steel, false);
+        AddWaitingMesh(root, store, "BoardBack", board, WaitingLook.Steel, false);
+        AddWaitingMesh(root, store, "Band", band, WaitingLook.Accent, false);
 
         // A deck-level collider, so people stand on it even if the mesh collider cooks thin; the walkable area is the server's clamp anyway.
         var floor = new GameObject("DeckCollider"); floor.transform.SetParent(root, false);
