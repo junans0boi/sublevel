@@ -182,6 +182,9 @@ namespace Game.Tests
             Assert.AreEqual(-0.3f, z, 1e-4f, "behind the carrier");
             Assert.Greater(y, 0f);
             Assert.AreEqual(0f, x, 1e-4f);
+            // #173 piggyback: with a ~0.95 m standing hip height, the rider's hips sit at the carrier's lower back.
+            float riderHips = y - KnockCarry.RideDrop + 0.95f;
+            Assert.That(riderHips, Is.InRange(0.9f, 1.2f));
         }
 
         [Test]

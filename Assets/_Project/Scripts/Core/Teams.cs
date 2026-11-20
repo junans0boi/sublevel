@@ -223,6 +223,11 @@ namespace Game.Core
         public static bool KeepGoing(float distance, bool carrierStanding, bool targetKnocked, TeamRules rules) =>
             carrierStanding && targetKnocked && distance <= rules.CarryKeepMeters;
 
+        // The carried body rides piggyback (#173), not lying: upright, knees round the carrier's waist, arms over its
+        // shoulders, leaning onto its back. The model is drawn RideDrop below the carried origin so its hips sit at the
+        // carrier's lower back (the origin, and with it the carried one's camera, stays where Offset puts it).
+        public const float RideThighDeg = 70f, RideShinDeg = 80f, RideArmDeg = 70f, RideTorsoDeg = 12f, RideDrop = 0.45f;
+
         // Where the carried body rides: on the carrier's back, a little above its feet.
         public static (float x, float y, float z) Offset(float yawDeg)
         {

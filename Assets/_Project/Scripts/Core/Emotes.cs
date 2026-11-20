@@ -95,9 +95,14 @@ namespace Game.Core
                     p.Bend = 4f * bow;
                     break;
                 case Emote.Dance:
+                    // Alternating fist pumps in front (one arm up as the other comes down), hips swaying, knees on the beat.
+                    // Never both arms out to the side together: that read as a T-pose (#173).
                     float beat = t * 2.0f * (float)Math.PI * 1.25f;
-                    p.RightOut = (95f + 55f * (float)Math.Sin(beat)) * env;
-                    p.LeftOut = (95f - 55f * (float)Math.Sin(beat)) * env;
+                    float pump = (float)Math.Sin(beat);
+                    p.RightFwd = (95f + 55f * pump) * env;
+                    p.LeftFwd = (95f - 55f * pump) * env;
+                    p.RightOut = (20f + 10f * pump) * env;
+                    p.LeftOut = (20f - 10f * pump) * env;
                     p.TorsoRoll = 9f * (float)Math.Sin(beat * 0.5f) * env;
                     p.TorsoYaw = 12f * (float)Math.Sin(beat * 0.5f + 1.2f) * env;
                     p.Bend = (7f + 7f * (float)Math.Sin(beat * 2f)) * env;

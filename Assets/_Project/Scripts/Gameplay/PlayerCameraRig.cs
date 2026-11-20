@@ -40,8 +40,11 @@ namespace Game.Gameplay
 
         public void ToggleMode() => Mode = Mode == ViewMode.ThirdPerson ? ViewMode.FirstPerson : ViewMode.ThirdPerson;
 
+        // Set while the player plays an emote: first person pulls out to the chase view so the player sees it (#173).
+        public bool ShowSelf;
+
         // True when the camera sits at the eyes, so the player's own body should not be drawn.
-        public bool IsEyeView(AimMode aim) => Mode == ViewMode.FirstPerson || aim == AimMode.Sights;
+        public bool IsEyeView(AimMode aim) => (Mode == ViewMode.FirstPerson && !ShowSelf) || aim == AimMode.Sights;
 
         public void Place(Transform camera, Transform player, Vector3 eye, float yaw, float pitch, in ViewState view, float dt)
         {

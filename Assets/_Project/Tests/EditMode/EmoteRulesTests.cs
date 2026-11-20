@@ -57,6 +57,31 @@ namespace Game.Tests
         }
 
         [Test]
+        public void Dance_NeverHoldsBothArmsOutToTheSide()
+        {
+            // #173: both arms raised sideways at once read as a T-pose.
+            for (float t = 0f; t <= Emotes.Duration(Emote.Dance); t += 0.02f)
+            {
+                var p = Emotes.PoseAt(Emote.Dance, t);
+                Assert.IsFalse(p.RightOut > 60f && p.LeftOut > 60f, "T-pose at " + t);
+            }
+            var mid = Emotes.PoseAt(Emote.Dance, Emotes.Duration(Emote.Dance) * 0.5f);
+            Assert.Greater(System.Math.Abs(mid.RightFwd) + System.Math.Abs(mid.LeftFwd), 60f, "the arms pump in front");
+        }
+
+        [Test]
+        public void FirstPersonView_PullsOutWhileEmoting()
+        {
+            // #173: the player sees their own emote; sights still go to the eyes.
+            var rig = new Game.Gameplay.PlayerCameraRig();
+            rig.ToggleMode();
+            Assert.IsTrue(rig.IsEyeView(AimMode.Hip));
+            rig.ShowSelf = true;
+            Assert.IsFalse(rig.IsEyeView(AimMode.Hip));
+            Assert.IsTrue(rig.IsEyeView(AimMode.Sights));
+        }
+
+        [Test]
         public void Envelope_FadesInAndOut()
         {
             Assert.AreEqual(0f, Emotes.Envelope(0f, 2f));

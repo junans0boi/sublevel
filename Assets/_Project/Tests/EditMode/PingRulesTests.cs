@@ -118,5 +118,18 @@ namespace Game.Tests
             Assert.AreEqual(defaults.PingMaxMeters, rules.PingMaxMeters, 1e-6f);
             Assert.Greater(rules.PingLifeSeconds, 1f);
         }
+
+        [Test]
+        public void Spread_PushesOverlappingLabelsApart_AndLeavesClearOnesAlone()
+        {
+            // #173: three pings almost on one spot, one far away.
+            float[] x = { 0f, 5f, -3f, 400f }, y = { 0f, 2f, -1f, 0f };
+            Pings.Spread(x, y, 4, 110f, 80f);
+            Assert.AreEqual(0f, y[0], "the first stays put");
+            Assert.AreEqual(0f, y[3], "a clear one stays put");
+            for (int i = 0; i < 3; i++)
+                for (int j = i + 1; j < 3; j++)
+                    Assert.GreaterOrEqual(Mathf.Abs(y[i] - y[j]), 80f - 1e-3f, i + " vs " + j);
+        }
     }
 }

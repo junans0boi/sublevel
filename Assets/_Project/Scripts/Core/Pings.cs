@@ -27,6 +27,20 @@ namespace Game.Core
 
         public static bool IsValid(int kind) => kind >= 0 && kind < KindCount;
 
+        // World ping labels pushed apart on screen (#173): a label overlapping one placed before it moves up by a label's
+        // height until it is clear, so the first ones never move. In place, canvas units, y up.
+        public static void Spread(float[] x, float[] y, int count, float width, float height)
+        {
+            for (int i = 1; i < count; i++)
+                for (int pass = 0; pass <= i; pass++)
+                {
+                    bool moved = false;
+                    for (int j = 0; j < i; j++)
+                        if (Math.Abs(x[i] - x[j]) < width && Math.Abs(y[i] - y[j]) < height) { y[i] = y[j] + height; moved = true; }
+                    if (!moved) break;
+                }
+        }
+
         // Segment of a wheel with `count` equal parts for a cursor at (x, y) from its centre (y up): segment 0 is centred
         // straight up and they run clockwise. -1 while the cursor is inside the dead zone.
         public static int SegmentAt(float x, float y, int count, float deadZone)

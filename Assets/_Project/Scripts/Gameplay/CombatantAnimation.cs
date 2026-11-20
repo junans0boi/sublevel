@@ -121,6 +121,7 @@ namespace Game.Gameplay
         float _legTurnShown;      // the leg turn actually applied to the model (none while lying down)
         float _parkour;           // 0..1: how much of the vault/climb pose is shown (ADR-065 (4))
         float _seated;            // 0..1: how much of the seated pose is shown (in a car, ADR-065 (5))
+        float _carried;           // 1 while carried on a teammate's back: the piggyback pose instead of lying (#173)
         bool _driverPose;         // seated at the wheel: empty hands go to the steering wheel
         const float CrouchWalkBlendPerSecond = 6f;
         // A bone no playing clip keys keeps what was written to it last, so a turn added every frame would pile
@@ -284,10 +285,12 @@ namespace Game.Gameplay
             float seatAmount = dead ? 0f : VehicleSeat.SeatedAmount(_combatant);
             _seated = seatAmount * seatAmount * (3f - 2f * seatAmount);
             _driverPose = VehicleSeat.InDriverSeat(_combatant);
-            var v = dead || _seated > 0.001f ? Vector3.zero : _motion.LocalVelocity;
+            // Carried: placed on the carrier's back each frame, as instantly as the pose switches; none of it is walking.
+            _carried = !dead && _combatant.BeingCarried ? 1f : 0f;
+            var v = dead || _seated > 0.001f || _carried > 0f ? Vector3.zero : _motion.LocalVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
             _legs.Tick(v.x, v.z, Time.deltaTime, GameData.Rules.Gait);
-            float proneAmount = dead || _stance == null ? 0f : _stance.ProneAmount;
+            float proneAmount = dead || _stance == null || _carried > 0f ? 0f : _stance.ProneAmount;
             // Vaulting or climbing, replicated so everyone sees it: eased in and out.
             bool parkour = !dead && _stance != null && _stance.Parkour.Value != 0 && !OnLedge; // the ledge has its own pose (.Ledge.cs)
             _parkour = Mathf.MoveTowards(_parkour, parkour ? 1f : 0f, ParkourRules.Current.PosePerSecond * Time.deltaTime);
@@ -375,7 +378,7 @@ namespace Game.Gameplay
         {
             var jump = GameData.Rules.Jump;
             // Floating is not falling: no jump pose over deep water.
-            if (_swimAmount > 0.01f || _bungee > 0.01f) { _inAir = false; _landUntil = -1f; return false; }   // nor is hanging on the bungee cord
+            if (_swimAmount > 0.01f || _bungee > 0.01f || _carried > 0f) { _inAir = false; _landUntil = -1f; return false; }   // nor is hanging on the bungee cord, or riding a teammate's back
             if (_motion.Airborne)
             {
                 // Taking off: start on the rise pose instead of sweeping to it from wherever the last jump ended.
@@ -443,7 +446,7 @@ namespace Game.Gameplay
             // Seated: the hips go down and back into the seat (the body's origin is already placed for the eyes).
             var seatRules = VehicleSeat.RulesOf(_combatant);
             var sitting = SeatedShift(Vector3.down * seatRules.SeatedHipDrop + Vector3.back * seatRules.SeatedHipBack) * _seated;
-            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal + _plantDrop) + lying + sitting;
+            _animator.transform.localPosition = _modelRestPosition + Vector3.down * (_drop + _footFixTotal + _plantDrop + KnockCarry.RideDrop * _carried) + lying + sitting;
         }
 
         // How far the playing clip has turned the hips from their rest facing, in degrees about the vertical.
@@ -668,6 +671,7 @@ namespace Game.Gameplay
             PoseSwim();
             PoseBungee();
             if (_seated > 0.001f) PoseSeated();
+            if (_carried > 0f) PoseCarried();
 
             for (int i = 0; i < TurnedBones; i++)
                 if (_boneTurned[i]) _boneLeftAt[i] = _bones[i].localRotation;
@@ -685,6 +689,20 @@ namespace Game.Gameplay
             float total = Mathf.Clamp(_footFixTotal + low - _footRestHeight, -MaxFootFix, MaxFootFix);
             _animator.transform.position -= transform.up * (total - _footFixTotal);
             FootFix = _footFixTotal = total;
+        }
+
+        // Piggyback on the carrier (#173): thighs forward round its waist, shins hanging, arms forward over its
+        // shoulders, the chest tipped onto its back. Same turns as the seated legs.
+        void PoseCarried()
+        {
+            float thigh = -KnockCarry.RideThighDeg, shin = KnockCarry.RideThighDeg + KnockCarry.RideShinDeg;
+            PoseLeg(0, ThighLeft, ShinLeft, FootLeft, thigh, shin, transform.right);
+            PoseLeg(1, ThighRight, ShinRight, FootRight, thigh, shin, transform.right);
+            Turn(FootLeft, -KnockCarry.RideShinDeg, transform.right);
+            Turn(FootRight, -KnockCarry.RideShinDeg, transform.right);
+            Turn(Torso, KnockCarry.RideTorsoDeg, transform.right);
+            Turn(ArmLeft, -KnockCarry.RideArmDeg, transform.right);
+            Turn(ArmRight, -KnockCarry.RideArmDeg, transform.right);
         }
 
         // Sitting in a car (ADR-065 (5)), no clip: thighs forward to about level, shins down with the feet a little
