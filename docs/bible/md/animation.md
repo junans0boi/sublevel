@@ -7,7 +7,7 @@
 지금 캐릭터는 Quaternius Swat(Generic 리그)이다. Swat은 발이 정강이의 자식이 아니고 다리가 Hips가 아닌 Body 아래라 Unity Humanoid 리타겟이 안 된다. 그래서 Mixamo 소총 클립을 오프라인으로 Swat에 구워(MixamoBake) 일반 클립 17종을 만들었다(ADR-166). 구운 결과에 결함이 있고 코드 포즈가 많아, 준환 결정으로 캐릭터와 애니메이션을 모두 Humanoid로 교체한다(MASTER_PLAN §4).
 
 - 제안 캐릭터: Mixamo 사실풍 8~12종(봇·상대) + 이미 저장소에 있는 Quaternius UBC Superhero 남·여 2종(플레이어 보조 스킨). 폴백은 UBC 단독(CC0). Mixamo 다운로드·약관 읽기는 준환(규칙 3·8).
-- Humanoid가 되면 Mixamo/UAL 클립을 런타임 리타겟으로 직접 쓰고 MixamoBake와 Baked/Mx_*.anim 17개는 폐기 대상(삭제는 준환 확인 후).
+- Humanoid가 되면 Mixamo/UAL 클립을 런타임 리타겟으로 직접 쓰고 MixamoBake와 Baked/Mx_*.anim 17개는 폐기 대상이었고 2026-11-20 삭제했다(ADR-549, master 승인).
 - Animation Rigging 패키지는 추가하지 않고 OnAnimatorIK를 쓰는 것을 권장(의존성 추가는 먼저 묻는다).
 - 실제 캡처로 현재 트리를 다시 확인하지는 않았다. 아래 결함 원인은 04 감사의 코드 읽기 결과다.
 
@@ -40,8 +40,8 @@
 
 | 상태 | 현상 | 원인 | 해결 방향 | 근거 |
 |---|---|---|---|---|
-| 확정 | 엎드리면 몸이 약 35도로 떠 있음(85도 눕힘 + 40도 머리 들기) | 모델 전체를 ProneModelPitchDeg 85도 앞으로 눕히고(몸통 선이 지면 위 5도), 그 위에 Turn(Torso, -ProneHeadLiftDeg 40)으로 가슴·머리를 다시 40도 세운다. 눈 높이 0.4 m(EyeDropMeters 1.2)에 머리를 맞추는 설계값이라 의도된 값이다. 팔은 armUp으로 45도 보정, 다리는 Swat 걷기 클립 그대로라 무릎이 굽어 발이 뜬다. | 클립 기반 엎드림(Humanoid)으로 교체, 85/40/45/0.15 코드와 armUp 삭제. 임시로 40→10도는 하지 않는다(테스트가 고정, 교체 확정). | docs/research/04_animation_audit.md:13-24; Assets/_Project/Scripts/Gameplay/CombatantAnimation.cs:250,476; Assets/_Project/Scripts/Core/Stance.cs:54-55 |
-| 확정 | 구운 엎드림 클립을 샘플하면 캐릭터가 서 있음, RifleRun 8위상의 다리가 모두 같음(확신도 중간, 시트 한 장) | MixamoBake.Bake가 Hips 회전을 Hips 뼈에만 쓰고, Swat 다리는 Hips가 아닌 Body 아래라 눕는 회전이 다리에 전달되지 않는다. | Humanoid로 가면 사라진다(MixamoBake 폐기). | docs/research/04_animation_audit.md:19-20 |
+| 확정 | 엎드리면 몸이 약 35도로 떠 있음(85도 눕힘 + 40도 머리 들기) | 모델 전체를 ProneModelPitchDeg 85도 앞으로 눕히고(몸통 선이 지면 위 5도), 그 위에 Turn(Torso, -ProneHeadLiftDeg 40)으로 가슴·머리를 다시 40도 세운다. 눈 높이 0.4 m(EyeDropMeters 1.2)에 머리를 맞추는 설계값이라 의도된 값이다. 팔은 armUp으로 45도 보정, 다리는 Swat 걷기 클립 그대로라 무릎이 굽어 발이 뜬다. | 클립 기반 엎드림(Humanoid)으로 교체, 85/40/45/0.15 코드와 armUp 삭제. 임시로 40→10도는 하지 않는다(테스트가 고정, 교체 확정). 결과: 엎드림은 ProneFiringRifle 클립(ADR-231), 85도 코드 피치는 삭제(ADR-549), 40/0.15는 수영에만 남음. | docs/research/04_animation_audit.md:13-24; Assets/_Project/Scripts/Gameplay/CombatantAnimation.cs:250,476; Assets/_Project/Scripts/Core/Stance.cs:54-55 |
+| 확정 | 구운 엎드림 클립을 샘플하면 캐릭터가 서 있음, RifleRun 8위상의 다리가 모두 같음(확신도 중간, 시트 한 장) | MixamoBake.Bake가 Hips 회전을 Hips 뼈에만 쓰고, Swat 다리는 Hips가 아닌 Body 아래라 눕는 회전이 다리에 전달되지 않는다. | 해결: Humanoid 직접 사용(ADR-187·230), MixamoBake·Baked 삭제(ADR-549). | docs/research/04_animation_audit.md:19-20 |
 | 확정 | 소총 스프린트·장전 때 왼팔이 늘어짐(젤리 팔) | 스프린트에서 SprintSupportRelease 0.9가 왼손 IK 가중치를 0.1로 낮춰 IK를 포기하면 Swat Run 클립의 팔이 그대로 남는다. 장전은 탄창 위치가 총에서 아래 17~30 cm(허리춤)라 팔이 아래로 내려간 모양이 된다(ReloadMotion.cs:34). 코드에 0.5 값을 쓰는 다른 프로파일도 있어 실제 사용 값 재확인 필요. | 스프린트 전용 로우레디 클립(왼손이 총을 잡음) + OnAnimatorIK 왼손 IK 가중치 유지, 장전은 클립이 손 동작을 가지고 IK는 해제. | docs/research/04_animation_audit.md:26-33; Assets/_Project/Scripts/Gameplay/CombatantAnimation.Rifle.cs:286; Assets/_Project/Scripts/Core/Locomotion.cs:99,112 |
 | 확정 | 소총(Sentinel)이 거대함 | 저격 모델이 없어 AssaultRifle_1을 1.05 m(키 1.8 m의 58%)로 늘려 씀. 실물 AK류 0.87 m(48%). 권총 0.24 m(실물 0.19 m +25%). 머리 0.30 m가 실제 0.23 m 수준이라 몸통·팔이 짧아 보임(스타일화 5.5등신). | 무기 길이를 실물 비례로(AK 0.87, 권총 0.19), 무기 모델 교체 트랙과 합의. 키 대비 소총 ≤ 50%를 캡처 판정 기준으로. | docs/research/04_animation_audit.md:35-47; Assets/_Project/Editor/CharacterKit.cs:29-34 |
 | 확정 | 엎드림 + 소총: 클립과 코드 회전이 겹침 | 엎드림이면 _rifleWanted=false(Rifle.cs:131)라 Upper 레이어의 Mx_RifleAimingIdle이 눕힌 모델 위에 얹히고 armUp 코드 회전이 한 번 더 쌓인다. | 클립 하나로 정리. | docs/research/04_animation_audit.md:33 |
@@ -65,7 +65,7 @@
 |---|---|---|---|
 | 확정 | Editor/CharacterKit.cs | 전면 재작성: Humanoid Avatar, GetBoneTransform, AvatarMask, 컨트롤러 생성, 무기 소켓. | docs/research/04_animation_audit.md:50-53 |
 | 확정 | CombatantAnimation.cs 외 .Rifle/.Gait/.Items/.Melee/.Swim/.Ledge/.Emote/.Vehicle | 본 슬롯을 Humanoid 본으로 교체. 눕기·웅크림·난간을 클립으로 대체하면 해당 코드 삭제. 얇은 코드 레이어(에임 오프셋·립 롤·발 보정)만 유지. 공개 속성 PronePose, CrouchPose, RiflePose, UpperState, BaseState, FootLow 유지로 PlayMode 수정 최소화. | docs/research/04_animation_audit.md:54 |
-| 확정 | Editor/MixamoBake.cs + Baked/Mx_*.anim | 폐기(삭제는 준환 확인 후). | docs/research/04_animation_audit.md:51 |
+| 확정 | Editor/MixamoBake.cs + Baked/Mx_*.anim | 삭제 완료(2026-11-20, ADR-549). | docs/research/04_animation_audit.md:51 |
 | 확정 | BackpackVisual, InventoryPreview.cs:167, WeaponVisual, FirstPersonArms, 프리팹 Player/Bot/TrainingDummy | 마운트 본·무기 손 소켓 교체, 프리팹은 TestBoxBuilder.Build로 재생성(차량 프리팹은 git restore). 1인칭 팔은 변경 없음(후속으로 실제 팔 여부는 결정). | docs/research/04_animation_audit.md:56-62 |
 | 제안 | AssetImportRules.cs | 새 FBX 임포트 규칙(Humanoid, 루트 모션 off, 루프 플래그)과 LICENSE/ledger 확인 추가. | docs/research/04_animation_audit.md:128 |
 
@@ -73,7 +73,7 @@
 
 | 상태 | 테스트 | 고정하고 있는 것 | 처리 | 근거 |
 |---|---|---|---|---|
-| 확정 | StanceTests, SlotDataTests (EditMode) | 엎드림 85/40/45/0.15, ProneModelBackShift 0.45 m, 웅크림 무릎 86도·0.2427 m (SlotDataTests는 rules.json의 85/40) | 코드를 지우는 시점에 함께 삭제/이관. | docs/research/04_animation_audit.md:127-129 |
+| 확정 | StanceTests, SlotDataTests (EditMode) | 엎드림 85/40/45/0.15, ProneModelBackShift 0.45 m, 웅크림 무릎 86도·0.2427 m (SlotDataTests는 rules.json의 85/40) | 완료(ADR-536·547): 웅크림 무릎·KneeBendDrop·85도 피치 단언과 SlotDataTests 85/40 삭제. 남은 40/0.15/1.35는 수영 배치용. | docs/research/04_animation_audit.md:127-129 |
 | 확정 | RifleHoldTests, ReloadMotionTests | 코드 포즈 수식 | 코드 포즈를 쓰는 동안만 의미. 클립으로 바뀌면 ReloadMotion과 함께 삭제. | docs/research/04_animation_audit.md:130-131 |
 | 확정 | CharacterGaitTests, VehiclePoseTests | 다리 회전·보행 속도 순수 수학, 좌석 수식 | 유지(모델 무관 수학이면). | docs/research/04_animation_audit.md:130 |
 | 확정 | CharacterAnimatorTests | Swat 클립 이름과 컨트롤러 구조 | CharacterKit 재작성 때 새 구조로 같은 의도를 다시 표현. | docs/research/04_animation_audit.md:132 |
@@ -110,5 +110,6 @@
 - 엎드림: Mixamo ProneFiringRifle 클립. 머리 0.28m, 엉덩이 0.13m, 몸통 수평, 총구 오차 0.7도. 수영은 기존 피치 몸 유지.
 - 재장전: Action 레이어 클립(왼손이 총에서 0.6m 떨어졌다 3cm 안으로 복귀). 피격: Additive 플린치.
 - 50인 비용: Animator 50체 2.4ms(4레이어), 봇 44체 코드 애니메이션 0.32ms. 20m 안 전부, 40m 안 IK 없음, 40m 밖 골격 컬.
-- 남은 것(ADR-234): 방향 2D 블렌드(#223), 점프(#228)·스프린트(#222)·제자리 회전(#234)·권총(#218)·근접(#219)·난간(#233)·수영(#236) 클립은 격차 시트 대기, 기존 코드 포즈를 Humanoid 본에 올려 둠.
+- 이후 클립화(2026-11-17~20): 8방향 이동(ADR-391)·스프린트(ADR-390)·수영(#236, UAL)·소총 웅크림(#303, ADR-536)·점프 3단(#304, ADR-537)·난간 매달림 맞춤(#312, ADR-542). 코드 웅크림·엎드림 피치·MixamoBake는 삭제(ADR-536·547).
+- 남은 것: 서서/달리며 점프 구분 없음(클립 1벌), 근접(#219)·차량 좌석 재측정은 코드 포즈, 난간·점프는 캡처 수치 증거 미확보.
 

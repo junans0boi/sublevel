@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "LocomotionAim", "Unarmed", "UnarmedCrouch", "RifleCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "LocomotionAim", "Unarmed", "UnarmedCrouch", "RifleCrouch", "Swim", "JumpStart", "JumpLoop", "JumpLand", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]

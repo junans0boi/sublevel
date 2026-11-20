@@ -309,12 +309,9 @@ namespace Game.Gameplay
             _snapTurn = Mathf.MoveTowards(_snapTurn, snapTarget, GameData.Rules.Gait.LegTurnDegPerSecond * Time.deltaTime);
             _clipDir = nearest >= 0 && speed >= GameData.Rules.Gait.LegTurnMinSpeed ? dirs[nearest] : 0f;
             _legTurnShown = (1f - _prone) * Mathf.Lerp(_snapTurn, _legs.TurnDeg, oldTrees);
-            var proneRules = StanceRules.Current;
             // Lying is the prone clip (ADR-231); swimming is the Swim tree (UAL, #236), already flat: the body is not pitched for either.
             _proneClip = _prone * (1f - _swimAmount);
-            const float pitched = 0f;
-            _animator.transform.localRotation = Quaternion.AngleAxis(proneRules.ProneModelPitchDeg * pitched, Vector3.right)
-                * Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
+            _animator.transform.localRotation = Quaternion.AngleAxis(_legTurnShown, Vector3.up) * _modelRest;
             // Every speed, slow walk included, is the blend at that speed: the walk, jog and sprint are one library's cycles and line up (ADR-390).
             _animator.SetFloat(_move, _legs.Backward ? -speed : speed, BlendDamp, Time.deltaTime);
             // The velocity as the turned legs see it.
@@ -336,7 +333,7 @@ namespace Game.Gameplay
             float crouchClipSpeed = _unarmedBody ? _unarmedCrouchSpeed : _legs.Backward ? _rifleCrouchBackSpeed : _rifleCrouchSpeed;
             if (_clipCrouch > 0.01f) pace = Mathf.Lerp(pace, Game.Core.Locomotion.LegPace(speed, crouchClipSpeed, GameData.Rules.Gait), _clipCrouch);
             // Crawling is the walk clip at a slow pace; at the crawl's low speed the blend also shows only a part of the stride.
-            if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, proneRules.ProneMinLegPace), _prone);
+            if (_prone > 0.01f) pace = Mathf.Lerp(pace, Stances.CrouchLegPace(speed, clipSpeed, StanceRules.Current.ProneMinLegPace), _prone);
             _animator.SetFloat(_pace, pace);
             bool showAir = !dead && TrackAir() && _seated < 0.5f;
             if (_animator.layerCount > AdditiveLayer)
