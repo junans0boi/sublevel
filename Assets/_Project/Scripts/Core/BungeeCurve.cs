@@ -3,19 +3,23 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    // The bungee jump as a fixed curve (ADR-386/387, #419): no rope physics. Height above the landing pad (the deck under the jump
-    // board) as a function of the seconds since the jump began: a beat on the board at the top, a free fall for the length of the
-    // rope, a damped bounce, and a gentle lowering to the pad. People reach the top by the lift (BungeeLift). Pure and
-    // deterministic, so the server, the jumper's client and the tests agree.
+    public enum BungeePhase { Board, Fall, Bounce, Hang, Lower, Done }
+
+    // The bungee jump as a fixed curve (ADR-386/387/495, #419): no rope physics. Height above the landing pad (the deck under the jump
+    // board) as a function of the seconds since the jump began: a beat on the board (the lean over the edge), a free fall for the
+    // length of the rope, a hard catch and a damped bounce, a hang until the jumper asks to come down (F) or HangSeconds pass, and the
+    // lowering to the pad. People reach the top by the lift (BungeeLift). Pure and deterministic, so the server, the jumper's client
+    // and the tests agree; `lowerAt` is when the jumper asked to come down (seconds since the jump, +infinity = not asked).
     public static class BungeeCurve
     {
         public const float Top = 60f;             // the platform's height above the pad
-        public const float Rope = 35f;            // free fall before the rope pulls
+        public const float Rope = 40f;            // free fall before the rope pulls (~28 m/s at the catch)
         public const float Gravity = 9.81f;
-        public const float HoldSeconds = 0.4f;
-        public const float BouncePeriod = 6f;     // of the spring after the rope pulled
-        public const float Damping = 0.4f;        // fraction of critical (lowest point about 4 m above the pad)
-        public const float SettleBelow = 0.3f;    // metres: the bounce is over when its swing is below this
+        public const float HoldSeconds = 0.8f;    // on the board: the lean over the edge before the drop
+        public const float BouncePeriod = 4.5f;   // of the spring after the rope pulled (a ~2.2 g catch)
+        public const float Damping = 0.35f;       // fraction of critical (lowest point about 4 m above the pad)
+        public const float SettleBelow = 0.6f;    // metres: the bounce is over (hanging) when its swing is below this
+        public const float HangSeconds = 6f;      // hanging this long lowers on its own: nobody stays up there
         public const float LowerSeconds = 3.5f;
 
         static readonly double W = 2.0 * Math.PI / BouncePeriod;
@@ -24,40 +28,111 @@ namespace Game.Core
         static readonly double A = Rope - Deq;
         static readonly double V1 = Math.Sqrt(2.0 * Gravity * Rope);        // speed when the rope pulls
         static readonly double B = (V1 + Damping * W * A) / Wd;
+        static readonly float BottomTau = FirstLowest();                    // seconds from the rope pulling to the lowest point
 
         public static float FallSeconds => (float)Math.Sqrt(2.0 * Rope / Gravity);
         public static float BounceSeconds => (float)(Math.Log(Math.Sqrt(A * A + B * B) / SettleBelow) / (Damping * W));
-        public static float Duration => HoldSeconds + FallSeconds + BounceSeconds + LowerSeconds;
         public static float RestHeight => (float)(Top - Deq);
+        public static float TautAt => HoldSeconds + FallSeconds;           // the rope starts to pull
+        public static float SnapAt => TautAt + BottomTau;                  // the lowest point: the rope's hardest pull, the climax
+        public static float ReadyAt => TautAt + BounceSeconds;             // hanging: F may lower from here
+        public static float AutoLowerAt => ReadyAt + HangSeconds;
+        public static float Duration => AutoLowerAt + LowerSeconds;        // the longest jump (nobody pressed F)
 
-        public static float Height(float t)
+        public static float LowerStart(float lowerAt) => Math.Min(Math.Max(lowerAt, ReadyAt), AutoLowerAt);
+        public static float End(float lowerAt) => LowerStart(lowerAt) + LowerSeconds;
+        public static bool Over(float t, float lowerAt = float.PositiveInfinity) => t >= End(lowerAt);
+
+        public static float Height(float t, float lowerAt = float.PositiveInfinity)
         {
-            if (t <= 0f) return Top;
-            float t2 = HoldSeconds, t3 = t2 + FallSeconds, t4 = t3 + BounceSeconds, t5 = t4 + LowerSeconds;
-            if (t < t2) return Top;
-            if (t < t3) { float tau = t - t2; return Top - 0.5f * Gravity * tau * tau; }
-            if (t < t4) return Top - Dist(t - t3);
-            if (t < t5) { float u = (t - t4) / LowerSeconds; return RestHeight * (1f - u * u * (3f - 2f * u)); }
-            return 0f;
+            if (t < HoldSeconds) return Top;
+            if (t < TautAt) { float tau = t - HoldSeconds; return Top - 0.5f * Gravity * tau * tau; }
+            float ls = LowerStart(lowerAt);
+            if (t < ls) return Top - Dist(t - TautAt);
+            // Lowered from wherever the swing was (no jump in the height), eased out onto the pad.
+            float u = (t - ls) / LowerSeconds;
+            if (u >= 1f) return 0f;
+            return (Top - Dist(ls - TautAt)) * (1f - u * u * (3f - 2f * u));
         }
+
+        public static BungeePhase PhaseAt(float t, float lowerAt = float.PositiveInfinity)
+        {
+            if (t < HoldSeconds) return BungeePhase.Board;
+            if (t < TautAt) return BungeePhase.Fall;
+            if (t < ReadyAt) return BungeePhase.Bounce;
+            if (t < LowerStart(lowerAt)) return BungeePhase.Hang;
+            return t < End(lowerAt) ? BungeePhase.Lower : BungeePhase.Done;
+        }
+
+        // Upward speed (m/s) and acceleration (m/s^2) along the curve: what the camera and the sound follow.
+        public static float Velocity(float t, float lowerAt = float.PositiveInfinity) => (Height(t + 0.005f, lowerAt) - Height(t - 0.005f, lowerAt)) / 0.01f;
+        public static float Acceleration(float t, float lowerAt = float.PositiveInfinity)
+            => (Height(t + 0.02f, lowerAt) - 2f * Height(t, lowerAt) + Height(t - 0.02f, lowerAt)) / 0.0004f;
+
+        // Slow motion in the jumper's own view as the rope bites (ADR-498): their body follows FeelTime(t), which runs down to about a third
+        // of real speed over the last metres of the plunge, then a little fast through the rebound until it is back in step. Only the
+        // jumper's own clock: the server and everyone else stay on t (the gap is never more than SlowLag seconds, near the slowest point).
+        public const float SlowLag = 0.28f, SlowBefore = 0.55f, SlowAfter = 0.1f, CatchUpSeconds = 1.6f;
+        public static float FeelTime(float t)
+        {
+            float a = SnapAt - SlowBefore, b = SnapAt + SlowAfter, c = b + CatchUpSeconds;
+            if (t <= a || t >= c) return t;
+            return t - (t < b ? SlowLag * Smooth((t - a) / (b - a)) : SlowLag * (1f - Smooth((t - b) / (c - b))));
+        }
+
+        static float Smooth(float u) => u * u * (3f - 2f * u);
 
         static float Dist(float tau) => (float)(Deq + Math.Exp(-Damping * W * tau) * (A * Math.Cos(Wd * tau) + B * Math.Sin(Wd * tau)));
 
-        public static bool Over(float t) => t >= Duration;
+        static float FirstLowest()
+        {
+            float best = 0f, deepest = float.MinValue;
+            for (float tau = 0f; tau < BouncePeriod; tau += 0.002f) { float d = Dist(tau); if (d > deepest) { deepest = d; best = tau; } else if (d < deepest - 0.5f) break; }
+            return best;
+        }
 
         // The lowest point and the first rebound's top (heights above the pad): what the board shows as the jump's best.
-        public static float Bottom { get { float m = float.MaxValue; for (float t = 0f; t < BounceSeconds; t += 0.01f) m = Math.Min(m, Top - Dist(t)); return m; } }
+        public static float Bottom => Top - Dist(BottomTau);
         public static float ReboundApex
         {
             get
             {
-                float tBottom = 0f, low = float.MaxValue;
-                for (float t = 0f; t < BounceSeconds; t += 0.01f) { float h = Top - Dist(t); if (h < low) { low = h; tBottom = t; } else if (h > low + 0.05f) break; }
-                float best = low;
-                for (float t = tBottom; t < BounceSeconds; t += 0.01f) { float h = Top - Dist(t); if (h >= best) best = h; else if (h < best - 0.05f) break; }
+                float best = Bottom;
+                for (float t = BottomTau; t < BounceSeconds; t += 0.01f) { float h = Top - Dist(t); if (h >= best) best = h; else if (h < best - 0.05f) break; }
                 return best;
             }
         }
+    }
+
+    // How a jumper's body is turned (ADR-498): head first over the edge, head-down through the fall, the bounce and the hang, and back
+    // upright in the last metres of the lowering so the feet touch the pad. From the height alone, so every client poses (and ropes) a
+    // jumper it only sees move, with nothing extra sent.
+    public static class BungeePose
+    {
+        public const float ColumnRadius = 1.6f;   // this close (horizontally) to the pad's middle, a body is on the rope
+        public const float PivotHeight = 1.0f;    // the body turns over at the hips
+        public const float AnkleHeight = 0.1f;    // where the cord is tied, above the soles
+        public const float DetachBelow = 1.2f;    // the cord comes off this close above the pad (and is not shown for a hop on the pad)
+
+        // 0 = upright, 1 = head-down. `h` is the feet's height above the pad.
+        public static float Flip(float h)
+        {
+            float over = Smooth01((BungeeCurve.Top + 0.05f - h) / 4f);   // the first 4 m of the fall
+            float land = Smooth01((h - 0.5f) / 3.1f);                    // upright again from 3.6 m down to 0.5 m
+            return Math.Min(over, land);
+        }
+
+        public static bool OnRope(float dx, float dz, float h) => dx * dx + dz * dz <= ColumnRadius * ColumnRadius && h > DetachBelow && h < BungeeCurve.Top + 1f;
+
+        // The tied ankles relative to the feet, in the body's own frame (y up, z forward): the body turns forward (head first) about the hips.
+        public static void Ankles(float flip, out float up, out float forward)
+        {
+            double a = Math.PI * flip, r = AnkleHeight - PivotHeight;
+            up = (float)(PivotHeight + r * Math.Cos(a));
+            forward = (float)(r * Math.Sin(a));
+        }
+
+        static float Smooth01(float u) { u = Math.Min(1f, Math.Max(0f, u)); return u * u * (3f - 2f * u); }
     }
 
     public enum LiftPhase { OpenBottom, Rising, OpenTop, Descending }
@@ -146,24 +221,34 @@ namespace Game.Core
 
         int _jumper = -1;
         double _startedAt, _freeAt = double.NegativeInfinity;
+        float _lowerAt = float.PositiveInfinity;
         public float Best { get; private set; }   // the best rebound of this room (metres above the pad), 0 = none yet
 
         public bool Active => _jumper >= 0;
         public int Jumper => _jumper;
         public float ElapsedOf(double now) => _jumper >= 0 ? (float)(now - _startedAt) : 0f;
+        public float LowerAt => _lowerAt;   // when the jumper asked to come down (seconds into the jump), +infinity = not asked
 
         public Result TryStart(int id, double now)
         {
             if (_jumper >= 0) return Result.Busy;
             if (now < _freeAt) return Result.Cooling;
-            _jumper = id; _startedAt = now;
+            _jumper = id; _startedAt = now; _lowerAt = float.PositiveInfinity;
             return Result.Started;
+        }
+
+        // The jumper pressed F while hanging (ADR-498): the lowering starts now (or as soon as they hang, if the press came early).
+        public bool RequestLower(int id, double now)
+        {
+            if (_jumper != id || _jumper < 0 || !float.IsPositiveInfinity(_lowerAt)) return false;
+            _lowerAt = BungeeCurve.LowerStart(ElapsedOf(now));
+            return true;
         }
 
         // Call every tick: ends the jump when the curve is over (records the rebound). Returns true on the tick it ended.
         public bool Tick(double now)
         {
-            if (_jumper < 0 || !BungeeCurve.Over((float)(now - _startedAt))) return false;
+            if (_jumper < 0 || !BungeeCurve.Over((float)(now - _startedAt), _lowerAt)) return false;
             Best = Math.Max(Best, BungeeCurve.ReboundApex);
             _jumper = -1; _freeAt = now + CooldownSeconds;
             return true;

@@ -377,6 +377,13 @@ namespace Game.Net
         [TargetRpc]
         void TargetBungeeStart(NetworkConnection connection, Vector3 pad) => BungeeBegan?.Invoke(pad);
 
+        // The jumper hangs on the cord and asks to come down (F, ADR-498); the server starts the same lowering as the owner.
+        [ServerRpc]
+        public void CmdBungeeLower()
+        {
+            if (WaitingRoom.Current != null && TryGetComponent<Combatant>(out var body)) WaitingRoom.Current.ServerBungeeLower(body);
+        }
+
         // The bungee lift (ADR-387): the server took this body on a ride from `from` (feet) up or down by BungeeLift.Height; the owner
         // plays the same S-curve from there.
         public event Action<Vector3, bool> LiftBegan;

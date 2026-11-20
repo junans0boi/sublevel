@@ -277,6 +277,7 @@ namespace Game.Gameplay
             bool hit = hp < _lastHp && !dead;
             _lastHp = hp;
             TrackSwim(dead);
+            TrackBungee(dead);
             TrackGait();
 
             // Seated, the body rides with the car: none of that motion is walking.
@@ -364,6 +365,7 @@ namespace Game.Gameplay
                 // Crouched or lying, the weapon stays up: hanging down from hips this low it would go through the floor.
                 // Seated too: lowered it would go through the car.
                 SetUpper(_combatant.AimMode != AimMode.Hip || Time.time < _aimPoseUntil || _crouch > 0.5f || _prone > 0.5f || _seated > 0.5f ? Aim : Lowered);
+            TurnOverForBungee();
         }
 
         // Follows take-off and touch-down, picks the jump pose, and says whether the base layer should show it: all
@@ -373,7 +375,7 @@ namespace Game.Gameplay
         {
             var jump = GameData.Rules.Jump;
             // Floating is not falling: no jump pose over deep water.
-            if (_swimAmount > 0.01f) { _inAir = false; _landUntil = -1f; return false; }
+            if (_swimAmount > 0.01f || _bungee > 0.01f) { _inAir = false; _landUntil = -1f; return false; }   // nor is hanging on the bungee cord
             if (_motion.Airborne)
             {
                 // Taking off: start on the rise pose instead of sweeping to it from wherever the last jump ended.
@@ -664,6 +666,7 @@ namespace Game.Gameplay
             PoseLedge();
             PoseEmote();
             PoseSwim();
+            PoseBungee();
             if (_seated > 0.001f) PoseSeated();
 
             for (int i = 0; i < TurnedBones; i++)

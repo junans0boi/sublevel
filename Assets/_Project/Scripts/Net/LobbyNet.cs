@@ -59,7 +59,7 @@ namespace Game.Net
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 4; // door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
+        public const int Protocol = 5; // the bungee's F to come down: CombatantStance.CmdBungeeLower (ADR-498); 4 = door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
