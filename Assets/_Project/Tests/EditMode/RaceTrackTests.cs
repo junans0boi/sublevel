@@ -243,3 +243,40 @@ namespace Game.Tests
         }
     }
 }
+
+namespace Game.Tests
+{
+    // #439/#440 (ADR-509): the island's lap records reach the big board as a LAP TOP3 page in its rotation.
+    public class IslandLapBoardTests
+    {
+        [Test]
+        public void Records_BumpTheirVersion_OnlyWhenABestImproves()
+        {
+            var r = new RaceRecords();
+            int v0 = r.Version;
+            r.Submit(1, "Ann", 30f);
+            Assert.Greater(r.Version, v0);
+            int v1 = r.Version;
+            r.Submit(1, "Ann", 31f);
+            Assert.AreEqual(v1, r.Version, "a slower lap changes nothing");
+            r.Clear();
+            Assert.Greater(r.Version, v1);
+            Assert.AreEqual(0, r.Top(3).Count);
+        }
+
+        [Test]
+        public void TheLapPage_ShowsTheThreeFastest_WithTheirTimes()
+        {
+            var lines = new string[BoardText.Lines];
+            var view = new BoardView { SecondsLeft = 50f, Total = 10, Target = 80,
+                LapTop = new System.Collections.Generic.List<(string name, float seconds)> { ("Ann", 34.5f), ("Bo", 36.25f) } };
+            BoardText.Compose(BoardPage.LapTop, view, lines);
+            Assert.AreEqual("랩 TOP 3", lines[BoardText.Title]);
+            StringAssert.Contains("Ann", lines[BoardText.Row0]); StringAssert.Contains("34.50", lines[BoardText.Row0]);
+            StringAssert.Contains("Bo", lines[BoardText.Row0 + 1]);
+            BoardText.Compose(BoardPage.LapTop, new BoardView { SecondsLeft = 50f }, lines);
+            Assert.AreEqual("아직 기록이 없습니다", lines[BoardText.Row0 + 1]);
+            CollectionAssert.Contains(new IslandRules().Pages, BoardPage.LapTop, "the lap page is in the board's rotation");
+        }
+    }
+}

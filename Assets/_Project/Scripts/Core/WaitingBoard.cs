@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Game.Core
 {
-    public enum BoardPage { Countdown, BungeeTop, RangeTop, Regions, Tip }
+    public enum BoardPage { Countdown, BungeeTop, RangeTop, Regions, Tip, LapTop }
 
     // The waiting island's extras as data (rules.json "Island", ADR-501/502): the range's loan and the board's rotation.
     [Serializable]
@@ -15,7 +15,7 @@ namespace Game.Core
         public int RangeRounds = 60;        // reserve lent with it, topped up while in the booth
         public float BoardPageSeconds = 6f; // each page of the board shows this long
         public float BoardFinalSeconds = 10f; // the last seconds always show the countdown
-        public string[] BoardPages = { "Countdown", "BungeeTop", "RangeTop", "Regions", "Tip" };
+        public string[] BoardPages = { "Countdown", "BungeeTop", "RangeTop", "LapTop", "Regions", "Tip" };
         public string[] Tips =
         {
             "봉쇄 경보가 뜨면\n가까운 통로로 이동하세요",
@@ -69,6 +69,7 @@ namespace Game.Core
     {
         public float SecondsLeft; public int Total, Target; public float BungeeBest;
         public List<RecordRow> BungeeTop, RangeTop; public string[] Regions; public string Tip;
+        public List<(string name, float seconds)> LapTop;   // the race hall's best laps (ADR-509)
     }
 
     // The board's six lines for a page (Korean, no brands). Pure: the client hands the result to its text meshes.
@@ -92,6 +93,11 @@ namespace Game.Core
                     return;
                 case BoardPage.BungeeTop: Top(lines, "번지 TOP 3", v.BungeeTop, "회"); break;
                 case BoardPage.RangeTop: Top(lines, "사격 TOP 3", v.RangeTop, "점"); break;
+                case BoardPage.LapTop:
+                    lines[Title] = "랩 TOP 3";
+                    if (v.LapTop == null || v.LapTop.Count == 0) { lines[Row0 + 1] = "아직 기록이 없습니다"; break; }
+                    for (int i = 0; i < v.LapTop.Count && i < 3; i++) lines[Row0 + i] = $"{i + 1}위   {v.LapTop[i].name}   {RaceBoard.Time(v.LapTop[i].seconds)}";
+                    break;
                 case BoardPage.Regions:
                     lines[Title] = "투입 지역 안내";
                     // The map's regions on two rows (the board fits about 14 Korean letters a row), then how the drop works.

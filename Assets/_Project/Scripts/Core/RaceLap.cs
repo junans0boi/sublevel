@@ -56,12 +56,15 @@ namespace Game.Core
         int _order;
 
         public bool Any => _best.Count > 0;
+        public int Version { get; private set; }   // bumps when the table changes (the server resends it then)
+        public void Clear() { _best.Clear(); Version++; }
 
         // True when this is the person's best so far.
         public bool Submit(int key, string name, float seconds)
         {
             if (_best.TryGetValue(key, out var e) && e.Seconds <= seconds) return false;
             _best[key] = new Entry { Key = key, Name = name ?? "", Seconds = seconds, Order = _order++ };
+            Version++;
             return true;
         }
 

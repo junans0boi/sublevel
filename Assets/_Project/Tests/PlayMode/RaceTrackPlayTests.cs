@@ -120,6 +120,35 @@ namespace Game.Tests
             Assert.IsTrue(RaceTrack.Walkable(lx, lz), $"got out on the track: put back in the pit, now {lx:0.0}, {lz:0.0}");
         }
 
+        // #439/#440 (ADR-507/509): a lap round the hall, judged by the server, goes into the room's records and onto the board's LAP TOP3;
+        // the driver hears the lap. The car is placed along the centre line at a steady pace (a lap a little over the shortest real one).
+        [UnityTest, Timeout(300000)]
+        public IEnumerator ALapInTheHall_ReachesTheBoardTop3()
+        {
+            var me = Combatant.LocalPlayer;
+            float deck = DeckY;
+            var car = RaceRoom.Current.CarAt(0);
+            PlayerController.Local.Teleport(car.transform.position + car.transform.right * -2f + Vector3.up * 0.1f);
+            yield return new WaitForSeconds(0.3f);
+            Assert.GreaterOrEqual(car.ServerEnter(me), 0, "at the wheel");
+            float end = Time.realtimeSinceStartup + 5f;
+            while (VehicleSeat.VehicleOf(me) != car) { Assert.Less(Time.realtimeSinceStartup, end, "seated"); yield return null; }
+            var c = RaceTrack.Course;
+            float lapSeconds = RaceLap.MinLapSeconds + 3f, speed = c.LapLength / lapSeconds;
+            for (float s = -10f; s < c.LapLength + 5f; s += speed * Time.deltaTime)
+            {
+                var (x, z, yaw) = c.PointAt(s);
+                car.Place(Local(x, deck + 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
+                yield return null;
+            }
+            yield return new WaitForSeconds(4f);   // the records go out when they change (and every 3 s)
+            var hud = Object.FindAnyObjectByType<WaitingHud>();
+            Assert.IsNotNull(hud);
+            Assert.AreEqual(1, RaceRoom.Current.Records.Top(3).Count, "the lap is in the room's records");
+            Assert.AreEqual(1, hud.LapTop.Count, "the board's LAP TOP3 has it");
+            Assert.AreEqual(lapSeconds, hud.LapTop[0].seconds, 1.5f, "with its time");
+        }
+
         [UnityTest, Timeout(300000)]
         public IEnumerator EmptyCar_GoesBackToItsGridSpot()
         {

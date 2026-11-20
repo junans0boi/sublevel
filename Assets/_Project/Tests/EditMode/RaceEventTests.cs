@@ -409,3 +409,18 @@ namespace Game.Tests
         }
     }
 }
+
+namespace Game.Tests
+{
+    // #448 (ADR-512): a lobby's start message can send the party to an event race course.
+    public class RaceLobbyEventTests
+    {
+        [Test]
+        public void TheStartMessagesEvent_NamesTheCourseScene_OrNothing()
+        {
+            Assert.IsNull(RaceEvent.SceneForLobby(0), "0 = the battle royale");
+            Assert.AreEqual(RaceEvent.Courses[0].Scene, RaceEvent.SceneForLobby(1));
+            Assert.IsNull(RaceEvent.SceneForLobby((byte)(RaceEvent.Courses.Length + 1)), "an unknown course: the battle royale");
+        }
+    }
+}
