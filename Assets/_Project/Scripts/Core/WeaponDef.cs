@@ -19,6 +19,9 @@ namespace Game.Core
     // Which slots a weapon may sit in (ADR-058). Never reorder: stored in data. Melee weapons go in slot 4 (ADR-073).
     public enum WeaponCategory { Primary = 0, Sidearm = 1, Melee = 2 }
 
+    // The gun's class as the player is told it (ADR-493): AR, DMR, SR... Stored in data: never reorder. None = melee or old data.
+    public enum WeaponClass { None = 0, Pistol = 1, Smg = 2, Ar = 3, Dmr = 4, Sr = 5, Shotgun = 6, Lmg = 7 }
+
     // How a melee weapon is swung (ADR-073): a sideways slash or an overhead chop. Picks the swing pose only.
     public enum MeleeSwingStyle { Slash = 0, Chop = 1 }
 
@@ -30,6 +33,7 @@ namespace Game.Core
         public string Name;
         public AmmoType Ammo;
         public WeaponCategory Category;   // Primary (slots 1-2) or Sidearm (slot 3, pistols)
+        public WeaponClass Class;         // AR, DMR, SR... for the tooltip and the roster rules (ADR-493)
         public bool Auto;                 // can fire in bursts when the shooter picks automatic (semi-auto weapons never)
         public float Damage;
         public float FireInterval;

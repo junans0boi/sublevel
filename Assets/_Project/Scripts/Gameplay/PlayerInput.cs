@@ -10,6 +10,7 @@ namespace Game.Gameplay
         public Vector2 Look;       // degrees this frame: x = yaw, y = pitch (up positive)
         public bool Sprint;
         public bool Jump;
+        public bool JumpHeld;      // Space held: mantle onto an edge reached in the air (ADR-492)
         public bool FireHeld;
         public bool FirePressed;
         public bool FireReleased;  // let go this frame (the throwable in hand throws on it, ADR-144)
@@ -78,6 +79,7 @@ namespace Game.Gameplay
             }
             f.Sprint = KeyBinds.Held(BindAction.Sprint);
             f.Jump = KeyBinds.Pressed(BindAction.Jump);
+            f.JumpHeld = KeyBinds.Held(BindAction.Jump);
             f.Reload = KeyBinds.Pressed(BindAction.Reload);
             f.Interact = KeyBinds.Pressed(BindAction.Interact);
             f.InteractHeld = KeyBinds.Held(BindAction.Interact);

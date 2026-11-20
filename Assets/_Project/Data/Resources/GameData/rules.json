@@ -42,7 +42,7 @@
     "CrouchThighDeg": 46.0, "CrouchShinDeg": 40.0, "CrouchTorsoPitchDeg": 10.0,
     "CrouchWalkBend": 0.65, "CrouchWalkFullSpeed": 1.5, "CrouchMinLegPace": 0.4
   },
-  "Fall": { "SafeMeters": 3.0, "LethalMeters": 12.0, "LethalDamage": 100.0, "ReportToleranceMeters": 1.0, "ReportWindowSeconds": 1.0 },
+  "Fall": { "SafeMeters": 3.0, "LethalMeters": 15.0, "LethalDamage": 100.0, "LandingDamage": 4.0, "ReportToleranceMeters": 1.0, "ReportWindowSeconds": 1.0 },
   "FreeLook": { "ReturnDegPerSecond": 540.0, "ReturnEasePerSecond": 10.0 },
   "Armor": {
     "Helmets": [
@@ -105,6 +105,16 @@
     "BotReachMargin": 0.2, "BotChargeMeters": 9.0, "SwingSeconds": 0.5, "SwingWindUpShare": 0.18, "SwingStrikeShare": 0.5,
     "ReadyArmDeg": 30.0, "SlashArmDeg": 85.0, "SlashSweepDeg": 65.0, "SlashTorsoDeg": 25.0, "ChopWindUpDeg": 165.0, "ChopStrikeDeg": 35.0, "ChopTorsoDeg": 15.0 },
   "Match": { "BotCount": 15, "MaxBots": 79, "Participants": 80, "MinBots": 16, "QueueWindowSeconds": 30, "WaitMaxSeconds": 90, "WaitFullSeconds": 15, "UseWaitingIsland": true, "FillToParticipants": true, "MaxPlayers": 64, "ReconnectSeconds": 60 },
+  "Island": { "RangeWeaponId": 1, "RangeRounds": 60, "BoardPageSeconds": 6.0, "BoardFinalSeconds": 10.0,
+    "BoardPages": ["Countdown", "BungeeTop", "RangeTop", "Regions", "Tip"],
+    "Tips": ["봉쇄 경보가 뜨면\n가까운 통로로 이동하세요",
+      "엘리베이터 문이 열리면\n첫 사격 전까지 보호됩니다",
+      "총소리는 멀리 퍼집니다\n봇도 소리를 듣고 다가옵니다",
+      "엎드리면 탄이 덜 퍼집니다",
+      "구급상자는 H 키로\n천천히 회복합니다",
+      "다른 구역으로는\n엘리베이터를 타고 이동합니다",
+      "사격장 부스에 들어가면\n연습용 권총을 빌려 줍니다",
+      "섬에서 얻은 것은\n본 판으로 넘어가지 않습니다"] },
   "Interest": { "Enabled": true, "CombatantMeters": 300.0, "VehicleMeters": 700.0, "LootMeters": 100.0, "ThrownMeters": 200.0, "HideExtraFraction": 0.2 },
   "Interact": { "ReachMeters": 3.0, "MaxRiseMeters": 1.6, "MaxDropMeters": 1.0, "ConeCosine": 0.5, "NearMeters": 0.9, "SightLiftMeters": 0.12, "SightTopMeters": 0.3, "ItemBiasDegrees": 12.0 },
   "Parkour": {
@@ -113,8 +123,8 @@
     "WindowSillMin": 0.9, "WindowSillMax": 1.25, "WindowMinOpening": 0.6, "SmallWindowHeight": 1.0,
     "VaultSeconds": 0.55, "WindowSeconds": 0.65, "ClimbLowSeconds": 0.6, "ClimbHighSeconds": 0.9,
     "LiftMeters": 0.15, "CancelShare": 0.6,
-    "MaxHorizontalMeters": 3.2, "MaxRiseMeters": 2.3, "StartToleranceMeters": 1.5, "EndToleranceMeters": 0.6,
-    "LedgeMinHeight": 2.0, "LedgeMaxHeight": 2.5, "LedgeReachMin": 1.4, "LedgeReachMax": 1.95, "LedgeFallSpeed": 4.0,
+    "MaxHorizontalMeters": 3.2, "MaxRiseMeters": 2.5, "StartToleranceMeters": 1.5, "EndToleranceMeters": 0.6,
+    "LedgeMinHeight": 2.0, "LedgeMaxHeight": 2.5, "LedgeReachMin": 1.4, "LedgeReachMax": 1.95, "LedgeFallSpeed": 4.0, "MantleHandHeight": 1.5, "MantleBelowHands": 1.2, "MantleAboveHands": 0.9, "MantleReach": 0.6,
     "HangDrop": 1.8, "HangGap": 0.05, "HangLookDeg": 70.0, "LedgeClimbSeconds": 0.8,
     "PoseTuck": 0.8, "PoseTorsoPitchDeg": 18.0, "PoseArmReachDeg": 70.0, "PosePerSecond": 8.0
   },

@@ -165,6 +165,7 @@ public static partial class WorldBuilder
     static void BuildRaceTrack(Transform island, WorldMeshes.Store store)
     {
         var root = Child(island, "RaceTrack");
+        root.gameObject.AddComponent<Game.Gameplay.RaceHallCulling>();   // from the island only the gate end is drawn (perf)
         var cols = Child(root, "Colliders");
         var concrete = WorldMaterials.ConcreteDark; var wallMat = WorldMaterials.Plaster(0); var roofMat = WorldMaterials.SteelRoof;
         var floor = new RaceTiles(concrete.Tile); var walls = new RaceTiles(wallMat.Tile); var roof = new RaceTiles(roofMat.Tile);

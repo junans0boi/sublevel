@@ -25,6 +25,7 @@ namespace Game.Gameplay
         public Camera Camera { get; private set; }
         public float Yaw { get; private set; }
         public float Pitch { get; private set; }
+        public bool LiftCallInReach { get; private set; }   // the waiting island's lift button is what F would press (the HUD prompt)
         public LootItem NearbyLoot { get; private set; }
 
         public AimMode Aim => _aim.Mode;
@@ -448,7 +449,7 @@ namespace Game.Gameplay
                 _controller.Move(new Vector3(vx, _verticalVelocity, vz) * Time.deltaTime);
                 ReportFall();
                 if (_controller.isGrounded) _jumpedThisAir = _ledgeLetGo = false;
-                else if (!knocked && TryGrabLedge())
+                else if (!knocked && TryGrabLedge((f.Jump && !jump) || f.JumpHeld)) // a tap that takes off is a jump; the hang then catches (ADR-087)
                 {
                     PlaceCamera();
                     return;
@@ -467,16 +468,21 @@ namespace Game.Gameplay
             bool supplyKey = !elevatorKey && SupplyView.HandleInteract(_combatant, f.InteractHeld, Time.deltaTime);
             // One press, one target (ADR-276): the pickup, unless a door lies clearly nearer the middle of the view.
             var look = Camera != null ? Camera.transform.forward : transform.forward;
+            // On the waiting island F at the bungee lift's call button calls it (ADR-490); it comes before loot and doors there.
+            bool liftTop = false;
+            LiftCallInReach = !elevatorKey && !supplyKey && WaitingHud.CallInReach(_combatant, look, out liftTop);
+            if (LiftCallInReach) NearbyLoot = null;
+            bool liftKey = LiftCallInReach && f.Interact && WaitingHud.Call(_combatant, liftTop);
             float doorBearing = DoorSystem.Bearing(_combatant.EyePosition, look);
             bool doorFirst = doorBearing != float.MaxValue && (NearbyLoot == null || !Interact.PickupBeatsDoor(PickupList.Instance != null ? PickupList.Instance.CurrentBearing : 0f, doorBearing, InteractRules.Current));
             if (doorFirst) NearbyLoot = null; // the prompt and list show what F will do
             PickupList.DoorFirst = doorFirst && doorBearing != float.MaxValue;
-            bool doorKey = !elevatorKey && !supplyKey && f.Interact && doorFirst && TeamHud.ReviveCandidate(_combatant) == null
+            bool doorKey = !elevatorKey && !supplyKey && !LiftCallInReach && f.Interact && doorFirst && TeamHud.ReviveCandidate(_combatant) == null
                 && DoorSystem.TryInteract(_combatant, _combatant.EyePosition, look);
             if (!elevatorKey && !supplyKey && !doorKey && f.Interact && NearbyLoot != null && TeamHud.ReviveCandidate(_combatant) == null) PickupList.Take(_combatant, NearbyLoot);
             // The hand reaches for the door or the loot (#212, own view only).
-            if (doorKey || (f.Interact && !elevatorKey && !supplyKey && NearbyLoot != null))
-                if (TryGetComponent(out CombatantAnimation reachAnim)) reachAnim.StartGesture(doorKey ? HandGesture.Door : HandGesture.Pickup);
+            if (doorKey || liftKey || (f.Interact && !elevatorKey && !supplyKey && NearbyLoot != null))
+                if (TryGetComponent(out CombatantAnimation reachAnim)) reachAnim.StartGesture(doorKey || liftKey ? HandGesture.Door : HandGesture.Pickup);
             if (f.SelectSlot >= 0) _combatant.CmdSelectSlot(f.SelectSlot);
             if (f.Reload && !ThrowableInHand && !(_throwView != null && _throwView.Aiming)) _combatant.CmdReload(); // R pulls the pin then (ThrowableView)
             if (f.Holster) SetHolstered(!_combatant.Holstered.Value);
@@ -514,14 +520,19 @@ namespace Game.Gameplay
         }
 
         // In the air facing a high edge the hands can reach (#115): catch it and hang. After a jump, or when falling
-        // past it; standing only (no weapon fire, no stance change while hanging).
-        bool TryGrabLedge()
+        // past it; standing only (no weapon fire, no stance change while hanging). With Space down (`key`), an edge the
+        // hands reach is mantled onto at once, whatever is below (ADR-492).
+        bool TryGrabLedge(bool key)
         {
             var rules = ParkourRules.Current;
-            if (_stance == null || _ledgeLetGo || _combatant.Reviving || BodyStance != Stance.Stand
-                || !(_jumpedThisAir || _verticalVelocity < -rules.LedgeFallSpeed)) return false;
-            var plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
-            if (plan.Move != ParkourMove.Hang) return false;
+            if (_stance == null || _ledgeLetGo || _combatant.Reviving || BodyStance != Stance.Stand) return false;
+            var plan = key ? ParkourProbe.PlanMantle(transform, _controller.radius, _controller.height, Yaw, rules) : default;
+            if (plan.Move != ParkourMove.LedgeClimb)
+            {
+                if (!(_jumpedThisAir || _verticalVelocity < -rules.LedgeFallSpeed)) return false;
+                plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
+                if (plan.Move != ParkourMove.Hang) return false;
+            }
             LastParkourPlan = plan;
             _parkour = plan;
             _parkourT = 0f;
@@ -530,9 +541,10 @@ namespace Game.Gameplay
             _hangYaw = Yaw;
             _controller.enabled = false;
             _verticalVelocity = 0f;
-            transform.position = plan.End;
-            if (IsServerInitialized) _stance.ServerStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
-            else _stance.CmdStartParkour((int)ParkourMove.Hang, plan.Start, plan.End, -1);
+            // Hanging: the body holds under the edge. Mantling: it starts against the wall and climbs from there.
+            transform.position = plan.Move == ParkourMove.Hang ? plan.End : plan.Start;
+            if (IsServerInitialized) _stance.ServerStartParkour((int)plan.Move, plan.Start, plan.End, -1);
+            else _stance.CmdStartParkour((int)plan.Move, plan.Start, plan.End, -1);
             return true;
         }
 

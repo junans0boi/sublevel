@@ -4,8 +4,10 @@ using UnityEngine;
 
 namespace Game.Gameplay
 {
-    // Low-poly models of the worn helmet, vest and backpack (3 tiers each), built in code (no downloads), life size in the
-    // character's frame: metres, +y up, +z forward. Sub-meshes: Body (the tier's military tone), Dark (webbing, straps,
+    // Models of the worn helmet, vest and backpack (3 tiers each), life size in the character's frame: metres, +y up,
+    // +z forward. The real models (ADR-520, ASSET_LEDGER G-0001..G-0009) are baked by GearKit into Resources/Gear in this
+    // frame; the low-poly code-built ones below are the fallback when a baked model is missing, and the size and anchor
+    // GearKit matches the real ones to. Sub-meshes: Body (the tier's military tone), Dark (webbing, straps,
     // liners) and Accent (pouches, mid tone). Tier 1 light khaki, 2 olive, 3 black; heavier tiers add parts.
     // Origins: helmet = centre of the brim line; vest = chest centre; backpack = bottom centre of the back panel
     // (the pack hangs toward -z). Both the worn visuals (ArmorVisual, BackpackVisual) and the ground pickups use them.
@@ -29,11 +31,38 @@ namespace Game.Gameplay
 
         public static bool Handles(LootKind kind) => kind == LootKind.Helmet || kind == LootKind.Vest || kind == LootKind.Backpack;
 
+        public const string ResourceDir = "Gear";
+        // Worn gear drops to a coarser Mesh LOD two steps sooner than the body (50 geared characters in view: PERF_BUDGET).
+        public const float LodBias = 2f;
+        static readonly Dictionary<int, Material[]> MaterialSets = new Dictionary<int, Material[]>();
+
+        // The real model of a piece (Resources/Gear/<Kind><Tier>), null when it was not baked.
+        public static Mesh Baked(LootKind kind, int tier) => Resources.Load<Mesh>(ResourceDir + "/" + kind + Mathf.Clamp(tier, 1, 3));
+
+        // The materials for Model(kind, tier), one per sub-mesh: the baked model's own (Resources/Gear/<Kind><Tier>_<n>), or
+        // the tier palette for the code-built model.
+        public static Material[] Materials(LootKind kind, int tier)
+        {
+            tier = Mathf.Clamp(tier, 1, 3);
+            int key = (int)kind * 10 + tier;
+            if (MaterialSets.TryGetValue(key, out var set) && set.Length > 0 && set[0] != null) return set;
+            var baked = Baked(kind, tier);
+            if (baked == null) return new[] { Palette(tier) };
+            set = new Material[baked.subMeshCount];
+            for (int i = 0; i < set.Length; i++) set[i] = Resources.Load<Material>(ResourceDir + "/" + kind + tier + "_" + i);
+            return MaterialSets[key] = set;
+        }
+
+        // The code-built model with its three sub-meshes (Body, Dark, Accent).
+        public static Mesh CodeModel(LootKind kind, int tier) => Raw(kind, Mathf.Clamp(tier, 1, 3));
+
         // Worn model: ONE sub-mesh whose UVs point into a 3-colour palette (Body, Dark, Accent), so the three pieces of a
         // character cost one draw call each and every piece of a tier shares one material (Palette).
         public static Mesh Model(LootKind kind, int tier)
         {
             tier = Mathf.Clamp(tier, 1, 3);
+            var baked = Baked(kind, tier);
+            if (baked != null) return baked;
             int key = (int)kind * 10 + tier + 5000;
             if (Cache.TryGetValue(key, out var mesh) && mesh != null) return mesh;
             var raw = Raw(kind, tier);
@@ -98,7 +127,9 @@ namespace Game.Gameplay
             tier = Mathf.Clamp(tier, 1, 3);
             int key = 1000 + (int)kind * 10 + tier;
             if (Cache.TryGetValue(key, out var mesh) && mesh != null) return mesh;
-            var worn = Raw(kind, tier); // three sub-meshes, tinted by LootView like the other pickups
+            // The baked model with its own materials, else the code-built one with three sub-meshes tinted by LootView.
+            var worn = Baked(kind, tier);
+            if (worn == null) worn = Raw(kind, tier);
             // Helmet rests on its brim; the vest lies on its back (front up); the pack stands on its bottom, panel toward -z.
             Quaternion turn = kind == LootKind.Vest ? Quaternion.Euler(-90f, 0f, 0f) : kind == LootKind.Backpack ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
             // Larger than life, but the longest side stays within the pickup size limit (LootMeshTests: 0.6 m).
@@ -122,6 +153,7 @@ namespace Game.Gameplay
         // CharacterDef (the old Swat), which keeps its hand-tuned constants in ArmorVisual/BackpackVisual.
         public struct Fit
         {
+            public CharacterDef Def;
             public Transform Head, Torso;
             public Vector3 HelmetBase, VestCentre, PackBottom; // world positions
             public float HeadScale, TorsoScale;
@@ -133,7 +165,7 @@ namespace Game.Gameplay
             var def = root.GetComponentInChildren<CharacterDef>(true);
             if (def == null || def.Sockets.Head == null || def.Sockets.UpperChest == null) return false;
             var s = def.Sockets; var fwd = root.forward; var up = root.up;
-            fit.Head = s.Head; fit.Torso = s.UpperChest;
+            fit.Def = def; fit.Head = s.Head; fit.Torso = s.UpperChest;
             fit.HeadScale = Mathf.Clamp((s.HeadSocket.position.y - s.Head.position.y) / HeadRise, 0.9f, 1.15f);
             float shoulders = Vector3.Distance(s.LeftUpperArm.position, s.RightUpperArm.position);
             fit.TorsoScale = Mathf.Clamp(shoulders / ShoulderWidth, 0.85f, 1.2f);

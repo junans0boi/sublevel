@@ -33,6 +33,7 @@ namespace Game.Net
             BotRules.Current = rules.Bot;
             MeleeRules.Current = rules.Melee;
             MatchRules.Current = rules.Match ?? new MatchRules();
+            IslandRules.Current = rules.Island ?? new IslandRules();
             InterestRules.Current = rules.Interest ?? new InterestRules();
             InteractRules.Current = rules.Interact ?? new InteractRules();
             ParkourRules.Current = rules.Parkour;

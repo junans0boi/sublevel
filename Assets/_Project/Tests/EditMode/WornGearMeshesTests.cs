@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace Game.Tests
 {
-    // Worn helmet/vest/backpack models: triangle budget (3 pieces <= 1,500 triangles per tier), size sanity, tiers differ,
-    // military tones, ground pickups within the pickup size limit.
+    // Worn helmet/vest/backpack models: the real models are baked for every piece and tier (ADR-520), triangle budget
+    // (3 pieces <= 30,000 triangles per tier), size sanity, tiers differ, ground pickups within the pickup size limit.
     public class WornGearMeshesTests
     {
         static readonly LootKind[] Kinds = { LootKind.Helmet, LootKind.Vest, LootKind.Backpack };
@@ -21,7 +21,7 @@ namespace Game.Tests
                 int sum = 0; string line = "";
                 foreach (var k in Kinds) { int t = Tris(WornGearMeshes.Model(k, tier)); sum += t; line += $" {k} {t}"; }
                 UnityEngine.Debug.Log($"[Gear] tier {tier}: total {sum} tris ({line.Trim()})");
-                Assert.LessOrEqual(sum, 1500, "tier " + tier + " helmet+vest+backpack triangles");
+                Assert.LessOrEqual(sum, 30000, "tier " + tier + " helmet+vest+backpack triangles");
             }
         }
 
@@ -31,16 +31,41 @@ namespace Game.Tests
             var helmet = WornGearMeshes.Model(LootKind.Helmet, 2).bounds.size;
             Assert.That(helmet.x, Is.InRange(0.18f, 0.28f), "helmet width"); Assert.That(helmet.z, Is.InRange(0.2f, 0.3f), "helmet depth");
             var vest = WornGearMeshes.Model(LootKind.Vest, 2).bounds.size;
-            Assert.That(vest.x, Is.InRange(0.3f, 0.5f), "vest width"); Assert.That(vest.y, Is.InRange(0.25f, 0.45f), "vest height");
+            Assert.That(vest.x, Is.InRange(0.3f, 0.5f), "vest width"); Assert.That(vest.y, Is.InRange(0.25f, 0.6f), "vest height");
             var pack = WornGearMeshes.Model(LootKind.Backpack, 2).bounds.size;
             Assert.That(pack.y, Is.InRange(0.3f, 0.6f), "pack height"); Assert.That(pack.x, Is.InRange(0.25f, 0.45f), "pack width");
             foreach (var k in Kinds)
             {
                 Assert.Less(Tris(WornGearMeshes.Model(k, 1)), Tris(WornGearMeshes.Model(k, 3)), k + " tier 3 has more parts than tier 1");
-                Assert.AreEqual(1, WornGearMeshes.Model(k, 1).subMeshCount, "one draw call per piece");
-                Assert.AreEqual(3, LootMeshes.Model(k, default, 1).subMeshCount, "ground pickups keep Body/Dark/Accent");
+                for (int tier = 1; tier <= 3; tier++)
+                {
+                    var m = WornGearMeshes.Model(k, tier);
+                    Assert.LessOrEqual(m.subMeshCount, 2, k + " " + tier + ": one draw call per piece (two with a see-through visor)");
+                    Assert.AreEqual(m.subMeshCount, WornGearMeshes.Materials(k, tier).Length, "one material per sub-mesh");
+                    Assert.AreEqual(m.subMeshCount, LootMeshes.Model(k, default, tier).subMeshCount, "the ground pickup is the same model");
+                }
             }
             Assert.Greater(WornGearMeshes.Model(LootKind.Backpack, 3).bounds.size.y, WornGearMeshes.Model(LootKind.Backpack, 1).bounds.size.y, "bigger pack, higher tier");
+        }
+
+        // The playtest asked for real models, not shapes built from boxes: every piece and tier is a baked model with its
+        // own textured material, and each tier is a different model.
+        [Test]
+        public void EveryPieceAndTier_IsABakedRealModel_WithTextures()
+        {
+            foreach (var k in Kinds)
+                for (int tier = 1; tier <= 3; tier++)
+                {
+                    var baked = WornGearMeshes.Baked(k, tier);
+                    Assert.IsNotNull(baked, $"{k} {tier} baked (GearKit.Bake)");
+                    Assert.AreSame(baked, WornGearMeshes.Model(k, tier), "worn model is the baked one");
+                    Assert.Greater(Tris(baked), 1000, $"{k} {tier} is a detailed model");
+                    var mat = WornGearMeshes.Materials(k, tier)[0];
+                    Assert.IsNotNull(mat.GetTexture("_BaseMap"), $"{k} {tier} colour map");
+                    Assert.IsNotNull(mat.GetTexture("_BumpMap"), $"{k} {tier} normal map");
+                    for (int other = tier + 1; other <= 3; other++)
+                        Assert.AreNotEqual(Tris(baked), Tris(WornGearMeshes.Baked(k, other)), $"{k} tiers {tier} and {other} are different models");
+                }
         }
 
         [Test]

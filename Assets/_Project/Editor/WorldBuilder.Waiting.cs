@@ -60,7 +60,7 @@ public static partial class WorldBuilder
             if (InRaceGate(Mathf.Cos(am) * R, Mathf.Sin(am) * R)) continue;   // the gate to the race pit
             wall.Add(new Vector3(Mathf.Cos(am) * (R - 0.3f), WaitingWallHeight * 0.5f, Mathf.Sin(am) * (R - 0.3f)), new Vector3(chord, WaitingWallHeight, 0.4f), rot);
         }
-        // A gold band round the hall at chest height: the one bright colour of the room besides the lamps.
+        // An amber band round the hall at chest height: the one bright colour of the room besides the lamps.
         for (int i = 0; i < WaitingWallSegments; i++)
         {
             float am = (i + 0.5f) * Mathf.PI * 2f / WaitingWallSegments, r = R - 0.65f, chord = 2f * R * Mathf.Sin(Mathf.PI / WaitingWallSegments) + 0.1f;
@@ -140,7 +140,7 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz - bridgeGap), new Vector3(bx1, th, bz - bridgeGap));
         WaitingRail(trim, cols, new Vector3(WaitingIsland.BungeePad.x + WaitingIsland.JumpBoardRadius, th, bz + bridgeGap), new Vector3(bx1, th, bz + bridgeGap));
         var pad = WaitingIsland.BungeePad;
-        band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: gold
+        band.Add(new Vector3(pad.x, th + 0.01f, pad.z), new Vector3(WaitingIsland.JumpBoardRadius * 2f, 0.04f, bridgeGap * 2f));     // the jump board: amber
         trim.Add(new Vector3(pad.x, WaitingIsland.PadTop * 0.5f, pad.z), new Vector3(WaitingIsland.BungeePadRadius * 2f, WaitingIsland.PadTop, WaitingIsland.BungeePadRadius * 2f)); // the landing pad below
 
         // The lift: an exposed shaft of four posts and hoops, a landing grate at the top between the shaft and the platform, and the car.
@@ -164,16 +164,9 @@ public static partial class WorldBuilder
         WaitingRail(trim, cols, new Vector3(lp.x - sh, th, landZ1), new Vector3(lp.x + sh, th, landZ1));
         deck.Add(new Vector3(lp.x, WaitingIsland.LiftSillTop * 0.5f, lp.z), new Vector3(sh * 2f + 1f, WaitingIsland.LiftSillTop, sh * 2f + 1f)); // the ground sill: flush, under the car floor
         BuildRaceTrack(root, store);   // the race hall east of the gate (ADR-505, #438)
-        BuildBungeeLiftCar(root, store, steel.Material, accent.Material, planks.Material, steel.Tile, accent.Tile, planks.Tile);
+        BuildBungeeLiftCar(root, store, WaitingLook.Stainless, accent.Material, WaitingLook.Tread, steel.Tile, accent.Tile, planks.Tile);   // ADR-495: the island's own look
 
-        // Booths of the shooting range (2nd stage): a counter, a back wall and a roof each.
-        foreach (var b in WaitingIsland.Booths)
-        {
-            frame.Add(new Vector3(b.x, 1.0f, b.z), new Vector3(2.4f, 2f, 1.2f));
-            wall.Add(new Vector3(b.x - 1.8f, 1.6f, b.z), new Vector3(0.3f, 3.2f, 5f));
-            frame.Add(new Vector3(b.x - 0.4f, 3.3f, b.z), new Vector3(4.4f, 0.2f, 5.2f));
-            trim.Add(new Vector3(b.x + 1.2f, 3.0f, b.z), new Vector3(0.1f, 0.3f, 5.2f));
-        }
+        BuildWaitingRange(root, frame, wall, trim, board, band);
 
         // The big board: a dark panel on a steel frame on the north rim, facing the middle (T6 draws the text).
         var bd = WaitingIsland.Board;
@@ -190,12 +183,12 @@ public static partial class WorldBuilder
         trim.Add(new Vector3(el.x, 4.5f, el.z + 2.7f), new Vector3(6.2f, 0.12f, 0.12f));
 
         AddWaitingMesh(root, store, "Deck", deck, concrete.Material, false);
-        for (int i = 0; i < WaitingSectors.Count; i++) AddWaitingMesh(root, store, "Frame" + i, frame.Batches[i], steel.Material, false);
-        for (int i = 0; i < WaitingSectors.Count; i++) { AddWaitingMesh(root, store, "Wall" + i, wall.Batches[i], rust.Material, false); AddWaitingMesh(root, store, "Dome" + i, dome.Batches[i], WorldMaterials.SteelRoof.Material, false); }
+        for (int i = 0; i < WaitingSectors.Count; i++) AddWaitingMesh(root, store, "Frame" + i, frame.Batches[i], WaitingLook.Steel, false);
+        for (int i = 0; i < WaitingSectors.Count; i++) { AddWaitingMesh(root, store, "Wall" + i, wall.Batches[i], WaitingLook.Panel, false); AddWaitingMesh(root, store, "Dome" + i, dome.Batches[i], WaitingLook.Dome, false); }
         AddWaitingMesh(root, store, "Planks", wood, planks.Material, false);
-        AddWaitingMesh(root, store, "Trim", trim, accent.Material, false);
-        AddWaitingMesh(root, store, "BoardBack", board, navy.Material, false);
-        AddWaitingMesh(root, store, "Band", band, gold.Material, false);
+        AddWaitingMesh(root, store, "Trim", trim, WaitingLook.Steel, false);
+        AddWaitingMesh(root, store, "BoardBack", board, WaitingLook.Steel, false);
+        AddWaitingMesh(root, store, "Band", band, WaitingLook.Accent, false);
 
         // A deck-level collider, so people stand on it even if the mesh collider cooks thin; the walkable area is the server's clamp anyway.
         var floor = new GameObject("DeckCollider"); floor.transform.SetParent(root, false);
@@ -220,6 +213,50 @@ public static partial class WorldBuilder
         Debug.Log($"[WorldBuilder] waiting island at ({cx:F0}, {cz:F0}), radius {R:F0} m: {deck.Boxes + frame.Boxes + wall.Boxes + wood.Boxes + trim.Boxes} boxes");
     }
 
+    // The shooting range (ADR-501, #421): per booth a waist-high counter, a roof over the stand, lane walls west to the island's wall, a
+    // backstop and two targets with the TrainingDummy's body: a 1.8 m capsule collider marked RangeTarget (the server scores hits on it),
+    // drawn as boxes in the shared batches (no new draw calls, no new assets). Geometry from Core/WaitingRange.
+    static void BuildWaitingRange(Transform root, WaitingSectors frame, WaitingSectors wall, WorldMeshes.BoxBatch trim, WorldMeshes.BoxBatch board, WorldMeshes.BoxBatch band)
+    {
+        var range = Child(root, "Range");
+        float wallR = WaitingIsland.Radius - 0.6f;
+        for (int i = 0; i < WaitingIsland.Booths.Length; i++)
+        {
+            var b = WaitingIsland.Booths[i];
+            float counterX = b.x + WaitingRange.CounterX, width = WaitingRange.HalfWidth * 2f, lane = WaitingRange.LaneHalf * 2f;
+            frame.Add(new Vector3(counterX, 0.55f, b.z), new Vector3(0.5f, 1.1f, width));
+            band.Add(new Vector3(counterX, 1.12f, b.z), new Vector3(0.62f, 0.04f, width + 0.1f));
+            WaitingCollider(range, new Vector3(counterX, 0.6f, b.z), new Vector3(0.5f, 1.2f, width));
+            float standMid = b.x + (WaitingRange.StandFront + WaitingRange.StandBack) * 0.5f, standLen = WaitingRange.StandBack - WaitingRange.StandFront;
+            frame.Add(new Vector3(standMid, 3.3f, b.z), new Vector3(standLen + 0.6f, 0.2f, lane + 0.3f));
+            trim.Add(new Vector3(b.x + WaitingRange.StandBack + 0.25f, 3.0f, b.z), new Vector3(0.1f, 0.3f, lane + 0.3f));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float z = b.z + side * WaitingRange.LaneHalf;
+                float x0 = b.x + WaitingRange.StandBack + 0.3f, x1 = -Mathf.Sqrt(wallR * wallR - z * z);   // from the stand's back to the island's wall
+                var c = new Vector3((x0 + x1) * 0.5f, 1.6f, z); var size = new Vector3(x0 - x1, 3.2f, 0.25f);
+                wall.Add(c, size);
+                WaitingCollider(range, c, size);
+            }
+            board.Add(new Vector3(WaitingRange.TargetX - 1.6f, 1.6f, b.z), new Vector3(0.3f, 3.2f, lane - 0.3f));   // backstop
+            for (int t = 0; t < WaitingRange.TargetsPerBooth; t++)
+            {
+                var p = WaitingRange.Target(i, t);
+                frame.Add(new Vector3(p.x, 0.35f, p.z), new Vector3(0.1f, 0.7f, 0.1f));          // post
+                band.Add(new Vector3(p.x, 1.15f, p.z), new Vector3(0.18f, 0.9f, 0.56f));         // body: gold, so it reads against the dark backstop
+                band.Add(new Vector3(p.x, 1.74f, p.z), new Vector3(0.18f, 0.28f, 0.26f));        // head
+                trim.Add(new Vector3(p.x + 0.1f, 1.25f, p.z), new Vector3(0.03f, 0.22f, 0.22f)); // the mark on its chest
+                var go = new GameObject($"Target{i}_{t}");
+                go.transform.SetParent(range, false);
+                go.transform.localPosition = new Vector3(p.x, 0f, p.z);
+                var capsule = go.AddComponent<CapsuleCollider>();
+                capsule.height = WaitingRange.TargetHeight; capsule.radius = WaitingRange.TargetRadius; capsule.center = new Vector3(0f, WaitingRange.TargetHeight * 0.5f, 0f);
+                go.AddComponent<Game.Net.RangeTarget>().Booth = i;
+                go.isStatic = true;
+            }
+        }
+    }
+
     // A railing from a to b on a floor at a.y: a top rail at 1.1 m and a mid rail (visual), one collider box 1.2 m high.
     static void WaitingRail(WorldMeshes.BoxBatch trim, Transform cols, Vector3 a, Vector3 b)
     {
@@ -238,8 +275,8 @@ public static partial class WorldBuilder
     }
 
     // The cage car of the bungee lift (ADR-387): a floor, corner posts, a roof and open bar sides so the riders see out; "Doors" (bars
-    // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. No colliders (the riders are
-    // driven by BungeeRide; the top landing has its own floor).
+    // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. Its side and gate
+    // colliders, the shaft's post colliders and fence and the hoist drive are added at runtime by Net/LiftHoist (ADR-496).
     static void BuildBungeeLiftCar(Transform root, WorldMeshes.Store store, Material steel, Material accent, Material planks, Vector2 steelTile, Vector2 accentTile, Vector2 planksTile)
     {
         var lp = WaitingIsland.Lift; float h = BungeeLift.HalfSize, H = 2.6f;

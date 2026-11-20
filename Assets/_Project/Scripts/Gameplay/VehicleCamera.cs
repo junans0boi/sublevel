@@ -18,9 +18,12 @@ namespace Game.Gameplay
         const float MotorcycleMinPivot = 1.5f; // over the rider's head, not just the bike
         const float DistancePerLength = 1f;
         const float DistanceExtra = 2.2f;
+        const float CarDistanceExtra = 1.2f;   // ADR-494: a car 1 m nearer than ADR-222's 2.2, about 21% of the frame width like the PUBG reference
         // The chase distance stays in these ranges whatever the model's bounds measure (ADR-222): a car 5.5..7.5 m back, a motorcycle 4..5.5 m.
         public const float CarMinDistance = 5.5f, CarMaxDistance = 7.5f, BikeMinDistance = 4f, BikeMaxDistance = 5.5f;
         public const float SpeedExtraMeters = 2f, SpeedExtraAtKmh = 90f;   // the camera drifts back with speed, up to this much more
+        // Third person: the camera this far over the orbit point, the view kept (ADR-494, 준환: PUBG-like framing, road ahead over the roof).
+        public const float ChaseLift = 0.6f;   // with the pivot PivotOverTop over the roof: the camera about 1 m over the roof
         public const float DrivingFov = 78f;                                // first person in a vehicle (the on-foot value is narrower)
         const float FollowIdleSeconds = 1.2f, FollowDegPerSecond = 80f, FollowMinSpeed = 3f;   // third person: behind the car again once the mouse rests
         const float RoofClearance = 0.3f;
@@ -48,7 +51,7 @@ namespace Game.Gameplay
 
         // True while this frame's camera was placed by the car camera.
         public bool Active { get; private set; }
-        // Last third-person camera distance from the pivot (0 in the eye view) and the framed distance it grows from.
+        // Last third-person camera distance from the pivot along the lifted line (0 in the eye view) and the framed distance it grows from.
         public float Distance => _distance;
         public float FramedDistance => _orbit;
 
@@ -60,7 +63,11 @@ namespace Game.Gameplay
             _animation = GetComponent<CombatantAnimation>();
         }
 
-        void OnDisable() => SetAimIgnore(null);
+        void OnDisable()
+        {
+            SetAimIgnore(null);
+            if (_player != null && VegetationRenderer.ClearAround == _player.Camera) VegetationRenderer.ClearAround = null;
+        }
 
         void LateUpdate() => Place();
 
@@ -68,6 +75,7 @@ namespace Game.Gameplay
         public void Place()
         {
             Active = false;
+            if (VegetationRenderer.ClearAround == (_player != null ? _player.Camera : null)) VegetationRenderer.ClearAround = null;
             if (_player == null || PlayerController.Local != _player || _combatant == null) return;
             var vehicle = VehicleSeat.VehicleOf(_combatant);
             SetAimIgnore(vehicle);
@@ -103,16 +111,39 @@ namespace Game.Gameplay
             }
             if (vehicle != _framed) Frame(vehicle);
             var pivot = vehicle.transform.TransformPoint(new Vector3(_pivotLocal.x, 0f, _pivotLocal.z)) + Vector3.up * _pivotLocal.y;
-            var back = look * Vector3.back;
-            float wanted = ClearDistance(vehicle, pivot, back, _orbit + SpeedExtra(vehicle.SpeedKmh));
-            // Pulled in at once when something is in the way, eased back out.
+            var offset = ChaseOffset(look, _orbit + SpeedExtra(vehicle.SpeedKmh));
+            var along = offset.normalized;
+            float wanted = ClearDistance(vehicle, pivot, along, offset.magnitude);
+            // Pulled in at once when something is in the way, eased back out (along the lifted line, so the framing keeps its shape).
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
             // Pulled in close (a wall behind), the camera would end up inside the body: over the roof instead.
-            var at = vehicle.transform.InverseTransformPoint(pivot + back * _distance);
-            if (Mathf.Abs(at.x - _local.center.x) < _local.extents.x && Mathf.Abs(at.z - _local.center.z) < _local.extents.z && at.y < _local.max.y + RoofClearance)
-                at.y = _local.max.y + RoofClearance;
-            cam.transform.SetPositionAndRotation(vehicle.transform.TransformPoint(at), look);
+            cam.transform.SetPositionAndRotation(OverRoof(vehicle, _local, pivot + along * _distance), look);
+            VegetationRenderer.ClearPivot = pivot;
+            VegetationRenderer.ClearAround = cam;   // third person: crowns on the sight line to the car are not drawn (ADR-487)
         }
+
+        static Vector3 OverRoof(Vehicle vehicle, Bounds local, Vector3 camera)
+        {
+            var at = vehicle.transform.InverseTransformPoint(camera);
+            if (Mathf.Abs(at.x - local.center.x) < local.extents.x && Mathf.Abs(at.z - local.center.z) < local.extents.z && at.y < local.max.y + RoofClearance)
+                at.y = local.max.y + RoofClearance;
+            return vehicle.transform.TransformPoint(at);
+        }
+
+        // Where Place settles the third-person camera for this vehicle at rest with this view (no easing, no speed drift).
+        // The capture tool (WorldBuilder.ForestCheck) uses it so its shots show what the player sees.
+        public static Vector3 ChasePose(Vehicle vehicle, Quaternion look, out Vector3 pivot)
+        {
+            var local = LocalBounds(vehicle.transform);
+            Orbit(local, vehicle.IsMotorcycle, out float height, out float orbit);
+            pivot = vehicle.transform.TransformPoint(new Vector3(local.center.x, 0f, local.center.z)) + Vector3.up * height;
+            var offset = ChaseOffset(look, orbit);
+            return OverRoof(vehicle, local, pivot + offset.normalized * ClearDistance(vehicle, pivot, offset.normalized, offset.magnitude));
+        }
+
+        // The chase camera from the pivot: back along the view, then ChaseLift up with the view unchanged (ADR-494), so a level view
+        // has the car in the lower part of the frame and the road ahead over its roof.
+        public static Vector3 ChaseOffset(Quaternion look, float distance) => look * Vector3.back * distance + Vector3.up * ChaseLift;
 
         public static float SpeedExtra(float kmh) => SpeedExtraMeters * Mathf.Clamp01(Mathf.Abs(kmh) / SpeedExtraAtKmh);
 
@@ -193,7 +224,7 @@ namespace Game.Gameplay
         {
             pivotHeight = local.max.y + PivotOverTop;
             if (motorcycle) pivotHeight = Mathf.Max(pivotHeight, MotorcycleMinPivot);
-            distance = Mathf.Clamp(local.size.z * DistancePerLength + DistanceExtra, motorcycle ? BikeMinDistance : CarMinDistance, motorcycle ? BikeMaxDistance : CarMaxDistance);
+            distance = Mathf.Clamp(local.size.z * DistancePerLength + (motorcycle ? DistanceExtra : CarDistanceExtra), motorcycle ? BikeMinDistance : CarMinDistance, motorcycle ? BikeMaxDistance : CarMaxDistance);
         }
 
         // The cabin is dark under the roof in first person (the sun and the sky do not reach in): one soft fill light

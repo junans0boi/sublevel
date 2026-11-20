@@ -271,12 +271,93 @@ public static partial class WorldBuilder
             cam.fieldOfView = 50f;
             SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_air_{region.Id}.png", c + new Vector3(0f, 230f, -380f), c + Vector3.up * 40f);
         }
+        CarInTheWood(cam, plan, pts, Ground, tag);
+        CarOnTheRoad(cam, plan, Ground, tag);
         var statAt = Ground(pts[pts.Count / 2].x, pts[pts.Count / 2].y) + Vector3.up * 1.7f;
         string stats = ViewStats(cam, statAt, statAt + new Vector3(0.7f, 0f, 0.7f) * 40f, tag);
         Debug.Log(stats);
         File.AppendAllText($"Logs/forest_{tag}.txt", stats + "\n");
         cam.targetTexture = null;
         EditorApplication.Exit(0);
+    }
+
+    // ADR-487: a car parked in the wood, seen from the chase camera and from above, at the first slope points that are drivable (tan < 0.35),
+    // have trunks round them (at least 6 within 15 m: in the wood, not a glade) and room for the car (no trunk within 2.6 m).
+    static void CarInTheWood(Camera cam, WorldPlan plan, List<Vector2> pts, System.Func<float, float, Vector3> ground, string tag)
+    {
+        var prefab = CarPrefab();
+        if (prefab == null) return;
+        bool Trunk(Collider c) => c.transform.parent != null && c.transform.parent.name == "Trunks";
+        int shots = 0;
+        for (int i = 0; i < pts.Count && shots < 3; i += 7)
+        {
+            var at = ground(pts[i].x, pts[i].y);
+            if (plan.SlopeTan(pts[i].x, pts[i].y) > 0.35f) continue;
+            var near = Physics.OverlapSphere(at + Vector3.up, 15f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore).Count(Trunk);
+            if (near < 6 || Physics.OverlapSphere(at + Vector3.up, 2.6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore).Any(Trunk)) continue;
+            float e = 1f, gx = plan.Height(pts[i].x + e, pts[i].y) - plan.Height(pts[i].x - e, pts[i].y), gz = plan.Height(pts[i].x, pts[i].y + e) - plan.Height(pts[i].x, pts[i].y - e);
+            var uphill = new Vector3(gx, 0f, gz).sqrMagnitude > 1e-4f ? new Vector3(gx, 0f, gz).normalized : Vector3.forward;
+            CarShot(cam, prefab, at, uphill, $"{OverviewDir}/forest_{tag}_car{shots}");
+            Debug.Log($"[ForestCheck:{tag}] car view {shots} at ({at.x:F0},{at.z:F0}): {near} trunks within 15 m");
+            shots++;
+        }
+    }
+
+    // ADR-494: the car on a straight, level stretch of road with nothing round it, to judge the chase framing against the open road.
+    static void CarOnTheRoad(Camera cam, WorldPlan plan, System.Func<float, float, Vector3> ground, string tag)
+    {
+        var prefab = CarPrefab();
+        if (prefab == null) return;
+        for (float z = 40f; z < plan.Size - 40f; z += 23f)
+            for (float x = 40f; x < plan.Size - 40f; x += 23f)
+            {
+                if (plan.RoadDistance(x, z) > 0.5f || plan.SlopeTan(x, z) > 0.06f) continue;
+                float e = 1f, gx = plan.RoadDistance(x + e, z) - plan.RoadDistance(x - e, z), gz = plan.RoadDistance(x, z + e) - plan.RoadDistance(x, z - e);
+                if (gx * gx + gz * gz < 1e-4f) continue;
+                var along = new Vector3(-gz, 0f, gx).normalized;
+                bool straight = true;
+                for (float d = 8f; d <= 48f && straight; d += 8f)
+                    straight = plan.RoadDistance(x + along.x * d, z + along.z * d) < 1.5f && plan.SlopeTan(x + along.x * d, z + along.z * d) < 0.1f;
+                var at = ground(x, z);
+                bool open = true;   // nothing at roof height within 12 m round (the ground and the road surface are below the rays)
+                for (int k = 0; k < 8 && open; k++)
+                    open = !Physics.Raycast(at + Vector3.up * 1.6f, Quaternion.Euler(0f, k * 45f, 0f) * Vector3.forward, 12f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                if (!straight || !open) continue;
+                CarShot(cam, prefab, at, along, $"{OverviewDir}/forest_{tag}_road");
+                Debug.Log($"[ForestCheck:{tag}] road view at ({x:F0},{z:F0})");
+                return;
+            }
+        Debug.LogWarning("[ForestCheck] no straight open road found");
+    }
+
+    static GameObject CarPrefab()
+    {
+        var prefab = AssetDatabase.FindAssets("t:Prefab", new[] { VehicleModels.OutDir })
+            .Select(g => AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(g)))
+            .FirstOrDefault(p => p != null && p.GetComponent<Game.Net.Vehicle>() != null && !p.name.ToLowerInvariant().Contains("moto") && !p.name.ToLowerInvariant().Contains("bike"));
+        if (prefab == null) Debug.LogWarning("[ForestCheck] no car prefab");
+        return prefab;
+    }
+
+    // A car parked on the ground at `at` facing `heading`, seen through the in-game chase camera (VehicleCamera.ChasePose: orbit, lift,
+    // collision pull-in) with the third-person hip field of view and the view of taking the wheel (down the car's nose, level), then from above.
+    static void CarShot(Camera cam, GameObject prefab, Vector3 at, Vector3 heading, string path)
+    {
+        var up = Physics.Raycast(at + Vector3.up * 5f, Vector3.down, out var floor, 10f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) ? floor.normal : Vector3.up;
+        var car = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        car.transform.SetPositionAndRotation(at + up * 0.05f, Quaternion.LookRotation(Vector3.ProjectOnPlane(heading, up), up));
+        foreach (var body in car.GetComponentsInChildren<Rigidbody>()) body.isKinematic = true;
+        Physics.SyncTransforms();
+        cam.fieldOfView = Game.Net.GameData.Rules.Aim.Hip.Fov;
+        var flat = Vector3.ProjectOnPlane(car.transform.forward, Vector3.up).normalized;
+        var look = Quaternion.LookRotation(flat);   // pitch 0
+        var eye = VehicleCamera.ChasePose(car.GetComponent<Game.Net.Vehicle>(), look, out var pivot);
+        VegetationRenderer.ClearAround = cam;   // as the car camera does in play
+        VegetationRenderer.ClearPivot = pivot;
+        SceneLook.Shot(cam, path + "_chase.png", eye, eye + flat * 30f);
+        VegetationRenderer.ClearAround = null;
+        SceneLook.Shot(cam, path + "_top.png", at + Vector3.up * 55f - flat * 0.01f, at);
+        Object.DestroyImmediate(car);
     }
 
     // Render stats of one view over 120 frames, plus the instanced vegetation estimated from the renderer's own LOD rule.

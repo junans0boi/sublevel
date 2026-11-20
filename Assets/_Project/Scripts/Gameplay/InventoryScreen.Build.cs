@@ -25,6 +25,7 @@ namespace Game.Gameplay
         const float SmallCardWidth = 262f, SmallCardHeight = 224f;
         const float PipX = 14f, PipY = -166f, PipSize = 46f, PipGap = 6f;
         const float TooltipWidth = 340f, TooltipHeader = 84f;
+        const float TooltipBarRow = 24f, TooltipBarLabel = 62f, TooltipBarValue = 76f; // ADR-493: a gun's stat bars
 
         static readonly Color ColumnPlate = new Color(0.045f, 0.052f, 0.06f, 0.93f);
         static readonly Color CharacterPlate = new Color(0.04f, 0.047f, 0.055f, 0.97f);
@@ -237,6 +238,24 @@ namespace Game.Gameplay
 
         RawImage _characterImage;
 
+        // ADR-493: five rows (label, bar, number) between the header and the body, shown for guns only.
+        void BuildTooltipBars()
+        {
+            float width = TooltipWidth - 28f;
+            _tooltipBars = UiKit.Rect("Bars", _tooltipRect, TopLeft, TopLeft, new Vector2(14f, -(TooltipHeader + 2f)), new Vector2(width, TooltipBarRow * TooltipBarCount));
+            for (int i = 0; i < TooltipBarCount; i++)
+            {
+                var row = UiKit.Rect("Bar" + i, _tooltipBars, TopLeft, TopLeft, new Vector2(0f, -i * TooltipBarRow), new Vector2(width, TooltipBarRow));
+                _tooltipBarLabels[i] = UiKit.Label(UiKit.Rect("Label", row, TopLeft, TopLeft, Vector2.zero, new Vector2(TooltipBarLabel, TooltipBarRow)), WeaponStats.BarLabels[i], 16, UiKit.TextDim);
+                var track = UiKit.Rect("Track", row, MidLeft, MidLeft, new Vector2(TooltipBarLabel, 0f), new Vector2(width - TooltipBarLabel - TooltipBarValue - 8f, 8f));
+                UiKit.Box(track, UiKit.PanelLight);
+                _tooltipBarFills[i] = UiKit.Fill("Fill", track);
+                UiKit.Box(_tooltipBarFills[i], UiKit.Accent);
+                _tooltipBarValues[i] = UiKit.Label(UiKit.Rect("Value", row, TopRight, TopRight, Vector2.zero, new Vector2(TooltipBarValue, TooltipBarRow)), "", 16, UiKit.Text, TextAnchor.MiddleRight);
+            }
+            _tooltipBars.gameObject.SetActive(false);
+        }
+
         // The texture is made with the preview; hooked up once it exists.
         void BindPreview()
         {
@@ -397,6 +416,7 @@ namespace Game.Gameplay
             var body = UiKit.Rect("Body", _tooltipRect, TopLeft, TopLeft, new Vector2(14f, -(TooltipHeader + 4f)), new Vector2(TooltipWidth - 28f, 60f));
             _tooltipBody = UiKit.Paragraph(body, "", 18, new Color(0.82f, 0.85f, 0.88f, 1f));
             _tooltipBody.verticalOverflow = VerticalWrapMode.Overflow;
+            BuildTooltipBars();
             _tooltip = _tooltipRect.gameObject;
             _tooltip.SetActive(false);
         }

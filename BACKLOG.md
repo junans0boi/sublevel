@@ -13,3 +13,5 @@
 - 차량: 오토바이 R0·고개 근처 가중 배치(ADR-198) 미구현
 - [애니] 스윙 발 클리어런스 IK: 계단·경사 걷기에서 스윙 발목이 단 모서리·경사면 안으로 들어감(15모델 5~17cm, FootPlantSurveyTests), 월드 Terrain 위 직접 측정 (ADR-262)
 - 훈련장: TrainingRange.unity·ZoneD.unity의 Match에 없는 스크립트(guid 5381414d…) — 실행 시 'referenced script is missing' 경고
+- 차량: 오르막에서 3인칭 추격 카메라(수평 시선)가 차 뒤 범퍼를 화면 아래로 자름 — Logs/world/forest_after3_car{0,1,2}_chase.png, 준환이 현 상태 수용 (ADR-494)
+- [애니] 공중 맨틀(ADR-492) 손 짚기: LedgeClimb 경로가 수직 상승 먼저라 맨틀 중간(0.4s)에 어깨가 모서리 위 1.3m → 손이 모서리에 안 닿음. 맨틀 전용 경로(앞으로 일찍)·상체 앞숙임 필요 (LedgeCaptureTests.CaptureMantleShots)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 게임 클라이언트 릴리스: 빌드 → zip → sha256·크기 → manifest.json → (선택) 서버 업로드. #402(L0).
-# 사용: tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   (플랫폼 생략 시 mac만)
+# 사용: tools/release.sh [--mac] [--win] [--upload] [--github <태그>] [--version <이름>]   (플랫폼 생략 시 mac만)
+#   --github <태그>: 만든 zip·manifest를 그 태그의 GitHub Release(공개 저장소)에 첨부. 공개 배포 조건은 docs/RELEASE.md 'GitHub Releases'.
 #   Unity 빌드는 무겁다(순차 1개, 동기화 측정 같은 독점 창과 겹치지 않게). 비밀 값 없음.
 #   버전 이름 기본값: <yyyymmddHHMM>-<커밋 7자리>. 게임-서버 호환은 Application.version/Protocol이 정하고(LobbyNet.CurrentVersion),
 #   이 이름은 런처가 '새 파일이 있나' 비교하는 릴리스 라벨일 뿐이다.
@@ -9,18 +10,21 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PLATS=(); UPLOAD=0; VER=""
+PLATS=(); UPLOAD=0; VER=""; GH_TAG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --mac) PLATS+=(mac) ;;
     --win) PLATS+=(win) ;;
     --upload) UPLOAD=1 ;;
+    --github) GH_TAG="${2:?--github <태그>}"; shift ;;
     --version) VER="${2:?--version <이름>}"; shift ;;
-    *) echo "usage: $0 [--mac] [--win] [--upload] [--version <이름>]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--mac] [--win] [--upload] [--github <태그>] [--version <이름>]" >&2; exit 2 ;;
   esac
   shift
 done
 [ ${#PLATS[@]} -gt 0 ] || PLATS=(mac)
+# 빌드 전에 확인: 태그의 Release가 있어야 첨부할 수 있다(태그 push → .github/workflows/release.yml이 만든다)
+[ -z "$GH_TAG" ] || gh release view "$GH_TAG" --repo junans0boi/sublevel >/dev/null || { echo "GitHub Release $GH_TAG 없음" >&2; exit 1; }
 [ -n "$VER" ] || VER="$(date +%Y%m%d%H%M)-$(git rev-parse --short=7 HEAD)"
 [[ "$VER" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] || { echo "bad version name: $VER" >&2; exit 2; }
 
@@ -67,5 +71,11 @@ if [ "$UPLOAD" = 1 ]; then
   UP="../sublevel-web/scripts/release_upload.sh"
   [ -x "$UP" ] || UP="/Volumes/WorkSpace/Project/sublevel-web/scripts/release_upload.sh"
   bash "$UP" "$OUT"
+fi
+if [ -n "$GH_TAG" ]; then
+  for f in "$OUT"/*.zip; do  # GitHub Release 파일 하나당 2 GiB 상한
+    [ "$(stat -f %z "$f")" -lt 2147483648 ] || { echo "$f 가 2 GiB 이상이라 GitHub Release에 올릴 수 없음" >&2; exit 1; }
+  done
+  gh release upload "$GH_TAG" "$OUT"/*.zip "$OUT/manifest.json" --repo junans0boi/sublevel
 fi
 echo "release ready: $OUT"

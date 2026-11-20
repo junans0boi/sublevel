@@ -224,3 +224,22 @@ namespace Game.Tests
         }
     }
 }
+
+namespace Game.Tests
+{
+    // The master's perf failure (ADR-505): from the island only the gate end of the hall is drawn.
+    public class RaceHallCullingRuleTests
+    {
+        [Test]
+        public void FromTheIsland_OnlyThePitEndIsDrawn_FromThePitOrTheHall_All()
+        {
+            float cz = (RaceTrack.PitZ0 + RaceTrack.PitZ1) * 0.5f;
+            Assert.IsTrue(RaceTrack.SeenFromIsland(40f, cz - 20f, cz + 20f), "the cell in front of the gate");
+            Assert.IsFalse(RaceTrack.SeenFromIsland(RaceTrack.GateViewX, cz - 20f, cz + 20f), "further east");
+            Assert.IsFalse(RaceTrack.SeenFromIsland(40f, -140f, -100f), "far north along the hall's west wall");
+            Assert.IsTrue(RaceTrack.SeesWholeHall(WaitingIsland.WorldX(44f), WaitingIsland.WorldZ(cz)), "in the pit");
+            Assert.IsTrue(RaceTrack.SeesWholeHall(WaitingIsland.WorldX(150f), WaitingIsland.WorldZ(0f)), "in the hall");
+            Assert.IsFalse(RaceTrack.SeesWholeHall(WaitingIsland.WorldX(0f), WaitingIsland.WorldZ(0f)), "on the island");
+        }
+    }
+}

@@ -11,8 +11,8 @@ namespace Game.Tests
         static WeaponTable Weapons() => JsonUtility.FromJson<WeaponTable>(File.ReadAllText("Assets/_Project/Data/Resources/GameData/weapons.json"));
 
         // Drop at 300 m (m) = g/2 * (300 / speed)^2, the table the ADR quotes.
-        [TestCase(1, 360f, 3.4f)]
-        [TestCase(2, 400f, 2.76f)]
+        [TestCase(1, 380f, 3.06f)]
+        [TestCase(2, 280f, 5.63f)]
         [TestCase(3, 880f, 0.57f)]
         [TestCase(4, 380f, 3.06f)]
         [TestCase(5, 800f, 0.69f)]

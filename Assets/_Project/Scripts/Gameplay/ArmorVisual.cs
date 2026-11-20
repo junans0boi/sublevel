@@ -23,7 +23,9 @@ namespace Game.Gameplay
         {
             public Transform Mount;
             public MeshFilter Filter;
-            public MeshRenderer Renderer;
+            public Renderer Renderer;
+            public SkinnedMeshRenderer Skin; // a wrapped piece (GearFit): skinned to the torso bones
+            public GearBody Body;
             public int Shown = -1;
         }
 
@@ -60,7 +62,12 @@ namespace Game.Gameplay
             {
                 // Roster character: mounts on the Humanoid head and chest bones, sized by head height and shoulder width.
                 _helmet = NewPart("Helmet", fit.Head, fit.HelmetBase, transform.rotation, Vector3.one * fit.HeadScale);
-                _vestFront = NewPart("Vest", fit.Torso, fit.VestCentre, transform.rotation, Vector3.one * fit.TorsoScale);
+                // The vest wrapped onto this body and skinned to its torso bones when the body was measured (ADR-520).
+                var body = GearBody.Load(fit.Def.Id);
+                _vestFront = body != null && WornGearMeshes.Baked(LootKind.Vest, 1) != null
+                    ? new Part { Skin = GearFit.AddRenderer(fit.Def.Animator, "Vest"), Body = body }
+                    : NewPart("Vest", fit.Torso, fit.VestCentre, transform.rotation, Vector3.one * fit.TorsoScale);
+                if (_vestFront.Skin != null) { _vestFront.Renderer = _vestFront.Skin; _vestFront.Mount = _vestFront.Skin.transform; }
                 return;
             }
             var head = BackpackVisual.Humanoid(transform, HumanBodyBones.Head) ?? BackpackVisual.Deep(transform, "Head");
@@ -81,6 +88,7 @@ namespace Game.Gameplay
             part.Mount.gameObject.layer = bone.gameObject.layer;
             part.Filter = part.Mount.gameObject.AddComponent<MeshFilter>();
             part.Renderer = part.Mount.gameObject.AddComponent<MeshRenderer>();
+            part.Renderer.meshLodSelectionBias = WornGearMeshes.LodBias;
             part.Renderer.enabled = false;
             return part;
         }
@@ -111,14 +119,15 @@ namespace Game.Gameplay
 
         void Fill(LootKind kind, Part part, int tier)
         {
-            part.Filter.sharedMesh = tier > 0 ? WornGearMeshes.Model(kind, tier) : null;
-            if (tier > 0) part.Renderer.sharedMaterial = WornGearMeshes.Palette(tier);
+            if (part.Skin != null) part.Skin.sharedMesh = tier > 0 ? GearFit.For(part.Body, kind, tier) : null;
+            else part.Filter.sharedMesh = tier > 0 ? WornGearMeshes.Model(kind, tier) : null;
+            if (tier > 0) part.Renderer.sharedMaterials = WornGearMeshes.Materials(kind, tier);
             Apply(part);
         }
 
         void Apply(Part part)
         {
-            if (part != null) part.Renderer.enabled = !_hidden && part.Shown > 0 && part.Filter.sharedMesh != null;
+            if (part != null) part.Renderer.enabled = !_hidden && part.Shown > 0 && (part.Skin != null ? part.Skin.sharedMesh : part.Filter.sharedMesh) != null;
         }
     }
 }

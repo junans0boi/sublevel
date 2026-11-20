@@ -28,6 +28,10 @@ namespace Game.Core
         // Heights over the deck (the walkable floor is the deck, y = 0): the lift's ground sill sits under the car's floor, and the
         // landing pad is a thin plate on the deck, so neither hides the car floor nor swallows the feet of a rider or a jumper.
         public const float LiftSillTop = 0.02f, CarFloorTop = 0.08f, PadTop = 0.06f;
+        // The lift's call buttons (ADR-490): a post beside the ground gate (north of the shaft) and a plate on the top platform's north
+        // rail beside the landing. Local x/z; y over the deck. F reaches them like a pickup (InteractRules), the server checks the reach.
+        public static readonly (float x, float y, float z) CallBottom = (Lift.x + LiftShaftHalf + 0.45f, 1.2f, Lift.z + LiftShaftHalf + 0.2f);
+        public static readonly (float x, float y, float z) CallTop = (Lift.x + LiftShaftHalf + 0.45f, BungeeCurve.Top + 1.2f, Tower.z + TopHalf - 0.12f);
         public const float JumpBoardRadius = 0.9f;                              // stand this close to the board's middle to jump
         public const float BridgeHalfWidth = 0.8f;
         public static float BridgeStartX => Tower.x - TopHalf;
@@ -42,7 +46,7 @@ namespace Game.Core
         }
         public static readonly (float x, float z) Board = (0f, -33f);         // the big board, on the north rim facing the middle
         public const float BoardWidth = 22f, BoardHeight = 9f;
-        public static readonly (float x, float z)[] Booths =                  // shooting booths (2nd stage), west side
+        public static readonly (float x, float z)[] Booths =                  // shooting booths (ADR-501: stands, lanes, targets in WaitingRange), west side
         {
             (-27f, -12f), (-27f, 0f), (-27f, 12f),
         };
@@ -101,7 +105,7 @@ namespace Game.Core
             if (Near(lx, lz, Lift.x, Lift.z, LiftShaftHalf + 1f + pad)) return true;
             if (Near(lx, lz, BungeePad.x, BungeePad.z, BungeePadRadius + pad)) return true;   // nobody stands where the jumper lands
             if (Near(lx, lz, Elevator.x, Elevator.z, ElevatorRadius + pad)) return true;
-            foreach (var b in Booths) if (Near(lx, lz, b.x, b.z, BoothRadius + pad)) return true;
+            if (WaitingRange.InLane(lx, lz, pad)) return true;                                  // the range's stands and lanes (ADR-501)
             return Math.Abs(lx - Board.x) < BoardWidth * 0.5f + pad && lz < Board.z + 6f;
         }
 

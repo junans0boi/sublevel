@@ -125,9 +125,9 @@ namespace Game.Tests
 
             _input.Frame.Reload = true;
             yield return WaitUntil(() => me.Reloading.Value, 2f, "reload started");
-            yield return WaitUntil(() => !me.Reloading.Value && me.Mag2.Value == 12, 5f, "magazine refilled");
+            yield return WaitUntil(() => !me.Reloading.Value && me.Mag2.Value == 15, 5f, "magazine refilled"); // VK-9 holds 15 (ADR-493)
             Assert.AreEqual(Loadout.SidearmSlot, me.ActiveSlot.Value);
-            Assert.AreEqual(20, me.ReservePistol9.Value);
+            Assert.AreEqual(17, me.ReservePistol9.Value);
 
             _input.Frame.SelectSlot = 0;
             yield return WaitUntil(() => me.ActiveSlot.Value == 0, 2f, "first slot active");

@@ -98,6 +98,7 @@ namespace Game.Tests
             Gear(me);
             me.ServerGive(new LootEntry { Kind = LootKind.Helmet, Tier = 2 });
             me.ServerGive(new LootEntry { Kind = LootKind.Vest, Tier = 3 });
+            foreach (int id in new[] { 4, 9, 13 }) me.ServerGive(Optics.ToLoot(id)); // ADR-493: fitted, for the gun tooltip
             foreach (int id in new[] { 5, 12, 11, 16 }) me.GetComponent<CombatantOptics>().ServerStash(id); // loose in the bag
             yield return new WaitForSeconds(0.4f);
             UiFocus.Set(UiScreen.Inventory);
@@ -122,6 +123,22 @@ namespace Game.Tests
                 screen.ShowTooltip(screen.AttachSlotSource(0, AttachSlot.Optic), at, null);
                 yield return new WaitForSeconds(0.3f);
                 yield return Shot(folder, "hover_weapon_slot", size[0], size[1], at, false);
+                screen.HideTooltip(true);
+            }
+            // ADR-493: the gun card's stats panel (class, modes, bars, fitted parts) and a gun on the ground.
+            foreach (var size in Sizes)
+            {
+                var at = Screen(screen, "Weapons/Slot1", size[0], size[1]);
+                screen.SetPointerForTests(at);
+                screen.ShowTooltip(screen.WeaponSource(0), at, null);
+                yield return new WaitForSeconds(0.3f);
+                yield return Shot(folder, "hover_weapon_card", size[0], size[1], at, false);
+                screen.HideTooltip(true);
+                at = Screen(screen, "Weapons/Slot2", size[0], size[1]);
+                screen.SetPointerForTests(at);
+                screen.ShowTooltip(screen.WeaponSource(1), at, null);
+                yield return new WaitForSeconds(0.3f);
+                yield return Shot(folder, "hover_weapon_card2", size[0], size[1], at, false);
                 screen.HideTooltip(true);
             }
             foreach (var size in Sizes)

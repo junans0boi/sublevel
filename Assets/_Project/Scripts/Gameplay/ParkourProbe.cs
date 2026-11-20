@@ -171,6 +171,34 @@ namespace Game.Gameplay
             return plan;
         }
 
+        // In the air with Space down (ADR-492): the edge ahead the hands reach, if any, to mantle onto at once. Move is
+        // LedgeClimb from the feet against the wall (Start) to the feet standing on top (End), or None.
+        public static ParkourPlan PlanMantle(Transform body, float radius, float height, float yawDeg, ParkourRules rules)
+        {
+            var none = new ParkourPlan { Move = ParkourMove.None, Start = body.position };
+            var plan = Plan(body, radius, height, yawDeg, false, rules);
+            if (plan.Face <= 0f || plan.Face - radius > rules.MantleReach) return none;
+            var feet = body.position;
+            var profile = plan.Profile;
+            profile.TopHeight = plan.TopY - feet.y;
+            plan.Profile = profile;
+            if (!Parkour.CanMantle(profile, rules)) return none;
+
+            var forward = Quaternion.Euler(0f, yawDeg, 0f) * Vector3.forward;
+            var start = feet + forward * Mathf.Max(0f, plan.Face - radius - rules.HangGap);
+            var onTop = feet + forward * (plan.Face + radius + 0.15f);
+            onTop.y = plan.TopY + 0.02f;
+            if (!Free(onTop, radius, height, body)) return none;
+            if (!Free(start, radius, height, body)) start = feet;
+            plan.Move = ParkourMove.LedgeClimb;
+            plan.Start = start;
+            plan.End = onTop;
+            plan.ClimbTo = onTop;
+            plan.Seconds = Parkour.Duration(ParkourMove.LedgeClimb, profile.TopHeight, rules);
+            plan.Glass = null;
+            return plan;
+        }
+
         static float Rung(int i) => FirstRung + i * RungStep;
 
         // The nearest thing along the ray that is not the body itself (and not glass or a trigger). `walls`: ground

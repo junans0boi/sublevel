@@ -20,7 +20,15 @@ public static class WaitingIslandCapture
             Directory.CreateDirectory("Logs/lookdev");
             float cx = WaitingIsland.CentreX, cz = WaitingIsland.CentreZ, y = 10.4f;
             // The board as the match shows it, and a crowd standing on the island for scale (bots from the real prefab).
-            Game.Net.WaitingHud.Preview(new Game.Net.WaitingBroadcast { Active = true, SecondsLeft = 47f, People = 2, Total = 38, Target = 80, BungeeBest = 12.7f });
+            var world = Object.FindFirstObjectByType<Game.Gameplay.WorldInfo>();
+            string[] regions = null;
+            if (world != null) { regions = new string[world.Regions.Count]; for (int i = 0; i < regions.Length; i++) regions[i] = world.Regions[i].Name; }
+            var records = new Game.Net.WaitingRecordsBroadcast   // sample TOP3s (#422): what a room shows after a few jumps and booth rounds
+            {
+                BungeeNames = new[] { "하늘", "플레이어 2", "루나" }, BungeeScores = new[] { 3, 2, 2 },
+                RangeNames = new[] { "노을", "하늘", "플레이어" }, RangeScores = new[] { 41, 27, 9 },
+            };
+            var hud = Game.Net.WaitingHud.Preview(new Game.Net.WaitingBroadcast { Active = true, SecondsLeft = 47f, People = 2, Total = 38, Target = 80, BungeeBest = 12.7f }, records, regions);
             var botPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/M1/Bot_MixamoAdam.prefab");
             var spots = WaitingIsland.SpawnPoints();
             var crowd = new GameObject("CaptureCrowd");
@@ -44,6 +52,19 @@ public static class WaitingIslandCapture
             Shot(cam, "island_crowd", new Vector3(cx - 6f, y + 1.7f, cz + 16f), new Vector3(cx + 2f, y + 1.4f, cz - 2f));
             Shot(cam, "island_board_live", new Vector3(cx, y + 3f, cz - 8f), new Vector3(cx, y + 7f, cz - 33f));
             Shot(cam, "island_board_close", new Vector3(cx, y + 6.5f, cz - 12f), new Vector3(cx, y + 7f, cz - 33f));
+            // #422: every page of the board's rotation, close and from the deck.
+            foreach (Game.Core.BoardPage page in System.Enum.GetValues(typeof(Game.Core.BoardPage)))
+            {
+                hud.PreviewPage(page);
+                Shot(cam, "board_page_" + page, new Vector3(cx, y + 6.5f, cz - 12f), new Vector3(cx, y + 7f, cz - 33f));
+            }
+            hud.PreviewPage(Game.Core.BoardPage.RangeTop);
+            Shot(cam, "board_from_deck", new Vector3(cx + 4f, y + 1.7f, cz + 6f), new Vector3(cx, y + 7f, cz - 33f));
+            // #421: the range — the three booths from the hall, a stand with its lane and targets, and the targets up close.
+            var st = WaitingRange.Stand(1); var tg = WaitingRange.Target(1, 0);
+            Shot(cam, "range_booths", new Vector3(cx - 14f, y + 2.4f, cz + 9f), new Vector3(cx - 30f, y + 1.4f, cz - 3f));
+            Shot(cam, "range_stand", new Vector3(cx + st.x + 1.2f, y + 1.65f, cz + st.z + 0.6f), new Vector3(cx + tg.x, y + 1.2f, cz + st.z));
+            Shot(cam, "range_targets", new Vector3(cx + tg.x + 3.5f, y + 1.5f, cz + tg.z + 2.0f), new Vector3(cx + tg.x, y + 1.1f, cz + tg.z + 0.5f));
             // The bungee (ADR-386/387): the lift gate on the deck, the view from the car on its way up, the top platform, the board looking
             // down, the fall, the lowest point, and the whole tower from across the hall.
             float L(float lx) => cx + lx; float Z(float lz) => cz + lz;

@@ -23,7 +23,11 @@ namespace Game.Gameplay
         CombatantCarry _carry;
         Transform _mount;
         MeshFilter _filter;
-        MeshRenderer _renderer;
+        Renderer _renderer;
+        // Fitted onto the measured body (ADR-520): the back panel on the back, the shoulder straps over the shoulders. Held
+        // rigidly by the upper-chest bone, not skinned: the pack is one stiff block and CPU skinning (gpuSkinning off)
+        // of fifty packs cost more than it showed.
+        GearBody _body;
         readonly Color[] _colors = new Color[3];
         int _shown = -1;
 
@@ -44,7 +48,12 @@ namespace Game.Gameplay
             // Taken now, while the character still stands as the prefab was saved: the mount keeps that relation to
             // the bone however the animation turns it later.
             Transform bone; Vector3 at; float scale;
-            if (WornGearMeshes.TryFit(transform, out var fit)) { bone = fit.Torso; at = fit.PackBottom; scale = fit.TorsoScale; }
+            bool roster = WornGearMeshes.TryFit(transform, out var fit);
+            if (roster && (_body = GearBody.Load(fit.Def.Id)) != null && WornGearMeshes.Baked(LootKind.Backpack, 1) != null)
+            {
+                bone = fit.Torso; at = bone.position; scale = 1f; // the fitted mesh is in the body frame: origin on this bone
+            }
+            else if (roster) { _body = null; bone = fit.Torso; at = fit.PackBottom; scale = fit.TorsoScale; }
             else { bone = FindTorso(transform) ?? transform; at = transform.TransformPoint(BottomInCharacter); scale = WornScale; }
             _mount = new GameObject("Backpack").transform;
             _mount.SetParent(bone, false);
@@ -54,6 +63,7 @@ namespace Game.Gameplay
             _mount.gameObject.layer = bone.gameObject.layer;
             _filter = _mount.gameObject.AddComponent<MeshFilter>();
             _renderer = _mount.gameObject.AddComponent<MeshRenderer>();
+            _renderer.meshLodSelectionBias = WornGearMeshes.LodBias;
             _renderer.enabled = false;
         }
 
@@ -65,9 +75,10 @@ namespace Game.Gameplay
             if (tier == _shown) return;
             _shown = tier;
             if (tier <= 0) { _renderer.enabled = false; return; }
-            _filter.sharedMesh = WornGearMeshes.Model(LootKind.Backpack, tier);
-            _renderer.sharedMaterial = WornGearMeshes.Palette(tier);
-            _renderer.enabled = _filter.sharedMesh != null;
+            var mesh = _body != null ? GearFit.For(_body, LootKind.Backpack, tier) : WornGearMeshes.Model(LootKind.Backpack, tier);
+            _filter.sharedMesh = mesh;
+            _renderer.sharedMaterials = WornGearMeshes.Materials(LootKind.Backpack, tier);
+            _renderer.enabled = mesh != null;
         }
 
         // A bone of the Humanoid rig under `root` (ADR-230); null for a rig without an avatar.

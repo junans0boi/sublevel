@@ -72,6 +72,15 @@ namespace Game.Net
         // Server only: lets equipment change incoming damage (armour). Gets the damage as dealt and returns the
         // amount to apply; null means "as dealt". Set by a component on this combatant.
         public Func<DamageInfo, float> ServerDamageFilter { get; set; }
+        // Server only, set by the waiting island (ADR-501): false refuses a shot before it is fired (outside a range booth). Null = allowed.
+        public Func<bool> ServerFireGate { get; set; }
+        // Server only, set by the waiting island (ADR-501): true when the island took the bullet that met this collider (a booth target,
+        // or a body that must not be hurt); the bullet then stops there as on a wall, with no damage and no hit marker. Null = never.
+        public Func<Collider, bool> ServerShotIntercept { get; set; }
+        // Server only, set by the waiting island (ADR-501): false refuses dropping and picking up, so a booth's loan never leaves the
+        // booth and nothing of the island reaches the match. Null = allowed.
+        public Func<bool> ServerItemGate { get; set; }
+        bool ItemsLocked => ServerItemGate != null && !ServerItemGate();
 
         // Set by the stance component on every side (server, owner, observers) so all of them agree on the eyes:
         // metres added to the upright eye height (negative when crouched), and the stance's share of the spread.
@@ -424,6 +433,7 @@ namespace Game.Net
             float sqr = direction.sqrMagnitude;
             // Knocked down or reviving (ADR-072): no shooting.
             if (_health.IsDead || TeamBlocksAction || Holstered.Value || CombatantSwim.In(this) || float.IsNaN(sqr) || float.IsInfinity(sqr) || sqr < 1e-6f) return false;
+            if (ServerFireGate != null && !ServerFireGate()) return false;
             // Shots always start at the server's idea of this combatant's eyes, never at a client-supplied point.
             var origin = EyePosition;
             var weapon = _loadout.ActiveWeapon;
@@ -739,6 +749,17 @@ namespace Game.Net
             return true;
         }
 
+        // Takes back what the waiting island's range booth lent (ADR-501): the weapon in `slot` while it is still `weaponId` (its
+        // magazine goes with it), and the rounds of `ammo` above `keepReserve`. Nothing lands on the ground.
+        public void ServerTakeBack(int slot, int weaponId, AmmoType ammo, int keepReserve)
+        {
+            if (!IsServerInitialized || _loadout == null) return;
+            if (weaponId != 0 && _loadout.WeaponInSlot(slot) == weaponId) { _loadout.RemoveWeapon(slot, out _); OpticsPart?.ServerOnWeaponRemoved(slot); }
+            int extra = _loadout.Reserve(ammo) - Mathf.Max(0, keepReserve);
+            if (extra > 0) _loadout.RemoveAmmo(ammo, extra);
+            Push();
+        }
+
         // Empties weapons, ammo and medkits. Non-players keep at most DroppedReserveCap rounds per calibre in what
         // they hand back (the rest is gone), so a dummy's 9999 rounds do not litter the ground. `into` (may be null)
         // receives the contents as loot entries; the replicated values are cleared either way.
@@ -798,7 +819,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickupToSlot(NetworkObject lootObject, int slot)
         {
-            if (_health.IsDead || TeamBlocksAction || lootObject == null || !SlotOk(slot, "pickup to")) return;
+            if (_health.IsDead || TeamBlocksAction || ItemsLocked || lootObject == null || !SlotOk(slot, "pickup to")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
             if (!PickupInReach(item, "pickup to slot")) return;
@@ -814,7 +835,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickup(NetworkObject lootObject)
         {
-            if (_health.IsDead || TeamBlocksAction || lootObject == null) return;
+            if (_health.IsDead || TeamBlocksAction || ItemsLocked || lootObject == null) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
             if (!PickupInReach(item, "pickup")) return;
@@ -830,7 +851,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropWeapon(int slot)
         {
-            if (_health.IsDead || MatchDirector.Instance == null || !SlotOk(slot, "drop")) return;
+            if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null || !SlotOk(slot, "drop")) return;
             int weaponId = _loadout.RemoveWeapon(slot, out int mag);
             if (weaponId == 0) return;
             OpticsPart?.ServerOnWeaponRemoved(slot);
@@ -853,7 +874,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropAmmo(int ammoType)
         {
-            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType);
             if (amount <= 0) return;
@@ -864,7 +885,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropAmmoHalf(int ammoType)
         {
-            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType, System.Math.Max(1, _loadout.Reserve((AmmoType)ammoType) / 2));
             if (amount <= 0) return;
@@ -874,7 +895,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropMedkit()
         {
-            if (_health.IsDead || MatchDirector.Instance == null) return;
+            if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!_loadout.RemoveMedkit()) return;
             ServerDropLoot(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });
         }

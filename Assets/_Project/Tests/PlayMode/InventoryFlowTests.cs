@@ -316,6 +316,53 @@ namespace Game.Tests
             button = button, clickCount = clicks, position = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), pressPosition = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
         };
 
+        // ADR-493 (준환 r5.2: "마우스를 올려도 총 정보가 안 나온다"): the pointer over a weapon card reaches the card, and
+        // the tooltip carries class, modes, ammo and the five bars.
+        [UnityTest]
+        public IEnumerator Hover_WeaponCard_ShowsClassModesAndBars()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var screen = InventoryScreen.Instance;
+            yield return TwoRifles(me);
+            UiFocus.Set(UiScreen.Inventory);
+            yield return null;
+            yield return null;
+            var card = Find(screen, "Weapons/Slot1");
+            var rect = (RectTransform)card.transform;
+            var cam = screen.ScreenCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : screen.ScreenCanvas.worldCamera;
+            int checkedPoints = 0;
+            foreach (var at in new[] { new Vector2(0.3f, 0.6f), new Vector2(0.5f, 0.75f), new Vector2(0.85f, 0.6f) })
+            {
+                Vector3 world = rect.TransformPoint(new Vector3(rect.rect.xMin + rect.rect.width * at.x, rect.rect.yMin + rect.rect.height * at.y));
+                var position = RectTransformUtility.WorldToScreenPoint(cam, world);
+                if (position.x < 0f || position.y < 0f || position.x > Screen.width || position.y > Screen.height) continue; // the batch screen is small
+                checkedPoints++;
+                var pointer = new PointerEventData(EventSystem.current) { position = position };
+                var hits = new System.Collections.Generic.List<RaycastResult>();
+                EventSystem.current.RaycastAll(pointer, hits);
+                Assert.Greater(hits.Count, 0, "something under the pointer at " + at);
+                var handler = ExecuteEvents.GetEventHandler<IPointerEnterHandler>(hits[0].gameObject);
+                Assert.AreEqual(card, handler, "the card takes the hover at " + at + ", not " + hits[0].gameObject.name);
+            }
+
+            Assert.Greater(checkedPoints, 0, "some of the card is on screen");
+            ExecuteEvents.Execute(card, Data(PointerEventData.InputButton.Left), ExecuteEvents.pointerEnterHandler);
+            Assert.IsTrue(screen.TooltipVisible, "hover shows the tooltip");
+            StringAssert.Contains(GameData.Weapons.Find(3).Name, screen.TooltipTitle);
+            StringAssert.Contains("AR 돌격소총", screen.TooltipBody);
+            StringAssert.Contains("사격 단발/점사 3발/연사", screen.TooltipBody);
+            StringAssert.Contains("탄약 5.56mm", screen.TooltipBody);
+            StringAssert.Contains("피해 40", screen.TooltipBars);
+            StringAssert.Contains("탄속 880m/s", screen.TooltipBars);
+            ExecuteEvents.Execute(card, Data(PointerEventData.InputButton.Left), ExecuteEvents.pointerExitHandler);
+
+            // Anything that is not a gun shows no bars.
+            screen.ShowTooltip(screen.AmmoSource(1), Vector2.zero, null);
+            Assert.AreEqual("", screen.TooltipBars, "no bars for ammo");
+            screen.HideTooltip(true);
+        }
+
         [UnityTest]
         public IEnumerator PointerEvents_RightClickOnTheCell_FitsIt_AndHoverShowsTheTooltip()
         {

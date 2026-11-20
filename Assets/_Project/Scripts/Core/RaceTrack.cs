@@ -65,6 +65,16 @@ namespace Game.Core
             return lx <= HallX1 && lz >= HallZ0 && lz <= HallZ1 && (lx >= HallX0 || (lx >= BollardX && lz >= PitZ0 && lz <= PitZ1));
         }
 
+        // Drawing the hall (perf, ADR-505): without occlusion culling a camera on the island would draw the whole hall behind the island's
+        // wall. From the island only the pit and the hall's first stretch can be seen through the gate: pieces that start at GateViewX or
+        // further east, or further than GateViewHalfZ north or south of the gate (and the lamps there), are drawn only for a camera in the pit
+        // or the hall (lx >= BollardX - 1).
+        public const float GateViewX = 80f;
+        public const float GateViewHalfZ = 40f;   // ...and only within this far north or south of the gate (the island's wall hides the rest)
+        public static bool SeenFromIsland(float minLx, float minLz, float maxLz)
+            => minLx < GateViewX && maxLz > (PitZ0 + PitZ1) * 0.5f - GateViewHalfZ && minLz < (PitZ0 + PitZ1) * 0.5f + GateViewHalfZ;
+        public static bool SeesWholeHall(float worldX, float worldZ) => worldX - WaitingIsland.CentreX >= BollardX - 1f || InArea(worldX, worldZ);
+
         public static bool InPit(float lx, float lz, float margin = 0f)
             => lx >= BollardX + margin && lx <= PitX1 - margin && lz >= PitZ0 + margin && lz <= PitZ1 - margin;
 
