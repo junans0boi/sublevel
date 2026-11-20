@@ -130,6 +130,22 @@ public static class MagazineKit
         }
     }
 
+    // Adds Unity Mesh LODs to the split meshes already saved (ADR-541), without rebuilding the prefabs that use them.
+    // tools/unity.sh run MagazineKit.LodSplits
+    public static void LodSplits()
+    {
+        foreach (var guid in AssetDatabase.FindAssets("t:Mesh", new[] { CharacterKit.WeaponDir.TrimEnd('/') }))
+        {
+            var path = AssetDatabase.GUIDToAssetPath(guid);
+            if (!path.Contains("/Split/") || !path.EndsWith(".asset")) continue;
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            MeshLodUtility.GenerateMeshLods(mesh);
+            EditorUtility.SetDirty(mesh);
+            AssetDatabase.SaveAssetIfDirty(mesh);
+            Debug.Log($"[MagazineKit] {path}: LODs {mesh.lodCount}");
+        }
+    }
+
     // Only the vertices these triangles use, every channel the model has.
     static Mesh Compact(Mesh src, int[][] subs, string name)
     {
@@ -157,6 +173,7 @@ public static class MagazineKit
     // Into the asset at `path`, keeping its GUID when it already exists (the prefabs reference it).
     static Mesh Save(Mesh mesh, string path)
     {
+        MeshLodUtility.GenerateMeshLods(mesh); // as the gun models themselves (ADR-541)
         var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
         if (existing == null) { AssetDatabase.CreateAsset(mesh, path); return mesh; }
         EditorUtility.CopySerialized(mesh, existing);

@@ -64,6 +64,8 @@ public class AssetImportRules : AssetPostprocessor
         var importer = (ModelImporter)assetImporter;
         // Never readable in a build; only MagazineKit opens one model for the moment it splits the magazine off (#200).
         importer.isReadable = assetPath == ReadableWhileSplitting;
+        // Gun models carry Unity Mesh LODs (ADR-541, .meta); MagazineKit splits the full mesh and adds LODs to the parts itself.
+        if (assetPath == ReadableWhileSplitting) importer.generateMeshLods = false;
         importer.meshCompression = ModelImporterMeshCompression.Medium;
         importer.importCameras = false;
         importer.importLights = false;
