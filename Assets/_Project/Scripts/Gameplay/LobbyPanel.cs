@@ -51,7 +51,7 @@ namespace Game.Gameplay
             public Text TileLabel, NameText;
         }
 
-        public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
+        public static LobbyPanel Build(MainMenu menu, Transform parent, System.Action training, System.Action events, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
         {
             var p = new LobbyPanel { _menu = menu };
             p.Party = new PartyLobby(0, "플레이어");
@@ -62,7 +62,7 @@ namespace Game.Gameplay
             fit.Stage = p.Stage;
             fit.OnFit = p.PlaceAll; // the camera may move (외형 closeup) and the canvas may resize: keep the labels on the characters
             p.BuildScene();
-            p.BuildTop(training, custom, settings, credits, quit, character, bell);
+            p.BuildTop(training, events, custom, settings, credits, quit, character, bell);
             if (Compact) { p.BuildPlatesCompact(); p.BuildConsoleCompact(); }
             else { p.BuildPlates(); p.BuildConsole(); }
             p.Refresh();
@@ -96,13 +96,13 @@ namespace Game.Gameplay
         }
 
         // ---------------------------------------------------------------- top bar
-        void BuildTop(System.Action training, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
+        void BuildTop(System.Action training, System.Action events, System.Action custom, System.Action settings, System.Action credits, System.Action quit, System.Action character, System.Action bell)
         {
             var bar = UiPaint.At(Stage, "TopBar", 0, 0, StageW, 96);
             UiPaint.GradientOpaque(bar, UiPaint.Pn, new Color(UiPaint.Pn.r, UiPaint.Pn.g, UiPaint.Pn.b, 0f));
-            string[] names = { "플레이", "외형", "훈련장", "설정", "크레딧" };
-            System.Action[] acts = { null, character, training, settings, credits };
-            for (int i = 0; i < 5; i++)
+            string[] names = { "플레이", "외형", "훈련장", "이벤트", "설정", "크레딧" };
+            System.Action[] acts = { null, character, training, events, settings, credits };
+            for (int i = 0; i < names.Length; i++)
             {
                 float x = 48f + i * 100f;
                 bool on = i == 0;
@@ -113,12 +113,12 @@ namespace Game.Gameplay
                 UiPaint.Label(b.transform, "No", 0, 7, 92, 17, (on ? "▲ " : "") + (i + 1).ToString("00"), 15, on ? UiPaint.Ac : UiPaint.T2, TextAnchor.MiddleCenter, FontStyle.Bold);
                 UiPaint.Label(b.transform, "Name", 0, 24, 92, 26, names[i], 20, on ? UiPaint.Tx : UiPaint.T2, TextAnchor.MiddleCenter, FontStyle.Bold);
             }
-            UiPaint.Label(Stage, "Chevron", 548, 32, 9, 32, "›", 22, UiPaint.T2, TextAnchor.MiddleCenter);
+            UiPaint.Label(Stage, "Chevron", 648, 32, 9, 32, "›", 22, UiPaint.T2, TextAnchor.MiddleCenter);
             // 일반 매치 | 커스텀 모드 segmented control.
-            UiPaint.Box(UiPaint.At(Stage, "Seg", 565, 23, 252, 50), Color.clear, 25, UiPaint.Ln);
-            var normal = UiPaint.Btn(Stage, "Normal", 566, 24, 128, 48, "✓ 일반 매치", 18, 24, UiPaint.AcS, Color.clear, UiPaint.Tx, null);
+            UiPaint.Box(UiPaint.At(Stage, "Seg", 665, 23, 252, 50), Color.clear, 25, UiPaint.Ln);
+            var normal = UiPaint.Btn(Stage, "Normal", 666, 24, 128, 48, "✓ 일반 매치", 18, 24, UiPaint.AcS, Color.clear, UiPaint.Tx, null);
             UiPaint.Box(UiPaint.At(normal.transform, "Bar", 16, 44, 96, 4), UiPaint.Ac, 1);
-            UiPaint.Btn(Stage, "Custom", 694, 24, 122, 48, "커스텀 모드", 18, 24, Color.clear, Color.clear, UiPaint.Tx, new UnityEngine.Events.UnityAction(custom));
+            UiPaint.Btn(Stage, "Custom", 794, 24, 122, 48, "커스텀 모드", 18, 24, Color.clear, Color.clear, UiPaint.Tx, new UnityEngine.Events.UnityAction(custom));
             // Right: ping chip, three round icon buttons, logo placeholder with the game name.
             UiPaint.Box(UiPaint.At(Stage, "Ping", 1476, 34, 85, 26), UiPaint.Pn, 13, UiPaint.Ln);
             UiPaint.Label(Stage, "PingText", 1476, 34, 85, 26, "핑 18 ms", 14, UiPaint.Tx, TextAnchor.MiddleCenter);

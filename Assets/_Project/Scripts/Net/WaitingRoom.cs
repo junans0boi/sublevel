@@ -43,6 +43,7 @@ namespace Game.Net
         MatchDirector _director;
         NetworkManager _nm;
         WaitingFlow _flow;
+        RaceRoom _race;         // the race hall (ADR-505), null in a World built before it
         float _deckY;
         float _nextSend;
         readonly Dictionary<Combatant, int> _keys = new Dictionary<Combatant, int>();
@@ -130,6 +131,7 @@ namespace Game.Net
             room._director = director; room._nm = nm;
             room._deckY = island.transform.position.y;
             room._flow = new WaitingFlow(rules, DedicatedServer.StartSecondsOverride);
+            room._race = RaceRoom.TryCreate(nm, island.transform);
             Current = room;
             nm.ServerManager.RegisterBroadcast<LiftCallRequest>(room.OnCallRequest);
             Debug.Log($"[WaitingRoom] open: the island at ({WaitingIsland.CentreX:F0}, {WaitingIsland.CentreZ:F0}), countdown {(DedicatedServer.StartSecondsOverride >= 0f ? DedicatedServer.StartSecondsOverride : rules.WaitMaxSeconds):0}s / {rules.WaitFullSeconds:0}s when full");
@@ -390,6 +392,7 @@ namespace Game.Net
         void Deploy()
         {
             if (_line.Active && _jumper != null) _line.Abort(_line.Jumper, Time.unscaledTimeAsDouble); // the departure cuts a jump short; the jumper's own client ends the ride on the corrected place
+            _race?.ServerClose();   // out of the race cars before anyone is moved (ADR-511)
             Debug.Log($"[WaitingRoom] countdown over ({_flow.Last.Reason}): {_flow.People} people, {_flow.Last.BotsTotal} bots in all, to the elevators");
             CloseRange();   // the booth guns back and the room's records gone before anyone reaches an elevator (ADR-501/502)
             foreach (var b in _bots)

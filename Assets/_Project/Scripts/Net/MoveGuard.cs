@@ -81,10 +81,11 @@ namespace Game.Net
             _sampled = now;
             var p = transform.position;
             // Waiting on the island (ADR-382): the server keeps people inside it, whatever the client says.
-            if (WaitingRoom.Current != null && WaitingRoom.Current.Open && !_combatant.Dead.Value)
+            // On foot only the island or the race pit, never the track; a seated person goes where the race car goes (ADR-508).
+            if (WaitingRoom.Current != null && WaitingRoom.Current.Open && !_combatant.Dead.Value && !VehicleSeat.IsAttached(_combatant))
             {
                 float cx = p.x, cz = p.z;
-                WaitingIsland.Clamp(ref cx, ref cz);
+                RaceTrack.ClampWalker(ref cx, ref cz);
                 if (cx != p.x || cz != p.z)
                 {
                     var back = new Vector3(cx, p.y, cz);

@@ -239,7 +239,8 @@ namespace Game.Gameplay
             // The inventory has its own copy of everything the HUD shows (armour, ammo, grenades) and the map
             // screen covers the minimap's job; drawn through them the HUD only clutters (and overlapped the header).
             // After death the death cam / result / spectate views take over (ADR-094).
-            bool drawn = show && UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map && !ResultScreen.HidesHud;
+            // An event race (ADR-519) has its own HUD (RaceHudView) and the vehicle panel: the battle royale's is off.
+            bool drawn = show && UiFocus.Current != UiScreen.Inventory && UiFocus.Current != UiScreen.Map && !ResultScreen.HidesHud && !Vehicle.EventRace;
             if (_canvas.enabled != drawn) _canvas.enabled = drawn;
             if (!show) return;
 

@@ -64,7 +64,7 @@ namespace Game.Gameplay
         }
 
         // The elevator doors are still shut: no moving or firing; the HUD counts down to "문 열림".
-        public static bool DoorsClosed => SpawnProtection.InputBlocked;
+        public static bool DoorsClosed => SpawnProtection.InputBlocked && !Vehicle.EventRace;   // an event race locks input before GO, no elevator
         public static float DoorSecondsLeft => SpawnProtection.DoorSecondsLeft;
 
         // ---- Vehicle (ADR-065 (5)) ----

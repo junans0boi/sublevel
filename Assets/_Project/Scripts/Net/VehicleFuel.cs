@@ -42,7 +42,7 @@ namespace Game.Net
         {
             if (IsServerInitialized)
             {
-                _tank = global::Game.Core.Fuel.Burn(_tank, _vehicle.EngineOn.Value, _vehicle.ServerThrottle, _vehicle.ServerBoost,
+                _tank = _vehicle.IsRaceCar ? 1f : global::Game.Core.Fuel.Burn(_tank, _vehicle.EngineOn.Value, _vehicle.ServerThrottle, _vehicle.ServerBoost,
                     _vehicle.IsMotorcycle, Time.deltaTime, FuelRules.Current);
                 // SyncVar writes are not free: a step of 0.1% of a tank (or reaching empty) goes out.
                 if (_tank != Fuel.Value && (_tank <= 0f || Mathf.Abs(_tank - Fuel.Value) >= 0.001f)) Fuel.Value = _tank;

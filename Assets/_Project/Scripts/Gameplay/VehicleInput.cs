@@ -122,7 +122,13 @@ namespace Game.Gameplay
             {
                 if (f.Interact) vehicle.RequestExit(_combatant);
                 else if (f.Seat >= 0 && f.Seat != seat) vehicle.RequestSwitch(_combatant, f.Seat);
-                if (seat == Vehicles.DriverSeat) Drive(vehicle, f);
+                if (seat == Vehicles.DriverSeat)
+                {
+                    Drive(vehicle, f);
+                    // R in an event race: back onto the course (ADR-516). shortcut: the raw R key, not a KeyBinds action; add one if people ask to rebind it.
+                    if (Vehicle.EventRace && !blocked && UnityEngine.InputSystem.Keyboard.current != null
+                        && UnityEngine.InputSystem.Keyboard.current.rKey.wasPressedThisFrame) RaceHud.RequestReset();
+                }
                 else ReleaseHorn();
                 return;
             }
