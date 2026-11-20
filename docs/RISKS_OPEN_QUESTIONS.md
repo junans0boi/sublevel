@@ -96,3 +96,10 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 | 게임 기록 | 판 id·모드·순위·킬·생존 시간·종료 시각, 매치 정보(모드·서버 주소·봇 수·시각) | 게임 서버 | |
 | 소셜 | 친구 관계(요청자·상태·시각), 파티·파티 초대·참여 시각, 접속 상태(로비/게임 중, 마지막 확인 시각), 매칭 대기열 기록(모드·인원·상태·시각) | 사용자 행동 | `data.md`에 아직 없는 테이블 — 처리방침에 넣을지 확인 |
 | 접속 기록 | 서버 요청 로그(인증 헤더·쿠키는 가림), Caddy 접속 로그(켜져 있으면), 게임 서버 로그 | 자동 | IP 저장 여부·보관 기간은 위 '로그 보관' 질문 |
+
+## 공개 저장소·GitHub Releases (2026-11-20) — 사람이 판단 (에이전트는 법적 판단 안 함)
+`junans0boi/sublevel`은 **공개(PUBLIC)** 저장소다. README·Release 작업 중 확인한 사실만 적는다.
+- [ ] **Mixamo 원본 FBX 17개가 공개 저장소에 있다**: `Assets/_Project/Art/Characters/Mixamo/*.fbx`(소총 애니메이션 16 + `Swat_RifleAimingIdle_skin.fbx`, ledger C-0005, LFS)가 `origin/main`과 이력에 있다. 위 'Mixamo 사용 확정' 항목은 "저장소 공개 전 반드시 확인"이라고 적었지만 저장소는 이미 공개다. 선택지(준환): 그대로 둠 / 이후 커밋에서 추적 해제(이력에는 남음) / 이력 정리(force push 필요 — 에이전트 금지) / 비공개 전환(가시성 변경 — 사람). 이후 반입분(로스터·strafe)은 이미 gitignore.
+- [ ] **공개 문서에 서버 주소가 있다**: `docs/DEPLOY_GAME_SERVER.md`, `docs/MASTER_HANDOFF_2.md`, `docs/MASTER_HANDOFF_3.md`, `docs/handoff/CODEX_MASTER_PROMPT.md`에 서버 공인 IP·tailnet IP가 적혀 있다(비밀번호·키는 아님). 지울지 판단.
+- [ ] **코드 라이선스 없음**: 저장소에 `LICENSE`가 없어 기본적으로 모든 권리 보유다(README에 그렇게 적음). 오픈소스 라이선스를 붙일지, 붙인다면 에셋(Mixamo·CC BY)과 어떻게 구분할지 판단.
+- [ ] **게임 클라이언트 zip의 GitHub Release 공개 첨부**: `tools/release.sh --github`로 가능하지만 공개 배포가 된다. 조건(Mixamo·Fish-Net 약관, 등급분류, 개발용 인자 제거, 2 GiB 상한)은 `docs/RELEASE.md` 7절. 풀리기 전에는 Release에 노트만 올린다(ADR-530).

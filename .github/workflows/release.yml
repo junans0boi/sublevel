@@ -1,0 +1,28 @@
+# v* 태그 → GitHub Release(노트 = 태그 메시지 + 이전 태그 이후 커밋). 비밀 값 없음, GITHUB_TOKEN만 사용.
+# Unity 빌드는 CI에서 하지 않는다(에디터 라이선스·LFS 용량). 클라이언트 zip 첨부는 로컬 tools/release.sh --github <태그> (docs/RELEASE.md).
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, lfs: false }
+      - name: Notes
+        env: { GH_TOKEN: "${{ github.token }}", TAG: "${{ github.ref_name }}" }
+        run: |
+          ref="repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG"
+          if [ "$(gh api "$ref" -q .object.type)" = tag ]; then  # 주석 태그면 메시지가 노트 첫머리
+            gh api "repos/$GITHUB_REPOSITORY/git/tags/$(gh api "$ref" -q .object.sha)" -q .message > notes.md
+          else : > notes.md; fi
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          { echo; echo "## Commits${prev:+ since $prev}"; git log -n 100 --no-merges --format='- %s (%h)' ${prev:+"$prev.."}"$TAG"; } >> notes.md
+      - name: Release
+        env: { GH_TOKEN: "${{ github.token }}", TAG: "${{ github.ref_name }}" }
+        run: |
+          pre=(); [[ "$TAG" == v0.* || "$TAG" == *-* ]] && pre=(--prerelease)
+          gh release create "$TAG" --verify-tag --title "SUBLEVEL $TAG" --notes-file notes.md "${pre[@]}"
