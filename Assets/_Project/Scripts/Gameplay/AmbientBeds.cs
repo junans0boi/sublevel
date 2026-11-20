@@ -6,9 +6,10 @@ namespace Game.Gameplay
 {
     // Environment sound of the outdoor map (#194, ADR-151): wind, birds by day, crickets by night, water near the
     // shore, room tone under a roof, mixed from where the listener stands (AmbientRules) and ducked under gunfire
-    // (SpatialAudio.NoteLoud). Nothing is recorded or downloaded: every clip is synthesised here when first needed
-    // (noise through one-pole filters, sine chirps), loops are whole cycles or crossfaded. Birds are 3D one-shots in the
-    // trees around the listener; the beds are 2D (a wind has no direction worth panning).
+    // (SpatialAudio.NoteLoud). Wind, crickets and birds are CC0 recordings in Resources/Sfx (#290, ADR-540, cut by
+    // tools/sound_cut.py with tools/sound_ambient.json, loops crossfaded); water and room tone are still synthesised here,
+    // and the synthesis is the fallback when a recording is missing. Birds are 3D one-shots in the trees around the
+    // listener; the beds are 2D (a wind has no direction worth panning).
     public class AmbientBeds : MonoBehaviour
     {
         const int Rate = 22050;
@@ -184,13 +185,15 @@ namespace Game.Gameplay
             }
         }
 
-        // ---- Synthesis (made once per run) ----
+        // ---- Recordings, else synthesis (made once per run) ----
 
-        static AudioClip Wind => _wind != null ? _wind : (_wind = Make("AmbientWind", SynthWind()));
-        static AudioClip Crickets => _crickets != null ? _crickets : (_crickets = Make("AmbientCrickets", SynthCrickets()));
+        static AudioClip Wind => _wind != null ? _wind : (_wind = Resources.Load<AudioClip>("Sfx/amb_wind_loop") ?? Make("AmbientWind", SynthWind()));
+        static AudioClip Crickets => _crickets != null ? _crickets : (_crickets = Resources.Load<AudioClip>("Sfx/amb_crickets_loop") ?? Make("AmbientCrickets", SynthCrickets()));
         static AudioClip Water => _water != null ? _water : (_water = Make("AmbientWater", SynthWater()));
         static AudioClip Room => _room != null ? _room : (_room = Make("AmbientRoom", SynthRoom()));
-        static AudioClip[] Birds => _birds ??= Array.ConvertAll(SynthBirds(), d => Make("AmbientBird", d));
+        static AudioClip[] Birds => _birds ??= RecordedBirds() is { Length: > 0 } recorded ? recorded : Array.ConvertAll(SynthBirds(), d => Make("AmbientBird", d));
+
+        static AudioClip[] RecordedBirds() => Array.FindAll(Array.ConvertAll(new[] { 1, 2, 3, 4 }, i => Resources.Load<AudioClip>("Sfx/amb_bird_0" + i)), c => c != null);
 
         static AudioClip Make(string name, float[] data)
         {

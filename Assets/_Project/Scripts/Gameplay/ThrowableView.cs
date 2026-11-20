@@ -497,9 +497,11 @@ namespace Game.Gameplay
             return true;
         }
 
-        // A looping crackle: sparse short noise ticks over a soft low rumble, no recorded sound.
+        // A looping crackle: the recorded fire (Sfx/fire_crackle_loop, #290); the synthesis below is the fallback.
         static AudioClip Crackle()
         {
+            if (_crackle != null) return _crackle;
+            _crackle = Resources.Load<AudioClip>("Sfx/fire_crackle_loop");
             if (_crackle != null) return _crackle;
             const int rate = 22050;
             int n = rate * 2;

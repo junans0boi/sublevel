@@ -11,7 +11,7 @@ namespace Game.Gameplay
     public class PollutionHudView : MonoBehaviour
     {
         public static PollutionHudModel Model { get; private set; }
-        // Sound hooks (#270): the S5 sound track listens; no clip exists yet, so nothing plays here.
+        // Geiger (#270, #291): this view clicks the recorded counter (Sfx/geiger_click_*) at this rate; the event is for others.
         public static float GeigerClicksPerSecond { get; private set; }
         public static event System.Action<float> GeigerRateChanged;
         public string CoverIconKey { get; private set; } = "";
@@ -26,6 +26,10 @@ namespace Game.Gameplay
         PollutionDirector _director;
         Image _tint;
         Text _gas;
+        AudioSource _geiger;
+        float _clickIn;
+        static AudioClip[] _clicks;
+        static AudioClip[] Clicks => _clicks ??= System.Array.FindAll(new[] { Resources.Load<AudioClip>("Sfx/geiger_click_01"), Resources.Load<AudioClip>("Sfx/geiger_click_02") }, c => c != null);
         readonly PollutionExposure _cover = new PollutionExposure();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -66,12 +70,27 @@ namespace Game.Gameplay
                 "", 24, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
             _badge = badge.gameObject;
             _badge.SetActive(false);
+            _geiger = gameObject.AddComponent<AudioSource>();
+            _geiger.playOnAwake = false;
+            _geiger.spatialBlend = 0f; // the counter is on the player
+        }
+
+        void TickGeiger()
+        {
+            float rate = GeigerClicksPerSecond;
+            if (rate <= 0f) { _clickIn = 0f; return; }
+            _clickIn -= Time.deltaTime;
+            if (_clickIn > 0f) return;
+            _clickIn = PollutionHud.NextGeigerGap(rate, Random.value);
+            var clips = Clicks;
+            if (clips.Length > 0) _geiger.PlayOneShot(clips[Random.Range(0, clips.Length)], 0.55f * GameSettings.EffectsVolume);
         }
 
         void OnDestroy() => Model = default;
 
         void Update()
         {
+            TickGeiger();
             if (_director == null) { _director = PollutionDirector.Instance; if (_director == null) return; }
             var me = Combatant.LocalPlayer;
             var match = _director.Match;
