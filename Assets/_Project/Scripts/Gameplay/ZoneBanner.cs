@@ -35,6 +35,9 @@ namespace Game.Gameplay
         PollutionDirector _director;
         AudioSource _audio;
         GameObject _bannerBox, _promptBox;
+        Canvas _canvas;
+        // Tests: the region alert banner is on the screen.
+        public bool BannerShown => _canvas != null && _canvas.enabled && _bannerBox != null && _bannerBox.activeSelf;
         Text _bannerText, _promptText;
         Image _bannerFill;
 
@@ -161,6 +164,9 @@ namespace Game.Gameplay
 
         void Update()
         {
+            // An event race has no regions: none of the battle royale's region alerts, status or prompts (ADR-519).
+            if (_canvas != null && _canvas.enabled == Vehicle.EventRace) _canvas.enabled = !Vehicle.EventRace;
+            if (Vehicle.EventRace) return;
             if (_director == null)
             {
                 _director = PollutionDirector.Instance;
@@ -288,6 +294,7 @@ namespace Game.Gameplay
         void Build()
         {
             var canvas = UiKit.Canvas("ZoneBannerCanvas", SortOrder, false);
+            _canvas = canvas;
             canvas.transform.SetParent(transform, false);
             var top = new Vector2(0.5f, 1f);
 

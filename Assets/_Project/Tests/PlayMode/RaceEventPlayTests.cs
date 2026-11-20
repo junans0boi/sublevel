@@ -127,6 +127,13 @@ namespace Game.Tests
             Assert.AreEqual(RaceEvent.Racers, r.Keys.Length, "the player and the bots");
             Assert.AreEqual(me.ObjectId, r.Keys[0], "the local player first");
             for (int i = 1; i < r.Keys.Length; i++) Assert.IsFalse(r.Done[i], "the bots did not finish in time: DNF");
+            // The web capture's report: the battle royale's region alert and the vehicle bars showed over the results.
+            yield return null;
+            var banner = Object.FindAnyObjectByType<ZoneBanner>();
+            Assert.IsTrue(banner == null || !banner.BannerShown, "no region alert in an event race");
+            Assert.IsFalse(PollutionDirector.Instance != null && PollutionDirector.Instance.Ready, "the region lockdown never started");
+            var bars = Object.FindAnyObjectByType<VehicleHud>();
+            Assert.IsTrue(bars == null || !bars.PlateShown, "the vehicle bars are gone under the results");
             Assert.IsTrue(r.Done[0], "finished");
             Assert.AreEqual(Course.Laps, r.LapsDone[0]);
             Assert.GreaterOrEqual(lapsSeen, Course.Laps - 1, "the laps showed while racing");

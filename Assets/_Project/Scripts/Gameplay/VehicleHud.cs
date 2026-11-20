@@ -80,6 +80,8 @@ namespace Game.Gameplay
             bool canPour = cans != null && !pouring && cans.Count.Value > 0 && CombatantJerrycan.TargetFor(me) != null;
 
             drawn &= vehicle != null || pouring || canPour;
+            // An event race's results table takes the screen (ADR-519): the speed, fuel and body bars go with the race.
+            drawn &= !(Vehicle.EventRace && (RaceHud.Phase == Game.Core.RacePhase.Results || RaceHud.Phase == Game.Core.RacePhase.Over));
             if (_canvas.enabled != drawn) _canvas.enabled = drawn;
             if (!drawn) return;
 
