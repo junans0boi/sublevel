@@ -48,8 +48,8 @@ namespace Game.AI
         const float EscapeOnwardMeters = 6f;
         const int KeysWanted = 1;
 
-        // What the lockdown asks of a bot right now (#77), in priority order.
-        public enum ZoneGoal { None, Escape, SafeSubZone, ToFinalRegion, Hunt, Elevator }
+        // What the region endings (gas rise or bombardment, ADR-484) ask of a bot right now (#77, #333), in priority order.
+        public enum RegionGoal { None, Escape, ToFinalRegion, Hunt, Elevator }
 
         public static readonly List<BotController> All = new List<BotController>();
 
@@ -99,7 +99,7 @@ namespace Game.AI
         readonly Vector3[] _corners = new Vector3[64];
         bool _routing;
         float _routeRetryAt;
-        ZoneGoal _goal;
+        RegionGoal _goal;
         int _goalPass = -1;
         bool _escapeOnward;
         int _skipPass = -1;
@@ -121,8 +121,8 @@ namespace Game.AI
         public BotIntent Intent => _intent;
         public Combatant Target => _percept.EnemyVisible ? _enemy : null;
         public bool OnNavMesh => _agent != null && _agent.enabled && _agent.isOnNavMesh;
-        // What the lockdown made this bot do on its last update (None when it followed its own brain).
-        public ZoneGoal Goal => _goal;
+        // What the region endings made this bot do on its last update (None when it followed its own brain).
+        public RegionGoal Goal => _goal;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -695,18 +695,18 @@ namespace Game.AI
         {
             if (!OnNavMesh) return;
             var at = transform.position;
-            // The lockdown first (#77): out of a region that is closing, out of a closing sub-zone of the final
-            // region, into the final region once it is named, and at the very end toward the others. Urgent goals
+            // The region endings first (#77, ADR-533): out of a region before its gas or bombardment starts,
+            // into the final region once it is named, and at the very end toward the others. Urgent goals
             // take over the legs whatever the brain wants (it still aims and shoots); the others only when the brain
             // is just wandering or looking into something.
-            _goal = CurrentZoneGoal(at, out var goalTarget, out bool urgent, out _goalPass);
-            if (_goal != ZoneGoal.Escape) _escapeOnward = false;
+            _goal = CurrentRegionGoal(at, out var goalTarget, out bool urgent, out _goalPass);
+            if (_goal != RegionGoal.Escape) _escapeOnward = false;
             var zones = PollutionDirector.Instance;
             // The very end with nothing to shoot with: running away would never end the match. Fists out, go at it.
             if (_percept.EnemyVisible && _enemy != null && !CanFight && zones != null && zones.OnlyFinalRegionLeft)
             {
                 if (!Melee.CanStrike(_self.ActiveWeapon)) _self.ServerSetHolstered(true); // a melee weapon stays in hand
-                _goal = ZoneGoal.Hunt;
+                _goal = RegionGoal.Hunt;
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
@@ -715,13 +715,13 @@ namespace Game.AI
             if (_percept.EnemyVisible && _enemy != null && !CanFight && inHand != null && inHand.IsMelee
                 && Flat(_enemy.transform.position - at) <= MeleeRules.Current.BotChargeMeters)
             {
-                _goal = ZoneGoal.Hunt;
+                _goal = RegionGoal.Hunt;
                 goalTarget = _enemy.transform.position;
                 urgent = true;
             }
             // A noise it is going to comes before the final-region gather (ADR-312): only a roaming bot is pulled by a non-urgent zone goal.
-            bool zoneMove = _goal != ZoneGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && intent.State == BotState.Roam));
-            if (!zoneMove) _goal = ZoneGoal.None;
+            bool zoneMove = _goal != RegionGoal.None && (urgent || (!_percept.FarmActive && !_percept.CorpseActive && intent.State == BotState.Roam));
+            if (!zoneMove) _goal = RegionGoal.None;
 
             if (!intent.Move && !zoneMove)
             {
@@ -834,15 +834,15 @@ namespace Game.AI
         // A weapon with rounds in hand or in another slot (what the brain calls being able to fight).
         bool CanFight => (_percept.HasWeapon && (_percept.Mag > 0 || _percept.Reserve > 0)) || _percept.OtherSlotUsable;
 
-        // The lockdown's wish for a bot standing at `at` (see ZoneGoal), with where to go and whether it overrides
+        // The region endings' wish for a bot standing at `at` (see RegionGoal), with where to go and whether it overrides
         // everything the brain wants. `pass` is the pass of an escape, else -1.
-        ZoneGoal CurrentZoneGoal(Vector3 at, out Vector3 target, out bool urgent, out int pass)
+        RegionGoal CurrentRegionGoal(Vector3 at, out Vector3 target, out bool urgent, out int pass)
         {
             target = default;
             urgent = false;
             pass = -1;
             var zones = PollutionDirector.Instance;
-            if (zones == null || zones.RegionCount == 0) return ZoneGoal.None;
+            if (zones == null || zones.RegionCount == 0) return RegionGoal.None;
 
             int skip = Time.time < _skipPassUntil ? _skipPass : -1;
             // A warning on the region it stands in: leave after a reaction delay by difficulty, before the front comes (ADR-245).
@@ -850,13 +850,13 @@ namespace Game.AI
             {
                 urgent = true;
                 _goalPass = -1;
-                return ZoneGoal.Elevator;
+                return RegionGoal.Elevator;
             }
             if (TryWarnedLeaveTarget(zones, at, out target, out urgent))
             {
                 _warnedLeaves++;
                 _goalPass = -1;
-                return ZoneGoal.Escape;
+                return RegionGoal.Escape;
             }
             if (zones.TryEscapeTarget(at, skip, out target, out pass, out int toRegion))
             {
@@ -868,25 +868,25 @@ namespace Game.AI
                 {
                     target = station;
                     pass = -1;
-                    return ZoneGoal.Elevator;
+                    return RegionGoal.Elevator;
                 }
                 // The border need not run exactly through the pass: once at the point beyond it while still counted
                 // in the closing region, keep on toward the middle of the region beyond.
                 if (Flat(target - at) < EscapeOnwardMeters) _escapeOnward = true;
                 if (_escapeOnward) target = zones.RegionCentre(toRegion);
-                return ZoneGoal.Escape;
+                return RegionGoal.Escape;
             }
             // A player learns the final region only when enough regions are warned or lost (M7); the bot reads the same map.
             int final = BotPollutionPlan.KnowsFinal(KnownRegions(zones), zones.RegionCount) ? zones.FinalRegion : -1;
-            if (final < 0) return ZoneGoal.None;
+            if (final < 0) return RegionGoal.None;
             if (zones.RegionIndexAt(at) != final)
             {
                 target = zones.RegionCentre(final);
-                return ZoneGoal.ToFinalRegion;
+                return RegionGoal.ToFinalRegion;
             }
             // Only the final region is left: nobody may hide until the end, the bots go looking for each other.
-            if (zones.OnlyFinalRegionLeft && TryNearestEnemy(at, out target)) return ZoneGoal.Hunt;
-            return ZoneGoal.None;
+            if (zones.OnlyFinalRegionLeft && TryNearestEnemy(at, out target)) return RegionGoal.Hunt;
+            return RegionGoal.None;
         }
 
         // ---- Key elevator (ADR-246): walk to a station of the region, insert the key, wait for company, pick a destination ----
@@ -968,6 +968,8 @@ namespace Game.AI
         public static int WarnedLeaveStarts;
         int _warnedLeaves;
 
+        float _walkOutSeconds = BotPollutionPlan.MinimumWalkSeconds, _walkOutAt;
+
         bool TryWarnedLeaveTarget(PollutionDirector zones, Vector3 at, out Vector3 target, out bool urgent)
         {
             target = default;
@@ -977,7 +979,6 @@ namespace Game.AI
             float left = zones.SecondsLeft(own);
             if (left < 0f) return false;
             float since = Mathf.Max(0f, zones.Rules.WarningLeadSeconds - left);
-            if (!BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, left, zones.IsDoomed(at), _level, unchecked(_botIndex * 7919 + _self.ObjectId))) return false;
             // The middle of the nearest region that is neither warned nor lost.
             float best = float.MaxValue;
             bool found = false;
@@ -990,7 +991,18 @@ namespace Game.AI
                 if (d < best) { best = d; target = c; found = true; }
             }
             if (!found) return false;
-            urgent = left <= 40f; // before that the brain may still fight; in the last stretch walking out wins
+            // Gas rise and bombardment both start at the confirmation (ADR-484): be over the border by then (ADR-533).
+            // The border walk changes slowly: sampled every 2 s, not every frame (server ms, PERF_BUDGET).
+            if (Time.time >= _walkOutAt)
+            {
+                var aim = target;
+                _walkOutAt = Time.time + 2f;
+                _walkOutSeconds = BotPollutionPlan.WalkOutSeconds(
+                    BotPollutionPlan.MetersToBorder((x, z) => zones.RegionIndexAt(new Vector3(x, 0f, z)) == own, at.x, at.z, aim.x, aim.z), _agent.speed);
+            }
+            float walk = _walkOutSeconds;
+            if (!BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, left, zones.IsDoomed(at), _level, unchecked(_botIndex * 7919 + _self.ObjectId), walk)) return false;
+            urgent = left <= walk; // before that the brain may still fight; in the last stretch walking out wins
             if (_warnedLeaves == 0)
             {
                 WarnedLeaveStarts++;
@@ -1111,7 +1123,7 @@ namespace Game.AI
                 _enemy = null;
                 _percept.EnemyVisible = false;
             }
-            if (_goal == ZoneGoal.Escape && _goalPass >= 0)
+            if (_goal == RegionGoal.Escape && _goalPass >= 0)
             {
                 _skipPass = _goalPass;
                 _skipPassUntil = now + IgnoreSeconds;
@@ -1126,12 +1138,11 @@ namespace Game.AI
         {
             switch (_goal)
             {
-                case ZoneGoal.Escape:
+                case RegionGoal.Escape:
                     return "escape";
-                case ZoneGoal.SafeSubZone: return "safe-subzone";
-                case ZoneGoal.ToFinalRegion: return "to-final-region";
-                case ZoneGoal.Hunt: return "hunt";
-                case ZoneGoal.Elevator: return "elevator";
+                case RegionGoal.ToFinalRegion: return "to-final-region";
+                case RegionGoal.Hunt: return "hunt";
+                case RegionGoal.Elevator: return "elevator";
             }
             switch (_intent.State)
             {

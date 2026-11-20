@@ -13,15 +13,37 @@ namespace Game.Core
         public static float ReactionSeconds(BotDifficulty level, int botSeed) =>
             (float)(new Random(unchecked(botSeed * 131 + 7)).NextDouble() * MaxReactionSeconds(level));
 
+        // Whatever the delay, at least the last stretch before the confirmation is for walking out.
+        public const float MinimumWalkSeconds = 40f;
+        // A nav path runs longer than the straight line, and doors, a fight on the way or a stall cost time (ADR-533).
+        public const float PathFactor = 1.4f, SpareSeconds = 15f;
+
+        // Seconds a bot needs to cross `metersToBorder` (straight line) at `speed` m/s and be out before the region ends: both
+        // endings start at the confirmation, the gas from the lowest ground and the bombardment anywhere (ADR-484), so being
+        // over the border by then is safe from either. Never under MinimumWalkSeconds.
+        public static float WalkOutSeconds(float metersToBorder, float speed) =>
+            Math.Max(MinimumWalkSeconds, metersToBorder * PathFactor / Math.Max(0.5f, speed) + SpareSeconds);
+
+        // Metres along the straight line from (fromX, fromZ) toward (toX, toZ) until `inside` is false (the border of the
+        // region it stands in), sampled every `step` metres; the whole distance when it never leaves.
+        public static float MetersToBorder(Func<float, float, bool> inside, float fromX, float fromZ, float toX, float toZ, float step = 10f)
+        {
+            float dx = toX - fromX, dz = toZ - fromZ, len = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (len < 1e-3f) return 0f;
+            for (float d = step; d < len; d += step)
+                if (!inside(fromX + dx * d / len, fromZ + dz * d / len)) return d;
+            return len;
+        }
+
         // True when the bot should head out of its region now. `sinceWarning` = seconds since the region's warning began,
-        // `secondsToConfirm` = seconds until it is contaminated (large when not warned), `doomed` = the front is within reach.
-        public static bool ShouldLeave(PollutionState own, float sinceWarning, float secondsToConfirm, bool doomed, BotDifficulty level, int botSeed)
+        // `secondsToConfirm` = seconds until it is contaminated (large when not warned), `doomed` = the front is within reach,
+        // `walkOutSeconds` = WalkOutSeconds of the way out: whatever the reaction delay, it leaves when that is all that is left.
+        public static bool ShouldLeave(PollutionState own, float sinceWarning, float secondsToConfirm, bool doomed, BotDifficulty level, int botSeed,
+            float walkOutSeconds = MinimumWalkSeconds)
         {
             if (own == PollutionState.Contaminated || doomed) return true;
             if (own != PollutionState.Warning) return false;
-            // Whatever the delay, the last stretch before the confirmation is for walking out.
-            const float MinimumWalkSeconds = 40f;
-            return secondsToConfirm <= MinimumWalkSeconds || sinceWarning >= ReactionSeconds(level, botSeed);
+            return secondsToConfirm <= Math.Max(MinimumWalkSeconds, walkOutSeconds) || sinceWarning >= ReactionSeconds(level, botSeed);
         }
 
         // Chance that a bot with a key and a warning on its region uses the key (S8-A9 KeyUseChance; the dial that tunes the key

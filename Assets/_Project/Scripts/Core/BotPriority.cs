@@ -7,17 +7,17 @@ namespace Game.Core
 
     public struct PriorityInput
     {
-        public bool EscapeUrgent;    // the pollution or the lockdown is on it (ZoneGoal urgent)
+        public bool EscapeUrgent;    // its region is about to end in gas or bombardment, or already has (RegionGoal urgent, ADR-533)
         public bool Combat;          // an enemy in sight, a retreat or a heal going on
         public bool Farming;         // still kitting itself out (BotFarm)
         public bool NoiseHeard;      // a noise it has not looked into yet
         public bool Investigates;    // this bot goes to noises (BotPriority.Investigates)
-        public bool GatherGoal;      // the lockdown wants it in the final region (not urgent)
+        public bool GatherGoal;      // the final region is named and it is not in it (not urgent)
     }
 
     public static class BotPriority
     {
-        // Escape the pollution/lockdown > fight, retreat, heal > finish farming > look into a noise > gather in the final region > walk between towns.
+        // Escape the region ending > fight, retreat, heal > finish farming > look into a noise > gather in the final region > walk between towns.
         public static BotGoal Choose(in PriorityInput i)
         {
             if (i.EscapeUrgent) return BotGoal.Escape;
