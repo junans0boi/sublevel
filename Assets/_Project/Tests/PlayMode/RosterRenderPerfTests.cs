@@ -8,13 +8,16 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // S3 roster: 50 characters in view (PERF_BUDGET method A). Silent (no audio). Needs restored roster FBX
+    // S3 roster: 80 characters in view (ADR-259 match size, PERF_BUDGET method A), each holding a gun in the +gun scenes (ADR-541). Silent (no audio). Needs restored roster FBX
     // (tools/unity.sh run CharacterImport.SyncStaging) and built prefabs (CharacterRoster.Build).
     // Run alone: tools/unity.sh test playmode Game.Tests.RosterRenderPerfTests
     [Category("Perf")]
     public class RosterRenderPerfTests
     {
-        static bool WithGear = true;
+        static bool WithGear = true, WithGun;
+        const int Count = 80; // ADR-259
+        // Real gun models (Mesh LOD, ADR-541), a different one per character so materials vary as in a match.
+        static readonly string[] Guns = { "Wpn04_Breacher", "Wpn05_Sentinel", "Wpn09_Vanguard", "Wpn10_Bulwark", "Wpn11_Hauler", "Wpn12_Lancer", "Wpn13_Tracer", "Wpn14_Arbiter", "Wpn33_Marshal", "Wpn34_Fang" };
         static readonly string[] Ids = { "MixamoSwat", "MixamoBrian", "MixamoLouise", "MixamoJames", "MixamoMegan", "MixamoKate", "MixamoJosh", "MixamoAdam", "MixamoMartha", "MixamoAlex", "MixamoSteve", "MixamoSwatGuy", "MixamoGasMask", "UbcMale", "UbcFemale" };
 
         static CharacterDef[] Spawn(int count, float near, float far, int seed)
@@ -31,9 +34,21 @@ namespace Game.Tests
                 var def = go.GetComponent<CharacterDef>();
                 def.ApplyVariant(rng.Next(0, def.Variants.Length));
                 if (WithGear) { int t = 1 + i % 3; go.AddComponent<ArmorVisual>().ShowTiers(t, t); go.AddComponent<BackpackVisual>().Show(t); } // helmet + vest + backpack on everyone
+                if (WithGun) Hold(def, Guns[i % Guns.Length]);
                 list[i] = def;
             }
             return list;
+        }
+
+        // The gun in the hand at about rifle length; the fit is rough (only its draw and triangle cost matter here).
+        static void Hold(CharacterDef def, string gun)
+        {
+            var model = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Art/Weapons/Roster/{gun}.fbx");
+            Assert.IsNotNull(model, gun);
+            var go = Object.Instantiate(model, def.Sockets.WeaponSocket, false);
+            var b = new Bounds(go.transform.position, Vector3.zero);
+            foreach (var r in go.GetComponentsInChildren<Renderer>()) b.Encapsulate(r.bounds);
+            go.transform.localScale *= 0.9f / Mathf.Max(b.size.x, b.size.y, b.size.z, 1e-4f);
         }
 
         static Camera Stage()
@@ -51,7 +66,7 @@ namespace Game.Tests
 
         [UnityTest]
         [Timeout(300000)]
-        public IEnumerator Fifty_Characters_RenderWithinBudget()
+        public IEnumerator Eighty_Characters_RenderWithinBudget()
         {
             var cam = Stage();
             Directory.CreateDirectory("Logs/perf"); Directory.CreateDirectory("Logs/roster");
@@ -59,29 +74,29 @@ namespace Game.Tests
             RenderProbe.Result empty = default;
             yield return RenderProbe.Measure(cam, r => empty = r, 60, 20);
             sb.AppendLine($"empty floor+sun: {empty} | with helmet+vest+backpack on every character (tiers 1-3 mixed)");
-            foreach (var (name, near, far, gear) in new[] { ("spread 6-90m NO gear", 6f, 90f, false), ("spread 6-90m +gear", 6f, 90f, true), ("worst 8-25m NO gear", 8f, 25f, false), ("worst 8-25m +gear", 8f, 25f, true) })
+            foreach (var (name, near, far, gear, gun) in new[] { ("spread 6-90m NO gear", 6f, 90f, false, false), ("spread 6-90m +gear+gun", 6f, 90f, true, true), ("worst 8-25m NO gear", 8f, 25f, false, false), ("worst 8-25m +gear", 8f, 25f, true, false), ("worst 8-25m +gear+gun", 8f, 25f, true, true) })
             {
-                WithGear = gear; var chars = Spawn(50, near, far, 1);
+                WithGear = gear; WithGun = gun; var chars = Spawn(Count, near, far, 1);
                 yield return null;
                 // Best of 3: other Unity instances on the same Mac cause one-off spikes (PERF_BUDGET measures on a quiet machine).
                 RenderProbe.Result res = default; bool first = true;
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     RenderProbe.Result r1 = default;
-                    yield return RenderProbe.Measure(cam, r => r1 = r, 90, 30, $"Logs/roster/perf50_{(near < 7 ? "spread" : "worst")}{(gear ? "_gear" : "")}.png");
+                    yield return RenderProbe.Measure(cam, r => r1 = r, 90, 30, $"Logs/roster/perf{Count}_{(near < 7 ? "spread" : "worst")}{(gear ? "_gear" : "")}{(gun ? "_gun" : "")}.png");
                     if (first || r1.Stats.P99Ms < res.Stats.P99Ms) res = r1;
                     first = false;
                     if (res.Stats.P99Ms <= RenderProbe.RenderBudgetMs) break;
                 }
-                sb.AppendLine($"50 chars {name}: {res} | minus empty: tris {res.Triangles - empty.Triangles} ({(res.Triangles - empty.Triangles) / 50} per char), draw {res.DrawCalls - empty.DrawCalls}");
+                sb.AppendLine($"{Count} chars {name}: {res} | minus empty: tris {res.Triangles - empty.Triangles} ({(res.Triangles - empty.Triangles) / Count} per char), draw {res.DrawCalls - empty.DrawCalls}");
                 foreach (var c in chars) Object.Destroy(c.gameObject);
-                File.WriteAllText("Logs/perf/roster50.txt", sb.ToString());
+                File.WriteAllText($"Logs/perf/roster{Count}.txt", sb.ToString());
                 Assert.LessOrEqual(res.Stats.P99Ms, RenderProbe.RenderBudgetMs, name + " render p99");
                 Assert.LessOrEqual(res.DrawCalls, RenderProbe.DrawCallBudget, name + " draw calls");
                 Assert.LessOrEqual(res.SetPasses, RenderProbe.SetPassBudget, name + " set pass");
                 yield return null;
             }
-            File.WriteAllText("Logs/perf/roster50.txt", sb.ToString());
+            File.WriteAllText($"Logs/perf/roster{Count}.txt", sb.ToString());
             UnityEngine.Debug.Log("[Perf] " + sb);
         }
 

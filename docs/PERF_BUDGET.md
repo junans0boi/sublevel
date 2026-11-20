@@ -166,6 +166,7 @@ A의 이번 수치는 M2-1 때보다 15~30% 높다. 렌더 내용이 바뀌지 �
 | **총 몫(차이)** | +30 | **+98(총당 약 4.7)** | **+36,468(총당 약 1,740)** | +93 | +0.8ms | — |
 총기 메시 27개 메모리 합 5.5MB(CPU+GPU 추정치 `Profiler.GetRuntimeMemorySizeLong`), 총당 646~2528 삼각형.
 판정: 50인 전원이 화면에 있다고 가정해도 총 몫 약 235 드로우·87k 삼각형 → 예산(2,500 / 1.5M)의 9% / 6%. 렌더 p99 5.17ms ≤ 10ms. **통과(잠정)**. 머티리얼 98은 FBX마다 머티리얼이 따로라서 SetPass가 늘 수 있으나 SRP Batcher라 영향이 작다고 추정(미측정) → 플레이어 빌드 M1 게이트에서 SetPass 재측정 필요. 총 LOD 없음(총 삼각형이 작아 불필요로 판단).
+→ ADR-541(#281): 80인 기준(ADR-259)에서 다시 판정하려고 총 메시 전부에 Unity Mesh LOD를 넣었다. 80인 측정은 `RosterRenderPerfTests.Eighty_Characters_RenderWithinBudget`의 "worst 8-25m +gear+gun"(비교: 50인 +장비 p99 9.75ms) — **재측정 대기, 판정 잠정 유지**.
 
 
 ## 착용 장비 실제 모델 (2026-11-20, ADR-520, `RosterRenderPerfTests` 로스터 50명, 에디터 오프스크린 1080p)
