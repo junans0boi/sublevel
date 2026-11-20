@@ -45,8 +45,14 @@ public static class WebNewsCapture
         var lift = WaitingIsland.Lift; var pad = WaitingIsland.BungeePad; var tw = WaitingIsland.Tower; float top = y + BungeeCurve.Top;
         // The board, the island's own materials, the call buttons and the hoist are built by the client HUD (ADR-490/495/496): drive its preview.
         var msg = new Game.Net.WaitingBroadcast { Active = true, SecondsLeft = 47f, People = 6, Total = 52, Target = 80, BungeeBest = 58.4f };
-        Game.Net.WaitingHud.Preview(msg);
-        var hud = Object.FindFirstObjectByType<Game.Net.WaitingHud>();
+        var records = new Game.Net.WaitingRecordsBroadcast   // sample TOP3s (#422), as WaitingIslandCapture shows them
+        {
+            BungeeNames = new[] { "하늘", "노을", "루나" }, BungeeScores = new[] { 3, 2, 2 },
+            RangeNames = new[] { "노을", "하늘", "바람" }, RangeScores = new[] { 41, 27, 9 },
+        };
+        var world = Object.FindFirstObjectByType<WorldInfo>();
+        var regions = world != null ? world.Regions.Select(r => r.Name).ToArray() : null;
+        var hud = Game.Net.WaitingHud.Preview(msg, records, regions);
         // shortcut: reaches WaitingHud._last/Refresh by reflection (capture-only); give WaitingHud a preview setter if this breaks.
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
         void LiftAt(LiftPhase phase, float into, byte calls)
@@ -76,6 +82,23 @@ public static class WebNewsCapture
         Shot(cam, "island_aerial", new Vector3(cx + 95f, y + 55f, cz + 95f), new Vector3(cx, y + 18f, cz));
         cam.farClipPlane = 700f;
         Shot(cam, "bungee_tower", new Vector3(L(-26f), y + 1.7f, Z(-16f)), new Vector3(L(tw.x), y + 30f, Z(tw.z)));
+
+        // Range (#421): the booths from the hall, a shooter at a stand seen from behind, the shooter's view down the lane; the board's TOP3 pages (#422).
+        var st = WaitingRange.Stand(1); var tg = WaitingRange.Target(1, 0);
+        Shot(cam, "range_booths", new Vector3(L(-14f), y + 2.4f, Z(9f)), new Vector3(L(-30f), y + 1.4f, Z(-3f)));
+        Shot(cam, "range_row", new Vector3(L(-11f), y + 4f, Z(1f)), new Vector3(L(-30f), y + 0.8f, Z(0f)));
+        var shooter = Person(new Vector3(L(st.x - 0.6f), y + 0.1f, Z(st.z)), 90f, 0.9f);   // the bot prefab faces -z: 90 turns it down the lane
+        Shot(cam, "range_shooter", new Vector3(L(st.x + 3.2f), y + 2.2f, Z(st.z + 1.6f)), new Vector3(L(tg.x), y + 1.2f, Z(st.z)));
+        if (shooter != null) Object.DestroyImmediate(shooter);
+        Shot(cam, "range_stand", new Vector3(L(st.x + 1.2f), y + 1.65f, Z(st.z + 0.6f)), new Vector3(L(tg.x), y + 1.2f, Z(st.z)));
+        foreach (var page in new[] { BoardPage.RangeTop, BoardPage.BungeeTop, BoardPage.Regions })
+        {
+            hud.PreviewPage(page);
+            Shot(cam, "board_" + page, new Vector3(cx, y + 6.5f, cz - 12f), new Vector3(cx, y + 7f, cz - 33f));
+        }
+        hud.PreviewPage(BoardPage.RangeTop);
+        Shot(cam, "board_deck", new Vector3(cx + 4f, y + 1.7f, cz + 6f), new Vector3(cx, y + 7f, cz - 33f));
+        hud.PreviewPage(BoardPage.Countdown);
 
         // Top: someone at the end of the jump board, seen from the tower top behind, and the jumper's own view from the end.
         float end = WaitingIsland.BridgeEndX;
