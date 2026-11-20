@@ -49,6 +49,8 @@ namespace Game.Core
             r.PeekAlternate = hard;
             // Farming (ADR-294): the easy bot farms longest; the hard one kits itself out with armour. Every level gets the weapon hint (ADR-321).
             r.FarmSeconds *= hard ? 180f / 210f : 240f / 210f;
+            // Arming time apart (#377, ADR-548): the hard bot is told where a gun lies 25 s after the drop, the easy one only at 210 s.
+            r.FarmHintSeconds *= hard ? 25f / 150f : 210f / 150f;
             if (hard) { r.FarmArmorPieces = Math.Max(r.FarmArmorPieces, 2); r.FarmHealItems = Math.Max(r.FarmHealItems, 2); }
             else r.FarmHealItems = 0;
             return r;

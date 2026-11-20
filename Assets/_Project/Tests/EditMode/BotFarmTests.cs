@@ -43,6 +43,8 @@ namespace Game.Tests
             Assert.IsTrue(BotLevels.For(normal, BotDifficulty.Easy).FarmHint);
             Assert.IsTrue(normal.FarmHint);
             Assert.IsTrue(BotLevels.For(normal, BotDifficulty.Hard).FarmHint, "ADR-321: every level gets the hint");
+            Assert.AreEqual(210f, BotLevels.For(normal, BotDifficulty.Easy).FarmHintSeconds, 0.01f);
+            Assert.AreEqual(25f, BotLevels.For(normal, BotDifficulty.Hard).FarmHintSeconds, 0.01f, "ADR-548: hard arms clearly sooner");
         }
 
         [Test]
