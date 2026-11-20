@@ -29,7 +29,8 @@ namespace Game.Gameplay
         Light _sun, _fill;
         Material _sky, _baseSky;
         Color _baseTint = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-        float _baseExposure = 1f, _baseAmbient = 1f, _baseReflection = 1f;
+        float _baseExposure = 1f, _baseAmbient = 1f, _baseReflection = 1f, _reflection = 1f;
+        InteriorLights _interior;
         Color _fogColour;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -90,6 +91,7 @@ namespace Game.Gameplay
             _baseAmbient = RenderSettings.ambientIntensity;
             _baseReflection = RenderSettings.reflectionIntensity;
             _fogColour = RenderSettings.fogColor;
+            _interior = FindFirstObjectByType<InteriorLights>();
             Apply();
         }
 
@@ -129,6 +131,7 @@ namespace Game.Gameplay
                 _tick = TickSeconds;
                 Apply();
             }
+            ApplyReflection();
         }
 
         // Test hook: jumps the clock and re-applies at once.
@@ -161,10 +164,14 @@ namespace Game.Gameplay
                 _sky.SetColor(TintId, new Color(_baseTint.r * look.SkyR, _baseTint.g * look.SkyG, _baseTint.b * look.SkyB, _baseTint.a));
             }
             RenderSettings.ambientIntensity = _baseAmbient * look.Ambient;
-            RenderSettings.reflectionIntensity = _baseReflection * look.Ambient * look.Ambient; // squared: the sky reflected in smooth road must go dark with the night
+            _reflection = _baseReflection * look.Ambient * look.Ambient; // squared: the sky reflected in smooth road must go dark with the night
+            ApplyReflection();
             // The radiation fog of a closing region (ZoneFogView) takes the fog over while it is on.
             if (!ZoneFog.Current.Active) ApplyFog(look);
         }
+
+        // Indoors the sky cubemap would still shine on smooth floors (ADR-543): it fades with the interior grade, every frame.
+        void ApplyReflection() => RenderSettings.reflectionIntensity = _reflection * WorldSky.IndoorReflection(_interior != null ? _interior.GradeWeight : 0f);
 
         void ApplyFog(in SkyLook look)
         {

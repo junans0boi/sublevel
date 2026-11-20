@@ -51,7 +51,7 @@ namespace Game.Core
         public int MaxLootSpawns = 250;       // hard ceiling on loot points (network objects); LootPerBuilding decides how many are wanted
         public float LootPerBuilding = 3.4f;  // points a building of weight 1 asks for (today: 250 points / 73 buildings)
         public int MaxRocks = 900, MaxSingleLodRocks = 80;
-        public float FarClip = 700f, FogStart = 90f, FogEnd = 640f;
+        public float FarClip = 700f, FogStart = 140f, FogEnd = 640f; // ADR-543: clear day, no haze inside 140 m
         public float AlphamapMetersPerPixel = 1f;
         public float HeightmapMetersPerSample = 1f;
 
@@ -111,7 +111,7 @@ namespace Game.Core
                 Size = 2400f, Seed = 20261116, SeaLevel = 10f, MaxHeight = 240f, IslandRadius = 0f, CoastNoise = 0f, CoastBays = 0f, MaxRoadSlopeDeg = 12f,
                 Island = isl, Regions = regions,
                 Rules = new WorldRuleSpec { MinElevators = 3, MaxElevators = 4, MinElevatorSpacing = 80f, MinLotsNearElevator = 2, LotRange = 60f, DoorstepRange = 35f, MaxLotGroundSlopeDeg = 20f, WalkSlopeDeg = 40f, MinLandKm2 = 2.8f, MaxLandKm2 = 3.8f, RegionsAreWalled = false },
-                Build = new WorldBuildSpec { MaxLootSpawns = 1400, LootPerBuilding = 3.0f, MaxRocks = 1400, MaxSingleLodRocks = 120, FarClip = 700f, FogStart = 90f, FogEnd = 640f },
+                Build = new WorldBuildSpec { MaxLootSpawns = 1400, LootPerBuilding = 3.0f, MaxRocks = 1400, MaxSingleLodRocks = 120, FarClip = 700f, FogStart = 140f, FogEnd = 640f },
             };
         }
 

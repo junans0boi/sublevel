@@ -35,8 +35,8 @@ namespace Game.Tests
         public void Day_IsTheBuiltLook_Dusk_IsLowAndWarm_Night_IsDimAndBlue()
         {
             var day = WorldSky.At(WorldSky.DayHour, WeatherKind.Clear);
-            Assert.AreEqual(1.5f, day.SunIntensity, 1e-4f, "the scene's sun as built");
-            Assert.AreEqual(1f, day.Ambient, 1e-4f);
+            Assert.AreEqual(WorldSky.ClearDaySun, day.SunIntensity, 1e-4f, "the clear-day sun (ADR-543)");
+            Assert.AreEqual(WorldSky.ClearDayAmbient, day.Ambient, 1e-4f);
             Assert.AreEqual(0f, day.FogEnd, "clear weather keeps the scene's fog distances");
             var dusk = WorldSky.At(WorldSky.DuskHour, WeatherKind.Clear);
             Assert.Less(dusk.SunElevationDeg, 10f);
@@ -129,6 +129,24 @@ namespace Game.Tests
             Assert.GreaterOrEqual(look.Ambient, 1f);
             Assert.AreEqual(1f, look.SkyExposure, 1e-3f);
             Assert.AreEqual(0f, look.FogEnd, "clear keeps the scene's own fog (the ADR-193 haze colour)");
+        }
+
+        // ADR-543 (#318): a clean, readable clear day, and no sky glare on the floors indoors.
+        [Test]
+        public void ClearDay_IsNearWhite_AndIndoorsTheSkyReflectionFades()
+        {
+            var day = WorldSky.At(WorldSky.DayHour, WeatherKind.Clear);
+            Assert.That(day.SunB / day.SunR, Is.GreaterThan(0.9f), "noon sun near white, not the dusk warmth");
+            Assert.That(day.Ambient / day.SunIntensity, Is.InRange(0.6f, 0.8f), "sun still leads, shadowed faces still read");
+            Assert.AreEqual(1f, WorldSky.IndoorReflection(0f), 1e-6f, "outdoors untouched");
+            Assert.AreEqual(WorldSky.IndoorReflectionShare, WorldSky.IndoorReflection(1f), 1e-6f);
+            Assert.AreEqual(WorldSky.IndoorReflectionShare, WorldSky.IndoorReflection(3f), 1e-6f, "clamped");
+            Assert.AreEqual(1f, WorldSky.IndoorReflection(-1f), 1e-6f, "clamped");
+            Assert.Less(WorldSky.IndoorReflection(0.5f), 1f);
+            Assert.Greater(WorldSky.IndoorReflection(0.5f), WorldSky.IndoorReflectionShare);
+            var spec = new WorldBuildSpec();
+            Assert.GreaterOrEqual(spec.FogStart, 120f, "no haze over combat range on a clear day");
+            Assert.Less(spec.FogEnd, spec.FarClip, "fog still ends before the far clip");
         }
     }
 }
