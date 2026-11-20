@@ -484,5 +484,50 @@ namespace Game.Tests
                 n++;
             }
         }
+
+        // The cabin in first person, each distinct car model by day and by night (#99): shots only, judged by eye and by the lower-frame luminance.
+        [UnityTest, Timeout(900000)]
+        public IEnumerator CaptureCabinDayNight()
+        {
+            VehicleCamera.CabinLift = true;
+            yield return Setup(DayTimeChoice.Day);
+            Assert.IsTrue(FindSpot(s => true, out var spot, out float yaw), "an open spot");
+            var models = Vehicle.All.Where(v => v != null && !v.IsMotorcycle && v.HasFreeSeat).GroupBy(v => v.name.Replace("(Clone)", "")).Select(g => g.First()).ToList();
+            var fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+            int at = 0;
+            foreach (var v in models)
+            {
+                Place(v, spot + fwd * (8f * at++), yaw);   // each on its own ground: the earlier ones stay parked
+                yield return new WaitForSeconds(1.2f);
+                yield return Board(v);
+                _keys.Frame.ToggleView = true;
+                yield return new WaitForSeconds(0.6f);
+                var pc = PlayerController.Local;
+                string tag = v.name.Replace("(Clone)", "");
+                foreach (var (time, hour) in new[] { ("day", WorldSky.DayHour), ("night", WorldSky.NightHour) })
+                {
+                    _env.Set(hour, WeatherKind.Clear);
+                    yield return new WaitForSeconds(0.5f);
+                    foreach (var (what, dir) in new[] { ("ahead", new Vector3(0f, -0.15f, 1f)), ("left", new Vector3(-1f, -0.25f, 0.35f)) })
+                    {
+                        pc.LookAt(pc.Camera.transform.position + v.transform.TransformDirection(dir) * 5f);
+                        yield return new WaitForSeconds(0.4f);
+                        _shot.Follow = null;
+                        _cam.fieldOfView = VehicleCamera.DrivingFov;
+                        _cam.transform.SetPositionAndRotation(pc.Camera.transform.position, pc.Camera.transform.rotation);
+                        foreach (bool lift in new[] { false, true })
+                        {
+                            VehicleCamera.CabinLift = lift;
+                            yield return null;
+                            yield return Take($"cabin_{tag}_{time}_{what}_{(lift ? "after" : "before")}");
+                        }
+                    }
+                    Debug.Log($"[Cabin] {time} ambientIntensity {RenderSettings.ambientIntensity:F2} probe L0 {RenderSettings.ambientProbe[0, 0]:F3}");
+                }
+                _env.Set(WorldSky.DayHour, WeatherKind.Clear);
+                _keys.Frame.ToggleView = true;
+                yield return Leave();
+            }
+        }
     }
 }

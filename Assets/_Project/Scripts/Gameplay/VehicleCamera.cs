@@ -66,6 +66,7 @@ namespace Game.Gameplay
         void OnDisable()
         {
             SetAimIgnore(null);
+            SetCabinGlow(null, false);
             if (_player != null && VegetationRenderer.ClearAround == _player.Camera) VegetationRenderer.ClearAround = null;
         }
 
@@ -80,7 +81,7 @@ namespace Game.Gameplay
             var vehicle = VehicleSeat.VehicleOf(_combatant);
             SetAimIgnore(vehicle);
             var cam = _player.Camera;
-            if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = _cabinLow.enabled = false; return; }
+            if (vehicle == null || cam == null) { if (_cabin != null) _cabin.enabled = _cabinLow.enabled = false; SetCabinGlow(null, false); return; }
             Active = true;
             // Taking the wheel looks straight down the road, level: the view pitch of getting in (down at the door) stays out of it.
             if (vehicle != _seated)
@@ -95,6 +96,7 @@ namespace Game.Gameplay
             bool eyes = (_input != null ? _input.EyeView : _player.Rig.Mode == ViewMode.FirstPerson) || _combatant.AimMode == AimMode.Sights;
             // Also in third person: the close views of the hands in the cabin are lit too.
             CabinLight(vehicle, !vehicle.IsMotorcycle);
+            SetCabinGlow(vehicle, eyes && !vehicle.IsMotorcycle && CabinLift);
             if (eyes)
             {
                 // The view goes forward / sideways with the posed head (hips on the cushion, a rider's forward lean), so
@@ -243,6 +245,56 @@ namespace Game.Gameplay
             var t = vehicle.transform;
             _cabin.transform.SetPositionAndRotation(_combatant.EyePosition + t.up * CabinLightOverEye - t.forward * CabinLightBehindEye, Quaternion.identity);
             _cabinLow.transform.SetPositionAndRotation(_combatant.EyePosition - t.up * 0.45f - t.forward * 0.45f, Quaternion.identity);
+        }
+
+        // ADR-531 (#99): a black interior (albedo near 0) stays black under any light or ambient, and stronger cabin lights
+        // blew the hands out. So in the eye view the own car alone (not the driver, not the world, not other players' view)
+        // takes copies of its opaque materials with a small flat emission: blacks lift to a readable dark grey, bright
+        // surfaces barely change. Local, no lights, no shadows; the copies are made once per material.
+        public static readonly Color CabinGlow = new Color(0.045f, 0.044f, 0.042f);
+        public static bool CabinLift = true;   // off only for the before/after capture
+        static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        static readonly System.Collections.Generic.Dictionary<Material, Material> Glows = new();
+        readonly System.Collections.Generic.List<(Renderer r, Material[] plain, Material[] glow)> _glowing = new();
+        Vehicle _glowFor;
+
+        void SetCabinGlow(Vehicle vehicle, bool on)
+        {
+            if (on && vehicle == _glowFor) return;
+            foreach (var (r, plain, glow) in _glowing)
+            {
+                if (r == null) continue;
+                // Only the slots still showing our copy: a wreck swap (VehicleDamageVisual) since then stays.
+                var now = r.sharedMaterials;
+                for (int i = 0; i < now.Length && i < plain.Length; i++) if (now[i] == glow[i]) now[i] = plain[i];
+                r.sharedMaterials = now;
+            }
+            _glowing.Clear();
+            _glowFor = on ? vehicle : null;
+            if (!on) return;
+            foreach (var r in vehicle.GetComponentsInChildren<Renderer>())
+            {
+                if (!(r is MeshRenderer)) continue;
+                var plain = r.sharedMaterials;
+                var glow = new Material[plain.Length];
+                bool any = false;
+                for (int i = 0; i < plain.Length; i++) { glow[i] = Glowing(plain[i]); any |= glow[i] != plain[i]; }
+                if (!any) continue;
+                r.sharedMaterials = glow;
+                _glowing.Add((r, plain, glow));
+            }
+        }
+
+        // The glowing copy of a lit opaque material; the material itself for glass, lamps, beams and the already emissive.
+        public static Material Glowing(Material m)
+        {
+            if (m == null || m.renderQueue >= 2500 || !m.HasProperty(EmissionColorId) || m.IsKeywordEnabled("_EMISSION")) return m;
+            if (Glows.TryGetValue(m, out var g) && g != null) return g;
+            g = new Material(m) { name = m.name };
+            g.EnableKeyword("_EMISSION");
+            g.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            g.SetColor(EmissionColorId, CabinGlow);
+            return Glows[m] = g;
         }
 
         static Light NewCabinLight(string name, float range, float intensity)
