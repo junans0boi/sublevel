@@ -16,11 +16,19 @@ namespace Game.Net
         public float Countdown;   // seconds to GO while counting down
         public float SecondsLeft; // to the end while finishing, to the menu on the results
         public byte Laps;         // laps of this race
+        public float RaceTime;    // seconds since GO (0 before)
+        // The race order (ADR-515/518), first to last: the driver's ObjectId, name, laps done, whether finished, the finish time (or 0),
+        // the best clean lap (0 = none yet) and how far into the lap in progress the clock is (-1 = not on a clean lap).
+        public int[] Keys; public string[] Names; public byte[] LapsDone; public bool[] Done; public float[] Times; public float[] Best; public float[] Running;
+        public byte[] LapsToGo;   // the laps this driver must do: the race's, one more after a false start (ADR-516)
     }
 
-    // The event race of a Race_<course> scene (ADR-512..519, #445). Every side: all vehicles of the scene are race cars (Vehicle.EventRace)
-    // and the client HUD is attached. Server: each person who arrives gets a car on the next grid slot and is seated at its wheel; the
-    // race flow (RaceFlow) waits for everyone, counts down 3 s (input locked) and starts the race; the phase goes out as RaceStandings.
+    // The event race of a Race_<course> scene (ADR-512..519, #445, #446). Every side: all vehicles of the scene are race cars
+    // (Vehicle.EventRace) and the client HUD is attached. Server: each person who arrives gets a car on the next grid slot and is seated at
+    // its wheel; the race flow (RaceFlow) waits for everyone, counts down 3 s (input locked) and starts the race. From GO the server judges
+    // every car from its own copy's place (RaceLap): laps, clean lap times, the finish after the course's laps (one more for a car that
+    // left its grid slot before GO); the first finisher gives the rest AfterWinnerSeconds, then the results, then the menu. The phase and the
+    // race order go out as RaceStandings.
     public sealed class RaceDirector : MonoBehaviour
     {
         public string CourseId = "snake";
@@ -36,6 +44,16 @@ namespace Game.Net
         readonly List<(float x, float z, float yaw)> _grid = new List<(float, float, float)>();
         readonly List<Vehicle> _cars = new List<Vehicle>();
         readonly Dictionary<Combatant, Vehicle> _carOf = new Dictionary<Combatant, Vehicle>();
+        const float FalseStartMeters = 3f;
+
+        sealed class Racer
+        {
+            public Vehicle Car; public Combatant Driver; public string Name; public RaceLap Lap; public Vector3 Grid;
+            public bool FalseStart, Finished; public float FinishTime, Best;
+            public bool Bot, Cut; public float Skill, StuckSince = -1f;     // a bot racer (ADR-517): how good, which way at the fork
+        }
+        readonly List<Racer> _racers = new List<Racer>();
+        readonly List<RaceEvent.Standing> _order = new List<RaceEvent.Standing>();
         float _nextSend;
         RacePhase _sentPhase = (RacePhase)255;
 
@@ -70,8 +88,11 @@ namespace Game.Net
             double now = Time.unscaledTimeAsDouble;
             if (_flow == null) _flow = new RaceFlow(now);
             bool everyoneIn = SeatArrivals();
+            if (_flow.Phase == RacePhase.Countdown && !_botsIn) FillWithBots();
+            DriveBots();
+            bool everyoneDone = Judge(now);
             var before = _flow.Phase;
-            _flow.Tick(now, everyoneIn, false);
+            _flow.Tick(now, everyoneIn, everyoneDone);
             if (_flow.Phase != before) Debug.Log($"[RaceDirector] {Info.Name}: {before} -> {_flow.Phase} ({_cars.Count} cars)");
             if (_flow.Phase != _sentPhase || Time.unscaledTime >= _nextSend) Send(now);
         }
@@ -91,6 +112,8 @@ namespace Game.Net
                     car = SpawnCar(_cars.Count);
                     if (car == null) continue;
                     _carOf[c] = car;
+                    var name = MatchState.Instance != null ? MatchState.Instance.ServerNameOf(c) : "";
+                    _racers.Add(new Racer { Car = car, Driver = c, Name = string.IsNullOrEmpty(name) ? "플레이어 " + _cars.Count : name, Lap = new RaceLap(Info.Course), Grid = car.transform.position });
                 }
                 if (VehicleSeat.VehicleOf(c) == car) { seated++; continue; }
                 if (VehicleSeat.IsAttached(c)) continue;
@@ -101,6 +124,83 @@ namespace Game.Net
         }
 
         int ConnectedPeople() => _nm.ServerManager.Clients.Count;
+
+        // When the countdown starts, bots take the free grid slots up to RaceEvent.Racers (ADR-514/517): driverless cars on autopilot, each with
+        // a name, a skill between 0.80 and 0.95 of the grip limit and a side of the fork.
+        bool _botsIn;
+        public int BotResets { get; private set; }   // tests: how often a bot had to be put back on the course
+        void FillWithBots()
+        {
+            _botsIn = true;
+            var rng = new System.Random(_cars.Count * 7919 + Info.Id.GetHashCode());
+            for (int i = 0; _cars.Count < Mathf.Min(RaceEvent.Racers, _grid.Count); i++)
+            {
+                var car = SpawnCar(_cars.Count);
+                if (car == null) break;
+                car.Autopilot = true;
+                car.ServerSetEngine(true);
+                _racers.Add(new Racer
+                {
+                    Car = car, Name = BotNames.For(Info.Id.GetHashCode(), i), Lap = new RaceLap(Info.Course), Grid = car.transform.position,
+                    Bot = true, Skill = RaceBotDriver.Skill(i, RaceEvent.Racers - 1, Info.Id.GetHashCode()), Cut = rng.NextDouble() < 0.5,
+                });
+            }
+            Debug.Log($"[RaceDirector] {_racers.Count} racers ({_racers.Count - _carOf.Count} bots)");
+        }
+
+        // Bot input every frame: held still before GO, then RaceBotDriver; a bot stuck (upside down, off the course or not moving) for
+        // StuckResetSeconds is put back on the course.
+        void DriveBots()
+        {
+            bool go = _flow.Phase == RacePhase.Racing || _flow.Phase == RacePhase.Finishing;
+            var course = Info.Course;
+            foreach (var r in _racers)
+            {
+                if (!r.Bot || r.Car == null) continue;
+                var t = r.Car.transform;
+                if (!go || r.Finished) { r.Car.SetDriverInput(new DriverInput { Handbrake = true }); continue; }   // held (a negative throttle would reverse once stopped)
+                var (throttle, steer) = RaceBotDriver.Drive(course, t.position.x, t.position.z, t.eulerAngles.y, r.Car.Speed, r.Skill, r.Cut);
+                r.Car.SetDriverInput(new DriverInput { Throttle = throttle, Steer = steer });
+                bool stuck = t.up.y < 0.3f || Mathf.Abs(course.Project(t.position.x, t.position.z).offset) > course.Width * 0.5f + course.Runoff + 2f || Mathf.Abs(r.Car.Speed) < 1f;
+                if (!stuck) { r.StuckSince = -1f; continue; }
+                if (r.StuckSince < 0f) { r.StuckSince = Time.time; continue; }
+                if (Time.time - r.StuckSince < RaceEvent.StuckResetSeconds) continue;
+                var (x, z, yaw) = course.ResetPose(t.position.x, t.position.z);
+                r.Car.ServerPlace(new Vector3(x, 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
+                r.StuckSince = -1f;
+                BotResets++;
+            }
+        }
+
+        // The race as the server sees it (ADR-515): before GO a car that leaves its slot is a false start; from GO each car's place feeds
+        // its lap judge. True when every racer has finished (none = not yet).
+        bool Judge(double now)
+        {
+            var phase = _flow.Phase;
+            bool before = phase == RacePhase.Waiting || phase == RacePhase.Countdown, racing = phase == RacePhase.Racing || phase == RacePhase.Finishing;
+            int done = 0;
+            foreach (var r in _racers)
+            {
+                if (r.Car == null) { done++; continue; }
+                var p = r.Car.transform.position;
+                if (before)
+                {
+                    if (!r.FalseStart && Vector3.Distance(p, r.Grid) > FalseStartMeters) { r.FalseStart = true; Debug.Log($"[RaceDirector] false start: {r.Name} (one more lap to go)"); }
+                    continue;
+                }
+                if (r.Finished) { done++; continue; }
+                if (!racing) continue;
+                float lap = r.Lap.Step(Info.Course.Project(p.x, p.z).s, now);
+                if (lap > 0f && (r.Best <= 0f || lap < r.Best)) r.Best = lap;
+                if (r.Lap.Laps >= Info.Laps + (r.FalseStart ? 1 : 0))
+                {
+                    r.Finished = true; r.FinishTime = (float)(now - _flow.GoAt); done++;
+                    _flow.FirstFinish(now);
+                    Debug.Log($"[RaceDirector] {r.Name} finished in {r.FinishTime:0.00} s (best lap {r.Best:0.00})");
+                }
+            }
+            return _racers.Count > 0 && done >= _racers.Count;
+        }
 
         Vehicle SpawnCar(int slot)
         {
@@ -126,10 +226,44 @@ namespace Game.Net
         {
             _sentPhase = _flow.Phase;
             _nextSend = Time.unscaledTime + 0.25f;
-            _nm.ServerManager.Broadcast(new RaceStandings
+            bool final = _flow.Phase == RacePhase.Results || _flow.Phase == RacePhase.Over;
+            if (!final || !_orderFinal) BuildOrder();
+            _orderFinal = final;   // the order is frozen once the results are up (cars still rolling must not reshuffle them)
+            SendStandings(now);
+        }
+
+        void BuildOrder()
+        {
+            _order.Clear();
+            for (int i = 0; i < _racers.Count; i++)
+            {
+                var r = _racers[i];
+                float s = r.Car != null ? Info.Course.Project(r.Car.transform.position.x, r.Car.transform.position.z).s : 0f;
+                _order.Add(new RaceEvent.Standing { Key = i, Finished = r.Finished, FinishTime = r.FinishTime, Progress = r.Lap.Progress(s) });
+            }
+            RaceEvent.Order(_order);
+        }
+
+        bool _orderFinal;
+
+        void SendStandings(double now)
+        {
+            int n = _order.Count;
+            var m = new RaceStandings
             {
                 Phase = (byte)_flow.Phase, Countdown = _flow.CountdownLeft(now), SecondsLeft = _flow.SecondsLeft(now), Laps = (byte)Info.Laps,
-            }, true, Channel.Unreliable);
+                RaceTime = _flow.GoAt >= 0 ? (float)(now - _flow.GoAt) : 0f,
+                Keys = new int[n], Names = new string[n], LapsDone = new byte[n], Done = new bool[n], Times = new float[n], Best = new float[n], Running = new float[n], LapsToGo = new byte[n],
+            };
+            for (int k = 0; k < n; k++)
+            {
+                var r = _racers[_order[k].Key];
+                m.Keys[k] = r.Driver != null ? r.Driver.ObjectId : -1 - _order[k].Key; m.Names[k] = r.Name; m.LapsDone[k] = (byte)Mathf.Min(255, r.Lap.Laps);
+                m.Done[k] = r.Finished; m.Times[k] = r.FinishTime; m.Best[k] = r.Best;
+                m.Running[k] = r.Lap.Timing && !r.Finished ? (float)(now - r.Lap.Start) : -1f;
+                m.LapsToGo[k] = (byte)(Info.Laps + (r.FalseStart ? 1 : 0));
+            }
+            _nm.ServerManager.Broadcast(m, true, Channel.Unreliable);
         }
     }
 }

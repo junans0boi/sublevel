@@ -140,6 +140,8 @@ namespace Game.Net
         public bool IsRaceCar => EventRace || RaceTrack.InArea(transform.position.x, transform.position.z);
         // An event race scene is running (ADR-516): every vehicle is a race car, and nobody gets out. Set by the scene's RaceDirector on every side.
         public static bool EventRace;
+        // Server: an event race's bot drives this car with no body at the wheel (ADR-517): its input counts as a driver's.
+        public bool Autopilot { get; set; }
         public VehicleRules Rules
         {
             get
@@ -433,7 +435,7 @@ namespace Game.Net
         void Simulate(float dt)
         {
             var r = Rules;
-            bool driver = Seat0.Value >= 0 && Time.time - _inputAt <= r.InputStaleSeconds && !Disabled;
+            bool driver = (Seat0.Value >= 0 || Autopilot) && Time.time - _inputAt <= r.InputStaleSeconds && !Disabled;
             bool engine = EngineOn.Value && CanRunEngine;
             var input = driver ? _input : default;
 

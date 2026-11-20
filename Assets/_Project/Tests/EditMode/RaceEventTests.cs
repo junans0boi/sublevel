@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Game.Core;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Game.Tests
 {
@@ -329,6 +330,82 @@ namespace Game.Tests
             lap.Step(1f, 202);                                                      // and over it again
             Assert.AreEqual(1, lap.Laps, "not a second lap");
             Assert.AreEqual(L + 1f, lap.Progress(1f), 0.01f);
+        }
+    }
+}
+
+namespace Game.Tests
+{
+    // #447 (ADR-517): how a bot racer drives — look ahead along its route, steer at that point, slow for the corners coming up.
+    public class RaceBotDriverTests
+    {
+        static RaceCourse C => RaceEvent.Course;
+
+        [Test]
+        public void OnTheMainStraight_FacingTheWay_ItGoesFlatOutAndStraight()
+        {
+            var (x, z, yaw) = C.PointAt(10f);
+            var d = RaceBotDriver.Drive(C, x, z, yaw, 10f, 0.9f, false);
+            Assert.AreEqual(1f, d.throttle, 1e-3f);
+            Assert.AreEqual(0f, d.steer, 0.05f);
+        }
+
+        [Test]
+        public void OffToTheLeft_ItSteersBackRight_AndOffToTheRight_Left()
+        {
+            var (x, z, yaw) = C.PointAt(30f);
+            float rad = yaw * Mathf.Deg2Rad;
+            float rx = Mathf.Cos(rad), rz = -Mathf.Sin(rad);    // right of the heading
+            Assert.Greater(RaceBotDriver.Drive(C, x - rx * 4f, z - rz * 4f, yaw, 15f, 0.9f, false).steer, 0.05f, "left of the line: steer right");
+            Assert.Less(RaceBotDriver.Drive(C, x + rx * 4f, z + rz * 4f, yaw, 15f, 0.9f, false).steer, -0.05f, "right of the line: steer left");
+        }
+
+        [Test]
+        public void BeforeAHairpin_AtSpeed_ItBrakes()
+        {
+            // The end of the main straight runs into the first corner: at full speed close to it, brake.
+            float s = 0f;
+            for (; s < C.LapLength; s += 2f)
+            {
+                var (px, pz, _) = C.PointAt(s);
+                var (_, off) = C.Project(px, pz);
+                bool corner = false;
+                foreach (var p in C.Path) if (p.Radius > 0f && p.Radius <= 20f && Mathf.Abs(p.X - px) < 1f && Mathf.Abs(p.Z - pz) < 1f) corner = true;
+                if (corner) break;
+            }
+            var (x, z, yaw) = C.PointAt(s - 25f);
+            Assert.Less(RaceBotDriver.Drive(C, x, z, yaw, 25f, 0.9f, false).throttle, 0f, "25 m before the first corner at 90 km/h: brake");
+            Assert.Greater(RaceBotDriver.TargetSpeed(C, s - 25f, 0.95f), RaceBotDriver.TargetSpeed(C, s - 25f, 0.8f), "a better bot corners faster");
+        }
+
+        [Test]
+        public void Skills_SpreadOverTheField_QuickAndSlow()
+        {
+            float lo = 1f, hi = 0f;
+            for (int i = 0; i < 7; i++) { float k = RaceBotDriver.Skill(i, 7, 42); lo = Mathf.Min(lo, k); hi = Mathf.Max(hi, k); }
+            Assert.GreaterOrEqual(lo, 0.8f); Assert.LessOrEqual(hi, 0.95f);
+            Assert.Greater(hi - lo, 0.1f, "quick and slow bots in every race");
+        }
+
+        [Test]
+        public void ABotTakingTheCut_SlowsForTheCutsCorner_NotTheArcs()
+        {
+            float apex = -1f; foreach (var p in C.BranchPath) if (p.Radius > 0f) { apex = p.S; break; }
+            Assert.Greater(apex, 0f, "the cut has a corner");
+            float s = apex - 5f;   // just before the V
+            Assert.Less(RaceBotDriver.TargetSpeed(C, s, 0.9f, true), RaceBotDriver.TargetSpeed(C, s, 0.9f, false) - 1f, "the V's apex is tighter than the arc");
+        }
+
+        [Test]
+        public void InTheFork_ABotChoosingTheCut_AimsAtTheCut()
+        {
+            var b = C.BranchPath[2];
+            var (s, _) = C.Project(b.X, b.Z);
+            var (x, z, yaw) = C.PointAt(C.ForkS - 6f);
+            var inner = RaceBotDriver.Aim(C, x, z, C.ForkS - 6f, 15f, true);
+            var outer = RaceBotDriver.Aim(C, x, z, C.ForkS - 6f, 15f, false);
+            Assert.IsTrue(C.ProjectRoute(inner.x, inner.z).onBranch, "the cut");
+            Assert.IsFalse(C.ProjectRoute(outer.x, outer.z).onBranch, "the arc");
         }
     }
 }

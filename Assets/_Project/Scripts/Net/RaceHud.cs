@@ -42,6 +42,10 @@ namespace Game.Net
         }
 
         public static RacePhase Phase => _instance != null ? _instance._phase : RacePhase.Waiting;
+        // The last word from the server (the race order and the clocks in it) and how long ago it came.
+        public static RaceStandings Last => _instance != null ? _instance._last : default;
+        public static float SinceLast => _instance != null ? Time.unscaledTime - _instance._at : 0f;
+        public static float LastAt => _instance != null ? _instance._at : -10f;   // changes with every new word: views rebuild their text then
         // Before GO in an event race the local player cannot drive (or do anything else).
         public static bool InputLocked => _instance != null && Vehicle.EventRace && (_instance._phase == RacePhase.Waiting || _instance._phase == RacePhase.Countdown);
         public static float CountdownNow => _instance == null ? 0f : Mathf.Max(0f, _instance._last.Countdown - (Time.unscaledTime - _instance._at));
