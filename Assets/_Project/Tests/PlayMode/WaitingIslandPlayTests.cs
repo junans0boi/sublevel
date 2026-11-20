@@ -13,7 +13,11 @@ namespace Game.Tests
     // island, cannot leave it, takes no damage, can bungee, and is sent to the elevator when the countdown ends.
     public class WaitingIslandPlayTests
     {
-        sealed class NoPlayerInput : IPlayerInput { public PlayerInputFrame Read() => new PlayerInputFrame { SelectSlot = -1 }; }
+        sealed class NoPlayerInput : IPlayerInput
+        {
+            public bool PressF;   // one F press on the next frame
+            public PlayerInputFrame Read() { var f = new PlayerInputFrame { SelectSlot = -1, Interact = PressF }; PressF = false; return f; }
+        }
 
         bool _oldFlag;
 
@@ -100,7 +104,7 @@ namespace Game.Tests
             var car = GameObject.Find("WaitingIsland").transform.Find("BungeeLiftCar");
             Assert.IsNotNull(car, "the World scene has the lift car");
             float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 2f;
-            while (BungeeLift.Phase(WaitingRoom.Current.LiftSinceOpen, out _) != LiftPhase.OpenBottom || WaitingRoom.Current.LiftSinceOpen < 1f)
+            while (WaitingRoom.Current.Lift == null || WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom)
             { Assert.Less(Time.realtimeSinceStartup, end, "the car came to the bottom"); yield return null; }
             var lift = WaitingIsland.Lift;
             PlayerController.Local.Teleport(Local(lift.x, deck + 0.1f, lift.z));
@@ -124,7 +128,7 @@ namespace Game.Tests
             System.IO.Directory.CreateDirectory(folder);
             float deck = DeckY;
             float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 2f;
-            while (BungeeLift.Phase(WaitingRoom.Current.LiftSinceOpen, out _) != LiftPhase.OpenBottom || WaitingRoom.Current.LiftSinceOpen < 1f)
+            while (WaitingRoom.Current.Lift == null || WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom)
             { Assert.Less(Time.realtimeSinceStartup, end, "the car came to the bottom"); yield return null; }
             var cam = new GameObject("IslandShotCamera").AddComponent<Camera>();
             cam.enabled = false;
@@ -154,6 +158,125 @@ namespace Game.Tests
             }
             Object.Destroy(cam.gameObject);
             Debug.Log("[WaitingIslandPlayTests] shots in " + folder);
+        }
+
+        static Vector3 AtCallButton(bool top, float deck, float back)
+        {
+            var b = top ? WaitingIsland.CallTop : WaitingIsland.CallBottom;
+            return Local(b.x, deck + (top ? BungeeCurve.Top : 0f) + 0.1f, b.z + (top ? -back : back));   // the bottom button faces north, the top one south
+        }
+
+        static IEnumerator SendTheCarUp()
+        {
+            float end = Time.realtimeSinceStartup + 10f;
+            while (WaitingRoom.Current.Lift == null) { Assert.Less(Time.realtimeSinceStartup, end, "the lift runs"); yield return null; }
+            WaitingRoom.Current.Lift.Call(true, Time.unscaledTimeAsDouble);
+            end = Time.realtimeSinceStartup + BungeeLift.Cycle + 4f;
+            while (WaitingRoom.Current.Lift.Phase != LiftPhase.OpenTop) { Assert.Less(Time.realtimeSinceStartup, end, "the car went up"); yield return null; }
+        }
+
+        // ADR-490 (준환 r5.2: "패드 밟고 엘리베이터까지 걸어가는 게 귀찮다"): F at the call button beside the gate brings the car, which opens.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator CallButton_F_BringsTheCarDown_AndItOpens()
+        {
+            float deck = DeckY;
+            yield return SendTheCarUp();
+            PlayerController.Local.Teleport(AtCallButton(false, deck, 0.6f));
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsTrue(PlayerController.Local.LiftCallInReach, "the button is in reach: the prompt shows");
+            Assert.AreEqual("[F]  엘리베이터 호출", Hud.Instance != null ? Hud.Instance.PromptText : "[F]  엘리베이터 호출");
+            ((NoPlayerInput)PlayerController.InputOverride).PressF = true;
+            yield return null; yield return null;
+            Assert.IsTrue(WaitingRoom.Current.Lift.CalledBottom || WaitingRoom.Current.Lift.Moving, "the call was taken");
+            float end = Time.realtimeSinceStartup + LiftCall.CallDepartSeconds + BungeeLift.TravelSeconds + 3f;
+            while (WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom) { Assert.Less(Time.realtimeSinceStartup, end, "the car came down"); yield return null; }
+            yield return new WaitForSeconds(0.6f);   // the broadcast reaches the client view
+            var car = GameObject.Find("WaitingIsland").transform.Find("BungeeLiftCar");
+            Assert.AreEqual(0f, car.localPosition.y, 0.05f, "the car stands at the deck");
+            Assert.IsFalse(car.Find("Doors").gameObject.activeSelf, "and its gates are open");
+            Assert.IsFalse(WaitingRoom.Current.Lift.CalledBottom, "the light went out on arrival");
+        }
+
+        [UnityTest, Timeout(300000)]
+        public IEnumerator CallButton_PressFromFarAway_IsRefused_ThroughTheNetworkPath()
+        {
+            var me = Combatant.LocalPlayer;
+            float deck = DeckY;
+            yield return SendTheCarUp();
+            Assert.IsFalse(WaitingRoom.Current.ServerCall(me, false), "the island's middle is far from the button");
+            PlayerController.Local.Teleport(AtCallButton(false, deck, 8f));
+            yield return new WaitForSeconds(0.3f);
+            me.NetworkManager.ClientManager.Broadcast(new LiftCallRequest { Top = false });   // a client claiming a press from 8 m
+            yield return new WaitForSeconds(0.5f);
+            Assert.AreEqual(LiftPhase.OpenTop, WaitingRoom.Current.Lift.Phase);
+            Assert.IsFalse(WaitingRoom.Current.Lift.CalledBottom, "refused: out of reach");
+            PlayerController.Local.Teleport(AtCallButton(false, deck, 1f));
+            yield return new WaitForSeconds(0.3f);
+            me.NetworkManager.ClientManager.Broadcast(new LiftCallRequest { Top = false });
+            yield return new WaitForSeconds(0.5f);
+            Assert.IsTrue(WaitingRoom.Current.Lift.CalledBottom || WaitingRoom.Current.Lift.Moving, "the same request at the button is taken");
+        }
+
+        // Review shot of the button with its prompt (UI included). Run on purpose with
+        //   ISLAND_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.WaitingIslandPlayTests.CaptureCallButton
+        [UnityTest, Explicit, Category("Capture"), Timeout(300000)]
+        public IEnumerator CaptureCallButton()
+        {
+            string folder = System.Environment.GetEnvironmentVariable("ISLAND_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = System.IO.Path.Combine(Application.dataPath, "../Logs/island-shots");
+            System.IO.Directory.CreateDirectory(folder);
+            float deck = DeckY;
+            yield return SendTheCarUp();
+            var input = (NoPlayerInput)PlayerController.InputOverride;
+            for (int i = 0; i < 2; i++)
+            {
+                bool top = i == 1;
+                PlayerController.Local.Teleport(AtCallButton(top, deck, 1.6f) + (top ? Vector3.right * 0.7f : Vector3.zero));   // the top plate hides behind the body otherwise
+                yield return new WaitForSeconds(0.5f);
+                var b = top ? WaitingIsland.CallTop : WaitingIsland.CallBottom;
+                PlayerController.Local.LookAt(Local(b.x, deck + b.y - 0.3f, b.z));
+                yield return new WaitForSeconds(0.3f);
+                Debug.Log($"[WaitingIslandPlayTests] {(top ? "top" : "bottom")} button: in reach {PlayerController.Local.LiftCallInReach}, prompt '{(Hud.Instance != null ? Hud.Instance.PromptText : "")}'");
+                yield return Shot(folder, top ? "call_button_top" : "call_button_prompt");
+                if (!top)
+                {
+                    input.PressF = true;
+                    yield return new WaitForSeconds(0.4f);
+                    yield return Shot(folder, "call_button_lit");
+                    float end = Time.realtimeSinceStartup + 15f;
+                    while (WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom) { Assert.Less(Time.realtimeSinceStartup, end); yield return null; }
+                    yield return new WaitForSeconds(0.6f);
+                    yield return Shot(folder, "call_button_arrived");
+                    yield return SendTheCarUp();
+                }
+            }
+            Debug.Log("[WaitingIslandPlayTests] shots in " + folder);
+        }
+
+        // The player's camera with the HUD canvases drawn into it (an overlay canvas is not in a camera render).
+        static IEnumerator Shot(string folder, string name)
+        {
+            yield return null;
+            var cam = PlayerController.Local.Camera != null ? PlayerController.Local.Camera : Camera.main;
+            var canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            var modes = new RenderMode[canvases.Length];
+            for (int i = 0; i < canvases.Length; i++)
+            {
+                modes[i] = canvases[i].renderMode;
+                if (canvases[i].isRootCanvas && modes[i] == RenderMode.ScreenSpaceOverlay)
+                { canvases[i].renderMode = RenderMode.ScreenSpaceCamera; canvases[i].worldCamera = cam; canvases[i].planeDistance = cam.nearClipPlane + 0.02f; }
+            }
+            const int w = 1280, h = 720;
+            var rt = RenderTexture.GetTemporary(w, h, 24, RenderTextureFormat.ARGB32);
+            var before = cam.targetTexture;
+            cam.targetTexture = rt; Canvas.ForceUpdateCanvases(); cam.Render(); cam.targetTexture = before;
+            for (int i = 0; i < canvases.Length; i++) if (canvases[i] != null && canvases[i].isRootCanvas) canvases[i].renderMode = modes[i];
+            var active = RenderTexture.active; RenderTexture.active = rt;
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, w, h), 0, 0); tex.Apply();
+            RenderTexture.active = active; RenderTexture.ReleaseTemporary(rt);
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder, name + ".png"), tex.EncodeToPNG());
+            Object.Destroy(tex);
         }
 
         [UnityTest, Timeout(300000)]

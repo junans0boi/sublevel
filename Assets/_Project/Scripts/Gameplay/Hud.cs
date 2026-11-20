@@ -428,8 +428,15 @@ namespace Game.Gameplay
                 _promptFor = null;
                 _promptLabel.text = "[F]  탑승";
             }
+            // The waiting island's lift call button (ADR-490): the player clears the loot while it is in reach.
+            bool liftCall = !dead && !vehicle && player != null && player.LiftCallInReach;
+            if (liftCall)
+            {
+                _promptFor = null;
+                _promptLabel.text = "[F]  엘리베이터 호출";
+            }
             Show(_promptIconRoot, hasLoot);
-            Show(_prompt, hasLoot || vehicle);
+            Show(_prompt, hasLoot || vehicle || liftCall);
         }
 
         // Shows how the weapon is aimed (ADR-048): four lines at the edge of the spread cone from the hip, closer

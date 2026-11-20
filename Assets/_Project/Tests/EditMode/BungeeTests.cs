@@ -92,18 +92,57 @@ namespace Game.Tests
             Assert.AreEqual(0f, BungeeLift.Speed(0f)); Assert.AreEqual(0f, BungeeLift.Speed(BungeeLift.TravelSeconds));
         }
 
-        [Test] public void Lift_Cycle_OpenBottom_Up_OpenTop_Down()
+        [Test] public void Lift_WaitsOpenAtTheBottom_UntilCalled()
         {
-            Assert.AreEqual(LiftPhase.OpenBottom, BungeeLift.Phase(0.1, out _));
-            Assert.IsTrue(BungeeLift.DoorsOpen(0.1));
-            Assert.AreEqual(LiftPhase.Rising, BungeeLift.Phase(BungeeLift.DoorSeconds + 0.1, out _));
-            Assert.IsFalse(BungeeLift.DoorsOpen(BungeeLift.DoorSeconds + 0.1), "doors shut while moving");
-            double top = BungeeLift.DoorSeconds + BungeeLift.TravelSeconds + 0.1;
-            Assert.AreEqual(LiftPhase.OpenTop, BungeeLift.Phase(top, out _));
-            Assert.AreEqual(BungeeLift.Height, BungeeLift.CarHeight(top), 1e-3f);
-            Assert.AreEqual(LiftPhase.Descending, BungeeLift.Phase(top + BungeeLift.DoorSeconds, out _));
-            Assert.AreEqual(0f, BungeeLift.CarHeight(BungeeLift.Cycle + 0.1), 1e-3f, "and round again");
-            Assert.AreEqual(BungeeLift.Height * 0.5f, BungeeLift.CarHeight(BungeeLift.DoorSeconds + BungeeLift.TravelSeconds * 0.5), 0.01f);
+            var lift = new LiftCall(0);
+            for (double t = 0; t < 60; t += 0.5) Assert.IsFalse(lift.Tick(t, false), "nobody called, nobody inside: it stays");
+            Assert.AreEqual(LiftPhase.OpenBottom, lift.Phase);
+            Assert.AreEqual(0f, lift.Height(60));
+            Assert.IsFalse(lift.Call(false, 60), "a call at its own floor only holds the doors");
+            Assert.IsFalse(lift.CalledBottom);
+        }
+
+        [Test] public void Lift_CalledFromTheTop_ComesUp_Opens_AndTheLightGoesOut()
+        {
+            var lift = new LiftCall(0);
+            Assert.IsTrue(lift.Call(true, 10), "the top button lights");
+            Assert.IsFalse(lift.Call(true, 10.1), "pressing again changes nothing");
+            Assert.IsTrue(lift.CalledTop);
+            lift.Tick(10.1, false);
+            Assert.AreEqual(LiftPhase.Rising, lift.Phase, "the doors had been open long enough: it leaves at once");
+            Assert.IsFalse(BungeeLift.DoorsOpenOf(lift.Phase, lift.Into(10.2)));
+            Assert.AreEqual(BungeeLift.Height * 0.5f, lift.Height(10.1 + BungeeLift.TravelSeconds * 0.5), 0.01f);
+            Assert.IsTrue(lift.Tick(10.1 + BungeeLift.TravelSeconds + 0.01, false));
+            Assert.AreEqual(LiftPhase.OpenTop, lift.Phase);
+            Assert.IsFalse(lift.CalledTop, "arrived: the light goes out");
+            Assert.AreEqual(BungeeLift.Height, lift.Height(20));
+        }
+
+        [Test] public void Lift_CalledWhileLeaving_TurnsBack_AfterABriefStop()
+        {
+            var lift = new LiftCall(0);
+            lift.Call(true, 10); lift.Tick(10, false);                       // on its way up
+            Assert.IsTrue(lift.Call(false, 11), "the bottom button lights while it rises");
+            double up = 10 + BungeeLift.TravelSeconds + 0.01;
+            lift.Tick(up, false);
+            Assert.AreEqual(LiftPhase.OpenTop, lift.Phase);
+            Assert.IsFalse(lift.Tick(up + LiftCall.CallDepartSeconds - 0.1, false), "the doors open a moment at the top");
+            Assert.IsTrue(lift.Tick(up + LiftCall.CallDepartSeconds + 0.01, false));
+            Assert.AreEqual(LiftPhase.Descending, lift.Phase);
+        }
+
+        [Test] public void Lift_PeopleInTheCage_RideToTheOtherFloor_AfterTheDoorTime()
+        {
+            var lift = new LiftCall(0);
+            lift.Tick(30, true);                                            // stepped in at 30 s; the doors had been open all along
+            Assert.AreEqual(LiftPhase.OpenBottom, lift.Phase, "the doors stay open a while for the others");
+            Assert.IsFalse(lift.Tick(30 + BungeeLift.DoorSeconds - 0.1, true));
+            Assert.IsTrue(lift.Tick(30 + BungeeLift.DoorSeconds + 0.01, true));
+            Assert.AreEqual(LiftPhase.Rising, lift.Phase);
+            Assert.IsTrue(lift.CalledTop, "the top's light shows where it goes");
+            lift = new LiftCall(0);
+            lift.Tick(1, true); lift.Tick(4, false); lift.Tick(5, true);
+            Assert.IsFalse(lift.Tick(5 + BungeeLift.DoorSeconds - 0.1, true), "stepping out restarts the wait");
         }
 
         [Test] public void Lift_TakesAtMostFour_FirstComeFirstServed()

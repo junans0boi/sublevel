@@ -62,10 +62,9 @@ namespace Game.Core
 
     public enum LiftPhase { OpenBottom, Rising, OpenTop, Descending }
 
-    // The open steel cage lift beside the bungee tower (ADR-387): it runs a fixed cycle from the moment the waiting room opens, doors
-    // open at the bottom, a fast ride up (a high-rise express: S-curve start and stop, cruise ~15 m/s, 60 m in ~4.8 s), doors open
-    // at the top, the same ride down. Who stands in the cage when the doors close rides (at most Capacity). Pure; the caller passes
-    // the seconds since the room opened.
+    // The open steel cage lift beside the bungee tower (ADR-387): a fast ride (a high-rise express: S-curve start and stop, cruise
+    // ~15 m/s, 60 m in ~4.8 s) between the deck and the top. Since ADR-490 it moves on call (LiftCall), not on a fixed cycle. Who
+    // stands in the cage when the doors close rides (at most Capacity). Pure.
     public static class BungeeLift
     {
         public const int Capacity = 4;
@@ -77,7 +76,7 @@ namespace Game.Core
         public static float Height => BungeeCurve.Top;
         // Distance covered by one ease ramp: speed follows smoothstep(0..1) over EaseSeconds, so the ramp covers half of cruise*ease.
         public static float TravelSeconds => 2f * EaseSeconds + (Height - CruiseSpeed * EaseSeconds) / CruiseSpeed;
-        public static float Cycle => 2f * (DoorSeconds + TravelSeconds);
+        public static float Cycle => 2f * (DoorSeconds + TravelSeconds);   // the longest wait for a call: a full trip each way
 
         // Metres covered after t seconds of a ride (0..Height), speed continuous and zero at both ends.
         public static float Travelled(float t)
@@ -100,21 +99,10 @@ namespace Game.Core
             return CruiseSpeed;
         }
 
-        public static LiftPhase Phase(double sinceOpen, out float into)
+        // The car's floor height above the deck in this phase, `into` seconds after it began (a ride past its end has arrived).
+        public static float HeightOf(LiftPhase phase, float into)
         {
-            float c = (float)(sinceOpen % Cycle); if (c < 0f) c += Cycle;
-            if (c < DoorSeconds) { into = c; return LiftPhase.OpenBottom; }
-            c -= DoorSeconds;
-            if (c < TravelSeconds) { into = c; return LiftPhase.Rising; }
-            c -= TravelSeconds;
-            if (c < DoorSeconds) { into = c; return LiftPhase.OpenTop; }
-            into = c - DoorSeconds; return LiftPhase.Descending;
-        }
-
-        // The cage floor's height above the deck.
-        public static float CarHeight(double sinceOpen)
-        {
-            switch (Phase(sinceOpen, out float into))
+            switch (phase)
             {
                 case LiftPhase.OpenBottom: return 0f;
                 case LiftPhase.Rising: return Travelled(into);
@@ -123,7 +111,8 @@ namespace Game.Core
             }
         }
 
-        public static bool DoorsOpen(double sinceOpen) { var p = Phase(sinceOpen, out _); return p == LiftPhase.OpenBottom || p == LiftPhase.OpenTop; }
+        // Doors are open at either end, and on a ride the clients see as over (their clock ran past the trip).
+        public static bool DoorsOpenOf(LiftPhase phase, float into) => phase == LiftPhase.OpenBottom || phase == LiftPhase.OpenTop || into >= TravelSeconds;
 
         // The riders of one trip: those in the cage when the doors close, first come first served, at most Capacity.
         public static List<T> Board<T>(IEnumerable<T> inCage)
@@ -136,6 +125,60 @@ namespace Game.Core
         // A waiting person who is up in the air and not on the top floor (platform, bridge, lift landing), not riding and not jumping,
         // has fallen: the server puts them back on the deck at once (damage is zero anyway, ADR-383).
         public static bool FellOff(float heightAboveDeck, bool onTopFloor) => heightAboveDeck > 2.5f && !onTopFloor;
+    }
+
+    // The lift on call (ADR-490): the car rests with its doors open at the floor it last reached. A call from the other floor (the F
+    // button beside the doors) brings it there; a call from its own floor holds the doors. People in the cage ride to the other floor
+    // once they have stood in it DoorSeconds. Pure; the caller passes the clock and whether anyone stands in the cage.
+    public sealed class LiftCall
+    {
+        public const float CallDepartSeconds = 1.5f;   // a call from the other floor shuts the doors this long after they opened, at the earliest
+
+        public LiftPhase Phase { get; private set; } = LiftPhase.OpenBottom;
+        public bool CalledBottom { get; private set; }  // the button's light: the car is on its way (or about to leave) for that floor
+        public bool CalledTop { get; private set; }
+        double _since, _occupiedSince = double.NaN;
+
+        public LiftCall(double now) { _since = now; }
+
+        public float Into(double now) => (float)(now - _since);
+        public bool Moving => Phase == LiftPhase.Rising || Phase == LiftPhase.Descending;
+        public float Height(double now) => BungeeLift.HeightOf(Phase, Into(now));
+
+        // The button at the bottom (top = false) or the top. True when the call is new (the light comes on).
+        public bool Call(bool top, double now)
+        {
+            var here = top ? LiftPhase.OpenTop : LiftPhase.OpenBottom;
+            if (Phase == here) { _since = Math.Max(_since, now - CallDepartSeconds); return false; }   // already here: the doors stay open
+            if (top ? CalledTop : CalledBottom) return false;
+            if (top) CalledTop = true; else CalledBottom = true;
+            return true;
+        }
+
+        // Call every tick. True on the tick the phase changed (doors shut and the ride began, or the car arrived and opened).
+        public bool Tick(double now, bool occupied)
+        {
+            float into = Into(now);
+            if (Moving)
+            {
+                if (into < BungeeLift.TravelSeconds) return false;
+                bool top = Phase == LiftPhase.Rising;
+                Phase = top ? LiftPhase.OpenTop : LiftPhase.OpenBottom;
+                if (top) CalledTop = false; else CalledBottom = false;
+                _since = now; _occupiedSince = double.NaN;
+                return true;
+            }
+            if (!occupied) _occupiedSince = double.NaN;
+            else if (double.IsNaN(_occupiedSince)) _occupiedSince = now;
+            bool atTop = Phase == LiftPhase.OpenTop;
+            bool called = atTop ? CalledBottom : CalledTop;
+            bool ridersReady = occupied && now - _occupiedSince >= BungeeLift.DoorSeconds;
+            if (!(called && into >= CallDepartSeconds) && !ridersReady) return false;
+            Phase = atTop ? LiftPhase.Descending : LiftPhase.Rising;
+            if (atTop) CalledBottom = true; else CalledTop = true;   // the far floor's light shows where it goes
+            _since = now;
+            return true;
+        }
     }
 
     // Who may jump (ADR-386): one at a time, a short pause after each jump. Pure; the caller passes the clock.
