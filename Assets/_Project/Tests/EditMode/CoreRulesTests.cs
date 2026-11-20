@@ -243,6 +243,37 @@ namespace Game.Tests
             Assert.AreEqual(0.3125f, Locomotion.AirPhase(0f, jump), 1e-4f, "half way at the top of the jump");
         }
 
+        // #304, ADR-537: grounded -> take-off -> airborne loop -> landing -> grounded, frame by frame as CombatantAnimation asks.
+        [Test]
+        public void PickJumpClip_GroundedJumpAirLand_InThatOrder()
+        {
+            var jump = new JumpRules { StartClipSeconds = 0.25f };
+            Assert.AreEqual(JumpClip.None, Locomotion.PickJumpClip(false, false, false, 0f, false, jump), "standing");
+            Assert.AreEqual(JumpClip.Start, Locomotion.PickJumpClip(true, false, true, 0f, false, jump), "just pushed off");
+            Assert.AreEqual(JumpClip.Start, Locomotion.PickJumpClip(true, false, true, 0.2f, false, jump), "still taking off");
+            Assert.AreEqual(JumpClip.Loop, Locomotion.PickJumpClip(true, false, true, 0.25f, false, jump), "in the air");
+            Assert.AreEqual(JumpClip.Loop, Locomotion.PickJumpClip(true, false, true, 3f, false, jump), "a long fall stays in the loop");
+            Assert.AreEqual(JumpClip.Land, Locomotion.PickJumpClip(false, true, true, 3.1f, false, jump), "touched down");
+            Assert.AreEqual(JumpClip.None, Locomotion.PickJumpClip(false, false, true, 3.4f, false, jump), "back to the ground blend");
+        }
+
+        [Test]
+        public void PickJumpClip_WalkingOffAnEdge_SkipsTheTakeOff()
+        {
+            var jump = new JumpRules { StartClipSeconds = 0.25f };
+            Assert.AreEqual(JumpClip.Loop, Locomotion.PickJumpClip(true, false, false, 0f, false, jump));
+        }
+
+        [Test]
+        public void PickJumpClip_OnALedge_HoldsTheStillPose_ForTheMidAirMantle()
+        {
+            var jump = new JumpRules { StartClipSeconds = 0.25f };
+            Assert.AreEqual(JumpClip.Hold, Locomotion.PickJumpClip(true, false, true, 0.1f, true, jump), "grabbed the edge during the take-off");
+            Assert.AreEqual(JumpClip.Hold, Locomotion.PickJumpClip(true, false, true, 1f, true, jump), "pulling up");
+            Assert.AreEqual(JumpClip.Hold, Locomotion.PickJumpClip(false, true, true, 1.5f, true, jump), "stepping onto the top");
+            Assert.AreEqual(JumpClip.None, Locomotion.PickJumpClip(false, false, true, 2f, true, jump));
+        }
+
         [Test]
         public void JumpTuck_IsFullAtTheTopOfTheJump_AndLeastWhileMovingFastUpOrDown()
         {

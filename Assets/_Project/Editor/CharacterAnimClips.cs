@@ -63,9 +63,9 @@ public static class CharacterAnimClips
     public const string UalPath = "Assets/_Project/Art/Characters/Ual/UAL1_Standard.fbx";
     static string UalSource() => System.Environment.GetEnvironmentVariable("SUBLEVEL_UAL_DIR")
         ?? "/Volumes/WorkSpace/Project/sublevel_staging/QuaterniusUniversal/UAL1";
-    // Source clip name in the file -> our clip name (prefix U_). Loops: walk/jog/idle only. Hit_Chest is read as an additive pose (frame 0 = reference).
-    public static readonly string[] UalNames = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Punch_Jab", "Punch_Cross", "Hit_Chest", "Crouch_Idle_Loop", "Crouch_Fwd_Loop", "Swim_Idle_Loop", "Swim_Fwd_Loop", "Sprint_Loop" };
-    static readonly string[] UalLoops = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop", "Crouch_Idle_Loop", "Crouch_Fwd_Loop", "Swim_Idle_Loop", "Swim_Fwd_Loop" };
+    // Source clip name in the file -> our clip name (prefix U_). Loops: the cycles and the airborne Jump_Loop (ADR-537). Hit_Chest is read as an additive pose (frame 0 = reference).
+    public static readonly string[] UalNames = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Punch_Jab", "Punch_Cross", "Hit_Chest", "Crouch_Idle_Loop", "Crouch_Fwd_Loop", "Swim_Idle_Loop", "Swim_Fwd_Loop", "Sprint_Loop", "Jump_Start", "Jump_Loop", "Jump_Land" };
+    static readonly string[] UalLoops = { "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop", "Crouch_Idle_Loop", "Crouch_Fwd_Loop", "Swim_Idle_Loop", "Swim_Fwd_Loop", "Jump_Loop" };
 
     public static void SyncUal()
     {

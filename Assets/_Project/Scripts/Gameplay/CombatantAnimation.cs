@@ -37,6 +37,7 @@ namespace Game.Gameplay
         public const string Move = "Move"; // speed along the legs' heading, negative when back-pedalling
         public const string Pace = "Pace"; // playback speed of the locomotion blend only
         public const string AirPhase = "AirPhase"; // which moment of its clip the air state holds (0..1)
+        public const string JumpStart = "JumpStart", JumpLoop = "JumpLoop", JumpLand = "JumpLand"; // base layer jump clips (ADR-537)
 
         const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
@@ -103,6 +104,9 @@ namespace Game.Gameplay
         int _move, _pace, _airPhaseId, _moveX, _moveZ;
         float _airPhase;
         bool _inAir;
+        JumpClip _jumpClip;          // which jump clip the logical Air state shows (ADR-537)
+        bool _jumpClips;             // the controller has the jump clips; without them the jump is posed in code (ADR-048)
+        RuntimeAnimatorController _jumpClipsOf;
         float _landUntil = -1f; // touched down: the landing pose is held until this time
         float _takeoffAt = float.NegativeInfinity; // left the ground going up
         float _landedAt = float.NegativeInfinity;
@@ -374,6 +378,18 @@ namespace Game.Gameplay
         bool TrackAir()
         {
             var jump = GameData.Rules.Jump;
+            if (_animator.runtimeAnimatorController != _jumpClipsOf && _animator.isInitialized)
+            {
+                _jumpClipsOf = _animator.runtimeAnimatorController;
+                _jumpClips = _animator.HasState(BaseLayer, Animator.StringToHash(JumpLoop));
+            }
+            bool show = TrackAirTimes(jump);
+            _jumpClip = _jumpClips ? Game.Core.Locomotion.PickJumpClip(_inAir, show && !_inAir, _takeoffAt > float.NegativeInfinity, Time.time - _takeoffAt, OnLedge, jump) : JumpClip.Hold;
+            return show;
+        }
+
+        bool TrackAirTimes(JumpRules jump)
+        {
             // Floating is not falling: no jump pose over deep water.
             if (_swimAmount > 0.01f || _bungee > 0.01f) { _inAir = false; _landUntil = -1f; return false; }   // nor is hanging on the bungee cord
             if (_motion.Airborne)
@@ -396,7 +412,7 @@ namespace Game.Gameplay
                 _inAir = false;
                 // Arriving on top from a pull-up is no landing: its knee-bend dip read as a snap to sitting (#233, ADR-542).
                 bool fromLedge = LedgePose > 0.5f;
-                _landUntil = fromLedge ? -1f : Time.time + jump.LandSeconds;
+                _landUntil = fromLedge ? -1f : Time.time + (_jumpClips && !OnLedge ? jump.LandClipSeconds : jump.LandSeconds);
                 _landedAt = fromLedge ? float.NegativeInfinity : Time.time;
                 Landed?.Invoke();
             }
@@ -411,7 +427,7 @@ namespace Game.Gameplay
         {
             var jump = GameData.Rules.Jump;
             float push = 0f, tuck = 0f;
-            if (!dead && _inAir)
+            if (!dead && _inAir && !_jumpClips)
             {
                 float sinceTakeoff = Time.time - _takeoffAt;
                 if (sinceTakeoff < jump.TakeoffSeconds)
@@ -424,7 +440,7 @@ namespace Game.Gameplay
             tuck *= 1f - LedgePose; // hanging or pulling up the legs are posed in .Ledge.cs, not tucked like a jump
             _tuck = Mathf.MoveTowards(_tuck, tuck, jump.TuckPerSecond * Time.deltaTime);
             // The ground probe reports the landing a little above the floor, so the dip is deepest about as the feet arrive.
-            _dip = dead ? 0f : Game.Core.Locomotion.Pulse(Time.time - _landedAt, jump.LandAttackSeconds, jump.LandAbsorbSeconds);
+            _dip = dead || _jumpClips ? 0f : Game.Core.Locomotion.Pulse(Time.time - _landedAt, jump.LandAttackSeconds, jump.LandAbsorbSeconds);
             // The crouch follows the replicated stance, eased in and out; in the air the tuck takes over from it.
             float crouch = dead || _stance == null ? 0f : _stance.CrouchAmount;
             _crouch = crouch * crouch * (3f - 2f * crouch) * (1f - _tuck);
@@ -494,7 +510,7 @@ namespace Game.Gameplay
         void SetBase(string state)
         {
             bool tree = state == Locomotion;
-            string wanted = !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Aiming ? LocomotionAim : Locomotion;
+            string wanted = state == Air ? AirShown() : !tree ? state : _unarmedBody ? (_crouch > 0.5f ? UnarmedCrouch : Unarmed) : Aiming ? LocomotionAim : Locomotion;
             if (_base == state && _baseShown == wanted) return;
             // Down to and up from the ground is slower than a step.
             _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
@@ -503,6 +519,8 @@ namespace Game.Gameplay
         }
 
         string _baseShown = Locomotion; // the animator state actually playing for _base
+
+        string AirShown() => _jumpClip == JumpClip.Start ? JumpStart : _jumpClip == JumpClip.Loop ? JumpLoop : _jumpClip == JumpClip.Land ? JumpLand : Air;
         bool Aiming => _combatant.AimMode != AimMode.Hip;
 
         // Pure: index of the direction (deg, any range) nearest to `deg`, the short way round. Straight ahead and straight back (the UAL

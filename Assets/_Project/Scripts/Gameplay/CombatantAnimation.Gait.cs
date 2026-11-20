@@ -107,7 +107,7 @@ namespace Game.Gameplay
             }
 
             // A running jump: one leg forward, one back, the way a stride goes through the air.
-            if (_inAir && _prone < 0.1f && _seated < 0.1f && !OnLedge)
+            if (_inAir && !_jumpClips && _prone < 0.1f && _seated < 0.1f && !OnLedge) // the jump clips stride themselves (ADR-537)
             {
                 float k = Mathf.Clamp01(speed / JumpStrideSpeed) * (1f - 0.5f * _tuck);
                 var right = transform.right;
