@@ -43,7 +43,7 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 - 무기 모델 4종(Quaternius Ultimate Guns: Pistol_1, SubmachineGun_1, Bullpup_1, Shotgun_1)은 각인·상표·텍스처가 없는 로우폴리지만 **실존 총기와 형상이 닮았는지는 검토하지 않았다**(디자인권 판단은 사람 몫).
 - 총성(S-0001, The Free Firearm Sound Library)은 OpenGameArt 페이지에 CC0로 표기돼 있으나 **압축 파일 안에 라이선스 문서가 없다**. 페이지 사본은 `docs/licenses/S-0001/`. 원 배포처 표기 확인 필요. 원본은 실총 녹음이며 프로젝트 파일명에는 실총 명칭을 넣지 않았다.
 - OpenGameArt "Gunshot Sounds"(Tabasco)는 페이지는 CC0, 압축 파일 안 문서는 CC-BY 3.0으로 **표기가 엇갈려 사용하지 않았다**.
-- 캐릭터가 Universal Base Characters가 아닌 Ultimate Modular Men(Swat)이다(ADR-036). Humanoid 리타깃은 하지 않았다(애니메이션이 같은 파일에 내장).
+- ~~캐릭터가 Universal Base Characters가 아닌 Ultimate Modular Men(Swat)이다(ADR-036).~~ [2026-11-20 해소: Humanoid 로스터 15종(C-0003·C-0006~C-0010)으로 교체, Quaternius Swat은 `placeholder/QuaterniusModularMen`으로 이동(#262)]
 
 ## M1.6a-fix 중 누적 (2026-11-13)
 - [ ] **릴리스 전 제거(S5, #399, ADR-300)**: 클라이언트 `--simulate-ping <ms>`·`--simulate-jitter <ms>`(체감용 지연 주입). 파일 `Core/SimulatedPing.cs`, `Net/PingSimulation.cs`, `LobbyNet.StartClientSide`·`MatchDirector`의 `PingSimulation.Attach` 호출, `NetStatusView`의 표시 한 줄, 테스트 `SimulatedPingTests`. 인자가 없으면 아무것도 하지 않는다.
@@ -71,6 +71,11 @@ Unity 헤드리스로 못 하는 작업 목록, 스킬 이름/동작 차이, 네
 ## 사운드 크레딧 (2026-11-19) — 릴리스 전 사람이 확인 (에이전트는 법적 판단 안 함)
 - [ ] **크레딧 원 제목의 상표**: 크레딧 화면(`Credits.cs`)에 CC BY 3.0 원 제목 "Glock19_reload"(Fr3yr, S-0035)가 그대로 나온다. CC BY는 원 제목 표기를 요구할 수 있고 CLAUDE.md 규칙 1은 실존 총기 상표를 금지한다 → 원 제목 유지/대체 표기 여부는 사람 판단(규칙 8). ledger의 다른 Freesound 원 파일명(glock·mp5·m16·mossberg·ak-47·chrysler 등)은 ledger에만 있고 게임에는 안 나온다.
 
+
+## 캐릭터 크레딧·placeholder (2026-11-20, #262) — 릴리스 전 사람이 결정 (에이전트는 판단 안 함)
+- 캐릭터 에셋(C-0001~C-0011)은 모두 CC0(Quaternius) 또는 Adobe Mixamo 약관이라 **표기 의무가 없다**. 크레딧 화면(`Credits.cs`)은 CC BY만 싣는다(장비 9종·차량·소리는 이미 있음). 그래서 캐릭터 항목은 0개다.
+- [ ] **자발 표기 여부와 문구**: Quaternius(UBC·UAL1·옛 Swat)와 Mixamo(로스터 13종·소총·strafe 클립)를 크레딧에 넣을지, 넣는다면 문구(예: "Characters/animations: Quaternius (CC0), Mixamo (Adobe)")와 Adobe 상표 표기 가능 여부는 사람이 정한다. 넣기로 하면 `Credits.cs`에 행을 더하고 ledger 해당 행의 '표기 필요'를 `예`로 바꾼다(`VehicleModelTests`가 `예` 행마다 같은 URL의 크레딧 항목을 요구).
+- [ ] **Quaternius Swat placeholder 제거**: `placeholder/QuaterniusModularMen/Swat.fbx`(C-0001, CC0)는 게임 경로(프리팹·`CharacterKit`·로스터)에서 안 쓴다. 남은 참조 2곳: ① M1.5 때 만든 뒤 재생성하지 않은 `Assets/_Project/Scenes/LookDev.unity`(Swat 프리팹 인스턴스 → 이동 후 Missing Prefab, `LookDevBuilder.Build`로 다시 만들면 로스터 캐릭터로 바뀜), ② 폐기 예정 `Editor/MixamoBake.cs`(ADR-187, `Baked/Mx_*.anim` 17개는 어느 컨트롤러도 참조하지 않음). 릴리스 전 파일과 이 두 참조를 함께 지운다(MixamoBake·Mx_* 삭제는 ADR-187대로 준환 확인).
 
 ## 법적·운영 (정식 서비스 전, #394) — 사람이 검토 (에이전트는 법적 판단 안 함)
 단계: B = 외부 사람 초대 시험(로그인·다운로드 공개), C = 정식 공개. 담당은 모두 준환(필요하면 전문가 자문).

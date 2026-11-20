@@ -1,12 +1,12 @@
 # 캐릭터
 
-> 상태: 확정 · 요약: 지금은 Quaternius CC0 'Swat' 한 모델(Generic 리그)이 플레이어·봇·더미를 모두 맡는다. 키 1.8m 캡슐, 눈 1.6m, 높이 기반 피격 구역. 실사 비율 Humanoid 교체와 20종 이상 로스터는 제안 단계.
+> 상태: 확정 · 요약: Humanoid 로스터 15모델(Mixamo 13·Quaternius UBC 2, 외형 66종)이 플레이어·봇을 맡고 기본은 MixamoSwat. 키 1.8m 캡슐, 눈 1.6m, 높이 기반 피격 구역. 옛 Quaternius Swat(Generic)은 placeholder/로 옮겼다(#262). 캐릭터 에셋은 CC0·Mixamo라 크레딧 의무 없음(자발 표기는 사람 결정).
 
 ## 현재 모델
 
 | 상태 | 항목 | 값 | 메모 | 근거 |
 |---|---|---|---|---|
-| 확정 | 캐릭터 모델 | Quaternius Ultimate Modular Men - Swat.fbx (CC0, Generic 리그, 손 뼈 Wrist.R) | 플레이어·봇·훈련 더미가 같은 모델. 스타일화 비율(큰 머리, 5.5등신). | docs/ASSET_LEDGER.md:38 (C-0001); Assets/_Project/Editor/CharacterKit.cs:15 |
+| 확정 | 캐릭터 모델 | 로스터 15모델(Mixamo Swat·민간 9·군복 3, UBC 남·여), Humanoid. 기본 `MixamoSwat`. 옛 Quaternius Swat.fbx(C-0001, Generic)는 미사용 → `placeholder/QuaterniusModularMen`(릴리스 전 제거, #262) | 크레딧: CC0(Quaternius)·Mixamo 약관이라 표기 의무 없음. 자발 표기 여부·문구는 RISKS '캐릭터 크레딧·placeholder'(사람 결정). | docs/ASSET_LEDGER.md (C-0003, C-0006~C-0010); Assets/_Project/Editor/CharacterKit.cs:13; Assets/_Project/Editor/CharacterRoster.cs |
 | 제안 | 스킨·복장 변형 | Mixamo: 의상 고정 + 약한 머티리얼 틴트 + 팀 색 완장·머리띠 소품. UBC: 피부 2 x 머리 2 x CC0 소품. 봇은 시드 배정, 인접 중복 금지 [S3 가정 2026-11-16, 준환 위임] | 팀 구분 색이 어떻게 입혀지는지는 이 조사에서 확인 못 함. 제안은 아래 로스터 참고. |  |
 | 확정 | 캡슐 | 높이 1.8m, 반지름 0.35m, 중심 0.9m |  | Assets/_Project/Editor/TestBoxBuilder.cs:331 |
 | 확정 | 눈 높이(서기) | 1.6m | 앉기 -0.65, 엎드리기 -1.2 (Stance 규칙) | Assets/_Project/Scripts/Net/Combatant.cs:28 |
@@ -91,9 +91,9 @@
 
 | 상태 | 묶음 | 클립 | 쓰임 | 메모 | 근거 |
 |---|---|---|---|---|---|
-| 확정 | Swat 내장(24개, Quaternius CC0) | Idle, Walk, Run, Run_Back, HitRecieve, Punch_Left, Punch_Right, Idle_Gun_Pointing 등 | 이동 기본층, 피격, 펀치 | 이름은 코드에 쓰인 것만 적음 | docs/ASSET_LEDGER.md:38; Assets/_Project/Editor/CharacterKit.cs:45-50 |
-| 확정 | Mixamo 소총 17개를 Swat 뼈대에 구운 Mx_* (ADR-166) | RifleIdle, RifleAimingIdle, FiringRifleStand, ReloadingRifleStand, ReloadRifleCrouch, RifleWalk, RifleWalkBack, RifleRun, RifleSideStep, RifleCrouchWalk, RifleCrouchWalkBack, RifleKneelIdle, RiflePullOut, RiflePutAway, RifleDeath, ProneFiringRifle, ProneReloadingRifle | 조준/낮춤/발사/사망에 연결. ProneFiringRifle, ProneReloadingRifle은 구웠지만 어느 상태에도 안 이어짐 | 비 CC0, 저장소 비공개 유지(Mixamo/LICENSE.txt). Adobe 추가 약관 미확인. | Assets/_Project/Prefabs/M1_5/Baked/*.anim; docs/ASSET_LEDGER.md:77 (C-0005) |
-| 확정 | Quaternius UAL1/UAL2 Standard (CC0) | UAL1: 권총 조준·대기·장전·발사, 웅크리기, 수영, 달리기, 구르기, 사망, 피격. UAL2: 근접·슬라이드·점프·피격 | 임포트만, 현 컨트롤러에는 연결 안 됨(확인 필요) | Humanoid 리그용이라 현 Swat(Generic)에는 못 붙는다 | docs/ASSET_LEDGER.md:72-76 (C-0002, C-0004) |
+| 확정 | 옛 Quaternius Swat 내장 24개(CC0) | Idle, Walk, Run, Run_Back, HitRecieve, Punch_Left, Punch_Right, Idle_Gun_Pointing 등 | 미사용(로스터 Humanoid 컨트롤러로 교체). 파일은 placeholder/ | 릴리스 전 제거 | docs/ASSET_LEDGER.md (C-0001); placeholder/QuaterniusModularMen/Swat.fbx |
+| 확정 | Mixamo 소총 16개 + strafe 14개(Humanoid 직접 사용, ADR-187·391) | RifleIdle, RifleAimingIdle, FiringRifleStand, ReloadingRifleStand, ReloadRifleCrouch, RifleWalk, RifleWalkBack, RifleRun, RifleSideStep, RifleCrouchWalk, RifleCrouchWalkBack, RifleKneelIdle, RiflePullOut, RiflePutAway, RifleDeath, ProneFiringRifle, ProneReloadingRifle | 조준·발사·장전·엎드림(ADR-231)·8방향 이동. 옛 Swat에 구운 `Baked/Mx_*.anim` 17개는 어느 컨트롤러도 참조하지 않음(MixamoBake와 함께 삭제 예정, ADR-187) | 비 CC0. strafe FBX는 git-ignored(`CharacterAnimClips.SyncStrafe`). 공개 전 Adobe Additional Terms 사람 검토(RISKS). | Assets/_Project/Editor/CharacterControllerBuilder.cs; Assets/_Project/Editor/CharacterAnimClips.cs; docs/ASSET_LEDGER.md (C-0005, C-0011) |
+| 확정 | Quaternius UAL1/UAL2 Standard (CC0) | UAL1: 권총 조준·대기·장전·발사, 웅크리기, 수영, 달리기, 구르기, 사망, 피격. UAL2: 근접·슬라이드·점프·피격 | UAL1 사용: 맨손 Idle·Walk·Jog·Sprint(소총 이동 다리 겸용, ADR-390)·주먹·피격·웅크리기·수영(C-0004). UAL2는 저장소 밖(C-0002, 미사용) | Humanoid로 로스터에 직접 붙음 | docs/ASSET_LEDGER.md:72-76 (C-0002, C-0004) |
 | 확정 | 코드 구동 포즈 | 엎드리기(모델 85도 눕힘), 웅크리기 무릎, 수영 팔·다리, 총 두 손 IK, 차량 착석, 난간, 파쿠르 포즈 | 클립 없이 코드가 뼈를 직접 돌림 | 엎드림 시 몸이 약 35도 뜨고 소총 달릴 때 한 팔이 늘어지는 결함이 감사에서 확인됨 | docs/research/04_animation_audit.md |
 
 ## 애니메이터 구조
