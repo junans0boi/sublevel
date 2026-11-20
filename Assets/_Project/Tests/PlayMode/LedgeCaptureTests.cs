@@ -58,6 +58,31 @@ namespace Game.Tests
             }
         }
 
+        // #312 judgement numbers for the LedgeBlock (wall face z = -22, top y = 2.3): each hand's distance from the edge line, and how far
+        // each body part is in front of the wall (negative = inside it).
+        static void Fit(Combatant me, string when)
+        {
+            const float wallZ = -22f, topY = 2.3f;
+            var a = me.GetComponentInChildren<Animator>();
+            if (a == null || !a.isHuman) return;
+            string hands = "", body = "";
+            foreach (var b in new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand })
+            {
+                var p = a.GetBoneTransform(b).position;
+                hands += $" {b} dy {p.y - topY:F2} dz {p.z - wallZ:F2}";
+            }
+            float worst = float.MaxValue; string worstBone = "";
+            foreach (var b in new[] { HumanBodyBones.Head, HumanBodyBones.Chest, HumanBodyBones.Hips, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.LeftToes, HumanBodyBones.RightToes })
+            {
+                var t = a.GetBoneTransform(b);
+                if (t == null) continue;
+                float gap = wallZ - t.position.z;
+                if (t.position.y < topY && gap < worst) { worst = gap; worstBone = b.ToString(); }
+                body += $" {b} {gap:F2}";
+            }
+            Debug.Log($"[LedgeFit] {when}: hands{hands} | in front of wall:{body} | closest below the top {worstBone} {worst:F2}");
+        }
+
         string _folder;
         LateShot _shot;
         Camera _fixed;
@@ -111,6 +136,7 @@ namespace Game.Tests
             yield return Shot("ledge_02_hang_behind", at + new Vector3(1.2f, 1.5f, -2.6f), at + new Vector3(0f, 1.5f, 0.3f));
             yield return Shot("ledge_03_hang_close", at + new Vector3(0.9f, 2.3f, -0.9f), at + new Vector3(0f, 1.9f, 0.4f));
             yield return Shot("ledge_04_hang_tpp", null, default);
+            Fit(me, "hang");
 
             input.Frame.Jump = true;
             float started = Time.time;
@@ -121,6 +147,7 @@ namespace Game.Tests
                 while (Time.time - started < when && pc.InParkour) yield return null;
                 Debug.Log($"[LedgeCapture] climb {Time.time - started:F2}s: {pc.ParkourUnderWay} at {pc.transform.position}");
                 yield return Shot($"ledge_1{(int)(when * 10)}_climb_side_{(int)(when * 100):000}", side, look);
+                Fit(me, $"climb {when:F2}");
             }
             while (pc.InParkour) yield return null;
             yield return new WaitForSeconds(0.5f);

@@ -126,7 +126,7 @@ namespace Game.Gameplay
             {
                 while (Time.time - t0 < at) yield return null;
                 var animLog = PlayerController.Local.GetComponent<CombatantAnimation>();
-                Debug.Log($"[FeelCapture] {name} want {at:F2} real {Time.time - t0:F3} holster {animLog.HolsterProgress:F2} draw {animLog.DrawProgress:F2} held {animLog.HeldId} reload {animLog.ReloadProgress:F2}");
+                Debug.Log($"[FeelCapture] {name} want {at:F2} real {Time.time - t0:F3} holster {animLog.HolsterProgress:F2} draw {animLog.DrawProgress:F2} held {animLog.HeldId} reload {animLog.ReloadProgress:F2} base {animLog.BaseShown} airborne {animLog.GetComponent<CombatantMotion>().Airborne} y {animLog.transform.position.y:F2}");
                 yield return Views($"{name}_t{Mathf.RoundToInt(at * 100):0000}", fp, views);
             }
         }
@@ -491,6 +491,7 @@ namespace Game.Gameplay
             _frame.Crouch = true; yield return new WaitForSeconds(0.7f);
             yield return Views("C_crouch_idle", true, Out3);
             yield return Motion(pc, home, run, room, "C_crouch_walk", new Vector2(0f, 1f));
+            yield return Motion(pc, home, run, room, "C_crouch_back", new Vector2(0f, -1f), backwards: true); // #303: the Mixamo back walk
             _frame.Crouch = true; yield return new WaitForSeconds(0.2f);
             _frame.Prone = true; yield return new WaitForSeconds(1.2f);
             yield return Views("C_prone_idle", true, Out3);
@@ -626,6 +627,11 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.7f);
             yield return Burst("I_jump_run", new[] { 0.08f, 0.2f, 0.35f, 0.5f, 0.7f }, () => _frame.Jump = true);
             _frame.Move = Vector2.zero; _frame.Sprint = false;
+            yield return new WaitForSeconds(1f);
+            // A 6 m drop (#304): no push-off, the airborne loop, then the landing (falls ~0.93 s at the game's gravity).
+            pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+            yield return new WaitForSeconds(0.5f);
+            yield return Burst("I_drop_6m", new[] { 0.1f, 0.5f, 0.85f, 0.95f, 1.05f, 1.2f, 1.4f }, () => pc.Teleport(home + Vector3.up * 6f));
             yield return new WaitForSeconds(1f);
             pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
             yield return new WaitForSeconds(0.5f);

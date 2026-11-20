@@ -481,14 +481,18 @@ namespace Game.Tests
             yield return Load();
             float rest = _anim.FootRest, standing = Mathf.Abs(AnkleOverGround(HumanBodyBones.LeftFoot) - rest);
             float lowest = 9f, drop = 0f;
+            string atLowest = "";
             _input.Frame.Move = new Vector2(0, 1);
             yield return new WaitForSeconds(0.6f);
             for (float end = Time.time + 1.5f; Time.time < end;)
             {
                 yield return null;
-                lowest = Mathf.Min(lowest, AnkleOverGround(HumanBodyBones.LeftFoot), AnkleOverGround(HumanBodyBones.RightFoot));
+                float low = Mathf.Min(AnkleOverGround(HumanBodyBones.LeftFoot), AnkleOverGround(HumanBodyBones.RightFoot));
+                if (low < lowest) atLowest = $"{_anim.BaseShown} plantDrop {_anim.PlantDrop:F3} modelDrop {_anim.ModelDrop:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} speed {_me.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F2}";
+                lowest = Mathf.Min(lowest, low);
                 drop = Mathf.Max(drop, _anim.PlantDrop);
             }
+            Debug.Log("[AnimMetrics] flat ground lowest frame: " + atLowest);
             Debug.Log($"[AnimMetrics] flat ground: standing ankle error {standing:F3} m, lowest ankle while moving {lowest:F3} (rest {rest:F3}), max pelvis drop {drop:F3}");
             Assert.LessOrEqual(standing, 0.025f, "standing: an ankle is `rest` above the ground (m)");
             Assert.GreaterOrEqual(lowest, rest - 0.03f, "moving: no ankle is more than 3 cm below its resting height over the ground");
@@ -546,7 +550,7 @@ namespace Game.Tests
             Physics.Raycast(_pc.transform.position + Vector3.up, Vector3.down, out var floorHit, 3f);
             Debug.Log($"[AnimMetrics] crouch origin over floor {_pc.transform.position.y - floorHit.point.y:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} drop {_anim.PlantDrop:F3} lod {_anim.Lod} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]}");
             Debug.Log($"[AnimMetrics] crouch: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} palm {r[8]:F3}");
-            Assert.That(r[3], Is.InRange(0.9f, 1.3f), "head height crouched (m)");
+            Assert.That(r[3], Is.InRange(0.8f, 1.3f), "head joint height kneeling (m): under the 1.0 m crouch capsule like the bare-hand crouch (0.845 on the Mixamo kneel, #303)");
             Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");
             Assert.AreEqual("RifleCrouch", _anim.BaseShown, "the rifle crouch is the Mixamo kneel clip (ADR-536, #303)");
             Assert.Less(Mathf.Abs(_anim.ModelDrop), 0.03f, "the clip is the crouch: no code knee bend");

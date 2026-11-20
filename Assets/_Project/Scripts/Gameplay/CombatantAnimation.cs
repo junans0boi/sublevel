@@ -382,7 +382,10 @@ namespace Game.Gameplay
                 _jumpClips = _animator.HasState(BaseLayer, Animator.StringToHash(JumpLoop));
             }
             bool show = TrackAirTimes(jump);
-            _jumpClip = _jumpClips ? Game.Core.Locomotion.PickJumpClip(_inAir, show && !_inAir, _takeoffAt > float.NegativeInfinity, Time.time - _takeoffAt, OnLedge, jump) : JumpClip.Hold;
+            var v = _motion.LocalVelocity;
+            _jumpClip = _jumpClips ? Game.Core.Locomotion.PickJumpClip(_inAir, show && !_inAir, _takeoffAt > float.NegativeInfinity, Time.time - _takeoffAt, OnLedge, jump, new Vector2(v.x, v.z).magnitude) : JumpClip.Hold;
+            // A running landing has no landing pose: the run blend carries straight on (#304).
+            if (show && !_inAir && _jumpClip == JumpClip.None) { _landUntil = -1f; show = false; }
             return show;
         }
 
