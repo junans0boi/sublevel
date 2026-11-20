@@ -58,9 +58,10 @@ public static partial class WorldBuilder
 
     // The player's CharacterController (radius, height, step); the slope is WorldRules.WalkSlopeDeg.
     const float AgentRadius = 0.35f, AgentHeight = 1.8f, AgentStepHeight = 0.3f;
-    // A third of the radius (Unity's default). The research note suggests radius / 2 (0.175 m) to bake faster, but
-    // a 1.3 m door then keeps as little as one voxel of walkable width; switch only if the bake time hurts.
-    const float NavVoxelSize = AgentRadius / 3f;
+    // Half the radius (ADR-544, #426): radius / 3 baked 31.9 MiB, over the 30 MB budget; radius / 2 bakes 21.2 MiB and still
+    // erodes exactly one radius, so a 1.3 m door keeps 2-3 voxels. Measured 410/411 house interiors still reach their front
+    // (radius / 3: 411, radius / 2.5: 410 with 29.1 MiB). Tile 256 is the smallest file: 128, 512 and 1024 all grew it.
+    const float NavVoxelSize = AgentRadius / 2f;
     const int NavTileSize = 256;
     const int NotWalkableArea = 1;          // built-in navmesh area
 
