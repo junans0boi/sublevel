@@ -117,6 +117,12 @@ namespace Game.Gameplay
         InventoryItemIcon _tooltipIcon;
         Text _tooltipTitle, _tooltipType, _tooltipBody;
         RectTransform _tooltipRule;
+        const int TooltipBarCount = 5;
+        RectTransform _tooltipBars;
+        readonly Text[] _tooltipBarLabels = new Text[TooltipBarCount], _tooltipBarValues = new Text[TooltipBarCount];
+        readonly RectTransform[] _tooltipBarFills = new RectTransform[TooltipBarCount];
+        // ADR-493: the bars' numbers as "피해 40 | 사거리 120m | ...", for the tests; empty when no bars show.
+        public string TooltipBars { get; private set; } = "";
         bool _tooltipWant;
         float _tooltipAlpha;
 
@@ -1143,16 +1149,36 @@ namespace Game.Gameplay
             _tooltipType.text = parts.Count > 0 ? parts[0] : "";
             _tooltipBody.text = parts.Count > 1 ? string.Join("\n", parts.GetRange(1, parts.Count - 1)) : "";
             if (source.Kind == InventorySourceKind.EmptyAttach) _tooltipIcon.SetGhost(key); else _tooltipIcon.Set(key, name);
+            float barsHeight = ShowTooltipBars(InventoryBackend.GunOf(source, Combatant.LocalPlayer, out int packed), packed);
             bool hasBody = _tooltipBody.text.Length > 0;
             float bodyHeight = hasBody ? _tooltipBody.preferredHeight : 0f;
-            _tooltipRule.gameObject.SetActive(hasBody);
+            _tooltipRule.gameObject.SetActive(hasBody || barsHeight > 0f);
             var bodyRect = _tooltipBody.rectTransform;
             bodyRect.sizeDelta = new Vector2(bodyRect.sizeDelta.x, bodyHeight + 2f);
-            _tooltipRect.sizeDelta = new Vector2(TooltipWidth, TooltipHeader + (hasBody ? bodyHeight + 22f : 6f));
+            bodyRect.anchoredPosition = new Vector2(bodyRect.anchoredPosition.x, -(TooltipHeader + 4f + barsHeight));
+            _tooltipRect.sizeDelta = new Vector2(TooltipWidth, TooltipHeader + barsHeight + (hasBody ? bodyHeight + 22f : 6f));
             _tooltipWant = true;
             _tooltip.SetActive(true);
             _tooltip.transform.SetAsLastSibling();
             PlaceTooltip(screenPosition, eventCamera);
+        }
+
+        // Fills the bars for a gun (null hides them); returns the height they take.
+        float ShowTooltipBars(WeaponDef gun, int packed)
+        {
+            _tooltipBars.gameObject.SetActive(gun != null);
+            if (gun == null) { TooltipBars = ""; return 0f; }
+            var bars = WeaponStats.Bars(gun, Attachments.ModsOf(packed, OpticRules.Current));
+            var seen = new List<string>();
+            for (int i = 0; i < TooltipBarCount; i++)
+            {
+                _tooltipBarLabels[i].text = bars[i].Label;
+                _tooltipBarValues[i].text = bars[i].Value;
+                _tooltipBarFills[i].anchorMax = new Vector2(Mathf.Max(0.02f, bars[i].Fill), 1f);
+                seen.Add(bars[i].Label + " " + bars[i].Value);
+            }
+            TooltipBars = string.Join(" | ", seen);
+            return TooltipBarRow * TooltipBarCount + 10f;
         }
 
         string DescribeThrowableSlot(Combatant me)
