@@ -154,6 +154,14 @@ namespace Game.Tests
             Debug.Log($"[MatchSimulation] over {log.over} in {log.durationSeconds:0} s match time ({log.durationRealSeconds:0} s real), " +
                 $"winner {log.winner}, final region {log.finalRegion}, kills {log.kills.Count}, stalls {log.stallTotal}, log {path}");
 
+            // #333 (ADR-533): bots leave a region before its gas or bombardment starts. The player was killed by Zone damage
+            // at the start (the first Zone kill), so it is not counted. Logged only: QuickMatch squeezes the warning to 13 s, too
+            // short to walk out, so most bots die to it here by design (2026-11-20: 14 of 15).
+            int zoneDeaths = -1;
+            foreach (var k in log.kills) if (k.cause == nameof(DamageCause.Zone)) zoneDeaths++;
+            zoneDeaths = Mathf.Max(0, zoneDeaths);
+            Debug.Log($"[MatchSimulation] region-ending deaths {zoneDeaths} of {Bots} bots ({100f * zoneDeaths / Bots:0}%)");
+
             Assert.IsTrue(state.IsOver, $"the match did not end within {RealSecondsLimit:0} s real time ({alive} still alive; log {path})");
             Assert.AreEqual(1, aliveWhenOver, "exactly one survivor when the match ended");
             Assert.AreEqual(1, AliveCount(out last), "exactly one survivor");

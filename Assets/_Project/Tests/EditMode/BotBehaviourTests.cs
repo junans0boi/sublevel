@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Game.Core;
 using NUnit.Framework;
@@ -49,6 +50,44 @@ namespace Game.Tests
             Assert.Less(Moving(BotDifficulty.Easy, 10f), Moving(BotDifficulty.Normal, 10f));
             Assert.Less(Moving(BotDifficulty.Normal, 10f), Moving(BotDifficulty.Hard, 10f));
             Assert.AreEqual(1f, Moving(BotDifficulty.Easy, 66f), 0.001f, "40 s before the confirmation nobody stays");
+        }
+
+        [Test]
+        public void WalkOut_NeverUnderTheMinimum_GrowsWithTheWayOut()
+        {
+            Assert.AreEqual(BotPollutionPlan.MinimumWalkSeconds, BotPollutionPlan.WalkOutSeconds(0f, 4.7f), 1e-4f);
+            Assert.AreEqual(400f * 1.4f / 4.7f + 15f, BotPollutionPlan.WalkOutSeconds(400f, 4.7f), 1e-3f);
+            Assert.Greater(BotPollutionPlan.WalkOutSeconds(400f, 2f), BotPollutionPlan.WalkOutSeconds(400f, 4.7f), "slower walkers leave sooner");
+        }
+
+        [Test]
+        public void MetersToBorder_FindsTheFirstStepOutside_OrTheWholeWay()
+        {
+            Assert.AreEqual(100f, BotPollutionPlan.MetersToBorder((x, z) => x < 95f, 0f, 0f, 300f, 0f), 1e-3f);
+            Assert.AreEqual(300f, BotPollutionPlan.MetersToBorder((x, z) => true, 0f, 0f, 0f, 300f), 1e-3f);
+            Assert.AreEqual(0f, BotPollutionPlan.MetersToBorder((x, z) => false, 5f, 5f, 5f, 5f), 1e-3f);
+        }
+
+        // #333 (ADR-533): gas rise and bombardment both start at the confirmation (ADR-484), so a bot is safe once over the
+        // border by then. Every bot of every level, at any distance the warning lead allows, starts early enough to walk
+        // the way out (straight line × PathFactor) before the confirmation, whatever its reaction delay.
+        [Test]
+        public void Warning_EveryBotStartsInTimeToBeOutBeforeTheConfirmation([Values(0f, 100f, 300f, 450f)] float meters)
+        {
+            const float lead = 105f, speed = 4.7f;
+            float walk = BotPollutionPlan.WalkOutSeconds(meters, speed);
+            foreach (BotDifficulty d in Enum.GetValues(typeof(BotDifficulty)))
+                for (int seed = 0; seed < 500; seed++)
+                {
+                    float start = -1f;
+                    for (float since = 0f; since <= lead; since += 0.5f)
+                        if (BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, lead - since, false, d, seed, walk)) { start = since; break; }
+                    Assert.GreaterOrEqual(start, 0f, $"{d} bot {seed} never left");
+                    float arrive = start + meters * BotPollutionPlan.PathFactor / speed;
+                    // Beyond the warning lead nobody can make it; then it must at least go at once.
+                    if (walk <= lead) Assert.LessOrEqual(arrive, lead, $"{d} bot {seed} at {meters} m is still in when the region ends");
+                    else Assert.AreEqual(0f, start, $"{d} bot {seed}: too far to make it, must go at the warning");
+                }
         }
 
         [Test]
