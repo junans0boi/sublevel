@@ -121,28 +121,27 @@ namespace Game.Gameplay
             _ready = true;
         }
 
-        // ADR-487: the third-person car camera sits inside low boughs in the wood (crowns have no collider to pull it in). For this camera a
-        // plant is not drawn while the camera is inside its crown's reach (flat distance under CrownReach x its height) and the plant is nearer
-        // the camera than the car (ClearPivot), so trunks beside or ahead of the car stay drawn. Set each frame by VehicleCamera, null otherwise.
+        // ADR-487: in the wood the third-person car camera looks at the car through boughs and bushes. For this camera a plant is not drawn
+        // when its crown (flat radius Reach x its height, plus ClearMargin) crosses the flat sight line from the camera to the car (ClearPivot;
+        // the car's centre and roof share it seen from above), or holds the camera. A plant past the car (more than ClearPastCar beyond it
+        // along the line) is behind the car on screen and stays. Only drawing changes: trunk colliders, cover and physics do not.
+        // Set each frame by VehicleCamera, null otherwise.
         public static Camera ClearAround;
         public static Vector3 ClearPivot;
-        public const float CrownReach = 0.28f;   // conifer boughs reach 0.22..0.26 of the tree's height at the bottom tier
-        // Bushes have no collider, so any bush on the flat sight line from the camera to the car is not drawn either, up to SightClearTo of
-        // the way (the bush the car is driving through stays). A bush is about as wide as it is high (radius 0.6..1.3 x height).
-        public const float BushReach = 1.3f, SightClearTo = 0.85f;
+        // Crown radius / height: conifer bottom boughs 0.22..0.26, broadleaf crowns 0.30..0.42, bushes 0.6..1.3 (the widest is low, so the margin covers it).
+        public const float CrownReach = 0.28f, BroadleafReach = 0.45f, BushReach = 1f, ClearMargin = 0.5f, ClearPastCar = 1.5f;
 
         public static bool Cleared(PlantKind kind, float height, Vector3 at, Vector3 eye, Vector3 pivot)
         {
-            float px = at.x - eye.x, pz = at.z - eye.z;
-            if (kind != PlantKind.Bush)
-            {
-                float toEye = px * px + pz * pz, reachOf = CrownReach * height;
-                return toEye < reachOf * reachOf && toEye < (at.x - pivot.x) * (at.x - pivot.x) + (at.z - pivot.z) * (at.z - pivot.z);
-            }
-            float sx = pivot.x - eye.x, sz = pivot.z - eye.z;
-            float t = Mathf.Clamp01((px * sx + pz * sz) / Mathf.Max(sx * sx + sz * sz, 1e-4f));
-            float ox = px - sx * t, oz = pz - sz * t, r = BushReach * height;
-            return t < SightClearTo && ox * ox + oz * oz < r * r;
+            float reach = (kind == PlantKind.Conifer ? CrownReach : kind == PlantKind.Broadleaf ? BroadleafReach : BushReach) * height + ClearMargin;
+            float px = at.x - eye.x, pz = at.z - eye.z, sx = pivot.x - eye.x, sz = pivot.z - eye.z;
+            float length = Mathf.Sqrt(sx * sx + sz * sz);
+            if (length < 1e-3f) return px * px + pz * pz < reach * reach;
+            float along = (px * sx + pz * sz) / length;
+            if (along > length + ClearPastCar) return false;
+            float t = Mathf.Clamp(along, 0f, length) / length;
+            float ox = px - sx * t, oz = pz - sz * t;
+            return ox * ox + oz * oz < reach * reach;
         }
 
         void OnBeginCamera(ScriptableRenderContext context, Camera cam)

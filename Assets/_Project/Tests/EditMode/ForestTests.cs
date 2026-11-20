@@ -219,20 +219,22 @@ namespace Game.Tests
             Assert.AreEqual(a.Count, b.Count);
             for (int i = 0; i < a.Count; i++) Assert.AreEqual(a[i], b[i], "plant " + i);
         }
-            // ADR-487: the third-person car camera does not draw bushes on its sight line to the car, nor a tree whose boughs hold the camera,
-        // but keeps the bush the car drives through and a trunk beside the car (it has a collider).
+            // ADR-487: the third-person car camera does not draw a plant whose crown crosses its sight line to the car or holds the camera,
+        // whatever its collider, but keeps trees clearly beside the line and those past the car.
         [Test]
-        public void CarCamera_ClearsTheSightLine_ButKeepsTrunksBesideTheCar()
+        public void CarCamera_HidesCrownsOnTheSightLine_ButKeepsTreesBesideAndPastTheCar()
         {
             var eye = new UnityEngine.Vector3(0f, 3f, 0f);
             var car = new UnityEngine.Vector3(0f, 0f, 6.5f);
             bool Cleared(PlantKind k, float h, float x, float z) => Game.Gameplay.VegetationRenderer.Cleared(k, h, new UnityEngine.Vector3(x, 0f, z), eye, car);
-            Assert.IsTrue(Cleared(PlantKind.Bush, 1.5f, 0.5f, 3f), "bush between camera and car");
-            Assert.IsTrue(Cleared(PlantKind.Bush, 1.5f, 0.3f, -0.5f), "bush round the camera");
-            Assert.IsFalse(Cleared(PlantKind.Bush, 1.5f, 4f, 3f), "bush off the sight line");
-            Assert.IsFalse(Cleared(PlantKind.Bush, 1.5f, 0f, 6.2f), "bush the car drives through");
+            Assert.IsTrue(Cleared(PlantKind.Conifer, 20f, 3f, 5.5f), "conifer beside the car whose boughs cross the line");
             Assert.IsTrue(Cleared(PlantKind.Conifer, 20f, 2f, -1f), "conifer whose boughs hold the camera");
-            Assert.IsFalse(Cleared(PlantKind.Conifer, 20f, 2f, 6f), "trunk beside the car");
+            Assert.IsTrue(Cleared(PlantKind.Broadleaf, 10f, -3f, 3f), "broadleaf crown over the middle of the line");
+            Assert.IsTrue(Cleared(PlantKind.Bush, 1.5f, 0.5f, 3f), "bush between camera and car");
+            Assert.IsTrue(Cleared(PlantKind.Bush, 1.5f, 0.8f, 6.8f), "bush overlapping the car");
+            Assert.IsFalse(Cleared(PlantKind.Conifer, 20f, 0.5f, 9.5f), "tree 3 m past the car");
+            Assert.IsFalse(Cleared(PlantKind.Conifer, 20f, 8f, 5f), "tree clearly beside the line");
+            Assert.IsFalse(Cleared(PlantKind.Bush, 1.5f, 4f, 3f), "bush off the line");
         }
     }
 }
