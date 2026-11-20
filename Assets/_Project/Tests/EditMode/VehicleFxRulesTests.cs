@@ -12,8 +12,8 @@ namespace Game.Tests
         {
             Assert.IsFalse(VehicleFxRules.AutoLights(1f, false), "full day");
             Assert.IsTrue(VehicleFxRules.AutoLights(0.4f, false), "dusk / night");
-            Assert.IsTrue(VehicleFxRules.AutoLights(0.8f, true), "rain by day");
-            Assert.IsFalse(VehicleFxRules.AutoLights(1f, true), "bright even in rain");
+            Assert.IsTrue(VehicleFxRules.AutoLights(0.8f, true), "fog by day");
+            Assert.IsFalse(VehicleFxRules.AutoLights(1f, true), "bright even in fog");
         }
 
         [Test]

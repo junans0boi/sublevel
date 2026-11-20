@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// The material of the rain streaks (EnvironmentView loads it from Resources): unlit, alpha blended, both sides,
+// The unlit particle material FxKit clones for every effect (made for the rain streaks; rain is gone, ADR-497): unlit, alpha blended, both sides,
 // the particle shader's vertex colour gives each streak its tint. Run headless: tools/unity.sh run WeatherBuilder.Build
 public static class WeatherBuilder
 {

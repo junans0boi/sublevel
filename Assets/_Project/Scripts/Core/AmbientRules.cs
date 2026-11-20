@@ -18,7 +18,7 @@ namespace Game.Core
     {
         public float Wind, Crickets, Water, RoomTone;   // loop volumes 0..1
         public float BirdsPerMinute, BirdVolume;        // spatial one-shots
-        public float WindBoost;                         // 0..1: foliage sway in rain and fog
+        public float WindBoost;                         // 0..1: foliage sway in fog
     }
 
     public static class AmbientRules
@@ -42,23 +42,22 @@ namespace Game.Core
         public static AmbientLevels Mix(in AmbientInput i)
         {
             float day = Day(i.Hour), night = 1f - day;
-            bool rain = i.Weather == WeatherKind.Rain, fog = i.Weather == WeatherKind.Fog;
+            bool fog = i.Weather == WeatherKind.Fog;
             float outdoors = i.Indoors ? 0f : 1f;
 
             // Wind: the mountain is the windiest, the town and factory sheltered; weather adds to it.
             float wind = i.Region == RegionKind.Mountain ? 0.7f : i.Region == RegionKind.Wetland ? 0.5f : 0.35f;
-            wind += rain ? 0.2f : fog ? 0.05f : 0f;
-            var o = new AmbientLevels { WindBoost = rain ? 0.65f : fog ? 0.25f : 0f };
+            wind += fog ? 0.05f : 0f;
+            var o = new AmbientLevels { WindBoost = fog ? 0.25f : 0f };
             o.Wind = Math.Min(1f, wind) * (i.Indoors ? 0.2f : 1f);
 
-            // Birds sing by day, less in the factory and not at all in rain; crickets take over at night and in the
-            // wetland, they are silenced by rain.
+            // Birds sing by day, less in the factory and in fog; crickets take over at night and in the wetland.
             float birdy = i.Region == RegionKind.Factory ? 0.3f : i.Region == RegionKind.Town ? 0.6f : 1f;
-            float calm = rain ? 0f : fog ? 0.5f : 1f;
+            float calm = fog ? 0.5f : 1f;
             o.BirdsPerMinute = 10f * day * birdy * calm * outdoors;
             o.BirdVolume = 0.55f;
             float cricketRegion = i.Region == RegionKind.Wetland ? 1f : i.Region == RegionKind.Factory ? 0.35f : 0.75f;
-            o.Crickets = 0.5f * night * cricketRegion * (rain ? 0.2f : 1f) * (i.Indoors ? 0.12f : 1f);
+            o.Crickets = 0.5f * night * cricketRegion * (i.Indoors ? 0.12f : 1f);
 
             o.Water = 0.7f * Math.Max(0f, Math.Min(1f, i.Shore)) * (i.Indoors ? 0.2f : 1f);
             o.RoomTone = i.Indoors ? 0.55f : 0f;

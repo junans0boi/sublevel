@@ -133,17 +133,17 @@ namespace Game.Tests
         [UnityTest]
         public IEnumerator FixedChoice_OnTheServerReachesTheClient_WhateverItsOwnSettingsSay()
         {
-            // The host's settings are what count: here a fixed night with rain on the server.
+            // The host's settings are what count: here a fixed night with fog on the server.
             yield return _net.Teardown();
             EnvironmentView.ForceTime = DayTimeChoice.Night;
-            EnvironmentView.ForceWeather = WeatherChoice.Rain;
+            EnvironmentView.ForceWeather = WeatherChoice.Fog;
             EnvironmentView.ForceSeed = 777;
             _net = new MultiHarness { Log = Log };
             yield return _net.StartHost("World");
             var sky = SkySync.Instance;
             Assert.IsTrue(sky.Known);
             Assert.AreEqual(DayTimeChoice.Night, sky.TimeChoice);
-            Assert.AreEqual(WeatherKind.Rain, sky.Kind);
+            Assert.AreEqual(WeatherKind.Fog, sky.Kind);
             Assert.AreEqual(WorldSky.NightHour, sky.HourNow, 1e-3f, "a chosen time of day stands still");
             // A client with other settings of its own (ForceTime cleared) still gets the server's.
             EnvironmentView.ForceTime = DayTimeChoice.Day;
@@ -151,7 +151,7 @@ namespace Game.Tests
             yield return _net.AddClient(null, beforeConnect: nm => late = Listen(nm, SupplyDirector.Instance, sky));
             yield return NetHarness.WaitUntil(() => late.SkyOnClient.Known, "the client got the sky", Log, 10f);
             Assert.AreEqual(777, late.SkyOnClient.Seed);
-            Assert.AreEqual(WeatherKind.Rain, late.SkyOnClient.Kind);
+            Assert.AreEqual(WeatherKind.Fog, late.SkyOnClient.Kind);
             Assert.AreEqual(WorldSky.NightHour, late.SkyOnClient.HourNow, 1e-3f);
             KeepInstance(sky);
         }

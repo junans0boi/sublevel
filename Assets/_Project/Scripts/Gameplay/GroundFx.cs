@@ -7,12 +7,11 @@ namespace Game.Gameplay
 {
     // The ground reacts to what happens on it (#205 #207, ADR-163): footprints in soft ground (a capped pool of quads
     // that fade), low plants bent away from walkers (shader global _GameBends), water rings and droplets when someone
-    // wades or swims, and in rain: splash rings on the ground, a wetness that darkens and glosses terrain and roads
-    // (shader global _GameWet) and puddles. Added to the World by SkyAmbient; every peer draws its own from what it
-    // sees (steps come from CombatantAudio on every combatant).
+    // wades or swims. Added to the World by SkyAmbient; every peer draws its own from what it sees (steps come from
+    // CombatantAudio on every combatant).
     public class GroundFx : MonoBehaviour
     {
-        const float PrintRange = 45f, WadeTick = 0.12f, ActiveRange = 40f, BendRadius = 1.15f, SplashRadius = 13f, PrintLift = 0.02f;
+        const float PrintRange = 45f, WadeTick = 0.12f, ActiveRange = 40f, BendRadius = 1.15f, PrintLift = 0.02f;
         const int BendSlots = 4;
 
         struct Print
@@ -25,24 +24,21 @@ namespace Game.Gameplay
 
         public static GroundFx Current { get; private set; }
 
-        public float Wet { get; private set; }
         public int PrintsAlive { get; private set; }
         public int PrintsMade { get; private set; }
         public Vector3 LastPrint { get; private set; }
         public int RingsMade { get; private set; }
-        public int SplashesMade { get; private set; }
 
         public Transform Root { get; private set; }
         Print[] _prints;
         Mesh _quad;
         ParticleSystem _rings, _drops;
         readonly Vector4[] _bends = new Vector4[BendSlots];
-        float _wadeTick, _printTick, _splashDebt, _wadeDebt;
-        bool _soaked;
+        float _wadeTick, _printTick, _wadeDebt;
         System.Collections.Generic.Dictionary<int, bool> _leftFoot = new System.Collections.Generic.Dictionary<int, bool>();
         System.Collections.Generic.Dictionary<int, Vector3> _last = new System.Collections.Generic.Dictionary<int, Vector3>();
         static readonly RaycastHit[] Hits = new RaycastHit[8];
-        static readonly int WetId = Shader.PropertyToID("_GameWet"), BendsId = Shader.PropertyToID("_GameBends");
+        static readonly int BendsId = Shader.PropertyToID("_GameBends");
         static readonly int BaseColourId = Shader.PropertyToID("_BaseColor");
 
         void Awake()
@@ -73,7 +69,6 @@ namespace Game.Gameplay
             var dr = _drops.sizeOverLifetime;
             dr.enabled = false;
             CombatantAudio.StepTaken += OnStep;
-            Shader.SetGlobalFloat(WetId, 0f);
             Shader.SetGlobalVectorArray(BendsId, _bends);
         }
 
@@ -81,7 +76,6 @@ namespace Game.Gameplay
         {
             CombatantAudio.StepTaken -= OnStep;
             if (Current == this) Current = null;
-            Shader.SetGlobalFloat(WetId, 0f);
             Shader.SetGlobalVectorArray(BendsId, new Vector4[BendSlots]);
             foreach (var p in _prints) if (p.M != null) Destroy(p.M);
             if (_quad != null) Destroy(_quad);
@@ -96,18 +90,11 @@ namespace Game.Gameplay
 
         void Update()
         {
-            var view = EnvironmentView.Current;
-            bool raining = view != null && view.Raining;
-            // A match that starts in the rain has been wet for a while already.
-            if (raining && !_soaked) { _soaked = true; if (Wet < 0.6f) Wet = 0.6f; }
-            Wet = GroundFxRules.Wetness(Wet, raining, Time.deltaTime);
-            Shader.SetGlobalFloat(WetId, Wet);
             UpdateBends();
             _printTick -= Time.deltaTime;
             if (_printTick <= 0f) { _printTick = 0.1f; FadePrints(); }
             _wadeTick -= Time.deltaTime;
             if (_wadeTick <= 0f) { Wade(WadeTick); _wadeTick = WadeTick; }
-            if (raining) RainSplashes(view);
         }
 
         // ---- Footprints ----
@@ -117,7 +104,7 @@ namespace Game.Gameplay
             var cam = Camera.main;
             if (cam == null || who == null || (who.position - cam.transform.position).sqrMagnitude > PrintRange * PrintRange) return;
             if (surface == FootSurface.Water) { WaterStep(who); return; }
-            var look = GroundFxRules.Footprint(surface, Wet, false);
+            var look = GroundFxRules.Footprint(surface, false);
             if (look.Alpha <= 0f) return;
             int id = who.GetInstanceID();
             _leftFoot.TryGetValue(id, out bool left);
@@ -293,37 +280,6 @@ namespace Game.Gameplay
                     position = at, velocity = v, startSize = Random.Range(0.03f, 0.06f), startLifetime = 0.55f,
                     startColor = new Color(0.85f * l + 0.1f, 0.9f * l + 0.1f, 1f * l, 0.75f),
                 }, 1);
-            }
-        }
-
-        // ---- Rain on the ground ----
-
-        // Test hook for the splash cap: the most rays cast in one frame.
-        public int RaysLastFrame { get; private set; }
-
-        void RainSplashes(EnvironmentView view)
-        {
-            RaysLastFrame = 0;
-            var cam = Camera.main;
-            if (cam == null) return;
-            float quality = GameSettings.HighEffects ? 1f : 0.5f;
-            _splashDebt += GroundFxRules.SplashesPerSecond(view.Look.RainPerSecond, quality, view.Indoors) * Time.deltaTime;
-            var sea = WorldInfo.Current != null ? WorldInfo.Current.SeaLevel : float.NegativeInfinity;
-            var centre = cam.transform.position;
-            int budget = GroundFxRules.MaxSplashesPerFrame;
-            while (_splashDebt >= 1f)
-            {
-                _splashDebt -= 1f;
-                if (budget-- <= 0) { _splashDebt = 0f; break; }
-                float a = Random.value * Mathf.PI * 2f, d = Mathf.Sqrt(Random.value) * SplashRadius;
-                var from = centre + new Vector3(Mathf.Cos(a) * d, 12f, Mathf.Sin(a) * d);
-                RaysLastFrame++;
-                if (!Physics.Raycast(from, Vector3.down, out var hit, 40f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
-                var at = hit.point + hit.normal * 0.02f;
-                if (at.y < sea) at.y = sea + 0.02f; // sea and lakes: the drop lands on the surface
-                Ring(at, 0.55f, 0.6f + 0.4f * Wet);
-                Drops(at, 2, 0.9f);
-                SplashesMade++;
             }
         }
     }

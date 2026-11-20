@@ -180,7 +180,8 @@ namespace Game.Gameplay
         public static float CameraShake => Values[(int)SettingId.CameraShake]; // 0..1 (ADR-471)
         public static Game.Core.BloodLevel Blood => (Game.Core.BloodLevel)Mathf.Clamp(GetIndex(SettingId.Blood), 0, 2); // ADR-470
         public static Game.Core.DayTimeChoice DayTimeSetting => (Game.Core.DayTimeChoice)GetIndex(SettingId.DayTime);
-        public static Game.Core.WeatherChoice WeatherSetting => (Game.Core.WeatherChoice)GetIndex(SettingId.Weather);
+        public static Game.Core.WeatherChoice WeatherSetting => WeatherOptions[Mathf.Clamp(GetIndex(SettingId.Weather), 0, WeatherOptions.Length - 1)];
+        static readonly Game.Core.WeatherChoice[] WeatherOptions = { Game.Core.WeatherChoice.Random, Game.Core.WeatherChoice.Clear, Game.Core.WeatherChoice.Fog }; // ADR-497
 
         // 쉬움 / 보통 / 어려움 (ADR-117). The bots read Game.Core.BotLevels.Level when they start.
         public static Game.Core.BotDifficulty BotDifficulty => (Game.Core.BotDifficulty)Mathf.Clamp(GetIndex(SettingId.BotDifficulty), 0, 2);

@@ -217,8 +217,8 @@ namespace Game.Gameplay
                 "무작위: 매치마다 시작 시각이 달라지고 경기 중 시간이 흐릅니다. 그 밖의 값은 그 시간대로 고정합니다.",
                 "settings.dayTime", new[] { "무작위", "낮", "저녁", "밤" }, 1)); // default 낮 (ADR-210)
             Add(Choice(SettingId.Weather, SettingsTab.Gameplay, SettingsPage.Basic, "환경", "날씨",
-                "무작위: 매치마다 날씨가 달라집니다. 비와 안개는 시야를 줄입니다.",
-                "settings.weather", new[] { "무작위", "맑음", "비", "안개" }, 1)); // default 맑음 (ADR-210)
+                "무작위: 매치마다 날씨가 달라집니다. 안개는 시야를 줄입니다.",
+                "settings.weather2", new[] { "무작위", "맑음", "안개" }, 1)); // default 맑음 (ADR-210); new key: the old one's index 2 was 비 (ADR-497)
             Add(Slider(SettingId.CameraShake, SettingsTab.Gameplay, SettingsPage.Basic, "효과", "화면 흔들림",
                 "근처 폭발, 피격, 높은 곳 착지, 자기 사격 때 화면이 흔들리는 세기입니다. 0%면 흔들리지 않습니다. 조준점에는 영향이 없습니다.",
                 "settings.cameraShake", 0f, 1f, 0.05f, 1f, SliderFormat.Unit01Percent));

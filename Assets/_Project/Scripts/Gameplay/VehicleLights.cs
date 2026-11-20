@@ -8,7 +8,7 @@ namespace Game.Gameplay
 {
     // The lamps of a car or motorcycle (#202, ADR-155), on every side from replicated state:
     //  - headlamps (a pair; one on a motorcycle): a glow on the lens, a real spot light and a faint beam cone so the
-    //    light shows in the dark air; on by themselves at dusk / night / rain / fog while the engine runs, L toggles;
+    //    light shows in the dark air; on by themselves at dusk / night / fog while the engine runs, L toggles;
     //  - tail lamps (dim) and brake lamps (bright, while slowing down hard or on the handbrake), reverse lamps,
     //    and amber indicators that blink while the wheels are held over at low speed (cars).
     // The glow discs are placed on the body mesh's own surface (raycast from the front / rear at the lamp's height

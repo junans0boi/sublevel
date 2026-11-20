@@ -269,11 +269,11 @@ namespace Game.Tests
             for (float t = 0f, n = 0; t < 3f; n++) { msOn += Time.unscaledDeltaTime * 1000f; t += Time.unscaledDeltaTime; if (t >= 3f) msOn /= (n + 1); yield return null; }
             Debug.Log($"[VehFx] frame ms, engines off {msOff:F1} vs {others.Count + 2} vehicles lit {msOn:F1}; vehicles with real lights {VehicleLights.SpotVehicles}");
             Assert.LessOrEqual(VehicleLights.SpotVehicles, VehicleLights.MaxSpotVehicles, "real lights stay within the budget");
-            // Rain by day.
-            _env.Set(WorldSky.DayHour, WeatherKind.Rain);
+            // Fog by day.
+            _env.Set(WorldSky.DayHour, WeatherKind.Fog);
             yield return new WaitForSeconds(1f);
-            yield return Take("lamps_4dayrain_car_front");
-            Debug.Log($"[VehFx] rain by day: lit {lights.Lit}");
+            yield return Take("lamps_4dayfog_car_front");
+            Debug.Log($"[VehFx] fog by day: lit {lights.Lit}");
 
             // Driving at night: brake lamps, reverse lamps, indicators.
             _env.Set(WorldSky.NightHour, WeatherKind.Clear);

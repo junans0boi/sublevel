@@ -25,14 +25,13 @@ namespace Game.Tests
         }
 
         [Test]
-        public void Rain_SilencesBirdsAndMostCrickets_AndRaisesWindAndSway()
+        public void Fog_QuietsBirds_AndRaisesWindAndSway()
         {
             var clear = AmbientRules.Mix(Out(12f, WeatherKind.Clear, RegionKind.Mountain));
-            var rain = AmbientRules.Mix(Out(12f, WeatherKind.Rain, RegionKind.Mountain));
-            Assert.AreEqual(0f, rain.BirdsPerMinute);
-            Assert.Greater(rain.Wind, clear.Wind);
-            Assert.Greater(rain.WindBoost, clear.WindBoost);
-            Assert.Less(AmbientRules.Mix(Out(23.5f, WeatherKind.Rain)).Crickets, AmbientRules.Mix(Out(23.5f)).Crickets);
+            var fog = AmbientRules.Mix(Out(12f, WeatherKind.Fog, RegionKind.Mountain));
+            Assert.Less(fog.BirdsPerMinute, clear.BirdsPerMinute);
+            Assert.Greater(fog.Wind, clear.Wind);
+            Assert.Greater(fog.WindBoost, clear.WindBoost);
         }
 
         [Test]

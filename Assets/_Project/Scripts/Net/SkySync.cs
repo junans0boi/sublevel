@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Game.Net
 {
-    // Server -> clients: what the sky of this match is (ADR-131). Everything else (the hour now, the weather, the rain)
+    // Server -> clients: what the sky of this match is (ADR-131). Everything else (the hour now, the weather)
     // is derived from these four numbers with WorldSky, so every peer sees the same sky.
     public struct SkyState : IBroadcast
     {

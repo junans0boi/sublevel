@@ -124,7 +124,7 @@ namespace Game.Gameplay
                 _tick = 0.5f;
                 var view = EnvironmentView.Current;
                 var input = _beds != null ? _beds.Input : default;
-                bool indoors = _beds != null && _beds.Input.Indoors || view != null && view.Indoors;
+                bool indoors = _beds != null && _beds.Input.Indoors;
                 Levels = WildlifeRules.Mix(view != null ? view.Hour : WorldSky.DayHour, view != null ? view.Weather : WeatherKind.Clear,
                     input.Region, indoors, input.Shore, _beds != null ? _beds.Levels.WindBoost : 0f);
             }
