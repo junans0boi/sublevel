@@ -158,10 +158,52 @@ public static partial class WorldBuilder
 
         store.Finish(world);
         EditorSceneManager.SaveScene(scene, ScenePath);
+        BakeOcclusion(world, plan);
+        EditorSceneManager.SaveScene(scene, ScenePath);
         RegisterScene();
         AssetDatabase.SaveAssets();
         Debug.Log($"[WorldBuilder] Saved {ScenePath} in {total.Elapsed.TotalSeconds:F0} s: {lots.Count} buildings, {stations.Count} elevator stations, " +
             $"{rocks} rocks (plan {plan.Rocks.Count}), {barriers} sea barrier segments, {loot.Count} loot spawns");
+    }
+
+    // #452 (ADR-547): Umbra occlusion culling. Inside a building or down a street the rest of the town was drawn
+    // (3,800-4,450 draws). Static objects already carry the occluder/occludee flags (isStatic); transparent ones may
+    // only be hidden, never hide. View cells are baked only over the towns (OcclusionAreas) to keep the bake short:
+    // a camera outside them (fields, the air) gets frustum culling only, where few buildings stand anyway.
+    const float OcclusionCell = 160f, OcclusionMargin = 24f, OcclusionAbove = 40f;
+
+    static void BakeOcclusion(GameObject world, WorldPlan plan)
+    {
+        var sw = Stopwatch.StartNew();
+        foreach (var r in world.GetComponentsInChildren<Renderer>(true))
+        {
+            var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+            if ((flags & StaticEditorFlags.OccluderStatic) == 0) continue;
+            if (r.sharedMaterials.Any(m => m == null || m.renderQueue >= (int)RenderQueue.AlphaTest))
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags & ~StaticEditorFlags.OccluderStatic);
+        }
+        var root = new GameObject("OcclusionAreas");
+        root.transform.SetParent(world.transform, false);
+        int areas = 0;
+        foreach (var cell in plan.Lots.GroupBy(l => (Mathf.FloorToInt(l.X / OcclusionCell), Mathf.FloorToInt(l.Z / OcclusionCell))))
+        {
+            float pad = OcclusionMargin + cell.Max(l => Mathf.Max(l.SizeX, l.SizeZ)) * 0.5f;
+            float minX = cell.Min(l => l.X) - pad, maxX = cell.Max(l => l.X) + pad;
+            float minZ = cell.Min(l => l.Z) - pad, maxZ = cell.Max(l => l.Z) + pad;
+            float minY = cell.Min(l => l.Y) - 4f, maxY = cell.Max(l => l.Y) + OcclusionAbove;
+            var go = new GameObject($"Area_{cell.Key.Item1}_{cell.Key.Item2}");
+            go.transform.SetParent(root.transform, false);
+            var area = go.AddComponent<OcclusionArea>();
+            area.center = new Vector3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, (minZ + maxZ) * 0.5f);
+            area.size = new Vector3(maxX - minX, maxY - minY, maxZ - minZ);
+            areas++;
+        }
+        // Smallest occluder: a house wall panel; smallest hole: a window opening stays see-through.
+        StaticOcclusionCulling.smallestOccluder = 4f;
+        StaticOcclusionCulling.smallestHole = 0.3f;
+        StaticOcclusionCulling.backfaceThreshold = 100f;
+        bool ok = StaticOcclusionCulling.Compute();
+        Debug.Log($"[WorldBuilder] occlusion: {areas} town areas, baked {(ok ? "ok" : "FAILED")} in {sw.Elapsed.TotalSeconds:F0} s, {StaticOcclusionCulling.umbraDataSize / 1048576.0:F1} MB");
     }
 
     internal static WorldSpec LoadSpec()
