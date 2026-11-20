@@ -30,7 +30,8 @@ namespace Game.Net
             var rope = new Material(steel) { color = new Color(0.09f, 0.09f, 0.1f) };
 
             // Guards: the car's sides move with it (a kinematic body, so moving them is cheap), the gates only while shut.
-            var body = car.gameObject.AddComponent<Rigidbody>(); body.isKinematic = true; body.useGravity = false;
+            if (!car.TryGetComponent<Rigidbody>(out var body)) body = car.gameObject.AddComponent<Rigidbody>();   // a second board on the same island (two clients in one process) reuses it
+            body.isKinematic = true; body.useGravity = false;
             foreach (float sx in new[] { -h, h }) Solid(car, new Vector3(sx, CarHeight * 0.5f, 0f), new Vector3(0.08f, CarHeight, h * 2f));
             var doors = car.Find("Doors");
             if (doors != null) foreach (float sz in new[] { -h, h }) Solid(doors, new Vector3(0f, CarHeight * 0.5f, sz), new Vector3(h * 2f, CarHeight, 0.08f));

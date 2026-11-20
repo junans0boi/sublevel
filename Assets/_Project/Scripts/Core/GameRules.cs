@@ -37,6 +37,7 @@ namespace Game.Core
         public BotRules Bot = new BotRules();
         public MeleeRules Melee = new MeleeRules();
         public MatchRules Match = new MatchRules();
+        public IslandRules Island = new IslandRules();   // the waiting island's range and board (ADR-501/502)
         public InterestRules Interest = new InterestRules(); // #167, ADR-135
         public InteractRules Interact = new InteractRules(); // ADR-276
         public ParkourRules Parkour = new ParkourRules();
