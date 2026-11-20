@@ -181,6 +181,13 @@ namespace Game.Tests
             Assert.Greater(bestClear, float.NegativeInfinity, "an open R0 view");
             Debug.Log($"[IslandLook] R0 view: terrain stays {bestClear:F1} m below the eye from 50 to 450 m");
             yield return Shot("look_04_r0_field_far", fieldEye, fieldEye + fieldDir * 300f - Vector3.up * Mathf.Clamp(bestClear, 5f, 40f));
+            // 4b (#453). 150 m above the coast nearest the town, looking out to sea just under the horizon: the sea's far
+            // clip edge and the sky below the horizon both in frame.
+            var coast = TownC;
+            var seaward = Flat(TownC - new Vector3(world.Size * 0.5f, 0f, world.Size * 0.5f));
+            for (int i = 0; i < 120 && Ground(coast, out var cg) && cg.point.y > world.SeaLevel + 0.5f; i++) coast += seaward * 10f;
+            var highEye = coast + Vector3.up * (world.SeaLevel + 150f - coast.y);
+            yield return Shot("look_07_high_sea_horizon", highEye, highEye + seaward * 600f - Vector3.up * 60f);
 
             // 5. A school (else shop) interior, ground floor, floor in view.
             bool hallDone = false;

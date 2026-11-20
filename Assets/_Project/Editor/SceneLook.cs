@@ -201,9 +201,10 @@ public static class SceneLook
         var sky = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (sky == null)
         {
-            sky = new Material(Shader.Find("Skybox/Cubemap"));
+            sky = new Material(Shader.Find("Game/WorldSky"));
             AssetDatabase.CreateAsset(sky, path);
         }
+        sky.shader = Shader.Find("Game/WorldSky"); // Skybox/Cubemap with fog colour below the horizon (ADR-550)
         sky.SetTexture("_Tex", cubemap);
         sky.SetFloat("_Exposure", SkyExposure);
         EditorUtility.SetDirty(sky);
