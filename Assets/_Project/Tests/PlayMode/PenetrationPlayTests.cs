@@ -39,12 +39,12 @@ namespace Game.Tests
             }
         }
 
-        static GameObject Slab(Vector3 at, float thick, BulletSurface surface)
+        static GameObject Slab(Vector3 at, float thick, SurfaceId surface)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.transform.position = at;
             go.transform.localScale = new Vector3(4f, 4f, thick);
-            go.AddComponent<BulletSurfaceTag>().Surface = surface;
+            go.AddComponent<SurfaceIdTag>().Id = surface; // as WorldBuilder tags walls (ADR-534)
             return go;
         }
 
@@ -74,7 +74,7 @@ namespace Game.Tests
             var weapon = GameData.Weapons.Find(Rifle);
 
             // 3 m in front of the dummy, on the line of fire.
-            var wood = Slab(me.EyePosition + toward * 3f, 0.2f, BulletSurface.Wood);
+            var wood = Slab(me.EyePosition + toward * 3f, 0.2f, SurfaceId.Wood);
             Physics.SyncTransforms();
             me.StanceSpreadFactor = 0f;
             Assert.IsTrue(me.ServerFire(chest - me.EyePosition), "shot through wood fired");
@@ -83,7 +83,7 @@ namespace Game.Tests
             yield return new WaitForSeconds(0.3f);
 
             float hp1 = dummy.Hp.Value;
-            var concrete = Slab(me.EyePosition + toward * 3f, 0.2f, BulletSurface.Concrete);
+            var concrete = Slab(me.EyePosition + toward * 3f, 0.2f, SurfaceId.Concrete);
             Physics.SyncTransforms();
             Assert.IsTrue(me.ServerFire(chest - me.EyePosition), "shot into concrete fired");
             Assert.AreEqual(hp1, dummy.Hp.Value, 1e-4f, "concrete stops it");
