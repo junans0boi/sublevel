@@ -60,6 +60,7 @@ namespace Game.AI
 
         void ApplyTeam(ref BotIntent intent, float now)
         {
+            _regrouping = false;
             if (!_self.HasTeam) return;
             if (_percept.EnemyVisible) _lastEnemySeenAt = now;
             var rules = TeamRules.Current;
@@ -107,18 +108,20 @@ namespace Game.AI
             }
 
             if (intent.State != BotState.Roam && intent.State != BotState.Investigate && intent.State != BotState.Loot) return;
-            // Farming is each bot's own (ADR-312); the squad gathers again once the bots are kitted out.
-            if (_percept.FarmActive) return;
             // It keeps within BotFollowMeters of the team's centre (ADR-312), not of one leader: the centre of the members on their feet.
-            if (!TeamCentre(out var centre)) return;
-            float away = Flat(centre - transform.position);
-            bool far = away > rules.BotRegroupMeters;
-            if (away <= rules.BotFollowMeters || (intent.State == BotState.Loot && !far)) return;
+            if (!TeamCentre(out var centre, out var meet)) return;
+            if (!BotSquad.Regroups(intent.State, _percept.FarmActive, now < _regroupPauseUntil, Flat(centre - transform.position), rules, out bool far)) return;
+            _regrouping = true;
             intent.Move = true;
-            intent.MoveTarget = ToVec(centre);
+            intent.MoveTarget = ToVec(meet);
             intent.Sprint = far;
             intent.PickUp = false;
         }
+
+        // A regroup that stalls is not tried again at once (ADR-546): the same unreachable spot would stall it again.
+        bool _regrouping;
+        float _regroupPauseUntil;
+        static readonly System.Collections.Generic.List<BotVec> MateSpots = new System.Collections.Generic.List<BotVec>(4);
 
         // Kneels by the knocked teammate: no walking or shooting, facing it.
         static void Hold(ref BotIntent intent, Combatant target)
@@ -159,11 +162,13 @@ namespace Game.AI
             return best;
         }
 
-        // The middle of the teammates on their feet (this bot included); false when it is alone.
-        bool TeamCentre(out Vector3 centre)
+        // The middle of the teammates on their feet (this bot included), and the teammate standing nearest it (`meet`, a place on the
+        // navmesh, ADR-546); false when it is alone.
+        bool TeamCentre(out Vector3 centre, out Vector3 meet)
         {
-            centre = default;
+            centre = meet = default;
             int n = 0;
+            MateSpots.Clear();
             var all = Combatant.All;
             for (int i = 0; i < all.Count; i++)
             {
@@ -171,9 +176,12 @@ namespace Game.AI
                 if (c == null || !c.IsServerInitialized || !c.Standing || (c != _self && !_self.IsTeammateOf(c))) continue;
                 centre += c.transform.position;
                 n++;
+                if (c != _self) MateSpots.Add(ToVec(c.transform.position));
             }
             if (n < 2) return false;
             centre /= n;
+            var spot = MateSpots[BotSquad.NearestTo(ToVec(centre), MateSpots)];
+            meet = new Vector3(spot.X, spot.Y, spot.Z);
             return true;
         }
 

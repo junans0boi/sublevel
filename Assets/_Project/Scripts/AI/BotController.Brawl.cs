@@ -72,7 +72,6 @@ namespace Game.AI
 
         void TickBrawl(float now)
         {
-            if (_percept.Heard && !_heardCounted) { _heardCounted = true; BotBrawlStats.NoiseHeardBots++; }
             if (_percept.EnemyVisible) _lastEnemyAt = now;
             _percept.CorpseActive = false;
             if (_farmStarted && !_farmDone) { _corpseTrip = false; return; }
@@ -149,6 +148,8 @@ namespace Game.AI
                 BotMatchStats.Engagements++;
                 BotMatchStats.EngageSeconds += _engageLast - _engageStart;
             }
+            // The share's denominator is the bots that heard a noise while free to go (ADR-546), not every bot that heard one.
+            if (!_heardCounted && _brain.NoiseFreeHearings > 0) { _heardCounted = true; BotBrawlStats.NoiseHeardBots++; }
             if (!_investigatedCounted && _brain.NoiseInvestigations > 0) { _investigatedCounted = true; BotBrawlStats.NoiseInvestigatedBots++; }
             if (_farmDone) BotBrawlStats.StateSeconds[(int)_intent.State] += Time.deltaTime;
             bool unarmed = !_percept.HasWeapon && !_percept.OtherSlotUsable;

@@ -152,6 +152,8 @@ namespace Game.Core
         public PeekPhase Phase => _phase;
         bool _noiseCounted;
         public int NoiseInvestigations { get; private set; }
+        // Noises heard while nothing more pressing held it (armed, not low, not farming, no fresh threat): investigated or not.
+        public int NoiseFreeHearings { get; private set; }
         public int PeekCycles { get; private set; }
         public int ExposeEpisodes { get; private set; }
         public int ExposeCutShort { get; private set; }
@@ -402,15 +404,13 @@ namespace Game.Core
                     if (BotVec.PlanarDistance(p.Position, _lastSeen) <= rules.ArriveMeters || p.Stuck) _hasLastSeen = false;
                     else return Investigate(intent, _lastSeen);
                 }
-                if (_hasNoise && p.IgnoresNoise) _hasNoise = false;
+                if (_hasNoise && (BotVec.PlanarDistance(p.Position, _noise) <= rules.ArriveMeters || p.Stuck)) _hasNoise = false;
                 if (_hasNoise)
                 {
-                    if (BotVec.PlanarDistance(p.Position, _noise) <= rules.ArriveMeters || p.Stuck) _hasNoise = false;
-                    else
-                    {
-                        if (!_noiseCounted) { _noiseCounted = true; NoiseInvestigations++; }
-                        return Investigate(intent, _noise);
-                    }
+                    // Free to go (ADR-546): only these hearings test the bot's roll, so they are the share's denominator.
+                    if (!_noiseCounted) { _noiseCounted = true; NoiseFreeHearings++; if (!p.IgnoresNoise) NoiseInvestigations++; }
+                    if (p.IgnoresNoise) _hasNoise = false;
+                    else return Investigate(intent, _noise);
                 }
             }
 
