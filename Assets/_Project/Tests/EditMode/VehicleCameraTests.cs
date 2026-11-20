@@ -125,5 +125,21 @@ namespace Game.Tests
                 finally { Object.DestroyImmediate(go); }
             }
         }
+    
+        // ADR-531 (#99): in the eye view the own car's opaque materials get a glowing copy (made once); glass and lamps stay.
+        [Test]
+        public void Glowing_CopiesOpaqueLit_Once_LeavesTransparent()
+        {
+            var lit = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "Body" };
+            var glow = VehicleCamera.Glowing(lit);
+            Assert.AreNotSame(lit, glow);
+            Assert.IsTrue(glow.IsKeywordEnabled("_EMISSION"));
+            Assert.AreEqual(VehicleCamera.CabinGlow, glow.GetColor("_EmissionColor"));
+            Assert.AreEqual("Body", glow.name, "the name stays (Vehicle.Paint finds slots by name)");
+            Assert.AreSame(glow, VehicleCamera.Glowing(lit), "one copy per material");
+            Assert.IsFalse(lit.IsKeywordEnabled("_EMISSION"), "the shared material is untouched");
+            var glass = new Material(lit) { renderQueue = 3000 };
+            Assert.AreSame(glass, VehicleCamera.Glowing(glass));
+        }
     }
 }
