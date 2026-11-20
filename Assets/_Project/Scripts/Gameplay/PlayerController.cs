@@ -856,6 +856,7 @@ namespace Game.Gameplay
             if (Camera == null) return;
             var aimRules = _rules.Aim;
             StaggerWander.Offset(Combatant.StaggerShakeDegOf(_combatant), Time.timeAsDouble, out float wanderPitch, out float wanderYaw);
+            Rig.ShowSelf = _combatant.Emoting;
             var view = new ViewState
             {
                 Aim = _aim.Mode,
@@ -891,7 +892,7 @@ namespace Game.Gameplay
             }
             float ease = 1f - Mathf.Exp(-aimRules.FovChangePerSecond * Time.deltaTime);
             float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
-                : _aim.Mode == AimMode.Hip && Rig.Mode == ViewMode.FirstPerson ? GameSettings.FirstPersonFov
+                : _aim.Mode == AimMode.Hip && Rig.IsEyeView(AimMode.Hip) ? GameSettings.FirstPersonFov
                 : aimRules.For(_aim.Mode).Fov;
             Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget + BungeeRide.ExtraFov, ease);
 

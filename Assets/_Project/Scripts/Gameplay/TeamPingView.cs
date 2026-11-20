@@ -13,6 +13,9 @@ namespace Game.Gameplay
     public sealed class TeamPingView
     {
         const float WorldSize = 24f;
+        // One world marker's footprint (name over the diamond over the distance), for keeping close pings apart (#173).
+        const float LabelWidth = 110f, LabelHeight = 80f;
+        const float MapSize = 24f; // was 17: too small to find on the full map (#173)
         static readonly Color Rim = new Color(0.04f, 0.05f, 0.06f, 0.95f);
 
         sealed class Marker
@@ -29,6 +32,7 @@ namespace Game.Gameplay
         readonly Transform _worldRoot;
         RectTransform _compass, _minimap, _map;
         int _used;
+        float[] _xs = new float[8], _ys = new float[8];
 
         // Read-only state for tests.
         public int Visible => _used;
@@ -92,6 +96,20 @@ namespace Game.Gameplay
             }
             _used = k;
             for (int i = k; i < _pool.Count; i++) Hide(_pool[i]);
+            SpreadWorldLabels();
+        }
+
+        void SpreadWorldLabels()
+        {
+            if (_xs.Length < _used) { _xs = new float[_used * 2]; _ys = new float[_used * 2]; }
+            int n = 0;
+            for (int i = 0; i < _used; i++)
+                if (_pool[i].World.gameObject.activeSelf) { var a = _pool[i].World.anchoredPosition; _xs[n] = a.x; _ys[n] = a.y; n++; }
+            if (n < 2) return;
+            Pings.Spread(_xs, _ys, n, LabelWidth, LabelHeight);
+            n = 0;
+            for (int i = 0; i < _used; i++)
+                if (_pool[i].World.gameObject.activeSelf) { _pool[i].World.anchoredPosition = new Vector2(_xs[n], _ys[n]); n++; }
         }
 
         public void HideAll()
@@ -186,7 +204,7 @@ namespace Game.Gameplay
         {
             if (_compass != null && m.Compass == null) m.Compass = HostMark("TeamPing", _compass, 10f, m, 1, null);
             if (_minimap != null && m.Minimap == null) m.Minimap = HostMark("TeamPing", _minimap, 9f, m, 2, null);
-            if (_map != null && m.Map == null) m.Map = HostMark("TeamPing", _map, 17f, m, 3, Vector2.zero);
+            if (_map != null && m.Map == null) m.Map = HostMark("TeamPing", _map, MapSize, m, 3, Vector2.zero);
             m.ShownAlpha = -1f;
             m.ShownId = -1;
         }
