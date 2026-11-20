@@ -178,3 +178,21 @@ A의 이번 수치는 M2-1 때보다 15~30% 높다. 렌더 내용이 바뀌지 �
 | 최악 8~25m, 장비 | 761 | 1.12M | 6.79ms | 9.75ms |
 
 장비 LOD 없이는 최악 2.65M·분산 1.83M tris(목표 초과)였다 → Unity Mesh LOD + 장비 LOD 바이어스 2. 조끼만 스키닝(gpuSkinning 0이라 CPU), 가방은 뼈 고정. 최악 장면 p99 여유가 0.25ms로 얇다: 다른 Unity가 돌 때는 10.0~10.9ms가 나왔다(부하 평균 10 이상). 조용한 장비에서 다시 잴 것.
+
+## 서버 예산 (80인 전용 서버, 2026-11-20, #329, ADR-545)
+한도는 `docs/research/server_perf_budget_proposal.md`(S8-A2·A3) 그대로, 판정은 `python3 tools/perf/perf_verdict.py measured.json`(미측정 = 통과 아님). 측정: mac 서버 빌드(`tools/unity.sh build server`, Mono), `--dedicated --participants 80 --bots 79 --region C --perf <이름>`, 사람 0. 값은 `ServerPerfProbe` 10초 창(전투원 ≥40인 창만).
+
+| 항목 | 키 | 한도 | 현재 값 | 판정 |
+|---|---|---|---|---|
+| 서버 평균 프레임 | server_avg_ms | ≤10 ms | 4.6~8.4 ms(15회 평균 ≈6.6) | 통과 |
+| 서버 p99 | server_p99_ms | ≤25 ms | 창 p99 중앙 6~10 ms, 창 최대 8~24 ms(예외 2회: 52·125 ms) | 통과(잠정, 오염) |
+| 봇 몫(전 봇 합, 프레임당) | bot_ms | ≤4 ms | 평균 0.1~0.7 ms, 창 최대 2.9 ms(bombard80) | **통과 → #330 게이트 미발동** |
+| 서버 메모리 | server_mem_gb | ≤1.5 GB | 관리 힙 72~102 MB만 잼. 프로세스 RSS **측정 대기** | 측정 대기 |
+| 클라당 전송 | client_kb_per_s | ≤15 KB/s | 16인+봇 20: 8.5 KB/s(네트워크 절). 80인 **측정 대기** | 측정 대기 |
+| 문·유리 방송(클라당) | (#331 게이트) | ≤1 KB/s | `[PerfNet]` 카운터 추가, **측정 대기** | 측정 대기 |
+| 문 검사 CPU | (#331 게이트) | ≤1 ms | 0.001~0.002 ms(BotPerf doors) | 통과 |
+| 서버 송신 | server_mbit_per_s | ≤6 Mbit/s | **측정 대기**(클라이언트 없음) | 측정 대기 |
+
+근거: 2026-11-17~20 다른 세션들의 80인 서버 실행 15회(`s8_server_p0_{easy,normal,hard,mix}_s*`, `bombard80`, `bombardstress`; 워크트리 `bot-slices`·`build-mac`·`fix-botstats-server`·`bombard`의 `Logs/perf/`)를 다시 집계했다. ADR-320(평균 6.0/6.7 ms, p99 10.1 ms)과 일치.
+**한계**: (1) 독점 창이 아니었다 — 다른 Unity가 겹친 실행이 섞였고, p99 예외(52·125 ms)는 그 때문으로 보지만 미확인. (2) 프레임 값은 `unscaledDeltaTime`(대기 포함, 서버 `targetFrameRate` 60)이라 CPU 시간의 상한이다. (3) 봇 몫은 `BotPerf` 스톱워치 합(`bot_ai` = `BotController.Update` 전체)이라 NavMeshAgent 내부 이동 비용은 빠진다. (4) 오라클 2코어 ARM 실서버 수치 아님(M4 Pro). (5) 클라이언트 없는 측정이라 대역폭은 못 잰다 — 문·유리 방송은 서버가 보낸 횟수 × 메시지 크기(문 ≈30 B, 유리 ≈12 B, 헤더 포함 추정)로 클라당 값을 낸다(전역 방송이므로 모든 클라가 다 받는다).
+측정 대기 항목은 독점 창에서 P0 300 s + P3 240 s 한 번으로 채운다(RSS 10초 샘플, `[PerfNet]` 문·유리 방송 누적 수).

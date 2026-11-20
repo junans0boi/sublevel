@@ -193,6 +193,7 @@ namespace Game.Net
             string line = $"{now:F0},{_frames.Count},{_frames.Mean():F2},{_frames.Percentile(50):F2},{_frames.Percentile(95):F2},{_frames.Percentile(99):F2},{_frames.Max():F2},{heap:F0},{Combatant.All.Count},{rewinds}";
             for (int k = 0; k < BotPerf.Slots; k++) { line += $",{_bot[k].Mean():F3},{_bot[k].Percentile(99):F3}"; _bot[k].Clear(); }
             Debug.Log("[Perf] " + line);
+            Debug.Log($"[PerfNet] t={now:F0} doorBroadcasts={DoorSystem.ServerBroadcasts} glassBroadcasts={GlassPanes.ServerBroadcasts}"); // cumulative; every client gets each one
             LogFarm(now);
             LogSquad();
             Debug.Log($"[Noise] botsHeard={BotBrawlStats.NoiseHeardBots} investigated={BotBrawlStats.NoiseInvestigatedBots} share={(BotBrawlStats.NoiseHeardBots > 0 ? (float)BotBrawlStats.NoiseInvestigatedBots / BotBrawlStats.NoiseHeardBots : 0f):P0}");
