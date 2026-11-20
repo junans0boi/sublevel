@@ -23,6 +23,8 @@ namespace Game.Core
         public const string Ricochet = "impact_ricochet_";
         // Resources/Sfx clip name prefixes of the body sounds (#288, tools/sound_combat.json).
         public const string MeleeSwing = "melee_swing_", PainGrunt = "pain_grunt_", HealStart = "heal_bandage_", Pickup = "loot_rummage_", SwimStroke = "swim_stroke_";
+        // Resources/Sfx clips of the throwables (#289, tools/sound_throwables.json): the grenade blast, the flashbang, the fire loop.
+        public const string Explosion = "explosion_", Flashbang = "flashbang_", FireLoop = "fire_crackle_loop";
 
         // Weapon ids are the rows of weapons.json (1~5, 6~16 new, 31~35 supply). Melee (21~24) has no gunshot.
         public static readonly WeaponSound[] Table =

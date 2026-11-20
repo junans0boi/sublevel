@@ -149,6 +149,19 @@ namespace Game.Tests
                 Assert.IsTrue(ledger.Contains("https://freesound.org/s/" + id + "/"), "ledger row for Freesound " + id);
         }
 
+        // ---- #289 ----
+
+        [Test]
+        public void Throwable_sounds_are_recorded_clips_in_the_repository_and_the_ledger()
+        {
+            Assert.AreEqual(1, Files(Sfx, WeaponSounds.Explosion), "grenade blast");
+            Assert.AreEqual(1, Files(Sfx, WeaponSounds.Flashbang), "flashbang");
+            Assert.IsTrue(File.Exists(Sfx + "/" + WeaponSounds.FireLoop + ".wav"), "fire loop");
+            var ledger = File.ReadAllText("docs/ASSET_LEDGER.md");
+            foreach (var id in new[] { "475780", "752628", "595483" })
+                Assert.IsTrue(ledger.Contains("https://freesound.org/s/" + id + "/"), "ledger row for Freesound " + id);
+        }
+
         [Test]
         public void Ricochets_off_hard_things_only()
         {

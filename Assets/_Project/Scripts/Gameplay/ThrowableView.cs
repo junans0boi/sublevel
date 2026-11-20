@@ -104,7 +104,7 @@ namespace Game.Gameplay
         float[] _fireStart, _fireSeconds, _fireRadius;
         bool[] _fireOn;
         int _nextFire;
-        static AudioClip _crackle;
+        static AudioClip _crackle, _explosion, _flashbang;
         public int FiresShown { get; private set; }
         public Vector3 LastFireCentre { get; private set; }
         public int ActiveFires
@@ -399,11 +399,15 @@ namespace Game.Gameplay
             LastBlastCentre = centre;
             BlastsShown++;
             PlayerController.ShakeFromBlast(centre, flash ? 0.4f : 1f); // ADR-471
-            if (_blastSource != null && _blastClip != null)
+            // The recorded blast or bang (#289) plays as cut; the serialized clip is the old pitched-down fallback.
+            var recorded = flash ? (_flashbang != null ? _flashbang : _flashbang = Resources.Load<AudioClip>("Sfx/" + WeaponSounds.Flashbang + "01"))
+                                 : (_explosion != null ? _explosion : _explosion = Resources.Load<AudioClip>("Sfx/" + WeaponSounds.Explosion + "01"));
+            var clip = recorded != null ? recorded : _blastClip;
+            if (_blastSource != null && clip != null)
             {
                 _blastSource.transform.position = centre;
-                _blastSource.pitch = flash ? _blastPitch * 1.8f : _blastPitch;
-                _blastSource.PlayOneShot(_blastClip, _blastVolume * GameSettings.EffectsVolume * (flash ? 0.6f : 1f));
+                _blastSource.pitch = recorded != null ? 1f : flash ? _blastPitch * 1.8f : _blastPitch;
+                _blastSource.PlayOneShot(clip, _blastVolume * GameSettings.EffectsVolume * (flash && recorded == null ? 0.6f : 1f));
                 BlastSoundsPlayed++;
             }
             if (!_built) return;
@@ -497,9 +501,11 @@ namespace Game.Gameplay
             return true;
         }
 
-        // A looping crackle: sparse short noise ticks over a soft low rumble, no recorded sound.
+        // A looping crackle: the recorded fire loop (#289); the synthesis below (noise ticks over a rumble) is the fallback.
         static AudioClip Crackle()
         {
+            if (_crackle != null) return _crackle;
+            _crackle = Resources.Load<AudioClip>("Sfx/" + WeaponSounds.FireLoop);
             if (_crackle != null) return _crackle;
             const int rate = 22050;
             int n = rate * 2;

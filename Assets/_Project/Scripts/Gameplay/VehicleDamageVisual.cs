@@ -299,9 +299,11 @@ namespace Game.Gameplay
             cam.transform.position += new Vector3(Mathf.PerlinNoise(s, 0.1f) - 0.5f, Mathf.PerlinNoise(0.7f, s) - 0.5f, Mathf.PerlinNoise(s, 0.9f) - 0.5f) * (2f * amount);
         }
 
-        // A low boom with a crackling tail: a thump (falling sine) under low-passed noise, decaying.
+        // The recorded blast (#289, shared with grenades); the synthesis below (falling-sine thump under noise) is the fallback.
         static AudioClip Bang()
         {
+            if (_bang != null) return _bang;
+            _bang = Resources.Load<AudioClip>("Sfx/" + WeaponSounds.Explosion + "01");
             if (_bang != null) return _bang;
             const int rate = 22050;
             int n = (int)(rate * 2.4f);
