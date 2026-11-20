@@ -36,11 +36,8 @@ namespace Game.Core
         // The crouch is clips (UAL bare-handed ADR-255, Mixamo rifle kneel and crouch walks ADR-536), no code knee bend.
         public float CrouchMinLegPace = 0.4f;   // slowest the walk clip is played while easing into the crouch
 
-        // Lying on the belly facing the aim. The whole model is pitched forward about the character's right axis
-        // (a positive turn tips the top of the body forward and down), with the feet as the pivot and the model
-        // then moved back so the head ends up where the eyes (and the capsule) are. The chest and head are
-        // turned back up by ProneHeadLiftDeg, and the arms by what is left of the pitch so a held weapon stays level.
-        public float ProneModelPitchDeg = 85f;
+        // Lying is the prone clip (ADR-231), not a code pitch. Swimming still places the flat swim clips with these:
+        // the chest and head turned up by ProneHeadLiftDeg, the spine line at ProneBodyHeight, the model moved back.
         public float ProneHeadLiftDeg = 40f;
         public float ProneBodyHeight = 0.15f;      // the spine line lies this high over the ground (the body is about 0.3 m thick)
         public float ProneModelBackShift = 1.35f;  // metres the model is moved back from the capsule so its head sits under the eyes
@@ -73,11 +70,6 @@ namespace Game.Core
         // Does going from one stance to the other raise the top of the body?
         public static bool Rises(Stance from, Stance to, StanceRules rules) =>
             rules.For(to).CapsuleHeight > rules.For(from).CapsuleHeight;
-
-        // How far the hips come down when both knees bend by `kneeDeg` (thigh forward, shin back by the same
-        // angle from upright) on legs `legLength` long.
-        public static float KneeBendDrop(float legLength, float kneeDeg) =>
-            CrouchHipDrop(legLength, kneeDeg, kneeDeg);
 
         // Hips lowered when the thigh points `thighDeg` forward and the shin `shinBackDeg` back of vertical, with
         // the thigh and the shin each half of `legLength`: the ankle sat legLength/2 * (cos t + cos s) under the hip.

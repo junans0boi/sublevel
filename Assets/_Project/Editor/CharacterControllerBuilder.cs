@@ -94,7 +94,7 @@ public static class CharacterControllerBuilder
         crouch.speedParameter = CombatantAnimation.Pace;
         crouch.speedParameterActive = true;
         // Armed crouch (ADR-536, #303): the Mixamo rifle kneel standing still, its crouch walks ahead and back; replaces the code knee bend
-        // (#227: a deep squat with a foot in the air, a lunge when walking). Forward-only like the bare-handed crouch: the legs turn to the heading.
+        // (#227: a deep squat with a foot in the air, a lunge when walking). One axis (ahead and back), no side clips: the legs turn to the heading.
         var rifleCrouch = controller.CreateBlendTreeInController(CombatantAnimation.RifleCrouch, out var rifleCrouchTree, 0);
         rifleCrouchTree.blendType = BlendTreeType.Simple1D;
         rifleCrouchTree.blendParameter = CombatantAnimation.Move;

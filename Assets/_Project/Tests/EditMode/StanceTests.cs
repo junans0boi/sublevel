@@ -125,29 +125,19 @@ namespace Game.Tests
         }
 
         [Test]
-        public void ProneBodyPose_Angles_AreConsistent()
+        public void Swimming_PlacesTheFlatClip_WithTheLiftHeightAndBackShift()
         {
-            // The body lies down by 85 degrees; lifting the chest 40 (the arms are levelled by measuring the weapon, not by a fixed turn).
-            Assert.AreEqual(85f, Rules.ProneModelPitchDeg, 1e-5f);
+            // Lying is the prone clip (ADR-231); only swimming still lifts the chest and moves the flat body back in code.
             Assert.AreEqual(40f, Rules.ProneHeadLiftDeg, 1e-5f);
-            // Pitching by a: the body's up (0,1,0) goes to (0,cos a,sin a), its facing (0,0,1) to (0,-sin a,cos a).
-            double a = Rules.ProneModelPitchDeg * System.Math.PI / 180.0;
-            Assert.AreEqual(0.087, System.Math.Cos(a), 1e-3, "the spine is almost horizontal");
-            Assert.AreEqual(0.996, System.Math.Sin(a), 1e-3, "and points forward");
-            // The spine line lies at the body height, the head at the eyes: the model is moved back by the stature minus its reach.
-            double reach = 1.8 * System.Math.Sin(a);
-            Assert.AreEqual(1.79, reach, 0.01);
-            Assert.AreEqual(0.45, reach - Rules.ProneModelBackShift, 0.02, "the crown ends up 0.45 m ahead of the capsule, the eyes about under the face");
             Assert.AreEqual(0.15f, Rules.ProneBodyHeight, 1e-5f);
+            Assert.AreEqual(1.35f, Rules.ProneModelBackShift, 1e-5f);
         }
 
         [Test]
-        public void BentKnees_LowerTheHips()
+        public void BentLegs_LowerTheHips()
         {
-            Assert.AreEqual(0f, Stances.KneeBendDrop(0.9f, 0f), 1e-5f);
-            Assert.AreEqual(0.45f, Stances.KneeBendDrop(0.9f, 60f), 1e-4f);
-            Assert.AreEqual(0.9f, Stances.KneeBendDrop(0.9f, 90f), 1e-4f);
-            // Thigh 46 and shin 40 degrees from vertical on a 0.9 m leg (the ledge pull-up uses the same geometry).
+            Assert.AreEqual(0f, Stances.CrouchHipDrop(0.9f, 0f, 0f), 1e-5f);
+            // Thigh 46 and shin 40 degrees from vertical on a 0.9 m leg (the ledge pull-up pose, ADR-542).
             Assert.AreEqual(0.2427f, Stances.CrouchHipDrop(0.9f, 46f, 40f), 1e-3f);
         }
 

@@ -50,8 +50,6 @@ namespace Game.Tests
             Assert.AreEqual(1.2f, rules.Stance.Prone.EyeDropMeters, 1e-5f);
             Assert.AreEqual(0.7f, rules.Stance.Prone.CapsuleHeight, 1e-5f);
             Assert.AreEqual(0.255f, rules.Stance.Prone.MoveFactor, 1e-5f);
-            Assert.AreEqual(85f, rules.Stance.ProneModelPitchDeg, 1e-5f);
-            Assert.AreEqual(40f, rules.Stance.ProneHeadLiftDeg, 1e-5f);
             Assert.GreaterOrEqual(rules.Stance.Prone.CapsuleHeight, 0.7f);
             Assert.Less(1.6f - rules.Stance.Prone.EyeDropMeters, rules.Stance.Prone.CapsuleHeight);
         }
