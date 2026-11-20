@@ -84,6 +84,9 @@ namespace Game.Core
         // Faster with the damage the player really takes: 2/s at the lightest gas, about 20/s at 20 hp/s.
         public static float GeigerClicksPerSecond(PollutionHudModel h) => h.InGas ? 2f + 0.9f * Math.Max(0f, h.Dps) : 0f;
 
+        // Seconds to the next click for a uniform draw u in [0,1): random (Poisson) gaps like a real counter, mean 1/rate.
+        public static float NextGeigerGap(float clicksPerSecond, float u) => clicksPerSecond <= 0f ? float.PositiveInfinity : -(float)Math.Log(1.0 - Math.Min(u, 0.9999f)) / clicksPerSecond;
+
         // "오염 중 · 초당 4.5 · 방독 0:42" (cover useless in the final region), "" outside the gas.
         public static string GasLine(PollutionHudModel h)
         {

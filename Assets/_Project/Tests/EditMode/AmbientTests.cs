@@ -89,6 +89,36 @@ namespace Game.Tests
             }
         }
 
+        // #290/#291 (ADR-540): the CC0 recordings cut by tools/sound_ambient.json load, and the loops have no seam: the
+        // step from the last sample to the first is no bigger than the typical (RMS) step inside the clip.
+        const string RecordedDir = "Assets/_Project/Audio/Foley/Freesound/Resources/Sfx/";
+
+        [Test]
+        public void RecordedClips_Load()
+        {
+            foreach (var name in new[] { "amb_wind_loop", "amb_crickets_loop", "fire_crackle_loop", "amb_bird_01", "amb_bird_02", "amb_bird_03", "amb_bird_04",
+                         "geiger_click_01", "geiger_click_02" })
+                Assert.IsNotNull(UnityEngine.Resources.Load<UnityEngine.AudioClip>("Sfx/" + name), name);
+            Assert.IsNotNull(UnityEngine.Resources.Load<UnityEngine.AudioClip>(ZoneBanner.SirenClip), "siren");
+            Assert.IsNotNull(UnityEngine.Resources.Load<UnityEngine.AudioClip>(ZoneBanner.ChimeClip), "chime");
+        }
+
+        [Test]
+        public void RecordedLoops_AreLong_AndLoopWithoutAJump()
+        {
+            foreach (var name in new[] { "amb_wind_loop", "amb_crickets_loop", "fire_crackle_loop" })
+            {
+                var bytes = System.IO.File.ReadAllBytes(RecordedDir + name + ".wav");
+                int n = (bytes.Length - 44) / 2; // tools/sound_cut.py: 44-byte header, 16-bit mono 44.1 kHz
+                Assert.Greater(n, 44100 * 10, name + " is shorter than 10 s");
+                int S(int i) => System.BitConverter.ToInt16(bytes, 44 + 2 * i);
+                double stepSq = 0;
+                for (int i = 1; i < n; i++) stepSq += (double)(S(i) - S(i - 1)) * (S(i) - S(i - 1));
+                double stepRms = System.Math.Sqrt(stepSq / (n - 1));
+                Assert.LessOrEqual(System.Math.Abs(S(0) - S(n - 1)), stepRms, name + " has a seam");
+            }
+        }
+
         [Test]
         public void Birds_AreShortSongsOfDifferentLength()
         {

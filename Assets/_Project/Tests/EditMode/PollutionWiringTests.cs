@@ -277,5 +277,17 @@ namespace Game.Tests
             Assert.Greater(light, 2f);
             Assert.Greater(heavy, light, "faster in heavier gas");
         }
+
+        [Test]
+        public void GeigerGaps_AreRandom_WithAMeanOfOneOverTheRate()
+        {
+            Assert.AreEqual(float.PositiveInfinity, PollutionHud.NextGeigerGap(0f, 0.5f), "no clicks outside the gas");
+            Assert.AreEqual(0f, PollutionHud.NextGeigerGap(5f, 0f), 1e-6f);
+            float sum = 0f;
+            const int n = 1000;
+            for (int i = 0; i < n; i++) sum += PollutionHud.NextGeigerGap(5f, (i + 0.5f) / n);
+            Assert.AreEqual(0.2f, sum / n, 0.01f, "mean gap 1/rate");
+            Assert.IsFalse(float.IsInfinity(PollutionHud.NextGeigerGap(5f, 1f)), "u = 1 never stalls the counter");
+        }
     }
 }

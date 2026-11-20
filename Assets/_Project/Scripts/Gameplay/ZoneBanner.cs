@@ -73,11 +73,13 @@ namespace Game.Gameplay
             go.AddComponent<ZoneBanner>();
         }
 
-        // Siren hook (#270, sound in S5): a region was announced on this client. No siren clip exists yet.
+        // Siren hook (#270): a region was announced on this client. The banner itself plays the chime and the siren (#291).
         public static event System.Action<int> Siren;
         public static int SirenCount { get; private set; }
 
-        // Sounds are optional: whoever has the clips hands them over (the master's wiring), else the banner is silent.
+        // Recorded defaults (#291, ADR-540): a warning plays the announcement chime and the air-raid siren, the region
+        // closing (gas confirmed or bombardment begins) the chime again. SetClips overrides; a missing clip is silent.
+        public const string SirenClip = "Sfx/zone_siren", ChimeClip = "Sfx/zone_chime";
         public void SetClips(AudioClip warning, AudioClip lockdown, AudioClip bombardment, AudioClip incoming)
         {
             _warningClip = warning;
@@ -98,6 +100,8 @@ namespace Game.Gameplay
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
+            if (_warningClip == null) _warningClip = Resources.Load<AudioClip>(SirenClip);
+            if (_lockdownClip == null) _lockdownClip = Resources.Load<AudioClip>(ChimeClip);
             Build();
             PollutionDirector.ClientRegionStateChanged += OnRegionState;
             PollutionDirector.ClientFinalRevealed += OnFinalRevealed;
@@ -122,11 +126,13 @@ namespace Game.Gameplay
             switch (state)
             {
                 case ZoneState.Warning:
+                    Play(_lockdownClip);
                     Play(_warningClip);
                     SirenCount++;
                     Siren?.Invoke(region);
                     break;
                 case ZoneState.Closed:
+                    Play(_lockdownClip);
                     Say(name + " 지역 오염 확정", UiKit.Danger, MessageSeconds);
                     break;
             }
