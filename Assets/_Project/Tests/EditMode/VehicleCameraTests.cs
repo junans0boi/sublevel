@@ -88,6 +88,17 @@ namespace Game.Tests
         [Test]
         public void DrivingFov_IsWide() => Assert.That(VehicleCamera.DrivingFov, Is.InRange(75f, 80f));
 
+        // ADR-494: the chase camera sits ChaseLift over the orbit point with the view unchanged, so a level view shows the road over the roof.
+        [Test]
+        public void ChaseOffset_LiftsTheCameraOverTheOrbit_KeepingTheView()
+        {
+            var o = VehicleCamera.ChaseOffset(Quaternion.Euler(0f, 30f, 0f), 6f);
+            Assert.AreEqual(VehicleCamera.ChaseLift, o.y, 1e-4f, "level view: straight up by the lift");
+            Assert.AreEqual(6f, new Vector2(o.x, o.z).magnitude, 1e-4f, "and the orbit distance back");
+            Assert.Less(Vector3.Dot(o, Quaternion.Euler(0f, 30f, 0f) * Vector3.forward), 0f, "behind the view");
+            Assert.That(VehicleCamera.ChaseLift, Is.InRange(0.4f, 1.3f));
+        }
+
         // The cause of the "drone" camera (ADR-222), as numbers: the old framing took the renderers' world boxes, so the length it
         // measured (and the distance = length + 2.2 with it) depended on the yaw the vehicle was in when the player got in.
         [Test]
