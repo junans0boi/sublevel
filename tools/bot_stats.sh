@@ -35,7 +35,7 @@ for f in sorted(glob.glob(f"{out}/{stamp}_*.csv")):
 if rows:
     with open(f"{out}/{stamp}_all.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
-    keys = ["level", "seed", "armed4min_all", "firstGunMedian_all", "engagements", "avgEngageSeconds", "firstEngageArmed", "stalledBots", "hideShare", "frameMeanMs", "frameP99Ms"]
+    keys = ["level", "seed", "armed4min_all", "firstGunMedian_all", "engagements", "avgEngageSeconds", "firstEngageArmed", "stalledBots", "noiseInvestigated", "peekCycles", "avgExpose", "squadMedianM", "squadP90M", "hideShare", "frameMeanMs", "frameP99Ms"]
     print("| " + " | ".join(keys) + " |"); print("|" + "---|" * len(keys))
     for r in rows: print("| " + " | ".join(r.get(k, "") for k in keys) + " |")
     print(f"\nmerged: {out}/{stamp}_all.csv")

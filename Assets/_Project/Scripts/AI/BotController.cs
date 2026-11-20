@@ -1101,7 +1101,7 @@ namespace Game.AI
             // No navmesh (a test box): the bot holds its ground on purpose.
             if (!OnNavMesh) return;
             var position = transform.position;
-            bool busy = _intent.State == BotState.Heal || _self.Reloading.Value || now - _lastAttackAt < StallSeconds;
+            bool busy = BotSquad.StallExcused(_intent.State == BotState.Heal, _self.Reloading.Value, _self.Reviving, now - _lastAttackAt, StallSeconds);
             if (busy || (position - _stallFrom).sqrMagnitude > StallMeters * StallMeters)
             {
                 _stallFrom = position;
@@ -1111,6 +1111,7 @@ namespace Game.AI
             if (now - _stallAt < StallSeconds) return;
 
             string reason = StallReason();
+            if (_regrouping) _regroupPauseUntil = now + IgnoreSeconds;
             if (!_stallCounted) { _stallCounted = true; BotMatchStats.StalledBots[(int)_level]++; }
             BotStats.CountStall(reason);
             Debug.Log($"[Bot] {DisplayName} made no headway for {StallSeconds:0} s ({reason}) at {position}; picking a new target");
@@ -1144,6 +1145,7 @@ namespace Game.AI
                 case RegionGoal.Hunt: return "hunt";
                 case RegionGoal.Elevator: return "elevator";
             }
+            if (_regrouping) return "regroup";
             switch (_intent.State)
             {
                 case BotState.Engage: return _percept.EnemyVisible ? "engage-unreachable" : "engage";

@@ -142,6 +142,8 @@ namespace Game.Net
             row.Add("peekCycles", BotBrawlStats.PeekCycles).Add("avgExpose", BotBrawlStats.ExposeEpisodes > 0 ? BotBrawlStats.ExposeSeconds / BotBrawlStats.ExposeEpisodes : 0f);
             row.Add("hideShare", BotBrawlStats.EngagedSeconds > 0f ? BotBrawlStats.HideSeconds / BotBrawlStats.EngagedSeconds : 0f);
             row.Add("noiseInvestigated", BotStatsCsv.Share(BotBrawlStats.NoiseInvestigatedBots, BotBrawlStats.NoiseHeardBots));
+            // Squads (ADR-312, ADR-546): members' distance to their team's centre so far; 0 in a solo match.
+            row.Add("squadMedianM", _squad.Percentile(50)).Add("squadP90M", _squad.Percentile(90));
             row.Add("frameMeanMs", _allFrames.Mean()).Add("frameP99Ms", _allFrames.Percentile(99f)).Add("combatantsLeft", Combatant.All.Count);
             File.WriteAllText(_statsFile, row.Header + "\n" + row.Line + "\n");
         }

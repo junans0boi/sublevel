@@ -271,4 +271,36 @@ namespace Game.Core
             return ReviveStep.Done;
         }
     }
+
+    // How a bot in a team keeps with its squad (ADR-312, ADR-546). Pure rules; BotController.Team applies them.
+    public static class BotSquad
+    {
+        // Walks back to the squad while roaming, looting or looking into a noise, never while farming (each bot's own) or while backing off
+        // after a regroup that stalled; past BotRegroupMeters it sprints, and only then does it leave a pickup.
+        public static bool Regroups(BotState state, bool farming, bool backingOff, float awayMeters, TeamRules rules, out bool sprint)
+        {
+            sprint = awayMeters > rules.BotRegroupMeters;
+            if (state != BotState.Roam && state != BotState.Investigate && state != BotState.Loot) return false;
+            if (farming || backingOff || awayMeters <= rules.BotFollowMeters) return false;
+            return state != BotState.Loot || sprint;
+        }
+
+        // Where it walks: the teammate nearest the centre, not the centre itself, which can sit in a wall, a building or a river
+        // between them. -1 for none.
+        public static int NearestTo(BotVec centre, IReadOnlyList<BotVec> mates)
+        {
+            int best = -1;
+            float bestDistance = float.MaxValue;
+            for (int i = 0; i < mates.Count; i++)
+            {
+                float d = BotVec.PlanarDistance(mates[i], centre);
+                if (d < bestDistance) { bestDistance = d; best = i; }
+            }
+            return best;
+        }
+
+        // Standing still on purpose is no stall: healing, reloading, just having shot, or reviving (10 s, longer than the stall window).
+        public static bool StallExcused(bool healing, bool reloading, bool reviving, float sinceAttack, float stallSeconds) =>
+            healing || reloading || reviving || sinceAttack < stallSeconds;
+    }
 }
