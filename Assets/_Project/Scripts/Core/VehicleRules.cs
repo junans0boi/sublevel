@@ -143,10 +143,11 @@ namespace Game.Core
 
         public static bool IsValidSeat(int seat, int seatCount) => seat >= 0 && seat < seatCount;
 
-        // F at a car: nothing when every door is farther than `range` or every seat is taken; otherwise the driver's
-        // seat if it is free, else the free seat whose door is nearest. `occupants[i]` < 0 means seat i is free;
-        // `doorDistance[i]` is the distance to seat i's door.
-        public static int ChooseEnterSeat(IReadOnlyList<int> occupants, IReadOnlyList<float> doorDistance, float range)
+        // F at a vehicle: nothing when every door is farther than `range` or every seat is taken; otherwise the free seat
+        // whose door is nearest, so you sit on the side you walked up to (ADR-523). `driverFirst` (the motorcycle, whose
+        // two seats mount from the same spot) takes the driver's seat whenever it is free. `occupants[i]` < 0 means seat i
+        // is free; `doorDistance[i]` is the distance to seat i's door.
+        public static int ChooseEnterSeat(IReadOnlyList<int> occupants, IReadOnlyList<float> doorDistance, float range, bool driverFirst = false)
         {
             if (occupants == null || doorDistance == null) return NoSeat;
             int count = Math.Min(occupants.Count, doorDistance.Count);
@@ -154,7 +155,7 @@ namespace Game.Core
             for (int i = 0; i < count; i++)
                 if (doorDistance[i] <= range) near = true;
             if (!near) return NoSeat;
-            if (count > DriverSeat && occupants[DriverSeat] < 0) return DriverSeat;
+            if (driverFirst && count > DriverSeat && occupants[DriverSeat] < 0) return DriverSeat;
             int best = NoSeat;
             for (int i = 0; i < count; i++)
                 if (occupants[i] < 0 && (best == NoSeat || doorDistance[i] < doorDistance[best])) best = i;

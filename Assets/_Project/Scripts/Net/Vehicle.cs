@@ -947,7 +947,7 @@ namespace Game.Net
             if (connection != null && Owner == connection) RemoveOwnership();
         }
 
-        // Gets `c` in: the driver's seat if free, else the free seat with the nearest door. Returns the seat, or -1 when
+        // Gets `c` in: the free seat with the nearest door (a motorcycle: the driver's seat first). Returns the seat, or -1 when
         // refused (dead, already in a vehicle, no door within EnterRange, full, disabled).
         [Server]
         public int ServerEnter(Combatant c)
@@ -962,7 +962,7 @@ namespace Game.Net
                 occupants[s] = OccupantId(s);
                 distances[s] = EnterDistance(c.transform.position, s, GameData.Rules.Guard.LagSlackMeters);
             }
-            int seat = Vehicles.ChooseEnterSeat(occupants, distances, r.EnterRange + GameData.Rules.Guard.LagSlackMeters);
+            int seat = Vehicles.ChooseEnterSeat(occupants, distances, r.EnterRange + GameData.Rules.Guard.LagSlackMeters, IsMotorcycle);
             if (seat < 0)
             {
                 if (c.IsPlayer && System.Array.TrueForAll(distances, d => d > r.EnterRange + GameData.Rules.Guard.LagSlackMeters))

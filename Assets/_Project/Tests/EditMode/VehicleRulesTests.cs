@@ -26,9 +26,18 @@ namespace Game.Tests
         // ---- Seats ----
 
         [Test]
-        public void Enter_TakesTheDriversSeatWhenFree_EvenIfAnotherDoorIsNearer()
+        public void Enter_Car_TakesTheSeatOfTheNearestDoor_EvenWhenTheDriversSeatIsFree()
         {
-            Assert.AreEqual(0, Vehicles.ChooseEnterSeat(new[] { -1, -1, -1, -1 }, new[] { 2.5f, 0.5f, 1f, 1f }, 3f));
+            Assert.AreEqual(1, Vehicles.ChooseEnterSeat(new[] { -1, -1, -1, -1 }, new[] { 2.5f, 0.5f, 1f, 1f }, 3f), "front passenger door");
+            Assert.AreEqual(3, Vehicles.ChooseEnterSeat(new[] { -1, -1, -1, -1 }, new[] { 2.5f, 1.2f, 1f, 0.4f }, 3f), "rear right door");
+            Assert.AreEqual(0, Vehicles.ChooseEnterSeat(new[] { -1, -1, -1, -1 }, new[] { 0.3f, 2f, 1f, 2.5f }, 3f), "driver's door");
+        }
+
+        [Test]
+        public void Enter_Motorcycle_TakesTheDriversSeatWhenFree_EvenIfThePillionIsNearer()
+        {
+            Assert.AreEqual(0, Vehicles.ChooseEnterSeat(new[] { -1, -1 }, new[] { 1.2f, 0.4f }, 3f, driverFirst: true));
+            Assert.AreEqual(1, Vehicles.ChooseEnterSeat(new[] { 7, -1 }, new[] { 0.2f, 0.4f }, 3f, driverFirst: true));
         }
 
         [Test]
@@ -43,7 +52,7 @@ namespace Game.Tests
         {
             Assert.AreEqual(Vehicles.NoSeat, Vehicles.ChooseEnterSeat(new[] { -1, -1, -1, -1 }, new[] { 3.1f, 3.2f, 4f, 5f }, 3f), "too far");
             Assert.AreEqual(Vehicles.NoSeat, Vehicles.ChooseEnterSeat(new[] { 1, 2, 3, 4 }, new[] { 0.5f, 0.5f, 0.5f, 0.5f }, 3f), "full");
-            Assert.AreEqual(0, Vehicles.ChooseEnterSeat(new[] { -1, -1 }, new[] { 3f, 9f }, 3f), "the range itself counts (motorcycle, two seats)");
+            Assert.AreEqual(0, Vehicles.ChooseEnterSeat(new[] { -1, -1 }, new[] { 3f, 9f }, 3f, driverFirst: true), "the range itself counts (motorcycle, two seats)");
         }
 
         [Test]
