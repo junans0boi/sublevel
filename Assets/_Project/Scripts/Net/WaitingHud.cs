@@ -69,6 +69,7 @@ namespace Game.Net
         // closed) the car waits at the bottom, doors open.
         Transform _car, _carDoors;
         CallButton _bottom, _top;
+        LiftHoist _hoist;
         void MoveLiftCar(bool live)
         {
             if (_car == null)
@@ -78,11 +79,13 @@ namespace Game.Net
                 if (car == null) return;
                 _car = car; _carDoors = car.Find("Doors");
                 Dress(island.transform);
+                _hoist = new LiftHoist(island.transform, car, Look("WaitingSteel"), Look("WaitingAccent"));
             }
             var phase = live ? (Game.Core.LiftPhase)_last.LiftPhase : Game.Core.LiftPhase.OpenBottom;
             float into = live ? _last.LiftInto + (_preview ? 0f : Time.unscaledTime - _at) : 0f;
             float h = Game.Core.BungeeLift.HeightOf(phase, into);
             var p = _car.localPosition; p.y = h; _car.localPosition = p;
+            _hoist.Move(h);
             if (_carDoors != null) _carDoors.gameObject.SetActive(!Game.Core.BungeeLift.DoorsOpenOf(phase, into));
             if (_bottom == null) { _bottom = new CallButton(_car.parent, false); _top = new CallButton(_car.parent, true); }
             bool moving = !Game.Core.BungeeLift.DoorsOpenOf(phase, into);

@@ -16,7 +16,8 @@ namespace Game.Tests
         sealed class NoPlayerInput : IPlayerInput
         {
             public bool PressF;   // one F press on the next frame
-            public PlayerInputFrame Read() { var f = new PlayerInputFrame { SelectSlot = -1, Interact = PressF }; PressF = false; return f; }
+            public Vector2 Walk;  // held movement (x right, y forward)
+            public PlayerInputFrame Read() { var f = new PlayerInputFrame { SelectSlot = -1, Interact = PressF, Move = Walk }; PressF = false; return f; }
         }
 
         bool _oldFlag;
@@ -116,6 +117,32 @@ namespace Game.Tests
             Assert.Less(top, 0.15f, "the car floor is a low step, not a box");
             Assert.GreaterOrEqual(floor.min.y - deck, -0.05f, "nothing of the car floor is below the deck");
             Assert.Less(Mathf.Abs(feet - top), 0.15f, "the rider stands on the car floor, not sunk in it");
+        }
+
+        // ADR-492 (준환 r5.2: "승강기 통과된다"): the cage's sides and the fence of the shaft stop a walker.
+        [UnityTest, Timeout(300000)]
+        public IEnumerator Lift_CageSides_AndShaftFence_StopAWalker()
+        {
+            float deck = DeckY; var lift = WaitingIsland.Lift;
+            float end = Time.realtimeSinceStartup + BungeeLift.Cycle + 2f;
+            while (WaitingRoom.Current.Lift == null || WaitingRoom.Current.Lift.Phase != LiftPhase.OpenBottom)
+            { Assert.Less(Time.realtimeSinceStartup, end, "the car came to the bottom"); yield return null; }
+            var input = (NoPlayerInput)PlayerController.InputOverride;
+            var me = Combatant.LocalPlayer;
+            foreach (var (startX, limit, what) in new[] { (0f, BungeeLift.HalfSize, "the cage's east side"), (-WaitingIsland.LiftShaftHalf - 1.2f, -WaitingIsland.LiftShaftHalf, "the shaft's west fence") })
+            {
+                PlayerController.Local.Teleport(Local(lift.x + startX, deck + 0.1f, lift.z + 0.4f));
+                yield return new WaitForSeconds(0.3f);
+                PlayerController.Local.LookAt(Local(lift.x + 30f, deck + 1.5f, lift.z + 0.4f));
+                yield return null;
+                input.Walk = Vector2.up;
+                yield return new WaitForSeconds(1.5f);
+                input.Walk = Vector2.zero;
+                float x = me.transform.position.x - WaitingIsland.WorldX(lift.x);
+                Debug.Log($"[WaitingIslandPlayTests] walked east from {startX:0.0} to {x:0.00} (limit {limit:0.00})");
+                Assert.Greater(x, startX + 0.2f, "the walker moved");
+                Assert.Less(x, limit, what + " holds");
+            }
         }
 
         // Review shots (third person, the feet, the car floor and the deck together). Run on purpose with
@@ -256,6 +283,36 @@ namespace Game.Tests
         }
 
         // The player's camera with the HUD canvases drawn into it (an overlay canvas is not in a camera render).
+        // Review shots of the hoist (ADR-492): the car halfway down with its ropes and counterweight, the drive on the shaft head, and the
+        // fence round the shaft on the deck. Run on purpose with
+        //   ISLAND_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.WaitingIslandPlayTests.CaptureHoist
+        [UnityTest, Explicit, Category("Capture"), Timeout(300000)]
+        public IEnumerator CaptureHoist()
+        {
+            string folder = System.Environment.GetEnvironmentVariable("ISLAND_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = System.IO.Path.Combine(Application.dataPath, "../Logs/island-shots");
+            System.IO.Directory.CreateDirectory(folder);
+            float deck = DeckY, top = BungeeCurve.Top; var lp = WaitingIsland.Lift;
+            yield return SendTheCarUp();
+            yield return new WaitForSeconds(0.6f);
+            yield return FreeShot(folder, "hoist_fence", Local(lp.x + 6f, deck + 1.8f, lp.z + 5f), Local(lp.x, deck + 1.6f, lp.z), 60f);
+            yield return FreeShot(folder, "hoist_head", Local(lp.x - 3f, deck + top + 1.7f, lp.z - 4.5f), Local(lp.x + 0.8f, deck + top + 3.1f, lp.z), 55f);
+            WaitingRoom.Current.Lift.Call(false, Time.unscaledTimeAsDouble);
+            float end = Time.realtimeSinceStartup + 10f;
+            while (!WaitingRoom.Current.Lift.Moving || WaitingRoom.Current.Lift.Into(Time.unscaledTimeAsDouble) < BungeeLift.TravelSeconds * 0.45f)
+            { Assert.Less(Time.realtimeSinceStartup, end); yield return null; }
+            yield return FreeShot(folder, "hoist_ride", Local(lp.x + 7f, deck + top * 0.5f - 4f, lp.z + 6f), Local(lp.x, deck + top * 0.5f, lp.z), 60f);
+            Debug.Log("[WaitingIslandPlayTests] shots in " + folder);
+        }
+
+        static IEnumerator FreeShot(string folder, string name, Vector3 from, Vector3 at, float fov)
+        {
+            var cam = new GameObject("FreeShotCamera").AddComponent<Camera>();
+            cam.enabled = false; cam.fieldOfView = fov; cam.transform.position = from; cam.transform.LookAt(at);
+            yield return Shot(folder, name, cam);
+            Object.Destroy(cam.gameObject);
+        }
+
         // The panel up close, from a little right of its face (no HUD).
         static IEnumerator CloseShot(string folder, string name, bool top, float deck)
         {

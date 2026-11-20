@@ -233,8 +233,8 @@ public static partial class WorldBuilder
     }
 
     // The cage car of the bungee lift (ADR-387): a floor, corner posts, a roof and open bar sides so the riders see out; "Doors" (bars
-    // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. No colliders (the riders are
-    // driven by BungeeRide; the top landing has its own floor).
+    // across both openings) shows only while it moves. Not static: WaitingHud moves it on the clients. Its side and gate
+    // colliders, the shaft's post colliders and fence and the hoist drive are added at runtime by Net/LiftHoist (ADR-492).
     static void BuildBungeeLiftCar(Transform root, WorldMeshes.Store store, Material steel, Material accent, Material planks, Vector2 steelTile, Vector2 accentTile, Vector2 planksTile)
     {
         var lp = WaitingIsland.Lift; float h = BungeeLift.HalfSize, H = 2.6f;
