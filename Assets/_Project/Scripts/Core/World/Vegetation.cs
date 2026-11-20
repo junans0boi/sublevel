@@ -103,7 +103,10 @@ namespace Game.Core
             {
                 var t = plan.Trees[i];
                 var kind = Species(plan, t.Region, t.Y, WorldNoise.Hash01(i, 1, seed));
-                Add(plants, grid, kind, t.Region, t.X, t.Y, t.Z, t.Scale, t.YawDeg, (int)(WorldNoise.Hash01(i, 2, seed) * Variants));
+                int variant = (int)(WorldNoise.Hash01(i, 2, seed) * Variants);
+                // With the wood the plan's trees keep its trunk spacing too (ADR-487); without it they stand where the plan put them.
+                if (forest) TryAdd(plants, grid, ForestSpacing, kind, t.Region, t.X, t.Y, t.Z, t.Scale, t.YawDeg, variant);
+                else Add(plants, grid, kind, t.Region, t.X, t.Y, t.Z, t.Scale, t.YawDeg, variant);
             }
 
             // Yard trees: one or two behind each house, a little way off the back wall, or beside it when the back is
@@ -196,12 +199,17 @@ namespace Game.Core
                     bushes = plants.Count - trees;
                 }
             }
+            if (forest) AddUndergrowth(plan, plants, grid, seed);
             return plants;
         }
 
         // ---- forest belt (ADR-270): dense trees on mountain and hill slopes so that cover and concealment exist up there ----
 
-        public const float ForestCell = 3.6f, ForestSpacing = 2.6f, ForestChance = 0.88f;
+        // ADR-487: trunks (colliders) at least ForestSpacing apart centre to centre so a 2 m car weaves through; the wood looks full from
+        // the undergrowth (bushes, no collider) between them instead of from packed trunks.
+        public const float ForestCell = 5.5f, ForestSpacing = 6.5f, ForestChance = 0.92f;
+        public const float UndergrowthCell = 3.2f, UndergrowthSpacing = 2.4f, UndergrowthChance = 0.55f;
+        public const int MaxUndergrowth = 30000;
         public const int MaxForest = 80000;
         public const float TreeLineAbove = 165f;                 // metres above the sea: full forest up to TreeLineAbove - 30, thinning to none at TreeLineAbove
         const float ForestRoadClear = 5f, ForestRoadRamp = 9f;   // bare verge, then the wood thickens over this distance
@@ -268,9 +276,29 @@ namespace Game.Core
                 }
         }
 
+        // Forest undergrowth (ADR-487): bushes through the forest belt, as dense as the wood. They have no collider, so a car drives
+        // through them; they hide a crouching player and fill the view between the spaced trunks.
+        static void AddUndergrowth(WorldPlan plan, List<Plant> plants, SpacingGrid grid, uint seed)
+        {
+            int cells = (int)(plan.Size / UndergrowthCell), added = 0;
+            for (int gz = 0; gz < cells && added < MaxUndergrowth; gz++)
+                for (int gx = 0; gx < cells && added < MaxUndergrowth; gx++)
+                {
+                    float x = (gx + WorldNoise.Hash01(gx, gz, seed + 80u)) * UndergrowthCell;
+                    float z = (gz + WorldNoise.Hash01(gx, gz, seed + 81u)) * UndergrowthCell;
+                    float f = ForestDensity(plan, x, z);
+                    if (f <= 0f || WorldNoise.Hash01(gx, gz, seed + 82u) >= f * UndergrowthChance) continue;
+                    if (!grid.Clear(x, z, UndergrowthSpacing)) continue;
+                    Add(plants, grid, PlantKind.Bush, plan.RegionAt(x, z), x, plan.Height(x, z), z,
+                        0.9f + 0.7f * WorldNoise.Hash01(gx, gz, seed + 83u), WorldNoise.Hash01(gx, gz, seed + 84u) * 360f,
+                        (int)(WorldNoise.Hash01(gx, gz, seed + 85u) * Variants));
+                    added++;
+                }
+        }
+
         // ---- meadow trees (ADR-282): broadleaf groves with open grass between, thickening toward the slope forest ----
 
-        public const float MeadowCell = 5f, MeadowSpacing = 5.5f;
+        public const float MeadowCell = 5f, MeadowSpacing = ForestSpacing;   // ADR-487: the groves run into the wood, same trunk gap
         public const int MaxMeadow = 9000;
         const float MeadowLotClear = 22f, MeadowLotRamp = 14f, MeadowMaxSlopeTan = 0.45f;
 

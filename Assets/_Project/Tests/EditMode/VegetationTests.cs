@@ -20,10 +20,10 @@ namespace Game.Tests
         {
             var trees = Plants.Where(p => p.HasTrunk).ToList();
             var bushes = Plants.Where(p => !p.HasTrunk).ToList();
-            Assert.GreaterOrEqual(trees.Count, Plan.Trees.Count * 0.9f, "the plan's trees are kept");
+            Assert.GreaterOrEqual(trees.Count, Plan.Trees.Count * 0.8f, "the plan's trees are kept (less those closer than the trunk spacing, ADR-487)");
             Assert.LessOrEqual(trees.Count, Vegetation.MaxTrees + Vegetation.MaxForest);
             Assert.Greater(bushes.Count, 500);
-            Assert.LessOrEqual(bushes.Count, Vegetation.MaxBushes);
+            Assert.LessOrEqual(bushes.Count, Vegetation.MaxBushes + Vegetation.MaxUndergrowth);
             Assert.Greater(trees.Count(p => p.Kind == PlantKind.Conifer), 100);
             Assert.Greater(trees.Count(p => p.Kind == PlantKind.Broadleaf), 100);
             for (int v = 0; v < Vegetation.Variants; v++)
@@ -83,10 +83,8 @@ namespace Game.Tests
         [Test]
         public void Trees_AreNotStackedOnEachOther()
         {
-            var plain = Vegetation.Plan(Plan, false); // the forest belt packs trees 2.6 m apart on purpose (ADR-270)
-            var trees = plain.Skip(Plan.Trees.Count).Where(p => p.HasTrunk).ToList();
-            var all = plain.Where(p => p.HasTrunk).ToList();
-            foreach (var t in trees)
+            var all = Plants.Where(p => p.HasTrunk).ToList();   // the forest belt keeps its trunks 6.5 m apart since ADR-487
+            foreach (var t in all)
                 foreach (var o in all)
                 {
                     if (o.X == t.X && o.Z == t.Z) continue;

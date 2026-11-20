@@ -60,7 +60,11 @@ namespace Game.Gameplay
             _animation = GetComponent<CombatantAnimation>();
         }
 
-        void OnDisable() => SetAimIgnore(null);
+        void OnDisable()
+        {
+            SetAimIgnore(null);
+            if (_player != null && VegetationRenderer.ClearAround == _player.Camera) VegetationRenderer.ClearAround = null;
+        }
 
         void LateUpdate() => Place();
 
@@ -68,6 +72,7 @@ namespace Game.Gameplay
         public void Place()
         {
             Active = false;
+            if (VegetationRenderer.ClearAround == (_player != null ? _player.Camera : null)) VegetationRenderer.ClearAround = null;
             if (_player == null || PlayerController.Local != _player || _combatant == null) return;
             var vehicle = VehicleSeat.VehicleOf(_combatant);
             SetAimIgnore(vehicle);
@@ -112,6 +117,8 @@ namespace Game.Gameplay
             if (Mathf.Abs(at.x - _local.center.x) < _local.extents.x && Mathf.Abs(at.z - _local.center.z) < _local.extents.z && at.y < _local.max.y + RoofClearance)
                 at.y = _local.max.y + RoofClearance;
             cam.transform.SetPositionAndRotation(vehicle.transform.TransformPoint(at), look);
+            VegetationRenderer.ClearPivot = pivot;
+            VegetationRenderer.ClearAround = cam;   // third person: boughs round the camera are not drawn (ADR-487)
         }
 
         public static float SpeedExtra(float kmh) => SpeedExtraMeters * Mathf.Clamp01(Mathf.Abs(kmh) / SpeedExtraAtKmh);

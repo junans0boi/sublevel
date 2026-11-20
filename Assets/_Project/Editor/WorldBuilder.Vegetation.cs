@@ -271,12 +271,46 @@ public static partial class WorldBuilder
             cam.fieldOfView = 50f;
             SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_air_{region.Id}.png", c + new Vector3(0f, 230f, -380f), c + Vector3.up * 40f);
         }
+        CarInTheWood(cam, plan, pts, Ground, tag);
         var statAt = Ground(pts[pts.Count / 2].x, pts[pts.Count / 2].y) + Vector3.up * 1.7f;
         string stats = ViewStats(cam, statAt, statAt + new Vector3(0.7f, 0f, 0.7f) * 40f, tag);
         Debug.Log(stats);
         File.AppendAllText($"Logs/forest_{tag}.txt", stats + "\n");
         cam.targetTexture = null;
         EditorApplication.Exit(0);
+    }
+
+    // ADR-487: a car parked in the wood, seen from the chase camera and from above, at the first slope points that are drivable (tan < 0.35),
+    // have trunks round them (at least 6 within 15 m: in the wood, not a glade) and room for the car (no trunk within 2.6 m).
+    static void CarInTheWood(Camera cam, WorldPlan plan, List<Vector2> pts, System.Func<float, float, Vector3> ground, string tag)
+    {
+        var prefab = AssetDatabase.FindAssets("t:Prefab", new[] { VehicleModels.OutDir })
+            .Select(g => AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(g)))
+            .FirstOrDefault(p => p != null && p.GetComponent<Game.Net.Vehicle>() != null && !p.name.ToLowerInvariant().Contains("moto") && !p.name.ToLowerInvariant().Contains("bike"));
+        if (prefab == null) { Debug.LogWarning("[ForestCheck] no car prefab"); return; }
+        bool Trunk(Collider c) => c.transform.parent != null && c.transform.parent.name == "Trunks";
+        int shots = 0;
+        for (int i = 0; i < pts.Count && shots < 3; i += 7)
+        {
+            var at = ground(pts[i].x, pts[i].y);
+            if (plan.SlopeTan(pts[i].x, pts[i].y) > 0.35f) continue;
+            var near = Physics.OverlapSphere(at + Vector3.up, 15f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore).Count(Trunk);
+            if (near < 6 || Physics.OverlapSphere(at + Vector3.up, 2.6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore).Any(Trunk)) continue;
+            float e = 1f, gx = plan.Height(pts[i].x + e, pts[i].y) - plan.Height(pts[i].x - e, pts[i].y), gz = plan.Height(pts[i].x, pts[i].y + e) - plan.Height(pts[i].x, pts[i].y - e);
+            var uphill = new Vector3(gx, 0f, gz).sqrMagnitude > 1e-4f ? new Vector3(gx, 0f, gz).normalized : Vector3.forward;
+            var car = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            car.transform.SetPositionAndRotation(at + Vector3.up * 0.05f, Quaternion.LookRotation(uphill));
+            foreach (var body in car.GetComponentsInChildren<Rigidbody>()) body.isKinematic = true;
+            cam.fieldOfView = 60f;
+            VegetationRenderer.ClearAround = cam;   // as the car camera does in play
+            VegetationRenderer.ClearPivot = at;
+            SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_car{shots}_chase.png", at - uphill * 6.5f + Vector3.up * 2.6f, at + uphill * 12f + Vector3.up * 1.2f);
+            VegetationRenderer.ClearAround = null;
+            SceneLook.Shot(cam, $"{OverviewDir}/forest_{tag}_car{shots}_top.png", at + Vector3.up * 55f - uphill * 0.01f, at);
+            Object.DestroyImmediate(car);
+            Debug.Log($"[ForestCheck:{tag}] car view {shots} at ({at.x:F0},{at.z:F0}): {near} trunks within 15 m");
+            shots++;
+        }
     }
 
     // Render stats of one view over 120 frames, plus the instanced vegetation estimated from the renderer's own LOD rule.

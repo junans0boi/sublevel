@@ -121,6 +121,30 @@ namespace Game.Gameplay
             _ready = true;
         }
 
+        // ADR-487: the third-person car camera sits inside low boughs in the wood (crowns have no collider to pull it in). For this camera a
+        // plant is not drawn while the camera is inside its crown's reach (flat distance under CrownReach x its height) and the plant is nearer
+        // the camera than the car (ClearPivot), so trunks beside or ahead of the car stay drawn. Set each frame by VehicleCamera, null otherwise.
+        public static Camera ClearAround;
+        public static Vector3 ClearPivot;
+        public const float CrownReach = 0.28f;   // conifer boughs reach 0.22..0.26 of the tree's height at the bottom tier
+        // Bushes have no collider, so any bush on the flat sight line from the camera to the car is not drawn either, up to SightClearTo of
+        // the way (the bush the car is driving through stays). A bush is about as wide as it is high (radius 0.6..1.3 x height).
+        public const float BushReach = 1.3f, SightClearTo = 0.85f;
+
+        public static bool Cleared(PlantKind kind, float height, Vector3 at, Vector3 eye, Vector3 pivot)
+        {
+            float px = at.x - eye.x, pz = at.z - eye.z;
+            if (kind != PlantKind.Bush)
+            {
+                float toEye = px * px + pz * pz, reachOf = CrownReach * height;
+                return toEye < reachOf * reachOf && toEye < (at.x - pivot.x) * (at.x - pivot.x) + (at.z - pivot.z) * (at.z - pivot.z);
+            }
+            float sx = pivot.x - eye.x, sz = pivot.z - eye.z;
+            float t = Mathf.Clamp01((px * sx + pz * sz) / Mathf.Max(sx * sx + sz * sz, 1e-4f));
+            float ox = px - sx * t, oz = pz - sz * t, r = BushReach * height;
+            return t < SightClearTo && ox * ox + oz * oz < r * r;
+        }
+
         void OnBeginCamera(ScriptableRenderContext context, Camera cam)
         {
             if (!_ready || !VegetationDraw.Draws(cam, gameObject.layer)) return;
@@ -130,6 +154,7 @@ namespace Game.Gameplay
             // Casters outside the view still throw shadows into it: inside the shadow distance no cell is skipped.
             float shadowReach = QualitySettings.shadowDistance;
             var eye = cam.transform.position;
+            bool clear = cam == ClearAround;
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
             for (int p = 0; p < _counts.Length; p++) Array.Clear(_counts[p], 0, _counts[p].Length);
 
@@ -145,6 +170,7 @@ namespace Game.Gameplay
                     if (distance > reach) continue;
                     int p = _prototype[i];
                     var proto = _prototypes[p];
+                    if (clear && Cleared(proto.Kind, proto.Height * at.w, at, eye, ClearPivot)) continue;
                     // From straight above (the map pictures) billboards would be edge-on: the card LOD is used instead.
                     int lod = cam.orthographic ? Mathf.Min(1, proto.Lods.Length - 1) : Vegetation.Lod(proto.Kind, distance, at.w, zoom, level);
                     if (lod < 0) continue;
