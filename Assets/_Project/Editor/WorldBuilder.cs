@@ -163,7 +163,7 @@ public static partial class WorldBuilder
             $"{rocks} rocks (plan {plan.Rocks.Count}), {barriers} sea barrier segments, {loot.Count} loot spawns");
     }
 
-    static WorldSpec LoadSpec()
+    internal static WorldSpec LoadSpec()
     {
         var text = Resources.Load<TextAsset>("GameData/world");
         if (text != null)
