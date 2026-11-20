@@ -118,11 +118,38 @@ namespace Game.Gameplay
             });
         }
 
+        string _partyShown;
+
+        // The stage shows the logged-in player and the backend party (#389): the login's nickname instead of "플레이어", the party's members
+        // with its leader, squad when more than one. The backend has no ready step, so members count as ready. Left alone while matching.
+        void SyncBackendParty()
+        {
+            if (_lobbyPanel == null || LobbyNet.AccountId == 0 || _lobbyPanel.Party.Matching) return;
+            var party = _social?.Party;
+            string key = LobbyNet.AuthNickname + "|" + (party == null ? "" : party.leader_id + ":" + string.Join(",", System.Array.ConvertAll(party.members, m => m.account_id + m.nickname)));
+            if (key == _partyShown) return;
+            _partyShown = key;
+            int self = (int)LobbyNet.AccountId;
+            var old = _lobbyPanel.Party;
+            PartyLobby next;
+            if (party == null || party.members.Length == 0) next = new PartyLobby(self, LobbyNet.AuthNickname ?? "플레이어");
+            else
+            {
+                var leader = System.Array.Find(party.members, m => m.account_id == party.leader_id) ?? party.members[0];
+                next = new PartyLobby((int)leader.account_id, leader.nickname);
+                foreach (var m in party.members) if (m != leader) { next.Join((int)m.account_id, m.nickname); next.SetReady((int)m.account_id, true); }
+                if (party.members.Length > 1) next.SetMode(next.LeaderId, TeamMode.Squad);
+            }
+            next.SetView(next.LeaderId, old.View);
+            _lobbyPanel.SetParty(next, self);
+        }
+
         void Update()
         {
             if (_social == null) StartBackend();
             if (_social != null && _friends == null && _root != null) _friends = FriendsPanel.Build(_root.transform, _social);
             if (_social != null) { _social.Tick(Time.unscaledTimeAsDouble); _backendQueue.Tick(Time.unscaledTimeAsDouble); }
+            SyncBackendParty();
             SyncQueue();
             if (CharacterShown && !ModalShown) _charScreen.Tick();
             if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }

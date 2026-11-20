@@ -9,7 +9,8 @@ namespace Game.Gameplay
     // It draws SocialClient's snapshots; every change goes through the backend and comes back with the next poll.
     public sealed class FriendsPanel
     {
-        const float W = 560f, H = 900f, Pad = 24f, Row = 52f;
+        // Between the lobby's top bar (96) and its bottom console (~930) so it never covers 시작.
+        const float W = 560f, H = 816f, Top = 104f, Pad = 24f, Row = 52f;
 
         readonly SocialClient _social;
         readonly RectTransform _root;
@@ -24,8 +25,9 @@ namespace Game.Gameplay
 
         public static FriendsPanel Build(Transform parent, SocialClient social)
         {
-            var root = UiKit.Rect("FriendsPanel", parent, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-40f, 0f), new Vector2(W, H));
-            UiPaint.Box(root, UiPaint.PnSolid, 14, UiPaint.Ln);
+            var root = UiKit.Rect("FriendsPanel", parent, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, -Top), new Vector2(W, H));
+            var solid = UiPaint.PnSolid; solid.a = 1f; // opaque: the cards behind must not show through
+            UiPaint.Box(root, solid, 14, UiPaint.Ln);
             var p = new FriendsPanel(social, root);
             UiPaint.Label(root, "Title", Pad, 20f, 380f, 40f, "친구 · 파티", 28, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
             UiPaint.Btn(root, "Close", W - Pad - 44f, 20f, 44f, 40f, "×", 26, 8, UiPaint.Sf, UiPaint.Ln, UiPaint.T2, () => p.Show(false));
