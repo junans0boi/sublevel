@@ -225,13 +225,17 @@ namespace Game.Tests
         }
 
         [Test]
-        public void HigherFalls_HurtMoreWithEveryMetre_AndKillAroundTwelve()
+        public void HigherFalls_HurtMoreWithEveryMetre_AndKillOnlyFromFifteen()
         {
-            Assert.AreEqual(11.1111f, Locomotion.FallDamage(4f, Fall), 1e-3f);
-            Assert.AreEqual(33.3333f, Locomotion.FallDamage(6f, Fall), 1e-3f);
-            Assert.AreEqual(50f, Locomotion.FallDamage(7.5f, Fall), 1e-3f);
-            Assert.AreEqual(100f, Locomotion.FallDamage(12f, Fall), 1e-3f);
-            Assert.AreEqual(133.3333f, Locomotion.FallDamage(15f, Fall), 1e-3f);
+            // ADR-491: a 2-3 storey drop (6-10 m) takes a chunk, not the whole bar.
+            Assert.AreEqual(4f, Locomotion.FallDamage(3.001f, Fall), 0.01f, "a hard landing just past the safe height");
+            Assert.AreEqual(12f, Locomotion.FallDamage(4f, Fall), 1e-3f);
+            Assert.AreEqual(28f, Locomotion.FallDamage(6f, Fall), 1e-3f);
+            Assert.AreEqual(44f, Locomotion.FallDamage(8f, Fall), 1e-3f);
+            Assert.AreEqual(60f, Locomotion.FallDamage(10f, Fall), 1e-3f);
+            Assert.Less(Locomotion.FallDamage(14.9f, Fall), 100f, "not lethal below 15 m");
+            Assert.AreEqual(100f, Locomotion.FallDamage(15f, Fall), 1e-3f);
+            Assert.Greater(Locomotion.FallDamage(20f, Fall), 100f);
         }
 
         [Test]

@@ -343,15 +343,15 @@ namespace Game.Tests
             Assert.AreEqual(0, stance.FallsHurt, "2.5 m does not hurt");
             Assert.AreEqual(100f, me.Hp.Value);
 
-            // Six metres: (6 - 3) / (12 - 3) of 100 = 33.3 damage.
+            // Six metres (ADR-491): 4 + (6 - 3) / (15 - 3) of 96 = 28 damage.
             pc.Teleport(new Vector3(3f, ground + 6f, -24f));
             yield return WaitUntil(() => stance.FallsHurt == 1, 4f, "fall damage applied on the server");
             Assert.AreEqual(6f, stance.LastFallMeters, 0.2f);
             Assert.AreEqual(DamageCause.Fall, stance.LastFall.Cause);
             Assert.IsNull(stance.LastFall.Attacker);
-            Assert.AreEqual(33.3f, stance.LastFall.Amount, 2.5f);
+            Assert.AreEqual(28f, stance.LastFall.Amount, 2.5f); // ADR-491 curve
             yield return WaitUntil(() => me.Hp.Value < 100f, 1f, "health went down");
-            Assert.AreEqual(66.7f, me.Hp.Value, 2.5f);
+            Assert.AreEqual(72f, me.Hp.Value, 2.5f);
             Assert.IsFalse(me.Dead.Value);
             yield return new WaitForSeconds(1.2f);
             Assert.AreEqual(1, stance.FallsHurt, "one fall, one damage");

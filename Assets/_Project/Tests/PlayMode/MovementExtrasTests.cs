@@ -469,6 +469,91 @@ namespace Game.Tests
             Assert.Less(pc.transform.position.z, -22.1f, "in front of it");
         }
 
+        // ADR-492: from a 1 m block, sprint and jump (Space held) across a 2 m gap at a block `rise` higher, 6 m deep.
+        // Returns whether a mantle was seen on the way; the body ends standing on the far block either way.
+        IEnumerator JumpAcross(PlayerController pc, float rise, Action<bool> mantled)
+        {
+            Box("From", new Vector3(0f, 0.5f, -27f), new Vector3(3f, 1f, 5f));               // top 1, ends at z = -24.5
+            float top = 1f + rise;
+            Box("To", new Vector3(0f, top / 2f, -19.5f), new Vector3(3f, top, 6f));           // near face at z = -22.5
+            yield return StandAt(pc, new Vector3(0f, 1.1f, -27.5f));
+            _input.Frame.Sprint = true;
+            _input.Frame.Move = new Vector2(0f, 1f);
+            float end = Time.time + 2f;
+            while (pc.transform.position.z < -24.85f && Time.time < end) yield return null;
+            _input.Frame.Jump = true;
+            _input.Frame.JumpHeld = true;
+            bool seen = false;
+            end = Time.time + 2f;
+            while (Time.time < end && !(seen && !pc.InParkour) && pc.transform.position.z < -20f)
+            {
+                seen |= pc.ParkourUnderWay == ParkourMove.LedgeClimb;
+                yield return null;
+            }
+            _input.Frame.Move = Vector2.zero;
+            _input.Frame.Sprint = _input.Frame.JumpHeld = false;
+            yield return new WaitForSeconds(0.5f);
+            mantled(seen);
+            Assert.AreEqual(top, pc.transform.position.y, 0.12f, $"standing on top of the far block (at {pc.transform.position})");
+            Assert.Greater(pc.transform.position.z, -22.3f, "on the far block");
+        }
+
+        [UnityTest]
+        public IEnumerator AJumpAcrossAGap_AtABlockHalfAMetreHigher_EndsOnTop()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            var stance = Combatant.LocalPlayer.GetComponent<CombatantStance>();
+            bool mantled = false;
+            yield return JumpAcross(pc, 0.5f, m => mantled = m);
+            Assert.AreEqual(0, stance.ParkoursRejected);
+            Debug.Log($"[Mantle] 0.5 m higher: mantled {mantled}");
+        }
+
+        // A block 1.5 m higher is above what the jump clears: the hands catch its edge and the body climbs onto it.
+        [UnityTest]
+        public IEnumerator AJumpAcrossAGap_AtABlockTooHighToClear_IsMantledOnto_AndTheServerBelievesIt()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            var stance = Combatant.LocalPlayer.GetComponent<CombatantStance>();
+            int corrections = MoveGuard.Corrections;
+            bool mantled = false;
+            yield return JumpAcross(pc, 1.5f, m => mantled = m);
+            Assert.IsTrue(mantled, "a mantle, not a landing");
+            Assert.AreEqual(ParkourMove.LedgeClimb, pc.LastParkourPlan.Move);
+            Assert.GreaterOrEqual(stance.ParkoursAccepted, 1, "the server believed it");
+            Assert.AreEqual(0, stance.ParkoursRejected);
+            Assert.AreEqual(corrections, MoveGuard.Corrections, "MoveGuard did not put the body back");
+            Assert.AreEqual(ParkourMove.None, stance.ParkourMove);
+        }
+
+        // Space held while walking slowly off a 3 m block toward a 2.2 m one 1.5 m ahead: the short fall ends on top of the
+        // lower block instead of on the floor.
+        [UnityTest]
+        public IEnumerator SpaceHeld_AfterAShortFall_MantlesOntoTheEdgeAhead()
+        {
+            yield return LoadTestBox();
+            var pc = PlayerController.Local;
+            Box("From", new Vector3(0f, 1.5f, -25f), new Vector3(3f, 3f, 2f));                // top 3, ends at z = -24
+            Box("To", new Vector3(0f, 1.1f, -21.5f), new Vector3(3f, 2.2f, 2f));              // top 2.2, face at z = -22.5
+            yield return StandAt(pc, new Vector3(0f, 3.1f, -24.5f));
+            _input.Frame.JumpHeld = true;
+            _input.Frame.Move = new Vector2(0f, 0.3f);
+            bool seen = false;
+            float end = Time.time + 2.5f;
+            while (Time.time < end && !(seen && !pc.InParkour))
+            {
+                seen |= pc.ParkourUnderWay == ParkourMove.LedgeClimb;
+                yield return null;
+            }
+            _input.Frame.Move = Vector2.zero;
+            _input.Frame.JumpHeld = false;
+            yield return new WaitForSeconds(0.4f);
+            Assert.IsTrue(seen, $"a mantle (at {pc.transform.position})");
+            Assert.AreEqual(2.2f, pc.transform.position.y, 0.12f, "on top");
+        }
+
         // A block `height` high, 2 m deep, its near face at z = -22; Space from 0.6 m in front of it until hanging.
         IEnumerator HangFrom(PlayerController pc, float height)
         {

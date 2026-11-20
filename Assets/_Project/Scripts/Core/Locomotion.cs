@@ -213,7 +213,8 @@ namespace Game.Core
         public float LandPitchDeg = 8f;
     }
 
-    // Falling hurts (ADR-053): nothing up to a safe drop, then more with every metre, lethal around the second height.
+    // Falling hurts (ADR-053, curve ADR-491): nothing up to a safe drop, a hard landing past it, then more with every
+    // metre, lethal at the second height (a 2-3 storey drop takes a chunk of health, it does not kill).
     [Serializable]
     public class FallRules
     {
@@ -221,8 +222,9 @@ namespace Game.Core
         public static FallRules Current = new FallRules();
 
         public float SafeMeters = 3f;
-        public float LethalMeters = 12f;
+        public float LethalMeters = 15f;
         public float LethalDamage = 100f;
+        public float LandingDamage = 4f;           // just past the safe height
         // Movement belongs to the owner (ADR-029), so the owner reports its falls. The server believes a report
         // only up to the drop it watched itself plus this much, and waits this long for its own view to catch up.
         public float ReportToleranceMeters = 1f;
@@ -271,13 +273,13 @@ namespace Game.Core
 
     public static class Locomotion
     {
-        // Damage for dropping `meters`: none up to the safe height, then rising evenly, lethal at the lethal height
-        // (and more beyond it).
+        // Damage for dropping `meters`: none up to the safe height, then from the landing damage rising evenly, lethal at
+        // the lethal height (and more beyond it).
         public static float FallDamage(float meters, FallRules rules)
         {
             if (!(meters > rules.SafeMeters)) return 0f; // also false for NaN
             if (rules.LethalMeters <= rules.SafeMeters) return rules.LethalDamage;
-            return (meters - rules.SafeMeters) / (rules.LethalMeters - rules.SafeMeters) * rules.LethalDamage;
+            return rules.LandingDamage + (meters - rules.SafeMeters) / (rules.LethalMeters - rules.SafeMeters) * (rules.LethalDamage - rules.LandingDamage);
         }
 
         // The drop the server accepts from an owner's report: never more than what it watched plus the tolerance.
