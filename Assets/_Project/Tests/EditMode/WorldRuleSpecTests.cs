@@ -27,7 +27,7 @@ namespace Game.Tests
             Assert.AreEqual(900, b.MaxRocks);
             Assert.AreEqual(80, b.MaxSingleLodRocks);
             Assert.AreEqual(700f, b.FarClip);
-            Assert.AreEqual(90f, b.FogStart);
+            Assert.AreEqual(140f, b.FogStart);
             Assert.AreEqual(640f, b.FogEnd);
         }
 

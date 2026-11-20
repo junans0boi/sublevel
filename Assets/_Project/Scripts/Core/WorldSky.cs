@@ -26,6 +26,13 @@ namespace Game.Core
         public const float HoursPerRealMinute = 0.3f; // a 20-minute match spans 6 hours
         public const float DayHour = 12f, DuskHour = 18.3f, NightHour = 23.5f;
 
+        // ADR-543 clear day (9:00..16:00 keys): a near-white sun a little stronger than ADR-193's 1.5, and a touch more sky
+        // light so faces in shadow still read. Inside a building the sky cubemap fades to IndoorReflectionShare.
+        public const float ClearDaySun = 1.6f, ClearDayAmbient = 1.1f, IndoorReflectionShare = 0.3f;
+
+        // Multiplier on the sky reflection for how far the camera is inside a building (InteriorLights' grade weight, 0..1).
+        public static float IndoorReflection(float insideWeight) => 1f - (1f - IndoorReflectionShare) * Math.Max(0f, Math.Min(1f, insideWeight));
+
         // Hour keys (0..24 wrapping) and the look at each: elevation, sun, sun colour, ambient, fill colour/intensity, sky, fog.
         struct Key { public float Hour, Elev, Sun, Sr, Sg, Sb, Amb, Fr, Fg, Fb, Fill, Exp, Tr, Tg, Tb, Gr, Gg, Gb; }
 
@@ -34,8 +41,8 @@ namespace Game.Core
             new Key { Hour = 0f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
             new Key { Hour = 5f,    Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
             new Key { Hour = 6.5f,  Elev = 5f,  Sun = 0.80f, Sr = 1f,    Sg = 0.62f, Sb = 0.36f, Amb = 0.55f, Fr = 0.7f,  Fg = 0.75f, Fb = 1f,   Fill = 0.25f, Exp = 0.65f, Tr = 1f,    Tg = 0.75f, Tb = 0.6f,  Gr = 0.85f, Gg = 0.62f, Gb = 0.5f },
-            new Key { Hour = 9f,    Elev = 45f, Sun = 1.50f, Sr = 1f,    Sg = 0.95f, Sb = 0.88f, Amb = 1f,    Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
-            new Key { Hour = 16f,   Elev = 40f, Sun = 1.50f, Sr = 1f,    Sg = 0.95f, Sb = 0.88f, Amb = 1f,    Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
+            new Key { Hour = 9f,    Elev = 45f, Sun = ClearDaySun, Sr = 1f, Sg = 0.96f, Sb = 0.91f, Amb = ClearDayAmbient,  Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
+            new Key { Hour = 16f,   Elev = 40f, Sun = ClearDaySun, Sr = 1f, Sg = 0.96f, Sb = 0.91f, Amb = ClearDayAmbient,  Fr = 0.75f, Fg = 0.85f, Fb = 1f,   Fill = 0.30f, Exp = 1f,    Tr = 1f,    Tg = 1f,    Tb = 1f,    Gr = 1f,    Gg = 1f,    Gb = 1f },
             new Key { Hour = 18.3f, Elev = 4f,  Sun = 0.95f, Sr = 1f,    Sg = 0.50f, Sb = 0.24f, Amb = 0.55f, Fr = 0.7f,  Fg = 0.7f,  Fb = 1f,   Fill = 0.25f, Exp = 0.60f, Tr = 1f,    Tg = 0.65f, Tb = 0.5f,  Gr = 0.9f,  Gg = 0.55f, Gb = 0.42f },
             new Key { Hour = 20f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
             new Key { Hour = 24f,   Elev = 40f, Sun = 0.22f, Sr = 0.55f, Sg = 0.65f, Sb = 1f,    Amb = 0.38f, Fr = 0.5f,  Fg = 0.6f,  Fb = 1f,   Fill = 0.5f, Exp = 0.17f, Tr = 0.55f, Tg = 0.65f, Tb = 1f,    Gr = 0.07f, Gg = 0.09f, Gb = 0.18f },
