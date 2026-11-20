@@ -43,6 +43,7 @@ namespace Game.Tests
                     Assert.IsNotNull(gun, $"{path}: Weapon{id}");
                     foreach (var f in gun.GetComponentsInChildren<MeshFilter>(true))
                     {
+                        if (f.name == "Magazine") continue; // empty submeshes, no Mesh LOD (MagazineKit.AddLods)
                         var m = f.sharedMesh;
                         if (m == null || Enumerable.Range(0, m.subMeshCount).Sum(s => (long)m.GetIndexCount(s)) / 3 < MinTriangles) continue;
                         checkedMeshes++;

@@ -139,7 +139,7 @@ public static class MagazineKit
             var path = AssetDatabase.GUIDToAssetPath(guid);
             if (!path.Contains("/Split/") || !path.EndsWith(".asset")) continue;
             var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
-            MeshLodUtility.GenerateMeshLods(mesh);
+            AddLods(mesh);
             EditorUtility.SetDirty(mesh);
             AssetDatabase.SaveAssetIfDirty(mesh);
             Debug.Log($"[MagazineKit] {path}: LODs {mesh.lodCount}");
@@ -170,10 +170,19 @@ public static class MagazineKit
         return mesh;
     }
 
+    // Unity Mesh LOD as the gun models themselves (ADR-541). Skips a mesh with an empty submesh: GenerateMeshLods
+    // segfaults on one (every magazine keeps all the body's submeshes, most empty; at most 266 triangles, LOD not needed).
+    static void AddLods(Mesh mesh)
+    {
+        for (int s = 0; s < mesh.subMeshCount; s++)
+            if (mesh.GetIndexCount(s) == 0) return;
+        MeshLodUtility.GenerateMeshLods(mesh);
+    }
+
     // Into the asset at `path`, keeping its GUID when it already exists (the prefabs reference it).
     static Mesh Save(Mesh mesh, string path)
     {
-        MeshLodUtility.GenerateMeshLods(mesh); // as the gun models themselves (ADR-541)
+        AddLods(mesh);
         var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
         if (existing == null) { AssetDatabase.CreateAsset(mesh, path); return mesh; }
         EditorUtility.CopySerialized(mesh, existing);
