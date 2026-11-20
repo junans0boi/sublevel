@@ -141,8 +141,13 @@ namespace Game.Gameplay
                 bool pack = lootKind == LootKind.Backpack;
                 box.localScale = pack ? Vector3.one * GroundPackScale : Vector3.one;
                 box.localRotation = pack ? Quaternion.Euler(-90f, 0f, 0f) * _boxRotation : _boxRotation; // back panel down
-                if (attachment) LootMeshes.AttachmentColors(_colors); else LootMeshes.Colors(lootKind, ammo, tier, _colors);
-                _renderer.sharedMaterials = new[] { Tint(material, _colors[0]), Tint(material, _colors[1]), Tint(material, _colors[2]) };
+                if (!attachment && WornGearMeshes.Handles(lootKind) && WornGearMeshes.Baked(lootKind, tier) != null)
+                    _renderer.sharedMaterials = WornGearMeshes.Materials(lootKind, tier); // the real gear model's own textures
+                else
+                {
+                    if (attachment) LootMeshes.AttachmentColors(_colors); else LootMeshes.Colors(lootKind, ammo, tier, _colors);
+                    _renderer.sharedMaterials = new[] { Tint(material, _colors[0]), Tint(material, _colors[1]), Tint(material, _colors[2]) };
+                }
             }
             else
             {

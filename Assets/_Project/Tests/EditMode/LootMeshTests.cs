@@ -18,7 +18,8 @@ namespace Game.Tests
                 var mesh = LootMeshes.Model(kind, AmmoType.Rifle556, 2);
                 Assert.IsNotNull(mesh, kind.ToString());
                 Assert.AreSame(mesh, LootMeshes.Model(kind, AmmoType.Rifle556, 2), kind + " is built once");
-                Assert.AreEqual(3, mesh.subMeshCount, kind.ToString());
+                // Helmet, vest and backpack are the real gear models with their own materials (ADR-520); the rest Body/Dark/Accent.
+                Assert.AreEqual(WornGearMeshes.Handles(kind) ? WornGearMeshes.Model(kind, 2).subMeshCount : 3, mesh.subMeshCount, kind.ToString());
                 var b = mesh.bounds;
                 Assert.That(b.min.y, Is.InRange(-0.005f, 0.01f), kind + " rests on y = 0");
                 float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));

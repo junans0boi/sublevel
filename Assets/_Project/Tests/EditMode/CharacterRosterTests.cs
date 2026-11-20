@@ -120,7 +120,7 @@ namespace Game.Tests
             Assert.IsEmpty(bad, "realistic adults are 0.125-0.145; allowed 0.11-0.16: " + string.Join("; ", bad));
         }
 
-        // Worn gear: ArmorVisual/BackpackVisual mount the procedural helmet, vest and backpack on the Humanoid head/chest bones
+        // Worn gear: ArmorVisual/BackpackVisual put the helmet, vest and backpack on the Humanoid head/chest bones
         // of every roster model, sized by head height and shoulder width (WornGearMeshes.TryFit).
         [Test]
         public void WornGear_MountsOnRosterBones_AtHeadChestBack_AllTiers()
@@ -135,19 +135,31 @@ namespace Game.Tests
                         var s = go.GetComponent<CharacterDef>().Sockets; float crown = s.HeadSocket.position.y;
                         go.AddComponent<ArmorVisual>().ShowTiers(tier, tier);
                         go.AddComponent<BackpackVisual>().Show(tier);
-                        MeshRenderer R(string n) { var r = go.GetComponentsInChildren<MeshRenderer>(true).First(x => x.name == n); Assert.IsTrue(r.enabled, $"{id} {n} t{tier} enabled"); return r; }
-                        var h = R("Helmet"); var v = R("Vest"); var p = R("Backpack");
-                        float hs = h.transform.lossyScale.y, vs = v.transform.lossyScale.y;
+                        Renderer R(string n) { var r = go.GetComponentsInChildren<Renderer>(true).First(x => x.name == n); Assert.IsTrue(r.enabled, $"{id} {n} t{tier} enabled"); return r; }
+                        var h = R("Helmet"); var vr = R("Vest"); var pr = R("Backpack");
+                        var body = GearBody.Load(id);
+                        float hs = h.transform.lossyScale.y;
                         float brim = h.transform.position.y;
-                        sb.AppendLine($"{id} t{tier}: helmet brim {brim:F2} (crown {crown:F2}) top {h.bounds.max.y:F2} scale {hs:F2}; vest y {v.bounds.min.y:F2}..{v.bounds.max.y:F2} scale {vs:F2} w {v.bounds.size.x:F2}; pack y {p.bounds.min.y:F2}..{p.bounds.max.y:F2} z {p.bounds.max.z:F2} (chest z {s.UpperChest.position.z:F2})");
+                        var v = Posed(vr); var p = Posed(pr);
+                        sb.AppendLine($"{id} t{tier}: helmet brim {brim:F2} (crown {crown:F2}) top {h.bounds.max.y:F2} scale {hs:F2}; vest y {v.min.y:F2}..{v.max.y:F2} w {v.size.x:F2} d {v.size.z:F2}; pack y {p.min.y:F2}..{p.max.y:F2} z {p.min.z:F2}..{p.max.z:F2} (chest z {s.UpperChest.position.z:F2})");
                         if (!h.transform.IsChildOf(s.Head)) bad.Add($"{id} t{tier} helmet not on head bone");
-                        if (!v.transform.IsChildOf(s.UpperChest) || !p.transform.IsChildOf(s.UpperChest)) bad.Add($"{id} t{tier} vest/pack not on chest bone");
                         if (brim < crown - 0.12f || brim > crown - 0.04f) bad.Add($"{id} t{tier} brim {brim:F2} vs crown {crown:F2}");
                         if (h.bounds.max.y > crown + 0.08f) bad.Add($"{id} t{tier} helmet top {h.bounds.max.y:F2} too high");
-                        if (v.bounds.center.y < s.UpperChest.position.y - 0.08f || v.bounds.center.y > s.UpperChest.position.y + 0.08f) bad.Add($"{id} t{tier} vest not centred on chest");
-                        if (p.bounds.max.z > s.UpperChest.position.z - 0.05f) bad.Add($"{id} t{tier} pack not behind the chest");
-                        if (p.bounds.max.y > s.Neck.position.y + 0.16f) bad.Add($"{id} t{tier} pack above the neck");
-                        if (hs < 0.88f || hs > 1.18f || vs < 0.83f || vs > 1.22f) bad.Add($"{id} t{tier} scale {hs:F2}/{vs:F2}");
+                        if (hs < 0.88f || hs > 1.18f) bad.Add($"{id} t{tier} helmet scale {hs:F2}");
+                        // ADR-520: the vest and pack are fitted onto the measured body; the vest is skinned to its torso bones, the pack rides the chest bone.
+                        if (body == null) { bad.Add($"{id} has no measured body (GearKit.MeasureBodies)"); continue; }
+                        if (!(vr is SkinnedMeshRenderer smr) || smr.rootBone != s.UpperChest || smr.sharedMesh.bindposes.Length != GearBody.Bones.Length)
+                            bad.Add($"{id} t{tier} vest not skinned to the torso bones");
+                        if (!pr.transform.IsChildOf(s.UpperChest)) bad.Add($"{id} t{tier} pack not on the chest bone");
+                        float chestY = s.UpperChest.position.y, top = chestY + body.ShoulderTop, waist = chestY + body.Waist;
+                        // The vest covers the torso: from the waist up to the shoulder top, about as wide as the torso.
+                        if (Mathf.Abs(v.max.y - top) > 0.06f || v.min.y > waist + 0.05f) bad.Add($"{id} t{tier} vest {v.min.y:F2}..{v.max.y:F2} vs waist {waist:F2} shoulder {top:F2}");
+                        float widest = 0f; // the torso's widest row (shoulders or lats), side to side; tier 3 adds side pouches (up to 8 cm a side)
+                        for (int row = 0; row < body.Ny; row++) widest = Mathf.Max(widest, body.Radius[row * body.Na + body.Na / 4] + body.Radius[row * body.Na + 3 * body.Na / 4]);
+                        if (v.size.x > widest + 0.16f || v.size.x < body.Width * 0.7f) bad.Add($"{id} t{tier} vest width {v.size.x:F2} vs torso {body.Width:F2}..{widest:F2}");
+                        // The pack sits on the back: its body behind the chest, its top near the shoulders.
+                        if (p.center.z > s.UpperChest.position.z - 0.05f) bad.Add($"{id} t{tier} pack not behind the chest");
+                        if (p.max.y > top + 0.12f || p.max.y < top - 0.12f) bad.Add($"{id} t{tier} pack top {p.max.y:F2} vs shoulder {top:F2}");
                     }
                     finally { Object.DestroyImmediate(go); }
                 }
@@ -219,6 +231,20 @@ namespace Game.Tests
         {
             var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", args) { RedirectStandardOutput = true, UseShellExecute = false });
             var o = p.StandardOutput.ReadToEnd(); p.WaitForExit(); return o;
+        }
+
+        // World bounds of what a renderer draws now (a skinned one baked in its current pose).
+        static Bounds Posed(Renderer r)
+        {
+            if (!(r is SkinnedMeshRenderer smr)) return r.bounds;
+            var m = new Mesh();
+            smr.BakeMesh(m, true);
+            var t = Matrix4x4.TRS(smr.transform.position, smr.transform.rotation, Vector3.one);
+            var v = m.vertices;
+            var b = new Bounds(t.MultiplyPoint3x4(v[0]), Vector3.zero);
+            foreach (var x in v) b.Encapsulate(t.MultiplyPoint3x4(x));
+            Object.DestroyImmediate(m);
+            return b;
         }
 
         static void Append(StringBuilder sb)
