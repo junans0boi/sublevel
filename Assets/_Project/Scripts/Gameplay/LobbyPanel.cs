@@ -476,7 +476,7 @@ namespace Game.Gameplay
         {
             bool solo = Party.Mode == TeamMode.Solo;
             bool member = !Party.IsLeader(Self);
-            bool search = Party.Matching;
+            bool search = Party.Matching || (_queue != null && _queue.Waiting); // a party member sees the ticket its leader started (#389)
             int n = Party.Count;
             // Mode switch.
             _knob.anchoredPosition = new Vector2(_knob.anchoredPosition.x, -(851f + (solo ? 12.1f : 71.1f)));

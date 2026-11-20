@@ -202,6 +202,7 @@ namespace Game.Net
         // Leaves the room: stops both sides and removes the lobby's NetworkManager (it must be gone before the match's own is created).
         public void Shutdown()
         {
+            _refused.Clear();
             if (_nm != null)
             {
                 _nm.ClientManager.OnClientConnectionState -= OnClientState;
@@ -314,6 +315,7 @@ namespace Game.Net
                 _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
             }
             TickQueue();
+            DropRefused();
             if (Phase == PhaseKind.Connecting && Time.unscaledTime > _connectDeadline) Fail(LobbyRules.Unreachable);
             if (_hostLeaveAt >= 0f && Time.unscaledTime >= _hostLeaveAt)
             {
@@ -463,27 +465,47 @@ namespace Game.Net
 
         // ---- Host (server) side ----
 
+        // The refused client stops itself when the reason arrives (OnReject). Disconnecting right away raced the reason out
+        // (FishNet waits only ~2 ticks), so the player saw "no answer" instead of why (#389); laggards are dropped after RefuseGraceSeconds.
+        const float RefuseGraceSeconds = 2f;
+        readonly System.Collections.Generic.List<(NetworkConnection conn, float at)> _refused = new System.Collections.Generic.List<(NetworkConnection, float)>();
+
+        void Refuse(NetworkConnection conn, JoinResult reason)
+        {
+            Debug.Log("[Lobby] refused client " + conn.ClientId + ": " + reason);
+            _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)reason }, false);
+            _refused.Add((conn, Time.unscaledTime + RefuseGraceSeconds));
+        }
+
+        void DropRefused()
+        {
+            for (int i = _refused.Count - 1; i >= 0; i--)
+            {
+                if (Time.unscaledTime < _refused[i].at) continue;
+                var c = _refused[i].conn;
+                _refused.RemoveAt(i);
+                if (c != null && c.IsActive) c.Disconnect(false);
+            }
+        }
+
         void OnHello(NetworkConnection conn, LobbyHello hello, Channel channel)
         {
             if (_truth.Contains(conn.ClientId)) return;
             var result = LobbyRules.CheckJoin(Version, hello.Version, _truth.Count, MaxPlayers, _matchStarted);
             if (result != JoinResult.Ok)
             {
-                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)result }, false);
-                conn.Disconnect(false);
+                Refuse(conn, result);
                 return;
             }
             var login = LobbyRules.CheckLogin(ServerTokenSecret, hello.Token, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out var claims);
             if (login != JoinResult.Ok)
             {
-                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)login }, false);
-                conn.Disconnect(false);
+                Refuse(conn, login);
                 return;
             }
             if (!string.IsNullOrEmpty(ServerTokenSecret) && AssignedCheck != null && !AssignedCheck(claims.AccountId))
             {
-                _nm.ServerManager.Broadcast(conn, new LobbyReject { Reason = (byte)JoinResult.NotAssigned }, false);
-                conn.Disconnect(false);
+                Refuse(conn, JoinResult.NotAssigned);
                 return;
             }
             string name = hello.Name;
