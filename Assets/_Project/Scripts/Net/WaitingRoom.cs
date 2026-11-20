@@ -303,7 +303,7 @@ namespace Game.Net
                 else
                 {
                     // The server's own copy follows the same curve; the owner's body is driven by its client (BungeeRide).
-                    var at = _pad + Vector3.up * (BungeeCurve.Height(_line.ElapsedOf(now)) + 0.1f);
+                    var at = _pad + Vector3.up * (BungeeCurve.Height(_line.ElapsedOf(now), _line.LowerAt) + 0.1f);
                     if (_jumper.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(at);
                     if (_line.Tick(now)) { Debug.Log($"[WaitingRoom] bungee over, room best {_line.Best:0.0} m"); RecordJump(_jumper); Release(_jumper); _jumper = null; }
                 }
@@ -327,6 +327,13 @@ namespace Game.Net
             _onBoardSince = -1f;
             if (standing.TryGetComponent<CombatantStance>(out var stance)) stance.ServerBungeeStart(_pad);
             Debug.Log($"[WaitingRoom] bungee: {standing.name} jumps");
+        }
+
+        // The jumper pressed F while hanging (ADR-498, CombatantStance.CmdBungeeLower): the cord lowers them to the pad now.
+        public void ServerBungeeLower(Combatant c)
+        {
+            if (c == null || c != _jumper) return;
+            if (_line.RequestLower(c.ObjectId, Time.unscaledTimeAsDouble)) Debug.Log($"[WaitingRoom] bungee: {c.name} asked to come down at {_line.LowerAt:0.0} s");
         }
 
         // Someone who left the top floor any way but the jump (or slipped off the bridge) is put back on the deck at once, unhurt.
