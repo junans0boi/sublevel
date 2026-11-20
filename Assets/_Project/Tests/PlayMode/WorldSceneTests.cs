@@ -46,11 +46,23 @@ namespace Game.Tests
             return hit.position;
         }
 
+        // CalculatePath gives up on routes of several hundred metres and returns PathPartial even when they are joined
+        // (ADR-544: 31 of 96 such routes on the old radius/3 bake, 17 on radius/2). So a partial path is carried on from where
+        // it stopped; only a leg that gets no closer means the two points are really cut apart.
         static void AssertWalkable(Vector3 from, Vector3 to, string what)
         {
+            var at = OnNavMesh(from, what + " (start)");
+            var end = OnNavMesh(to, what + " (end)");
             var path = new NavMeshPath();
-            Assert.IsTrue(NavMesh.CalculatePath(OnNavMesh(from, what + " (start)"), OnNavMesh(to, what + " (end)"), NavMesh.AllAreas, path), "no path: " + what);
-            Assert.AreEqual(NavMeshPathStatus.PathComplete, path.status, "path is cut off: " + what);
+            for (int leg = 0; leg < 12; leg++)
+            {
+                Assert.IsTrue(NavMesh.CalculatePath(at, end, NavMesh.AllAreas, path), "no path: " + what);
+                if (path.status == NavMeshPathStatus.PathComplete) return;
+                var stop = path.corners[path.corners.Length - 1];
+                Assert.Greater(Vector3.Distance(at, end) - Vector3.Distance(stop, end), 1f, $"path is cut off at {stop}: " + what);
+                at = stop;
+            }
+            Assert.Fail($"path still partial after 12 legs, at {at}: " + what);
         }
 
         // #191, ADR-147: hundreds of lamps in the map, but only the few nearest the camera are lit.
@@ -124,11 +136,11 @@ namespace Game.Tests
         }
 
         [UnityTest]
-        public IEnumerator World_ListsFourRegionsAndTheirElevators()
+        public IEnumerator World_ListsSixRegionsAndTheirElevators()
         {
             var world = WorldInfo.Current;
             Assert.IsNotNull(world, "World scene should contain a WorldInfo");
-            Assert.AreEqual(4, world.Regions.Count, "regions");
+            Assert.AreEqual(6, world.Regions.Count, "regions"); // the C2 island (IslandSpec) has six regions
             Assert.GreaterOrEqual(world.Elevators.Count, 13, "elevators");
             Assert.Greater(world.Size, 0f);
             foreach (var region in world.Regions)
@@ -198,7 +210,7 @@ namespace Game.Tests
         public IEnumerator World_RendersWithinBudget()
         {
             var world = WorldInfo.Current;
-            Assert.AreEqual(4, world.Regions.Count, "one viewpoint per region");
+            Assert.AreEqual(6, world.Regions.Count, "one viewpoint per region");
 
             // Eye level beside an elevator of each region, looking across the region's centre compound.
             var cam = new GameObject("ProbeCamera").AddComponent<Camera>();
