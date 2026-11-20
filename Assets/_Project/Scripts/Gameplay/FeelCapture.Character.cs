@@ -297,11 +297,41 @@ namespace Game.Gameplay
             yield return new WaitForSeconds(0.3f);
 
             bool fpOnly = Environment.GetEnvironmentVariable("CHAR_FP_ONLY") == "1";
+            if (Environment.GetEnvironmentVariable("CHAR_ADS_ONLY") == "1")
+            {
+                yield return AdsAudit(me, pc, home, run);
+                PoseShotsDone = true;
+                yield break;
+            }
             if (!fpOnly) yield return AllThirdPerson(me, pc, home, run, room, user);
             if (Want("K")) yield return FirstPersonOnly(me, pc, home, run, room);
             _watch = Watch.Game;
             PoseShotsDone = true;
             Debug.Log("[FeelCapture] char shots done: " + _folder);
+        }
+
+        // #226: third-person ADS per class, standing and crouched, with a helmet on (CHAR_ADS_ONLY=1).
+        IEnumerator AdsAudit(Combatant me, PlayerController pc, Vector3 home, Vector3 run)
+        {
+            me.ServerGive(new LootEntry { Kind = LootKind.Helmet, Tier = 2 });
+            me.ServerGive(new LootEntry { Kind = LootKind.Vest, Tier = 2 });
+            foreach (var (id, tag) in new[] { (3, "rifle"), (2, "smg"), (4, "shotgun"), (5, "sniper"), (1, "pistol") })
+            {
+                yield return Equip(me, id);
+                foreach (bool crouch in new[] { false, true })
+                {
+                    _frame.Crouch = crouch; // a press toggles; FeelCapture clears it next frame
+                    _frame.AimHeld = true;
+                    pc.Teleport(home); pc.LookAt(home + run * 10f + Vector3.up * 1.6f);
+                    yield return new WaitForSeconds(1.0f);
+                    yield return Views($"T_ads_{tag}_{(crouch ? "crouch" : "stand")}", false, Watch.Side, Watch.Front, Watch.Quarter);
+                    _frame.AimHeld = false;
+                    _frame.Crouch = crouch;
+                    yield return new WaitForSeconds(0.5f);
+                }
+                _frame.AimHeld = false;
+                yield return Views($"T_idle_{tag}", false, Watch.Side);
+            }
         }
 
         // K. first person for good (no view toggling): ADS per weapon, run, reload, swap, heal, throw.

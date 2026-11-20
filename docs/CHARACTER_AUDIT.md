@@ -1,7 +1,7 @@
 # CHARACTER_AUDIT — 캐릭터 중심 배그 대비 감사 (2026-11-15)
 
 방법: 새 Explicit 캡처 `Game.Tests.CharacterCaptureTests`(`FeelCapture.Character.cs`, TestBox) 427장 + 기존 Ledge/Swim/Emote/Vehicle 캡처를 모두 직접 보고 판정. 구현은 하지 않음.
-재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (`CHAR_FP_ONLY=1`이면 1인칭 K 구간만). PNG는 저장소 제외(Logs/): `Logs/charshots_v2/`(A~J: 대기/이동/자세/ADS/장전/교체/투척/치료/점프/피격/사망, 측면·사선·정면·1인칭), `Logs/charshots/`(K: 1인칭 전용, 어깨 겨눔 vs 조준경 탭), `Logs/char_other/{ledge,swim,emote,veh}/`.
+재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (`CHAR_FP_ONLY=1`이면 1인칭 K 구간만, `CHAR_ADS_ONLY=1`이면 헬멧·조끼 착용 3인칭 ADS 총종별 서기/웅크림 측면·정면·사선만). PNG는 저장소 제외(Logs/): `Logs/charshots_v2/`(A~J: 대기/이동/자세/ADS/장전/교체/투척/치료/점프/피격/사망, 측면·사선·정면·1인칭), `Logs/charshots/`(K: 1인칭 전용, 어깨 겨눔 vs 조준경 탭), `Logs/char_other/{ledge,swim,emote,veh}/`.
 주의: A~J의 `_fpp`는 보기 전환 직후 촬영이라 총 위치가 K 구간보다 믿을 수 없음(1인칭 판정은 K 기준). 조준키 길게 누름=어깨 겨눔, 탭=조준경(ADS) — K의 `shoulder_*` vs `ads_*`.
 
 ## 구조 사실 (코드)
@@ -27,7 +27,7 @@
 | 점프/착지 | 서서·달리며 같은 tuck 포즈, 총 정적 (I_jump_*) | 달리기 점프 별도, 착지 흡수 | B (#228) |
 | 난간 오르기 | 몸이 벽에 박힘, 앉은 자세로 튐 (ledge_*) | 부드러운 클라임 | B (#233) |
 | 수영 | 팔다리 정지 슈퍼맨 (swim_*) | 젓기/발차기 | C (#236) |
-| ADS 3인칭 | 총이 얼굴 앞, 스톡 어깨 미접촉, 권총 한 팔 (D_ads_*) | 개머리판 어깨 | B (#226) |
+| ADS 3인칭 | 2026-11-20 재촬영(`CHAR_ADS_ONLY=1`, T_ads_*): 소총·샷건·저격 개머리판이 어깨 위·오른뺨, 헬멧 겹침 없음, 권총 두 손. 소총(불펍 0.75 m+손잡이)과 SMG(짧은 몸통+큰 탄창) 실루엣 구분됨. SMG는 개머리판 없는 모델이라 뺨에 붙여 듦 | 개머리판 어깨 | 해소 (#226) |
 | ADS 1인칭 | 가늠쇠/가늠자 중앙 정렬은 됨(소총·샷건), SMG/권총은 블록 윗면, hip 각도 제각각 (K_fp_ads_*, K_fp_hip_*) | 조준기 선명 | B (#229) |
 | 허리 사격 | 총구 화염만 큼직한 흰 별, 몸 반응 없음 (D_hipfire_*) | 반동 애니메이션 | B (#217) |
 | 기울이기 Q/E | 몸통 롤, 발 들림 (D_lean_*) | 골반 기울임 | B (#232) |
