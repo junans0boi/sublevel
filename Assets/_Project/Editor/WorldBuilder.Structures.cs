@@ -21,7 +21,9 @@ public static partial class WorldBuilder
     // Buildings: a skirt under the footprint hides gaps where the pad is not perfectly level.
     const float FoundationDepth = 1.2f;
     // LODGroup screen heights: inside walls, stairs and props are dropped first, the shell much later.
-    const float InteriorLodHeight = 0.25f, ShellLodHeight = 0.02f;
+    // #452 (ADR-547): 0.25 kept the insides of every building in ~70 m (the group's size is its widest side, not its
+    // height) drawing down a street, ~600 draws; 0.5 keeps them to ~35 m for a 20 m building.
+    const float InteriorLodHeight = 0.5f, ShellLodHeight = 0.02f;
 
     // Rocks: ScatterPoint.Scale 1 is a rock this wide; the models are scaled to it whatever their own size.
     const float RockWidth = 2.4f, RockSink = 0.22f;
