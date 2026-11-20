@@ -112,6 +112,7 @@ namespace Game.Net
 
         NetworkManager _network;
         bool _bound;
+        public static int ServerBroadcasts; // GlassShattered sent to everyone (ServerPerfProbe, #331 gate)
         readonly HashSet<int> _broken = new HashSet<int>();
 
         // Server: panes broken so far (tests).
@@ -155,6 +156,7 @@ namespace Game.Net
                 return;
             }
             self._broken.Add(pane.Id);
+            ServerBroadcasts++;
             self._network.ServerManager.Broadcast(new GlassShattered { Id = pane.Id });
         }
 

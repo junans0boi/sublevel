@@ -12,6 +12,7 @@ namespace Game.Net
     // plan order, so every peer builds the same list from the same seed. Scenes without the generated map get none.
     public class DoorSystem : MonoBehaviour
     {
+        public static int ServerBroadcasts; // DoorChanged + DoorDamaged sent to everyone (ServerPerfProbe, #331 gate)
         public static DoorSystem Instance { get; private set; }
 
         NetworkManager _network;
@@ -211,7 +212,7 @@ namespace Game.Net
             var door = _doors[index];
             if (door.State == state) return;
             door.Set(state);
-            if (ServerActive) _network.ServerManager.Broadcast(new DoorChanged { Index = index, At = At(index), State = (byte)state });
+            if (ServerActive) { ServerBroadcasts++; _network.ServerManager.Broadcast(new DoorChanged { Index = index, At = At(index), State = (byte)state }); }
         }
 
         // Server: the door takes `amount` damage (ADR-147); true when that broke it. Every client is told.
@@ -231,7 +232,7 @@ namespace Game.Net
                 return true;
             }
             door.SetHp(hp);
-            if (self.ServerActive) self._network.ServerManager.Broadcast(new DoorDamaged { Index = index, At = self.At(index), Hp = (ushort)Mathf.CeilToInt(hp) });
+            if (self.ServerActive) { ServerBroadcasts++; self._network.ServerManager.Broadcast(new DoorDamaged { Index = index, At = self.At(index), Hp = (ushort)Mathf.CeilToInt(hp) }); }
             return false;
         }
 

@@ -66,4 +66,4 @@ Build/server/SublevelServer.app/Contents/MacOS/Sublevel \
 ## 아직 확인하지 않은 것
 
 - Windows 서버 빌드와 실행, 다른 기기에서의 접속(방화벽·NAT), 두 사람 이상.
-- 서버 CPU·메모리 예산(`docs/PERF_BUDGET.md`에 서버 항목 없음), 장시간 운영.
+- 서버 메모리(RSS)·80인 대역폭 실측(`docs/PERF_BUDGET.md` 서버 예산 절, ADR-545: CPU 항목은 채움), 장시간 운영.
