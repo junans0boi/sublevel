@@ -16,8 +16,18 @@ namespace Game.Gameplay
 
         Transform _ring, _dot;
         MeshRenderer _renderer, _dotRenderer;
-        MaterialPropertyBlock _block;
         Color _tint = Color.white;
+        // #452 (ADR-547): one shared material per sprite and colour (5 tints x current or not) instead of a property block,
+        // which took every ring and glint out of the SRP Batcher (~7 SetPass with 16 pickups in view).
+        static readonly System.Collections.Generic.Dictionary<(FxKit.Sprite, Color), Material> Tinted = new System.Collections.Generic.Dictionary<(FxKit.Sprite, Color), Material>();
+
+        static Material TintedMaterial(FxKit.Sprite sprite, Color c)
+        {
+            if (Tinted.TryGetValue((sprite, c), out var m)) return m;
+            m = new Material(FxKit.Material(sprite, false));
+            m.SetColor(BaseColorId, c);
+            return Tinted[(sprite, c)] = m;
+        }
 
         // Flat 1 m square, facing up.
         static Mesh Quad()
@@ -80,7 +90,6 @@ namespace Game.Gameplay
                 _dotRenderer.sharedMaterial = FxKit.Material(FxKit.Sprite.Dot, false);
                 _dotRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 _dotRenderer.receiveShadows = false;
-                _block = new MaterialPropertyBlock();
             }
             _tint = TintOf(kind);
             _ring.position = floorPoint + Vector3.up * 0.015f;
@@ -110,15 +119,15 @@ namespace Game.Gameplay
             _ring.localScale = Vector3.one * (size * (current ? CurrentScale + 0.12f * pulse : 1f));
             var c = _tint;
             c.a = current ? 1f : 0.9f;
-            _block.SetColor(BaseColorId, c);
-            _renderer.SetPropertyBlock(_block);
+            var ring = TintedMaterial(FxKit.Sprite.Ring, c);
+            if (_renderer.sharedMaterial != ring) _renderer.sharedMaterial = ring;
             // The glint: 0.2 m near, growing with distance so it keeps about the same size on screen from 5 m on.
             var toViewer = viewer - _dot.position;
             if (toViewer.sqrMagnitude > 1e-4f) _dot.rotation = Quaternion.LookRotation(-toViewer);
             _dot.localScale = Vector3.one * Mathf.Max(0.2f, 0.05f * distance) * (current ? 1.3f : 1f);
             c.a = current ? 1f : 0.85f;
-            _block.SetColor(BaseColorId, c);
-            _dotRenderer.SetPropertyBlock(_block);
+            var dot = TintedMaterial(FxKit.Sprite.Dot, c);
+            if (_dotRenderer.sharedMaterial != dot) _dotRenderer.sharedMaterial = dot;
         }
     }
 }

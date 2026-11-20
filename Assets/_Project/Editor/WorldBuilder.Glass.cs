@@ -13,8 +13,8 @@ public static partial class WorldBuilder
 {
     const int GlassPercent = 45;           // share of windows glazed
     const float GlassThickness = 0.03f;
-    const float GlassInset = 0.02f;
-    const float GlassLodHeight = 0.15f;        // smaller than the hole on every side so it never touches the wall
+    const float GlassInset = 0.02f;        // smaller than the hole on every side so it never touches the wall
+    const float GlassLodHeight = 0.3f;
 
     static int _nextGlassId;
 
@@ -50,7 +50,7 @@ public static partial class WorldBuilder
             Set(component, "_id", p => p.intValue = id);
         }
         // #452 (ADR-547): a pane per window was ~120 draws and 15 SetPass down a street (transparent, so never batched
-        // past other see-through things). Far panes go: past ~60 m for a house, ~115 m for a 20 m block.
+        // past other see-through things, ~11 SetPass). Far panes go: past ~30 m for a house, ~58 m for a 20 m block.
         if (panes.Count > 0) windows.gameObject.AddComponent<LODGroup>().SetLODs(new[] { new LOD(GlassLodHeight, panes.ToArray()) });
     }
 

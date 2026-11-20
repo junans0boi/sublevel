@@ -25,22 +25,35 @@ namespace Game.Net
 
         void OnPaintChanged(int prev, int next, bool asServer) => ApplyPaint(next);
 
+        // #452 (ADR-547): one shared material per (paint material, colour) instead of a property block — a block takes
+        // the renderer out of the SRP Batcher, ~2 SetPass per parked car in a town view.
+        static readonly System.Collections.Generic.Dictionary<(Material, int), Material> Painted = new System.Collections.Generic.Dictionary<(Material, int), Material>();
+        static readonly System.Collections.Generic.Dictionary<Material, Material> Unpainted = new System.Collections.Generic.Dictionary<Material, Material>();
+
         void ApplyPaint(int index)
         {
             if (!VehicleColors.Valid(index)) return;
             VehicleColors.Tint(index, out float r, out float g, out float b);
-            var block = new MaterialPropertyBlock();
             foreach (var renderer in GetComponentsInChildren<Renderer>(true))
             {
                 var mats = renderer.sharedMaterials;
+                bool changed = false;
                 for (int i = 0; i < mats.Length; i++)
                 {
                     if (mats[i] == null || !mats[i].name.EndsWith("_Paint")) continue;
-                    var baseColor = mats[i].HasProperty(BaseColor) ? mats[i].GetColor(BaseColor) : Color.white;
-                    renderer.GetPropertyBlock(block, i);
-                    block.SetColor(BaseColor, new Color(baseColor.r * r, baseColor.g * g, baseColor.b * b, baseColor.a));
-                    renderer.SetPropertyBlock(block, i);
+                    var source = Unpainted.TryGetValue(mats[i], out var original) ? original : mats[i];   // a repaint tints the model's own material again
+                    if (!Painted.TryGetValue((source, index), out var painted))
+                    {
+                        painted = new Material(source) { name = source.name };
+                        var baseColor = source.HasProperty(BaseColor) ? source.GetColor(BaseColor) : Color.white;
+                        painted.SetColor(BaseColor, new Color(baseColor.r * r, baseColor.g * g, baseColor.b * b, baseColor.a));
+                        Painted[(source, index)] = painted;
+                        Unpainted[painted] = source;
+                    }
+                    mats[i] = painted;
+                    changed = true;
                 }
+                if (changed) renderer.sharedMaterials = mats;
             }
         }
     }
