@@ -30,7 +30,7 @@ namespace Game.Net
     // The waiting phase of a dedicated server's match (ADR-382, #415): people spawn on the island (World scene), the countdown
     // (ADR-380) runs, and when it ends everyone is moved into the elevator the deployment gave them and the doors are scheduled as
     // before. Off when the scene has no island (an older World build) or the data switches it off. Server only.
-    public sealed class WaitingRoom : MonoBehaviour
+    public sealed partial class WaitingRoom : MonoBehaviour
     {
         // While set, MoveGuard keeps people inside the island and the match flow does not open the doors yet.
         public static WaitingRoom Current { get; private set; }
@@ -53,6 +53,7 @@ namespace Game.Net
         {
             public Combatant Body; public Vector3 HomePosition; public Quaternion HomeRotation;
             public bool OnIsland; public Vector3 Target; public float PickAt; public bool ToButton;
+            public int Booth = -1; public float ShootUntil, NextShot;   // at the range (WaitingRoom.Range)
         }
         readonly List<WaitingBot> _bots = new List<WaitingBot>();
         const float BotWalkSpeed = 1.3f;
@@ -88,7 +89,7 @@ namespace Game.Net
             {
                 if (!b.OnIsland || b.Body == null) continue;
                 var p = b.Body.transform.position;
-                if (Time.time >= b.PickAt)
+                if (Time.time >= b.PickAt && !PickBooth(b))
                 {
                     // Stroll to a random place of the island (outside the booth and tower pads), then stand a while.
                     float a = Random.value * Mathf.PI * 2f, r = 6f + Random.value * 26f;
@@ -97,9 +98,11 @@ namespace Game.Net
                     b.ToButton = Random.value < BotCallChance;
                     if (b.ToButton) { var at = CallButtonWorld(false, _deckY); tx = at.x; tz = at.z + 1f; }
                     WaitingIsland.Clamp(ref tx, ref tz);
+                    if (WaitingRange.InLane(tx - WaitingIsland.CentreX, tz - WaitingIsland.CentreZ, 1f)) tx = 2f * WaitingIsland.CentreX - tx;   // not down a range lane
                     b.Target = new Vector3(tx, p.y, tz);
                     b.PickAt = Time.time + 4f + Random.value * 8f;
                 }
+                if (ShootAtRange(b)) continue;
                 var d = b.Target - p; d.y = 0f;
                 if (d.sqrMagnitude < 0.04f)
                 {
@@ -156,6 +159,7 @@ namespace Game.Net
         {
             if (combatant == null) return;
             _keys[combatant] = key;
+            ArmRange(combatant);
             var previous = combatant.ServerDamageFilter;
             combatant.ServerDamageFilter = info =>
             {
@@ -301,7 +305,7 @@ namespace Game.Net
                     // The server's own copy follows the same curve; the owner's body is driven by its client (BungeeRide).
                     var at = _pad + Vector3.up * (BungeeCurve.Height(_line.ElapsedOf(now)) + 0.1f);
                     if (_jumper.TryGetComponent<MoveGuard>(out var guard)) guard.ServerRelocate(at);
-                    if (_line.Tick(now)) { Debug.Log($"[WaitingRoom] bungee over, room best {_line.Best:0.0} m"); Release(_jumper); _jumper = null; }
+                    if (_line.Tick(now)) { Debug.Log($"[WaitingRoom] bungee over, room best {_line.Best:0.0} m"); RecordJump(_jumper); Release(_jumper); _jumper = null; }
                 }
             }
             ReturnFallen();
@@ -355,7 +359,7 @@ namespace Game.Net
             }
             double now = Time.unscaledTimeAsDouble;
             bool deploy = _flow.Tick(now);
-            if (!deploy) { DriveBots(_flow.Last); TickBungee(now); }
+            if (!deploy) { DriveBots(_flow.Last); TickBungee(now); TickRange(); SendRecords(false); }
             if (Time.unscaledTime >= _nextSend)
             {
                 _nextSend = Time.unscaledTime + 0.5f;
@@ -380,6 +384,7 @@ namespace Game.Net
         {
             if (_line.Active && _jumper != null) _line.Abort(_line.Jumper, Time.unscaledTimeAsDouble); // the departure cuts a jump short; the jumper's own client ends the ride on the corrected place
             Debug.Log($"[WaitingRoom] countdown over ({_flow.Last.Reason}): {_flow.People} people, {_flow.Last.BotsTotal} bots in all, to the elevators");
+            CloseRange();   // the booth guns back and the room's records gone before anyone reaches an elevator (ADR-501/502)
             foreach (var b in _bots)
                 if (b.OnIsland && b.Body != null) b.Body.transform.SetPositionAndRotation(b.HomePosition, b.HomeRotation);
             foreach (var kv in _keys)

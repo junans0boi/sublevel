@@ -1,17 +1,33 @@
+using System.Collections.Generic;
 using FishNet.Managing;
+using Game.Core;
 using UnityEngine;
 
 namespace Game.Net
 {
     // Client: the countdown of the waiting island, as one line on the screen and as text on the big board of the island
-    // (ADR-385, #418). The board's numbers are the server's broadcast; nothing here decides anything.
+    // (ADR-385, #418). The board turns through its pages (ADR-502, #422: countdown, bungee and range TOP3, the drop regions, tips) on
+    // the countdown's own seconds, so every client shows the same page. The numbers are the server's broadcasts; nothing here decides anything.
     public sealed class WaitingHud : MonoBehaviour
     {
         WaitingBroadcast _last;
         float _at = -10f;
         NetworkManager _nm;
         static GUIStyle _style;
-        TextMesh _title, _time, _people, _bungee;
+        readonly TextMesh[] _lines = new TextMesh[BoardText.Lines];
+        readonly string[] _text = new string[BoardText.Lines];
+        List<RecordRow> _bungeeTop = new List<RecordRow>(), _rangeTop = new List<RecordRow>();
+        int _records;              // bumps with every records broadcast
+        string[] _regions;
+        (bool live, BoardPage page, int seconds, int total, int target, int bungee, int cycle, int records, int regions) _shown;
+        bool _shownValid;
+        float _regionsAskedAt = -10f;
+
+        // The page the board shows now (tests compare clients).
+        public BoardPage PageShown { get; private set; }
+        public IReadOnlyList<RecordRow> RangeTop => _rangeTop;
+        public IReadOnlyList<RecordRow> BungeeTop => _bungeeTop;
+        public string LineShown(int line) => _text[line] ?? "";
 
         public static void Attach(NetworkManager nm)
         {
@@ -19,9 +35,30 @@ namespace Game.Net
             var hud = nm.gameObject.AddComponent<WaitingHud>();
             hud._nm = nm;
             nm.ClientManager.RegisterBroadcast<WaitingBroadcast>(hud.OnBroadcast);
+            nm.ClientManager.RegisterBroadcast<WaitingRecordsBroadcast>(hud.OnRecords);
         }
 
-        void OnDestroy() { OnIsland = false; if (_nm != null) _nm.ClientManager.UnregisterBroadcast<WaitingBroadcast>(OnBroadcast); }
+        void OnDestroy()
+        {
+            OnIsland = false;
+            if (_nm == null) return;
+            _nm.ClientManager.UnregisterBroadcast<WaitingBroadcast>(OnBroadcast);
+            _nm.ClientManager.UnregisterBroadcast<WaitingRecordsBroadcast>(OnRecords);
+        }
+
+        void OnRecords(WaitingRecordsBroadcast m, FishNet.Transporting.Channel channel)
+        {
+            _bungeeTop = Rows(m.BungeeNames, m.BungeeScores); _rangeTop = Rows(m.RangeNames, m.RangeScores);
+            _records++;
+        }
+
+        static List<RecordRow> Rows(string[] names, int[] scores)
+        {
+            var rows = new List<RecordRow>();
+            int n = names != null && scores != null ? Mathf.Min(names.Length, scores.Length) : 0;
+            for (int i = 0; i < n; i++) rows.Add(new RecordRow { Name = names[i], Score = scores[i] });
+            return rows;
+        }
 
         void OnBroadcast(WaitingBroadcast message, FishNet.Transporting.Channel channel)
         {
@@ -37,12 +74,19 @@ namespace Game.Net
         bool Live => _preview || (_last.Active && Time.unscaledTime - _at <= 3f);
 
         // Editor captures: the board as it reads with this broadcast, with no network behind it.
-        public static void Preview(WaitingBroadcast message)
+        public static WaitingHud Preview(WaitingBroadcast message, WaitingRecordsBroadcast records = default, string[] regions = null)
         {
             var hud = new GameObject("WaitingHudPreview").AddComponent<WaitingHud>();
             hud._last = message; hud._preview = true;
+            hud.OnRecords(records, default);
+            hud._regions = regions;
             hud.Update();
+            return hud;
         }
+
+        // Editor captures: show this page now, whatever the countdown says.
+        public void PreviewPage(BoardPage page) { _forced = page; _shownValid = false; Update(); }
+        BoardPage? _forced;
 
         void Update()
         {
@@ -54,14 +98,33 @@ namespace Game.Net
             bool live = Live;
             OnIsland = live;
             MoveLiftCar(live);
-            if (_title == null && !TryBuildBoard()) return;
-            _time.gameObject.SetActive(live); _people.gameObject.SetActive(live); _bungee.gameObject.SetActive(live && _last.BungeeBest > 0f);
-            if (!live) { _title.text = "SUBLEVEL"; return; }
-            int s = Mathf.CeilToInt(_last.SecondsLeft);
-            _title.text = "DEPARTURE";
-            _time.text = $"{s / 60}:{s % 60:00}";
-            _people.text = $"{_last.Total} / {_last.Target} ON BOARD";
-            _bungee.text = $"BUNGEE BEST  {_last.BungeeBest:0.0} m";
+            if (_lines[0] == null && !TryBuildBoard()) return;
+            var rules = IslandRules.Current ?? new IslandRules();
+            int cycle = 0;
+            var page = live ? _forced ?? BoardRotation.PageAt(_last.SecondsLeft, rules, out cycle) : BoardPage.Countdown;
+            // The map's region names: built per call by the zone code, so asked at most once a second until it answers.
+            if (page == BoardPage.Regions && (_regions == null || _regions.Length == 0) && Time.unscaledTime - _regionsAskedAt >= 1f)
+            {
+                _regionsAskedAt = Time.unscaledTime;
+                _regions = PollutionDirector.GeometrySource?.Invoke()?.RegionName;
+            }
+            // Only when something on the board changed (about once a second): no garbage per frame.
+            var shown = (live, page, Mathf.CeilToInt(_last.SecondsLeft), _last.Total, _last.Target, Mathf.RoundToInt(_last.BungeeBest * 10f), cycle, _records, _regions?.Length ?? 0);
+            if (_shownValid && shown == _shown) return;
+            _shown = shown; _shownValid = true;
+            PageShown = page;
+            if (!live) { for (int i = 0; i < _text.Length; i++) _text[i] = ""; _text[BoardText.Title] = "SUBLEVEL"; }
+            else
+            {
+                var view = new BoardView { SecondsLeft = _last.SecondsLeft, Total = _last.Total, Target = _last.Target, BungeeBest = _last.BungeeBest,
+                    BungeeTop = _bungeeTop, RangeTop = _rangeTop, Regions = _regions, Tip = BoardRotation.TipAt(cycle, rules.Tips) };
+                BoardText.Compose(page, view, _text);
+            }
+            for (int i = 0; i < _lines.Length; i++)
+            {
+                _lines[i].text = _text[i];
+                _lines[i].gameObject.SetActive(_text[i].Length > 0);
+            }
         }
 
         // The bungee lift's cage (ADR-387/490) follows the server's lift state (phase + seconds into it): the car, its shut doors and the
@@ -223,16 +286,21 @@ namespace Game.Net
         {
             var island = GameObject.Find("WaitingIsland");
             if (island == null) return false;
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // Korean pages (ADR-502): the game's Korean UI font, the built-in one only when it is missing.
+            var font = Resources.Load<Font>("Fonts/NotoSansKR");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             var root = new GameObject("WaitingBoardText").transform;
             root.SetParent(island.transform, false);
             var b = Game.Core.WaitingIsland.Board;
             root.localPosition = new Vector3(b.x, 7f, b.z + 0.1f);
             root.localRotation = Quaternion.Euler(0f, 180f, 0f);          // the text faces the middle of the island (+Z)
-            _title = Line(root, font, "Title", 0f, 3.5f, 0.8f, new Color(0.85f, 0.9f, 1f));
-            _time = Line(root, font, "Time", 0f, 0.7f, 2.0f, new Color(1f, 0.82f, 0.25f));
-            _people = Line(root, font, "People", 0f, -2.0f, 0.75f, new Color(0.8f, 1f, 0.85f));
-            _bungee = Line(root, font, "Bungee", 0f, -3.6f, 0.6f, new Color(1f, 0.6f, 0.4f));
+            // Title, the big clock, three rows and a footer (BoardText's lines), top to bottom on the 9 m panel.
+            _lines[BoardText.Title] = Line(root, font, "Title", 0f, 3.6f, 0.8f, new Color(0.85f, 0.9f, 1f));
+            _lines[BoardText.Big] = Line(root, font, "Time", 0f, 0.9f, 1.7f, new Color(1f, 0.82f, 0.25f));
+            _lines[BoardText.Row0] = Line(root, font, "Row0", 0f, 2.0f, 0.6f, new Color(1f, 0.95f, 0.8f));
+            _lines[BoardText.Row0 + 1] = Line(root, font, "Row1", 0f, 0.25f, 0.6f, new Color(1f, 0.95f, 0.8f));
+            _lines[BoardText.Row0 + 2] = Line(root, font, "Row2", 0f, -1.5f, 0.6f, new Color(0.8f, 1f, 0.85f));
+            _lines[BoardText.Footer] = Line(root, font, "Footer", 0f, -3.3f, 0.5f, new Color(1f, 0.6f, 0.4f));
             return true;
         }
 
@@ -250,17 +318,23 @@ namespace Game.Net
 
         // The font's own material (GUI/Text Shader) draws with ZTest Always, so the board text showed through the dome, the tower and the
         // cage; a material property does not change that, so the text gets a small depth-tested shader of its own (Resources/Shaders).
-        static Material _boardMaterial;
+        // One per font: the board (Noto Sans KR) and the lift panels (built-in font) must each sample their own glyph atlas, and a
+        // dynamic font rebuilds its atlas when new letters come (a Korean page), so the material follows the rebuilt texture.
+        static readonly Dictionary<Font, Material> _boardMaterials = new Dictionary<Font, Material>();
         static Material BoardMaterial(Font font)
         {
-            if (_boardMaterial == null)
+            if (!_boardMaterials.TryGetValue(font, out var m) || m == null)
             {
                 var shader = Resources.Load<Shader>("Shaders/WaitingBoardText");
-                _boardMaterial = shader != null ? new Material(shader) { mainTexture = font.material.mainTexture } : new Material(font.material);
-                _boardMaterial.name = "WaitingBoardText";
+                m = shader != null ? new Material(shader) { mainTexture = font.material.mainTexture } : new Material(font.material);
+                m.name = "WaitingBoardText_" + font.name;
+                _boardMaterials[font] = m;
+                if (_boardMaterials.Count == 1) Font.textureRebuilt += OnFontRebuilt;
             }
-            return _boardMaterial;
+            return m;
         }
+
+        static void OnFontRebuilt(Font font) { if (_boardMaterials.TryGetValue(font, out var m) && m != null) m.mainTexture = font.material.mainTexture; }
 
         // The same time on the screen, for a person who is not looking at the board.
         void OnGUI()

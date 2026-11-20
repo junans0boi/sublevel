@@ -105,6 +105,8 @@ namespace Game.Net
                 normal = hit.normal;
                 stoppedBy = hit.collider;
                 result = ShotHit.World;
+                // The waiting island (ADR-501): a booth target scores, a body is not hurt; either way the bullet ends here.
+                if (ServerShotIntercept != null && ServerShotIntercept(hit.collider)) { surface = BulletSurface.Metal; break; }
                 var target = hit.collider.GetComponentInParent<Combatant>();
                 // A body that is already dead stops the shot like any other obstacle.
                 if (target != null && target != this && !target._health.IsDead)

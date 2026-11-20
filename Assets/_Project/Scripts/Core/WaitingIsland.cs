@@ -46,7 +46,7 @@ namespace Game.Core
         }
         public static readonly (float x, float z) Board = (0f, -33f);         // the big board, on the north rim facing the middle
         public const float BoardWidth = 22f, BoardHeight = 9f;
-        public static readonly (float x, float z)[] Booths =                  // shooting booths (2nd stage), west side
+        public static readonly (float x, float z)[] Booths =                  // shooting booths (ADR-501: stands, lanes, targets in WaitingRange), west side
         {
             (-27f, -12f), (-27f, 0f), (-27f, 12f),
         };
@@ -105,7 +105,7 @@ namespace Game.Core
             if (Near(lx, lz, Lift.x, Lift.z, LiftShaftHalf + 1f + pad)) return true;
             if (Near(lx, lz, BungeePad.x, BungeePad.z, BungeePadRadius + pad)) return true;   // nobody stands where the jumper lands
             if (Near(lx, lz, Elevator.x, Elevator.z, ElevatorRadius + pad)) return true;
-            foreach (var b in Booths) if (Near(lx, lz, b.x, b.z, BoothRadius + pad)) return true;
+            if (WaitingRange.InLane(lx, lz, pad)) return true;                                  // the range's stands and lanes (ADR-501)
             return Math.Abs(lx - Board.x) < BoardWidth * 0.5f + pad && lz < Board.z + 6f;
         }
 
