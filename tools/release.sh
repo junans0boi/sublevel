@@ -3,8 +3,9 @@
 # 사용: tools/release.sh [--mac] [--win] [--upload] [--github <태그>] [--version <이름>]   (플랫폼 생략 시 mac만)
 #   --github <태그>: 만든 zip·manifest를 그 태그의 GitHub Release(공개 저장소)에 첨부. 공개 배포 조건은 docs/RELEASE.md 'GitHub Releases'.
 #   Unity 빌드는 무겁다(순차 1개, 동기화 측정 같은 독점 창과 겹치지 않게). 비밀 값 없음.
-#   버전 이름 기본값: <yyyymmddHHMM>-<커밋 7자리>. 게임-서버 호환은 Application.version/Protocol이 정하고(LobbyNet.CurrentVersion),
-#   이 이름은 런처가 '새 파일이 있나' 비교하는 릴리스 라벨일 뿐이다.
+#   버전 규칙(ADR-535): 이름 = v<bundleVersion>[-접미사] (예: bundleVersion 0.2.0 → v0.2.0 = 게임 저장소 태그).
+#   게임 서버가 받는 값 LobbyNet.CurrentVersion = <bundleVersion>/<Protocol>이라 같은 bundleVersion에서 나온다.
+#   Protocol을 올렸으면 bundleVersion도 올린다(같은 이름의 릴리스는 서버가 EXISTS로 거절).
 # 출력: Build/release/<버전>/{sublevel-<플랫폼>-<버전>.zip, manifest.json}
 # 업로드: ../sublevel-web/scripts/release_upload.sh <폴더> (서버가 sha256 재검증, 비밀 없음).
 set -euo pipefail
@@ -25,8 +26,10 @@ done
 [ ${#PLATS[@]} -gt 0 ] || PLATS=(mac)
 # 빌드 전에 확인: 태그의 Release가 있어야 첨부할 수 있다(태그 push → .github/workflows/release.yml이 만든다)
 [ -z "$GH_TAG" ] || gh release view "$GH_TAG" --repo junans0boi/sublevel >/dev/null || { echo "GitHub Release $GH_TAG 없음" >&2; exit 1; }
-[ -n "$VER" ] || VER="$(date +%Y%m%d%H%M)-$(git rev-parse --short=7 HEAD)"
-[[ "$VER" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] || { echo "bad version name: $VER" >&2; exit 2; }
+BV="$(sed -n 's/^  bundleVersion: //p' ProjectSettings/ProjectSettings.asset)"
+[[ "$BV" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bundleVersion '$BV' is not X.Y.Z (ADR-535)" >&2; exit 2; }
+[ -n "$VER" ] || VER="v$BV"
+[[ "$VER" =~ ^v${BV//./\\.}(-[A-Za-z0-9._]{1,32})?$ ]] || { echo "version '$VER' must be v$BV[-suffix] (ADR-535)" >&2; exit 2; }
 
 OUT="Build/release/$VER"; rm -rf "$OUT"; mkdir -p "$OUT"
 

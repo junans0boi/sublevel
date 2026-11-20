@@ -16,10 +16,10 @@ Caddy  /downloads/*                 forward_auth → /api/launcher/verify(200/40
 
 ## 1. 빌드·패키징 — `tools/release.sh`
 ```bash
-tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   # 플랫폼 생략 시 mac만
+tools/release.sh [--mac] [--win] [--upload] [--version v<bundleVersion>[-접미사]]   # 플랫폼 생략 시 mac만
 ```
 - Unity 빌드(`tools/unity.sh build mac` / `build win`)를 부르므로 무겁다. **한 번에 하나**, 측정 같은 Unity 독점 작업과 겹치지 않게 돌린다.
-- 버전 이름 기본값: `<yyyymmddHHMM>-<커밋 7자리>`. 허용 문자 `[A-Za-z0-9_][A-Za-z0-9._-]{0,127}`.
+- 버전 이름 기본값: `v<bundleVersion>`(5절).
 - mac: `ditto -c -k --sequesterRsrc --keepParent Build/mac/Sublevel.app`(번들 속성·링크 유지). win: `Build/win` 전체를 zip, `*_BackUpThisFolder_ButDontShipItWithYourGame`·`*_BurstDebugInformation_DoNotShip` 제외.
 - 출력: `Build/release/<버전>/sublevel-<플랫폼>-<버전>.zip` + `manifest.json`(`version` = 폴더 이름, `released_at`, 플랫폼별 `file`·`sha256`·`size`). 스키마는 `sublevel-backend/docs/launcher-api.md`.
 - `--upload`면 끝에 아래 2단계를 바로 실행한다.
@@ -56,9 +56,11 @@ tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   # 플랫폼 �
    ```
    값이 manifest의 `files.<플랫폼>.sha256`과 같고 크기(바이트)가 `size`와 같아야 한다.
 
-## 5. 버전 규칙 (현재 상태)
-- 게임 서버의 접속 허용 값은 `LobbyNet.CurrentVersion` = `Application.version` + `/` + `LobbyNet.Protocol`(지금 `1.0/4`, `ProjectSettings` `bundleVersion` 1.0, `Protocol` 4 — ADR-480, 문 메시지에 위치 추가). 다르면 로비가 거절한다.
-- 릴리스 폴더 이름(`version`)은 `release.sh`에서 **런처가 새 파일인지 비교하는 라벨**(`<시각>-<커밋>`)이다. `launcher-api.md`는 "`version`이 게임 서버 허용 값과 같아야 한다"고 적었지만 지금 둘은 다르다 → **정하지 않음**(아래 남은 것). 프로토콜이 바뀌면 서버와 클라이언트를 연달아 배포한다.
+## 5. 버전 규칙 (ADR-535)
+- 원천은 `ProjectSettings` `bundleVersion` = `X.Y.Z` 하나(지금 `0.2.0`).
+- 게임 저장소 태그 `vX.Y.Z` = 런처 manifest `version`(서버 폴더 이름) `vX.Y.Z`[`-접미사`]. `release.sh`가 기본값으로 쓰고 다른 이름은 거절한다.
+- 게임 서버의 접속 허용 값 `LobbyNet.CurrentVersion` = `X.Y.Z/<Protocol>`(지금 `0.2.0/7`). 다르면 로비가 거절한다. 같은 `bundleVersion`에서 나오므로 라벨과 접속 값은 한 빌드에서 함께 정해진다.
+- **`Protocol`을 올리면 `bundleVersion`도 올린다**(같은 라벨은 업로드가 `EXISTS`로 거절). `bundleVersion`이 바뀐 릴리스는 서버와 클라이언트를 같은 빌드로 연달아 배포한다(`DEPLOY_GAME_SERVER.md`).
 
 ## 6. 체크리스트 (릴리스 1회)
 1. `main`이 테스트 통과 상태인지 확인(`docs/PROGRESS.md` 최신 줄).
@@ -79,7 +81,7 @@ tools/release.sh [--mac] [--win] [--upload] [--version <이름>]   # 플랫폼 �
 | `sublevel-web` | `vX.Y.Z` = `package.json` 버전 | `release.yml`(typecheck·build 통과 후) | 없음(서버가 main을 빌드) |
 
 - **노트**: 주석 태그(`git tag -a`)의 메시지 + 이전 `v*` 태그 이후 커밋 목록(최대 100줄)을 워크플로가 붙인다. 비밀 값 없음, `GITHUB_TOKEN`만.
-- **게임 태그와 다른 버전의 관계**: 태그는 소스 마일스톤 이름일 뿐이다. 접속 호환은 계속 `LobbyNet.CurrentVersion`(`bundleVersion`/`Protocol`)이 정하고, 런처 manifest 라벨은 `release.sh --version <이름>`이다. 같은 빌드를 런처로 배포할 때는 `--version <태그>`(예: `v0.2.0`)를 써서 라벨을 맞춘다(허용 문자에 맞음).
+- **게임 태그와 다른 버전의 관계**: 태그는 소스 마일스톤 이름일 뿐이다. 접속 호환은 계속 `LobbyNet.CurrentVersion`(`bundleVersion`/`Protocol`)이 정하고, 런처 manifest 라벨은 `v<bundleVersion>`이라 태그와 같다(5절, ADR-535).
 - `v0.*`와 `-` 접미사 태그는 pre-release로 표시한다(게임 워크플로).
 
 ### 절차 (게임)
@@ -100,5 +102,6 @@ git push origin v0.2.0             # → Actions가 Release 생성
 |---|---|---|
 | 2026-11-18 | 더미 1 MB 릴리스(0.0.0-test) 업로드 | 서버 sha256 OK, 원자적 이동 확인 후 삭제. 디스크 여유 약 70 GiB |
 | 2026-11-18 | 보호 다운로드 시험 | 유효 200, Range 206, 만료·변조·플랫폼 변경·다른 파일·토큰 없음 403, 받은 파일 sha256·크기 일치, 비로그인 manifest 401 |
-| — | 실제 Mac 클라이언트 zip 업로드·sha256 일치 | 아직 안 함 |
-| — | 대역폭 사용량 | 미측정 |
+| 2026-11-20 | 첫 실제 릴리스 **v0.2.0**(Mac, ADR-535) | `.app` 1.1 GB → zip 531,420,326 B(507 MiB), sha256 `6a825aab72a08277763208c37ee769d21de2f9cce745ad08d152933ce965292e`. 업로드 488초(Mac→서버 약 1.0 MiB/s, base64라 회선 약 11 Mbit/s), 서버 sha256 OK, `UPLOADED v0.2.0`. 서버 디스크 96G 중 35G 사용, 여유 62G |
+| 2026-11-20 | 런처 0.1.7 종단(Mac, 준환 로그인 세션) | manifest 조회 → v0.2.0 표시 → 다운로드 약 3.0 MiB/s(약 25 Mbit/s, 507 MiB 약 3분) → 받은 zip sha256 = manifest → `game/v0.2.0/`(`.installed`, `.files.json`, 최근 2개만 유지) → '게임 시작'으로 `v0.2.0/Sublevel.app` 실행 확인 |
+| 2026-11-20 | 대역폭 추정 | 테스터 1명 = 507 MiB/버전. 10명이면 약 5 GiB/릴리스(Oracle 무료 송신 10 TB/월 대비 여유 큼). 서버 송신 속도 상한은 미측정(측정한 3.0 MiB/s는 이 Mac 회선 기준) |
