@@ -99,6 +99,7 @@ namespace Game.Tests
             InteriorLights.Focus = cam.transform;
 
             var report = new List<string>();
+            bool breakdown = Environment.GetEnvironmentVariable("LOOK_BREAKDOWN") == "1";
             IEnumerator Shot(string name, Vector3 eye, Vector3 target)
             {
                 cam.transform.position = eye;
@@ -112,6 +113,53 @@ namespace Game.Tests
                 string line = $"{name}: {result} eye {eye} grade {(interior != null ? interior.GradeWeight : -1f):F2} refl {RenderSettings.reflectionIntensity:F2}";
                 report.Add($"\"{name}\":{result.ToJson()}");
                 Debug.Log("[IslandLook] " + line);
+                if (breakdown) yield return Breakdown(name);
+            }
+
+            // #452: what the draws are made of. LOOK_BREAKDOWN=1 re-renders the view with one thing switched off at a time.
+            IEnumerator Breakdown(string name)
+            {
+                RenderProbe.Result r = default;
+                IEnumerator Probe(string what)
+                {
+                    yield return RenderProbe.Measure(cam, x => r = x, frames: 6, warmup: 3);
+                    Debug.Log($"[IslandLook] breakdown {name} {what}: draw {r.DrawCalls} setpass {r.SetPasses} tris {r.Triangles}");
+                }
+                yield return Probe("all");
+                pc.Camera.enabled = false;
+                yield return Probe("player camera off");
+                var sunLight = sunGo.GetComponent<Light>();
+                var shadows = sunLight.shadows;
+                sunLight.shadows = LightShadows.None;
+                yield return Probe("player camera off, sun shadows off");
+                sunLight.shadows = shadows;
+                var worldRoot = GameObject.Find("World").transform;
+                string Key(Transform t)
+                {
+                    var path = new List<string>();
+                    for (var x = t; x != null && x != worldRoot; x = x.parent) path.Insert(0, new string(x.name.TakeWhile(ch => !char.IsDigit(ch) && ch != '_').ToArray()));
+                    return path.Count == 0 ? "(outside World)" : path.Count == 1 ? path[0] : path[0] + "/" + path[path.Count - 1];
+                }
+                var groups = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None).Where(x => x.enabled && x.gameObject.activeInHierarchy)
+                    .GroupBy(x => Key(x.transform)).OrderBy(g => g.Key).ToList();
+                foreach (var g in groups)
+                {
+                    foreach (var x in g) if (x != null) x.forceRenderingOff = true;
+                    yield return Probe($"without {g.Key} ({g.Count()} renderers)");
+                    foreach (var x in g) if (x != null) x.forceRenderingOff = false;
+                }
+                foreach (var t in UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None)) t.drawHeightmap = false;
+                yield return Probe("without terrain heightmap");
+                foreach (var t in UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None)) t.drawHeightmap = true;
+                int mask = cam.cullingMask;
+                for (int layer = 0; layer < 32; layer++)
+                {
+                    if ((mask & (1 << layer)) == 0 || string.IsNullOrEmpty(LayerMask.LayerToName(layer))) continue;
+                    cam.cullingMask = mask & ~(1 << layer);
+                    yield return Probe($"without layer {LayerMask.LayerToName(layer)}");
+                }
+                cam.cullingMask = mask;
+                pc.Camera.enabled = true;
             }
 
             // 1-2. An R1 road near the town centre that runs along the sun, both ways.

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEditor;
@@ -13,6 +14,7 @@ public static partial class WorldBuilder
     const int GlassPercent = 45;           // share of windows glazed
     const float GlassThickness = 0.03f;
     const float GlassInset = 0.02f;        // smaller than the hole on every side so it never touches the wall
+    const float GlassLodHeight = 0.3f;
 
     static int _nextGlassId;
 
@@ -22,6 +24,8 @@ public static partial class WorldBuilder
     {
         if (plan.Windows.Count == 0) return;
         Material material = null;
+        Transform windows = null;
+        var panes = new List<Renderer>();
         for (int i = 0; i < plan.Windows.Count; i++)
         {
             var w = plan.Windows[i];
@@ -30,7 +34,8 @@ public static partial class WorldBuilder
             if (material == null) material = GlassMaterial();
             var pane = GameObject.CreatePrimitive(PrimitiveType.Cube); // its box collider stops movement
             pane.name = "Glass_" + w.Name;
-            pane.transform.SetParent(building, false);
+            if (windows == null) windows = Child(building, "Windows");
+            pane.transform.SetParent(windows, false);
             pane.transform.localPosition = new Vector3(w.X, w.Y + w.Height * 0.5f, w.Z);
             pane.transform.localRotation = Quaternion.Euler(0f, w.FacingDeg, 0f); // forward = out of the wall
             pane.transform.localScale = new Vector3(w.Width - 2f * GlassInset, w.Height - 2f * GlassInset, GlassThickness);
@@ -39,10 +44,14 @@ public static partial class WorldBuilder
             var renderer = pane.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
+            panes.Add(renderer);
             var component = pane.AddComponent<GlassPane>();
             int id = _nextGlassId++;
             Set(component, "_id", p => p.intValue = id);
         }
+        // #452 (ADR-547): a pane per window was ~120 draws and 15 SetPass down a street (transparent, so never batched
+        // past other see-through things, ~11 SetPass). Far panes go: past ~30 m for a house, ~58 m for a 20 m block.
+        if (panes.Count > 0) windows.gameObject.AddComponent<LODGroup>().SetLODs(new[] { new LOD(GlassLodHeight, panes.ToArray()) });
     }
 
     // Faintly blue-green, glossy and see-through. The transparent setup is done by hand (the material inspector

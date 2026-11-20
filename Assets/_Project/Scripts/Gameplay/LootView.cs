@@ -105,6 +105,8 @@ namespace Game.Gameplay
                 // Guns were placed upright as held; on the floor they lie on their side (melee models already lie).
                 if (!MeleeMeshes.Has(i)) model.transform.localRotation = Quaternion.Euler(0f, 0f, 90f) * model.transform.localRotation;
             }
+            // #452 (ADR-547): ~1,300 pickups lie mostly indoors where the sun casts no shadow; their shadow pass was wasted draws.
+            foreach (var r in _visual.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
         void Update()
@@ -250,6 +252,7 @@ namespace Game.Gameplay
                 _opticModel.transform.SetParent(_visual, false);
                 _opticMesh = _opticModel.AddComponent<MeshFilter>();
                 var r = _opticModel.AddComponent<MeshRenderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 var glass = _opticGlass != null ? _opticGlass : _opticMetal;
                 r.sharedMaterials = new[] { _opticMetal, glass, _opticWindow != null ? _opticWindow : glass };
             }

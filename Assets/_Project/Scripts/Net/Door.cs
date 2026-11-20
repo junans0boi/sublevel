@@ -46,6 +46,7 @@ namespace Game.Net
     public class Door : MonoBehaviour
     {
         public static readonly List<Door> All = new List<Door>();
+        const float HandleLodHeight = 0.04f;
 
         public int Index { get; private set; }
         public DoorState State { get; private set; }
@@ -110,6 +111,7 @@ namespace Game.Net
             if (!Headless) panel.GetComponent<MeshRenderer>().sharedMaterial = PanelMaterial();
             door._box = panel.GetComponent<BoxCollider>();
             // A dark handle on the free edge, both faces.
+            var handles = new List<Renderer>();
             if (!Headless) foreach (float face in new[] { -1f, 1f })
             {
                 var knob = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -118,7 +120,18 @@ namespace Game.Net
                 knob.transform.SetParent(pivot, false);
                 knob.transform.localPosition = new Vector3(width - 0.14f, height * 0.45f, face * (rules.PanelThickness / 2f + 0.025f));
                 knob.transform.localScale = new Vector3(0.12f, 0.035f, 0.05f);
-                knob.GetComponent<MeshRenderer>().sharedMaterial = HandleMaterial();
+                var knobRenderer = knob.GetComponent<MeshRenderer>();
+                knobRenderer.sharedMaterial = HandleMaterial();
+                knobRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                handles.Add(knobRenderer);
+            }
+            // #452 (ADR-547): 3,668 handles were ~235 draws down a town street. Past ~45 m (door under 4% of the screen) only
+            // the panel draws; the panel itself never culls (an open doorway in a facade would read as a hole).
+            if (!Headless)
+            {
+                var panelRenderer = panel.GetComponent<MeshRenderer>();
+                handles.Add(panelRenderer);
+                go.AddComponent<LODGroup>().SetLODs(new[] { new LOD(HandleLodHeight, handles.ToArray()), new LOD(0f, new Renderer[] { panelRenderer }) });
             }
             door._audio = go.AddComponent<AudioSource>();
             door._audio.spatialBlend = 1f;
