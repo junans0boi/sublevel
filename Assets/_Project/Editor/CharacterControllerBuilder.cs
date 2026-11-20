@@ -7,7 +7,7 @@ using UnityEditor.Animations;
 using UnityEngine;
 
 // Animation track (ADR-188, ADR-230): builds Character.controller for every Humanoid roster model.
-//   0 Base      locomotion blend (Move), Air (time parameter), Prone, Death                        whole body
+//   0 Base      locomotion blend (Move), Jump start/loop/land, Air (time parameter), Prone, Death                       whole body
 //   1 Upper     Lowered / Aim / Shoot / punches                                              Humanoid upper-body mask
 //   2 Action    reload clips per stance (speed from the weapon's own reload time)            Humanoid upper-body mask
 //   3 Additive  breathing loop and the hit flinch (procedural muscle clips, added on top)    whole body, additive
@@ -100,7 +100,12 @@ public static class CharacterControllerBuilder
         swimTree.useAutomaticThresholds = false;
         swimTree.AddChild(Clip("U_Swim_Idle_Loop"), 0f);
         swimTree.AddChild(Clip("U_Swim_Fwd_Loop"), CombatantAnimation.SwimClipSpeed);
-        // No jump clip yet (gap sheet, ADR-187): the air state holds a still moment of the idle and CombatantAnimation poses the jump on top (ADR-048).
+        // Jump (UAL, CC0 C-0004, ADR-537, #304): take-off, airborne loop and landing, bare-handed and with a gun alike (the long gun is posed
+        // in code over the base, ADR-083; other weapons ride the upper layer). CombatantAnimation picks the state (Locomotion.PickJumpClip).
+        baseMachine.AddState(CombatantAnimation.JumpStart).motion = Clip("U_Jump_Start");
+        baseMachine.AddState(CombatantAnimation.JumpLoop).motion = Clip("U_Jump_Loop");
+        baseMachine.AddState(CombatantAnimation.JumpLand).motion = Clip("U_Jump_Land");
+        // Hanging on or pulling up a ledge (ADR-492): a still moment of the idle, the ledge code poses the body on top (ADR-048).
         var air = baseMachine.AddState(CombatantAnimation.Air);
         air.motion = Clip("RifleIdle");
         air.timeParameter = CombatantAnimation.AirPhase;

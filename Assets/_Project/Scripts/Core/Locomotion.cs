@@ -180,8 +180,11 @@ namespace Game.Core
         static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
     }
 
-    // There is no jump clip (ADR-048): the air state holds a still pose and the jump itself is posed on top of it
-    // in code — a push at take-off, knees tucked up through the air, and a knee bend that absorbs the landing.
+    // The jump is the UAL Jump_Start / Jump_Loop / Jump_Land clips (ADR-537, #304). A controller without them (built before) falls back to
+    // ADR-048: the air state holds a still pose and the jump is posed on top of it in code — a push at take-off, knees tucked up through
+    // the air, and a knee bend that absorbs the landing.
+    public enum JumpClip { None, Start, Loop, Land, Hold }
+
     [Serializable]
     public class JumpRules
     {
@@ -191,6 +194,8 @@ namespace Game.Core
         public float LandPhase = 0.4f;
         public float PoseSpeed = 3f;           // vertical speed (m/s) at which the rise or fall moment is fully shown
         public float LandSeconds = 0.12f;      // the air state is held this long after touching down before moving on
+        public float StartClipSeconds = 0.25f; // a jump plays its take-off clip this long, then the airborne loop
+        public float LandClipSeconds = 0.25f;  // with the jump clips, the landing clip is held this long after touching down
         public float GroundProbeMeters = 0.35f; // airborne when there is no ground this close under the feet; more than a stair step, so walking down steps is not a fall
 
         // Take-off push: toes pointed, back arched, legs straight.
@@ -301,6 +306,16 @@ namespace Game.Core
         {
             float t = rules.PoseSpeed <= 0f ? (verticalSpeed > 0f ? 1f : 0f) : Math.Min(1f, Math.Max(0f, (verticalSpeed + rules.PoseSpeed) / (2f * rules.PoseSpeed)));
             return rules.FallPhase + (rules.RisePhase - rules.FallPhase) * t;
+        }
+
+        // Which jump clip the base layer plays (ADR-537): the take-off right after a jump (not after walking off an edge), then the airborne
+        // loop, then the landing while the landing is held (`landing`); hanging on or pulling up a ledge (mid-air mantle, ADR-492) holds the
+        // still pose instead, posed by the ledge code. Times in seconds since take-off.
+        public static JumpClip PickJumpClip(bool airborne, bool landing, bool pushedOff, float sinceTakeoff, bool onLedge, JumpRules rules)
+        {
+            if (onLedge) return airborne || landing ? JumpClip.Hold : JumpClip.None;
+            if (airborne) return pushedOff && sinceTakeoff < rules.StartClipSeconds ? JumpClip.Start : JumpClip.Loop;
+            return landing ? JumpClip.Land : JumpClip.None;
         }
 
         // How far the knees are tucked up (0..1) for a vertical speed: all the way at the top of a jump, least

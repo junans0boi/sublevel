@@ -98,10 +98,10 @@ namespace Game.Tests
                 }
             Assert.GreaterOrEqual(clips.Count, 15);
             foreach (var (state, clip) in clips) Assert.IsTrue(clip.isHumanMotion, $"{state}/{clip.name} must be a Humanoid clip so every roster model plays it");
-            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop" };
+            var loops = new[] { "RifleIdle", "RifleWalk", "RifleRun", "RifleWalkBack", "Breath", "Swat_RifleAimingIdle_skin", "U_Idle_Loop", "U_Walk_Loop", "U_Jog_Fwd_Loop", "U_Sprint_Loop", "U_Swim_Idle_Loop", "U_Swim_Fwd_Loop", "U_Jump_Loop" };
             foreach (var (_, clip) in clips)
                 if (loops.Contains(clip.name)) Assert.IsTrue(clip.isLooping, clip.name + " loops");
-            foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross" })
+            foreach (var one in new[] { "ReloadingRifleStand", "ReloadRifleCrouch", "ProneReloadingRifle", "RifleDeath", "U_Hit_Chest", "U_Punch_Jab", "U_Punch_Cross", "U_Jump_Start", "U_Jump_Land" })
                 Assert.IsFalse(clips.First(c => c.clip.name == one).clip.isLooping, one + " plays once");
         }
 
@@ -155,6 +155,32 @@ namespace Game.Tests
             var air = Controller().layers[Base].stateMachine.states.Select(s => s.state).First(s => s.name == "Air");
             Assert.IsTrue(air.timeParameterActive);
             Assert.IsTrue(Controller().parameters.Any(p => p.name == air.timeParameter && p.type == AnimatorControllerParameterType.Float));
+        }
+
+        // #304, ADR-537: take-off, airborne loop and landing are real clips on the base layer, for bare hands and guns alike.
+        [Test]
+        public void BaseLayer_HasJumpStartLoopAndLand_PlayingTheUalJumpClips()
+        {
+            var states = Controller().layers[Base].stateMachine.states.Select(s => s.state).ToDictionary(s => s.name);
+            foreach (var (state, clip) in new[] { ("JumpStart", "U_Jump_Start"), ("JumpLoop", "U_Jump_Loop"), ("JumpLand", "U_Jump_Land") })
+            {
+                Assert.IsTrue(states.ContainsKey(state), state + " missing");
+                Assert.AreEqual(clip, states[state].motion?.name, state);
+            }
+        }
+
+        [Test]
+        public void JumpClips_TheLoopLiftsAFootOffTheFloor_TheLandingBendsTheKnees()
+        {
+            Pose(Base, "Locomotion", 0f);
+            float standHips = Local(S.Hips).y;
+            Pose(Base, "JumpLoop", 0.5f);
+            Assert.Greater(Mathf.Max(Local(S.LeftFoot).y, Local(S.RightFoot).y), 0.2f, "a foot drawn up in the air");
+            float lowest = float.MaxValue;
+            for (float t = 0f; t <= 1f; t += 0.1f) { Pose(Base, "JumpLand", t); lowest = Mathf.Min(lowest, Local(S.Hips).y); }
+            Assert.Less(lowest, standHips - 0.05f, "the landing absorbs: the hips sink at least 5 cm");
+            Pose(Base, "JumpLand", 0f);
+            Assert.That(Mathf.Abs(TrunkPitch()), Is.LessThan(45f), "lands on the feet, not on the face");
         }
 
         [Test]
@@ -298,6 +324,7 @@ namespace Game.Tests
             foreach (var (layer, state, upper) in new[]
             {
                 (Base, "Locomotion", 0f), (Base, "LocomotionAim", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
+                (Base, "JumpStart", 0f), (Base, "JumpLoop", 0f), (Base, "JumpLand", 0f),
                 (Upper, "Aim", 1f), (Upper, "PunchRight", 1f), (Upper, "PunchLeft", 1f),
             })
             {
