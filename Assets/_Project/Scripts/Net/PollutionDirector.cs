@@ -222,7 +222,8 @@ namespace Game.Net
         {
             if (!_bound) TryBind();
             CompatTick();
-            if (!_serverRunning && AutoStart && ServerActive && MatchDirector.Instance != null)
+            // An event race (ADR-516) has no regions to pollute: the battle royale's lockdown never starts there.
+            if (!_serverRunning && AutoStart && ServerActive && MatchDirector.Instance != null && !Vehicle.EventRace)
                 ServerStart(MatchDirector.Instance.LockdownSeed);
             if (!_serverRunning || !ServerActive) return;
             double now = Now;
