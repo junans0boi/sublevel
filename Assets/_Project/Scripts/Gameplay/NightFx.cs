@@ -91,8 +91,8 @@ namespace Game.Gameplay
             float hour = view != null ? view.Hour : WorldSky.DayHour;
             var weather = view != null ? view.Weather : WeatherKind.Clear;
             NightLevel = 1f - AmbientRules.Day(hour);
-            // Cloud and rain hide the stars; fog dims them.
-            StarAlpha = NightLevel * (weather == WeatherKind.Clear ? 1f : weather == WeatherKind.Fog ? 0.25f : 0f);
+            // Fog dims the stars.
+            StarAlpha = NightLevel * (weather == WeatherKind.Fog ? 0.25f : 1f);
             Root.position = cam.transform.position;
             _starMat.SetColor("_BaseColor", new Color(1f, 1f, 1f, StarAlpha));
             if (_sun == null) { var s = GameObject.Find("Sun"); if (s != null) _sun = s.transform; }

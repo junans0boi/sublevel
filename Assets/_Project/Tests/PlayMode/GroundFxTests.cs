@@ -12,7 +12,7 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // Ground reaction, wildlife, storm and night in the real World (#205-#208, ADR-163): the behaviour is asserted and
+    // Ground reaction, wildlife and night in the real World (#205 #206 #208, ADR-163): the behaviour is asserted and
     // each stage is saved as a PNG (Logs/fx, or the folder in FX_SHOTS) to be looked at. Also the A/B frame cost of the
     // whole set (effects on vs off) with the same probe as the render budget.
     [Category("Capture")]
@@ -162,68 +162,6 @@ namespace Game.Tests
         }
 
         [UnityTest, Timeout(900000)]
-        public IEnumerator Rain_Splashes_WetGround_Lightning_Thunder()
-        {
-            yield return Start();
-            var pc = PlayerController.Local;
-            var view = EnvironmentView.Current;
-            var gfx = GroundFx.Current;
-            var storm = StormFx.Current;
-            Assert.IsNotNull(storm, "the World has StormFx");
-            var world = WorldInfo.Current;
-            var el = world.Elevators[0];
-            var dir = Quaternion.Euler(0f, el.FacingDeg, 0f) * Vector3.forward;
-            var spot = el.Position + dir * 20f;
-            if (Physics.Raycast(spot + Vector3.up * 200f, Vector3.down, out var hit, 400f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) spot = hit.point;
-            pc.Teleport(spot + Vector3.up * 0.2f);
-            yield return new WaitForSeconds(1.2f);
-            pc.LookAt(spot + dir * 30f + Vector3.up * 0.2f);
-            Assert.AreEqual(0f, gfx.Wet, 1e-3f, "dry before the rain");
-            int none = gfx.SplashesMade;
-            yield return new WaitForSeconds(1f);
-            Assert.AreEqual(none, gfx.SplashesMade, "no splashes in dry weather");
-
-            view.Set(WorldSky.DayHour, WeatherKind.Rain);
-            yield return new WaitForSeconds(3f);
-            Assert.Greater(gfx.SplashesMade, 20, "rain splashes on the ground");
-            Assert.Greater(gfx.Wet, 0.5f, "the ground is wet");
-            Assert.AreEqual(Shader.GetGlobalFloat("_GameWet"), gfx.Wet, 1e-3f, "shaders see the wetness");
-            Assert.LessOrEqual(gfx.RaysLastFrame, GroundFxRules.MaxSplashesPerFrame);
-            yield return Shot("fx_03_rain_day.png", $"splashes {gfx.SplashesMade} wet {gfx.Wet:F2}");
-
-            int thunders = storm.Thunders, strikes = storm.Strikes;
-            storm.Strike(500f);
-            // Frames may be long in batch mode: take the shot on the first frame where the flash is on.
-            bool shot = false;
-            float peak = 0f;
-            for (int f = 0; f < 40; f++)
-            {
-                yield return null;
-                peak = Mathf.Max(peak, storm.FlashNow);
-                if (!shot && storm.FlashNow > 0.2f) { shot = true; yield return Shot("fx_04_lightning.png", $"flash {storm.FlashNow:F2}"); }
-                if (storm.FlashNow == 0f && peak > 0f) break;
-            }
-            Assert.Greater(peak, 0.2f, "the flash came (peak " + peak + ", strikes " + storm.Strikes + ", dt " + Time.deltaTime + ")");
-            Assert.IsTrue(shot, "a frame showed the flash");
-            yield return new WaitForSeconds(0.7f);
-            Assert.AreEqual(0f, storm.FlashNow, 1e-3f, "the flash is over");
-            yield return new WaitForSeconds(2.5f);
-            Assert.AreEqual(thunders + 1, storm.Thunders, "the thunder came after the delay");
-            Assert.AreEqual(strikes + 1, storm.Strikes);
-
-            // Stop raining: it dries off slowly and the splashes stop.
-            view.Set(WorldSky.DayHour, WeatherKind.Clear);
-            int s = gfx.SplashesMade;
-            yield return new WaitForSeconds(1.5f);
-            Assert.AreEqual(s, gfx.SplashesMade, "no splashes after the rain");
-            Assert.Greater(gfx.Wet, 0.5f, "still wet a moment after");
-
-            view.Set(WorldSky.NightHour, WeatherKind.Rain);
-            yield return new WaitForSeconds(2f);
-            yield return Shot("fx_05_rain_night.png", "night rain");
-        }
-
-        [UnityTest, Timeout(900000)]
         public IEnumerator Night_Stars_WindowLights_Wildlife()
         {
             yield return Start();
@@ -333,15 +271,14 @@ namespace Game.Tests
             cam.GetUniversalAdditionalCameraData().SetRenderer(world.RendererIndex);
             cam.transform.position = pc.Camera.transform.position;
             cam.transform.LookAt(region.Hub + Vector3.up * 2f);
-            var parts = new Component[] { GroundFx.Current, Wildlife.Current, StormFx.Current, NightFx.Current };
-            var roots = new Transform[] { GroundFx.Current.Root, Wildlife.Current.Root, StormFx.Current.Root, NightFx.Current.Root };
+            var parts = new Component[] { GroundFx.Current, Wildlife.Current, NightFx.Current };
+            var roots = new Transform[] { GroundFx.Current.Root, Wildlife.Current.Root, NightFx.Current.Root };
             var report = new System.Text.StringBuilder();
             foreach (var (name, hour, weather) in new[]
             {
                 ("day_clear", WorldSky.DayHour, WeatherKind.Clear),
                 ("night_clear", WorldSky.NightHour, WeatherKind.Clear),
-                ("day_rain", WorldSky.DayHour, WeatherKind.Rain),
-                ("night_rain", WorldSky.NightHour, WeatherKind.Rain),
+                ("day_fog", WorldSky.DayHour, WeatherKind.Fog),
             })
             {
                 view.Set(hour, weather);
@@ -349,7 +286,6 @@ namespace Game.Tests
                 foreach (bool enabled in new[] { true, false, true, false })
                 {
                     for (int i = 0; i < parts.Length; i++) { ((Behaviour)parts[i]).enabled = enabled; roots[i].gameObject.SetActive(enabled); }
-                    Shader.SetGlobalFloat("_GameWet", enabled && weather == WeatherKind.Rain ? 1f : 0f);
                     yield return new WaitForSeconds(enabled ? 12f : 1f); // the wildlife fills in only when on; a second pass keeps the better of two
                     RenderProbe.Result r = default;
                     yield return RenderProbe.Measure(cam, x => r = x);

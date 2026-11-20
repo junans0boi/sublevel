@@ -10,8 +10,8 @@ namespace Game.Core
 
         public const byte LightsAuto = 0, LightsOn = 1, LightsOff = 2;
 
-        // The headlamps come on by themselves when it is dusk or night, or when rain / fog dims the day.
-        // `ambient` is SkyLook.Ambient (1 = full day); `weatherDimmed` = rain or fog.
+        // The headlamps come on by themselves when it is dusk or night, or when fog dims the day.
+        // `ambient` is SkyLook.Ambient (1 = full day); `weatherDimmed` = fog.
         public static bool AutoLights(float ambient, bool weatherDimmed) => ambient < 0.62f || (weatherDimmed && ambient < 0.95f);
 
         // The lamps are lit only with the engine running; the driver's L key can force them on or off.

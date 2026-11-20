@@ -2,7 +2,7 @@
 // grass: URP-lit shading (alpha-tested, both faces) plus a vertex sway. Everything bends downwind by its height above
 // the plant's foot (squared, so the foot stays put), with a travelling gust wave from world position so a field
 // ripples instead of nodding in step; leaf cards also flutter. Bark takes the same bend as the leaves above it, so
-// nothing tears off its trunk. _GameWindBoost (global, set by AmbientBeds) raises the wind in rain and fog.
+// nothing tears off its trunk. _GameWindBoost (global, set by AmbientBeds) raises the wind in fog.
 Shader "Game/WorldFoliage"
 {
     Properties

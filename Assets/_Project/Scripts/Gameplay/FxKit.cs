@@ -4,7 +4,7 @@ using UnityEngine.Rendering;
 namespace Game.Gameplay
 {
     // Small helpers for the environment particles (#205 #206 #207): soft sprites drawn into textures when first needed
-    // (no art files) and unlit particle materials cloned from the rain material, so no shader has to be referenced.
+    // (no art files) and unlit particle materials cloned from the old rain-streak material (Weather/RainStreak, kept as the template since rain went, ADR-497), so no shader has to be referenced.
     public static class FxKit
     {
         public enum Sprite { Dot, Ring, Leaf, Print, Wing }

@@ -4,8 +4,9 @@ namespace Game.Core
 {
     // The setting's choices (index = the option shown; 0 = random per match).
     public enum DayTimeChoice { Random = 0, Day = 1, Dusk = 2, Night = 3 }
-    public enum WeatherKind { Clear = 0, Rain = 1, Fog = 2 }
-    public enum WeatherChoice { Random = 0, Clear = 1, Rain = 2, Fog = 3 }
+    // Rain was removed (ADR-497): its numbers (kind 1, choice 2) stay unused so the byte SkySync sends keeps its meaning.
+    public enum WeatherKind { Clear = 0, Fog = 2 }
+    public enum WeatherChoice { Random = 0, Clear = 1, Fog = 3 }
 
     // What the sky, sun and fog look like at one moment (ADR-119, #150). Colours are plain floats (Core has no engine).
     public struct SkyLook
@@ -17,7 +18,6 @@ namespace Game.Core
         public float SkyExposure, SkyR, SkyG, SkyB; // skybox exposure and tint (1 = as built)
         public float FogR, FogG, FogB;        // multiplies the scene's fog colour
         public float FogStart, FogEnd;        // metres; 0 = keep the scene's own
-        public float RainPerSecond;           // 0 = dry
     }
 
     // Time of day and weather: pure numbers, EnvironmentView applies them (ADR-119).
@@ -67,9 +67,9 @@ namespace Game.Core
 
         public static WeatherKind PickWeather(WeatherChoice choice, int seed)
         {
-            if (choice != WeatherChoice.Random) return (WeatherKind)((int)choice - 1);
-            double u = new Random(seed * 31 + 7).NextDouble();
-            return u < 0.55 ? WeatherKind.Clear : u < 0.80 ? WeatherKind.Rain : WeatherKind.Fog;
+            if (choice == WeatherChoice.Fog) return WeatherKind.Fog;
+            if (choice != WeatherChoice.Random) return WeatherKind.Clear; // Clear, and the old Rain byte or anything unknown
+            return new Random(seed * 31 + 7).NextDouble() < 0.70 ? WeatherKind.Clear : WeatherKind.Fog; // 70/30 (ADR-497)
         }
 
         // The clock runs only when the time is random; a chosen time of day stays put.
@@ -96,11 +96,6 @@ namespace Game.Core
             float light = Math.Min(1f, look.Ambient);
             switch (weather)
             {
-                case WeatherKind.Rain:
-                    look.SunIntensity *= 0.40f; look.Ambient *= 0.80f; look.SkyExposure *= 0.55f;
-                    look.FogStart = 8f; look.FogEnd = 240f; look.RainPerSecond = 900f;
-                    Grey(ref look, 0.55f, light * 0.62f);
-                    break;
                 case WeatherKind.Fog:
                     look.SunIntensity *= 0.55f; look.Ambient *= 0.95f; look.SkyExposure *= 0.75f;
                     look.FogStart = 4f; look.FogEnd = 110f;

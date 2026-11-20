@@ -12,8 +12,7 @@ using UnityEngine.TestTools;
 namespace Game.Tests
 {
     // ADR-119 (#150): the render budget (PERF_BUDGET A: p99 <= 10 ms, draw calls, triangles) holds in the World for every
-    // time of day and weather, measured the way World_RendersWithinBudget does, from the viewpoint beside an elevator
-    // with the rain falling around the player's camera.
+    // time of day and weather, measured the way World_RendersWithinBudget does, from the viewpoint beside an elevator.
     [Category("Perf")]
     public class EnvironmentPerfTests
     {
@@ -54,7 +53,7 @@ namespace Game.Tests
             var toward = region.Hub - station;
             toward.y = 0f;
             toward = toward.sqrMagnitude > 0.01f ? toward.normalized : Vector3.forward;
-            // The player's own camera stands where the probe does, so the rain falls in front of it.
+            // The player's own camera stands where the probe does.
             var spot = station + toward * 8f;
             PlayerController.Local.Teleport(spot + Vector3.up * 0.2f);
             yield return new WaitForSeconds(1f);
@@ -75,18 +74,16 @@ namespace Game.Tests
                 ("day_clear", WorldSky.DayHour, WeatherKind.Clear),
                 ("dusk_clear", WorldSky.DuskHour, WeatherKind.Clear),
                 ("night_clear", WorldSky.NightHour, WeatherKind.Clear),
-                ("day_rain", WorldSky.DayHour, WeatherKind.Rain),
-                ("night_rain", WorldSky.NightHour, WeatherKind.Rain),
                 ("day_fog", WorldSky.DayHour, WeatherKind.Fog),
             })
             {
                 view.Set(hour, weather);
-                yield return new WaitForSeconds(1.5f); // the rain fills the air
+                yield return new WaitForSeconds(1.5f);
                 RenderProbe.Result result = default;
                 yield return RenderProbe.Measure(cam, r => result = r, screenshotPath: $"Logs/perf/env_{name}.png");
                 names.Add(name);
                 results.Add(result);
-                Debug.Log($"[Perf] env {name} (rain particles {view.RainAlive}): {result}");
+                Debug.Log($"[Perf] env {name}: {result}");
             }
             Object.Destroy(cam.gameObject);
             for (int i = 0; i < results.Count; i++) RenderProbe.AssertWithinBudget(results[i]);

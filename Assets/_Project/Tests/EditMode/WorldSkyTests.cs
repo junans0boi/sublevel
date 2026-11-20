@@ -64,32 +64,40 @@ namespace Game.Tests
         }
 
         [Test]
-        public void RainAndFog_DimTheSun_ShortenTheView_AndOnlyRainRains()
+        public void Fog_DimsTheSun_AndShortensTheView()
         {
             var clear = WorldSky.At(WorldSky.DayHour, WeatherKind.Clear);
-            var rain = WorldSky.At(WorldSky.DayHour, WeatherKind.Rain);
             var fog = WorldSky.At(WorldSky.DayHour, WeatherKind.Fog);
-            Assert.Less(rain.SunIntensity, clear.SunIntensity);
             Assert.Less(fog.SunIntensity, clear.SunIntensity);
-            Assert.Greater(rain.RainPerSecond, 0f);
-            Assert.AreEqual(0f, fog.RainPerSecond);
-            Assert.AreEqual(0f, clear.RainPerSecond);
-            Assert.Less(fog.FogEnd, rain.FogEnd, "fog is the thicker one");
-            Assert.Greater(rain.FogEnd, 0f);
+            Assert.Greater(fog.FogEnd, 0f);
+            Assert.AreEqual(0f, clear.FogEnd);
         }
 
         [Test]
         public void WeatherChoice_FixedOrSeededRandom()
         {
-            Assert.AreEqual(WeatherKind.Rain, WorldSky.PickWeather(WeatherChoice.Rain, 3));
             Assert.AreEqual(WeatherKind.Clear, WorldSky.PickWeather(WeatherChoice.Clear, 3));
             Assert.AreEqual(WeatherKind.Fog, WorldSky.PickWeather(WeatherChoice.Fog, 3));
-            int clear = 0, rain = 0, fog = 0;
-            for (int seed = 0; seed < 400; seed++)
-                switch (WorldSky.PickWeather(WeatherChoice.Random, seed)) { case WeatherKind.Clear: clear++; break; case WeatherKind.Rain: rain++; break; default: fog++; break; }
-            Assert.Greater(clear, rain);
-            Assert.Greater(rain, 30);
-            Assert.Greater(fog, 30);
+            int clear = 0, fog = 0;
+            for (int seed = 0; seed < 1000; seed++)
+                if (WorldSky.PickWeather(WeatherChoice.Random, seed) == WeatherKind.Clear) clear++; else fog++;
+            Assert.AreEqual(700, clear, 60, "about 70% clear (ADR-497)");
+            Assert.AreEqual(300, fog, 60);
+        }
+
+        // ADR-497: rain is gone. No seed rolls it, and the old rain byte (choice 2) from the wire falls back to clear.
+        [Test]
+        public void PickWeather_NeverRains_ForAnySeed()
+        {
+            var rng = new System.Random(497);
+            for (int n = 0; n < 20000; n++)
+            {
+                int seed = n < 10000 ? n - 5000 : rng.Next(int.MinValue, int.MaxValue);
+                var kind = WorldSky.PickWeather(WeatherChoice.Random, seed);
+                Assert.IsTrue(kind == WeatherKind.Clear || kind == WeatherKind.Fog, "seed " + seed + " gave " + kind);
+            }
+            Assert.AreEqual(WeatherKind.Clear, WorldSky.PickWeather((WeatherChoice)2, 3), "old rain choice");
+            Assert.AreEqual(WeatherKind.Clear, WorldSky.PickWeather((WeatherChoice)200, 3), "unknown byte");
         }
 
         // ADR-125: every peer derives the hour from the one start hour and the match time it was told.
@@ -113,14 +121,13 @@ namespace Game.Tests
             foreach (var def in Game.Gameplay.SettingsCatalog.All)
             {
                 if (def.Key == "settings.dayTime") Assert.AreEqual((float)DayTimeChoice.Day, def.Default);
-                if (def.Key == "settings.weather") Assert.AreEqual((float)WeatherChoice.Clear, def.Default);
+                if (def.Key == "settings.weather2") Assert.AreEqual("맑음", def.Options[(int)def.Default]);
             }
             var look = WorldSky.At(WorldSky.StartHour(DayTimeChoice.Day, 1), WeatherKind.Clear);
             Assert.GreaterOrEqual(look.SunElevationDeg, 40f);
             Assert.GreaterOrEqual(look.SunIntensity, 1.5f);
             Assert.GreaterOrEqual(look.Ambient, 1f);
             Assert.AreEqual(1f, look.SkyExposure, 1e-3f);
-            Assert.AreEqual(0f, look.RainPerSecond);
             Assert.AreEqual(0f, look.FogEnd, "clear keeps the scene's own fog (the ADR-193 haze colour)");
         }
     }

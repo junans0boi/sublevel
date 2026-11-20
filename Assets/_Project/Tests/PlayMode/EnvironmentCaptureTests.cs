@@ -11,7 +11,7 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // Review shots of the time of day and weather in the World (#150, ADR-119): day, dusk, night, rain, fog, night rain.
+    // Review shots of the time of day and weather in the World (#150, ADR-119): day, dusk, night, fog, night fog.
     // Run on purpose with
     //   ENV_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.EnvironmentCaptureTests
     [Explicit, Category("Capture")]
@@ -70,16 +70,15 @@ namespace Game.Tests
                 view.Set(hour, weather);
                 yield return new WaitForSeconds(settle);
                 yield return UiShot.Save(Path.Combine(folder, name), 1280, 720);
-                Debug.Log($"[EnvCapture] {name}: raining {view.Raining} indoors {view.Indoors} alive {view.RainAlive} emission {view.RainEmission}");
+                Debug.Log($"[EnvCapture] {name}: fog end {view.Look.FogEnd}");
             }
             yield return Shot("env_01_day_clear.png", WorldSky.DayHour, WeatherKind.Clear);
             yield return Shot("env_02_dusk_clear.png", WorldSky.DuskHour, WeatherKind.Clear);
             yield return Shot("env_03_night_clear.png", WorldSky.NightHour, WeatherKind.Clear);
-            yield return Shot("env_04_day_rain.png", WorldSky.DayHour, WeatherKind.Rain);
             yield return Shot("env_05_day_fog.png", WorldSky.DayHour, WeatherKind.Fog);
-            yield return Shot("env_06_night_rain.png", WorldSky.NightHour, WeatherKind.Rain);
+            yield return Shot("env_06_night_fog.png", WorldSky.NightHour, WeatherKind.Fog);
             yield return Shot("env_07_dawn_clear.png", 6.5f, WeatherKind.Clear);
-            Debug.Log("[EnvCapture] rain emission " + view.RainEmission + ", rain volume " + view.RainVolume + ", shots in " + folder);
+            Debug.Log("[EnvCapture] shots in " + folder);
         }
     }
 }

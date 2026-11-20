@@ -59,7 +59,6 @@ Shader "Game/WorldRoad"
                 half _Smoothness;
                 half _Paved;
             CBUFFER_END
-            float _GameWet; // global: 0 dry .. 1 soaked, set by GroundFx (#207)
 
             struct Attributes
             {
@@ -177,13 +176,7 @@ Shader "Game/WorldRoad"
                     albedo = lerp(albedo, half3(0.07h, 0.09h, 0.035h), (half)(grassy * 0.45));
                 }
 
-                // Rain: darker, glossier, and puddles in the worn hollows of the lane (#207).
-                half wet = (half)_GameWet;
-                half pud = wet * (half)(paved ? smoothstep(0.58, 0.68, Noise(w / 3.5 + 13.1)) : smoothstep(0.5, 0.62, Noise(w / 2.5 + 5.7)));
-                albedo *= lerp(1.0h, 0.6h, wet) * lerp(1.0h, 0.5h, pud);
-                smoothness = lerp(max(smoothness, wet * (paved ? 0.7h : 0.45h)), 0.96h, pud);
                 half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.uv), _BumpScale);
-                normalTS = normalize(lerp(normalTS, half3(0.0h, 0.0h, 1.0h), pud));
                 half3 bitangent = i.tangentWS.w * cross(i.normalWS, i.tangentWS.xyz);
                 half3 normalWS = NormalizeNormalPerPixel(TransformTangentToWorld(normalTS, half3x3(i.tangentWS.xyz, bitangent, i.normalWS)));
 

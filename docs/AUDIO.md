@@ -43,6 +43,6 @@ TunePocket, ElevenLabs 무료 플랜 산출물(상업 제약/약관 불명확), 
 | 문 열림·닫힘 | `door_fs_*`(S-0044) | S-0006: 폴백만 |
 | 유리·차량·엘리베이터 | `Resources/Sfx/*`(S-0038~0043·0045), 파일 없으면 합성 | — |
 | 근접 타격·명중 확인 | Kenney impactPunch·impactBell(S-0003) | 사용 중 |
-| 환경음·근접 휘두름·문 노크/부서짐·불·천둥 | 코드 합성(S-0007 등) | 사용 중 |
+| 환경음·근접 휘두름·문 노크/부서짐·불 | 코드 합성(S-0007 등) | 사용 중 |
 
 코드: `Core/WeaponSounds.cs`, `Gameplay/CombatantAudio.cs`, `Gameplay/DoorAudio.cs`, `Gameplay/GlassFx.cs`, `Gameplay/VehicleAudio.cs`, `Gameplay/ElevatorAudio.cs`. 교체된 옛 파일은 저장소에 남아 있다(제거는 별도 작업).
