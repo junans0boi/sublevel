@@ -12,6 +12,7 @@ public static class MixamoBake
 {
     const string MixamoDir = "Assets/_Project/Art/Characters/Mixamo";
     const string SkinPath = MixamoDir + "/Swat_RifleAimingIdle_skin.fbx";
+    // Legacy tool (ADR-187): Swat.fbx now sits in placeholder/QuaterniusModularMen (#262); copy it back here before running.
     const string SwatPath = "Assets/_Project/Art/Characters/QuaterniusModularMen/Swat.fbx";
     public const string BakedDir = "Assets/_Project/Prefabs/M1_5/Baked";
     const float Fps = 30f;

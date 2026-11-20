@@ -2,6 +2,7 @@
 
 ## 최신 상태 — 2026-11-18 15:42 (Codex)
 
+- 2026-11-20 문서·라이선스(claude/i262-docs-license, #262·#323): 옛 Quaternius `Swat.fbx`(C-0001)를 `placeholder/QuaterniusModularMen`으로 `git mv`(게임 경로 미사용; 남은 참조 LookDev.unity·MixamoBake는 RISKS에 기록). 캐릭터 에셋은 CC0·Mixamo라 크레딧 의무 없음, 자발 표기는 RISKS 사람 항목. 정의서 characters/materials를 main 기준으로 갱신(로스터 15모델, Poly Haven 2K 13종 사용·3행 미다운로드), ledger T-0001/T-0002 사용 상태 표시.
 - 2026-11-20 README·Releases(claude/readme-release): 루트 `README.md`(한국어, 실제 캡처·크레딧), `.github/workflows/release.yml`(v* 태그 → Release), `tools/release.sh --github <태그>`, `RELEASE.md` 7절, RISKS '공개 저장소' 4건, ADR-530. 클라이언트 zip은 공개 Release에 첨부하지 않음.
 - 후속 분석·기획 이슈 정리: Claude 대화 12개와 저장소/공개 URL 대조. 구형 기획 7개를 종료해 **OPEN 136개**, 대기섬 13개 보류 유지. 유효한 잔여 요구는 후속 이슈에 보존했다. 상세: `ISSUE_RECONCILE_2026-11-18.md` 3차 점검.
 - 런처 공개 0.1.6/백엔드 00f1972 확인. 게임의 `sg_` 토큰 교환·Social/Ticket 코드 및 봇 B7은 원본 worktree 미커밋 상태이며 main 통합과 종단 검증이 남아 있다. 이번 후속 작업은 분석·문서·이슈 정리만 수행.
