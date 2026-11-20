@@ -394,8 +394,10 @@ namespace Game.Gameplay
             if (_inAir)
             {
                 _inAir = false;
-                _landUntil = Time.time + jump.LandSeconds;
-                _landedAt = Time.time;
+                // Arriving on top from a pull-up is no landing: its knee-bend dip read as a snap to sitting (#233, ADR-542).
+                bool fromLedge = LedgePose > 0.5f;
+                _landUntil = fromLedge ? -1f : Time.time + jump.LandSeconds;
+                _landedAt = fromLedge ? float.NegativeInfinity : Time.time;
                 Landed?.Invoke();
             }
             if (Time.time >= _landUntil) return false;

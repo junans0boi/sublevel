@@ -8,6 +8,7 @@ namespace Game.Gameplay
     // little bent. The pull-up keeps the hands where they hold while the body rises past them (the elbows bend, then
     // push down), the torso tips forward over the top and a knee comes up onto it; the hands let go as the feet
     // arrive. It follows the replicated parkour state and the body's place, so every side shows the same.
+    // No ledge clip exists in UAL1/Mixamo here (#312): the posed body is fitted to the edge instead (FitToEdge, ADR-542).
     public partial class CombatantAnimation
     {
         const float LedgeHandsApart = 0.2f;    // each palm this far from the middle, along the edge
@@ -15,11 +16,18 @@ namespace Game.Gameplay
         const float HangThighDeg = 10f, HangShinDeg = 20f;
         const float ClimbKneeDeg = 80f, ClimbShinDeg = 70f, ClimbTorsoDeg = 30f;
 
+        // Fitting the posed body to the edge (#312, ADR-542): how much of each part must stay off the wall face (the
+        // bone is inside the body), and how far the model may move to keep it off and to bring the hands to the top.
+        const float WallClearTorso = 0.18f, WallClearHead = 0.12f, WallClearKnee = 0.08f, WallClearFoot = 0.15f;
+        const float LedgeBackMax = 0.4f, LedgeBackEasePerSecond = 1.5f;
+        const float LedgeLiftUp = 0.3f, LedgeLiftDown = 0.6f, LedgeArmBent = 0.97f;
+
         float _ledge;               // 0..1: how much of the ledge pose is shown
         ParkourMove _ledgeMove;
         Vector3 _ledgeEdge;         // the middle of the held edge
         float _ledgeClimbAt;
         CharacterController _ledgeBody;
+        float _ledgeBack;           // how far the model is kept back off the wall
 
         bool OnLedge => _stance != null && !_combatant.Dead.Value && Game.Core.Parkour.IsLedge(_stance.ParkourMove);
         // How much of the hang / pull-up pose is shown, 0..1.
@@ -62,7 +70,7 @@ namespace Game.Gameplay
             }
             if (move != ParkourMove.None || _ledge <= 0f) _ledgeMove = move;
             _ledge = Mathf.MoveTowards(_ledge, move != ParkourMove.None ? 1f : 0f, r.PosePerSecond * Time.deltaTime);
-            if (_ledge <= 0.001f) return;
+            if (_ledge <= 0.001f) { _ledgeBack = 0f; return; }
 
             float w = _ledge * _ledge * (3f - 2f * _ledge);
             // Fading out after the pull-up the pose stays at its end (t = 1); after letting go, at the hang.
@@ -83,14 +91,65 @@ namespace Game.Gameplay
             PoseLeg(0, ThighLeft, ShinLeft, FootLeft, -thighL * w, (thighL + shinL) * w, transform.right);
             PoseLeg(1, ThighRight, ShinRight, FootRight, -thighR * w, (thighR + shinR) * w, transform.right);
 
-            if (hands <= 0.001f) return;
             if (!_gripBonesLooked) FindGripBones();
+            FitToEdge(w, hands, r);
+            if (hands <= 0.001f) return;
             for (int side = 0; side < 2; side++)
             {
-                var hold = _ledgeEdge + transform.right * (side == 0 ? -LedgeHandsApart : LedgeHandsApart) + transform.forward * LedgeHandsOnTop;
+                var hold = LedgeHold(side);
                 // Palms towards the wall, the fingers curled over the edge.
                 Grip(side, side == 0 ? ArmLeft : ArmRight, hold, transform.right, transform.forward, GripCurlDeg, hands);
             }
+        }
+
+        Vector3 LedgeHold(int side) =>
+            _ledgeEdge + transform.right * (side == 0 ? -LedgeHandsApart : LedgeHandsApart) + transform.forward * LedgeHandsOnTop;
+
+        // The deepest any part of the posed body under the top is into the wall face (plus its clearance), at most LedgeBackMax.
+        float LedgeIntoWall()
+        {
+            float back = WallBack(_bones[Torso], WallClearTorso);
+            back = Mathf.Max(back, WallBack(_head, WallClearHead));
+            back = Mathf.Max(back, WallBack(_bones[ShinLeft], WallClearKnee));   // the knee
+            back = Mathf.Max(back, WallBack(_bones[ShinRight], WallClearKnee));
+            back = Mathf.Max(back, WallBack(_bones[FootLeft], WallClearFoot));
+            back = Mathf.Max(back, WallBack(_bones[FootRight], WallClearFoot));
+            return Mathf.Min(back, LedgeBackMax);
+        }
+
+        float WallBack(Transform bone, float clearance) => bone == null ? 0f
+            : LedgeFit.BackFor(Vector3.Dot(bone.position - _ledgeEdge, transform.forward), _ledgeEdge.y - bone.position.y, clearance);
+
+        // No IK (#309): the hang and the pull-up sank the body into the wall (#233) and a mantle's hands stayed short of
+        // the edge. The model goes back off the wall face, then up or down so the arms reach the holds; it is placed
+        // again every Update, so these are this frame's only.
+        void FitToEdge(float w, float hands, ParkourRules r)
+        {
+            var fwd = transform.forward;
+            float back = LedgeIntoWall();
+            // Out at once (never into the wall), in again slowly (no jump as a knee comes up over the top).
+            _ledgeBack = back >= _ledgeBack ? back : Mathf.MoveTowards(_ledgeBack, back, LedgeBackEasePerSecond * Time.deltaTime);
+            _animator.transform.position -= fwd * (_ledgeBack * w);
+            if (hands <= 0.001f) return;
+
+            // Only while the body is still in front of the wall; over the top it stands there and the hands let go.
+            float radius = _ledgeBody != null ? _ledgeBody.radius : 0.35f;
+            float front = Mathf.Clamp01(Vector3.Dot(_ledgeEdge - transform.position, fwd) / Mathf.Max(0.05f, radius + r.HangGap));
+            float lift = 0f;
+            int arms = 0;
+            for (int side = 0; side < 2; side++)
+            {
+                Transform upper = _bones[side == 0 ? ArmLeft : ArmRight], fore = _forearm[side], wrist = _wrist[side];
+                if (upper == null || fore == null || wrist == null) continue;
+                float reach = (Vector3.Distance(upper.position, fore.position) + Vector3.Distance(fore.position, wrist.position)) * LedgeArmBent;
+                var d = LedgeHold(side) - upper.position;
+                lift += LedgeFit.Lift(new Vector2(d.x, d.z).magnitude, d.y, reach, LedgeLiftUp, LedgeLiftDown);
+                arms++;
+            }
+            if (arms == 0) return;
+            _animator.transform.position += Vector3.up * (lift / arms * hands * front);
+            // Lowered, a leg that was over the top may now be in the wall.
+            _animator.transform.position -= fwd * (LedgeIntoWall() * w);
         }
     }
 }
