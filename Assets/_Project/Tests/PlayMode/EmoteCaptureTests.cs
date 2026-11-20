@@ -49,6 +49,8 @@ namespace Game.Tests
             yield return Seconds(0.5f);
 
             // The wheel the real way: hold the emote key, move the mouse to a part, shot while it is held.
+            if (pc.Rig.Mode != ViewMode.FirstPerson) pc.Rig.ToggleMode(); // start in first person: the self-emote shot below (#173)
+            yield return Seconds(0.6f);
             input.Frame.EmoteHeld = true;
             yield return NetHarness.WaitUntil(() => WheelHud.Instance.EmoteWheel.IsOpen, "the emote wheel", null, 3f);
             input.Frame.Look = new Vector2(-5f, -3f); // down and to the left: the fifth part, "춤"
@@ -61,6 +63,9 @@ namespace Game.Tests
             yield return NetHarness.WaitUntil(() => me.EmoteId.Value != 0, "the chosen emote plays", null, 3f);
             Debug.Log("[EmoteCapture] chosen emote id " + me.EmoteId.Value);
             yield return Seconds(1.0f);
+            // #173 (ADR-538): emoting in first person, the camera steps out behind so the player sees their own emote.
+            Debug.Log($"[EmoteCapture] view while emoting: {pc.Rig.Mode}, eye view {pc.Rig.IsEyeView(AimMode.Hip)}");
+            yield return UiShot.Save(Path.Combine(folder, "emote_wheel_result_first.png"), 1920, 1080);
             if (pc.Rig.Mode == ViewMode.FirstPerson) pc.Rig.ToggleMode();
             yield return Seconds(0.6f);
             yield return UiShot.Save(Path.Combine(folder, "emote_wheel_result_third.png"), 1920, 1080);

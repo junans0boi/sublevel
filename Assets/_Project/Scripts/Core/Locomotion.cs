@@ -196,6 +196,7 @@ namespace Game.Core
         public float LandSeconds = 0.12f;      // the air state is held this long after touching down before moving on
         public float StartClipSeconds = 0.25f; // a jump plays its take-off clip this long, then the airborne loop
         public float LandClipSeconds = 0.25f;  // with the jump clips, the landing clip is held this long after touching down
+        public float RunJumpSpeed = 2.5f;      // ground speed (m/s) from which a jump is a running jump: no crouched take-off or stopped landing (#304)
         public float GroundProbeMeters = 0.35f; // airborne when there is no ground this close under the feet; more than a stair step, so walking down steps is not a fall
 
         // Take-off push: toes pointed, back arched, legs straight.
@@ -311,11 +312,13 @@ namespace Game.Core
         // Which jump clip the base layer plays (ADR-537): the take-off right after a jump (not after walking off an edge), then the airborne
         // loop, then the landing while the landing is held (`landing`); hanging on or pulling up a ledge (mid-air mantle, ADR-492) holds the
         // still pose instead, posed by the ledge code. Times in seconds since take-off.
-        public static JumpClip PickJumpClip(bool airborne, bool landing, bool pushedOff, float sinceTakeoff, bool onLedge, JumpRules rules)
+        // A running jump (`groundSpeed` at or over RunJumpSpeed) keeps the stride: straight into the loop, and back to the run blend on touchdown.
+        public static JumpClip PickJumpClip(bool airborne, bool landing, bool pushedOff, float sinceTakeoff, bool onLedge, JumpRules rules, float groundSpeed = 0f)
         {
             if (onLedge) return airborne || landing ? JumpClip.Hold : JumpClip.None;
-            if (airborne) return pushedOff && sinceTakeoff < rules.StartClipSeconds ? JumpClip.Start : JumpClip.Loop;
-            return landing ? JumpClip.Land : JumpClip.None;
+            bool running = groundSpeed >= rules.RunJumpSpeed;
+            if (airborne) return pushedOff && !running && sinceTakeoff < rules.StartClipSeconds ? JumpClip.Start : JumpClip.Loop;
+            return landing && !running ? JumpClip.Land : JumpClip.None;
         }
 
         // How far the knees are tucked up (0..1) for a vertical speed: all the way at the top of a jump, least

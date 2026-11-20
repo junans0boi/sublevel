@@ -258,6 +258,18 @@ namespace Game.Tests
         }
 
         [Test]
+        public void PickJumpClip_RunningJump_SkipsTheCrouchedTakeOffAndTheStoppedLanding()
+        {
+            var jump = new JumpRules();
+            float run = jump.RunJumpSpeed;
+            Assert.AreEqual(JumpClip.Start, Locomotion.PickJumpClip(true, false, true, 0f, false, jump, run - 0.1f), "a standing or walking jump crouches to push off");
+            Assert.AreEqual(JumpClip.Loop, Locomotion.PickJumpClip(true, false, true, 0f, false, jump, run), "a running jump goes straight to the air pose");
+            Assert.AreEqual(JumpClip.Land, Locomotion.PickJumpClip(false, true, true, 0.8f, false, jump, 0f), "landing on the spot bends the knees");
+            Assert.AreEqual(JumpClip.None, Locomotion.PickJumpClip(false, true, true, 0.8f, false, jump, run), "landing on the run runs on");
+            Assert.AreEqual(JumpClip.Hold, Locomotion.PickJumpClip(true, false, true, 0f, true, jump, run), "a ledge still holds");
+        }
+
+        [Test]
         public void PickJumpClip_WalkingOffAnEdge_SkipsTheTakeOff()
         {
             var jump = new JumpRules { StartClipSeconds = 0.25f };
