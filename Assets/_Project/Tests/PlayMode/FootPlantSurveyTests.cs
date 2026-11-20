@@ -126,7 +126,7 @@ namespace Game.Tests
         public IEnumerator Survey()
         {
             var models = (Environment.GetEnvironmentVariable("SURVEY_MODELS") ?? string.Join(",", PlayerAppearance.ModelIds)).Split(',');
-            var csv = new StringBuilder("model,surface,footRest,plantDropMax,plantDropMean,modelDropMax,footFixMax,sunkMax,floatMax,speed\n");
+            var csv = new StringBuilder("model,surface,footRest,plantDropMax,plantDropMean,modelDropMax,sunkMax,floatMax,speed\n");
             Directory.CreateDirectory("Logs");
             foreach (var id in models)
             {
@@ -156,18 +156,18 @@ namespace Game.Tests
                     input.Frame.Move = new Vector2(0, 1);
                     yield return new WaitForSeconds(0.4f);
                     if (!string.IsNullOrEmpty(tag)) for (int i = 0; i < 3; i++) { Shot($"{tag}_{id}_{surface}_walk{i}"); yield return new WaitForSeconds(0.13f); }
-                    float dropMax = 0f, dropSum = 0f, mdMax = 0f, ffMax = 0f, sunk = 0f, floating = 0f, speed = 0f; int n = 0;
+                    float dropMax = 0f, dropSum = 0f, mdMax = 0f, sunk = 0f, floating = 0f, speed = 0f; int n = 0;
                     for (float t = Time.time + 1.6f; Time.time < t; n++)
                     {
                         yield return null;
                         dropMax = Mathf.Max(dropMax, anim.PlantDrop); dropSum += anim.PlantDrop;
-                        mdMax = Mathf.Max(mdMax, anim.ModelDrop); ffMax = Mathf.Max(ffMax, Mathf.Abs(anim.FootFix));
+                        mdMax = Mathf.Max(mdMax, anim.ModelDrop);
                         // Per ankle: over its ground minus the resting height. Only the lower ankle counts (the other one is in the air in a stride).
                         float low = feet.Min(f => f.position.y - GroundAt(f.position)) - anim.FootRest;
                         sunk = Mathf.Max(sunk, -low); floating = Mathf.Max(floating, low);
                         speed += me.GetComponent<CombatantMotion>().LocalVelocity.magnitude;
                     }
-                    csv.AppendLine($"{id},{surface},{anim.FootRest:F3},{dropMax:F3},{dropSum / n:F3},{mdMax:F3},{ffMax:F3},{sunk:F3},{floating:F3},{speed / n:F2}");
+                    csv.AppendLine($"{id},{surface},{anim.FootRest:F3},{dropMax:F3},{dropSum / n:F3},{mdMax:F3},{sunk:F3},{floating:F3},{speed / n:F2}");
                     input.Frame.Move = Vector2.zero;
                     File.WriteAllText("Logs/anim_plant_survey.csv", csv.ToString());
                 }

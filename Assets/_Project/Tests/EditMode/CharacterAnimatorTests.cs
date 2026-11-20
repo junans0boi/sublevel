@@ -69,7 +69,7 @@ namespace Game.Tests
             CollectionAssert.AreEquivalent(new[] { "Lowered", "Aim", "Shoot", "PunchLeft", "PunchRight" }, layers[Upper].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "None", "ReloadStand", "ReloadCrouch", "ReloadProne" }, layers[Action].stateMachine.states.Select(s => s.state.name));
             CollectionAssert.AreEquivalent(new[] { "Breath", "Flinch" }, layers[Additive].stateMachine.states.Select(s => s.state.name));
-            CollectionAssert.AreEquivalent(new[] { "Locomotion", "LocomotionAim", "Unarmed", "UnarmedCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
+            CollectionAssert.AreEquivalent(new[] { "Locomotion", "LocomotionAim", "Unarmed", "UnarmedCrouch", "RifleCrouch", "Swim", "Air", "Death", "Prone" }, layers[Base].stateMachine.states.Select(s => s.state.name));
         }
 
         [Test]
@@ -123,6 +123,44 @@ namespace Game.Tests
                 Assert.Greater(Reach(-90f), 1.5f, name + ": a sidestep to the left");
                 Assert.IsTrue(c.Any(x => x.position.y < -0.5f && x.timeScale < 0f), name + ": back-pedal = a forward cycle played backwards");
                 if (name != "Unarmed") foreach (float deg in new[] { 45f, -45f }) Assert.Greater(Reach(deg), 3f, $"{name}: a diagonal run at {deg} deg");
+            }
+        }
+
+        // #303 / #227: the rifle crouch is the Mixamo kneel standing still and its crouch walks moving (ADR-536), not a code knee bend
+        // (a deep squat with a foot in the air, a lunge when walking).
+        [Test]
+        public void RifleCrouch_IsTheKneelStillAndTheCrouchWalksAheadAndBack_WithTheHipsLowAndTheFeetDown()
+        {
+            var state = Controller().layers[Base].stateMachine.states.Select(s => s.state).First(s => s.name == "RifleCrouch");
+            var tree = state.motion as BlendTree;
+            Assert.IsNotNull(tree);
+            Assert.AreEqual(BlendTreeType.Simple1D, tree.blendType);
+            Assert.AreEqual("Move", tree.blendParameter);
+            Assert.IsTrue(state.speedParameterActive && state.speedParameter == "Pace", "the legs keep pace with the ground");
+            var c = tree.children.OrderBy(x => x.threshold).ToArray();
+            CollectionAssert.AreEqual(new[] { "RifleCrouchWalkBack", "RifleKneelIdle", "RifleCrouchWalk" }, c.Select(x => x.motion.name));
+            Assert.Less(c[0].threshold, -0.5f, "the back walk at its own ground speed (m/s)");
+            Assert.AreEqual(0f, c[1].threshold);
+            Assert.Greater(c[2].threshold, 0.5f, "the crouch walk at its own ground speed (m/s)");
+            foreach (var x in c) { Assert.AreEqual(1f, x.timeScale, x.motion.name + " plays forward"); Assert.IsTrue(((AnimationClip)x.motion).isLooping, x.motion.name + " loops"); }
+
+            Pose(Base, "Locomotion", 0f);
+            float standingHips = Local(S.Hips).y;
+            foreach (var (move, what) in new[] { (0f, "kneel"), (c[2].threshold, "crouch walk"), (c[0].threshold, "crouch walk back") })
+            {
+                _animator.SetFloat("Move", move);
+                float lowFootMax = 0f, highFootMax = 0f, hipsMax = 0f;
+                for (int i = 0; i <= 10; i++)
+                {
+                    Pose(Base, "RifleCrouch", i / 10f);
+                    float l = Local(S.LeftFoot).y, r = Local(S.RightFoot).y;
+                    lowFootMax = Mathf.Max(lowFootMax, Mathf.Min(l, r)); highFootMax = Mathf.Max(highFootMax, Mathf.Max(l, r));
+                    hipsMax = Mathf.Max(hipsMax, Local(S.Hips).y);
+                }
+                Debug.Log($"[AnimTest] RifleCrouch {what}: hips max {hipsMax:F3} (standing {standingHips:F3}) lower ankle max {lowFootMax:F3} higher ankle max {highFootMax:F3}");
+                Assert.Greater(standingHips - hipsMax, 0.2f, what + ": the hips are well down from standing");
+                Assert.Less(lowFootMax, 0.2f, what + ": a foot is always on the floor");
+                if (move == 0f) Assert.Less(highFootMax, 0.25f, "kneel: neither foot is lifted (#227)");
             }
         }
 
@@ -297,7 +335,7 @@ namespace Game.Tests
             _animator.SetFloat("Move", 3f); _animator.SetFloat("MoveZ", 3f);
             foreach (var (layer, state, upper) in new[]
             {
-                (Base, "Locomotion", 0f), (Base, "LocomotionAim", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
+                (Base, "Locomotion", 0f), (Base, "LocomotionAim", 0f), (Base, "Unarmed", 0f), (Base, "UnarmedCrouch", 0f), (Base, "RifleCrouch", 0f), (Base, "Swim", 0f), (Base, "Death", 0f), (Base, "Prone", 0f),
                 (Upper, "Aim", 1f), (Upper, "PunchRight", 1f), (Upper, "PunchLeft", 1f),
             })
             {

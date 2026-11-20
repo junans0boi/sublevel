@@ -93,6 +93,17 @@ public static class CharacterControllerBuilder
         crouchTree.AddChild(Clip("U_Crouch_Fwd_Loop"), gait.UnarmedCrouchSpeed);
         crouch.speedParameter = CombatantAnimation.Pace;
         crouch.speedParameterActive = true;
+        // Armed crouch (ADR-536, #303): the Mixamo rifle kneel standing still, its crouch walks ahead and back; replaces the code knee bend
+        // (#227: a deep squat with a foot in the air, a lunge when walking). Forward-only like the bare-handed crouch: the legs turn to the heading.
+        var rifleCrouch = controller.CreateBlendTreeInController(CombatantAnimation.RifleCrouch, out var rifleCrouchTree, 0);
+        rifleCrouchTree.blendType = BlendTreeType.Simple1D;
+        rifleCrouchTree.blendParameter = CombatantAnimation.Move;
+        rifleCrouchTree.useAutomaticThresholds = false;
+        rifleCrouchTree.AddChild(Clip("RifleCrouchWalkBack"), -gait.RifleCrouchBackSpeed);
+        rifleCrouchTree.AddChild(Clip("RifleKneelIdle"), 0f);
+        rifleCrouchTree.AddChild(Clip("RifleCrouchWalk"), gait.RifleCrouchSpeed);
+        rifleCrouch.speedParameter = CombatantAnimation.Pace;
+        rifleCrouch.speedParameterActive = true;
         // Swimming (#236, UAL Swim_Idle/Fwd, CC0 C-0004): the clips already lie flat, so the prone pitch and the code kick/stroke are off while it plays.
         var swim = controller.CreateBlendTreeInController(CombatantAnimation.SwimState, out var swimTree, 0);
         swimTree.blendType = BlendTreeType.Simple1D;
