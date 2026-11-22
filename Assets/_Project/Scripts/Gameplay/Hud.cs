@@ -436,8 +436,15 @@ namespace Game.Gameplay
                 _promptFor = null;
                 _promptLabel.text = "[F]  엘리베이터 호출";
             }
+            // By the race gate with no car in reach yet: the way in (#483).
+            bool raceHint = !dead && loot == null && !vehicle && !liftCall && HudBackend.RaceHallHint(me);
+            if (raceHint)
+            {
+                _promptFor = null;
+                _promptLabel.text = "경주장  ·  차 옆에서 [F] 탑승";
+            }
             Show(_promptIconRoot, hasLoot);
-            Show(_prompt, hasLoot || vehicle || liftCall);
+            Show(_prompt, hasLoot || vehicle || liftCall || raceHint);
         }
 
         // Shows how the weapon is aimed (ADR-048): four lines at the edge of the spread cone from the hip, closer

@@ -33,6 +33,8 @@ namespace Game.Core
         // bollard line (people pass between the posts, cars do not), people may walk all of it.
         public const float PitX0 = 26f, PitX1 = 52f, PitZ0 = -23f, PitZ1 = -6f;
         public const float BollardX = 36f;
+        // #483: on the island in front of the gate or in the pit: where the HUD names the race hall and its key.
+        public static bool NearGate(float lx, float lz) => lx >= PitX0 - 12f && lx <= PitX1 && lz >= PitZ0 - 4f && lz <= PitZ1 + 4f;
         // The hall round it all (walls and roof); every vehicle inside is a race car (no damage, no fuel, no roadkill, ADR-508).
         public const float HallX0 = 40f, HallX1 = 196f, HallZ0 = -140f, HallZ1 = 75f;
         public const float HallHeight = 20f;      // as high as the island's wall: the gate is a plain cut in it

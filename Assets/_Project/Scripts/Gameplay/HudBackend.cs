@@ -87,6 +87,17 @@ namespace Game.Gameplay
             me != null && !me.Dead.Value && !VehicleSeat.IsAttached(me)
             && Vehicle.NearestEnterable(me.transform.position, VehicleRules.Current.EnterRange, out _) != null;
 
+        // #483: on foot by the race gate while the island's race is open (its cars stand in the hall): the HUD shows the way in.
+        public static bool RaceHallHint(Combatant me)
+        {
+            if (me == null || me.Dead.Value || Vehicle.EventRace || VehicleSeat.IsAttached(me)) return false;
+            var p = me.transform.position;
+            if (!RaceTrack.NearGate(p.x - WaitingIsland.CentreX, p.z - WaitingIsland.CentreZ)) return false;
+            for (int i = 0; i < Vehicle.All.Count; i++)
+                if (Vehicle.All[i] != null && Vehicle.All[i].IsRaceCar) return true;
+            return false;
+        }
+
         // ---- Match ----
 
         public static int Alive()
