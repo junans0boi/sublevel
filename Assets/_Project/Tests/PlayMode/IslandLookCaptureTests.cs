@@ -92,7 +92,9 @@ namespace Game.Tests
             var cam = new GameObject("LookCamera").AddComponent<Camera>();
             cam.enabled = false;
             cam.nearClipPlane = 0.05f;
-            cam.farClipPlane = pc.Camera.farClipPlane;   // the view-distance setting the player has (700 m on 높음, the World's own)
+            cam.farClipPlane = pc.Camera.farClipPlane;   // the view-distance setting the player has (500 m on 보통, 700 m on 높음)
+            cam.layerCullDistances = pc.Camera.layerCullDistances;   // and its prop cull distances (#477)
+            cam.layerCullSpherical = pc.Camera.layerCullSpherical;
             cam.fieldOfView = 60f;
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
             cam.GetUniversalAdditionalCameraData().SetRenderer(world.RendererIndex);

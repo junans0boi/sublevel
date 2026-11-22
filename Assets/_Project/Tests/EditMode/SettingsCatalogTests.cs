@@ -133,6 +133,19 @@ namespace Game.Tests
         }
 
         [Test]
+        public void DetectPreset_ByGraphicsMemoryAndCores()
+        {
+            Assert.AreEqual(SettingsCatalog.PresetMedium, SettingsCatalog.DetectPreset(8192, 12), "GTX 1080 + Ryzen 5 2600X (#484)");
+            Assert.AreEqual(SettingsCatalog.PresetLow, SettingsCatalog.DetectPreset(1536, 8), "integrated GPU");
+            Assert.AreEqual(SettingsCatalog.PresetLow, SettingsCatalog.DetectPreset(8192, 4), "quad core");
+            Assert.AreEqual(SettingsCatalog.PresetHigh, SettingsCatalog.DetectPreset(12288, 16), "RTX 3080 class");
+            Assert.AreEqual(SettingsCatalog.PresetMedium, SettingsCatalog.DetectPreset(0, 12), "unknown memory");
+            // Fewer things drawn far away on 보통 than on 높음 (#484).
+            Assert.Less(SettingsCatalog.PresetValue(SettingsCatalog.PresetMedium, SettingId.ViewDistance),
+                SettingsCatalog.PresetValue(SettingsCatalog.PresetHigh, SettingId.ViewDistance));
+        }
+
+        [Test]
         public void ChoosingCustom_KeepsTheAdvancedRows()
         {
             var values = SettingsCatalog.Defaults();

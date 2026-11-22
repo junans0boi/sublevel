@@ -216,7 +216,8 @@ namespace Game.Tests
             var cam = new GameObject("ProbeCamera").AddComponent<Camera>();
             cam.enabled = false;
             cam.nearClipPlane = 0.05f;
-            cam.farClipPlane = 700f;
+            cam.farClipPlane = 700f;   // 높음, the worst preset
+            GraphicsOptions.ApplyLayerCull(cam);   // small/medium props stop at 150/300 m as on the player's camera (#477)
             cam.fieldOfView = 60f;
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
             // The map's own renderer, as the player's camera uses (no SSAO on the outdoor map).
@@ -237,6 +238,16 @@ namespace Game.Tests
 
                 RenderProbe.Result result = default;
                 yield return RenderProbe.Measure(cam, r => result = r, screenshotPath: $"Logs/perf/world_{region.Id}.png");
+                if (System.Environment.GetEnvironmentVariable("WORLD_CULL_COMPARE") == "1")
+                {
+                    // Same view without the layer cull distances: the before of #477.
+                    var cull = cam.layerCullDistances;
+                    cam.layerCullDistances = new float[32];
+                    RenderProbe.Result off = default;
+                    yield return RenderProbe.Measure(cam, r => off = r, screenshotPath: $"Logs/perf/world_{region.Id}_nocull.png");
+                    Debug.Log($"[Perf] world {region.Id} no layer cull: {off}");
+                    cam.layerCullDistances = cull;
+                }
                 ids.Add(region.Id);
                 results.Add(result);
             }
