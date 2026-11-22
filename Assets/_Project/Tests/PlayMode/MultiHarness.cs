@@ -24,7 +24,7 @@ namespace Game.Tests
             // One-shot presses last a single frame.
             Frame.Jump = Frame.FirePressed = Frame.Reload = Frame.Interact = false;
             Frame.ToggleView = Frame.Heal = Frame.Restart = false;
-            Frame.Ping = Frame.CarryPressed = false;
+            Frame.Ping = Frame.CarryPressed = Frame.Boost = false;
             Frame.SelectSlot = -1;
             return f;
         }

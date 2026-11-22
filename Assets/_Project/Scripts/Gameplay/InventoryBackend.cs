@@ -308,7 +308,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Ammo:
                     return AmmoName(source.Index) + " 탄약\n보유 " + Reserve(combatant, source.Index) + "발";
                 case InventorySourceKind.Medkit:
-                    return "구급상자\n" + GearTips.Heal(HealKind.Medkit, HealRules.Current) + " · 보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개";
+                    return "구급상자\n" + GearTips.Heal(HealKind.Medkit, HealRules.Current) + " · 보유 " + (combatant != null ? combatant.Medkits.Value : 0) + "개 · 우클릭 사용";
                 case InventorySourceKind.Grenade:
                     return ThrowableRules.GrenadeName + "\n투척물 · 보유 " + Grenades(combatant) + "개 · 클릭: 투척 칸으로, 더블클릭: 꺼내기";
                 case InventorySourceKind.Bandage:
@@ -519,10 +519,8 @@ namespace Game.Gameplay
             if (combatant != null) combatant.CmdSwapSlots(a, b);
         }
 
-        public static void UseMedkit(Combatant combatant)
-        {
-            if (combatant != null) combatant.CmdUseMedkit();
-        }
+        // #482: the medkit row uses the medkit itself, not H's best fit (which picks a bandage under 75).
+        public static void UseMedkit(Combatant combatant) => UseHealing(combatant, HealKind.Medkit);
 
         public static void DropWeapon(Combatant combatant, int slot)
         {
@@ -703,18 +701,19 @@ namespace Game.Gameplay
             if (healing != null) healing.CmdDrop((int)kind);
         }
 
-        // ADR-081 (#110): a single right click on a bandage or first-aid row uses it (other rows: quick drop).
+        // ADR-081 (#110) / ADR-520 (#482): a single right click on a bandage, first-aid, medkit or boost row uses it (other rows: quick drop).
         public static bool RightClickHeal(InventorySourceKind kind, out HealKind heal)
         {
-            heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid : BoostKindOf(kind);
+            heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid
+                : kind == InventorySourceKind.Medkit ? HealKind.Medkit : BoostKindOf(kind);
             return heal != HealKind.None;
         }
 
-        // Starts that bandage or kit (timed; the server refuses at full health or while busy).
+        // Starts that item (timed; the server refuses at full health, while busy or when none is carried).
         public static void UseHealing(Combatant combatant, HealKind kind)
         {
             var healing = combatant != null ? combatant.GetComponent<CombatantHealing>() : null;
-            if (healing != null) healing.CmdUseKind((int)kind);
+            if (healing != null) healing.RequestUseKind(kind);
         }
 
         // The server takes the piece only when it is better than the worn one (see CanEquipArmor).

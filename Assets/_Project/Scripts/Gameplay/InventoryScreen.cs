@@ -828,7 +828,6 @@ namespace Game.Gameplay
                 return;
             }
             if (source.Kind == InventorySourceKind.Vicinity && clickCount >= 2) InventoryBackend.Pickup(me, source.Loot);
-            else if (source.Kind == InventorySourceKind.Medkit && clickCount >= 2) InventoryBackend.UseMedkit(me);
             else if (clickCount >= 2 && InventoryBackend.RightClickHeal(source.Kind, out var heal)) InventoryBackend.UseHealing(me, heal);
             else if (source.Kind == InventorySourceKind.Jerrycan && clickCount >= 2) InventoryBackend.UseJerrycan(me);
             else if (source.Kind == InventorySourceKind.Weapon && source.Index == InventoryBackend.ThrowableSlot) InventoryBackend.SelectSlot(me, source.Index);
@@ -871,10 +870,7 @@ namespace Game.Gameplay
                 case InventorySourceKind.Backpack:
                     return;
             }
-            if (InventoryBackend.RightClickHeal(source.Kind, out var heal))
-            {
-                if (TryExtraCount(source, me, out int held) && held > 0) InventoryBackend.UseHealing(me, heal);
-            }
+            if (InventoryBackend.RightClickHeal(source.Kind, out var heal)) InventoryBackend.UseHealing(me, heal); // the server refuses when none is left
             else DropOnGround(source);
         }
 

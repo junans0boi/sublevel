@@ -184,7 +184,8 @@ namespace Game.Tests
             Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.FirstAid, out heal));
             Assert.AreEqual(HealKind.FirstAid, heal);
             Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.Ammo, out _));
-            Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.Medkit, out _));
+            Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.Medkit, out heal), "#482: the medkit row is used, not dropped");
+            Assert.AreEqual(HealKind.Medkit, heal);
             Assert.IsFalse(InventoryBackend.RightClickHeal(InventorySourceKind.BagOptic, out _));
         }
     }
