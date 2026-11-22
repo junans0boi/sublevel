@@ -22,6 +22,9 @@ namespace Game.Core
         public float HeadUnderMargin = 0.05f;
         public float VerticalSpeed = 2.5f;      // rising and sinking, m/s
         public float FloorClearance = 0.05f;
+        // Getting out (#458): swimming into a bank or lip no higher than this over the surface climbs out onto it; a
+        // higher one (up to the mantle's reach, about 2 m over the surface) takes Space.
+        public float WadeOutLip = 0.6f;
         // Pose (code-driven, no clip): crawl stroke and flutter kick, rates in cycles per second.
         public float StrokeHzIdle = 0.22f;      // treading water
         public float StrokeHzFull = 0.85f;      // at the swim speed
