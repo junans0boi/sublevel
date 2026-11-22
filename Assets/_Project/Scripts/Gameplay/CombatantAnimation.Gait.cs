@@ -34,7 +34,13 @@ namespace Game.Gameplay
         public float FootPlantLeft => _plant[0];
         public float FootPlantRight => _plant[1];
         public float CrawlPhase => _crawlPhase;
-        public readonly string[] PlantDebug = new string[2]; // pose review: foot height and ground found under each foot
+        // Pose review: foot height and ground found under a foot. Formatted on demand; PlantFeet built both strings every frame.
+        public string PlantDebug(int side) => $"footY {_plantFootY[side]:F3} groundDelta {_plantGroundDelta[side]:F3}";
+        readonly float[] _plantFootY = new float[2], _plantGroundDelta = new float[2];
+        // PlantFeet's per-foot scratch, kept: it ran every frame per close combatant and allocated four arrays each time.
+        readonly float[] _plantWant = new float[2], _plantAbove = new float[2];
+        readonly float?[] _plantUnder = new float?[2];
+        readonly Vector3[] _plantNormal = new Vector3[2];
 
         // Pure: how far (0..1) a body turning at `yawRateDegPerSecond` while nearly still steps its feet.
         public static float TurnStepAmount(float yawRateDegPerSecond, float speed)
@@ -141,10 +147,10 @@ namespace Game.Gameplay
                 return;
             }
             bool still = speed < 0.4f;
-            var want = new float[2];
-            var above = new float[2];
-            var under = new float?[2];
-            var normal = new Vector3[2];
+            var want = _plantWant;
+            var above = _plantAbove;
+            var under = _plantUnder;
+            var normal = _plantNormal;
             // Each ankle belongs `rest` above the ground under it (a bit more on a slope). The target is measured against the capsule's own height:
             // the capsule hovers by its skin width and rests on its side on a steep slope, so the origin is not on the ground and a cast under the
             // origin would not say where the soles are. A cast that finds something far below the origin missed the floor (a layer it skips would
@@ -157,7 +163,7 @@ namespace Game.Gameplay
                 float groundDelta = under[side].HasValue
                     ? Mathf.Max(under[side].Value - transform.position.y, -PlantMaxBelowOrigin) + _footRestHeight * (1f / Mathf.Max(0.7f, normal[side].y) - 1f)
                     : 0f;
-                PlantDebug[side] = $"footY {footY:F3} groundDelta {groundDelta:F3}";
+                _plantFootY[side] = footY; _plantGroundDelta[side] = groundDelta;
                 above[side] = footY - (_footRestHeight + groundDelta); // how far this ankle is over where it belongs
                 want[side] = PlantMove(footY, _footRestHeight, groundDelta, still) * (1f - _stepShown[side]);
             }

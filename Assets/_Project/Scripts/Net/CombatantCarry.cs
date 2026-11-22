@@ -150,6 +150,8 @@ namespace Game.Net
         {
             if (!IsServerInitialized) return;
             float now = Time.time;
+            // Phase spread: everyone spawned on the same frame scanned all the loot on the same frame for ever.
+            if (_nextScan == 0f) _nextScan = now + UnityEngine.Random.value * CarryRules.Current.AutoPickupInterval;
             if (now < _nextScan) return;
             _nextScan = now + CarryRules.Current.AutoPickupInterval;
             ServerScanAmmo();

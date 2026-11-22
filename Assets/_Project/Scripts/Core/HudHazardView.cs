@@ -4,7 +4,7 @@ namespace Game.Core
     public enum HudChip : byte { None = 0, Held = 1, Used = 2 }
 
     // What the HUD's hazard slot shows (ADR-246): filled by the pollution code, read by the UI. Plain data, no core dependency.
-    public struct HudHazardView
+    public struct HudHazardView : System.IEquatable<HudHazardView>
     {
         public HazardWarn Warn;
         public int SecondsToClose; // for Warning/Imminent; <0 = unknown
@@ -21,6 +21,11 @@ namespace Game.Core
             string time = Warn != HazardWarn.Sealed && SecondsToClose >= 0 ? " · 봉쇄까지 " + (SecondsToClose / 60).ToString("00") + ":" + (SecondsToClose % 60).ToString("00") : "";
             return "[" + tag + "]" + where + time;
         }
+
+        // Typed: the HUD compares every frame, and ValueType.Equals boxes and reflects (7 allocations a call).
+        public bool Equals(HudHazardView o) => Warn == o.Warn && SecondsToClose == o.SecondsToClose && Region == o.Region && Keys == o.Keys && Chip == o.Chip;
+        public override bool Equals(object obj) => obj is HudHazardView o && Equals(o);
+        public override int GetHashCode() => System.HashCode.Combine(Warn, SecondsToClose, Region, Keys, Chip);
 
         public string Items()
         {

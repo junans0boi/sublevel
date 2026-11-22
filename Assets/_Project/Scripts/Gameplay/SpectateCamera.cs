@@ -259,16 +259,21 @@ namespace Game.Gameplay
             ZoneBanner.SpectatorFeet = look;
         }
 
+        static readonly RaycastHit[] ClearHits = new RaycastHit[16];
+
         // `to`, or short of the first thing between `from` and it (not `ignore`'s own colliders).
         static Vector3 Clear(Vector3 from, Vector3 to, Transform ignore)
         {
             var d = to - from;
             float length = d.magnitude;
             if (length < 1e-3f) return to;
-            var hits = Physics.SphereCastAll(from, 0.25f, d / length, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            int count = Physics.SphereCastNonAlloc(from, 0.25f, d / length, ClearHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = length;
-            foreach (var h in hits)
+            for (int i = 0; i < count; i++)
+            {
+                var h = ClearHits[i];
                 if (h.distance > 0f && (ignore == null || !h.collider.transform.IsChildOf(ignore))) best = Mathf.Min(best, h.distance);
+            }
             return from + d / length * Mathf.Max(0.8f, best - 0.1f);
         }
 

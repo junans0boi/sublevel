@@ -970,6 +970,11 @@ namespace Game.AI
 
         float _walkOutSeconds = BotPollutionPlan.MinimumWalkSeconds, _walkOutAt;
 
+        // Its own method: a lambda capturing zones/own in TryWarnedLeaveTarget allocated its closure on every call
+        // (once a frame per bot), though it runs only every 2 s.
+        static float MetersToBorder(PollutionDirector zones, int own, Vector3 at, Vector3 aim) =>
+            BotPollutionPlan.MetersToBorder((x, z) => zones.RegionIndexAt(new Vector3(x, 0f, z)) == own, at.x, at.z, aim.x, aim.z);
+
         bool TryWarnedLeaveTarget(PollutionDirector zones, Vector3 at, out Vector3 target, out bool urgent)
         {
             target = default;
@@ -997,8 +1002,7 @@ namespace Game.AI
             {
                 var aim = target;
                 _walkOutAt = Time.time + 2f;
-                _walkOutSeconds = BotPollutionPlan.WalkOutSeconds(
-                    BotPollutionPlan.MetersToBorder((x, z) => zones.RegionIndexAt(new Vector3(x, 0f, z)) == own, at.x, at.z, aim.x, aim.z), _agent.speed);
+                _walkOutSeconds = BotPollutionPlan.WalkOutSeconds(MetersToBorder(zones, own, at, aim), _agent.speed);
             }
             float walk = _walkOutSeconds;
             if (!BotPollutionPlan.ShouldLeave(PollutionState.Warning, since, left, zones.IsDoomed(at), _level, unchecked(_botIndex * 7919 + _self.ObjectId), walk)) return false;

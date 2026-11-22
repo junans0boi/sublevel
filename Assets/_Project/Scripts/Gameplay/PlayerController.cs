@@ -865,15 +865,20 @@ namespace Game.Gameplay
             else _combatant.CmdPunch(direction);
         }
 
+        static readonly RaycastHit[] RideHits = new RaycastHit[16];
+
         // The ride view's spot toward `side` from the head, stopping short of walls, door and ceiling.
         Vector3 RideCameraSpot(Vector3 head, Vector3 side)
         {
             var offset = side * RideCameraForward + Vector3.up * (RideCameraHeight - 1.6f);
             float reach = offset.magnitude;
             var dir = offset / reach;
-            var hits = Physics.SphereCastAll(head, 0.12f, dir, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-            foreach (var hit in hits)
+            int count = Physics.SphereCastNonAlloc(head, 0.12f, dir, RideHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                var hit = RideHits[i];
                 if (hit.distance > 0f && !hit.transform.IsChildOf(transform)) reach = Mathf.Min(reach, Mathf.Max(0.05f, hit.distance - 0.05f));
+            }
             return head + dir * reach;
         }
 

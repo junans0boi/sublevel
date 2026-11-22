@@ -147,7 +147,7 @@ namespace Game.Net
         {
             if (_car == null)
             {
-                var island = GameObject.Find("WaitingIsland");
+                var island = FindIsland();
                 var car = island != null ? island.transform.Find("BungeeLiftCar") : null;
                 if (car == null) return;
                 _car = car; _carDoors = car.Find("Doors");
@@ -292,9 +292,20 @@ namespace Game.Net
         }
 
         // The island is part of the World scene; its board spot is WaitingIsland.Board (Core). Built once the island object exists.
+        // The island, looked up at most once a second while it is missing: in the World match there is none, and
+        // GameObject.Find walked the whole map twice a frame (docs/INEFFICIENCY_AUDIT.md).
+        float _findAt = float.NegativeInfinity;
+        GameObject FindIsland()
+        {
+            if (!_preview && Time.unscaledTime < _findAt) return null;
+            var island = GameObject.Find("WaitingIsland");
+            if (island == null) _findAt = Time.unscaledTime + 1f;
+            return island;
+        }
+
         bool TryBuildBoard()
         {
-            var island = GameObject.Find("WaitingIsland");
+            var island = FindIsland();
             if (island == null) return false;
             // Korean pages (ADR-502): the game's Korean UI font, the built-in one only when it is missing.
             var font = Resources.Load<Font>("Fonts/NotoSansKR");

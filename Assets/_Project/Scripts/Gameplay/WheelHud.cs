@@ -80,32 +80,29 @@ namespace Game.Gameplay
 
             // Marker wheel: team matches, on foot; held past the tap time it opens, letting go places the ping.
             bool markerOk = allowed && me.HasTeam && !me.Knocked.Value && !EmoteWheel.IsOpen;
-            Tick(MarkerWheel, markerOk && input.PingHeld, ref _pingHeld, DeviceInput.WheelHoldSeconds, kind =>
-            {
-                if (kind >= 0) PlaceMarker(me, player, (PingKind)kind);
-            });
+            int kind = Tick(MarkerWheel, markerOk && input.PingHeld, ref _pingHeld, DeviceInput.WheelHoldSeconds);
+            if (kind >= 0) PlaceMarker(me, player, (PingKind)kind);
 
             bool emoteOk = allowed && !me.Knocked.Value && !me.IsCarrying && !me.BeingCarried && !MarkerWheel.IsOpen;
-            Tick(EmoteWheel, emoteOk && input.EmoteHeld, ref _emoteHeld, EmoteHoldSeconds, part =>
-            {
-                if (part >= 0) player.StartEmote((Emote)(part + 1));
-            });
+            int part = Tick(EmoteWheel, emoteOk && input.EmoteHeld, ref _emoteHeld, EmoteHoldSeconds);
+            if (part >= 0) player.StartEmote((Emote)(part + 1));
         }
 
-        // Opens `wheel` once the button has been held `after` seconds; on release hands the chosen part over.
-        static void Tick(RadialWheel wheel, bool held, ref float heldFor, float after, System.Action<int> chosen)
+        // Opens `wheel` once the button has been held `after` seconds; on release returns the chosen part (-1 none).
+        // A returned value, not a callback: the two lambdas captured locals and allocated every frame.
+        static int Tick(RadialWheel wheel, bool held, ref float heldFor, float after)
         {
             if (held)
             {
                 heldFor += Time.unscaledDeltaTime;
                 if (heldFor >= after) wheel.Show();
-                return;
+                return -1;
             }
             heldFor = 0f;
-            if (!wheel.IsOpen) return;
+            if (!wheel.IsOpen) return -1;
             int part = wheel.Selected;
             wheel.Hide();
-            chosen(part);
+            return part;
         }
 
         // What the marker wheel does with a part: the ping at the crosshair, "enemy" when one stands on the spot.
