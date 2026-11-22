@@ -238,7 +238,9 @@ namespace Game.Gameplay
 
             _sightsBlend = Mathf.MoveTowards(_sightsBlend, _sights ? 1f : 0f, _anchorChangePerSecond * Time.deltaTime);
             var fit = _fitByWeaponId[wanted];
-            var anchor = Vector3.Lerp(HipAnchorFor(fit), SightsAnchorFor(fit), _sightsBlend);
+            // Eased in and out (WEAPON_MOTION_AUDIT #2): a linear slide starts and stops the weapon in one frame.
+            float sights = Mathf.SmoothStep(0f, 1f, _sightsBlend);
+            var anchor = Vector3.Lerp(HipAnchorFor(fit), SightsAnchorFor(fit), sights);
             // From the top rear of the weapon to its middle.
             var center = anchor + new Vector3(0f, -fit.Size.y * 0.5f, fit.Size.z * 0.5f);
             var model = _modelsByWeaponId[wanted].transform;
@@ -254,7 +256,7 @@ namespace Game.Gameplay
             // The view model's own motion (#217), turning about the right hand.
             var m = _motion.Step(ViewInput());
             // At the hip the muzzle points a little in toward the middle of the view, so every class aims at about one spot.
-            var rm = Quaternion.Euler(m.PitchDeg, m.YawDeg - HipYawDeg * (1f - _sightsBlend), m.RollDeg);
+            var rm = Quaternion.Euler(m.PitchDeg, m.YawDeg - HipYawDeg * (1f - sights), m.RollDeg);
             var restTurn = actTurn * fit.Rotation;
             var pivot = origin + restTurn * _gripRest[wanted];
             origin = pivot + rm * (origin - pivot) + new Vector3(m.X, m.Y, m.Z);

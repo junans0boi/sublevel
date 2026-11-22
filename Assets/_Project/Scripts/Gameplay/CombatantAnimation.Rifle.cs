@@ -59,10 +59,16 @@ namespace Game.Gameplay
         // 0..1 while a long gun is being lowered after the holster key (1 when not), and the weapon id still held for it.
         public float HolsterProgress { get; private set; } = 1f;
         public const float HolsterSeconds = 0.3f;
+        const float SwapLowerShare = 0.4f; // swapping guns: at most this share of the new weapon's draw time lowers the old one
+        float _swapLower = HolsterSeconds;
         int _holsterId;
         float _holsterStart = -10f;
         // The weapon in the hands for the poses: the active one, or the one being put away.
-        public int HeldId => _itemHidesWeapon ? 0 : _combatant.ActiveWeaponId != 0 ? _combatant.ActiveWeaponId : _holsterId;
+        // Swapping guns, the old one stays in the hand while it lowers (WEAPON_MOTION_AUDIT #1): it popped out in one frame.
+        // A switch that lands after this frame's Update (TrackAction) also keeps the old gun until the lowering starts next frame.
+        public int HeldId => _itemHidesWeapon ? 0 : _holsterId != 0 ? _holsterId
+            : SwapNotSeenYet ? _lastDrawnId : _combatant.ActiveWeaponId;
+        bool SwapNotSeenYet => _lastDrawnId != 0 && _combatant.ActiveWeaponId != 0 && _combatant.ActiveWeaponId != _lastDrawnId && !_combatant.Dead.Value && LongGunInHand(_lastDrawnId);
         public ActionPose ActionShown { get; private set; }
         // Weapon inspection (#200): 0..1 through it, -1 when not inspecting. Cosmetic and local (own view): not replicated.
         public float InspectProgress { get; private set; } = -1f;
@@ -81,6 +87,8 @@ namespace Game.Gameplay
         // How much of the two-handed long gun hold is shown (0..1) and how far it is raised (0 low ready, 1 shouldered).
         public float RifleHoldShown => _rifle;
         public float RifleReady => _ready;
+        // The raise eased in and out (WEAPON_MOTION_AUDIT #2): the linear one started and stopped the weapon in a single frame.
+        float ReadyShown => Mathf.SmoothStep(0f, 1f, _ready);
         // The hold pose shown this frame (angles and stock offset, RifleHoldRules).
         public RifleHoldPose RiflePose { get; private set; }
 
@@ -194,7 +202,7 @@ namespace Game.Gameplay
                 _smoothVelocity = localVelocity;
                 _smoothAccel = Vector3.Lerp(_smoothAccel, accel, k);
             }
-            RiflePose = RifleHold.Pose(speed, _sprintShown, _ready, r);
+            RiflePose = RifleHold.Pose(speed, _sprintShown, ReadyShown, r);
             TrackAction();
         }
 
@@ -249,13 +257,23 @@ namespace Game.Gameplay
             ReloadProgress = reloading ? (_reloadKind == ReloadKind.Shell ? 0.5f : Mathf.Clamp01((Time.time - _reloadStart) / _reloadSeconds)) : -1f;
             if (id != _lastDrawnId)
             {
-                if (id != 0) { _drawStart = Time.time; _drawSeconds = Mathf.Max(0.25f, def != null ? def.DrawSeconds : 0.4f); _holsterId = 0; }
-                // Putting a long gun away: it stays in the hand and lowers for HolsterSeconds instead of vanishing (#200).
-                else if (_lastDrawnId != 0 && !_combatant.Dead.Value && LongGunInHand(_lastDrawnId)) { _holsterId = _lastDrawnId; _holsterStart = Time.time; }
+                // Putting a gun away (to empty hands, #200, or to another weapon): it stays in the hand and lowers instead of vanishing.
+                bool lowerOld = _lastDrawnId != 0 && !_combatant.Dead.Value && LongGunInHand(_lastDrawnId);
+                _holsterId = lowerOld ? _lastDrawnId : 0;
+                _holsterStart = Time.time;
+                if (id != 0)
+                {
+                    // The new weapon is drawn in what is left of its own draw time, so it is ready when the server says it is.
+                    float draw = Mathf.Max(0.25f, def != null ? def.DrawSeconds : 0.4f);
+                    _swapLower = lowerOld ? Mathf.Min(HolsterSeconds, SwapLowerShare * draw) : 0f;
+                    _drawStart = Time.time + _swapLower;
+                    _drawSeconds = draw - _swapLower;
+                }
+                else _swapLower = HolsterSeconds;
                 _lastDrawnId = id;
             }
             DrawProgress = Mathf.Clamp01((Time.time - _drawStart) / _drawSeconds);
-            HolsterProgress = _holsterId != 0 && id == 0 ? Mathf.Clamp01((Time.time - _holsterStart) / HolsterSeconds) : 1f;
+            HolsterProgress = _holsterId != 0 ? Mathf.Clamp01((Time.time - _holsterStart) / Mathf.Max(0.05f, _swapLower)) : 1f;
             if (HolsterProgress >= 1f) _holsterId = 0;
             // A reload, a switch or a shot (the kick) ends the inspection.
             float inspect = (Time.time - _inspectStart) / ReloadMotion.InspectSeconds;
@@ -389,16 +407,17 @@ namespace Game.Gameplay
             // The shoulders to the hold's twist from the facing, measured on the shoulder line itself: the run clip
             // turns the hips (27 degrees) and the chest with the stride. Low ready keeps some of the stride's swing.
             var pose = RiflePose;
-            float square = Mathf.Lerp(LowReadySquare, 1f, _ready) * _rifle;
+            float ready = ReadyShown;
+            float square = Mathf.Lerp(LowReadySquare, 1f, ready) * _rifle;
             Turn(Torso, Mathf.DeltaAngle(ShoulderYaw(), _shoulderRestYaw + pose.Twist) * square, transform.up);
 
             // The look pitch (#121, ADR-096): all of it shouldered, part of it at low ready. The chest takes a share
             // (looking up tips it back: a negative turn about the right axis), the arms and weapon the rest.
-            float look = RifleHold.FollowedPitch(LookPitch(), _ready, r) * _rifle;
+            float look = RifleHold.FollowedPitch(LookPitch(), ready, r) * _rifle;
             Turn(Torso, -look * r.TorsoPitchShare, transform.right);
             var frame = transform.rotation * Quaternion.AngleAxis(-look, Vector3.right);
 
-            float amount = Mathf.Clamp01(speed / Mathf.Max(0.1f, r.MoveFullSpeed)) * (1f - 0.6f * _ready);
+            float amount = Mathf.Clamp01(speed / Mathf.Max(0.1f, r.MoveFullSpeed)) * (1f - 0.6f * ready);
             RifleHold.Bob(StridePhase(), amount, r, out float down, out float side, out float bobRoll);
             var act = CurrentAction();
             // Breathing lifts and lowers the hands a little (#231).
@@ -408,7 +427,7 @@ namespace Game.Gameplay
             int id = HeldId;
             if (!LongGunInHand(id)) return;
             // Shouldered, the butt goes into the shoulder pocket: a long stock (the bullpup's) pushes the grip forward until it does (#226).
-            float stock = _isPistol[id] ? 0f : Mathf.Max(0f, StockPocketZ + _rearBack[id] - pose.Z) * _ready;
+            float stock = _isPistol[id] ? 0f : Mathf.Max(0f, StockPocketZ + _rearBack[id] - pose.Z) * ready;
             var grip = _upperArmR.position + frame * new Vector3(pose.X + side, pose.Y - down - act.Down, pose.Z + stock)
                 - axis * (r.KickBackMeters * _kick);
             var gripTurn = turn * _gunBind[id];

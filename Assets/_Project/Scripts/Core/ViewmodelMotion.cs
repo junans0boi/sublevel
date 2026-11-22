@@ -76,7 +76,8 @@ namespace Game.Core
             var p = new ViewmodelPose
             {
                 X = s1 * BobX * bob + _swayYaw * 0.004f + carry * 0.03f,
-                Y = -Math.Abs(s2) * BobY * bob + breath * 0.0022f + _land - carry * SprintDown + _lift * 0.018f - _kick * 0.004f,
+                // s2 squared, not |s2|: the same dip per step without the corner that jolted the weapon each step (WEAPON_MOTION_AUDIT #5).
+                Y = -s2 * s2 * BobY * bob + breath * 0.0022f + _land - carry * SprintDown + _lift * 0.018f - _kick * 0.004f,
                 Z = -_kick * 0.035f - carry * 0.02f,
                 PitchDeg = -_kick * 2.6f + _swayPitch + breath * 0.18f + carry * SprintPitchDeg - _lift * 2f + _land * 30f,
                 YawDeg = _swayYaw + s1 * 0.5f * bob + carry * SprintYawDeg,

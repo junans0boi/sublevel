@@ -143,7 +143,10 @@ namespace Game.Gameplay
             if (_footLeft == null || _footRight == null || _lod >= 1 || _prone > 0.3f || _seated > 0.1f || _parkour > 0.1f || _swimAmount > 0.1f || _inAir || LedgePose > 0.1f)
             {
                 _plant[0] = _plant[1] = 0f;
-                if (_plantDrop != 0f) { _animator.transform.position += transform.up * _plantDrop; _plantDrop = 0f; }
+                // Leaving the ground the body eases back up (WEAPON_MOTION_AUDIT #3): put back at once it jumped up in one frame at take-off.
+                float keep = _inAir && _lod == 0 && _prone <= 0.3f && _seated <= 0.1f && _swimAmount <= 0.1f && LedgePose <= 0.1f
+                    ? Mathf.Lerp(_plantDrop, 0f, 1f - Mathf.Exp(-PlantSmoothPerSecond * Time.deltaTime)) : 0f;
+                if (_plantDrop != keep) { _animator.transform.position += transform.up * (_plantDrop - keep); _plantDrop = keep; }
                 return;
             }
             bool still = speed < 0.4f;
