@@ -187,7 +187,8 @@ namespace Game.Net
             if (self == null || me == null) return false;
             int index = self.Pick(eye, look);
             if (index < 0) return false;
-            if (me.IsServerInitialized) self.ServerToggle(index, me.transform.position);
+            // The host's own player takes the same checked path as a remote one (docs/MODE_PARITY_AUDIT.md): practice must fail where multiplayer fails.
+            if (me.IsServerInitialized) self.ServerRequest(me, index, self.At(index));
             else
             {
                 // Through the connection that owns this body (a test process runs several).
@@ -294,14 +295,29 @@ namespace Game.Net
         void OnRequest(NetworkConnection connection, DoorToggleRequest request, Channel channel)
         {
             var body = connection != null && connection.FirstObject != null ? connection.FirstObject.GetComponent<Combatant>() : null;
-            int index = Resolve(request.Index, request.At);
-            if (body == null || body.Dead.Value || index < 0) return;
-            // Close enough to have pressed F on it (a little slack for network delay).
-            var d = _doors[index].transform.position - body.transform.position;
-            d.y = 0f;
-            float reach = DoorRules.Current.ReachMeters + 1.5f;
-            if (d.sqrMagnitude > reach * reach) return;
-            ServerToggle(index, body.transform.position);
+            ServerRequest(body, request.Index, request.At);
+        }
+
+        // Server: `body` pressed F on the door named by number and place. The one check for every topology (host player,
+        // remote client); a refusal is logged, so a live server's journal says why a door stayed shut.
+        public bool ServerRequest(Combatant body, int index, Vector3 at)
+        {
+            int resolved = Resolve(index, at);
+            string refused = null;
+            if (body == null) refused = "no body";
+            else if (body.Dead.Value) refused = "dead";
+            else if (resolved < 0) refused = $"no door at {at} (#{index} of {_doors.Count})";
+            else
+            {
+                // Close enough to have pressed F on it (a little slack for network delay).
+                var d = _doors[resolved].transform.position - body.transform.position;
+                d.y = 0f;
+                float reach = DoorRules.Current.ReachMeters + 1.5f;
+                if (d.sqrMagnitude > reach * reach) refused = $"{Mathf.Sqrt(d.sqrMagnitude):F1} m from door #{resolved}, server body at {body.transform.position}";
+            }
+            if (refused != null) { Debug.Log($"[Doors] refused F from {(body != null ? body.name : "?")}: {refused}"); return false; }
+            ServerToggle(resolved, body.transform.position);
+            return true;
         }
 
         void OnRam(NetworkConnection connection, DoorRamRequest request, Channel channel)

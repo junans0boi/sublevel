@@ -68,6 +68,28 @@ namespace Game.Tests
             yield return AdoptHost();
         }
 
+        // Where the server runs (docs/MODE_PARITY_AUDIT.md): Host = bot practice and a LAN room (server + local player in one
+        // process); Dedicated = the live solo/squad server (server only, every player a remote client). A parity test runs both.
+        public enum Topology { Host, Dedicated }
+
+        public IEnumerator Start(Topology topology, string scene) => topology == Topology.Host ? StartHost(scene) : StartDedicated(scene);
+
+        // The dedicated topology in one process: the scene's MatchDirector serves without a local player (NetSession.Dedicated,
+        // as DedicatedServer sets it); players come with AddClient. HostPlayer stays null.
+        public IEnumerator StartDedicated(string scene)
+        {
+            MoveGuard.TrustTeleports = true;
+            PrepareHostInput();
+            NetSession.Dedicated = true;
+            SceneManager.LoadScene(scene);
+            yield return NetHarness.WaitUntil(() => MatchDirector.Instance != null && InstanceFinder.NetworkManager != null && InstanceFinder.NetworkManager.IsServerStarted, "dedicated server started", Log, 60f);
+            Host = InstanceFinder.NetworkManager;
+            Require(!Host.IsClientStarted, "a dedicated server has no local client");
+            yield return null;
+        }
+
+        static void Require(bool condition, string what) { if (!condition) throw new Exception(what); }
+
         // Must come before the host's player spawns.
         public void PrepareHostInput()
         {
@@ -166,6 +188,7 @@ namespace Game.Tests
         public IEnumerator Teardown()
         {
             MoveGuard.TrustTeleports = false;
+            NetSession.Dedicated = false;
             PlayerController.InputOverride = null;
             ReplicaLayers.SeparateVehicles = false;
             if (_interestBefore != null) InterestRules.Current = _interestBefore;
