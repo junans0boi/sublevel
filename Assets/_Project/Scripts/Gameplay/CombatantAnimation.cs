@@ -401,7 +401,11 @@ namespace Game.Gameplay
                 {
                     _airPhase = jump.RisePhase;
                     // Only a jump pushes off; walking off an edge does not.
-                    _takeoffAt = _motion.VerticalSpeed > 0f ? Time.time : float.NegativeInfinity;
+                    // The ground probe only says airborne once the body is GroundProbeMeters up (~0.08 s into a jump): count from the push itself,
+                    // or the start clip ran to about the top on some frame timings and the loop never showed there.
+                    var loco = GameData.Rules.Locomotion;
+                    float risen = loco.Gravity < 0f ? Mathf.Clamp((loco.JumpSpeed - _motion.VerticalSpeed) / -loco.Gravity, 0f, 0.2f) : 0f;
+                    _takeoffAt = _motion.VerticalSpeed > 0f ? Time.time - risen : float.NegativeInfinity;
                 }
                 _inAir = true;
                 _landUntil = -1f;
