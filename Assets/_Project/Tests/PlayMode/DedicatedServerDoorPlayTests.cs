@@ -93,24 +93,28 @@ namespace Game.Tests
             NetSession.Reset();
         }
 
-        [UnityTest, Timeout(600000)]
-        public IEnumerator RemoteClient_OpensAMapDoor_OnTheRealDedicatedServer()
+        // Starts the server build (Linux ARM64 in docker on 2 CPUs like the live host, else the Mac build), joins its lobby, starts the
+        // match and loads the client's World with `input` driving the local player under a real connection's delay and loss.
+        IEnumerator StartServerAndJoin(HarnessInput input, string logName)
         {
-            string args = $"-batchmode -nographics --dedicated --port {Port} --bots 2 --region C --max-players 4 --start-seconds 5";
+            // DEDICATED_BOTS: the server's bot count (default 2); 79 is the live 80-person load (#485).
+            string bots = Environment.GetEnvironmentVariable("DEDICATED_BOTS") ?? "2";
+            string args = $"-batchmode -nographics --dedicated --port {Port} --bots {bots} --region C --max-players 4 --start-seconds {Environment.GetEnvironmentVariable("DEDICATED_START_SECONDS") ?? "5"}";
             Directory.CreateDirectory(LogDir);
             string logDir = Path.GetFullPath(LogDir);
-            _serverLog = Path.Combine(logDir, "door-server-process.log");
+            _serverLog = Path.Combine(logDir, logName);
             if (File.Exists(_serverLog)) File.Delete(_serverLog);
             string linux = Path.GetFullPath(LinuxServer), mac = Path.GetFullPath(MacServer), address = "127.0.0.1";
             if (File.Exists(linux) && (_docker = Docker()) != null)
             {
                 RemoveContainer();
-                // The live host: Ubuntu 24.04 ARM64. The lobby port and the match port (lobby + 1) are published for UDP.
+                // The live host: Ubuntu 24.04 ARM64, 2 cores. The lobby port and the match port (lobby + 1) are published for UDP.
                 string vm = ColimaAddress();
                 string net = vm != null ? "--network host" : $"-p {Port}:{Port}/udp -p {Port + 1}:{Port + 1}/udp";
                 if (vm != null) address = vm;
-                string run = $"run --rm --name {Container} {net} " +
-                             $"-v \"{Path.GetDirectoryName(linux)}\":/srv:ro -v \"{logDir}\":/logs ubuntu:24.04 /srv/SublevelServer -logFile /logs/door-server-process.log {args}";
+                string cpus = Environment.GetEnvironmentVariable("DEDICATED_CPUS") ?? "2"; // fewer = a slower host than the M4 (#485)
+                string run = $"run --rm --name {Container} --cpus {cpus} {net} " +
+                             $"-v \"{Path.GetDirectoryName(linux)}\":/srv:ro -v \"{logDir}\":/logs ubuntu:24.04 /srv/SublevelServer -logFile /logs/{logName} {args}";
                 Log("server: linux arm64 in docker");
                 _server = Process.Start(new ProcessStartInfo(_docker, run) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
             }
@@ -129,7 +133,6 @@ namespace Game.Tests
             yield return NetHarness.WaitUntil(() => _lobby.HasStarted, "server started the match", Log, 30f);
             NetSession.Begin(_lobby);
             _lobby.Shutdown();
-            var input = new HarnessInput();
             PlayerController.InputOverride = input;
             SceneManager.LoadScene("World");
             yield return NetHarness.WaitUntil(() => MatchDirector.Instance != null && Combatant.LocalPlayer != null, "client's player in the server's match", Log, 150f);
@@ -138,6 +141,64 @@ namespace Game.Tests
             sim.SetLatency(MultiHarness.BadRoundTripMs);
             sim.SetPacketLoss(MultiHarness.BadLoss);
             sim.SetEnabled(true);
+        }
+
+        // #485: on the island and again out of the elevator, W moves the owner's body the frame it is read, and normal running is
+        // never put back by the server (MoveGuard).
+        [UnityTest, Timeout(600000)]
+        public IEnumerator RemoteClient_MovesAtOnce_AndRunsWithoutCorrections_OnTheRealDedicatedServer()
+        {
+            var input = new HarnessInput();
+            yield return StartServerAndJoin(input, "move-server-process.log");
+            var me = Combatant.LocalPlayer;
+            yield return NetHarness.WaitUntil(() => WaitingHud.OnIsland, "on the waiting island", Log, 30f);
+            yield return Wait(1f); // past the arrival's loading frames
+            var island = new OwnerMoveProbe();
+            // The island countdown is --start-seconds (5 here): 1 + 1.5 s are done before it sends the body down. DEDICATED_ISLAND_SECONDS for a longer stay.
+            yield return OwnerMoveProbe.Run(input, island, float.TryParse(Environment.GetEnvironmentVariable("DEDICATED_ISLAND_SECONDS"), out float stay) ? stay : 1.5f);
+            Log("island: " + island);
+
+            yield return NetHarness.WaitUntil(() => ServerText().Contains("countdown over"), "island countdown over", Log, 120f);
+            yield return NetHarness.WaitUntil(() => Mathf.Abs(me.transform.position.x - WaitingIsland.CentreX) + Mathf.Abs(me.transform.position.z - WaitingIsland.CentreZ) > 300f, "the body left the island", Log, 30f);
+            // In the closed car (the island's last broadcast no longer counts, #485): face the way out and hold W through the opening.
+            yield return NetHarness.WaitUntil(() => SpawnProtection.InputBlocked && !WaitingHud.OnIsland, "in the closed elevator", Log, 30f);
+            var site = ElevatorDoors.Instance.Sites[0];
+            foreach (var x in ElevatorDoors.Instance.Sites)
+                if ((x.Spawn - me.transform.position).sqrMagnitude < (site.Spawn - me.transform.position).sqrMagnitude) site = x;
+            me.GetComponent<PlayerController>().LookAt(me.EyePosition + Quaternion.Euler(0f, site.YawDeg, 0f) * Vector3.forward * 20f);
+            input.Frame.Move = new Vector2(0f, 1f);
+            yield return NetHarness.WaitUntil(() => !SpawnProtection.InputBlocked && !ElevatorPanel.Riding, "elevator doors open", Log, 90f);
+            float opened = Time.realtimeSinceStartup;
+            var at = me.transform.position;
+            yield return NetHarness.WaitUntil(() => new Vector2(me.transform.position.x - at.x, me.transform.position.z - at.z).magnitude > 2.5f, "out past the door", Log, 10f);
+            float leftAfter = Time.realtimeSinceStartup - opened;
+            input.Frame.Move = Vector2.zero;
+            Log($"left the elevator {leftAfter:F2} s after the doors opened");
+            yield return Wait(1f);
+            int refusedBefore = Regex.Matches(ServerText(), "refused Move").Count;
+            var field = new OwnerMoveProbe();
+            yield return OwnerMoveProbe.Run(input, field, float.TryParse(Environment.GetEnvironmentVariable("DEDICATED_RUN_SECONDS"), out float runFor) ? runFor : 5f);
+            yield return Wait(1.5f); // a correction the server sent at the end is still on its way
+            int refused = Regex.Matches(ServerText(), "refused Move").Count - refusedBefore;
+            Log($"field: {field} serverRefusedMove={refused}");
+
+            foreach (var (name, r) in new[] { ("island", island), ("field", field) })
+            {
+                Assert.LessOrEqual(r.SecondsToMove, 0.1f, $"{name}: W moves the owner's body at once, the server is not asked ({r})");
+                Assert.AreEqual(0, r.Corrections, $"{name}: no server correction while running normally ({r})");
+                Assert.AreEqual(0, r.SnapsBack, $"{name}: the body is never put back ({r})");
+            }
+            Assert.AreEqual(0, refused, "the server refused none of the run (MoveGuard)");
+            // Walking 2.5 m (the door is ~1.4 m ahead) takes ~0.6 s: the door is down by then, it does not hold the body (#485).
+            Assert.LessOrEqual(leftAfter, 0.8f, "W held: the body walks out the moment input is allowed");
+            Assert.Greater(field.Meters, 5f, "the body ran out of the elevator");
+        }
+
+        [UnityTest, Timeout(600000)]
+        public IEnumerator RemoteClient_OpensAMapDoor_OnTheRealDedicatedServer()
+        {
+            var input = new HarnessInput();
+            yield return StartServerAndJoin(input, "door-server-process.log");
 
             // Both peers built the map's doors, and the same number of them.
             yield return NetHarness.WaitUntil(() => Regex.IsMatch(ServerText(), @"\[Doors\] \d+ doors built"), "server logged its doors", Log, 30f);
