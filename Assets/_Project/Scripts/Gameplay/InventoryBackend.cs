@@ -701,7 +701,7 @@ namespace Game.Gameplay
             if (healing != null) healing.CmdDrop((int)kind);
         }
 
-        // ADR-081 (#110) / ADR-520 (#482): a single right click on a bandage, first-aid, medkit or boost row uses it (other rows: quick drop).
+        // ADR-081 (#110) / ADR-554 (#482): a single right click on a bandage, first-aid, medkit or boost row uses it (other rows: quick drop).
         public static bool RightClickHeal(InventorySourceKind kind, out HealKind heal)
         {
             heal = kind == InventorySourceKind.Bandage ? HealKind.Bandage : kind == InventorySourceKind.FirstAid ? HealKind.FirstAid
