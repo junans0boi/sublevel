@@ -141,7 +141,18 @@ namespace Game.Gameplay
                 if (parent != null) _gripRest[i] = Quaternion.Inverse(_modelsByWeaponId[i].transform.rotation) * (parent.position - _modelsByWeaponId[i].transform.position);
                 _handPosition[i] = _modelsByWeaponId[i].transform.localPosition;
                 _handRotation[i] = _modelsByWeaponId[i].transform.localRotation;
+                SetLodBias(_modelsByWeaponId[i], HandLodBias);
             }
+        }
+
+        // #478: a gun in a hand drops to a coarser Mesh LOD as soon as worn gear does (80 in view: 2.06M triangles);
+        // the one at the owner's eye keeps the full shape.
+        public const float HandLodBias = WornGearMeshes.LodBias;
+
+        void SetLodBias(GameObject model, float bias)
+        {
+            model.GetComponentsInChildren(true, _renderers);
+            foreach (var r in _renderers) r.meshLodSelectionBias = bias;
         }
 
         // The owner's view sits at the eyes: draw the weapon in front of `camera`. Call every frame it applies.
@@ -215,7 +226,9 @@ namespace Game.Gameplay
                 var back = _modelsByWeaponId[_atEye].transform;
                 back.localPosition = _handPosition[_atEye];
                 back.localRotation = _handRotation[_atEye];
+                SetLodBias(back.gameObject, HandLodBias);
             }
+            if (wanted != 0 && wanted != _atEye) SetLodBias(_modelsByWeaponId[wanted], 0f);
             _atEye = wanted;
             // Looking through a magnified scope the lens fills the view: the weapon and the optic body in front of the
             // camera would only cover it, so they are not drawn (the scope overlay draws the tube's ring instead).

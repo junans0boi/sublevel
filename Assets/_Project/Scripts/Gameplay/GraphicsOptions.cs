@@ -29,6 +29,14 @@ namespace Game.Gameplay
         static readonly float[] FarClips = { 300f, 500f, 700f, 900f };   // 낮음/보통/높음(the World scene's own)/울트라
         static readonly int[] FrameCaps = { -1, 60, 120, 144, 240 };
 
+        // #477: small static meshes stop drawing well before the far clip; the cost is draw submission (~1.7 ms / 1,000
+        // draws, docs/OPTIMIZATION_ANALYSIS.md), not pixels. The same on every preset so no setting sees through far cover.
+        // Buildings, terrain and anything with a collider on the renderer's object keep the full far clip (the horizon).
+        public const int SmallLayer = 8, MediumLayer = 9;
+        public const float SmallSize = 2.5f, MediumSize = 10f;          // largest bounds side, metres
+        public const float SmallCull = 150f, MediumCull = 300f;
+        static readonly float[] LayerCull = new float[32];
+
         static bool _initialized;
         static readonly List<Vector2Int> Resolutions = new List<Vector2Int>(16);
         static string[] _resolutionTexts = new string[0];
@@ -98,6 +106,7 @@ namespace Game.Gameplay
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            ClassifyCullLayers(scene);
             if (mode == LoadSceneMode.Single) CaptureScene();
             Apply();
         }
@@ -226,6 +235,7 @@ namespace Game.Gameplay
             if (cam == null) return;
             float far = FarClip(GameSettings.GetIndex(SettingId.ViewDistance));
             cam.farClipPlane = far;
+            ApplyLayerCull(cam);
             var data = cam.GetUniversalAdditionalCameraData();
             var aa = AntiAliasing(GameSettings.GetIndex(SettingId.AntiAliasing));
             if (data != null && data.antialiasing != aa) data.antialiasing = aa;
@@ -234,6 +244,39 @@ namespace Game.Gameplay
                 float ratio = far / _sceneFar;
                 RenderSettings.fogStartDistance = _sceneFogStart * ratio;
                 RenderSettings.fogEndDistance = _sceneFogEnd * ratio;
+            }
+        }
+
+        // Per-layer cull distances for the small and medium static meshes (0 = the far clip), capped at the camera's far clip.
+        public static void ApplyLayerCull(Camera cam)
+        {
+            LayerCull[SmallLayer] = Mathf.Min(SmallCull, cam.farClipPlane);
+            LayerCull[MediumLayer] = Mathf.Min(MediumCull, cam.farClipPlane);
+            cam.layerCullDistances = LayerCull;
+            cam.layerCullSpherical = true;   // a ring around the eye, not a plane that swings with the view
+        }
+
+        // Moves the scene's render-only static meshes (no collider on the object, Default layer, mesh present) to the
+        // small or medium cull layer by their largest bounds side. Nothing moves on a graphics-less server. Objects spawned
+        // later (doors, loot, vehicles, characters) keep their own LOD culling.
+        public static void ClassifyCullLayers(Scene scene)
+        {
+            if (!Application.isPlaying || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null || !scene.isLoaded) return;
+            var roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                var renderers = roots[i].GetComponentsInChildren<MeshRenderer>(true);
+                for (int r = 0; r < renderers.Length; r++)
+                {
+                    var go = renderers[r].gameObject;
+                    if (go.layer != 0 || go.TryGetComponent<Collider>(out _)) continue;
+                    if (!go.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null) continue;
+                    // The mesh's own bounds (a disabled renderer reports empty world bounds).
+                    var size = Vector3.Scale(filter.sharedMesh.bounds.size, go.transform.lossyScale);
+                    float largest = Mathf.Max(Mathf.Abs(size.x), Mathf.Max(Mathf.Abs(size.y), Mathf.Abs(size.z)));
+                    if (largest <= SmallSize) go.layer = SmallLayer;
+                    else if (largest <= MediumSize) go.layer = MediumLayer;
+                }
             }
         }
 

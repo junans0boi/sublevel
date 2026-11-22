@@ -90,9 +90,19 @@ namespace Game.Gameplay
         {
             // AA  shadows  textures  effects  distance  AO
             { 1,   1,       1,        0,       0,        0 }, // 낮음
-            { 1,   2,       2,        1,       2,        1 }, // 보통 = the shipped look (URP asset as built) plus FXAA
-            { 2,   3,       2,        1,       3,        1 }, // 높음
+            { 1,   2,       2,        1,       1,        1 }, // 보통 = the URP asset as built plus FXAA, 500 m view (#484: draws scale with distance)
+            { 2,   3,       2,        1,       2,        1 }, // 높음 = the World scene's own 700 m (울트라 900 m is by hand only)
         };
+
+        // #484: the preset a first launch starts on, from the graphics memory (MB) and logical cores SystemInfo reports.
+        // Far draws cost CPU submission, so a 6-core / 8 GB card (GTX 1080, Ryzen 5 2600X) lands on 보통.
+        public static int DetectPreset(int graphicsMemoryMb, int logicalCores)
+        {
+            if (graphicsMemoryMb <= 0) return PresetMedium;   // unknown
+            if (graphicsMemoryMb < 3500 || logicalCores < 6) return PresetLow;
+            if (graphicsMemoryMb >= 10000 && logicalCores >= 12) return PresetHigh;
+            return PresetMedium;
+        }
 
         public static readonly SettingDef[] All = Build();
         public static readonly KeyBinding[] KeyBindings = BuildKeys();
@@ -147,7 +157,7 @@ namespace Game.Gameplay
                 "총구 화염, 탄착 먼지, 연기 같은 효과의 양입니다. 낮음이면 입자 수가 줄어듭니다.",
                 "settings.effects", new[] { "낮음", "높음" }, PresetTable[PresetMedium, 3]));
             Add(Choice(SettingId.ViewDistance, SettingsTab.Graphics, SettingsPage.Advanced, "거리·조명", "거리 보기",
-                "카메라가 그리는 최대 거리입니다. 안개도 함께 맞춰져 경계가 갑자기 끊기지 않습니다.",
+                "카메라가 그리는 최대 거리입니다. 안개도 함께 맞춰져 경계가 갑자기 끊기지 않습니다. 낮출수록 프레임이 크게 오릅니다.",
                 "settings.viewDistance", new[] { "낮음", "보통", "높음", "울트라" }, PresetTable[PresetMedium, 4]));
             Add(Choice(SettingId.AmbientOcclusion, SettingsTab.Graphics, SettingsPage.Advanced, "거리·조명", "앰비언트 오클루전",
                 "구석과 틈에 은은한 그늘을 넣어 입체감을 줍니다. 끄면 프레임이 조금 오릅니다.",

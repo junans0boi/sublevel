@@ -49,6 +49,8 @@ namespace Game.Tests
             var b = new Bounds(go.transform.position, Vector3.zero);
             foreach (var r in go.GetComponentsInChildren<Renderer>()) b.Encapsulate(r.bounds);
             go.transform.localScale *= 0.9f / Mathf.Max(b.size.x, b.size.y, b.size.z, 1e-4f);
+            if (System.Environment.GetEnvironmentVariable("ROSTER_GUN_BIAS") != "0")
+                foreach (var r in go.GetComponentsInChildren<Renderer>()) r.meshLodSelectionBias = WeaponVisual.HandLodBias;   // as in a hand (#478)
         }
 
         static Camera Stage()
@@ -71,6 +73,7 @@ namespace Game.Tests
             var cam = Stage();
             Directory.CreateDirectory("Logs/perf"); Directory.CreateDirectory("Logs/roster");
             var sb = new System.Text.StringBuilder();
+            var failures = new System.Collections.Generic.List<string>();
             RenderProbe.Result empty = default;
             yield return RenderProbe.Measure(cam, r => empty = r, 60, 20);
             sb.AppendLine($"empty floor+sun: {empty} | with helmet+vest+backpack on every character (tiers 1-3 mixed)");
@@ -91,13 +94,15 @@ namespace Game.Tests
                 sb.AppendLine($"{Count} chars {name}: {res} | minus empty: tris {res.Triangles - empty.Triangles} ({(res.Triangles - empty.Triangles) / Count} per char), draw {res.DrawCalls - empty.DrawCalls}");
                 foreach (var c in chars) Object.Destroy(c.gameObject);
                 File.WriteAllText($"Logs/perf/roster{Count}.txt", sb.ToString());
-                Assert.LessOrEqual(res.Stats.P99Ms, RenderProbe.RenderBudgetMs, name + " render p99");
-                Assert.LessOrEqual(res.DrawCalls, RenderProbe.DrawCallBudget, name + " draw calls");
-                Assert.LessOrEqual(res.SetPasses, RenderProbe.SetPassBudget, name + " set pass");
+                // Every scene is measured before anything fails, so one noisy p99 does not hide the others' numbers.
+                if (res.Stats.P99Ms > RenderProbe.RenderBudgetMs) failures.Add($"{name} render p99 {res.Stats.P99Ms:F2}");
+                if (res.DrawCalls > RenderProbe.DrawCallBudget) failures.Add($"{name} draw calls {res.DrawCalls}");
+                if (res.SetPasses > RenderProbe.SetPassBudget) failures.Add($"{name} set pass {res.SetPasses}");
                 yield return null;
             }
             File.WriteAllText($"Logs/perf/roster{Count}.txt", sb.ToString());
             UnityEngine.Debug.Log("[Perf] " + sb);
+            Assert.IsEmpty(failures, string.Join("; ", failures));
         }
 
         // Triangles of ONE character (no shadows) by distance: shows Unity's Mesh LOD choosing lower shapes.

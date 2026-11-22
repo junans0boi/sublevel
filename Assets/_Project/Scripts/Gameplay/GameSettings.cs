@@ -236,6 +236,9 @@ namespace Game.Gameplay
         {
             if (def.Id == SettingId.Resolution) return GraphicsOptions.CurrentResolutionIndex();
             if (def.Id == SettingId.ScreenMode) return GraphicsOptions.CurrentScreenModeIndex();
+            // The hardware picks the first preset; batch runs (tests, captures) keep the catalog default so numbers compare.
+            if (def.Id == SettingId.QualityPreset && !Application.isBatchMode)
+                return SettingsCatalog.DetectPreset(SystemInfo.graphicsMemorySize, SystemInfo.processorCount);
             return def.Default;
         }
 
