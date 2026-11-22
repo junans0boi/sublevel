@@ -13,7 +13,7 @@ namespace Game.Core
 
         public float DoorDelaySeconds = 3f;   // match start -> the doors start to open; no moving or firing before
         public float ProtectionSeconds = 6f;  // after the doors open; the first shot or throw ends it early
-        public float DoorSlideSeconds = 1.2f; // how long the door takes to sink into the floor
+        public float DoorSlideSeconds = 0.4f; // how long the door takes to sink into the floor (#485: 1.2 held a body pushing W about 1 s at the door)
         public float DoorThickness = 0.12f;   // metres; the door fills the station's front opening
         public float DoorWallOverlap = 0.1f;  // metres the door reaches into the side walls on each side
 

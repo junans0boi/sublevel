@@ -195,7 +195,7 @@ namespace Game.Tests
 
             // Both doors sink away; the player stays on the floor (the car floor is solid).
             yield return WaitUntil(() => !car.DoorBlocking, rules.DoorSlideSeconds + 2f, "the car door to sink away");
-            yield return new WaitForSeconds(0.3f);
+            yield return new WaitForSeconds(1f); // the Space held in the car jumps as the doors open: ~0.7 s in the air
             Assert.Less(Mathf.Abs(player.transform.position.y - floor), 0.15f, "standing on the car floor at station level");
         }
 

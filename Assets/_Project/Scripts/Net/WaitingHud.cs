@@ -80,6 +80,18 @@ namespace Game.Net
         // True while the server says the room is open: the player stands on the island, not in an elevator.
         public static bool OnIsland { get; private set; }
 
+        // The last broadcast stays fresh for 3 s, and the countdown's closing one is unreliable: the local player the countdown already
+        // sent down to an elevator is off the island at once, or SpawnProtection lets it walk in the closed car (#485).
+        // 400 m covers the island and its race hall; the map is 1.8 km away.
+        static bool LocalNearIsland()
+        {
+            var me = Combatant.LocalPlayer;
+            if (me == null) return true;
+            var p = me.transform.position;
+            float dx = p.x - WaitingIsland.CentreX, dz = p.z - WaitingIsland.CentreZ;
+            return dx * dx + dz * dz < 400f * 400f;
+        }
+
         bool _preview;
         bool Live => _preview || (_last.Active && Time.unscaledTime - _at <= 3f);
 
@@ -106,7 +118,7 @@ namespace Game.Net
         void Refresh()
         {
             bool live = Live;
-            OnIsland = live;
+            OnIsland = live && LocalNearIsland();
             MoveLiftCar(live);
             if (_lines[0] == null && !TryBuildBoard()) return;
             var rules = IslandRules.Current ?? new IslandRules();
