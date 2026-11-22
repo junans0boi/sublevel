@@ -43,6 +43,7 @@ namespace Game.Gameplay
         const int BaseLayer = 0, UpperLayer = 1, ActionLayer = 2, AdditiveLayer = 3;
         const float Fade = 0.12f;
         const float ProneFade = 0.35f;
+        const float StanceFade = 0.25f; // crouch <-> stand
         const float ClipCrouchPerSecond = 5f;
         const float ProneLookMaxDeg = 35f, ProneLookShare = 0.8f;
         const float ProneHeadAheadOfEyes = 0.15f; // lying, the head joint ends this far ahead of the capsule / eyes
@@ -508,13 +509,15 @@ namespace Game.Gameplay
             bool tree = state == Locomotion;
             string wanted = state == Air ? AirShown() : !tree ? state : _crouch > 0.5f ? (_unarmedBody ? UnarmedCrouch : RifleCrouch) : _unarmedBody ? Unarmed : Aiming ? LocomotionAim : Locomotion;
             if (_base == state && _baseShown == wanted) return;
-            // Down to and up from the ground is slower than a step.
-            _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : Fade, BaseLayer);
+            // Down to and up from the ground is slower than a step; so is crouching or standing up (WEAPON_MOTION_AUDIT #4: 0.12 s dropped the hips in a snap).
+            bool stance = _base == state && IsCrouchTree(wanted) != IsCrouchTree(_baseShown);
+            _animator.CrossFadeInFixedTime(wanted, state == Prone || _base == Prone ? ProneFade : stance ? StanceFade : Fade, BaseLayer);
             _base = state;
             _baseShown = wanted;
         }
 
         string _baseShown = Locomotion; // the animator state actually playing for _base
+        static bool IsCrouchTree(string shown) => shown == RifleCrouch || shown == UnarmedCrouch;
 
         string AirShown() => _jumpClip == JumpClip.Start ? JumpStart : _jumpClip == JumpClip.Loop ? JumpLoop : _jumpClip == JumpClip.Land ? JumpLand : Air;
         public string BaseShown => _baseShown;

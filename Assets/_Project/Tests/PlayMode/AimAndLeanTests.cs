@@ -380,6 +380,30 @@ namespace Game.Tests
             yield return WaitUntil(() => animation.UpperState == CombatantAnimation.Lowered, 3f, "and it comes down a moment after the last shot");
         }
 
+        // WEAPON_MOTION_AUDIT #1: swapping guns, the old one lowers in the hand before the new one is drawn (it used to vanish in one frame).
+        [UnityTest]
+        public IEnumerator SwappingGuns_LowersTheOldOne_ThenDrawsTheNew()
+        {
+            yield return LoadTestBox();
+            var me = Combatant.LocalPlayer;
+            var animation = me.GetComponent<CombatantAnimation>();
+            yield return GiveRifle();
+            me.ServerGive(new LootEntry { Kind = LootKind.Weapon, WeaponId = 1, Amount = 15 });
+            yield return new WaitForSeconds(1f);
+            int pistolSlot = -1;
+            for (int s = 0; s < 5; s++) if (me.WeaponInSlot(s) == 1) pistolSlot = s;
+            if (me.ActiveWeaponId == 1) { for (int s = 0; s < 5; s++) if (me.WeaponInSlot(s) == 3) me.ServerSelectSlot(s); yield return new WaitForSeconds(1f); }
+            Assert.AreEqual(3, me.ActiveWeaponId, "rifle in hand");
+            me.ServerSelectSlot(pistolSlot);
+            yield return null;
+            Assert.AreEqual(1, me.ActiveWeaponId, "the pistol is the active weapon at once");
+            Assert.AreEqual(3, animation.HeldId, "but the rifle is still in the hand");
+            Assert.Less(animation.HolsterProgress, 1f, "being lowered");
+            yield return WaitUntil(() => animation.HeldId == 1, 1f, "then the pistol is in the hand");
+            Assert.Less(animation.DrawProgress, 1f, "being drawn");
+            yield return WaitUntil(() => animation.DrawProgress >= 1f, 1f, "drawn within its draw time");
+        }
+
         [UnityTest]
         public IEnumerator Jumping_ShowsTheAirPose_UntilLanding_ThenSoundsTheLanding()
         {
