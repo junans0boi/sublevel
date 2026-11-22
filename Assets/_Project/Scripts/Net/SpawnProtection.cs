@@ -33,6 +33,11 @@ namespace Game.Net
         // Not while people wait on the island (their elevators are shut, they are not in them): see WaitingHud.OnIsland.
         // Also before GO in an event race (ADR-514).
         public static bool InputBlocked => (ElevatorDoors.Instance != null && ElevatorDoors.Instance.DoorsClosed && !WaitingHud.OnIsland) || RaceHud.InputLocked;
+        // The same hold for `c` as the peer that runs it knows it: the server goes by its own schedule and island, since a dedicated
+        // server has no client schedule (its DoorsClosed stays true all match, docs/MODE_PARITY_AUDIT.md); other peers by InputBlocked.
+        public static bool HeldFor(Combatant c) => c != null && c.IsServerInitialized
+            ? (ElevatorDoors.Instance != null && ElevatorDoors.Instance.ServerDoorsClosed && !(WaitingRoom.Current != null && WaitingRoom.Current.Open)) || RaceHud.InputLocked
+            : InputBlocked;
         // Seconds until the doors open (0 once open or without elevators). HUD: "문 열림 N".
         public static float DoorSecondsLeft => ElevatorDoors.Instance != null && ElevatorDoors.Instance.DoorsClosed ? ElevatorDoors.Instance.DoorSecondsLeft : 0f;
         // Protection left for a combatant as this peer knows it (0 = none). HUD: "보호 N초".

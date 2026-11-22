@@ -54,7 +54,7 @@ namespace Game.Net
             float depth = WaterVolume.DepthAt(transform.position, out float surface, out _);
             // Riding the elevator car up from below the sea level is not swimming (doors closed = everyone is in a shaft),
             // nor is any elevator ride down a coastal station's shaft (it went prone, out of breath, the camera at the surface).
-            _swimming = !SpawnProtection.InputBlocked && !ElevatorCar.Carries(transform.position) && Swim.Swimming(_swimming, depth, rules);
+            _swimming = !SpawnProtection.HeldFor(_combatant) &&!ElevatorCar.Carries(transform.position) && Swim.Swimming(_swimming, depth, rules);
             if (_combatant.IsServerInitialized) StowWhileSwimming();
             HeadUnder = _swimming && Swim.HeadUnder(_combatant.EyePosition.y, surface, rules);
             float damage = _breath.Tick(Time.deltaTime, HeadUnder, rules);

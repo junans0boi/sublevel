@@ -511,6 +511,11 @@ namespace Game.Net
         }
 
         // Server-side. Solo has no revival: restarting reloads the match scene.
-        public void Restart() => SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        // A dedicated server's match belongs to everyone on it: DedicatedServer ends it and goes back to the lobby, a dead player's request does nothing.
+        public void Restart()
+        {
+            if (NetSession.Dedicated) { Debug.Log("[MatchDirector] restart refused: a dedicated server's match ends on its own"); return; }
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        }
     }
 }
