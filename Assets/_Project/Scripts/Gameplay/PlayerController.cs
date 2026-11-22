@@ -36,6 +36,7 @@ namespace Game.Gameplay
         // In deep water, swimming (ADR-112).
         public bool Swimming => _swimming;
         bool _swimming;
+        bool _swimBlocked; // the last swim stroke ran into something (#458)
         float _waterSurface;
         // Free look (Alt held): the view orbits away from where the character faces by these angles (ADR-065 (2)).
         public bool FreeLooking { get; private set; }
@@ -410,6 +411,12 @@ namespace Game.Gameplay
             // Riding the elevator car up (ADR-065 (1)): the car carries the feet, nothing else moves the body.
             else if (SpawnProtection.InputBlocked && ElevatorCar.TryRideFloor(transform.position, out float rideFeet))
                 Teleport(new Vector3(transform.position.x, rideFeet, transform.position.z));
+            // Out of the water onto a bank or lip (#458): the body leaves on its climb path.
+            else if (_swimming && TrySwimOut(f.Jump || f.JumpHeld, f.Move.y > 0.5f))
+            {
+                PlaceCamera();
+                return;
+            }
             else if (_swimming)
             {
                 // Swimming (ADR-112): about 46% of the sprint speed, floating to the surface (Ctrl held: diving), no jumping.
@@ -424,7 +431,7 @@ namespace Game.Gameplay
                 float rise = Mathf.Clamp((targetFeet - transform.position.y) / Mathf.Max(Time.deltaTime, 1e-3f), -swim.VerticalSpeed, swim.VerticalSpeed);
                 _verticalVelocity = 0f;
                 _fall.Reset();
-                _controller.Move(new Vector3(_moveX, rise, _moveZ) * Time.deltaTime);
+                _swimBlocked = (_controller.Move(new Vector3(_moveX, rise, _moveZ) * Time.deltaTime) & CollisionFlags.Sides) != 0;
             }
             else
             {
@@ -533,6 +540,26 @@ namespace Game.Gameplay
                 plan = ParkourProbe.PlanLedge(transform, _controller.radius, _controller.height, Yaw, rules);
                 if (plan.Move != ParkourMove.Hang) return false;
             }
+            StartEdgeMove(plan);
+            return true;
+        }
+
+        // Swimming (#458): Space (pressed or held) at a bank or lip the hands reach climbs out onto it, the mantle of
+        // ADR-492 from the water; swimming into one no higher than SwimRules.WadeOutLip over the surface climbs out
+        // without it. Measured with the standing capsule: the body stands up on top.
+        bool TrySwimOut(bool key, bool pushing)
+        {
+            if (_stance == null || _combatant.Reviving || !(key || (pushing && _swimBlocked))) return false;
+            var plan = ParkourProbe.PlanMantle(transform, _controller.radius, StanceRules.Current.Stand.CapsuleHeight, Yaw, ParkourRules.Current);
+            if (plan.Move != ParkourMove.LedgeClimb || (!key && plan.TopY > _waterSurface + SwimRules.Current.WadeOutLip)) return false;
+            _swimBlocked = false;
+            StartEdgeMove(plan);
+            return true;
+        }
+
+        // Catching or mantling an edge: the body leaves the controller for its path (hanging, or climbing from Start).
+        void StartEdgeMove(ParkourPlan plan)
+        {
             LastParkourPlan = plan;
             _parkour = plan;
             _parkourT = 0f;
@@ -545,7 +572,6 @@ namespace Game.Gameplay
             transform.position = plan.Move == ParkourMove.Hang ? plan.End : plan.Start;
             if (IsServerInitialized) _stance.ServerStartParkour((int)plan.Move, plan.Start, plan.End, -1);
             else _stance.CmdStartParkour((int)plan.Move, plan.Start, plan.End, -1);
-            return true;
         }
 
         // Hanging: Space pulls up onto the top, S lets go and drops.
