@@ -51,6 +51,8 @@ namespace Game.Core
             _stations[station].Select(now, id, region, _region[station], states, _rideSeconds, Cooldowns, _rules);
 
         // Timeouts for every station; `events` gets what happened (the list is cleared first).
+        readonly List<int> _riders = new List<int>();
+
         public void Tick(double now, IReadOnlyList<PollutionState> states, List<KeyStationEvent> events)
         {
             events.Clear();
@@ -61,7 +63,9 @@ namespace Game.Core
                 // Read before Tick: a ride end resets the station.
                 int dest = st.Destination;
                 int team = st.HolderTeam;
-                var riders = st.Phase == KeyPhase.Riding ? st.Riders.ToArray() : null;
+                // Into a kept buffer: the array is only needed when the ride ends (ToArray ran every frame per riding station).
+                _riders.Clear();
+                if (st.Phase == KeyPhase.Riding) _riders.AddRange(st.Riders);
                 var e = st.Tick(now, _rules);
                 if (e == KeyEvent.None) continue;
                 var ev = new KeyStationEvent { Station = i, Event = e, Holder = holder };
@@ -71,7 +75,7 @@ namespace Game.Core
                     _rides[team] = RidesOf(team) + 1;
                     ev.From = _region[i];
                     ev.Arrival = KeyElevatorTravel.ArrivalRegion(_region[i], dest, states);
-                    ev.Riders = riders;
+                    ev.Riders = _riders.ToArray();
                 }
                 events.Add(ev);
             }

@@ -456,7 +456,7 @@ namespace Game.Tests
             yield return new WaitForSeconds(1.2f);
             Shot($"slope{SlopeDeg:0}_side", 3f, 0.8f, 0.7f);
             var err = SoleErrors(col, flatRest / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad)); // vertical offset of an ankle over a sloped sole
-            Debug.Log($"[AnimMetrics] slope {SlopeDeg} deg: sole errors left {err[0]:F3} right {err[1]:F3} m, plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} pelvis drop {_anim.PlantDrop:F3} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]} | capsule y {_pc.transform.position.y:F3} ground at origin {top.point.y:F3}");
+            Debug.Log($"[AnimMetrics] slope {SlopeDeg} deg: sole errors left {err[0]:F3} right {err[1]:F3} m, plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} pelvis drop {_anim.PlantDrop:F3} | {_anim.PlantDebug(0)} | {_anim.PlantDebug(1)} | capsule y {_pc.transform.position.y:F3} ground at origin {top.point.y:F3}");
             // Sunk is the visible fault (the body in the ground), floating less so: the pelvis comes down no more than 12 cm below the nearer ground.
             Assert.GreaterOrEqual(Mathf.Min(err[0], err[1]), -0.03f, "no foot sinks into the slope (m)");
             Assert.LessOrEqual(Mathf.Max(err[0], err[1]), tolerance, "no foot floats over the slope (m)");
@@ -548,7 +548,7 @@ namespace Game.Tests
             yield return Record("crouch", 0.4f, rows);
             var r = rows[rows.Count - 1];
             Physics.Raycast(_pc.transform.position + Vector3.up, Vector3.down, out var floorHit, 3f);
-            Debug.Log($"[AnimMetrics] crouch origin over floor {_pc.transform.position.y - floorHit.point.y:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} drop {_anim.PlantDrop:F3} lod {_anim.Lod} | {_anim.PlantDebug[0]} | {_anim.PlantDebug[1]}");
+            Debug.Log($"[AnimMetrics] crouch origin over floor {_pc.transform.position.y - floorHit.point.y:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} drop {_anim.PlantDrop:F3} lod {_anim.Lod} | {_anim.PlantDebug(0)} | {_anim.PlantDebug(1)}");
             Debug.Log($"[AnimMetrics] crouch: hips {r[1]:F3} head {r[3]:F3} feet {r[4]:F3}/{r[5]:F3} palm {r[8]:F3}");
             Assert.That(r[3], Is.InRange(0.8f, 1.3f), "head joint height kneeling (m): under the 1.0 m crouch capsule like the bare-hand crouch (0.845 on the Mixamo kneel, #303)");
             Assert.Less(Mathf.Min(r[4], r[5]), 0.2f, "a foot on the floor");

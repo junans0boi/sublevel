@@ -265,6 +265,7 @@ namespace Game.Gameplay
         static readonly string[] FarShotNames = { null, "pistol", "smg", "rifle", "shotgun", "sniper" };
         static AudioClip[] _farShotClips, _whizClips;
         static readonly Dictionary<SurfaceId, AudioClip[]> StepSets = new Dictionary<SurfaceId, AudioClip[]>();
+        static readonly Dictionary<SurfaceId, float> StepGains = new Dictionary<SurfaceId, float>();
 
         static readonly AudioClip[] NoClips = new AudioClip[0];
         static readonly Dictionary<string, AudioClip[]> GunSets = new Dictionary<string, AudioClip[]>();
@@ -287,10 +288,13 @@ namespace Game.Gameplay
         // with "step_", so they are skipped until those files are removed.
         public static AudioClip[] StepClips(SurfaceId id, out float gain)
         {
+            // Cache first: resolving the folder ran Resources.LoadAll, a sort and string concats on every footstep of everyone.
+            if (StepSets.TryGetValue(id, out var clips)) { gain = StepGains[id]; return clips; }
             var e = SurfaceSounds.Of(id);
             string folder = SurfaceSounds.StepFolder(id, f => LoadStepFolder(f).Length > 0);
             gain = folder == "Steps/" + e.Folder ? 1f : e.FallbackGain;
-            if (!StepSets.TryGetValue(id, out var clips)) StepSets[id] = clips = LoadStepFolder(folder);
+            StepSets[id] = clips = LoadStepFolder(folder);
+            StepGains[id] = gain;
             return clips;
         }
 

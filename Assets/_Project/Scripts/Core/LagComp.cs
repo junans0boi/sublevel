@@ -39,12 +39,15 @@ namespace Game.Core
             x = y = z = 0f;
             if (_count == 0) return false;
             int cap = _time.Length, first = (_next - _count + cap) % cap;
-            int lo = first;
             if (time <= _time[first]) { x = _x[first]; y = _y[first]; z = _z[first]; return true; }
-            for (int i = 1; i < _count; i++)
+            int hi = (_next - 1 + cap) % cap;
+            if (time >= _time[hi]) { x = _x[hi]; y = _y[hi]; z = _z[hi]; return true; }
+            // From the newest back: a rewind is at most 0.3 s of a 1 s ring (~18 of ~60 samples); scanning from the
+            // oldest walked ~40 samples per body per bullet segment. Same pair: the last sample before `time` and the next.
+            for (int i = _count - 2; i >= 0; i--)
             {
-                int hi = (first + i) % cap;
-                if (_time[hi] >= time)
+                int lo = (first + i) % cap;
+                if (_time[lo] < time)
                 {
                     double span = _time[hi] - _time[lo];
                     float k = span > 1e-9 ? (float)((time - _time[lo]) / span) : 1f;
@@ -53,9 +56,9 @@ namespace Game.Core
                     z = _z[lo] + (_z[hi] - _z[lo]) * k;
                     return true;
                 }
-                lo = hi;
+                hi = lo;
             }
-            x = _x[lo]; y = _y[lo]; z = _z[lo];
+            x = _x[first]; y = _y[first]; z = _z[first];
             return true;
         }
     }

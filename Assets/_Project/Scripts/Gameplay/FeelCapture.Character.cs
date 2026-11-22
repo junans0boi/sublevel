@@ -521,7 +521,7 @@ namespace Game.Gameplay
                     _frame.LeanLeft = left; _frame.LeanRight = !left; _frame.AimHeld = aim;
                     yield return new WaitForSeconds(0.7f);
                     var anim = me.GetComponent<CombatantAnimation>();
-                    Debug.Log($"[FeelCapture] lean left={left} plantL {anim.FootPlantLeft:F3} plantR {anim.FootPlantRight:F3} footLow {anim.FootLow:F3} rest {anim.FootRest:F3} | {anim.PlantDebug[0]} | {anim.PlantDebug[1]}");
+                    Debug.Log($"[FeelCapture] lean left={left} plantL {anim.FootPlantLeft:F3} plantR {anim.FootPlantRight:F3} footLow {anim.FootLow:F3} rest {anim.FootRest:F3} | {anim.PlantDebug(0)} | {anim.PlantDebug(1)}");
                     yield return Views($"D_lean_{(left ? "Q" : "E")}_{(aim ? "ads" : "hip")}", true, Watch.Front, Watch.Behind);
                 }
             _frame.LeanLeft = _frame.LeanRight = _frame.AimHeld = false;

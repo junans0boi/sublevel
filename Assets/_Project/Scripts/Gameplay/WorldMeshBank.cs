@@ -75,16 +75,19 @@ namespace Game.Gameplay
             }
 
             int subs = r.SubMeshes.Length / 6;
-            mesh.subMeshCount = subs;
             var bounds = new Bounds(new Vector3(r.Bounds[0], r.Bounds[1], r.Bounds[2]), new Vector3(r.Bounds[3], r.Bounds[4], r.Bounds[5]));
+            var descriptors = new SubMeshDescriptor[subs];
             for (int i = 0; i < subs; i++)
             {
                 int o = i * 6;
-                mesh.SetSubMesh(i, new SubMeshDescriptor(r.SubMeshes[o], r.SubMeshes[o + 1], (MeshTopology)r.SubMeshes[o + 2])
+                descriptors[i] = new SubMeshDescriptor(r.SubMeshes[o], r.SubMeshes[o + 1], (MeshTopology)r.SubMeshes[o + 2])
                 {
                     baseVertex = r.SubMeshes[o + 3], firstVertex = r.SubMeshes[o + 4], vertexCount = r.SubMeshes[o + 5], bounds = bounds,
-                }, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
+                };
             }
+            // All at once with the flags: `subMeshCount = n` recalculated bounds and, on Float16 positions, logged a warning
+            // with a stack trace per mesh (~3,270 per World load).
+            mesh.SetSubMeshes(descriptors, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
             mesh.bounds = bounds;
             return mesh;
         }
