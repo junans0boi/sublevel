@@ -331,7 +331,7 @@ namespace Game.Tests
             Object.Destroy(cam.gameObject);
         }
 
-        static IEnumerator Shot(string folder, string name, Camera only = null)
+        internal static IEnumerator Shot(string folder, string name, Camera only = null)
         {
             yield return null;
             var cam = only != null ? only : PlayerController.Local.Camera != null ? PlayerController.Local.Camera : Camera.main;

@@ -344,7 +344,7 @@ namespace Game.Net
             foreach (var kv in _keys)
             {
                 var c = kv.Key;
-                if (c == null || !c.IsPlayer || c.Dead.Value || Carries(c)) continue;
+                if (c == null || !c.IsPlayer || c.Dead.Value || Carries(c) || VehicleSeat.IsAttached(c)) continue;   // a race car's people go with the car (#483)
                 var p = c.transform.position;
                 float lx = p.x - WaitingIsland.CentreX, lz = p.z - WaitingIsland.CentreZ;
                 bool onTop = WaitingIsland.OnBungeeTop(lx, lz) && p.y > _deckY + BungeeCurve.Top - 2f;
