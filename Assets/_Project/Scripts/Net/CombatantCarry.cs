@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using Game.Core;
@@ -182,11 +183,11 @@ namespace Game.Net
             _slotAmmoC = AmmoOf(_combatant.Slot2.Value); // the sidearm
             if (_slotAmmoA < 0 && _slotAmmoB < 0 && _slotAmmoC < 0) return;
             float reachSqr = reach * reach;
-            var items = LootItem.All;
-            // Backwards: taking an item removes it from the list.
+            // The hash's handful near here, not every pickup in the world (#473); backwards, as the full scan went.
+            var items = AmmoNear;
+            LootGrid.Near(here, reach, items);
             for (int i = items.Count - 1; i >= 0; i--)
             {
-                if (i >= items.Count) continue;
                 var item = items[i];
                 if (item == null || !item.IsSpawned || item.Kind.Value != (int)LootKind.Ammo) continue;
                 int type = item.Ammo.Value;
@@ -200,6 +201,8 @@ namespace Game.Net
                 ServerAutoPickups++;
             }
         }
+
+        static readonly List<LootItem> AmmoNear = new List<LootItem>();
 
         // The calibre of the weapon with this id, or -1 for an empty slot.
         static int AmmoOf(int weaponId)

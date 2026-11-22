@@ -484,6 +484,23 @@ namespace Game.Gameplay
         float _lodNext;
         public int Lod => _lod;
 
+        SkinnedMeshRenderer[] _skins;
+
+        // Any part of the body drawn by some camera last frame (shadows included).
+        bool OnScreen()
+        {
+            if (_skins == null || _skins.Length == 0) _skins = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            bool any = false;
+            foreach (var skin in _skins)
+            {
+                if (skin == null) continue;
+                if (skin.isVisible) return true;
+                any = true;
+            }
+            if (!any) _skins = null; // a swapped outfit: look again next time, pose meanwhile
+            return !any;
+        }
+
         void UpdateLod()
         {
             if (Time.time < _lodNext) return;
@@ -581,8 +598,9 @@ namespace Game.Gameplay
                 if ((left || right) && walking) FootDown?.Invoke();
             }
 
-            // Only on frames the animator poses the skeleton.
-            if (_spine == null || Time.deltaTime <= 0f || !_animator.isActiveAndEnabled) return;
+            // Only on frames the animator poses the skeleton. Level 2 off screen: the animator leaves the bones alone
+            // (CullUpdateTransforms), so the code poses on top go too (#484: most of 79 bots on a host, every frame).
+            if (_spine == null || Time.deltaTime <= 0f || !_animator.isActiveAndEnabled || (_lod >= 2 && !OnScreen())) return;
             for (int side = 0; side < 2; side++)
             {
                 if (!_footMoved[side]) continue;

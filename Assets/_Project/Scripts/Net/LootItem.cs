@@ -20,12 +20,14 @@ namespace Game.Net
         public readonly SyncVar<int> Optic = new SyncVar<int>();
 
         public static readonly List<LootItem> All = new List<LootItem>();
+        // Bumped whenever All gains or loses an item (LootGrid rebuilds on it: a swap keeps the count but not the set).
+        public static int Version { get; private set; }
 
-        public override void OnStartNetwork() => All.Add(this);
-        public override void OnStopNetwork() => All.Remove(this);
+        public override void OnStartNetwork() { All.Add(this); Version++; }
+        public override void OnStopNetwork() { if (All.Remove(this)) Version++; }
 
         // Scene unloads destroy objects without the network callbacks.
-        void OnDestroy() => All.Remove(this);
+        void OnDestroy() { if (All.Remove(this)) Version++; }
 
         // Call before spawning.
         public void Init(LootEntry entry)

@@ -656,6 +656,11 @@ namespace Game.Net
 
         // ---- Wheels (every side) ----
 
+        float[] _wheelDrop = new float[0];
+        Vector3 _wheelsCastAt;
+        Quaternion _wheelsCastRot;
+        int _wheelsRecastFrame;
+
         void PlaceWheels(float dt)
         {
             var r = Rules;
@@ -673,11 +678,23 @@ namespace Game.Net
             _lastYaw = yaw;
             _spin = Mathf.Repeat(_spin + Speed / Mathf.Max(0.05f, r.WheelRadius) * Mathf.Rad2Deg * dt, 360f);
 
+            // Standing still (most of the ~40 parked vehicles): the ground under the wheels is where it was; look again
+            // every 30 frames for something that moved under them (#484).
+            bool still = transform.position == _wheelsCastAt && transform.rotation == _wheelsCastRot && Time.frameCount < _wheelsRecastFrame
+                && _wheelDrop.Length == _wheelPivots.Length;
+            if (!still)
+            {
+                _wheelsCastAt = transform.position;
+                _wheelsCastRot = transform.rotation;
+                _wheelsRecastFrame = Time.frameCount + 30;
+                if (_wheelDrop.Length != _wheelPivots.Length) _wheelDrop = new float[_wheelPivots.Length];
+            }
             for (int i = 0; i < _wheelPivots.Length && i < _anchorLocal.Length; i++)
             {
                 var pivot = _wheelPivots[i];
                 if (pivot == null) continue;
-                float drop = CastWheel(i, out var hit) ? hit.distance : r.SuspensionTravel;
+                if (!still) _wheelDrop[i] = CastWheel(i, out var hit) ? hit.distance : r.SuspensionTravel;
+                float drop = _wheelDrop[i];
                 if (_state != null) drop += _state.DropOf(i);
                 pivot.localPosition = _anchorLocal[i] - Vector3.up * drop;
                 pivot.localRotation = IsFrontWheel(i) ? Quaternion.Euler(0f, _steerShown, 0f) : Quaternion.identity;

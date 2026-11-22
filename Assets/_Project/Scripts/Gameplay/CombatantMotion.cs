@@ -20,6 +20,11 @@ namespace Game.Gameplay
         // No ground close under the feet. Unlike a speed test this holds through the top of a jump.
         public bool Airborne { get; private set; }
 
+        CombatantAnimation _anim;
+        int _phase;
+
+        void Awake() { _anim = GetComponent<CombatantAnimation>(); _phase = GetInstanceID() & 3; }
+
         void OnEnable() => _lastPosition = transform.position;
 
         void Update()
@@ -41,6 +46,8 @@ namespace Game.Gameplay
             if (carried) delta.y = 0f;
             LocalVelocity = transform.InverseTransformDirection(delta / dt);
             VerticalSpeed = delta.y / dt;
+            // Past the animation's level 2 (40 m) the jump pose is a few pixels: probe every fourth frame (#484).
+            if (!carried && _anim != null && _anim.Lod >= 2 && ((Time.frameCount + _phase) & 3) != 0) return;
             // The cast starts inside this combatant's own collider, which a cast does not report.
             Airborne = !carried && !Physics.SphereCast(transform.position + Vector3.up * ProbeStartHeight, ProbeRadius, Vector3.down, out _,
                 ProbeStartHeight - ProbeRadius + GameData.Rules.Jump.GroundProbeMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);

@@ -51,6 +51,8 @@ namespace Game.Net
             return Clear(eye, item, self);
         }
 
+        static readonly List<LootItem> Near = new List<LootItem>();
+
         // Client: every pickup F could take from here looking along `look`, with its bearing off the view (degrees).
         // `items` and `bearings` are filled in step; `skip` pickups (just asked for) are left out.
         public static void Gather(Combatant me, Vector3 look, List<LootItem> items, List<float> bearings, System.Func<LootItem, bool> skip = null)
@@ -61,7 +63,8 @@ namespace Game.Net
             var rules = InteractRules.Current;
             var feet = me.transform.position;
             var eye = me.EyePosition;
-            foreach (var item in LootItem.All)
+            LootGrid.Near(feet, rules.ReachMeters, Near); // #484: a handful from the hash, not all ~1,600 every frame
+            foreach (var item in Near)
             {
                 if (item == null || !item.IsSpawned || (skip != null && skip(item))) continue;
                 var p = item.transform.position;

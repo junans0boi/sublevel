@@ -17,6 +17,11 @@ namespace Game.Gameplay
         Transform _ring, _dot;
         MeshRenderer _renderer, _dotRenderer;
         Color _tint = Color.white;
+        Vector3 _ringAt;  // pickups do not move (no NetworkTransform): the ring's place, kept off the transform
+        bool _shown = true;
+        // #484: one LateUpdate walks every ring instead of ~1,600 behaviours each fetching the camera and the player.
+        static readonly System.Collections.Generic.List<LootMarker> Live = new System.Collections.Generic.List<LootMarker>();
+        static Ticker _ticker;
         // #452 (ADR-547): one shared material per sprite and colour (5 tints x current or not) instead of a property block,
         // which took every ring and glint out of the SRP Batcher (~7 SetPass with 16 pickups in view).
         static readonly System.Collections.Generic.Dictionary<(FxKit.Sprite, Color), Material> Tinted = new System.Collections.Generic.Dictionary<(FxKit.Sprite, Color), Material>();
@@ -92,27 +97,52 @@ namespace Game.Gameplay
                 _dotRenderer.receiveShadows = false;
             }
             _tint = TintOf(kind);
-            _ring.position = floorPoint + Vector3.up * 0.015f;
+            _ringAt = floorPoint + Vector3.up * 0.015f;
+            _ring.position = _ringAt;
             _ring.rotation = Quaternion.identity;
             _dot.position = floorPoint + Vector3.up * 0.4f;
         }
 
-        void LateUpdate()
+        void OnEnable()
         {
-            if (_ring == null) return;
-            if (_camera == null || !_camera.isActiveAndEnabled) _camera = Camera.main;
-            if (_camera == null) return;
-            var player = PlayerController.Local;
-            Tick(_camera.transform.position, player != null && player.NearbyLoot != null && player.NearbyLoot.gameObject == gameObject);
+            Live.Add(this);
+            if (_ticker != null) return;
+            _ticker = new GameObject("LootMarkers").AddComponent<Ticker>();
+            DontDestroyOnLoad(_ticker.gameObject); // outlives scene swaps; idle while no ring is live
+        }
+
+        void OnDisable() => Live.Remove(this);
+
+        sealed class Ticker : MonoBehaviour
+        {
+            void LateUpdate()
+            {
+                if (Live.Count == 0) return;
+                if (_camera == null || !_camera.isActiveAndEnabled) _camera = Camera.main;
+                if (_camera == null) return;
+                var viewer = _camera.transform.position;
+                var player = PlayerController.Local;
+                var nearby = player != null ? player.NearbyLoot : null;
+                var current = nearby != null ? nearby.gameObject : null;
+                for (int i = 0; i < Live.Count; i++)
+                {
+                    var m = Live[i];
+                    if (m._ring == null) continue;
+                    // Far and already hidden: nothing to touch (most of the ~1,600 on any frame).
+                    if (!m._shown && (viewer - m._ringAt).sqrMagnitude >= ShowMeters * ShowMeters) continue;
+                    m.Tick(viewer, current != null && ReferenceEquals(m.gameObject, current));
+                }
+            }
+
+            void OnDestroy() { if (_ticker == this) _ticker = null; }
         }
 
         // Size, colour and visibility for a viewer at `viewer` (also called by the editor captures, which run no LateUpdate).
         public void Tick(Vector3 viewer, bool current)
         {
-            float distance = Vector3.Distance(viewer, _ring.position);
+            float distance = Vector3.Distance(viewer, _ringAt);
             bool show = distance < ShowMeters;
-            if (_renderer.enabled != show) _renderer.enabled = show;
-            if (_dotRenderer.enabled != show) _dotRenderer.enabled = show;
+            if (_shown != show || _renderer.enabled != show) { _renderer.enabled = show; _dotRenderer.enabled = show; _shown = show; }
             if (!show) return;
             float size = Mathf.Lerp(NearSize, FarSize, distance / ShowMeters);
             float pulse = current ? 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6f) : 0f;
