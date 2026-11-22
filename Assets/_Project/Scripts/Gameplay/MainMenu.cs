@@ -58,6 +58,7 @@ namespace Game.Gameplay
         public CustomScreen CustomPanel => _customScreen;
         SettingsScreen _settingsScreen;
         Text _loading;
+        AsyncOperation _loadOp;
         Text _modeLabel, _startLabel;
         LobbyScreen _lobbyScreen;
         LobbyPanel _lobbyPanel;
@@ -150,6 +151,8 @@ namespace Game.Gameplay
 
         void Update()
         {
+            // The read phase reports 0..0.9; the scene's activation (meshes, colliders) runs in one frame after it.
+            if (_loadOp != null) _loading.text = _loadOp.progress < 0.9f ? $"불러오는 중... {Mathf.RoundToInt(_loadOp.progress / 0.9f * 100f)}%" : "맵 준비 중...";
             if (_social == null) StartBackend();
             if (_social != null && _friends == null && _root != null) _friends = FriendsPanel.Build(_root.transform, _social);
             if (_social != null) { _social.Tick(Time.unscaledTimeAsDouble); _backendQueue.Tick(Time.unscaledTimeAsDouble); }
@@ -197,7 +200,8 @@ namespace Game.Gameplay
                 if (!_lobbyPanel.Root.gameObject.TryGetComponent(out CanvasGroup group)) group = _lobbyPanel.Root.gameObject.AddComponent<CanvasGroup>(); // ?? would not catch the editor's fake-null from GetComponent
                 group.interactable = false;
             }
-            SceneManager.LoadSceneAsync(scene);
+            LoadTrace.Mark("load start " + scene);
+            _loadOp = SceneManager.LoadSceneAsync(scene);
         }
 
         // 방 만들기 / 참가 (#160): the lobby panels; 시작 above stays the single-player path.

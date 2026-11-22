@@ -76,7 +76,7 @@ namespace Game.Gameplay
 
         void OnEnable()
         {
-            Prepare();
+            using (LoadTrace.Step("VegetationRenderer.Prepare " + name)) Prepare();
             RenderPipelineManager.beginCameraRendering += OnBeginCamera;
         }
 

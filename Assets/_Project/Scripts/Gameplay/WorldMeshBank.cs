@@ -36,10 +36,13 @@ namespace Game.Gameplay
             if (_blob == null || _filters.Length == 0) return;
             if (_built == null)
             {
-                var records = WorldMeshBlob.Read(_blob.bytes);
+                System.Collections.Generic.List<MeshRecord> records;
+                using (LoadTrace.Step("WorldMeshBank read blob")) records = WorldMeshBlob.Read(_blob.bytes);
                 _built = new Mesh[records.Count];
-                for (int i = 0; i < records.Count; i++) _built[i] = Build(records[i]);
+                using (LoadTrace.Step($"WorldMeshBank build {records.Count} meshes"))
+                    for (int i = 0; i < records.Count; i++) _built[i] = Build(records[i]);
             }
+            using (LoadTrace.Step($"WorldMeshBank assign {_filters.Length} filters"))
             for (int i = 0; i < _filters.Length; i++)
                 if (_filters[i] != null)
                 {

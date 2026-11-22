@@ -12,7 +12,7 @@ namespace Game.Gameplay
 
         void OnEnable()
         {
-            if (_data != null) _instance = NavMesh.AddNavMeshData(_data);
+            if (_data != null) using (LoadTrace.Step("NavMesh.AddNavMeshData")) _instance = NavMesh.AddNavMeshData(_data);
         }
 
         void OnDisable() => _instance.Remove();
