@@ -480,19 +480,34 @@ namespace Game.Tests
         {
             yield return Load();
             float rest = _anim.FootRest, standing = Mathf.Abs(AnkleOverGround(HumanBodyBones.LeftFoot) - rest);
-            float lowest = 9f, drop = 0f;
+            float lowest = 9f, drop = 0f, maxSpeed = 0f, start = Time.time;
             string atLowest = "";
+            // Run along the most open floor: facing the spawn's way the player hit a TestBox wall at ~2 s, and the stop against it (speed 0,
+            // the run blending out) was measured as "moving" (0.080 m, rest 0.124).
+            var from = _pc.transform.position + Vector3.up * 1.2f;
+            Vector3 open = _pc.transform.forward; float room = 0f;
+            for (int i = 0; i < 8; i++)
+            {
+                var dir = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
+                float ahead = Physics.Raycast(from, dir, out var hit, 60f, ~0, QueryTriggerInteraction.Ignore) ? hit.distance : 60f;
+                if (ahead > room) { room = ahead; open = dir; }
+            }
+            Assert.Greater(room, 12f, "room for 2.1 s of running");
+            _pc.LookAt(from + open * 10f + Vector3.up * 0.4f);
+            yield return new WaitForSeconds(0.2f);
             _input.Frame.Move = new Vector2(0, 1);
             yield return new WaitForSeconds(0.6f);
             for (float end = Time.time + 1.5f; Time.time < end;)
             {
                 yield return null;
                 float low = Mathf.Min(AnkleOverGround(HumanBodyBones.LeftFoot), AnkleOverGround(HumanBodyBones.RightFoot));
-                if (low < lowest) atLowest = $"{_anim.BaseShown} plantDrop {_anim.PlantDrop:F3} modelDrop {_anim.ModelDrop:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} speed {_me.GetComponent<CombatantMotion>().LocalVelocity.magnitude:F2}";
+                float spd = _me.GetComponent<CombatantMotion>().LocalVelocity.magnitude;
+                maxSpeed = Mathf.Max(maxSpeed, spd);
+                if (low < lowest) atLowest = $"{_anim.BaseShown} plantDrop {_anim.PlantDrop:F3} modelDrop {_anim.ModelDrop:F3} plant {_anim.FootPlantLeft:F3}/{_anim.FootPlantRight:F3} speed {spd:F2} L[{_anim.PlantDebug(0)}] R[{_anim.PlantDebug(1)}] t {Time.time - start:F2} blocked {SpawnProtection.InputBlocked} y {_pc.transform.position.y:F3}";
                 lowest = Mathf.Min(lowest, low);
                 drop = Mathf.Max(drop, _anim.PlantDrop);
             }
-            Debug.Log("[AnimMetrics] flat ground lowest frame: " + atLowest);
+            Debug.Log($"[AnimMetrics] flat ground lowest frame: {atLowest} (max speed {maxSpeed:F2})");
             Debug.Log($"[AnimMetrics] flat ground: standing ankle error {standing:F3} m, lowest ankle while moving {lowest:F3} (rest {rest:F3}), max pelvis drop {drop:F3}");
             Assert.LessOrEqual(standing, 0.025f, "standing: an ankle is `rest` above the ground (m)");
             Assert.GreaterOrEqual(lowest, rest - 0.03f, "moving: no ankle is more than 3 cm below its resting height over the ground");
