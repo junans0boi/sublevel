@@ -71,10 +71,17 @@ namespace Game.Tests
 
 #if UNITY_EDITOR
             if (Environment.GetEnvironmentVariable("MATCH_GC_BREAKDOWN") == "1") { yield return Breakdown(); yield break; }
+            if (Environment.GetEnvironmentVariable("MATCH_GC_BREAKDOWN") == "time") { yield return TimeBreakdown(); yield break; }
 #endif
             var gc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
             var gcCount = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocation In Frame Count");
             var main = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread");
+            var render = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Render Thread");
+            var draws = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
+            var setPass = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
+            var tris = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles Count");
+            var rms = new float[Frames];
+            long drawSum = 0, setPassSum = 0, trisSum = 0;
             var bytes = new long[Frames];
             var ms = new float[Frames];
             long countSum = 0;
@@ -85,8 +92,12 @@ namespace Game.Tests
                 bytes[i] = gc.LastValue;
                 countSum += gcCount.LastValue;
                 ms[i] = main.LastValue * 1e-6f;
+                rms[i] = render.LastValue * 1e-6f;
+                drawSum += draws.LastValue; setPassSum += setPass.LastValue; trisSum += tris.LastValue;
             }
-            gc.Dispose(); gcCount.Dispose(); main.Dispose();
+            gc.Dispose(); gcCount.Dispose(); main.Dispose(); render.Dispose(); draws.Dispose(); setPass.Dispose(); tris.Dispose();
+            var rstats = FrameStats.Compute(rms, 0);
+            Debug.Log($"[MatchGc] render thread avg {rstats.AvgMs:F2} ms p99 {rstats.P99Ms:F2} ms player-camera draws {drawSum / Frames} setpass {setPassSum / Frames} tris {trisSum / Frames}");
 
             int combatants = 0;
             foreach (var c in Combatant.All) if (c != null) combatants++;
@@ -166,6 +177,66 @@ namespace Game.Tests
             Directory.CreateDirectory("Logs/perf");
             File.WriteAllText("Logs/perf/match_gc_breakdown.txt", sb.ToString());
             Debug.Log("[MatchGcBreakdown]\n" + sb);
+            Assert.Greater(used, 0, "profiler frames");
+        }
+        // MATCH_GC_BREAKDOWN=time: profile 300 frames and sum main-thread time per PlayerLoop phase and per script method
+        // ("Class.Method()", not descended into). Profiler overhead inflates the absolute ms; the shares are what to read.
+        static IEnumerator TimeBreakdown()
+        {
+            const int frames = 300;
+            UnityEditorInternal.ProfilerDriver.ClearAllFrames();
+            UnityEditorInternal.ProfilerDriver.enabled = true;
+            UnityEngine.Profiling.Profiler.enabled = true;
+            for (int i = 0; i < frames + 2; i++) yield return null;
+            UnityEngine.Profiling.Profiler.enabled = false;
+            UnityEditorInternal.ProfilerDriver.enabled = false;
+
+            var phases = new System.Collections.Generic.Dictionary<string, double>();
+            var scripts = new System.Collections.Generic.Dictionary<string, double>();
+            var subs = new System.Collections.Generic.Dictionary<string, double>();
+            int last = UnityEditorInternal.ProfilerDriver.lastFrameIndex, first = Mathf.Max(UnityEditorInternal.ProfilerDriver.firstFrameIndex, last - frames + 1);
+            int used = 0;
+            double loop = 0;
+            void Add(System.Collections.Generic.Dictionary<string, double> d, string k, double v) => d[k] = (d.TryGetValue(k, out var x) ? x : 0) + v;
+            for (int f = first; f <= last; f++)
+            {
+                using var view = UnityEditorInternal.ProfilerDriver.GetHierarchyFrameDataView(f, 0,
+                    UnityEditor.Profiling.HierarchyFrameDataView.ViewModes.Default, UnityEditor.Profiling.HierarchyFrameDataView.columnTotalTime, false);
+                if (view == null || !view.valid) continue;
+                used++;
+                void Walk(int id, int depth, string phase)
+                {
+                    var children = new System.Collections.Generic.List<int>();
+                    view.GetItemChildren(id, children);
+                    foreach (var c in children)
+                    {
+                        string name = view.GetItemName(c);
+                        double t = view.GetItemColumnDataAsDouble(c, UnityEditor.Profiling.HierarchyFrameDataView.columnTotalTime);
+                        if (name == "PlayerLoop") { loop += t; Walk(c, 1, ""); continue; }
+                        if (depth == 1 && name == "UpdateScene") { Walk(c, 1, ""); continue; }   // the editor's extra level
+                        if (depth == 1) { Add(phases, name, t); Walk(c, 2, name); continue; }
+                        if (depth >= 2 && (name.EndsWith("()") || name.Contains("() ["))) { Add(scripts, name.Replace(" [Invoke]", "") + "  [" + phase + "]", t); continue; }
+                        if (depth == 2) Add(subs, name + "  [" + phase + "]", t);
+                        if (depth >= 1) Walk(c, depth + 1, phase);
+                    }
+                }
+                Walk(view.GetRootItemID(), 0, "");
+            }
+            var sb = new System.Text.StringBuilder();
+            int u = Mathf.Max(1, used);
+            sb.AppendLine($"frames {used} PlayerLoop {loop / u:F2} ms/frame (profiler on)");
+            sb.AppendLine("-- phases");
+            var pk = new System.Collections.Generic.List<string>(phases.Keys); pk.Sort((a, b) => phases[b].CompareTo(phases[a]));
+            for (int i = 0; i < Mathf.Min(30, pk.Count); i++) sb.AppendLine($"{phases[pk[i]] / u,8:F3} ms  {pk[i]}");
+            sb.AppendLine("-- engine items inside phases");
+            var bk = new System.Collections.Generic.List<string>(subs.Keys); bk.Sort((a, b) => subs[b].CompareTo(subs[a]));
+            for (int i = 0; i < Mathf.Min(30, bk.Count); i++) sb.AppendLine($"{subs[bk[i]] / u,8:F3} ms  {bk[i]}");
+            sb.AppendLine("-- scripts");
+            var sk = new System.Collections.Generic.List<string>(scripts.Keys); sk.Sort((a, b) => scripts[b].CompareTo(scripts[a]));
+            for (int i = 0; i < Mathf.Min(60, sk.Count); i++) sb.AppendLine($"{scripts[sk[i]] / u,8:F3} ms  {sk[i]}");
+            Directory.CreateDirectory("Logs/perf");
+            File.WriteAllText("Logs/perf/match_time_breakdown.txt", sb.ToString());
+            Debug.Log("[MatchTimeBreakdown]\n" + sb);
             Assert.Greater(used, 0, "profiler frames");
         }
 #endif

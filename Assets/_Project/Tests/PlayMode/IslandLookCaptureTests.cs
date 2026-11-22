@@ -114,6 +114,46 @@ namespace Game.Tests
                 report.Add($"\"{name}\":{result.ToJson()}");
                 Debug.Log("[IslandLook] " + line);
                 if (breakdown) yield return Breakdown(name);
+                if (Environment.GetEnvironmentVariable("LOOK_COST") == "1") yield return Cost(name);
+            }
+
+            // Optimisation analysis: render ms of the view with one feature switched off at a time (what the GPU time is made of).
+            IEnumerator Cost(string name)
+            {
+                RenderProbe.Result r = default;
+                IEnumerator Probe(string what)
+                {
+                    yield return RenderProbe.Measure(cam, x => r = x, frames: 40, warmup: 10);
+                    Debug.Log($"[IslandLook] cost {name} {what}: {r}");
+                }
+                pc.Camera.enabled = false;
+                yield return Probe("baseline (player camera off)");
+                var urp = (UniversalRenderPipelineAsset)UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                var sunLight = sunGo.GetComponent<Light>();
+                var shadows = sunLight.shadows; sunLight.shadows = LightShadows.None;
+                yield return Probe("sun shadows off"); sunLight.shadows = shadows;
+                float sd = urp.shadowDistance; urp.shadowDistance = sd * 0.5f;
+                yield return Probe($"shadow distance {sd:F0}->{sd * 0.5f:F0}"); urp.shadowDistance = sd;
+                int cascades = urp.shadowCascadeCount; urp.shadowCascadeCount = 1;
+                yield return Probe($"shadow cascades {cascades}->1"); urp.shadowCascadeCount = cascades;
+                var data = cam.GetUniversalAdditionalCameraData();
+                data.renderPostProcessing = false;
+                yield return Probe("post off"); data.renderPostProcessing = true;
+                var features = (System.Collections.Generic.List<ScriptableRendererFeature>)typeof(ScriptableRenderer).GetProperty("rendererFeatures", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(data.scriptableRenderer);
+                foreach (var f in features)
+                {
+                    if (f == null || !f.isActive) continue;
+                    f.SetActive(false);
+                    yield return Probe($"feature {f.name} off");
+                    f.SetActive(true);
+                }
+                float far = cam.farClipPlane; cam.farClipPlane = far * 0.5f;
+                yield return Probe($"far clip {far:F0}->{far * 0.5f:F0}"); cam.farClipPlane = far;
+                float lod = QualitySettings.lodBias; QualitySettings.lodBias = lod * 0.5f;
+                yield return Probe($"lod bias {lod:F2}->{lod * 0.5f:F2}"); QualitySettings.lodBias = lod;
+                float scale = urp.renderScale; urp.renderScale = 0.75f;
+                yield return Probe($"render scale {scale:F2}->0.75"); urp.renderScale = scale;
+                pc.Camera.enabled = true;
             }
 
             // #452: what the draws are made of. LOOK_BREAKDOWN=1 re-renders the view with one thing switched off at a time.
