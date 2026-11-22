@@ -312,7 +312,12 @@ namespace Game.Net
         public void RequestBoost()
         {
             var kind = Healing.BestBoost(Drinks.Value, Pills.Value, Syringes.Value);
-            if (kind == HealKind.None) return;
+            if (kind != HealKind.None) RequestUseKind(kind);
+        }
+
+        // The inventory's chosen item (double or right click on its row).
+        public void RequestUseKind(HealKind kind)
+        {
             if (IsServerInitialized) ServerBegin(kind); else CmdUseKind((int)kind);
         }
 

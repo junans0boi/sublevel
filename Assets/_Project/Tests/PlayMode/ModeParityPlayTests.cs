@@ -18,9 +18,13 @@ namespace Game.Tests
         static readonly Vector3 Spot = new Vector3(3000f, 0f, 3000f);
         MultiHarness _net;
 
+        HealRules _healBefore;
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
+            if (_healBefore != null) HealRules.Current = _healBefore;
+            _healBefore = null;
             if (_net != null) yield return _net.Teardown();
             _net = null;
         }
@@ -109,6 +113,86 @@ namespace Game.Tests
             Assert.IsTrue(system.ServerRequest(body, index, door.transform.position), "1.5 m away: opened");
             Assert.AreNotEqual(DoorState.Closed, door.State);
             yield return null;
+        }
+
+        // #482 (v0.3.0 "구급상자 사용안됨"): every healing item is used by the path a player takes — the inventory row (double or
+        // right click), H and J — from a remote client in both topologies and from the host's own player. The medkit row used
+        // H's best fit (a bandage under 75) and its right click dropped it.
+        [UnityTest]
+        public IEnumerator EveryHealingItem_IsUsedFromItsInputPath_InBothTopologies([Values] MultiHarness.Topology topology)
+        {
+            _healBefore = HealRules.Current;
+            HealRules.Current = new HealRules
+            {
+                Bandage = new HealItemRules(0.3f, 10f, 75f), FirstAid = new HealItemRules(0.3f, 75f, 75f), Medkit = new HealItemRules(0.3f, 100f, 100f),
+                Drink = new HealItemRules(0.3f, 0f, 0f) { Boost = 40f }, Pill = new HealItemRules(0.3f, 0f, 0f) { Boost = 60f },
+                Syringe = new HealItemRules(0.3f, 0f, 0f) { Boost = 100f },
+            };
+            RemoteClient remote = null;
+            yield return RemoteAtSpot(topology, new List<DoorChanged>(), c => remote = c);
+            yield return HealEveryItem($"[{topology} remote]", remote.Player, ServerCopy(_net, remote.Player), remote.Input);
+            if (topology == MultiHarness.Topology.Host)
+                yield return HealEveryItem("[host's own player]", _net.HostPlayer, _net.HostPlayer, _net.HostInput);
+        }
+
+        IEnumerator HealEveryItem(string who, Combatant me, Combatant body, HarnessInput input)
+        {
+            Assert.IsNotNull(me, who + " player");
+            Assert.IsNotNull(body, who + " server body");
+            var heal = body.GetComponent<CombatantHealing>();
+            Assert.IsNotNull(heal, "the player prefab carries CombatantHealing");
+            body.ServerHeal(1000f);
+
+            // Medkit from its inventory row, with bandages in the bag (H's best fit would be a bandage).
+            Assert.AreEqual(2, heal.ServerAdd(HealKind.Bandage, 2));
+            Assert.IsTrue(body.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 2 }));
+            body.ServerTakeDamage(50f);
+            Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.Medkit, out var kind), "the medkit row's right click uses it");
+            InventoryBackend.UseHealing(me, kind);
+            yield return NetHarness.WaitUntil(() => body.Hp.Value >= 99.9f, $"{who} the medkit row healed to full", Debug.Log, 5f);
+            Assert.AreEqual(1, body.Medkits.Value, who + " one medkit used");
+            Assert.AreEqual(2, heal.Bandages.Value, who + " no bandage used");
+            body.ServerTakeDamage(50f);
+            InventoryBackend.UseMedkit(me); // the row's double click
+            yield return NetHarness.WaitUntil(() => body.Hp.Value >= 99.9f && body.Medkits.Value == 0, $"{who} double click used the other medkit", Debug.Log, 5f);
+            Assert.AreEqual(2, heal.Bandages.Value, who + " still no bandage used");
+
+            // First-aid kit from its row, bandages still in the bag.
+            Assert.AreEqual(1, heal.ServerAdd(HealKind.FirstAid, 1));
+            body.ServerTakeDamage(60f);
+            InventoryBackend.UseHealing(me, HealKind.FirstAid);
+            yield return NetHarness.WaitUntil(() => heal.FirstAids.Value == 0 && !heal.Using, $"{who} the first-aid kit was used", Debug.Log, 5f);
+            Assert.AreEqual(75f, body.Hp.Value, 0.01f, who + " first aid heals to 75");
+
+            // H: bandages (best fit under 75) repeat until they run out.
+            body.ServerTakeDamage(30f); // 45
+            input.Frame.Heal = true;
+            yield return NetHarness.WaitUntil(() => heal.Bandages.Value == 0 && !heal.Using, $"{who} H used both bandages", Debug.Log, 5f);
+            Assert.AreEqual(65f, body.Hp.Value, 0.01f, who + " two bandages: +20");
+
+            // H with only a medkit left: the best fit is the medkit.
+            Assert.IsTrue(body.ServerGive(new LootEntry { Kind = LootKind.Medkit, Amount = 1 }));
+            input.Frame.Heal = true;
+            yield return NetHarness.WaitUntil(() => body.Medkits.Value == 0 && !heal.Using, $"{who} H used the medkit", Debug.Log, 5f);
+            Assert.AreEqual(100f, body.Hp.Value, 0.01f);
+
+            // Boost items: J takes the smallest, the rows the others.
+            Assert.AreEqual(1, heal.ServerAdd(HealKind.Drink, 1));
+            Assert.AreEqual(1, heal.ServerAdd(HealKind.Pill, 1));
+            Assert.AreEqual(1, heal.ServerAdd(HealKind.Syringe, 1));
+            int done = heal.ServerCompleted;
+            var mine = me.GetComponent<CombatantHealing>();
+            // J picks the smallest boost from the owner's own counts, so they must have reached it.
+            yield return NetHarness.WaitUntil(() => mine.Drinks.Value == 1 && mine.Pills.Value == 1 && mine.Syringes.Value == 1, $"{who} the boost counts reached the owner", Debug.Log, 5f);
+            input.Frame.Boost = true;
+            yield return NetHarness.WaitUntil(() => heal.Drinks.Value == 0 && !heal.Using, $"{who} J used the drink", Debug.Log, 5f);
+            Assert.IsTrue(InventoryBackend.RightClickHeal(InventorySourceKind.Pill, out kind));
+            InventoryBackend.UseHealing(me, kind);
+            yield return NetHarness.WaitUntil(() => heal.Pills.Value == 0 && !heal.Using, $"{who} the pill row was used", Debug.Log, 5f);
+            InventoryBackend.UseHealing(me, HealKind.Syringe);
+            yield return NetHarness.WaitUntil(() => heal.Syringes.Value == 0 && !heal.Using, $"{who} the syringe row was used", Debug.Log, 5f);
+            Assert.AreEqual(done + 3, heal.ServerCompleted, who + " three boosts finished");
+            Assert.Greater(heal.Gauge.Value, 90f, who + " the syringe filled the gauge");
         }
     }
 }
