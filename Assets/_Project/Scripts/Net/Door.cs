@@ -133,12 +133,6 @@ namespace Game.Net
                 handles.Add(panelRenderer);
                 go.AddComponent<LODGroup>().SetLODs(new[] { new LOD(HandleLodHeight, handles.ToArray()), new LOD(0f, new Renderer[] { panelRenderer }) });
             }
-            door._audio = go.AddComponent<AudioSource>();
-            door._audio.spatialBlend = 1f;
-            door._audio.playOnAwake = false;
-            door._audio.minDistance = 2f;
-            door._audio.maxDistance = 25f;
-            door._audio.rolloffMode = AudioRolloffMode.Linear;
             All.Add(door);
             return door;
         }
@@ -232,7 +226,21 @@ namespace Game.Net
 
         // Raised when a door starts to open (true) or shut (false); Game.Gameplay's DoorAudio plays the sound.
         public static event System.Action<Door, bool> Moved;
-        public AudioSource Audio => _audio;
+        // Made on the first sound (#484): ~3,700 idle sources, one per door, cost the audio update every frame.
+        public AudioSource Audio
+        {
+            get
+            {
+                if (_audio != null) return _audio;
+                _audio = gameObject.AddComponent<AudioSource>();
+                _audio.spatialBlend = 1f;
+                _audio.playOnAwake = false;
+                _audio.minDistance = 2f;
+                _audio.maxDistance = 25f;
+                _audio.rolloffMode = AudioRolloffMode.Linear;
+                return _audio;
+            }
+        }
 
         void PlaySound(bool opening) => Moved?.Invoke(this, opening);
 

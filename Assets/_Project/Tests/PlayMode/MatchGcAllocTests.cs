@@ -99,6 +99,9 @@ namespace Game.Tests
             var rstats = FrameStats.Compute(rms, 0);
             Debug.Log($"[MatchGc] render thread avg {rstats.AvgMs:F2} ms p99 {rstats.P99Ms:F2} ms player-camera draws {drawSum / Frames} setpass {setPassSum / Frames} tris {trisSum / Frames}");
 
+            int sources = 0, playing = 0;
+            foreach (var a in UnityEngine.Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None)) { if (!a.isActiveAndEnabled) continue; sources++; if (a.isPlaying) playing++; }
+            Debug.Log($"[MatchGc] audio sources active {sources} playing {playing}");
             int combatants = 0;
             foreach (var c in Combatant.All) if (c != null) combatants++;
             long sum = 0;
@@ -194,6 +197,8 @@ namespace Game.Tests
             var phases = new System.Collections.Generic.Dictionary<string, double>();
             var scripts = new System.Collections.Generic.Dictionary<string, double>();
             var subs = new System.Collections.Generic.Dictionary<string, double>();
+            var inner = new System.Collections.Generic.Dictionary<string, double>();
+            static string ShortName(string n) { int i = n.LastIndexOf("::", StringComparison.Ordinal); return (i >= 0 ? n.Substring(i + 2) : n).Replace(" [Invoke]", ""); }
             int last = UnityEditorInternal.ProfilerDriver.lastFrameIndex, first = Mathf.Max(UnityEditorInternal.ProfilerDriver.firstFrameIndex, last - frames + 1);
             int used = 0;
             double loop = 0;
@@ -215,9 +220,22 @@ namespace Game.Tests
                         if (name == "PlayerLoop") { loop += t; Walk(c, 1, ""); continue; }
                         if (depth == 1 && name == "UpdateScene") { Walk(c, 1, ""); continue; }   // the editor's extra level
                         if (depth == 1) { Add(phases, name, t); Walk(c, 2, name); continue; }
-                        if (depth >= 2 && (name.EndsWith("()") || name.Contains("() ["))) { Add(scripts, name.Replace(" [Invoke]", "") + "  [" + phase + "]", t); continue; }
+                        if (depth >= 2 && (name.EndsWith("()") || name.Contains("() ["))) { Add(scripts, name.Replace(" [Invoke]", "") + "  [" + phase + "]", t); Inner(c, ShortName(name), 0); continue; }
                         if (depth == 2) Add(subs, name + "  [" + phase + "]", t);
                         if (depth >= 1) Walk(c, depth + 1, phase);
+                    }
+                }
+                // What a script's time goes to: engine samples and markers under it, two levels down.
+                void Inner(int id, string path, int level)
+                {
+                    if (level >= 2) return;
+                    var children = new System.Collections.Generic.List<int>();
+                    view.GetItemChildren(id, children);
+                    foreach (var c in children)
+                    {
+                        string k = path + " > " + ShortName(view.GetItemName(c));
+                        Add(inner, k, view.GetItemColumnDataAsDouble(c, UnityEditor.Profiling.HierarchyFrameDataView.columnTotalTime));
+                        Inner(c, k, level + 1);
                     }
                 }
                 Walk(view.GetRootItemID(), 0, "");
@@ -234,6 +252,9 @@ namespace Game.Tests
             sb.AppendLine("-- scripts");
             var sk = new System.Collections.Generic.List<string>(scripts.Keys); sk.Sort((a, b) => scripts[b].CompareTo(scripts[a]));
             for (int i = 0; i < Mathf.Min(60, sk.Count); i++) sb.AppendLine($"{scripts[sk[i]] / u,8:F3} ms  {sk[i]}");
+            sb.AppendLine("-- inside scripts (>= 0.01 ms)");
+            var ik = new System.Collections.Generic.List<string>(inner.Keys); ik.Sort((a, b) => inner[b].CompareTo(inner[a]));
+            foreach (var k in ik) if (inner[k] / u >= 0.01) sb.AppendLine($"{inner[k] / u,8:F3} ms  {k}");
             Directory.CreateDirectory("Logs/perf");
             File.WriteAllText("Logs/perf/match_time_breakdown.txt", sb.ToString());
             Debug.Log("[MatchTimeBreakdown]\n" + sb);

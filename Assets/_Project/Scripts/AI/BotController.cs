@@ -500,7 +500,7 @@ namespace Game.AI
             bool bestIsWeapon = false;
             var feet = transform.position;
             var items = _lootNear;
-            BotLootGrid.Near(feet, rules.LootRadius, items);
+            LootGrid.Near(feet, rules.LootRadius, items);
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];

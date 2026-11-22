@@ -78,7 +78,16 @@ namespace Game.Gameplay
         // The Korean name of what lies here (shared with the HUD prompt and the inventory rows).
         public string Label => LootNames.Label(_item);
 
-        void Awake() => Init();
+        void Awake()
+        {
+            Init();
+            // #484: ~1,600 pickups polled five synced values every frame. Update now runs only after one changes.
+            if (_item == null) return;
+            _item.Kind.OnChange += Wake; _item.WeaponId.OnChange += Wake; _item.Ammo.OnChange += Wake;
+            _item.Tier.OnChange += Wake; _item.Optic.OnChange += Wake;
+        }
+
+        void Wake(int prev, int next, bool asServer) => enabled = true;
 
         // Lazy so the view also works where Awake has not run (edit-mode captures).
         void Init()
@@ -112,6 +121,7 @@ namespace Game.Gameplay
         void Update()
         {
             Show((LootKind)_item.Kind.Value, _item.WeaponId.Value, (AmmoType)_item.Ammo.Value, _item.Tier.Value, _item.Optic.Value);
+            if (_item.IsSpawned) enabled = false; // the values are in; a later change wakes it (Wake)
         }
 
         // Shows what the pickup holds (Update follows the synced values; captures call it directly).
