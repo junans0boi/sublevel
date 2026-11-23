@@ -180,7 +180,7 @@ namespace Game.Net
         void OnMatchStarting()
         {
             var start = _lobby.StartInfo;
-            if (_lobby.StartMode != TeamMode.Solo || _lobby.QueueMode != TeamMode.Solo) TeamMatch.Mode = _lobby.StartMode;
+            TeamMatch.Mode = ServerRules.MatchTeamMode(_options.PerfSquad, _lobby.StartMode);
             Debug.Log($"[Server] match starting: {start.Players} players, {start.Bots} bots, port {start.MatchPort}");
             ResultsReporter.CurrentMatchId = BackendMatchPoller.Pick(LobbyNet.AccountsBySession.Values.ToList());
             ResultsReporter.Reported = false;
@@ -202,8 +202,12 @@ namespace Game.Net
         {
             var director = MatchDirector.Instance;
             var network = InstanceFinder.NetworkManager;
-            if (director == null || network == null || !network.IsServerStarted) return;
             float now = Time.unscaledTime;
+            if (director == null || network == null || !network.IsServerStarted)
+            {
+                if (ServerRules.ShouldAbandonMatch(now - _matchStartedAt, false)) { Debug.LogWarning("[Server] the match server is not running, giving up on this match"); EndMatch(); }
+                return;
+            }
             int clients = network.ServerManager.Clients.Count;
             int held = director.Sessions != null ? director.Sessions.HeldCount : 0;
             bool people = clients > 0 || held > 0;

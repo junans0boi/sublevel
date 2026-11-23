@@ -124,5 +124,11 @@ namespace Game.Core
             if (everHadPeople) return emptyFor >= EmptySeconds;
             return matchSeconds >= NobodyCameSeconds;
         }
+
+        // The team rules of the next match: set every match, since one process runs match after match (#494).
+        public static TeamMode MatchTeamMode(bool perfSquad, TeamMode start) => perfSquad ? TeamMode.Squad : start;
+
+        // The match server never came up (port taken between the check and the bind) or stopped: give up after the arrival wait (#496).
+        public static bool ShouldAbandonMatch(float matchSeconds, bool serverUp) => !serverUp && matchSeconds >= NobodyCameSeconds;
     }
 }

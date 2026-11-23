@@ -154,7 +154,7 @@ namespace Game.Net
                 transport.SetPort(Port);
                 // Far combatants, loot, vehicles and thrown items are not sent (#167, ADR-135).
                 InterestCondition.Install(_networkManager);
-                _networkManager.ServerManager.StartConnection();
+                if (!_networkManager.ServerManager.StartConnection()) Debug.LogError($"[Match] the server could not start on port {Port}");
                 if (!NetSession.Dedicated) _networkManager.ClientManager.StartConnection();
             }
         }

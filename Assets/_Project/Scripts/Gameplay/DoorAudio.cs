@@ -8,7 +8,8 @@ namespace Game.Gameplay
     {
         static AudioClip[] _open, _close;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        // After Door.ResetStatics (SubsystemRegistration) clears Door.Moved: one stage's methods run in no set order (#498).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook()
         {
             _open = _close = null;

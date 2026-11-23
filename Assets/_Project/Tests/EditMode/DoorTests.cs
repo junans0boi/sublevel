@@ -1,5 +1,8 @@
 using System;
+using System.Reflection;
 using Game.Core;
+using Game.Gameplay;
+using Game.Net;
 using NUnit.Framework;
 
 namespace Game.Tests
@@ -92,6 +95,15 @@ namespace Game.Tests
         {
             Assert.AreEqual(DoorState.Broken, Doors.Toggle(DoorState.Broken, 1));
             Assert.AreEqual(DoorState.Broken, Doors.Toggle(DoorState.Broken, -1));
+        }
+
+        // #498: Unity does not order [RuntimeInitializeOnLoadMethod]s of one stage, so DoorAudio must subscribe in a later stage than Door clears Moved.
+        [Test]
+        public void DoorAudio_SubscribesInALaterStageThanDoorClearsItsEvents()
+        {
+            var order = new[] { UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration, UnityEngine.RuntimeInitializeLoadType.AfterAssembliesLoaded, UnityEngine.RuntimeInitializeLoadType.BeforeSplashScreen, UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad, UnityEngine.RuntimeInitializeLoadType.AfterSceneLoad };
+            int Stage(Type t, string method) => Array.IndexOf(order, t.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static).GetCustomAttribute<UnityEngine.RuntimeInitializeOnLoadMethodAttribute>().loadType);
+            Assert.Greater(Stage(typeof(DoorAudio), "Hook"), Stage(typeof(Door), "ResetStatics"));
         }
     }
 }
