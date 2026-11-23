@@ -77,6 +77,7 @@ public static class RaceCapture
         {
             foreach (var info in RaceEvent.Courses)
             {
+                if (info.Course.Open) continue;   // the pass: ShootPass
                 EditorSceneManager.OpenScene($"Assets/_Project/Scenes/{info.Scene}.unity", OpenSceneMode.Single);
                 var c = info.Course;
                 var cam = new GameObject("CaptureCam").AddComponent<Camera>();
@@ -103,6 +104,55 @@ public static class RaceCapture
             }
         }
         catch (System.Exception e) { Debug.LogError("[RaceCapture] event failed: " + e); code = 1; }
+        EditorApplication.Exit(code);
+    }
+
+    // tools/unity.sh run-gfx RaceCapture.ShootPass -> Logs/lookdev/pass_*.png (#451): both grids, the hairpins, the cliff side, from above.
+    public static void ShootPass()
+    {
+        int code = 0;
+        try
+        {
+            EditorSceneManager.OpenScene("Assets/_Project/Scenes/Race_Pass.unity", OpenSceneMode.Single);
+            var up = RaceEvent.PassUp; var down = RaceEvent.PassDown;
+            var cam = new GameObject("CaptureCam").AddComponent<Camera>();
+            cam.fieldOfView = 60; cam.nearClipPlane = 0.05f; cam.farClipPlane = 1500f;
+            SceneLook.EnablePost(cam);
+            var prefabs = Object.FindAnyObjectByType<VehicleSpawner>().CarPrefabs();
+            foreach (var c in new[] { up, down })
+            {
+                var grid = c.GridSpots(RaceEvent.Racers);
+                for (int i = 0; i < grid.Count; i++)
+                {
+                    var car = (GameObject)PrefabUtility.InstantiatePrefab(prefabs[i % prefabs.Count].gameObject);
+                    car.transform.SetPositionAndRotation(new Vector3(grid[i].x, c.RoadHeight(grid[i].x, grid[i].z) + 0.05f, grid[i].z), Quaternion.Euler(0f, grid[i].yaw, 0f));
+                }
+            }
+            // A point on the course: s along, h above the road, `side` metres to the right.
+            Vector3 P(RaceCourse c, float s, float h, float side = 0f) { var (x, z, yaw) = c.PointAt(s); return new Vector3(x, c.HeightAt(s) + h, z) + Quaternion.Euler(0f, yaw, 0f) * new Vector3(side, 0f, 0f); }
+            Shot(cam, "pass_start_foot", P(up, -70f, 5f, 3f), P(up, 10f, 1f));
+            Shot(cam, "pass_start_top", P(down, -70f, 5f, 3f), P(down, 10f, 1f));
+            Shot(cam, "pass_drive_up", P(up, 120f, 1.4f), P(up, 180f, 1f));
+            // The first hairpin (uphill): from the inside approach, then from above.
+            float hp = 0f; foreach (var p in up.Path) if (p.S > 0f && p.Radius > 0f && p.Radius <= 15f) { hp = p.S; break; }
+            Shot(cam, "pass_hairpin", P(up, hp - 45f, 1.6f, 1.5f), P(up, hp + 10f, 0f));
+            Shot(cam, "pass_hairpin_above", P(up, hp + 12f, 45f, -40f), P(up, hp + 12f, 0f));
+            // Downhill in the switchbacks: the guardrail and the drop on the valley side.
+            float mid = down.LapLength * 0.45f;
+            Shot(cam, "pass_cliff", P(down, mid, 1.5f, 2.5f), P(down, mid + 50f, -6f, 9f));
+            Shot(cam, "pass_drive_down", P(down, down.LapLength * 0.62f, 1.4f), P(down, down.LapLength * 0.62f + 60f, -2f));
+            var loop = RaceEvent.PassLoop;
+            // The way down the other side: its first hairpin (approach and from above), the esses.
+            float eh = 0f; foreach (var p in loop.Path) if (p.S > up.LapLength + 200f && p.Radius > 0f && p.Radius <= 15f && (eh == 0f || p.S < eh)) eh = p.S;
+            Shot(cam, "pass_loop_hairpin", P(loop, eh - 45f, 1.6f, 1.5f), P(loop, eh + 10f, -1f));
+            Shot(cam, "pass_loop_hairpins_above", P(loop, eh + 90f, 80f, -60f), P(loop, eh + 90f, 0f));
+            float es = 0f; foreach (var p in loop.Path) if (p.S > eh + 300f && p.Radius >= 30f && p.Radius <= 40f && (es == 0f || p.S < es)) es = p.S;
+            Shot(cam, "pass_loop_esses", P(loop, es - 40f, 1.4f), P(loop, es + 40f, -3f));
+            float cx = 0f, cz = 0f, cy = 0f; foreach (var p in loop.Path) { cx += p.X; cz += p.Z; cy += p.Y; } cx /= loop.Path.Count; cz /= loop.Path.Count; cy /= loop.Path.Count;
+            Shot(cam, "pass_aerial", new Vector3(cx, cy + 950f, cz), new Vector3(cx, cy, cz - 0.1f));
+            Shot(cam, "pass_oblique", new Vector3(cx + 560f, cy + 380f, cz + 640f), new Vector3(cx, cy, cz));
+        }
+        catch (System.Exception e) { Debug.LogError("[RaceCapture] pass failed: " + e); code = 1; }
         EditorApplication.Exit(code);
     }
 

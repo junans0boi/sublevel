@@ -12,9 +12,12 @@ namespace Game.Core
     {
         // A centre-line sample: place, distance from the line, the radius of the corner it is on (0 on a straight) and which way that
         // corner turns (+1 towards the left normal, -1 the right, 0 straight). Left normal of a direction (dx, dz) = (-dz, dx).
-        public struct Point { public float X, Z, S, Radius; public int Turn; }
+        public struct Point { public float X, Z, S, Radius, Y; public int Turn; }   // Y: the road's height (0 on a flat circuit)
 
         public readonly float Width, Runoff, LineX, LineZ, MinLapSeconds;
+        // An open course (#451): a road from one end to the other, raced once from the start line (s = 0) to the finish line
+        // (s = LapLength); s is negative on the grid behind the start and runs past LapLength beyond the finish. No laps, no fork.
+        public readonly bool Open;
         public readonly (float x, float z, float r)[] Corners;
         public readonly (float x, float z, float r)[] Branch;     // null = no fork; first and last points lie on the main route (radius 0)
 
@@ -31,7 +34,7 @@ namespace Game.Core
         const float StraightStep = 10f, ArcStepDeg = 4f, ForkMargin = 25f;
 
         public RaceCourse((float x, float z, float r)[] corners, float width, float runoff, float lineX, float lineZ, int checkpoints, float minLapSeconds,
-            (float x, float z, float r)[] branch = null)
+            (float x, float z, float r)[] branch = null, RaceCourse heightsFrom = null)
         {
             Corners = corners; Width = width; Runoff = runoff; LineX = lineX; LineZ = lineZ; MinLapSeconds = minLapSeconds; Branch = branch;
             _path = Sample(corners, true, out float lap);
@@ -55,6 +58,132 @@ namespace Game.Core
                 cps.Add(s);
             }
             _checkpoints = cps.ToArray();
+            if (heightsFrom != null) ProfileAlong(heightsFrom);
+        }
+
+        // A circuit that runs along an open hill road for part of the lap (#451, the pass loop): the road's own heights where the lap is on
+        // it, and on the rest of the lap (one stretch) a grade shaped like the open road's (tight corners half, eased in from both joins)
+        // scaled to go from one join's height to the other's.
+        void ProfileAlong(RaceCourse road)
+        {
+            int n = _path.Length;
+            var on = new bool[n];
+            float a = road._path[0].S, b = road._path[road._path.Length - 1].S;
+            for (int i = 0; i < n; i++)
+            {
+                var (s, off) = road.Project(_path[i].X, _path[i].Z);
+                on[i] = Math.Abs(off) < 0.5f && s > a + 1f && s < b - 1f;
+                if (on[i]) _path[i].Y = road.HeightAt(s);
+            }
+            int start = -1;   // the first sample off the road, after one on it
+            for (int i = 0; i < n; i++) if (on[i] && !on[(i + 1) % n]) { if (start >= 0) throw new ArgumentException("the lap leaves the road more than once"); start = (i + 1) % n; }
+            if (start < 0) throw new ArgumentException("the lap never leaves the road");
+            int count = 0; while (!on[(start + count) % n]) count++;
+            int from = (start + n - 1) % n, to = (start + count) % n;   // the last sample on the road before, the first after
+            var g = new float[count + 1]; var len = new float[count + 1]; var mid = new float[count + 1];
+            float along = 0f;
+            for (int k = 0; k <= count; k++)
+            {
+                var p = _path[(from + k) % n]; var q = _path[(from + k + 1) % n];
+                len[k] = (float)Math.Sqrt((q.X - p.X) * (q.X - p.X) + (q.Z - p.Z) * (q.Z - p.Z)); mid[k] = along + len[k] * 0.5f; along += len[k];
+                bool tight = p.Radius > 0f && q.Radius > 0f && p.Radius < TightRadius;
+                g[k] = tight ? 0.5f : 1f;
+            }
+            for (int k = 0; k <= count; k++) g[k] *= Math.Min(1f, Math.Min(mid[k], along - mid[k]) / GradeRamp);
+            var gs = new float[count + 1]; float total = 0f;
+            for (int k = 0; k <= count; k++)
+            {
+                float sum = 0f, w = 0f;
+                for (int j = 0; j <= count; j++) if (Math.Abs(mid[j] - mid[k]) <= GradeSmoothing) { sum += g[j] * len[j]; w += len[j]; }
+                gs[k] = sum / w; total += gs[k] * len[k];
+            }
+            float h0 = _path[from].Y, scale = (_path[to].Y - h0) / total, y = h0;
+            for (int k = 0; k < count; k++) { y += gs[k] * scale * len[k]; _path[(from + k + 1) % n].Y = y; }
+            Hilly = true;
+        }
+
+        public bool Hilly { get; private set; }   // the road has heights (an open hill road, or a circuit along one)
+
+
+        // An open hill road (#451): the corners from one end of the road to the other in driving order, the start and finish lines on it, and
+        // the road's heights: it climbs (`climbs`) or falls along the driving order at `grade` on the open road, half that round tight
+        // hairpins (flatter where the inside is short), level for FlatEnds metres at both ends (the grids and the run-outs). The heights
+        // start from the low end, so the same road raced the other way (corners reversed, `climbs` flipped) has the same heights.
+        public RaceCourse((float x, float z, float r)[] corners, float width, float runoff, (float x, float z) start, (float x, float z) finish,
+            int checkpoints, float minSeconds, float grade, bool climbs)
+        {
+            Open = true; Corners = corners; Width = width; Runoff = runoff; LineX = start.x; LineZ = start.z; MinLapSeconds = minSeconds;
+            _path = Sample(corners, false, out _);
+            float line = RawProject(_path, false, 0f, start.x, start.z, out _, out _);
+            LapLength = RawProject(_path, false, 0f, finish.x, finish.z, out _, out _) - line;
+            for (int i = 0; i < _path.Length; i++) _path[i].S -= line;
+            Profile(grade, climbs);
+            Hilly = grade != 0f;
+            _checkpoints = new float[checkpoints];
+            for (int k = 0; k < checkpoints; k++) _checkpoints[k] = LapLength * k / checkpoints;
+        }
+
+        public const float FlatEnds = 110f, GradeRamp = 60f, TightRadius = 20f, GradeSmoothing = 20f;
+
+        void Profile(float grade, bool climbs)
+        {
+            int n = _path.Length;
+            float s0 = _path[0].S, s1 = _path[n - 1].S;
+            var g = new float[n - 1]; var len = new float[n - 1]; var mid = new float[n - 1];
+            for (int i = 0; i < n - 1; i++)
+            {
+                var a = _path[i]; var b = _path[i + 1];
+                len[i] = b.S - a.S; mid[i] = (a.S + b.S) * 0.5f;
+                float ease = Math.Max(0f, Math.Min(1f, (Math.Min(mid[i] - s0, s1 - mid[i]) - FlatEnds) / GradeRamp));
+                bool tight = a.Radius > 0f && b.Radius > 0f && a.Radius < TightRadius;
+                g[i] = grade * ease * (tight ? 0.5f : 1f);
+            }
+            // Eased between the open road and the hairpins (a vertical curve, not a kink): the grade averaged over +-GradeSmoothing metres.
+            var y = new float[n];
+            for (int k = 0; k < n - 1; k++)
+            {
+                int i = climbs ? k : n - 2 - k;
+                float sum = 0f, w = 0f;
+                for (int j = 0; j < n - 1; j++) if (Math.Abs(mid[j] - mid[i]) <= GradeSmoothing) { sum += g[j] * len[j]; w += len[j]; }
+                float gs = w > 0f ? sum / w : 0f;
+                if (climbs) y[i + 1] = y[i] + gs * len[i]; else y[i] = y[i + 1] + gs * len[i];
+            }
+            for (int i = 0; i < n; i++) _path[i].Y = y[i];
+        }
+
+        // The road's height at distance s (0 on a flat circuit).
+        public float HeightAt(float s)
+        {
+            int i = Locate(s, out float u);
+            return _path[i].Y + (_path[(i + 1) % _path.Length].Y - _path[i].Y) * u;
+        }
+
+        // The road's height at the point of the course nearest (x, z).
+        public float RoadHeight(float x, float z) => HeightAt(Project(x, z).s);
+
+        public const float FallDepth = 5f;      // this far under the road where it was last on it = fallen off (#451)
+        const float FollowAbove = 2.5f;
+
+        // Where a car on a hill road was last on it (#451), for putting it back: s when it is on the road's surface (within the run-off,
+        // not far above or below it) — but not when it has fallen (well under where it last was): landing on the leg below is not the way
+        // on. NaN = not yet known (the first place on the road is taken). A car back on the road after a while off it is followed again.
+        public float Follow(float goodS, float x, float y, float z)
+        {
+            var (s, off) = Project(x, z);
+            if (Math.Abs(off) > Width * 0.5f + Runoff || Math.Abs(y - HeightAt(s)) > FollowAbove) return goodS;
+            return Fell(goodS, y) ? goodS : s;
+        }
+
+        // Fallen off the road: well under it where the car was last on it.
+        public bool Fell(float goodS, float y) => Hilly && !float.IsNaN(goodS) && y < HeightAt(goodS) - FallDepth;
+
+        // Where a car goes back to (ADR-516, #451): on a circuit the nearest point of the course; on a hill road the last place it was on
+        // the road (Follow) — never the leg below that it fell to. Place on the road, heading the way of the race.
+        public (float x, float y, float z, float yaw) ResetTo(float x, float z, float goodS)
+        {
+            if (Hilly && !float.IsNaN(goodS)) { var q = PointAt(goodS); return (q.x, HeightAt(goodS), q.z, q.yaw); }
+            var p = ResetPose(x, z);
+            return (p.x, RoadHeight(p.x, p.z), p.z, p.yaw);
         }
 
         // Which sector (between checkpoints) a distance is in.
@@ -74,7 +203,7 @@ namespace Game.Core
 
         public (float s, float offset, bool onBranch) ProjectRoute(float x, float z)
         {
-            float s = Wrap(RawProject(_path, true, LapLength, x, z, out float off, out float d2));
+            float s = Wrap(RawProject(_path, !Open, LapLength, x, z, out float off, out float d2));
             if (_branch != null)
             {
                 float bs = RawProject(_branch, false, 0f, x, z, out float boff, out float bd2);
@@ -88,19 +217,36 @@ namespace Game.Core
         // The main route's centre line at distance s from the line: place and heading (yaw in degrees, Unity's: 0 = +z, 90 = +x).
         public (float x, float z, float yaw) PointAt(float s)
         {
-            s = Wrap(s);
-            for (int i = 0; i < _path.Length; i++)
-            {
-                var a = _path[i]; var b = _path[(i + 1) % _path.Length];
-                float sa = a.S, sb = b.S < a.S ? b.S + LapLength : b.S, t = s < sa ? s + LapLength : s;
-                if (t < sa || t > sb || sb - sa < 1e-4f) continue;
-                float u = (t - sa) / (sb - sa);
-                return (a.X + (b.X - a.X) * u, a.Z + (b.Z - a.Z) * u, Yaw(b.X - a.X, b.Z - a.Z));
-            }
-            return (_path[0].X, _path[0].Z, 0f);
+            int i = Locate(s, out float u);
+            var a = _path[i]; var b = _path[(i + 1) % _path.Length];
+            return (a.X + (b.X - a.X) * u, a.Z + (b.Z - a.Z) * u, Yaw(b.X - a.X, b.Z - a.Z));
         }
 
-        // Start slots behind the line, two staggered columns 3.5 m either side of the centre line, 8 m a row, the right column 4 m back
+        // The piece of the centre line distance s lies on (i to i + 1) and how far along it (0..1); an open road's ends hold beyond them.
+        int Locate(float s, out float u)
+        {
+            u = 0f;
+            int n = _path.Length;
+            if (Open)
+            {
+                if (s <= _path[0].S) return 0;
+                for (int i = 0; i < n - 1; i++)
+                    if (s <= _path[i + 1].S) { float d = _path[i + 1].S - _path[i].S; u = d > 1e-4f ? (s - _path[i].S) / d : 0f; return i; }
+                u = 1f; return n - 2;
+            }
+            s = Wrap(s);
+            for (int i = 0; i < n; i++)
+            {
+                var a = _path[i]; var b = _path[(i + 1) % n];
+                float sa = a.S, sb = b.S < a.S ? b.S + LapLength : b.S, t = s < sa ? s + LapLength : s;
+                if (t < sa || t > sb || sb - sa < 1e-4f) continue;
+                u = (t - sa) / (sb - sa);
+                return i;
+            }
+            return 0;
+        }
+
+        // Start slots behind the line, two staggered columns 3.5 m either side of the centre line (less on a narrow road), 8 m a row, the right column 4 m back
         // (ADR-514). Each faces the way of the race.
         public List<(float x, float z, float yaw)> GridSpots(int count)
         {
@@ -109,7 +255,8 @@ namespace Game.Core
             {
                 bool right = (i & 1) == 1;
                 var (x, z, yaw) = PointAt(-(8f + (i / 2) * 8f + (right ? 4f : 0f)));
-                float rad = yaw * (float)Math.PI / 180f, side = right ? 3.5f : -3.5f;    // right of the heading = (cos, -sin) in (x, z)
+                float col = Math.Min(3.5f, Width * 0.5f - 1.3f);                         // a narrow road (the pass) keeps the cars on the tarmac
+                float rad = yaw * (float)Math.PI / 180f, side = right ? col : -col;      // right of the heading = (cos, -sin) in (x, z)
                 list.Add((x + (float)Math.Cos(rad) * side, z - (float)Math.Sin(rad) * side, yaw));
             }
             return list;
@@ -120,14 +267,14 @@ namespace Game.Core
         public float RouteDistance(bool branch, float x, float z)
         {
             if (branch && _branch == null) return float.PositiveInfinity;
-            RawProject(branch ? _branch : _path, !branch, LapLength, x, z, out _, out float d2);
+            RawProject(branch ? _branch : _path, !branch && !Open, LapLength, x, z, out _, out float d2);
             return (float)Math.Sqrt(d2);
         }
 
         // Where R puts a car back (ADR-516): the nearest point of the nearer route's centre line, facing the way of the race.
         public (float x, float z, float yaw) ResetPose(float x, float z)
         {
-            Nearest(_path, true, x, z, out float px, out float pz, out float yaw, out float d2);
+            Nearest(_path, !Open, x, z, out float px, out float pz, out float yaw, out float d2);
             if (_branch != null)
             {
                 Nearest(_branch, false, x, z, out float bx, out float bz, out float byaw, out float bd2);
@@ -153,7 +300,7 @@ namespace Game.Core
 
         static float Yaw(float dx, float dz) => (float)(Math.Atan2(dx, dz) * 180.0 / Math.PI);
 
-        float Wrap(float s) { s %= LapLength; return s < 0f ? s + LapLength : s; }
+        float Wrap(float s) { if (Open) return s; s %= LapLength; return s < 0f ? s + LapLength : s; }
 
         // The polyline's distance (as stored, interpolated; may run past `lap` over the line) at the point nearest (x, z), its offset and
         // squared distance.

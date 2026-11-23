@@ -46,8 +46,8 @@ namespace Game.Core
         static float Allowed(RaceCourse c, RaceCourse.Point p, float s, float skill)
         {
             if (p.Radius <= 0f) return TopSpeed;
-            float L = c.LapLength, d = ((p.S - s) % L + L) % L;
-            if (d > LookAhead) return TopSpeed;
+            float L = c.LapLength, d = c.Open ? p.S - s : ((p.S - s) % L + L) % L;
+            if (d < 0f || d > LookAhead) return TopSpeed;
             float corner = (float)Math.Sqrt(Grip * Gravity * p.Radius) * skill;
             return (float)Math.Sqrt(corner * corner + 2f * PlanBrake * d);
         }

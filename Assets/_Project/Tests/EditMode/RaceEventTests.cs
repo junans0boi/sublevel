@@ -247,7 +247,13 @@ namespace Game.Tests
             {
                 Assert.IsFalse(string.IsNullOrEmpty(c.Name));
                 Assert.IsTrue(c.Scene.StartsWith("Race_"), c.Scene);
-                Assert.IsTrue(scenes.Add(c.Scene), "one scene per course");
+                // One scene per course, but for courses on one road (#451: the pass both ways and its loop): this one starts on that road.
+                if (!scenes.Add(c.Scene))
+                {
+                    var other = RaceEvent.ByScene(c.Scene).Course;
+                    Assert.IsTrue(c.Course.Hilly && other.Hilly, c.Scene + ": only the pass's courses share a scene");
+                    Assert.Less(other.RouteDistance(false, c.Course.LineX, c.Course.LineZ), 0.5f, c.Name + " starts on the scene's road");
+                }
                 Assert.GreaterOrEqual(c.Laps, 1);
                 Assert.IsNotNull(c.Course);
             }
@@ -267,7 +273,8 @@ namespace Game.Tests
                 {
                     var (s, off) = c.Project(spots[i].x, spots[i].z);
                     Assert.Less(Math.Abs(off), c.Width * 0.5f - 1.2f, $"{info.Name} slot {i} on the tarmac");
-                    Assert.Greater(s, c.LapLength - 120f, $"{info.Name} slot {i} behind the line");
+                    float behind = c.Open ? -s : c.LapLength - s;   // an open course's grid is at negative s
+                    Assert.That(behind, Is.InRange(0f, 120f), $"{info.Name} slot {i} behind the line");
                     if (i > 0) Assert.Greater(Math.Abs(s - c.Project(spots[i - 1].x, spots[i - 1].z).s), 3f, "staggered");
                 }
             }
