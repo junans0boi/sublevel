@@ -300,8 +300,8 @@ public static partial class WorldBuilder
         return field.Mountain(probe.x, probe.z) <= (ma.y + mb.y) * 0.5f - 1.2f;
     }
 
-    // The roadside of a real mountain road: on every tight corner yellow chevron boards behind the outside edge pointing the way of the
-    // lap and a curve mirror at the apex; white delineator posts with a red reflector along the sides without a guardrail and a reflector
+    // The roadside of a real mountain road: on every tight corner chevron boards behind the outside edge for both ways (a V of two boards
+    // per post) and a curve mirror at the apex; white delineator posts with a red reflector along the sides without a guardrail and a reflector
     // on the guardrail every 8 m; a concrete gutter along the mountain side. Boxes batched in big cells (few draws), no colliders (behind
     // the rail or in the gutter). Returns the boards and mirrors.
     static (int boards, int mirrors) BuildPassDressing(Transform root, WorldMeshes.Store store, RaceCourse c, PassField field)
@@ -350,7 +350,6 @@ public static partial class WorldBuilder
                 if (!apex && k != first && k != last && (k - first) % 2 != 0) continue;
                 var m = Mid(k); var outward = Left(k) * outside; var inward = -outward;
                 var brot = Quaternion.LookRotation(inward, Vector3.up);
-                float s = Mathf.Sign(Vector3.Dot(brot * Vector3.right, (Mid(Mathf.Min(n - 1, k + 1)) - Mid(Mathf.Max(0, k - 1))).normalized));
                 if (apex)
                 {
                     // The curve mirror: a pole, an orange octagonal frame, the glass, facing the road.
@@ -362,13 +361,22 @@ public static partial class WorldBuilder
                     mirrors++;
                     continue;
                 }
-                // A chevron board on a post behind the outside edge: yellow, a black arrow (two bars) pointing the way of the lap.
+                // Chevron boards on a post behind the outside edge (the outside of a bend is the same side both ways): two yellow boards in
+                // a V, each turned towards the cars coming one way, its black arrow (two bars) pointing the way they turn — uphill and
+                // downhill alike (#451).
                 var at = m + outward * (edge + 0.6f);
                 M.Add(at + Vector3.up * 0.75f, new Vector3(0.07f, 1.5f, 0.07f), brot);
-                var board = at + Vector3.up * 1.5f + inward * 0.05f;
-                Y.Add(board, new Vector3(0.6f, 0.75f, 0.03f), brot);
-                foreach (int up in new[] { 1, -1 })
-                    K.Add(board + brot * new Vector3(-0.01f * s, 0.1f * up, 0.025f), new Vector3(0.34f, 0.09f, 0.02f), brot * Quaternion.Euler(0f, 0f, -42f * up * s));
+                var lap = (Mid(Mathf.Min(n - 1, k + 1)) - Mid(Mathf.Max(0, k - 1))); lap.y = 0f; lap.Normalize();
+                foreach (int way in new[] { 1, -1 })
+                {
+                    var t = lap * way;                                                   // the way these cars go
+                    var face = Quaternion.LookRotation((inward - t * 0.6f).normalized, Vector3.up);   // turned towards them
+                    float dir = Mathf.Sign(Vector3.Dot(face * Vector3.right, t));
+                    var board = at + Vector3.up * 1.5f - t * 0.2f + inward * 0.05f;
+                    Y.Add(board, new Vector3(0.5f, 0.7f, 0.03f), face);
+                    foreach (int up in new[] { 1, -1 })
+                        K.Add(board + face * new Vector3(-0.01f * dir, 0.1f * up, 0.025f), new Vector3(0.3f, 0.09f, 0.02f), face * Quaternion.Euler(0f, 0f, -42f * up * dir));
+                }
                 boards++;
             }
         }

@@ -137,6 +137,11 @@ public static class RaceCapture
             float hp = 0f; foreach (var p in up.Path) if (p.S > 0f && p.Radius > 0f && p.Radius <= 15f) { hp = p.S; break; }
             Shot(cam, "pass_hairpin", P(up, hp - 45f, 1.6f, 1.5f), P(up, hp + 10f, 0f));
             Shot(cam, "pass_hairpin_above", P(up, hp + 12f, 45f, -40f), P(up, hp + 12f, 0f));
+            // The same hairpin's chevrons up close from both ways (each way's boards point its own turn).
+            int hpTurn = 0; foreach (var p in up.Path) if (Mathf.Abs(p.S - hp) < 0.01f) hpTurn = p.Turn;
+            var (hx, hz, _) = up.PointAt(hp + 8f); float hd = down.Project(hx, hz).s;
+            Shot(cam, "pass_chevrons_up", P(up, hp - 22f, 1.5f), P(up, hp + 8f, 1.3f, 6.6f * hpTurn));
+            Shot(cam, "pass_chevrons_down", P(down, hd - 30f, 1.5f), P(down, hd, 1.3f, -6.6f * hpTurn));
             // Downhill in the switchbacks: the guardrail and the drop on the valley side.
             float mid = down.LapLength * 0.45f;
             Shot(cam, "pass_cliff", P(down, mid, 1.5f, 2.5f), P(down, mid + 50f, -6f, 9f));

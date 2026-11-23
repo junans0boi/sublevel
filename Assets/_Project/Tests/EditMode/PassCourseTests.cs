@@ -255,5 +255,16 @@ namespace Game.Tests
             Assert.IsNull(RaceEvent.IdForLobby(0));
             foreach (var (x, z, _) in Down.GridSpots(RaceEvent.GridSlots)) Assert.AreEqual(Down.HeightAt(0f), Down.RoadHeight(x, z), 0.05f, "the downhill grid at the top, level");
         }
+
+        // The sprint's HUD line in place of "LAP 1/1", and its results column (#451).
+        [Test]
+        public void SprintHud_ShowsMetresLeftAndHowFar_ResultsTheAverageSpeed()
+        {
+            Assert.AreEqual("남은 1,873 m · 0%", RaceEvent.SprintLine(-20f, 1873f), "on the grid behind the line");
+            Assert.AreEqual("남은 937 m · 49%", RaceEvent.SprintLine(936.4f, 1873f));
+            Assert.AreEqual("남은 0 m · 100%", RaceEvent.SprintLine(1900f, 1873f), "past the finish");
+            Assert.AreEqual("72 km/h", RaceEvent.AverageKmh(1800f, 90f));
+            Assert.AreEqual("--", RaceEvent.AverageKmh(1800f, 0f));
+        }
     }
 }

@@ -151,6 +151,18 @@ namespace Game.Core
         }
         // The scene a lobby's start message names (LobbyStart.Event, ADR-512): course n (1-based), null for the battle royale or an unknown n.
         public static string SceneForLobby(byte evt) => evt >= 1 && evt <= Courses.Length ? Courses[evt - 1].Scene : null;
+        // A sprint's line on the HUD (#451, ADR-559) in place of "LAP 1/1": the metres left to the finish and how far along (s from the
+        // start line, held to the run).
+        public static string SprintLine(float s, float length)
+        {
+            float done = Math.Max(0f, Math.Min(length, s));
+            int left = (int)Math.Ceiling(length - done), pct = (int)(done / length * 100f);
+            return "남은 " + left.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " m · " + pct + "%";
+        }
+
+        // A sprint's results column in place of the best lap: the average speed over the run.
+        public static string AverageKmh(float length, float seconds) => seconds > 0f ? (length / seconds * 3.6f).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " km/h" : "--";
+
         public static string IdForLobby(byte evt) => evt >= 1 && evt <= Courses.Length ? Courses[evt - 1].Id : null;
 
         public static CourseInfo ById(string id)
