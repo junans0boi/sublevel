@@ -13,15 +13,18 @@ namespace Game.Core
         public float WheelRadius;
         public float CentreOfMassHeight;
         public int SeatCount;   // the model's seats (the prefab's seat list); 0 keeps the type's
+        public string Model;    // the prefab's name: its engine and handling row in VehicleHandling (ADR-557)
 
-        public bool Any => MassKg > 0f || WheelRadius > 0f || CentreOfMassHeight > 0f || SeatCount > 0;
+        public bool Any => MassKg > 0f || WheelRadius > 0f || CentreOfMassHeight > 0f || SeatCount > 0 || !string.IsNullOrEmpty(Model);
 
         // A copy of `rules` with this model's numbers. The springs and dampers scale with the mass so every model
         // sits as deep on its suspension at rest as the type's numbers were tuned for.
-        public VehicleRules Apply(VehicleRules rules)
+        // `handling` false: the type's engine and tyres (race cars, ADR-557).
+        public VehicleRules Apply(VehicleRules rules, bool handling = true)
         {
             if (rules == null) return null;
             var tuned = Copy(rules);
+            if (handling) VehicleHandling.For(Model)?.ApplyTo(tuned);
             if (MassKg > 0f)
             {
                 float scale = MassKg / Math.Max(1f, rules.MassKg);

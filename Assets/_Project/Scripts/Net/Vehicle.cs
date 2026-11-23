@@ -148,16 +148,31 @@ namespace Game.Net
             {
                 var rules = VehicleRules.For(_kind);
                 if (!_fit.Any) return rules;
+                // Race cars keep the type's engine and tyres whatever the model (ADR-557): a mixed grid stays fair.
+                bool handling = !IsRaceCar;
                 // Tuned again whenever the data loader replaces the type's rules.
-                if (!ReferenceEquals(_tunedFrom, rules))
+                if (!ReferenceEquals(_tunedFrom, rules) || _tunedHandling != handling)
                 {
-                    _tuned = _fit.Apply(rules);
+                    _tuned = _fit.Apply(rules, handling);
                     _tunedFrom = rules;
+                    _tunedHandling = handling;
                 }
                 return _tuned;
             }
         }
         VehicleRules _tuned, _tunedFrom;
+        bool _tunedHandling;
+        GearboxState _gearbox;
+
+        // The automatic gearbox (ADR-558): the simulating side steps it with the driver's throttle, every other side with the
+        // throttle read off the speed, so the HUD, the engine note and the camera all read one gear and one needle.
+        public int Gear => _gearbox.Gear;
+        public float EngineRpm => _gearbox.Rpm;
+        public float RedlineRpm => Rules.Gearbox != null ? Rules.Gearbox.RedlineRpm : 7000f;
+        public bool Shifting => _gearbox.Shifting;
+        public int ShiftCount => _gearbox.ShiftCount;
+        public int LastShift => _gearbox.LastShift;
+        float _driftUntil = float.NegativeInfinity; // simulating side: Space let go at this time + DriftRecoverSeconds
         // The front wheels' angle as shown on this side (degrees, positive = right): the steering wheel follows it.
         public float SteerShown => _steerShown;
         public VehicleState State => _state;
@@ -276,6 +291,7 @@ namespace Game.Net
             foreach (var c in GetComponentsInChildren<Collider>(true))
                 if (!c.isTrigger) colliders.Add(c);
             _colliders = colliders.ToArray();
+            if (!IsMotorcycle) SetCarInertia();
 
             int wheels = _wheelPivots.Length;
             float rest = Vehicles.RestLength(rules, wheels);
@@ -376,6 +392,14 @@ namespace Game.Net
                 ShownAccel = Mathf.Lerp(ShownAccel, (Speed - before) / dt, 1f - Mathf.Exp(-4f * dt));
             }
             _speedFrom = transform.position;
+            // Not simulating here (a passenger, another player's car): the gearbox follows the replicated speed.
+            var gearRules = Rules.Gearbox;
+            if (!_simulating && dt > 0f && gearRules != null)
+            {
+                bool running = EngineOn.Value && CanRunEngine;
+                float readThrottle = ShownAccel > 0.4f ? 1f : ShownAccel < -0.4f && Speed < 0.5f ? -1f : 0f;
+                _gearbox = Gearbox.Step(_gearbox, Speed, readThrottle, Vehicles.TopSpeed(_offRoad, true, Rules), running, dt, gearRules);
+            }
             if (IsMotorcycle) PlaceModel(dt);
             PlaceOccupants();
             PlaceWheels(dt);
@@ -453,6 +477,9 @@ namespace Game.Net
             bool boost = engine && input.Boost && throttle > 0f;
             // Handbrake on the ground only (in the air Space pitches a motorcycle).
             bool handbrake = input.Handbrake && !Airborne;
+            if (handbrake) _driftUntil = Time.time + r.DriftRecoverSeconds;
+            // 1 the moment Space is let go, 0 once the rear tyres have their grip back.
+            float drift = handbrake ? 1f : Mathf.Clamp01((_driftUntil - Time.time) / Mathf.Max(0.01f, r.DriftRecoverSeconds));
 
             // Launch: W + Shift + Space held revs on the spot; letting go of Space launches at full pull.
             bool revving = engine && input.Throttle > 0f && input.Boost && input.Handbrake && Mathf.Abs(forwardSpeed) < 1f;
@@ -479,6 +506,12 @@ namespace Game.Net
             else accel = Vehicles.BrakeAccel(forwardSpeed, _drowned ? r.BrakeDecel : AnyOccupant ? r.NoDriverDecel : r.AbandonedBrakeDecel, dt);
             if (launching && forwardSpeed < top) accel = Mathf.Max(accel, r.EngineAccel * r.LaunchAccelFactor);
             if (revving) accel = 0f;
+            if (r.Gearbox != null)
+            {
+                _gearbox = Gearbox.Step(_gearbox, forwardSpeed, revving ? 0f : throttle, top, engine && !_drowned, dt, r.Gearbox);
+                // Mid-shift the engine lets go for a moment: the pull drops, braking does not.
+                if (accel * forwardSpeed > 0f && Mathf.Abs(throttle) > 0.05f) accel *= Gearbox.Pull(_gearbox, r.Gearbox);
+            }
             _lastAccel = accel;
             bool hold = (Mathf.Abs(throttle) < 0.05f || revving) && Mathf.Abs(forwardSpeed) < r.HoldSpeed;
 
@@ -514,11 +547,11 @@ namespace Game.Net
 
                 bool front = IsFrontWheel(i);
                 bool rear = !front;
-                var normal = hit.normal;
-                var wheelForward = Vector3.ProjectOnPlane(front ? Quaternion.AngleAxis(_steerDeg, up) * forward : forward, normal);
-                if (wheelForward.sqrMagnitude < 1e-6f) continue;
-                wheelForward.Normalize();
-                var side = Vector3.Cross(normal, wheelForward);
+                // The tyre's frame comes from the body, not the hit normal: a sphere cast on bumpy terrain returns normals tilted
+                // tens of degrees at the bumps' edges, and on a climb that turned the wheel's upward speed into "sideways sliding"
+                // and the car spun round entering a slope (준환 play feedback, VehicleHandlingTests.SlopeEntry_KeepsHeading).
+                var wheelForward = front ? Quaternion.AngleAxis(_steerDeg, up) * forward : forward;
+                var side = Vector3.Cross(up, wheelForward);
                 var v = _body.GetPointVelocity(centre);
                 float vSide = Vector3.Dot(v, side);
                 float vForward = Vector3.Dot(v, wheelForward);
@@ -533,7 +566,8 @@ namespace Game.Net
                     if (handbrake && rear)
                         alongForce -= Mathf.Sign(vForward) * Mathf.Min(r.HandbrakeDecel * massShare, Mathf.Abs(vForward) * massShare / dt);
                 }
-                float grip = r.TyreGrip * (handbrake && rear ? r.HandbrakeRearGrip : 1f) * (_state != null ? _state.GripOf(i) : 1f);
+                float rearGrip = IsMotorcycle ? (handbrake ? r.HandbrakeRearGrip : 1f) : Mathf.Lerp(r.RearGripBias, r.HandbrakeRearGrip, drift);
+                float grip = r.TyreGrip * (rear ? rearGrip : 1f) * (_state != null ? _state.GripOf(i) : 1f);
                 var tyre = new Vector2(sideForce, alongForce);
                 float most = grip * load;
                 if (tyre.sqrMagnitude > most * most) tyre = tyre.normalized * most;
@@ -546,8 +580,43 @@ namespace Game.Net
                 _body.AddForceAtPosition(wheelForward * tyre.y, sideAt);
             }
 
+            if (!IsMotorcycle && grounded >= 3) AssistYaw(forwardSpeed, drift, r);
             if (IsMotorcycle) SimulateTwoWheels(dt, input, wasAirborne, grounded > 0 ? groundNormal.normalized : Vector3.up);
             TickFlip(dt, r);
+        }
+
+        // A car's turning inertia as a solid box of its size, not as its colliders' volumes: the low box spans only the
+        // axles (approach angle), and the colliders' own inertia left the car light to spin (ADR-557).
+        void SetCarInertia()
+        {
+            Bounds b = default; bool any = false;
+            foreach (var c in _colliders)
+            {
+                if (!(c is BoxCollider box)) continue;
+                var cb = new Bounds(transform.InverseTransformPoint(box.transform.TransformPoint(box.center)), Vector3.Scale(box.size, box.transform.lossyScale));
+                if (!any) { b = cb; any = true; } else b.Encapsulate(cb);
+            }
+            if (!any) return;
+            float w = b.size.x, h = Mathf.Max(1.2f, b.size.y), l = b.size.z, m = _body.mass;
+            _body.inertiaTensor = new Vector3(m / 12f * (h * h + l * l), m / 12f * (w * w + l * l), m / 12f * (w * w + h * h));
+            _body.inertiaTensorRotation = Quaternion.identity;
+        }
+
+        // Yaw beyond what the front wheels ask for (speed x tan(steer) / wheelbase) plus a margin is damped: steering turns
+        // the car, it does not spin it (준환 play feedback). A drift opens the margin so the tail can come round.
+        void AssistYaw(float forwardSpeed, float drift, VehicleRules r)
+        {
+            var up = transform.up;
+            float yaw = Vector3.Dot(_body.angularVelocity, up);
+            float want = forwardSpeed * Mathf.Tan(_steerDeg * Mathf.Deg2Rad) / Mathf.Max(1f, _wheelbase);
+            // ...but never more than the tyres can carry: lateral grip x g over the speed.
+            float most = r.TyreGrip * 9.81f / Mathf.Max(3f, Mathf.Abs(forwardSpeed));
+            want = Mathf.Clamp(want, -most, most);
+            float margin = Mathf.Lerp(r.YawAssistMarginDegPerSecond, r.DriftYawMarginDegPerSecond, drift) * Mathf.Deg2Rad;
+            float excess = yaw - want;
+            if (Mathf.Abs(excess) <= margin) return;
+            excess -= Mathf.Sign(excess) * margin;
+            _body.AddTorque(-up * (excess * r.YawAssist), ForceMode.Acceleration);
         }
 
         Vector3 AnchorWorld(int i) => transform.TransformPoint(_anchorRoot[i]);

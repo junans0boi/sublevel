@@ -73,9 +73,19 @@ namespace Game.Gameplay
         void LateUpdate() => Place();
 
         // Also called by the capture tool, whose shots are taken before LateUpdate.
+        // ADR-558: the view widens with speed (up to MaxSpeedFov degrees), and an upshift pushes the camera back a touch.
+        public const float MaxSpeedFov = 10f, SpeedFovFromKmh = 50f, SpeedFovFullKmh = 220f;
+        const float ShiftKickMeters = 0.18f, ShiftKickSeconds = 0.3f;
+        // Added to the camera's own field of view by whoever sets it (PlayerController in third person); 0 off a vehicle.
+        public static float ExtraFov { get; private set; }
+        public static float SpeedFov(float kmh) => MaxSpeedFov * Mathf.Clamp01((kmh - SpeedFovFromKmh) / (SpeedFovFullKmh - SpeedFovFromKmh));
+        int _shiftSeen;
+        float _kickAt = float.NegativeInfinity;
+
         public void Place()
         {
             Active = false;
+            if (_player != null && PlayerController.Local == _player) ExtraFov = 0f;
             if (VegetationRenderer.ClearAround == (_player != null ? _player.Camera : null)) VegetationRenderer.ClearAround = null;
             if (_player == null || PlayerController.Local != _player || _combatant == null) return;
             var vehicle = VehicleSeat.VehicleOf(_combatant);
@@ -90,6 +100,15 @@ namespace Game.Gameplay
                 _player.LookAt(_combatant.EyePosition + vehicle.transform.forward * 30f);
             }
             FollowBehind(vehicle);
+            ExtraFov = Mathf.Lerp(ExtraFov, SpeedFov(vehicle.SpeedKmh), 1f - Mathf.Exp(-3f * Time.deltaTime));
+            if (vehicle.ShiftCount != _shiftSeen)
+            {
+                if (vehicle.LastShift > 0 && _shiftSeen != 0 && vehicle.SpeedKmh > 15f) _kickAt = Time.time;
+                _shiftSeen = vehicle.ShiftCount;
+            }
+            // A quick push back and ease in again: the car pulls away from the camera as the next gear bites.
+            float kickT = (Time.time - _kickAt) / ShiftKickSeconds;
+            var kick = kickT >= 0f && kickT < 1f ? -vehicle.transform.forward * (ShiftKickMeters * Mathf.Sin(kickT * Mathf.PI)) : Vector3.zero;
 
             float yaw = _player.ViewYaw, pitch = _player.ViewPitch;
             var look = Quaternion.Euler(-pitch, yaw, 0f);
@@ -106,8 +125,8 @@ namespace Game.Gameplay
                 if (_animation != null && _animation.HeadEye(out var head)) eye += Vector3.ProjectOnPlane(head - eye, vehicle.transform.up);
                 eye += GripsInView(vehicle, eye);
                 if (!vehicle.IsMotorcycle) eye += vehicle.transform.up * CarEyeRaise;
-                cam.transform.SetPositionAndRotation(eye, look);
-                cam.fieldOfView = DrivingFov;
+                cam.transform.SetPositionAndRotation(eye + kick * 0.3f, look);
+                cam.fieldOfView = DrivingFov + ExtraFov * 0.4f;   // the wheel and the dash sit close: a wide view stretches them
                 _distance = 0f;
                 return;
             }
@@ -119,7 +138,7 @@ namespace Game.Gameplay
             // Pulled in at once when something is in the way, eased back out (along the lifted line, so the framing keeps its shape).
             _distance = wanted < _distance ? wanted : Mathf.MoveTowards(_distance, wanted, DistanceChangePerSecond * Time.deltaTime);
             // Pulled in close (a wall behind), the camera would end up inside the body: over the roof instead.
-            cam.transform.SetPositionAndRotation(OverRoof(vehicle, _local, pivot + along * _distance), look);
+            cam.transform.SetPositionAndRotation(OverRoof(vehicle, _local, pivot + along * _distance) + kick, look);
             VegetationRenderer.ClearPivot = pivot;
             VegetationRenderer.ClearAround = cam;   // third person: crowns on the sight line to the car are not drawn (ADR-487)
         }

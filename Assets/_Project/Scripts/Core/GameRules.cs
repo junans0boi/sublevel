@@ -43,6 +43,7 @@ namespace Game.Core
         public ParkourRules Parkour = new ParkourRules();
         public VehicleRules Vehicles = new VehicleRules();
         public VehicleRules Motorcycles = VehicleRules.MotorcycleDefaults();
+        public VehicleHandling[] VehicleModels = VehicleHandling.Defaults(); // ADR-557
         public TeamRules Team = new TeamRules();
         public FuelRules Fuel = new FuelRules();
         public VehicleDamageRules VehicleDamage = new VehicleDamageRules();                         // #90, ADR-074

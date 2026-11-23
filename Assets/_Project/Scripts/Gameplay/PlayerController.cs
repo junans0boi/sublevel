@@ -925,7 +925,7 @@ namespace Game.Gameplay
             float fovTarget = ScopeView.FovOverride > 0f ? ScopeView.FovOverride
                 : _aim.Mode == AimMode.Hip && Rig.IsEyeView(AimMode.Hip) ? GameSettings.FirstPersonFov
                 : aimRules.For(_aim.Mode).Fov;
-            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget + BungeeRide.ExtraFov, ease);
+            Camera.fieldOfView = Mathf.Lerp(Camera.fieldOfView, fovTarget + BungeeRide.ExtraFov + VehicleCamera.ExtraFov, ease);
 
             // Hide our own body whenever the camera sits at the eyes so it does not block the view; the weapon
             // moves in front of the camera instead.

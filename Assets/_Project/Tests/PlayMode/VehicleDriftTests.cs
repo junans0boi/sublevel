@@ -45,6 +45,11 @@ namespace Game.Tests
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 15f, "local player");
             yield return WaitUntil(() => Find(VehicleKind.Car) != null && Find(VehicleKind.Motorcycle) != null, 10f, "vehicles");
             AudioListener.volume = 0f;
+            // Open ground beside the test box: a full-lock slide from 45 km/h reached the box's walls within the second.
+            var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pad.name = "DriftPad";
+            pad.transform.position = Pad + Vector3.down * 0.5f;
+            pad.transform.localScale = new Vector3(300f, 1f, 300f);
             yield return new WaitForSeconds(1f);
         }
 
@@ -71,10 +76,12 @@ namespace Game.Tests
             me.ServerSetHolstered(true);
         }
 
-        // Open floor south of the spawn block, facing +X, rolling at `kmh` with the engine on and nothing pressed.
+        static readonly Vector3 Pad = new Vector3(-600f, 0f, 0f);
+
+        // The open pad, facing +X, rolling at `kmh` with the engine on and nothing pressed.
         IEnumerator Roll(Vehicle v, float kmh)
         {
-            v.Body.position = new Vector3(-26f, 0.3f, v.IsMotorcycle ? -21f : -27f);
+            v.Body.position = Pad + new Vector3(-100f, 0.3f, v.IsMotorcycle ? 40f : -40f);
             v.Body.rotation = Quaternion.Euler(0f, 90f, 0f);
             v.Body.angularVelocity = Vector3.zero;
             _keys.Frame = new VehicleInputFrame { Seat = -1 };

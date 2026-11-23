@@ -149,9 +149,17 @@ public static class VehicleBuilder
         }
         else
         {
-            float bottom = p.WheelRadius * 0.85f;
+            // Floor above the wheel centres: the wheels (casts) carry the car; the box only stops it bellying on a crest.
+            float bottom = p.WheelRadius * 1.05f;
             float belt = p.HasGlass ? p.GlassBounds.min.y + 0.04f : b.min.y + b.size.y * 0.6f;
-            AddBox(colliders, "Chassis", new Vector3(b.center.x, (bottom + belt) * 0.5f, b.center.z), new Vector3(b.size.x - 0.06f, belt - bottom, b.size.z - 0.04f), physics);
+            // The low box spans the axles only; the overhangs start higher (approach/departure angle). One full-length box at
+            // wheel height scraped the ground where a slope begins and the off-centre hit spun the car round (VehicleHandlingTests).
+            float zFront = float.MinValue, zRear = float.MaxValue;
+            foreach (var c in p.WheelCentres) { zFront = Mathf.Max(zFront, c.z); zRear = Mathf.Min(zRear, c.z); }
+            float axleRear = Mathf.Max(b.min.z + 0.02f, zRear + p.WheelRadius * 0.2f), axleFront = Mathf.Min(b.max.z - 0.02f, zFront - p.WheelRadius * 0.2f);
+            AddBox(colliders, "Chassis", new Vector3(b.center.x, (bottom + belt) * 0.5f, (axleRear + axleFront) * 0.5f), new Vector3(b.size.x - 0.06f, belt - bottom, axleFront - axleRear), physics);
+            float high = Mathf.Min(p.WheelRadius * 1.7f, belt - 0.12f);
+            AddBox(colliders, "Overhangs", new Vector3(b.center.x, (high + belt) * 0.5f, b.center.z), new Vector3(b.size.x - 0.06f, belt - high, b.size.z - 0.04f), physics);
             if (p.HasGlass)
             {
                 // The roof over the whole glasshouse (the windows' length, not the lamps').
@@ -245,7 +253,7 @@ public static class VehicleBuilder
     }
 
     static VehicleFit VehicleFit(VehicleModels.Parts p) =>
-        new VehicleFit { MassKg = p.MassKg, WheelRadius = p.WheelRadius, CentreOfMassHeight = p.CentreOfMassHeight, SeatCount = p.SeatEyes.Length };
+        new VehicleFit { MassKg = p.MassKg, WheelRadius = p.WheelRadius, CentreOfMassHeight = p.CentreOfMassHeight, SeatCount = p.SeatEyes.Length, Model = p.Name };
 
     // An empty marker at `local` (in the vehicle's space of the seat's parent) under a seat.
     static void Anchor(string name, Transform seat, Vector3 local)

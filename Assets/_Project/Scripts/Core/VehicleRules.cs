@@ -28,6 +28,7 @@ namespace Game.Core
         // The motorcycle's numbers, used until the data loader replaces them (the "Motorcycles" block sets the same).
         public static VehicleRules MotorcycleDefaults() => new VehicleRules
         {
+            Gearbox = new GearboxRules { Gears = 5, IdleRpm = 1200f, RedlineRpm = 10000f, ShiftSeconds = 0.18f, RevRisePerSecond = 14000f, RevFallPerSecond = 20000f },
             SeatCount = 2, MassKg = 230f, MaxSpeedKmh = 105f, BoostMaxKmh = 120f, ReverseMaxKmh = 8f, EngineAccel = 7.5f,
             BrakeDecel = 8f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 4f, SuspensionTravel = 0.25f, SpringStrength = 14000f,
             SpringDamper = 1300f, WheelRadius = 0.31f, TyreGrip = 1.1f, CentreOfMassHeight = 0.55f,
@@ -68,6 +69,15 @@ namespace Game.Core
         public float SteerReturnDegPerSecond = 160f;
         public float ReloadSteerFactor = 0.7f; // the driver reloads a pistol: steering reach and speed times this (ADR-111)
         public float InputStaleSeconds = 0.5f; // driver input older than this counts as nothing pressed
+        // Drift and stability (ADR-557): after Space is let go the rear grip comes back over DriftRecoverSeconds (a slide you
+        // steer out of, not a snap). Otherwise yaw faster than the steering asks for (plus the margin) is damped at YawAssist
+        // per second, so a steered car turns but does not swap ends; a drift widens the margin while it lasts.
+        public float DriftRecoverSeconds = 0.7f;
+        public float YawAssist = 6f;
+        public float YawAssistMarginDegPerSecond = 12f;
+        public float DriftYawMarginDegPerSecond = 90f;
+        public float RearGripBias = 1.1f;      // rear side grip x this when not drifting: stable, a touch of understeer
+        public GearboxRules Gearbox = new GearboxRules(); // ADR-558
 
         // ---- Suspension and tyres ----
         public float SuspensionTravel = 0.32f; // from the top of the suspension to full extension (m)

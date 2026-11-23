@@ -131,10 +131,11 @@
     "SeatCount": 4, "EnterRange": 3.0, "EnterSeconds": 0.6, "SwitchSeconds": 0.5, "SeatedSpreadFactor": 1.35, "MassKg": 1350.0,
     "MaxSpeedKmh": 90.0, "ReverseMaxKmh": 25.0, "OffRoadSpeedFactor": 0.85, "BoostMaxKmh": 105.0, "BoostAccelFactor": 1.25,
     "LaunchAccelFactor": 1.5, "LaunchSeconds": 1.2, "EngineAccel": 5.5, "ReverseAccelFactor": 0.7, "BrakeDecel": 9.0,
-    "CoastDecel": 0.8, "OverSpeedDecel": 3.0, "HandbrakeDecel": 3.0, "HandbrakeRearGrip": 0.05, "HandbrakeSteerBoost": 1.5, "AbandonedBrakeDecel": 4.0,
-    "NoDriverDecel": 0.5, "HoldSpeed": 0.4, "SteerMaxDeg": 32.0, "SteerAtTopSpeedDeg": 6.0, "SteerDegPerSecond": 110.0,
+    "CoastDecel": 0.8, "OverSpeedDecel": 3.0, "HandbrakeDecel": 1.5, "HandbrakeRearGrip": 0.3, "HandbrakeSteerBoost": 1.25, "AbandonedBrakeDecel": 4.0,
+    "NoDriverDecel": 0.5, "HoldSpeed": 0.4, "Gearbox": { "Gears": 6, "IdleRpm": 850.0, "RedlineRpm": 7000.0, "ShiftUpShare": 0.92, "ShiftDownShare": 0.42, "ShiftSeconds": 0.22, "ShiftPull": 0.2, "RevRisePerSecond": 9000.0, "RevFallPerSecond": 14000.0 },
+    "SteerMaxDeg": 32.0, "SteerAtTopSpeedDeg": 9.0, "SteerDegPerSecond": 110.0,
     "SteerReturnDegPerSecond": 160.0, "InputStaleSeconds": 0.5, "SuspensionTravel": 0.32, "SpringStrength": 32000.0,
-    "SpringDamper": 3200.0, "WheelRadius": 0.34, "TyreGrip": 1.05, "SideGripPerSecond": 12.0, "CentreOfMassHeight": 0.38,
+    "SpringDamper": 3200.0, "WheelRadius": 0.34, "TyreGrip": 1.15, "SideGripPerSecond": 12.0, "CentreOfMassHeight": 0.38,
     "FlippedUpDot": 0.35, "RightingDelaySeconds": 5.0, "RightingSeconds": 2.5, "RightingLiftMeters": 1.2, "DrownDepth": 0.8,
     "DrownedDrag": 3.0, "CollisionMinSpeed": 4.0, "ExitSafeKmh": 30.0, "ExitLethalKmh": 65.0, "SpawnCount": 22,
     "ParkingSpacingMeters": 40.0, "SeatedThighDeg": 82.0, "SeatedShinDeg": -18.0, "SeatedHipDrop": 0.02, "SeatedHipBack": 0.08,
@@ -145,7 +146,8 @@
     "MaxSpeedKmh": 105.0, "ReverseMaxKmh": 8.0, "OffRoadSpeedFactor": 0.85, "BoostMaxKmh": 120.0, "BoostAccelFactor": 1.25,
     "LaunchAccelFactor": 1.5, "LaunchSeconds": 1.2, "EngineAccel": 7.5, "ReverseAccelFactor": 0.7, "BrakeDecel": 8.0,
     "CoastDecel": 0.8, "OverSpeedDecel": 3.0, "HandbrakeDecel": 6.0, "HandbrakeRearGrip": 0.8, "AbandonedBrakeDecel": 4.0,
-    "NoDriverDecel": 0.5, "HoldSpeed": 0.4, "SteerMaxDeg": 30.0, "SteerAtTopSpeedDeg": 4.0, "SteerDegPerSecond": 130.0,
+    "NoDriverDecel": 0.5, "HoldSpeed": 0.4, "Gearbox": { "Gears": 5, "IdleRpm": 1200.0, "RedlineRpm": 10000.0, "ShiftUpShare": 0.92, "ShiftDownShare": 0.42, "ShiftSeconds": 0.18, "ShiftPull": 0.2, "RevRisePerSecond": 14000.0, "RevFallPerSecond": 20000.0 },
+    "SteerMaxDeg": 30.0, "SteerAtTopSpeedDeg": 4.0, "SteerDegPerSecond": 130.0,
     "SteerReturnDegPerSecond": 180.0, "InputStaleSeconds": 0.5, "SuspensionTravel": 0.25, "SpringStrength": 14000.0,
     "SpringDamper": 1300.0, "WheelRadius": 0.31, "TyreGrip": 1.1, "SideGripPerSecond": 12.0, "CentreOfMassHeight": 0.55,
     "FlippedUpDot": 0.35, "RightingDelaySeconds": 5.0, "RightingSeconds": 2.0, "RightingLiftMeters": 0.6, "DrownDepth": 0.6,
@@ -157,6 +159,13 @@
     "SeatedThighDeg": 82.0, "SeatedShinDeg": -18.0, "SeatedHipDrop": 0.02, "SeatedHipBack": 0.08, "SeatedTorsoBackDeg": 6.0,
     "DriverArmDeg": 55.0, "DriverArmInDeg": 12.0, "PassengerArmDeg": 20.0
   },
+  "VehicleModels": [
+    { "Model": "FairheavenLT80", "MaxSpeedKmh": 175.0, "BoostMaxKmh": 195.0, "EngineAccel": 7.0, "RedlineRpm": 7200.0, "TyreGrip": 1.2, "SteerMaxDeg": 34.0 },
+    { "Model": "FairheavenSW84", "MaxSpeedKmh": 160.0, "BoostMaxKmh": 175.0, "EngineAccel": 6.2, "RedlineRpm": 6500.0, "TyreGrip": 1.15 },
+    { "Model": "GoblinV12", "MaxSpeedKmh": 220.0, "BoostMaxKmh": 240.0, "EngineAccel": 9.0, "RedlineRpm": 8200.0, "TyreGrip": 1.35, "SteerAtTopSpeedDeg": 7.0, "BrakeDecel": 10.0 },
+    { "Model": "Shvan92", "MaxSpeedKmh": 130.0, "BoostMaxKmh": 145.0, "EngineAccel": 5.0, "RedlineRpm": 5500.0, "TyreGrip": 1.0, "SteerMaxDeg": 30.0, "BrakeDecel": 8.0 },
+    { "Model": "LightbodyLifted85", "MaxSpeedKmh": 150.0, "BoostMaxKmh": 165.0, "EngineAccel": 5.8, "RedlineRpm": 6000.0, "TyreGrip": 1.05, "OffRoadSpeedFactor": 1.0 }
+  ],
   "Team": {
     "DuoSize": 2, "SquadSize": 4, "FriendlyFire": false,
     "KnockedHp": 100.0, "BleedPerSecond": 2.5, "BleedGrowthPerKnock": 0.5, "KnockedMoveFactor": 1.0, "KnockedDamageFactor": 1.0,

@@ -100,17 +100,20 @@ namespace Game.Gameplay
                 float speed = Mathf.Abs(_vehicle.Speed);
                 float throttle = Mathf.Clamp01((speed - _lastSpeed) / Mathf.Max(dt, 1e-4f) / 4f);
                 _lastSpeed = speed;
-                float target = EngineNote.Rpm01(_vehicle.Speed, top, Gears, throttle);
-                _rpm = Mathf.Lerp(_rpm, target, 1f - Mathf.Exp(-10f * dt));
+                // The vehicle's own gearbox (ADR-558): the note follows its needle, so the HUD and the ear agree.
+                float target = r.Gearbox != null ? Mathf.Clamp01(_vehicle.EngineRpm / Mathf.Max(1f, _vehicle.RedlineRpm)) : EngineNote.Rpm01(_vehicle.Speed, top, Gears, throttle);
+                target = Mathf.Max(EngineNote.IdleRpm, target);
+                _rpm = Mathf.Lerp(_rpm, target, 1f - Mathf.Exp(-14f * dt));
                 _smoothThrottle = Mathf.Lerp(_smoothThrottle, throttle, 1f - Mathf.Exp(-6f * dt));
                 // A gear change: the note falls, the engine lets go for a moment and a clunk comes through the floor.
-                int gear = EngineNote.Gear(_vehicle.Speed, top, Gears);
+                int gear = r.Gearbox != null ? _vehicle.ShiftCount : EngineNote.Gear(_vehicle.Speed, top, Gears);
                 if (gear != _gear)
                 {
-                    if (gear > _gear && speed > 4f) { _shiftUntil = Time.time + 0.16f; _oneShot.pitch = 1f; _oneShot.PlayOneShot(Clunk, 0.35f * GameSettings.EffectsVolume); }
+                    bool up = r.Gearbox != null ? _vehicle.LastShift > 0 : gear > _gear;
+                    if (up && speed > 4f) { _shiftUntil = Time.time + 0.16f; _oneShot.pitch = 1f; _oneShot.PlayOneShot(Clunk, 0.35f * GameSettings.EffectsVolume); }
                     _gear = gear;
                 }
-                float lift = Time.time < _shiftUntil ? 0.55f : 1f;
+                float lift = Time.time < _shiftUntil || _vehicle.Shifting ? 0.55f : 1f;
                 float fx = GameSettings.EffectsVolume;
                 _engineSource.pitch = EngineNote.Pitch(_rpm, _vehicle.IsMotorcycle);
                 _engineSource.volume = EngineVolume * _level * EngineNote.Volume(_rpm, _smoothThrottle) * lift * fx;
