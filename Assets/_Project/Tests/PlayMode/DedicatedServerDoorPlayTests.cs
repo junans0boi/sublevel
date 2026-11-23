@@ -81,8 +81,8 @@ namespace Game.Tests
             using (var rm = Process.Start(new ProcessStartInfo(_docker, "rm -f " + Container) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true })) rm.WaitForExit(20000);
         }
 
-        [TearDown]
-        public void TearDown()
+        [UnityTearDown]
+        public IEnumerator TearDown()
         {
             Directory.CreateDirectory(LogDir);
             File.WriteAllText(Path.Combine(LogDir, TestContext.CurrentContext.Test.Name + ".log"), _log + "\n--- server ---\n" + (_serverLog != null ? ServerText() : ""));
@@ -91,6 +91,15 @@ namespace Game.Tests
             RemoveContainer();
             PlayerController.InputOverride = null;
             NetSession.Reset();
+            // Leave nothing of this client's World behind (its connection, local player, MatchDirector): the next test's harness
+            // takes the first local player and network manager it finds (MultiHarness.AdoptHost), as MultiHarness.Teardown does.
+            var nm = FishNet.InstanceFinder.NetworkManager;
+            if (nm != null && nm.ClientManager.Started) nm.ClientManager.StopConnection();
+            float end = Time.realtimeSinceStartup + 10f;
+            while (nm != null && nm.ClientManager.Started && Time.realtimeSinceStartup < end) yield return null;
+            SceneManager.LoadScene("Bootstrap");
+            yield return null;
+            yield return null;
         }
 
         // Starts the server build (Linux ARM64 in docker on 2 CPUs like the live host, else the Mac build), joins its lobby, starts the
@@ -214,9 +223,16 @@ namespace Game.Tests
             var me = Combatant.LocalPlayer;
             var controller = me.GetComponent<PlayerController>();
             yield return NetHarness.WaitUntil(() => Mathf.Abs(me.transform.position.x - WaitingIsland.CentreX) + Mathf.Abs(me.transform.position.z - WaitingIsland.CentreZ) > 300f, "the body left the island", Log, 30f);
-            yield return Wait(2f);
+            // Out of the elevator on foot once its doors open (a real player cannot teleport out, #500).
+            yield return NetHarness.WaitUntil(() => SpawnProtection.InputBlocked && !WaitingHud.OnIsland, "in the closed elevator", Log, 30f);
+            var site = ElevatorDoors.Instance.Sites[0];
+            foreach (var x in ElevatorDoors.Instance.Sites)
+                if ((x.Spawn - me.transform.position).sqrMagnitude < (site.Spawn - me.transform.position).sqrMagnitude) site = x;
+            yield return NetHarness.WaitUntil(() => !SpawnProtection.InputBlocked && !ElevatorPanel.Riding, "elevator doors open", Log, 90f);
+            var outside = site.Spawn + Quaternion.Euler(0f, site.YawDeg, 0f) * Vector3.forward * 4f;
+            yield return WalkTo(input, controller, me, outside, 10f);
 
-            // The entrance door nearest the body; walk up to it in announced hops a real match would allow (MoveGuard).
+            // The entrance door nearest the body; walk up to it along the zone's navmesh, the way a person runs there.
             var from = me.transform.position;
             int best = -1;
             float bestSqr = float.MaxValue;
@@ -230,16 +246,15 @@ namespace Game.Tests
             var at = door.transform.position;
             var stand = at + door.Forward * 1.2f + Vector3.up * 0.1f;
             Log($"door {best} at {at}, body at {from}, {Mathf.Sqrt(bestSqr):F0} m");
-            var step = GameData.Rules.Guard.TeleportMaxMeters * 0.8f;
-            while ((me.transform.position - stand).magnitude > 0.5f)
-            {
-                var p = me.transform.position;
-                controller.Teleport(Vector3.MoveTowards(p, stand, step));
-                yield return Wait(GameData.Rules.Guard.TeleportMinIntervalSeconds + 0.15f);
-            }
-            controller.Teleport(stand);
+            Assert.IsTrue(UnityEngine.AI.NavMesh.SamplePosition(from, out var start, 5f, UnityEngine.AI.NavMesh.AllAreas), "the body stands on the zone's navmesh");
+            Assert.IsTrue(UnityEngine.AI.NavMesh.SamplePosition(stand, out var goal, 3f, UnityEngine.AI.NavMesh.AllAreas), "the door's front is on the navmesh");
+            var path = new UnityEngine.AI.NavMeshPath();
+            Assert.IsTrue(UnityEngine.AI.NavMesh.CalculatePath(start.position, goal.position, UnityEngine.AI.NavMesh.AllAreas, path) && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete, "a way to the door");
+            foreach (var corner in path.corners) yield return WalkTo(input, controller, me, corner, 20f);
+            yield return WalkTo(input, controller, me, stand, 5f, 0.6f);
             yield return Wait(1.5f);
-            StringAssert.DoesNotContain("refused Teleport", ServerText(), "the server took the walk to the door");
+            StringAssert.DoesNotContain("refused Teleport", ServerText(), "no teleport on the way");
+            StringAssert.DoesNotContain("refused Move", ServerText(), "the server took the walk to the door");
 
             Assert.AreEqual(DoorState.Closed, door.State);
             // F the way a person presses it: through PlayerController (door vs pickup, reach, the request to the server).
@@ -248,6 +263,26 @@ namespace Game.Tests
             Assert.AreNotEqual(float.MaxValue, DoorSystem.Bearing(me.EyePosition, controller.Camera != null ? controller.Camera.transform.forward : me.transform.forward), "the door is in reach and in view");
             input.Frame.Interact = true;
             yield return NetHarness.WaitUntil(() => door.State != DoorState.Closed, "the server opened the door for the remote client", Log, 5f);
+        }
+
+        // Runs the local player to `target` with the input a person gives (look that way, W and sprint), then stops.
+        IEnumerator WalkTo(HarnessInput input, PlayerController controller, Combatant me, Vector3 target, float timeout, float reach = 1f)
+        {
+            float end = Time.realtimeSinceStartup + timeout;
+            input.Frame.Sprint = true;
+            while (true)
+            {
+                var d = target - me.transform.position;
+                float flat = new Vector2(d.x, d.z).magnitude;
+                if (flat <= reach) break;
+                if (Time.realtimeSinceStartup > end) { input.Frame.Move = Vector2.zero; Assert.Fail($"walking to {target}: stuck at {me.transform.position}, {flat:F1} m short"); }
+                controller.LookAt(new Vector3(target.x, me.EyePosition.y, target.z));
+                input.Frame.Move = new Vector2(0f, 1f);
+                input.Frame.Sprint = flat > 3f;
+                yield return null;
+            }
+            input.Frame.Move = Vector2.zero;
+            input.Frame.Sprint = false;
         }
 
         static IEnumerator Wait(float seconds)
