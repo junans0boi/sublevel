@@ -17,12 +17,13 @@ namespace Game.Gameplay
     // and quits, so `menu -> playable` is timed without a person. Off (no cost but one bool) without the flag.
     public sealed class LoadTrace : MonoBehaviour
     {
-        const float HitchMs = 50f;
+        static float HitchMs = 50f; // `-loadtrace-ms <n>` lowers it (a slower PC turns 20 ms here into 50 ms)
         const float WatchSeconds = 20f;
 
         public static bool On { get; private set; }
         static string _path;
         static bool _autoPlay;
+        static bool _stay; // -playtrace: watch the whole run, FeelCapture quits
         static readonly StringBuilder _log = new StringBuilder();
 
         float _watchUntil;
@@ -42,6 +43,9 @@ namespace Game.Gameplay
             if (!On) return;
             _path = Path.GetFullPath(args[i + 1]);
             _autoPlay = Array.IndexOf(args, "-loadtrace-play") >= 0;
+            _stay = Array.IndexOf(args, "-playtrace") >= 0;
+            int ms = Array.IndexOf(args, "-loadtrace-ms");
+            HitchMs = ms >= 0 && ms + 1 < args.Length && float.TryParse(args[ms + 1], out var v) ? v : 50f;
             _log.Clear();
             Mark("subsystems (first script)");
         }
@@ -90,7 +94,7 @@ namespace Game.Gameplay
             double now = Time.realtimeSinceStartupAsDouble;
             float ms = (float)((now - _lastFrame) * 1000.0);   // not unscaledDeltaTime: Unity resets it on the frame after a scene load
             _lastFrame = now;
-            if (Time.frameCount > 1 && ms > HitchMs && Time.realtimeSinceStartup < _watchUntil) Mark($"hitch {ms:F0} ms");
+            if (Time.frameCount > 1 && ms > HitchMs && (_stay || Time.realtimeSinceStartup < _watchUntil)) Mark($"hitch {ms:F0} ms");
             if (Time.frameCount == 2) Mark("first frames rendered (" + SceneManager.GetActiveScene().name + ")");
 
             if (!_autoPlay) return;
@@ -108,7 +112,7 @@ namespace Game.Gameplay
             {
                 _playable = true;
                 Mark($"local player spawned (combatants {Combatant.All.Count}, loot {LootItem.All.Count})");
-                _quitAt = Time.realtimeSinceStartup + 12f;
+                if (!_stay) _quitAt = Time.realtimeSinceStartup + 12f;
             }
             if (_quitAt > 0f && Time.realtimeSinceStartup > _quitAt)
             {

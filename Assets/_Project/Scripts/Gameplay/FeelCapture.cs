@@ -41,6 +41,7 @@ namespace Game.Gameplay
         {
             var args = Environment.GetCommandLineArgs();
             if (BootVehicles(args)) return; // -vehshots (#89), FeelCapture.Vehicles.cs
+            if (BootPlayTrace(args)) return; // -playtrace, FeelCapture.PlayTrace.cs
             int i = Array.IndexOf(args, "-feelcapture");
             int w = Array.IndexOf(args, "-worldshots");
             int e = Array.IndexOf(args, "-eleshots");
@@ -108,6 +109,12 @@ namespace Game.Gameplay
             if (_poseShots)
             {
                 yield return _charShots ? CharShots(me) : PoseShots(me);
+                Application.Quit();
+                yield break;
+            }
+            if (_playTrace)
+            {
+                yield return PlayTrace(me);
                 Application.Quit();
                 yield break;
             }
