@@ -204,6 +204,7 @@ namespace Game.Net
         public void Shutdown()
         {
             _refused.Clear();
+            _heldHellos.Clear();
             if (_nm != null)
             {
                 _nm.ClientManager.OnClientConnectionState -= OnClientState;
@@ -316,6 +317,7 @@ namespace Game.Net
                 _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
             }
             TickQueue();
+            RetryHeldHellos();
             DropRefused();
             if (Phase == PhaseKind.Connecting && Time.unscaledTime > _connectDeadline) Fail(LobbyRules.Unreachable);
             if (_hostLeaveAt >= 0f && Time.unscaledTime >= _hostLeaveAt)
@@ -407,8 +409,9 @@ namespace Game.Net
             else if (mode != _queueMode) return;               // another mode waits for its own window (not queued here)
             int size = mode == TeamMode.Solo ? 1 : Mathf.Clamp(req.PartySize, 1, MatchComposer.TeamSizeOf(mode, TeamRules.Current));
             long party = mode == TeamMode.Solo ? 0 : req.PartyId; // in solo everybody is alone
-            var added = _parties.Add(conn.ClientId, party);
+            var added = _parties.Add(conn.ClientId, party, size);
             if (added == QueueParties.AddResult.Duplicate) return;
+            if (added == QueueParties.AddResult.Refused) { Debug.Log("[Server] queue: client " + conn.ClientId + " refused, party " + party + " has no place left"); return; }
             if (added == QueueParties.AddResult.JoinedTicket) { PushQueueState(); return; } // the party's ticket is already waiting
             if (_queue.Enqueue(conn.ClientId, size, Time.unscaledTimeAsDouble)) PushQueueState();
             else _parties.Remove(conn.ClientId, out _);
@@ -492,9 +495,29 @@ namespace Game.Net
             }
         }
 
-        void OnHello(NetworkConnection conn, LobbyHello hello, Channel channel)
+        // #497: the backend tells the client "matched" at once, this server learns the match only on its next poll of the backend
+        // (BackendMatchPoller, every 3 s). A hello of an account it does not know yet waits that long (polling at once) before the refusal;
+        // the client's own connect deadline (ConnectSeconds) is longer.
+        const float AssignWaitSeconds = 4f;
+        readonly System.Collections.Generic.List<(NetworkConnection conn, LobbyHello hello, long account, float until)> _heldHellos = new System.Collections.Generic.List<(NetworkConnection, LobbyHello, long, float)>();
+
+        void RetryHeldHellos()
         {
-            if (_truth.Contains(conn.ClientId)) return;
+            for (int i = _heldHellos.Count - 1; i >= 0; i--)
+            {
+                var h = _heldHellos[i];
+                bool gone = h.conn == null || !h.conn.IsActive;
+                if (!gone && Time.unscaledTime < h.until && AssignedCheck != null && !AssignedCheck(h.account)) continue;
+                _heldHellos.RemoveAt(i);
+                if (!gone) Hello(h.conn, h.hello, false);
+            }
+        }
+
+        void OnHello(NetworkConnection conn, LobbyHello hello, Channel channel) => Hello(conn, hello, true);
+
+        void Hello(NetworkConnection conn, LobbyHello hello, bool mayWait)
+        {
+            if (_truth.Contains(conn.ClientId) || _heldHellos.Exists(h => h.conn == conn)) return;
             var result = LobbyRules.CheckJoin(Version, hello.Version, _truth.Count, MaxPlayers, _matchStarted);
             if (result != JoinResult.Ok)
             {
@@ -509,6 +532,7 @@ namespace Game.Net
             }
             if (!string.IsNullOrEmpty(ServerTokenSecret) && AssignedCheck != null && !AssignedCheck(claims.AccountId))
             {
+                if (mayWait) { _heldHellos.Add((conn, hello, claims.AccountId, Time.unscaledTime + AssignWaitSeconds)); BackendMatchPoller.Refresh(); return; }
                 Refuse(conn, JoinResult.NotAssigned);
                 return;
             }
