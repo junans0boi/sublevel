@@ -48,6 +48,8 @@ namespace Game.Tests
             foreach (var r in _rooms) if (r != null) { r.Shutdown(); Object.Destroy(r.gameObject); }
             _rooms.Clear();
             PlayerController.InputOverride = null;
+            LobbyNet.ServerTokenSecret = LobbyNet.AuthToken = null;
+            LobbyNet.AssignedCheck = null;
             NetSession.Reset();
             SceneManager.LoadScene("Bootstrap");
             yield return null;
@@ -102,6 +104,40 @@ namespace Game.Tests
             yield return NetHarness.WaitUntil(() => guest.Phase == LobbyNet.PhaseKind.Failed, "guest refused", Log);
             Assert.AreEqual(LobbyRules.Reason(JoinResult.VersionMismatch), guest.FailureText);
             Assert.AreEqual(1, host.Roster.Count, "the refused guest never entered the room");
+        }
+
+        // #497: the backend answers "matched" to the client before this server's next poll of its match list sees the match.
+        // The hello of an account it does not know yet waits for that poll instead of being refused at once.
+        IEnumerator JoinAssignedServer(System.Func<bool> assigned, System.Action<LobbyNet> done)
+        {
+            const string secret = "test-secret";
+            LobbyNet.ServerTokenSecret = secret;
+            LobbyNet.AuthToken = GameToken.Sign(secret, 77, "late", System.DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            LobbyNet.AssignedCheck = account => account == 77 && assigned();
+            ushort port = _port++;
+            var server = NewRoom();
+            Assert.IsTrue(server.StartDedicated(port));
+            var guest = NewRoom();
+            Assert.IsTrue(guest.Join("127.0.0.1", port));
+            yield return NetHarness.WaitUntil(() => guest.Phase == LobbyNet.PhaseKind.InLobby || guest.Phase == LobbyNet.PhaseKind.Failed, "join answered", Log);
+            done(guest);
+        }
+
+        [UnityTest]
+        public IEnumerator AssignedJustAfterTheHello_StillGetsIn()
+        {
+            float assignAt = Time.realtimeSinceStartup + 1.5f;
+            LobbyNet guest = null;
+            yield return JoinAssignedServer(() => Time.realtimeSinceStartup >= assignAt, g => guest = g);
+            Assert.AreEqual(LobbyNet.PhaseKind.InLobby, guest.Phase, guest.FailureText);
+        }
+
+        [UnityTest]
+        public IEnumerator NeverAssigned_IsRefusedWithTheReason()
+        {
+            LobbyNet guest = null;
+            yield return JoinAssignedServer(() => false, g => guest = g);
+            Assert.AreEqual(LobbyRules.Reason(JoinResult.NotAssigned), guest.FailureText);
         }
 
         [UnityTest]

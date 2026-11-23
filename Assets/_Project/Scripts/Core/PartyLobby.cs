@@ -71,10 +71,10 @@ namespace Game.Core
             var m = _members[i]; m.Ready = ready; _members[i] = m;
         }
 
-        // Leader only, not while matching; solo needs an empty party.
+        // Leader only, not while matching; the party must fit one team of that mode (solo needs an empty party).
         public bool SetMode(int by, TeamMode mode)
         {
-            if (by != LeaderId || Matching || (mode == TeamMode.Solo && _members.Count > 1)) return false;
+            if (by != LeaderId || Matching || _members.Count > TeamRules.Current.SizeOf(mode)) return false;
             Mode = mode;
             return true;
         }
@@ -104,7 +104,7 @@ namespace Game.Core
 
         public bool Start(int by)
         {
-            if (by != LeaderId || Matching || WaitingLine().Length > 0) return false;
+            if (by != LeaderId || Matching || WaitingLine().Length > 0 || TooBig().Length > 0) return false;
             Matching = true;
             return true;
         }
@@ -136,8 +136,16 @@ namespace Game.Core
             }
             if (Matching)
                 return new StatusButton { Action = LobbyAction.CancelMatch, Label = "매칭 취소 · " + Clock(matchSeconds), Enabled = true, Reason = "" };
-            string wait = WaitingLine();
+            string wait = TooBig();
+            if (wait.Length == 0) wait = WaitingLine();
             return new StatusButton { Action = LobbyAction.Start, Label = _members.Count == 1 ? "혼자 시작" : "파티 시작", Enabled = wait.Length == 0, Reason = wait };
+        }
+
+        // #499: a party bigger than one team of its mode would push the next team's places; "" when it fits.
+        string TooBig()
+        {
+            int team = TeamRules.Current.SizeOf(Mode);
+            return _members.Count > team ? "한 팀은 최대 " + team + "명입니다." : "";
         }
 
         public static string Clock(int seconds)

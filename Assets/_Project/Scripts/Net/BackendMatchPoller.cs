@@ -73,6 +73,9 @@ namespace Game.Net
             }
         }
 
+        // Ask again on the next Tick (#497: someone the last list did not know knocked; after an answer still on its way, right after it).
+        public static void Refresh() => _next = 0;
+
         // The match that started now: the one most of the people in the room were assigned to.
         public static string Pick(ICollection<long> present) => BackendMatchRules.Pick(_active, present)?.Id;
 

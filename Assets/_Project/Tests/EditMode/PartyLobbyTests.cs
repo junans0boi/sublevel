@@ -49,6 +49,24 @@ namespace Game.Tests
         }
 
         [Test]
+        public void PartyBiggerThanTheTeam_CannotPickThatModeOrStart()
+        {
+            var rules = TeamRules.Current;
+            TeamRules.Current = new TeamRules { SquadSize = 3 };
+            try
+            {
+                var p = Squad(); p.Join(4, "x");
+                p.SetReady(2, true); p.SetReady(3, true); p.SetReady(4, true);
+                Assert.IsFalse(p.SetMode(1, TeamMode.Duo), "4 people do not fit a duo (#499)");
+                var b = p.ButtonFor(1);
+                Assert.IsFalse(b.Enabled, "4 people do not fit a squad of 3");
+                StringAssert.Contains("3명", b.Reason);
+                Assert.IsFalse(p.Start(1));
+            }
+            finally { TeamRules.Current = rules; }
+        }
+
+        [Test]
         public void Matching_LocksEverything_AndLeaderCancels()
         {
             var p = Squad();
