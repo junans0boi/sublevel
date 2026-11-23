@@ -35,6 +35,7 @@ namespace Game.Net
         bool _parkourOpen;
 
         Combatant _combatant;
+        CombatantSwim _swim;
         CharacterController _controller;
         CapsuleCollider _capsule;
         float _standHeight, _radius, _feetY;
@@ -199,19 +200,34 @@ namespace Game.Net
         }
 
         // Watches the combatant's height as the server sees it and settles a waiting report: the owner's number
-        // counts only up to the drop seen here plus a tolerance. A report that no watched landing confirms in time
-        // is measured against whatever drop is still in progress (none, if the combatant never left the ground).
+        // counts only within the drop seen here plus or minus a tolerance. A report that no watched landing confirms in time
+        // is measured against whatever drop is still in progress (none, if the combatant never left the ground). A watched
+        // landing that no report comes for in time hurts by itself (#501): leaving the report out is no way out of a fall.
         void ServerTickFall()
         {
             var rules = FallRules.Current;
+            // Whatever carries the body (a seat, the island's lift and jump, an elevator, a teammate, a parkour path, the water)
+            // makes no fall, as on the owner's side (PlayerController resets its tracker for the same).
+            bool grounded = !_combatant.Airborne;
+            if ((!grounded || _watched.InAir) && NotFalling) { ServerForgetFall(); return; }
             float y = transform.position.y;
-            float landed = _watched.Tick(!_combatant.Airborne, y);
+            float landed = _watched.Tick(grounded, y);
             if (landed > 0f)
             {
                 _watchedDrop = landed;
                 _watchedAt = Time.time;
             }
-            if (_reported <= 0f) return;
+            if (_reported <= 0f)
+            {
+                if (_watchedDrop > 0f && Time.time - _watchedAt > rules.ReportWindowSeconds)
+                {
+                    float unreported = Locomotion.UnreportedFall(_watchedDrop, rules);
+                    _watchedDrop = 0f;
+                    _watchedAt = float.NegativeInfinity;
+                    ServerApplyFall(unreported);
+                }
+                return;
+            }
 
             bool waited = Time.time - _reportedAt > rules.ReportWindowSeconds;
             // Still falling as the server sees it (a remote owner is ahead of its replicated position): wait for
@@ -227,6 +243,21 @@ namespace Game.Net
             _watchedDrop = 0f;
             _watchedAt = float.NegativeInfinity;
             ServerApplyFall(accepted);
+        }
+
+        bool NotFalling =>
+            _combatant.Dead.Value || VehicleSeat.IsAttached(_combatant) || _combatant.BeingCarried || Parkour.Value != 0 || _parkourOpen
+            || ((_swim != null || TryGetComponent(out _swim)) && _swim.InWater) || ElevatorCar.Carries(transform.position)
+            || (WaitingRoom.Current != null && WaitingRoom.Current.Carries(_combatant))
+            || (ElevatorRides.Instance != null && ElevatorRides.Instance.ServerRiding(_combatant));
+
+        // The server's watch starts over: the body was moved (a teleport taken, a relocation) or carried.
+        [Server]
+        public void ServerForgetFall()
+        {
+            _watched.Reset();
+            _watchedDrop = 0f;
+            _watchedAt = float.NegativeInfinity;
         }
 
         [Server]
@@ -298,6 +329,7 @@ namespace Game.Net
             ServerGuard.Refuse(GuardKind.Parkour, _combatant, "parkour start/end not where the body can be");
             _parkourOpen = false;
             Parkour.Value = 0;
+            if (TryGetComponent<MoveGuard>(out var guard)) guard.Expect(back);   // going back may cross the wall it went over (#500)
             if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) ParkourRejected?.Invoke(back);
             else TargetParkourRejected(Owner, back);
         }
@@ -356,6 +388,7 @@ namespace Game.Net
         [Server]
         public void ServerCorrect(Vector3 back)
         {
+            if (TryGetComponent<MoveGuard>(out var guard)) guard.Expect(back);   // the owner's echo of it is no cheat (#500)
             if (Owner == null || !Owner.IsValid || Owner.IsLocalClient) Corrected?.Invoke(back);
             else TargetCorrect(Owner, back);
         }

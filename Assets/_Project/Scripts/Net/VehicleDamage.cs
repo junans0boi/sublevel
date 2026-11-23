@@ -164,8 +164,35 @@ namespace Game.Net
 
         // ---- Server ----
 
+        // Server: the fastest this vehicle went lately as the server saw it (#502): a driver's crash or impact report is held to it.
+        float _recentSpeed;
+        float _recentSpeedAt = float.NegativeInfinity;
+        RequestBucket _impactRequests;
+
+        public float ServerRecentSpeed => _recentSpeed;
+
+        void SampleSpeed()
+        {
+            float now = Time.time, speed = _vehicle.ServerSpeed;
+            if (speed >= _recentSpeed || now - _recentSpeedAt > VehicleDamageMath.ReportSpeedWindowSeconds) { _recentSpeed = speed; _recentSpeedAt = now; }
+        }
+
+        // The most a driver's report may claim: this vehicle's recent speed plus the fastest one near it (a head-on closes at both).
+        public float ServerReportCap()
+        {
+            float near = 0f;
+            var at = transform.position;
+            foreach (var v in Vehicle.All)
+            {
+                if (v == null || v == _vehicle || (v.transform.position - at).sqrMagnitude > VehicleDamageMath.ReportNearMeters * VehicleDamageMath.ReportNearMeters) continue;
+                if (v.TryGetComponent<VehicleDamage>(out var d)) near = Mathf.Max(near, d.ServerRecentSpeed);
+            }
+            return VehicleDamageMath.ReportedSpeedCap(_recentSpeed, near);
+        }
+
         void ServerTick(float dt)
         {
+            SampleSpeed();
             var stage = CurrentStage;
             if (stage == VehicleDamageStage.Wrecked) return;
             var next = VehicleDamageMath.Advance(stage, VehicleDamageMath.StageFor(_health, Rules.MaxHealth, Rules));
@@ -358,8 +385,17 @@ namespace Game.Net
             else if (IsOwner) CmdImpact(speed, local);
         }
 
+        // From the driver's client (it simulates the vehicle): capped by what the server saw, and no more often than the
+        // simulating side's own impact cooldown allows, with a margin (#502).
         [ServerRpc]
-        void CmdImpact(float speed, Vector3 local) => ServerImpact(speed, local);
+        void CmdImpact(float speed, Vector3 local)
+        {
+            if (float.IsNaN(speed) || !InputGuard.Finite(local.x, local.y, local.z)) { ServerGuard.Refuse(GuardKind.Arg, null, $"impact {speed}"); return; }
+            if (!_impactRequests.TryTake(Time.timeAsDouble, ImpactRequestsPerSecond, ImpactRequestBurst)) { ServerGuard.Refuse(GuardKind.Rate, null, "vehicle impacts too often"); return; }
+            ServerImpact(Mathf.Min(speed, ServerReportCap()), local);
+        }
+
+        const double ImpactRequestsPerSecond = 4.0, ImpactRequestBurst = 4.0;
 
         void ServerImpact(float speed, Vector3 local)
         {

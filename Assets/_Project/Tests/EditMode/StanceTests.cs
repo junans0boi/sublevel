@@ -185,6 +185,11 @@ namespace Game.Tests
             Assert.AreEqual(0f, Locomotion.AcceptedFall(-3f, 5f, Fall));
             Assert.AreEqual(0f, Locomotion.AcceptedFall(float.NaN, 5f, Fall));
             Assert.AreEqual(0f, Locomotion.AcceptedFall(float.PositiveInfinity, 5f, Fall));
+            Assert.AreEqual(19f, Locomotion.AcceptedFall(3.5f, 20f, Fall), 1e-4f, "a fall played down is cut back up to seen - 1 m (#501)");
+            Assert.AreEqual(19f, Locomotion.UnreportedFall(20f, Fall), 1e-4f, "a watched landing with no report counts by itself (#501)");
+            Assert.AreEqual(0f, Locomotion.UnreportedFall(0.5f, Fall));
+            Assert.AreEqual(0f, Locomotion.UnreportedFall(float.NaN, Fall));
+            Assert.AreEqual(0f, Locomotion.UnreportedFall(float.PositiveInfinity, Fall));
         }
 
         [Test]

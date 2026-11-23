@@ -220,12 +220,14 @@ namespace Game.Net
         [ServerRpc]
         void CmdToggle()
         {
+            if (!_combatant.ItemRequestOk("jerrycan Toggle")) return;
             if (Using) ServerCancel(); else ServerBegin();
         }
 
         [ServerRpc]
         public void CmdDrop()
         {
+            if (!_combatant.ItemRequestOk("jerrycan Drop")) return;
             if (_combatant.Dead.Value || Count.Value <= 0 || MatchDirector.Instance == null) return;
             if (Using) ServerCancel();
             Count.Value--;

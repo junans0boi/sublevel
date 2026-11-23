@@ -106,6 +106,17 @@ namespace Game.Core
     // Pure vehicle damage rules (#90).
     public static class VehicleDamageMath
     {
+        // A driver's crash or impact report is believed up to what the server saw (#502, ADR-560): the fastest this vehicle and any
+        // vehicle near it went over the last ReportSpeedWindowSeconds (a head-on closes at both speeds), with a margin for the
+        // server's late, estimated copy of a remote driver's motion.
+        public const float ReportSpeedWindowSeconds = 2f;
+        public const float ReportSpeedMargin = 1.25f;
+        public const float ReportSpeedSlack = 5f;
+        public const float ReportNearMeters = 20f;
+
+        public static float ReportedSpeedCap(float ownRecentSpeed, float nearRecentSpeed) =>
+            ((ownRecentSpeed > 0f ? ownRecentSpeed : 0f) + (nearRecentSpeed > 0f ? nearRecentSpeed : 0f)) * ReportSpeedMargin + ReportSpeedSlack;   // NaN counts as 0
+
         public const int PaneCount = 6; // 0 windshield, 1 rear, 2 left front, 3 left rear, 4 right front, 5 right rear
         public const int PartCount = 4;
 

@@ -1005,7 +1005,7 @@ namespace Game.Net
         // ---- Server ----
 
         // The server's idea of the vehicle's speed (m/s): its own physics, or the motion it has been receiving.
-        float ServerSpeed => _simulating ? _body.linearVelocity.magnitude : _estimatedVelocity.magnitude;
+        internal float ServerSpeed => _simulating ? _body.linearVelocity.magnitude : _estimatedVelocity.magnitude;
 
         void ServerSetSeat(int seat, int objectId)
         {
@@ -1293,6 +1293,10 @@ namespace Game.Net
         {
             if (conn == null || conn != Owner) return;
             if (float.IsNaN(speed) || speed < 0f) { ServerGuard.Refuse(GuardKind.Arg, null, $"crash speed {speed}"); return; }
+            if (!IsMotorcycle) { ServerGuard.Refuse(GuardKind.Vehicle, null, "crash report from a car"); return; }   // only a bike throws its riders
+            if (Time.time < _crashedUntil) return;   // one crash per recovery; the riders are already off
+            // Held to the speed the server saw (#502): a standing machine cannot throw its riders off at 60 m/s.
+            if (TryGetComponent<VehicleDamage>(out var damage)) speed = Mathf.Min(speed, damage.ServerReportCap());
             ServerCrash(speed);
         }
 

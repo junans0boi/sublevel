@@ -304,6 +304,21 @@ namespace Game.Net
         // Server: a combatant is between stations.
         public bool ServerRiding(Combatant c) => c != null && _trips.ContainsKey(c.ObjectId);
 
+        // Server: `to` is in the car of a ride this combatant is on (its departure station, or the arrival one once it changed cars).
+        // The owner carries its own body on a ride, so the jump between the two cars is announced as a teleport (#500).
+        public bool ServerRideNear(Combatant c, Vector3 to, float reach)
+        {
+            if (c == null || _doors == null || !_trips.TryGetValue(c.ObjectId, out var trip)) return false;
+            return NearStation(trip.From, to, reach) || (!double.IsNaN(trip.SwitchAt) && NearStation(trip.To, to, reach));
+        }
+
+        bool NearStation(int station, Vector3 at, float reach)
+        {
+            if (station < 0 || station >= _doors.Sites.Count) return false;
+            var p = _doors.Sites[station].Spawn;
+            return new Vector2(at.x - p.x, at.z - p.z).sqrMagnitude <= reach * reach;
+        }
+
         public float ServerCooldownLeft(Combatant c) =>
             c != null && _readyAt.TryGetValue(c.ObjectId, out var t) ? Mathf.Max(0f, (float)(t - Time.timeAsDouble)) : 0f;
 

@@ -327,19 +327,20 @@ namespace Game.Net
         }
 
         [ServerRpc]
-        public void CmdUse() => ServerUse();
+        public void CmdUse() { if (!_combatant.ItemRequestOk("healing Use")) return; ServerUse(); }
 
         [ServerRpc]
         public void CmdCancel() => ServerCancel();
 
         // The inventory's double click on a bandage or kit row: that item, not the best fit.
         [ServerRpc]
-        public void CmdUseKind(int kind) => ServerBegin((HealKind)kind);
+        public void CmdUseKind(int kind) { if (!_combatant.ItemRequestOk("healing UseKind")) return; ServerBegin((HealKind)kind); }
 
         // Dropping from the inventory screen: one item lands on the ground in front.
         [ServerRpc]
         public void CmdDrop(int kind)
         {
+            if (!_combatant.ItemRequestOk("healing Drop")) return;
             if (_combatant.Dead.Value || MatchDirector.Instance == null) return;
             var heal = (HealKind)kind;
             if (heal == HealKind.None || heal == HealKind.Medkit || CountOf(heal) <= 0) return;

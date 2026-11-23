@@ -792,6 +792,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdUseMedkit()
         {
+            if (!ItemRequestOk("item UseMedkit")) return;
             var h = GetComponent<CombatantHealing>();
             if (h != null) { h.ServerUse(); return; }
             ServerUseMedkit();
@@ -801,6 +802,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSwapWeaponSlots()
         {
+            if (!ItemRequestOk("item SwapWeaponSlots")) return;
             if (_health.IsDead || !_loadout.SwapSlots()) return;
             OpticsPart?.ServerOnSlotsSwapped(Loadout.PrimarySlotA, Loadout.PrimarySlotB);
             Push();
@@ -810,6 +812,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdSwapSlots(int a, int b)
         {
+            if (!ItemRequestOk("item SwapSlots")) return;
             if (_health.IsDead || !SlotOk(a, "swap") || !SlotOk(b, "swap") || !_loadout.SwapSlots(a, b)) return;
             OpticsPart?.ServerOnSlotsSwapped(a, b);
             Push();
@@ -819,6 +822,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickupToSlot(NetworkObject lootObject, int slot)
         {
+            if (!ItemRequestOk("item PickupToSlot")) return;
             if (_health.IsDead || TeamBlocksAction || ItemsLocked || lootObject == null || !SlotOk(slot, "pickup to")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Weapon) return;
@@ -835,6 +839,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdPickup(NetworkObject lootObject)
         {
+            if (!ItemRequestOk("item Pickup")) return;
             if (_health.IsDead || TeamBlocksAction || ItemsLocked || lootObject == null) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned) return;
@@ -851,6 +856,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropWeapon(int slot)
         {
+            if (!ItemRequestOk("item DropWeapon")) return;
             if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null || !SlotOk(slot, "drop")) return;
             int weaponId = _loadout.RemoveWeapon(slot, out int mag);
             if (weaponId == 0) return;
@@ -874,6 +880,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropAmmo(int ammoType)
         {
+            if (!ItemRequestOk("item DropAmmo")) return;
             if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType);
@@ -885,6 +892,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropAmmoHalf(int ammoType)
         {
+            if (!ItemRequestOk("item DropAmmoHalf")) return;
             if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!AmmoNames.IsValid((AmmoType)ammoType)) { ServerGuard.Refuse(GuardKind.Arg, this, $"ammo type {ammoType}"); return; }
             int amount = _loadout.RemoveAmmo((AmmoType)ammoType, System.Math.Max(1, _loadout.Reserve((AmmoType)ammoType) / 2));
@@ -895,6 +903,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropMedkit()
         {
+            if (!ItemRequestOk("item DropMedkit")) return;
             if (_health.IsDead || ItemsLocked || MatchDirector.Instance == null) return;
             if (!_loadout.RemoveMedkit()) return;
             ServerDropLoot(new LootEntry { Kind = LootKind.Medkit, Amount = 1 });

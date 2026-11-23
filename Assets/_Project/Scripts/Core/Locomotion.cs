@@ -288,12 +288,18 @@ namespace Game.Core
             return rules.LandingDamage + (meters - rules.SafeMeters) / (rules.LethalMeters - rules.SafeMeters) * (rules.LethalDamage - rules.LandingDamage);
         }
 
-        // The drop the server accepts from an owner's report: never more than what it watched plus the tolerance.
+        // The drop the server accepts from an owner's report: never more than what it watched plus the tolerance, and never less
+        // than what it watched minus it (an owner playing a fall down is cut back up, #501).
         public static float AcceptedFall(float reportedMeters, float observedMeters, FallRules rules)
         {
             if (!(reportedMeters > 0f) || float.IsInfinity(reportedMeters)) return 0f;
-            return Math.Min(reportedMeters, Math.Max(0f, observedMeters) + rules.ReportToleranceMeters);
+            float seen = Math.Max(0f, observedMeters);
+            return Math.Max(Math.Min(reportedMeters, seen + rules.ReportToleranceMeters), seen - rules.ReportToleranceMeters);
         }
+
+        // A landing the server watched that no report came for in time (#501): it counts by itself, less the tolerance.
+        public static float UnreportedFall(float observedMeters, FallRules rules) =>
+            observedMeters > 0f && !float.IsInfinity(observedMeters) ? Math.Max(0f, observedMeters - rules.ReportToleranceMeters) : 0f;
 
         // Playback speed for the legs when moving at `speed` with a clip animated for `clipSpeed`.
         public static float LegPace(float speed, float clipSpeed, GaitRules rules)

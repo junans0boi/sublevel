@@ -274,6 +274,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropOptic(int slot)
         {
+            if (!_combatant.ItemRequestOk("optics DropOptic")) return;
             if (_combatant.Dead.Value || !SlotOk(slot, "drop optic")) return;
             ServerDetach(slot, true);
         }
@@ -281,18 +282,21 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDetachToBag(int slot)
         {
+            if (!_combatant.ItemRequestOk("optics DetachToBag")) return;
             if (!_combatant.Dead.Value && SlotOk(slot, "detach optic")) ServerDetachToBag(slot);
         }
 
         [ServerRpc]
         public void CmdAttachFromBag(int opticId, int slot)
         {
+            if (!_combatant.ItemRequestOk("optics AttachFromBag")) return;
             if (!_combatant.Dead.Value && SlotOk(slot, "attach optic")) ServerAttachFromBag(opticId, slot);
         }
 
         [ServerRpc]
         public void CmdDropFromBag(int opticId)
         {
+            if (!_combatant.ItemRequestOk("optics DropFromBag")) return;
             if (!_combatant.Dead.Value) ServerDropFromBag(opticId);
         }
 
@@ -300,6 +304,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdAttachFromGround(NetworkObject lootObject, int slot)
         {
+            if (!_combatant.ItemRequestOk("optics AttachFromGround")) return;
             if (_combatant.Dead.Value || lootObject == null || !SlotOk(slot, "optic from ground")) return;
             var item = lootObject.GetComponent<LootItem>();
             if (item == null || !item.IsSpawned || (LootKind)item.Kind.Value != LootKind.Optic) return;
