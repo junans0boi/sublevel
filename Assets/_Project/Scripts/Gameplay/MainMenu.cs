@@ -177,7 +177,8 @@ namespace Game.Gameplay
         }
 
         // 시작(솔로): loads the match scene in the background and shows a loading line.
-        public void StartGame() => Load(MatchScene, Mode);
+        // Solo from the menu goes through the waiting island like a server match (ADR-561).
+        public void StartGame() { WaitingRoom.PracticeNext = true; Load(MatchScene, Mode); }
 
         // 훈련장 (#153): the same hosted match without bots and lockdown, always solo.
         public void StartTraining() => Load(TrainingScene, TeamMode.Solo);

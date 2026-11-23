@@ -11,7 +11,7 @@ namespace Game.Core
     // a party that joined together keeps its cars (the deployment decides cars by index and team, ADR-072).
     public sealed class WaitingFlow
     {
-        readonly WaitingCountdown _countdown;
+        WaitingCountdown _countdown;
         readonly List<(float x, float z)> _spawns = WaitingIsland.SpawnPoints();
         readonly List<int> _order = new List<int>();                 // person ids in joining order (the deployment index of each)
         readonly Dictionary<int, int> _spot = new Dictionary<int, int>();
@@ -26,6 +26,17 @@ namespace Game.Core
         public IReadOnlyList<int> PlacingOrder => _order;
 
         public WaitingFlow(MatchRules rules, float startSecondsOverride = -1f) { _countdown = new WaitingCountdown(rules, startSecondsOverride); }
+
+        // Solo practice (ADR-561): full at a share of the room, a longer countdown from then, the bots' arrival over its own time.
+        public WaitingFlow(MatchRules rules, bool practice) : this(rules)
+        {
+            if (!practice) return;
+            _countdown = new WaitingCountdown(rules, rules.PracticeMaxSeconds, rules.PracticeFillShare, rules.PracticeCountdownSeconds);
+            BotArriveSeconds = rules.PracticeBotArriveSeconds;
+        }
+
+        // How long the waiting bots take to arrive (WaitingBotSchedule); 0 = over the countdown's max.
+        public float BotArriveSeconds { get; }
 
         public float MaxSeconds => _countdown.MaxSeconds;
 

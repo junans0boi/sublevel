@@ -132,6 +132,12 @@ namespace Game.Core
         public float WaitFullSeconds = 15f;
         // A dedicated server's match starts with everybody on the waiting island (ADR-382). Off in code so tests keep the elevator start.
         public bool UseWaitingIsland = false;
+        // Solo practice from the menu (ADR-561, 준환): the island too. The bots arrive over PracticeBotArriveSeconds; once people and
+        // bots reach PracticeFillShare of Participants a PracticeCountdownSeconds countdown runs; PracticeMaxSeconds starts it whatever.
+        public float PracticeFillShare = 0.8f;
+        public float PracticeCountdownSeconds = 60f;
+        public float PracticeBotArriveSeconds = 40f;
+        public float PracticeMaxSeconds = 130f;
         // Data: a match started from the menu is filled to Participants with bots (BotFill) instead of the fixed BotCount (ADR-258).
         // Off in code so tests that set BotCount keep it.
         public bool FillToParticipants = false;

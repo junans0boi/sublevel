@@ -122,5 +122,47 @@ namespace Game.Tests
             Assert.AreEqual(45f, g.WaitMaxSeconds);
             Assert.AreEqual(5f, g.WaitFullSeconds);
         }
+
+        // ADR-561: solo practice. Not full below 80% of the room: the clock is the safety max. At 80% the minute starts.
+        [Test]
+        public void Practice_FullAtEightyPercent_ThenOneMinute()
+        {
+            var r = Rules();
+            var c = new WaitingCountdown(r, r.PracticeMaxSeconds, r.PracticeFillShare, r.PracticeCountdownSeconds);
+            var s = c.Update(0, 1, 10);
+            Assert.IsFalse(s.Done);
+            Assert.AreEqual(r.PracticeMaxSeconds, s.SecondsLeft, 0.01f, "not full: the safety max shows");
+            s = c.Update(30, 1, 62);   // 63 of 80 < 64
+            Assert.AreEqual(r.PracticeMaxSeconds - 30f, s.SecondsLeft, 0.01f);
+            s = c.Update(38, 1, 63);   // 64 of 80 = 80%: the minute starts
+            Assert.AreEqual(60f, s.SecondsLeft, 0.01f);
+            s = c.Update(97.9, 1, 63);
+            Assert.IsFalse(s.Done);
+            s = c.Update(98, 1, 63);
+            Assert.IsTrue(s.Done);
+            Assert.AreEqual(StartReason.Full, s.Reason);
+        }
+
+        [Test]
+        public void Practice_NeverFull_StartsAtTheSafetyMax()
+        {
+            var r = Rules();
+            var c = new WaitingCountdown(r, r.PracticeMaxSeconds, r.PracticeFillShare, r.PracticeCountdownSeconds);
+            c.Update(0, 1, 5);
+            Assert.IsFalse(c.Update(r.PracticeMaxSeconds - 0.1, 1, 5).Done);
+            var s = c.Update(r.PracticeMaxSeconds, 1, 5);
+            Assert.IsTrue(s.Done);
+            Assert.AreEqual(StartReason.TimeUp, s.Reason);
+        }
+
+        // The bots arrive over the practice time and reach the 80% mark before it ends (1 person, 79 bots needed).
+        [Test]
+        public void Practice_BotsReachTheMark_WithinTheirArrivalTime()
+        {
+            var r = Rules();
+            int need = (int)System.Math.Ceiling(r.Participants * r.PracticeFillShare - 1e-3) - 1;
+            int at = WaitingBotSchedule.BotsAt(r.PracticeBotArriveSeconds, r.PracticeBotArriveSeconds, BotFill.Plan(1, r.Participants, r.MinBots), 1, r.Participants);
+            Assert.GreaterOrEqual(at, need);
+        }
     }
 }

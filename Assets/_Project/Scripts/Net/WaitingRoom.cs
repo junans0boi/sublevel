@@ -36,9 +36,11 @@ namespace Game.Net
         public static WaitingRoom Current { get; private set; }
         // Tests: a host in the editor runs the waiting phase too (a real server turns it on with NetSession.Dedicated).
         public static bool ForceEnabled;
+        // The menu's solo start (ADR-561): the next match opens on the island with the practice countdown. Taken by that match.
+        public static bool PracticeNext;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { ForceEnabled = false; Current = null; }
+        static void ResetStatics() { ForceEnabled = false; PracticeNext = false; Current = null; }
 
         MatchDirector _director;
         NetworkManager _nm;
@@ -70,7 +72,8 @@ namespace Game.Net
 
         void DriveBots(CountdownState cd)
         {
-            int want = Mathf.Min(_bots.Count, WaitingBotSchedule.BotsAt(cd.Elapsed, _flow.MaxSeconds > 0f ? _flow.MaxSeconds : (MatchRules.Current ?? new MatchRules()).WaitMaxSeconds,
+            float arrive = _flow.BotArriveSeconds > 0f ? _flow.BotArriveSeconds : _flow.MaxSeconds > 0f ? _flow.MaxSeconds : (MatchRules.Current ?? new MatchRules()).WaitMaxSeconds;
+            int want = Mathf.Min(_bots.Count, WaitingBotSchedule.BotsAt(cd.Elapsed, arrive,
                 cd.BotsTotal, _flow.People, (MatchRules.Current ?? new MatchRules()).Participants));
             int onIsland = BotsOnIsland;
             for (int i = 0; i < _bots.Count && onIsland < want; i++)
@@ -122,7 +125,9 @@ namespace Game.Net
         public static WaitingRoom TryCreate(MatchDirector director, NetworkManager nm)
         {
             var rules = MatchRules.Current ?? new MatchRules();
-            if (!(NetSession.Dedicated || ForceEnabled) || !rules.UseWaitingIsland) return null;
+            bool practice = PracticeNext && !NetSession.Dedicated && !NetSession.IsMultiplayer;
+            PracticeNext = false;
+            if (!(NetSession.Dedicated || ForceEnabled || practice) || !rules.UseWaitingIsland) return null;
             // --perf bots-only runs (ADR-323): the countdown needs a person to start its clock, so with nobody there the bots would never drop.
             if (LobbyNet.AllowEmptyStart) { Debug.Log("[WaitingRoom] --perf: no island, the bots start in the elevators"); return null; }
             var island = GameObject.Find("WaitingIsland");
@@ -130,7 +135,7 @@ namespace Game.Net
             var room = director.gameObject.AddComponent<WaitingRoom>();
             room._director = director; room._nm = nm;
             room._deckY = island.transform.position.y;
-            room._flow = new WaitingFlow(rules, DedicatedServer.StartSecondsOverride);
+            room._flow = practice ? new WaitingFlow(rules, true) : new WaitingFlow(rules, DedicatedServer.StartSecondsOverride);
             room._race = RaceRoom.TryCreate(nm, island.transform);
             Current = room;
             nm.ServerManager.RegisterBroadcast<LiftCallRequest>(room.OnCallRequest);

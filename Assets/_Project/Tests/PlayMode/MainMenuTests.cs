@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Game.Core;
 using Game.Gameplay;
 using Game.Net;
 using NUnit.Framework;
@@ -118,6 +119,23 @@ namespace Game.Tests
             Assert.AreEqual(GraphicsOptions.ShadowDistance(GraphicsPreset.Low), QualitySettings.shadowDistance, 0.001f);
             GraphicsOptions.Preset = GraphicsPreset.Medium;
             Assert.AreEqual(GraphicsOptions.ShadowDistance(GraphicsPreset.Medium), QualitySettings.shadowDistance, 0.001f);
+        }
+
+        // ADR-561: the menu's solo start opens the match on the waiting island with the practice countdown, then the elevators.
+        [UnityTest]
+        public IEnumerator Start_Solo_GoesThroughTheWaitingIsland()
+        {
+            PlayerController.InputOverride = new IdleInput();
+            yield return LoadMainMenu();
+            MainMenu.Instance.StartGame();
+            yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null, 40f, "the match");
+            yield return WaitUntil(() => WaitingRoom.Current != null, 10f, "the waiting room is open");
+            var flow = WaitingRoom.Current.Flow;
+            var rules = MatchRules.Current ?? new MatchRules();
+            Assert.AreEqual(rules.PracticeMaxSeconds, flow.MaxSeconds, 0.01f, "the practice countdown");
+            Assert.AreEqual(rules.PracticeBotArriveSeconds, flow.BotArriveSeconds, 0.01f);
+            yield return WaitUntil(() => WaitingHud.OnIsland, 10f, "the player stands on the island");
+            yield return WaitUntil(() => flow.Bots > 3, 20f, "bots arrive on the island");
         }
 
         [UnityTest]
