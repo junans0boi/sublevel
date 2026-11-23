@@ -183,7 +183,7 @@ namespace Game.Gameplay
         public void StartTraining() => Load(TrainingScene, TeamMode.Solo);
 
         // 이벤트 (ADR-512): a local race on the chosen course, always solo (the event's bots fill the grid).
-        public void StartEvent(Game.Core.RaceEvent.CourseInfo course) => Load(course.Scene, TeamMode.Solo);
+        public void StartEvent(Game.Core.RaceEvent.CourseInfo course) { Game.Core.RaceEvent.Chosen = course.Id; Load(course.Scene, TeamMode.Solo); }
 
         void Load(string scene, TeamMode mode)
         {
@@ -231,7 +231,7 @@ namespace Game.Gameplay
             _lobbyScreen.gameObject.SetActive(false);
             // The host may have started the event race instead (ADR-512, #448): everyone goes to that course's scene.
             string race = Game.Core.RaceEvent.SceneForLobby(lobby.StartInfo.Event);
-            if (race != null) { Load(race, TeamMode.Solo); return; }
+            if (race != null) { Game.Core.RaceEvent.Chosen = Game.Core.RaceEvent.IdForLobby(lobby.StartInfo.Event); Load(race, TeamMode.Solo); return; }
             Load(MatchScene, (TeamMode)Mathf.Clamp(lobby.StartInfo.Mode, 0, 2)); // a queue match carries its mode
         }
 

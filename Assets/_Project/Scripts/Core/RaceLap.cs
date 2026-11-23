@@ -23,6 +23,7 @@ namespace Game.Core
         // passed forward minus backward); its time counts only when nothing went wrong on it (no reversing, no skipped checkpoint).
         public float Step(float s, double now)
         {
+            if (_course.Open) return StepOpen(s, now);
             int sector = _course.Sector(s), n = _course.Sectors;
             if (_sector < 0 || sector == _sector) { _sector = sector; return -1f; }
             bool forward = sector == (_sector + 1) % n, back = sector == (_sector + n - 1) % n;
@@ -38,10 +39,31 @@ namespace Game.Core
             return lap >= _course.MinLapSeconds ? lap : -1f;
         }
 
+        // An open course (#451): the clock starts at the first crossing of the start line and the run is done (Laps = 1) when the car has
+        // driven to the finish line. Only driving counts: the furthest point reached grows only by steps of at most OpenJump metres, so a
+        // jump ahead (a fall onto the road below, a teleport) does not move it on. Its time is returned once, at the finish.
+        public const float OpenJump = 25f;
+        float _furthest;
+
+        float StepOpen(float s, double now)
+        {
+            if (!Started)
+            {
+                if (s < 0f || s > OpenJump) return -1f;
+                Started = true; Timing = true; Start = now; _furthest = s;
+            }
+            if (s > _furthest && s <= _furthest + OpenJump) _furthest = s;
+            if (Laps > 0 || _furthest < _course.LapLength) return -1f;
+            Laps = 1; Timing = false;
+            float t = (float)(now - Start);
+            return t >= _course.MinLapSeconds ? t : -1f;
+        }
+
         // How far round the race this is (metres): the race order of drivers who have not finished (ADR-515). Before the first crossing of
         // the line (on the grid behind it) it is negative; reversing back over the line goes back a lap.
         public float Progress(float s)
         {
+            if (_course.Open) return Started ? Math.Min(s, _furthest) : Math.Min(s, 0f);   // never ahead of where it drove to
             if (!Started) return s - _course.LapLength;
             int n = _course.Sectors, rounds = _net >= 0 ? _net / n : (_net - n + 1) / n;
             return rounds * _course.LapLength + s;

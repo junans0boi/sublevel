@@ -51,6 +51,7 @@ namespace Game.Net
             public Vehicle Car; public Combatant Driver; public string Name; public RaceLap Lap; public Vector3 Grid;
             public bool FalseStart, Finished; public float FinishTime, Best;
             public bool Bot, Cut; public float Skill, StuckSince = -1f;     // a bot racer (ADR-517): how good, which way at the fork
+            public float GoodS = float.NaN;                                  // where a bot was last on a hill road (RaceCourse.Follow)
         }
         readonly List<Racer> _racers = new List<Racer>();
         readonly List<RaceEvent.Standing> _order = new List<RaceEvent.Standing>();
@@ -62,7 +63,9 @@ namespace Game.Net
 
         void Awake()
         {
-            Info = RaceEvent.ById(CourseId) ?? RaceEvent.Courses[0];
+            // The course picked in the menu or the lobby when it is one of this scene's (the pass's two directions share a scene).
+            var chosen = RaceEvent.ById(RaceEvent.Chosen);
+            Info = chosen != null && chosen.Scene == gameObject.scene.name ? chosen : RaceEvent.ById(CourseId) ?? RaceEvent.Courses[0];
             Current = this;
             Vehicle.EventRace = true;
             _grid.AddRange(Info.Course.GridSpots(RaceEvent.GridSlots));
@@ -161,15 +164,31 @@ namespace Game.Net
                 if (!go || r.Finished) { r.Car.SetDriverInput(new DriverInput { Handbrake = true }); continue; }   // held (a negative throttle would reverse once stopped)
                 var (throttle, steer) = RaceBotDriver.Drive(course, t.position.x, t.position.z, t.eulerAngles.y, r.Car.Speed, r.Skill, r.Cut);
                 r.Car.SetDriverInput(new DriverInput { Throttle = throttle, Steer = steer });
-                bool stuck = t.up.y < 0.3f || Mathf.Abs(course.Project(t.position.x, t.position.z).offset) > course.Width * 0.5f + course.Runoff + 2f || Mathf.Abs(r.Car.Speed) < 1f;
+                var pos = t.position;
+                r.GoodS = course.Follow(r.GoodS, pos.x, pos.y, pos.z);
+                bool fell = course.Fell(r.GoodS, pos.y);   // off the edge of a hill road: put back at once (#451)
+                bool stuck = fell || t.up.y < 0.3f || Mathf.Abs(course.Project(pos.x, pos.z).offset) > course.Width * 0.5f + course.Runoff + 2f || Mathf.Abs(r.Car.Speed) < 1f;
                 if (!stuck) { r.StuckSince = -1f; continue; }
                 if (r.StuckSince < 0f) { r.StuckSince = Time.time; continue; }
-                if (Time.time - r.StuckSince < RaceEvent.StuckResetSeconds) continue;
-                var (x, z, yaw) = course.ResetPose(t.position.x, t.position.z);
-                r.Car.ServerPlace(new Vector3(x, 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
+                if (Time.time - r.StuckSince < (fell ? RaceEvent.FallResetSeconds : RaceEvent.StuckResetSeconds)) continue;
+                var (x, y, z, yaw) = course.ResetTo(pos.x, pos.z, r.GoodS);
+                // Never onto another car (two bots stuck together were put back on top of each other, again and again): further back.
+                float back = course.Project(x, z).s;
+                for (int k = 1; k <= 4 && CarNear(new Vector3(x, y, z), r.Car); k++)
+                {
+                    (x, z, yaw) = course.PointAt(back - 8f * k); y = course.HeightAt(back - 8f * k);
+                }
+                r.Car.ServerPlace(new Vector3(x, y + 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
+                Debug.Log($"[RaceDirector] {r.Name} put back ({(fell ? "fell" : t.up.y < 0.3f ? "flipped" : Mathf.Abs(r.Car.Speed) < 1f ? "stopped" : "off the course")}) at s {course.Project(pos.x, pos.z).s:0} -> {r.GoodS:0}");
                 r.StuckSince = -1f;
                 BotResets++;
             }
+        }
+
+        bool CarNear(Vector3 at, Vehicle self)
+        {
+            foreach (var c in _cars) if (c != null && c != self && (c.transform.position - at).sqrMagnitude < 36f) return true;
+            return false;
         }
 
         // The race as the server sees it (ADR-515): before GO a car that leaves its slot is a false start; from GO each car's place feeds
@@ -192,9 +211,10 @@ namespace Game.Net
                 if (!racing) continue;
                 float lap = r.Lap.Step(Info.Course.Project(p.x, p.z).s, now);
                 if (lap > 0f && (r.Best <= 0f || lap < r.Best)) r.Best = lap;
-                if (r.Lap.Laps >= Info.Laps + (r.FalseStart ? 1 : 0))
+                if (r.Lap.Laps >= LapsFor(r))
                 {
-                    r.Finished = true; r.FinishTime = (float)(now - _flow.GoAt); done++;
+                    // An open course has no lap to take away for a false start: time added instead (ADR-559).
+                    r.Finished = true; r.FinishTime = (float)(now - _flow.GoAt) + (Info.Course.Open && r.FalseStart ? RaceEvent.FalseStartPenaltySeconds : 0f); done++;
                     _flow.FirstFinish(now);
                     Debug.Log($"[RaceDirector] {r.Name} finished in {r.FinishTime:0.00} s (best lap {r.Best:0.00})");
                 }
@@ -202,12 +222,14 @@ namespace Game.Net
             return _racers.Count > 0 && done >= _racers.Count;
         }
 
+        int LapsFor(Racer r) => Info.Laps + (r.FalseStart && !Info.Course.Open ? 1 : 0);
+
         Vehicle SpawnCar(int slot)
         {
             var prefabs = VehicleSpawner.Instance != null ? VehicleSpawner.Instance.CarPrefabs() : null;
             if (prefabs == null || prefabs.Count == 0) { Debug.LogWarning("[RaceDirector] no car models in the scene"); return null; }
             var (x, z, yaw) = _grid[slot];
-            var nob = Instantiate(prefabs[slot % prefabs.Count], new Vector3(x, 0.3f, z), Quaternion.Euler(0f, yaw, 0f));
+            var nob = Instantiate(prefabs[slot % prefabs.Count], new Vector3(x, Info.Course.RoadHeight(x, z) + 0.3f, z), Quaternion.Euler(0f, yaw, 0f));
             var v = nob.GetComponent<Vehicle>();
             v.ServerSetPaint(VehicleColors.Pick(slot, slot % prefabs.Count));
             _nm.ServerManager.Spawn(nob);
@@ -261,7 +283,7 @@ namespace Game.Net
                 m.Keys[k] = r.Driver != null ? r.Driver.ObjectId : -1 - _order[k].Key; m.Names[k] = r.Name; m.LapsDone[k] = (byte)Mathf.Min(255, r.Lap.Laps);
                 m.Done[k] = r.Finished; m.Times[k] = r.FinishTime; m.Best[k] = r.Best;
                 m.Running[k] = r.Lap.Timing && !r.Finished ? (float)(now - r.Lap.Start) : -1f;
-                m.LapsToGo[k] = (byte)(Info.Laps + (r.FalseStart ? 1 : 0));
+                m.LapsToGo[k] = (byte)LapsFor(r);
             }
             _nm.ServerManager.Broadcast(m, true, Channel.Unreliable);
         }

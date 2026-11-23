@@ -56,26 +56,29 @@ namespace Game.Net
             if (!Vehicle.EventRace || RaceDirector.Current == null) return;
             var me = Combatant.LocalPlayer;
             var car = me != null ? VehicleSeat.VehicleOf(me) : null;
-            if (car == null || !car.Simulating || InputLocked) { _stuckSince = -1f; return; }
+            if (car == null || !car.Simulating || InputLocked) { _stuckSince = -1f; _goodS = float.NaN; return; }
             var course = RaceDirector.Current.Info.Course;
             var p = car.transform.position;
+            _goodS = course.Follow(_goodS, p.x, p.y, p.z);
+            bool fell = course.Fell(_goodS, p.y);   // off the edge of a hill road (#451)
             bool flipped = car.transform.up.y < 0.3f;
             bool off = Mathf.Abs(course.Project(p.x, p.z).offset) > course.Width * 0.5f + course.Runoff + 2f;
-            if (flipped || off) { if (_stuckSince < 0f) _stuckSince = Time.unscaledTime; } else _stuckSince = -1f;
+            if (fell || flipped || off) { if (_stuckSince < 0f) _stuckSince = Time.unscaledTime; } else _stuckSince = -1f;
             bool asked = _resetAsked; _resetAsked = false;
-            bool stuck = _stuckSince >= 0f && Time.unscaledTime - _stuckSince >= RaceEvent.StuckResetSeconds;
+            bool stuck = _stuckSince >= 0f && Time.unscaledTime - _stuckSince >= (fell ? RaceEvent.FallResetSeconds : RaceEvent.StuckResetSeconds);
             if ((asked || stuck) && Time.unscaledTime >= _nextReset) ResetCar(car, course);
         }
 
         // R while driving in an event race (VehicleInput reads the key): the car goes back onto the course.
         public static void RequestReset() { if (_instance != null) _instance._resetAsked = true; }
         bool _resetAsked;
+        float _goodS = float.NaN;   // where the car was last on a hill road (RaceCourse.Follow)
 
         public static void ResetCar(Vehicle car, RaceCourse course)
         {
             var p = car.transform.position;
-            var (x, z, yaw) = course.ResetPose(p.x, p.z);
-            car.Place(new Vector3(x, 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
+            var (x, y, z, yaw) = course.ResetTo(p.x, p.z, _instance != null ? _instance._goodS : float.NaN);
+            car.Place(new Vector3(x, y + 0.4f, z), Quaternion.Euler(0f, yaw, 0f));
             if (_instance != null) { _instance._nextReset = Time.unscaledTime + RaceEvent.ResetCooldownSeconds; _instance._stuckSince = -1f; }
         }
     }

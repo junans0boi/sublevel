@@ -12,10 +12,10 @@ public static partial class WorldBuilder
     // URP lights an object with at most 4 additional lights: the long pieces are cut into 40 m cells, each a mesh of its own.
     sealed class RaceTiles
     {
-        const float Cell = 40f;
+        readonly float Cell;   // 40 m; bigger for lit-by-the-sun-only pieces (the pass's roadside: fewer draws)
         readonly Dictionary<(int, int), WorldMeshes.BoxBatch> _cells = new Dictionary<(int, int), WorldMeshes.BoxBatch>();
         readonly Vector2 _tile;
-        public RaceTiles(Vector2 tile) { _tile = tile; }
+        public RaceTiles(Vector2 tile, float cell = 40f) { _tile = tile; Cell = cell; }
         WorldMeshes.BoxBatch At(Vector3 c)
         {
             var k = (Mathf.FloorToInt(c.x / Cell), Mathf.FloorToInt(c.z / Cell));

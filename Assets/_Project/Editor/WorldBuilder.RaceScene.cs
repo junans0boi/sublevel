@@ -14,8 +14,17 @@ public static partial class WorldBuilder
 {
     public static void BuildRaceScenes()
     {
-        try { foreach (var c in RaceEvent.Courses) BuildRaceScene(c); }
+        var built = new System.Collections.Generic.HashSet<string>();
+        try { foreach (var c in RaceEvent.Courses) if (built.Add(c.Scene)) BuildRaceScene(c); }   // the pass's two directions share a scene
         catch (Exception e) { Debug.LogException(e); Debug.LogError("[WorldBuilder] race scenes FAILED: " + e.Message); EditorApplication.Exit(1); return; }
+        EditorApplication.Exit(0);
+    }
+
+    // tools/unity.sh run WorldBuilder.BuildPassScene -> only Assets/_Project/Scenes/Race_Pass.unity (#451)
+    public static void BuildPassScene()
+    {
+        try { BuildRaceScene(RaceEvent.ById("pass_up")); }
+        catch (Exception e) { Debug.LogException(e); Debug.LogError("[WorldBuilder] pass scene FAILED: " + e.Message); EditorApplication.Exit(1); return; }
         EditorApplication.Exit(0);
     }
 
@@ -36,6 +45,51 @@ public static partial class WorldBuilder
         var root = new GameObject("RaceCourse").transform;
         var cols = Child(root, "Colliders");
 
+        if (c.Hilly) BuildPass(root, cols, store, RaceEvent.PassLoop, RaceEvent.PassUp, RaceEvent.PassDown);   // the mountain pass and its loop (#451)
+        else BuildFlatCircuit(root, cols, store, c);
+        // No static batching: the meshes come from the blob at load (WorldMeshBank), after the batching would have run on empty filters
+        // (the whole course rendered black in play mode). Same as the World scene.
+        foreach (var t in root.GetComponentsInChildren<Transform>(true))
+        {
+            var flags = GameObjectUtility.GetStaticEditorFlags(t.gameObject);
+            if ((flags & StaticEditorFlags.BatchingStatic) != 0) GameObjectUtility.SetStaticEditorFlags(t.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
+        }
+        store.Finish(root.gameObject);
+
+        // The match: people start where the grid is (RaceDirector seats them in the cars), no loot, no dummies, the car models for the race.
+        var grid = c.GridSpots(RaceEvent.GridSlots);
+        var spawns = new MatchKit.Spawn[grid.Count];
+        for (int i = 0; i < grid.Count; i++)
+        {
+            float rad = grid[i].yaw * Mathf.Deg2Rad;
+            float sx = grid[i].x - Mathf.Cos(rad) * 2.4f, sz = grid[i].z + Mathf.Sin(rad) * 2.4f;
+            spawns[i] = MatchKit.At(sx, c.RoadHeight(sx, sz) + 0.2f, sz, grid[i].yaw);   // beside the driver's door
+        }
+        var director = MatchKit.AddMatch(spawns, new MatchKit.Spawn[0], new MatchKit.Spawn[0]);
+        VehicleBuilder.AddParked(director);
+        var race = director.gameObject.AddComponent<RaceDirector>();
+        race.CourseId = info.Id;
+        EditorUtility.SetDirty(race);
+
+        var cam = new GameObject("Main Camera") { tag = "MainCamera" };
+        var camera = cam.AddComponent<Camera>();
+        camera.nearClipPlane = 0.05f; camera.farClipPlane = 900f;
+        SceneLook.EnablePost(camera);
+        cam.AddComponent<AudioListener>();
+        var (lx, lz, _) = c.PointAt(0f);
+        float ly = c.HeightAt(0f);
+        cam.transform.position = new Vector3(lx - 40f, ly + 30f, lz + 60f);
+        cam.transform.LookAt(new Vector3(lx, ly, lz));
+
+        EditorSceneManager.SaveScene(scene, scenePath);
+        SceneBuilder.RegisterBuildScenes();
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[WorldBuilder] race scene {scenePath}: {info.Name}, lap {c.LapLength:F0} m, {c.Sectors} checkpoints, {grid.Count} grid slots, {cols.childCount} colliders");
+    }
+
+    // A flat circuit's field, track, grandstand and pit garages (courses 1-2).
+    static void BuildFlatCircuit(Transform root, Transform cols, WorldMeshes.Store store, RaceCourse c)
+    {
         // The field: grass round the whole course, 60 m beyond it, top at y = 0, one box collider.
         float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
         foreach (var p in c.Path) { x0 = Mathf.Min(x0, p.X); x1 = Mathf.Max(x1, p.X); z0 = Mathf.Min(z0, p.Z); z1 = Mathf.Max(z1, p.Z); }
@@ -70,41 +124,5 @@ public static partial class WorldBuilder
 
         kit.Emit(root, store);
         field.Emit(root, store, "Field", turf.Material); stands.Emit(root, store, "Stands", concrete.Material); houses.Emit(root, store, "Garages", wallMat.Material);
-        // No static batching: the meshes come from the blob at load (WorldMeshBank), after the batching would have run on empty filters
-        // (the whole course rendered black in play mode). Same as the World scene.
-        foreach (var t in root.GetComponentsInChildren<Transform>(true))
-        {
-            var flags = GameObjectUtility.GetStaticEditorFlags(t.gameObject);
-            if ((flags & StaticEditorFlags.BatchingStatic) != 0) GameObjectUtility.SetStaticEditorFlags(t.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
-        }
-        store.Finish(root.gameObject);
-
-        // The match: people start where the grid is (RaceDirector seats them in the cars), no loot, no dummies, the car models for the race.
-        var grid = c.GridSpots(RaceEvent.GridSlots);
-        var spawns = new MatchKit.Spawn[grid.Count];
-        for (int i = 0; i < grid.Count; i++)
-        {
-            float rad = grid[i].yaw * Mathf.Deg2Rad;
-            spawns[i] = MatchKit.At(grid[i].x - Mathf.Cos(rad) * 2.4f, 0.2f, grid[i].z + Mathf.Sin(rad) * 2.4f, grid[i].yaw);   // beside the driver's door
-        }
-        var director = MatchKit.AddMatch(spawns, new MatchKit.Spawn[0], new MatchKit.Spawn[0]);
-        VehicleBuilder.AddParked(director);
-        var race = director.gameObject.AddComponent<RaceDirector>();
-        race.CourseId = info.Id;
-        EditorUtility.SetDirty(race);
-
-        var cam = new GameObject("Main Camera") { tag = "MainCamera" };
-        var camera = cam.AddComponent<Camera>();
-        camera.nearClipPlane = 0.05f; camera.farClipPlane = 900f;
-        SceneLook.EnablePost(camera);
-        cam.AddComponent<AudioListener>();
-        var (lx, lz, _) = c.PointAt(0f);
-        cam.transform.position = new Vector3(lx - 40f, 30f, lz + 60f);
-        cam.transform.LookAt(new Vector3(lx, 0f, lz));
-
-        EditorSceneManager.SaveScene(scene, scenePath);
-        SceneBuilder.RegisterBuildScenes();
-        AssetDatabase.SaveAssets();
-        Debug.Log($"[WorldBuilder] race scene {scenePath}: {info.Name}, lap {c.LapLength:F0} m, {c.Sectors} checkpoints, {grid.Count} grid slots, {cols.childCount} colliders");
     }
 }

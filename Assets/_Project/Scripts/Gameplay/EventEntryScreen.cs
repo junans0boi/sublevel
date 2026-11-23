@@ -34,7 +34,8 @@ namespace Game.Gameplay
                 foreach (var t in card.GetComponentsInChildren<Text>()) Object.Destroy(t.gameObject);
                 UiPaint.Label(card.transform, "Name", 28, 20, 700, 44, c.Name, 30, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
                 UiPaint.Label(card.transform, "Info", 28, 72, 700, 32,
-                    $"한 바퀴 {c.Course.LapLength / 1000f:0.0}km · {c.Laps}바퀴 · 최대 {RaceEvent.GridSlots}대{(c.Course.BranchPath.Count > 0 ? " · 갈림길" : "")}", 20, UiPaint.T2);
+                    c.Course.Open ? $"출발→결승 {c.Course.LapLength / 1000f:0.0}km · 고저차 {Mathf.Abs(c.Course.HeightAt(c.Course.LapLength) - c.Course.HeightAt(0f)):0}m · 최대 {RaceEvent.GridSlots}대"
+                    : $"한 바퀴 {c.Course.LapLength / 1000f:0.0}km · {c.Laps}바퀴 · 최대 {RaceEvent.GridSlots}대{(c.Course.BranchPath.Count > 0 ? " · 갈림길" : "")}", 20, UiPaint.T2);
                 _cards.Add(card.GetComponent<Image>());
             }
             float by = 200f + RaceEvent.Courses.Length * 150f + 20f;
