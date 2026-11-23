@@ -15,21 +15,47 @@ namespace Game.Gameplay
         static int _regions;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Reset() { _grid = null; _regions = 0; }
+        static void Reset() { _grid = null; _regions = 0; _pending = null; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Hook() => PollutionDirector.GridSource = Build;
 
-        static PollutionGrid Build()
+        // #491: the first build took 1.6 s (Mono) on the main thread the frame after the match populated. It is pure Game.Core
+        // work, so the menu starts it on a worker thread and Build only waits for what is left.
+        static System.Threading.Tasks.Task<(PollutionGrid Grid, int Regions)> _pending;
+
+        // Main thread (Resources). Nothing to do once the grid exists or is on its way.
+        public static void Prepare()
         {
-            if (_grid != null) { PollutionDirector.MapRegionCount = _regions; return _grid; }
+            if (_grid != null || _pending != null) return;
+            var spec = LoadSpec();
+            _pending = System.Threading.Tasks.Task.Run(() => Compute(spec));
+        }
+
+        static WorldSpec LoadSpec()
+        {
             WorldSpec spec = null;
             var text = Resources.Load<TextAsset>("GameData/world");
             if (text != null) spec = JsonUtility.FromJson<WorldSpec>(text.text);
             if (spec == null || spec.Regions == null || spec.Regions.Length == 0) spec = WorldSpec.CreateDefault();
+            return spec;
+        }
+
+        static (PollutionGrid, int) Compute(WorldSpec spec)
+        {
             var plan = WorldGenerator.Generate(spec);
-            _grid = PollutionGridBuilder.Build(new WorldPlanTerrain(plan), CellMeters);
-            _regions = plan.Regions.Count;
+            return (PollutionGridBuilder.Build(new WorldPlanTerrain(plan), CellMeters), plan.Regions.Count);
+        }
+
+        static PollutionGrid Build()
+        {
+            if (_grid == null)
+            {
+                var pending = _pending;
+                _pending = null;
+                var built = pending != null ? pending.Result : Compute(LoadSpec());
+                (_grid, _regions) = built;
+            }
             PollutionDirector.MapRegionCount = _regions;
             return _grid;
         }

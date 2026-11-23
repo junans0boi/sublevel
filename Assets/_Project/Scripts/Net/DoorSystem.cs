@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
@@ -30,7 +31,7 @@ namespace Game.Net
         public WorldPlan Plan { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => Instance = null;
+        static void ResetStatics() { Instance = null; _layout = null; }
 
         public int Count => _doors.Count;
         public Door this[int index] => _doors[index];
@@ -77,14 +78,41 @@ namespace Game.Net
             }
         }
 
+        // #491: regenerating the world and every building plan for their door openings took 8 s on Mono (~1.3 s IL2CPP) on
+        // the main thread at match start. It is pure Game.Core work, so it runs on worker threads (one lot per task), started
+        // as early as the World load is known (MainMenu, DedicatedServer, Restart); Bind only waits for what is left.
+        static Task<(WorldPlan Plan, List<BuildingOpening>[] Doors)> _layout;
+
+        // Main thread (Resources). Idempotent until BuildFromMap takes the result.
+        public static void PrepareLayout()
+        {
+            if (_layout != null) return;
+            var spec = LoadSpec();
+            _layout = Task.Run(() =>
+            {
+                var plan = WorldGenerator.Generate(spec);
+                var doors = new List<BuildingOpening>[plan.Lots.Count];
+                Parallel.For(0, doors.Length, i =>
+                {
+                    var lot = plan.Lots[i];
+                    doors[i] = Buildings.Generate(lot.Kind, lot.SizeX, lot.SizeZ, unchecked((int)Hash(plan.Seed, i))).Doors;
+                });
+                return (plan, doors);
+            });
+        }
+
         // The lots stand in the scene as "Lot<nn>_<Kind>" under "Buildings"; their plans come from the world spec again.
         void BuildFromMap()
         {
             var buildings = GameObject.Find("Buildings");
             if (buildings == null) return;
-            var spec = LoadSpec();
-            if (spec == null) return;
-            var plan = Plan = WorldGenerator.Generate(spec);
+            PrepareLayout();
+            // Taken, not kept: the next load plans afresh (nothing here outlives the scene).
+            var task = _layout;
+            _layout = null;
+            (WorldPlan Plan, List<BuildingOpening>[] Doors) layout;
+            using (LoadTraceLog.Step("doors: wait for layout")) layout = task.Result;
+            var plan = Plan = layout.Plan;
             _root = new GameObject("Doors").transform;
             _root.SetParent(transform, false);
             for (int i = 0; i < plan.Lots.Count; i++)
@@ -92,8 +120,7 @@ namespace Game.Net
                 var lot = plan.Lots[i];
                 var tr = buildings.transform.Find($"Lot{i:00}_{lot.Kind}");
                 if (tr == null) continue;
-                var building = Buildings.Generate(lot.Kind, lot.SizeX, lot.SizeZ, unchecked((int)Hash(plan.Seed, i)));
-                foreach (var opening in building.Doors)
+                foreach (var opening in layout.Doors[i])
                 {
                     // Roll doors stay open: vehicles and crowds use them.
                     if (opening.Width >= 3f) continue;

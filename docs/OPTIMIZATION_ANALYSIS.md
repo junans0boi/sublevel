@@ -193,3 +193,15 @@ GC 카운터(`gc0`)가 첫 프레임에 119회 뛰어서 GC가 범인처럼 보�
 4. 메뉴 첫 프레임 셰이더 컴파일(첫 실행 775 ms) — 한 번뿐이라 낮음. ShaderVariantCollection 예열은 이번에 하지 않았다.
 
 재현: `tools/unity.sh build mac` → `Build/mac/Sublevel.app/Contents/MacOS/Sublevel -loadtrace Logs/load/x.txt -loadtrace-play -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 -ApplePersistenceIgnoreState YES`. (강제 종료한 뒤에는 macOS "창 복원" 대화상자가 실행을 막으므로 마지막 인자가 필요하다.)
+
+### 6-5. World 첫 프레임 분해와 단축 (#491, 2026-11-23)
+**Mono** mac 플레이어(`BuildScript.BuildMacReview`, Windows 빌드와 같은 백엔드)로 쟀다. `LoadTraceLog`(Game.Net)로 Net 어셈블리에서도 단계를 재고, hitch 줄마다 PlayerLoop 단계별 합(`sum loop …`)과 스크립트/렌더 분할을 적는다.
+
+| 원인 | 수정 전(Mono) | 처리 |
+|---|---|---|
+| `DoorSystem.Bind`: 문 위치를 얻으려고 월드 계획 + 건물 계획 전체를 메인 스레드에서 다시 생성 | **8.15 s**(IL2CPP 약 1.3 s) | 워커 스레드(건물별 `Parallel.For`), 메뉴 `Awake`에서 시작. Bind는 남은 만큼만 기다린다 |
+| `PollutionWorld.Build`(오염 격자): 월드 계획을 한 번 더 생성, 채움 다음 프레임의 `PollutionDirector.Update` | **1.6 s** | 메뉴에서 워커 스레드로 미리 생성 |
+| 루팅 1,650개 + 봇 80명 스폰 | 0.33 s | 그대로(작음) |
+| `WaitingHud` 첫 `Update`(게시판 생성) | 0.32 s | 남음 |
+
+메뉴 시작 → 로컬 플레이어 스폰(3회 중앙값, 같은 창·같은 조건, 자동 클릭은 메뉴가 뜬 지 약 0.4 s 뒤): **11.63 s → 4.16 s**. 첫 프레임 8.65 s → 2.47 s, 채움 다음 프레임 1.84 s → 0.39 s. 자동 클릭이 너무 빨라 아직 문 계획을 1.4 s 기다린다. 사람이 메뉴에 3 s 이상 머물면 이 대기는 0에 가깝다.

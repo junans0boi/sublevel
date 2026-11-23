@@ -114,6 +114,7 @@ namespace Game.Net
 
         void Start()
         {
+            using var step = LoadTraceLog.Step("MatchDirector.Start");
             State.Bind(_networkManager);
             // Every peer builds the same doors from the scene's elevators; scenes without elevators get none.
             Elevators = ElevatorDoors.TryCreate(gameObject);
@@ -236,20 +237,24 @@ namespace Game.Net
         void OnServerState(ServerConnectionStateArgs args)
         {
             if (args.ConnectionState != LocalConnectionState.Started) return;
+            using var step = LoadTraceLog.Step("MatchDirector server populate (total)");
             _serverStartedAt = Time.time;
             Sessions = SessionKeeper.Attach(_networkManager);
             NetPulseServer.Attach(_networkManager);
             ServerPlanDeployment();
             _waiting = HasElevators ? WaitingRoom.TryCreate(this, _networkManager) : null;
 
-            BuildingLoot.Build(_lootSpawns);
+            using (LoadTraceLog.Step("BuildingLoot.Build")) BuildingLoot.Build(_lootSpawns);
             BotFarmStats.Reset();
             BotBrawlStats.Reset();
             BotMatchStats.Reset();
-            var plan = PlanLoot();
-            for (int i = 0; i < plan.Length; i++)
+            using (LoadTraceLog.Step("loot plan + spawn"))
             {
-                ServerSpawnLootRoll(plan[i], _lootSpawns[i].position);
+                var plan = PlanLoot();
+                for (int i = 0; i < plan.Length; i++)
+                {
+                    ServerSpawnLootRoll(plan[i], _lootSpawns[i].position);
+                }
             }
 
             foreach (var point in _dummySpawns)
@@ -258,7 +263,7 @@ namespace Game.Net
                 _networkManager.ServerManager.Spawn(dummy);
             }
 
-            ServerSpawnBots();
+            using (LoadTraceLog.Step("bots spawn")) ServerSpawnBots();
         }
 
         // The bots of the match, put on the navmesh when there is one within reach. Bots are ordinary combatants:
@@ -454,6 +459,7 @@ namespace Game.Net
         void OnClientLoaded(NetworkConnection connection, bool asServer)
         {
             if (!asServer) return;
+            using var step = LoadTraceLog.Step("player spawn");
             // A returning player gets its held combatant back instead of a new one (#166).
             if (Sessions == null || !Sessions.Intercept(connection, () => ServerSpawnPlayer(connection))) ServerSpawnPlayer(connection);
             // Interest management (#167): the client sees nothing until its body exists, so give it its view now, not at the next timed check.
@@ -515,6 +521,7 @@ namespace Game.Net
         public void Restart()
         {
             if (NetSession.Dedicated) { Debug.Log("[MatchDirector] restart refused: a dedicated server's match ends on its own"); return; }
+            if (DoorSystem.Instance != null && DoorSystem.Instance.Plan != null) DoorSystem.PrepareLayout(); // #491
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
     }
