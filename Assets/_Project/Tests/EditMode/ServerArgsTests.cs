@@ -79,5 +79,21 @@ namespace Game.Tests
             Assert.IsFalse(ServerRules.ShouldEndMatch(ServerRules.NobodyCameSeconds - 1, false, 999, 0), "a match nobody reached yet is waited for");
             Assert.IsTrue(ServerRules.ShouldEndMatch(ServerRules.NobodyCameSeconds, false, 0, 0));
         }
+
+        [Test]
+        public void MatchTeamMode_IsSetEveryMatch_SoASoloMatchAfterASquadOneIsSolo() // #494
+        {
+            Assert.AreEqual(TeamMode.Squad, ServerRules.MatchTeamMode(false, TeamMode.Squad));
+            Assert.AreEqual(TeamMode.Solo, ServerRules.MatchTeamMode(false, TeamMode.Solo), "the next solo match drops the squad rules");
+            Assert.AreEqual(TeamMode.Squad, ServerRules.MatchTeamMode(true, TeamMode.Solo), "--perf-squad pins squad");
+        }
+
+        [Test]
+        public void Match_WhoseServerNeverCameUp_IsAbandonedAfterTheArrivalWait() // #496
+        {
+            Assert.IsFalse(ServerRules.ShouldAbandonMatch(ServerRules.NobodyCameSeconds - 1, false), "the scene may still be loading");
+            Assert.IsTrue(ServerRules.ShouldAbandonMatch(ServerRules.NobodyCameSeconds, false));
+            Assert.IsFalse(ServerRules.ShouldAbandonMatch(9999, true), "a running server follows ShouldEndMatch");
+        }
     }
 }

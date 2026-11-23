@@ -41,8 +41,9 @@ namespace Game.Net
             if (_outbox == null) return;
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             string id = CurrentMatchId ?? "m-" + DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH-mm-ss'Z'") + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
-            Reported = true;
-            _outbox.Enqueue(id, ResultsRules.Json(id, "battle-royale", now, rows));
+            // Reported only once the results are safe on disk; otherwise the server closes the backend's slot itself (DedicatedServer.EndMatch).
+            Reported = _outbox.Enqueue(id, ResultsRules.Json(id, "battle-royale", now, rows));
+            if (!Reported) { Debug.LogError($"[Server] results: could not be written, {rows.Count} people's results of {id} are lost"); return; }
             Debug.Log($"[Server] results: {rows.Count} people queued for the backend ({id})");
             Pump();
         }

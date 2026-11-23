@@ -329,7 +329,8 @@ namespace Game.Net
                 var all = Combatant.All;
                 for (int i = 0; i < all.Count; i++)
                     if (all[i] != null && all[i].IsServerInitialized && !_serverDead.Contains(all[i].ObjectId)) ServerSendStats(all[i]);
-                ServerPostResults();
+                // Reporting must never cost the clients the end of the match (#495).
+                try { ServerPostResults(); } catch (Exception e) { Debug.LogException(e); }
             }
             ServerSendStatus(null);
         }
