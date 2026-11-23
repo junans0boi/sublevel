@@ -193,6 +193,7 @@ namespace Game.Net
             _everHadPeople = false;
             _emptySince = -1f;
             _overSince = -1f;
+            DoorSystem.PrepareLayout(); // #491: the door plan builds on worker threads while the scene loads
             SceneManager.LoadScene(MatchScene);
             _state = StateKind.Match;
         }

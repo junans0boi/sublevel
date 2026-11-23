@@ -88,6 +88,9 @@ namespace Game.Gameplay
         {
             Instance = this;
             Time.timeScale = 1f;
+            // #491: the World's door plan and pollution grid (seconds of pure computation) build on worker threads while the menu is up.
+            DoorSystem.PrepareLayout();
+            PollutionWorld.Prepare();
             // The cursor may still be locked by the match we came from.
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
