@@ -57,6 +57,9 @@ namespace Game.Tests
             MainMenu.Instance.ShowEventEntry();
             yield return new WaitForSeconds(0.5f);
             yield return UiShot.Save(Path.Combine(folder, "event_screen.png"), 1920, 1080);
+            // Other screen shapes: a Mac (16:10), an old 4:3-ish monitor and an ultrawide.
+            foreach (var (w, h) in new[] { (1440, 900), (1280, 1024), (2560, 1080) })
+                yield return UiShot.Save(Path.Combine(folder, $"event_screen_{w}x{h}.png"), w, h);
         }
     }
 }

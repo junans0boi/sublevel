@@ -20,8 +20,11 @@ namespace Game.Gameplay
         {
             _menu = menu;
             _root = UiKit.Fill("EventEntry", parent);
-            var stage = UiKit.Rect("Stage", _root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1920f, 1080f));
-            UiPaint.Box(UiPaint.At(stage, "Back", 0, 0, 1920, 1080), UiPaint.Bg, 0);
+            // The backdrop fills the screen; the content keeps to the top-left corner. A 1920x1080 stage centred on a 16:10
+            // or 5:4 screen (the canvas is 1080 high, so narrower than 1920) lost its left edge, title and cards cut off.
+            UiPaint.Box(UiKit.Fill("Back", _root), UiPaint.Bg, 0);
+            var topLeft = new Vector2(0f, 1f);
+            var stage = UiKit.Rect("Stage", _root, topLeft, topLeft, Vector2.zero, new Vector2(1920f, 1080f));
             UiPaint.Label(stage, "Title", 64, 56, 900, 60, "이벤트", 44, UiPaint.Tx, TextAnchor.MiddleLeft, FontStyle.Bold);
             UiPaint.Label(stage, "Event", 64, 128, 900, 36, "자동차 경주 — 차에 탄 채 출발, 3·2·1·GO, 먼저 들어오는 사람이 1위", 22, UiPaint.T2);
             for (int i = 0; i < RaceEvent.Courses.Length; i++)
