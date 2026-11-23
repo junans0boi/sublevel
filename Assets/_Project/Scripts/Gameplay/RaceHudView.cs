@@ -13,6 +13,7 @@ namespace Game.Gameplay
     public sealed class RaceHudView : MonoBehaviour
     {
         Text _top, _big, _pos, _lap, _clock, _order, _resultsTitle;
+        int _sprintLeft = int.MinValue;
         readonly Text[] _cols = new Text[4];   // results: rank, name, time, best lap (one Text per column keeps them lined up)
         GameObject _resultsPanel;
         bool _left;
@@ -85,7 +86,20 @@ namespace Game.Gameplay
             bool racing = phase == RacePhase.Racing || phase == RacePhase.Finishing, end = phase == RacePhase.Results || phase == RacePhase.Over;
             int me = MyRow(m);
             _pos.text = racing && me >= 0 ? $"P{me + 1}/{m.Keys.Length}" : "";
-            if (racing && me >= 0)
+            var course = director != null ? director.Info.Course : null;
+            if (racing && me >= 0 && course != null && course.Open)
+            {
+                // A sprint (#451): what is left to the finish from the car's own place, and the time since the start line.
+                bool done = m.Done[me];
+                var car = VehicleSeat.VehicleOf(Combatant.LocalPlayer);
+                int left = car != null ? Mathf.CeilToInt(course.LapLength - Mathf.Clamp(course.Project(car.transform.position.x, car.transform.position.z).s, 0f, course.LapLength)) : -1;
+                if (done) _lap.text = "완주!";
+                else if (left != _sprintLeft) { _sprintLeft = left; _lap.text = car != null ? RaceEvent.SprintLine(course.LapLength - left, course.LapLength) : ""; }   // text only when the metres change
+                float run = m.Running[me] >= 0f ? m.Running[me] + RaceHud.SinceLast : -1f;
+                _clock.text = done ? $"기록 {RaceBoard.Time(m.Times[me])}" : $"시간 {(run >= 0f ? RaceBoard.Time(run) : "--")}";
+                if (phase == RacePhase.Finishing) _clock.text += $"\n종료까지 {Mathf.CeilToInt(Mathf.Max(0f, m.SecondsLeft - RaceHud.SinceLast))}초";
+            }
+            else if (racing && me >= 0)
             {
                 bool done = m.Done[me];
                 int toGo = m.LapsToGo != null && m.LapsToGo.Length > me ? m.LapsToGo[me] : m.Laps;   // one more after a false start
@@ -104,7 +118,7 @@ namespace Game.Gameplay
                 if (end && m.Keys != null)
                 {
                     _resultsTitle.text = director != null ? $"{director.Info.Name}  결과" : "결과";
-                    ResultsText(m, me, _cols);
+                    ResultsText(m, me, _cols, director != null && director.Info.Course.Open ? director.Info.Course.LapLength : 0f);
                 }
             }
             _resultsPanel.SetActive(end && m.Keys != null);
@@ -138,14 +152,16 @@ namespace Game.Gameplay
             return sb.ToString();
         }
 
-        static void ResultsText(RaceStandings m, int me, Text[] cols)
+        // `sprint`: a sprint's length (its last column is the average speed instead of the best lap), 0 on a circuit.
+        static void ResultsText(RaceStandings m, int me, Text[] cols, float sprint)
         {
             var sb = new System.Text.StringBuilder[4];
-            string[] head = { "순위", "이름", "기록", "최고 랩" };
+            string[] head = { "순위", "이름", "기록", sprint > 0f ? "평균 속도" : "최고 랩" };
             for (int c = 0; c < 4; c++) { sb[c] = new System.Text.StringBuilder(); sb[c].AppendLine(head[c]); }
             for (int i = 0; i < m.Keys.Length; i++)
             {
-                string[] cell = { (i + 1).ToString(), m.Names[i], m.Done[i] ? RaceBoard.Time(m.Times[i]) : "DNF", m.Best[i] > 0f ? RaceBoard.Time(m.Best[i]) : "--" };
+                string last = sprint > 0f ? (m.Done[i] ? RaceEvent.AverageKmh(sprint, m.Times[i]) : "--") : m.Best[i] > 0f ? RaceBoard.Time(m.Best[i]) : "--";
+                string[] cell = { (i + 1).ToString(), m.Names[i], m.Done[i] ? RaceBoard.Time(m.Times[i]) : "DNF", last };
                 for (int c = 0; c < 4; c++) sb[c].AppendLine(i == me ? $"<b><color=#FFB347>{cell[c]}</color></b>" : cell[c]);
             }
             for (int c = 0; c < 4; c++) cols[c].text = sb[c].ToString();
