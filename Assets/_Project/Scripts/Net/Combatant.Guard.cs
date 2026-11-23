@@ -15,6 +15,16 @@ namespace Game.Net
             return bucket.TryTake(Time.timeAsDouble, g.FireRateMargin / minInterval, g.FireBurst) || ServerGuard.Refuse(GuardKind.Rate, this, what + " requests too often");
         }
 
+        // Inventory requests (pick up, drop, swap, attach, heal, throwable choice; #503): one shared bucket, far above what the
+        // inventory screen and the pickup list produce, so a modified client cannot spawn and despawn loot thousands of times a second.
+        RequestBucket _itemRequests;
+
+        internal bool ItemRequestOk(string what)
+        {
+            var g = GameData.Rules.Guard;
+            return _itemRequests.TryTake(Time.timeAsDouble, g.ItemRequestsPerSecond, g.ItemRequestBurst) || ServerGuard.Refuse(GuardKind.Rate, this, what + " requests too often");
+        }
+
         // How far a pickup may be: the reach plus what the server's late copy of the body can be off by.
         public static float ServerPickupRange => InteractRules.Current.ReachMeters + GameData.Rules.Guard.LagSlackMeters;
 

@@ -11,7 +11,13 @@ namespace Game.Tests
         static readonly GuardRules G = new GuardRules();
 
         [Test]
-        public void RulesJson_CarriesTheGuardLimits() => Assert.AreEqual(25f, JsonUtility.FromJson<GameRules>(System.IO.File.ReadAllText("Assets/_Project/Data/Resources/GameData/rules.json")).Guard.TeleportMaxMeters);
+        public void RulesJson_CarriesTheGuardLimits()
+        {
+            var g = JsonUtility.FromJson<GameRules>(System.IO.File.ReadAllText("Assets/_Project/Data/Resources/GameData/rules.json")).Guard;
+            Assert.AreEqual(25f, g.TeleportMaxMeters);
+            Assert.AreEqual(10f, g.ItemRequestsPerSecond, "#503");
+            Assert.AreEqual(20, g.ItemRequestBurst);
+        }
 
         [Test]
         public void AVehicleExit_IsATeleportTheServerTakes()

@@ -8,6 +8,17 @@ namespace Game.Tests
     {
         static readonly VehicleDamageRules R = new VehicleDamageRules();
 
+        // #502: a driver's crash or impact report is held to what the server saw (own speed + the fastest one near, with a margin).
+        [Test]
+        public void AReportedSpeed_IsCappedByWhatTheServerSaw()
+        {
+            Assert.AreEqual(5f, VehicleDamageMath.ReportedSpeedCap(0f, 0f), 1e-4f, "standing still: under the collision damage floor");
+            Assert.Less(VehicleDamageMath.ReportedSpeedCap(0f, 0f), R.CollisionDamageMinSpeed);
+            Assert.AreEqual(30f, VehicleDamageMath.ReportedSpeedCap(20f, 0f), 1e-4f);
+            Assert.AreEqual(55f, VehicleDamageMath.ReportedSpeedCap(20f, 20f), 1e-4f, "a head-on closes at both speeds");
+            Assert.AreEqual(5f, VehicleDamageMath.ReportedSpeedCap(-3f, float.NaN), 1e-4f);
+        }
+
         // ---- Zones and health ----
 
         [Test]

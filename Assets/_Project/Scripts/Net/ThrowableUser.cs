@@ -210,7 +210,7 @@ namespace Game.Net
         }
 
         [ServerRpc]
-        public void CmdSetThrowable(int kind, bool takeOut) => ServerSetThrowable((ThrowableKind)kind, takeOut);
+        public void CmdSetThrowable(int kind, bool takeOut) { if (!_combatant.ItemRequestOk("throwableuser SetThrowable")) return; ServerSetThrowable((ThrowableKind)kind, takeOut); }
 
         // The owner's call (the T key): the host is the server, so it does not wait for the next network tick.
         public void RequestCycle()
@@ -342,12 +342,13 @@ namespace Game.Net
         }
 
         [ServerRpc]
-        public void CmdCycle() => ServerCycle();
+        public void CmdCycle() { if (!_combatant.ItemRequestOk("throwableuser Cycle")) return; ServerCycle(); }
 
         // Dropping one from the inventory screen: it lands on the ground in front as a pickup.
         [ServerRpc]
         public void CmdDropGrenade()
         {
+            if (!_combatant.ItemRequestOk("throwableuser DropGrenade")) return;
             if (_combatant.Dead.Value || Grenades.Value <= 0 || MatchDirector.Instance == null) return;
             Grenades.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = ThrowableRules.GrenadeLootKind, Amount = 1 },
@@ -357,6 +358,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropFlash()
         {
+            if (!_combatant.ItemRequestOk("throwableuser DropFlash")) return;
             if (_combatant.Dead.Value || Flashes.Value <= 0 || MatchDirector.Instance == null) return;
             Flashes.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Flash, Amount = 1 },
@@ -366,6 +368,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropMolotov()
         {
+            if (!_combatant.ItemRequestOk("throwableuser DropMolotov")) return;
             if (_combatant.Dead.Value || Molotovs.Value <= 0 || MatchDirector.Instance == null) return;
             Molotovs.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = LootKind.Molotov, Amount = 1 },
@@ -389,6 +392,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropSmoke()
         {
+            if (!_combatant.ItemRequestOk("throwableuser DropSmoke")) return;
             if (_combatant.Dead.Value || Smokes.Value <= 0 || MatchDirector.Instance == null) return;
             Smokes.Value--;
             MatchDirector.Instance.ServerSpawnLoot(new LootEntry { Kind = ThrowableRules.SmokeLootKind, Amount = 1 },

@@ -125,6 +125,7 @@ namespace Game.Net
         [ServerRpc]
         public void CmdDropArmor(int slot)
         {
+            if (!_combatant.ItemRequestOk("gear DropArmor")) return;
             if (_combatant.Dead.Value || MatchDirector.Instance == null) return;
             if (slot != (int)ArmorSlot.Helmet && slot != (int)ArmorSlot.Vest) return;
             var piece = ServerRemove((ArmorSlot)slot);

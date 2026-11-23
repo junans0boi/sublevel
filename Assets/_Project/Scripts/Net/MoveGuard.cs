@@ -44,17 +44,24 @@ namespace Game.Net
 
         double _lastTeleport = double.NegativeInfinity;
 
-        // The owner says it moved itself on purpose to `to` (CmdTeleported, #170): taken when near and not too often,
-        // otherwise refused, and the jump is then put back like any other.
+        // The owner says it moved itself on purpose to `to` (CmdTeleported, #170). Taken when the server knows why (#500, ADR-560):
+        // the island's lift and jump, a place the server itself sent the body to (any ServerCorrect, a parkour sent back), an elevator
+        // ride's cars, being carried. Anything else (leaving a vehicle) only when near, not too often, and with nothing solid on the
+        // way: a jump through a wall or a shut door is put back like any other.
         public bool TryTeleport(Vector3 to)
         {
             double now = Time.timeAsDouble;
             float meters = (to - transform.position).magnitude;
-            if (CarriedOnIsland) { Accept(to); return true; }   // the lift and the jump move the body fast on purpose (ADR-387)
+            if (!InputGuard.Finite(to.x, to.y, to.z)) return ServerGuard.Refuse(GuardKind.Arg, _combatant, "teleport to a place that is not a number");
+            if (TrustTeleports || CarriedOnIsland || Expected(to, now) || RidingTo(to)) { Accept(to); return true; }
+            // On a teammate's back the body goes where the carrier walks (ADR-129), walls brushed by the carried legs included.
+            if (_combatant.BeingCarried && meters <= GameData.Rules.Guard.TeleportMaxMeters) { Accept(to); return true; }
             // The owner arriving where the server itself put it (island -> elevator, any ServerCorrect) echoes CmdTeleported: no jump at all.
             if ((to - _good).sqrMagnitude < MoveReconcile.SlackMeters * MoveReconcile.SlackMeters) { Accept(to); return true; }
-            if (!TrustTeleports && !InputGuard.TeleportOk(meters, now - _lastTeleport, GameData.Rules.Guard))
+            if (!InputGuard.TeleportOk(meters, now - _lastTeleport, GameData.Rules.Guard))
                 return ServerGuard.Refuse(GuardKind.Teleport, _combatant, $"teleport {meters:F1} m, {now - _lastTeleport:F2} s after the last");
+            if (!ClearPath(transform.position, to))
+                return ServerGuard.Refuse(GuardKind.Teleport, _combatant, $"teleport {meters:F1} m through something solid");
             _lastTeleport = now;
             Accept(to);
             return true;
@@ -62,11 +69,50 @@ namespace Game.Net
 
         bool CarriedOnIsland => WaitingRoom.Current != null && WaitingRoom.Current.Carries(_combatant);
 
+        // An elevator ride: the owner moves itself from the departure car to the arrival car, km apart.
+        const float StationReachMeters = 6f;
+        bool RidingTo(Vector3 to) => ElevatorRides.Instance != null && ElevatorRides.Instance.ServerRideNear(_combatant, to, StationReachMeters);
+
+        // A place the server sent the owner to (ServerCorrect, a parkour sent back): the owner's echo is taken for a while, wherever
+        // the body was meanwhile (a parkour sent back crosses the wall it went over).
+        const float ExpectSeconds = 3f;
+        Vector3 _expected;
+        double _expectedUntil = double.NegativeInfinity;
+
+        public void Expect(Vector3 at)
+        {
+            _expected = at;
+            _expectedUntil = Time.timeAsDouble + ExpectSeconds;
+        }
+
+        bool Expected(Vector3 to, double now) =>
+            now <= _expectedUntil && (to - _expected).sqrMagnitude < MoveReconcile.SlackMeters * MoveReconcile.SlackMeters;
+
+        static readonly RaycastHit[] PathHits = new RaycastHit[16];
+        const float PathHeight = 1f;   // about the hips: a kerb or a step is no wall, a window sill is
+
+        // Nothing solid between two feet positions but people and vehicles (leaving a car crosses its own body).
+        public static bool ClearPath(Vector3 from, Vector3 to)
+        {
+            var a = from + Vector3.up * PathHeight;
+            var d = to + Vector3.up * PathHeight - a;
+            float length = d.magnitude;
+            if (length < 1e-3f) return true;
+            int n = Physics.RaycastNonAlloc(a, d / length, PathHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                var col = PathHits[i].collider;
+                if (col.GetComponentInParent<Combatant>() == null && col.GetComponentInParent<Vehicle>() == null) return false;
+            }
+            return true;
+        }
+
         // The server moved this body itself (waiting island -> elevator): that place is the good one now.
         public void ServerRelocate(Vector3 to) => Accept(to);
 
         void Accept(Vector3 to)
         {
+            _stance?.ServerForgetFall();   // being moved is not a fall (#501)
             _good = to;
             _sampled = Time.timeAsDouble;
             _pending = false;

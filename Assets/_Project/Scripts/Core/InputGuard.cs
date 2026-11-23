@@ -18,6 +18,9 @@ namespace Game.Core
         public int FireBurst = 4;
         // Bare hands or a melee weapon: requests per second, and the burst.
         public float MeleeRequestsPerSecond = 8f;
+        // Inventory requests (#503): per second on average, and the burst (a quick run of clicks or a pickup list emptied fast).
+        public float ItemRequestsPerSecond = 10f;
+        public int ItemRequestBurst = 20;
         // A look pitch beyond this is not a head a player can turn (the server clamps it to 90 anyway).
         public float MaxLookPitchDegrees = 91f;
         // The log says one line per kind this often, with how many were left out.
