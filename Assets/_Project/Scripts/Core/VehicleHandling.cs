@@ -18,6 +18,14 @@ namespace Game.Core
         public float OffRoadSpeedFactor;
         public float BrakeDecel;
         public float RedlineRpm;          // the gearbox's redline (ADR-558)
+        // The driver's instrument cluster (ADR-558 amended): "A" twin round, "B" half-moon, "C" digital sport, "D" classic
+        // analog; its accent colour ("#RRGGBB"); compact = a smaller cluster (the motorcycle).
+        public string Cluster;
+        public string ClusterAccent;
+        public bool ClusterCompact;
+
+        // A row that only carries a cluster: every motorcycle. Race cars read their own model's row (cluster only, ADR-558a).
+        public const string MotorcycleRow = "Motorcycle";
 
         public static VehicleHandling[] Current = Defaults();
 
@@ -26,6 +34,13 @@ namespace Game.Core
             if (string.IsNullOrEmpty(model) || Current == null) return null;
             foreach (var h in Current) if (h != null && h.Model == model) return h;
             return null;
+        }
+
+        // The cluster row for a vehicle: the motorcycle's, else its own model's (race cars too); null when none has one.
+        public static VehicleHandling ClusterFor(string model, bool motorcycle)
+        {
+            var row = For(motorcycle ? MotorcycleRow : model);
+            return row != null && !string.IsNullOrEmpty(row.Cluster) ? row : null;
         }
 
         public void ApplyTo(VehicleRules r)
@@ -49,11 +64,12 @@ namespace Game.Core
         // Same numbers as rules.json, for tests and for a missing list.
         public static VehicleHandling[] Defaults() => new[]
         {
-            new VehicleHandling { Model = "FairheavenLT80", MaxSpeedKmh = 175f, BoostMaxKmh = 195f, EngineAccel = 7f, RedlineRpm = 7200f, TyreGrip = 1.2f, SteerMaxDeg = 34f },
-            new VehicleHandling { Model = "FairheavenSW84", MaxSpeedKmh = 160f, BoostMaxKmh = 175f, EngineAccel = 6.2f, RedlineRpm = 6500f, TyreGrip = 1.15f },
-            new VehicleHandling { Model = "GoblinV12", MaxSpeedKmh = 220f, BoostMaxKmh = 240f, EngineAccel = 9f, RedlineRpm = 8200f, TyreGrip = 1.35f, SteerAtTopSpeedDeg = 7f, BrakeDecel = 10f },
-            new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 130f, BoostMaxKmh = 145f, EngineAccel = 5f, RedlineRpm = 5500f, TyreGrip = 1.0f, SteerMaxDeg = 30f, BrakeDecel = 8f },
-            new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 150f, BoostMaxKmh = 165f, EngineAccel = 5.8f, RedlineRpm = 6000f, TyreGrip = 1.05f, OffRoadSpeedFactor = 1f },
+            new VehicleHandling { Model = "FairheavenLT80", MaxSpeedKmh = 175f, BoostMaxKmh = 195f, EngineAccel = 7f, RedlineRpm = 7200f, TyreGrip = 1.2f, SteerMaxDeg = 34f, Cluster = "D", ClusterAccent = "#F2F2F2" },
+            new VehicleHandling { Model = "FairheavenSW84", MaxSpeedKmh = 160f, BoostMaxKmh = 175f, EngineAccel = 6.2f, RedlineRpm = 6500f, TyreGrip = 1.15f, Cluster = "A", ClusterAccent = "#4DA3FF" },
+            new VehicleHandling { Model = "GoblinV12", MaxSpeedKmh = 220f, BoostMaxKmh = 240f, EngineAccel = 9f, RedlineRpm = 8200f, TyreGrip = 1.35f, SteerAtTopSpeedDeg = 7f, BrakeDecel = 10f, Cluster = "C", ClusterAccent = "#FF3B30" },
+            new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 130f, BoostMaxKmh = 145f, EngineAccel = 5f, RedlineRpm = 5500f, TyreGrip = 1.0f, SteerMaxDeg = 30f, BrakeDecel = 8f, Cluster = "B", ClusterAccent = "#4CD964" },
+            new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 150f, BoostMaxKmh = 165f, EngineAccel = 5.8f, RedlineRpm = 6000f, TyreGrip = 1.05f, OffRoadSpeedFactor = 1f, Cluster = "D", ClusterAccent = "#FFB020" },
+            new VehicleHandling { Model = MotorcycleRow, Cluster = "C", ClusterAccent = "#FFD60A", ClusterCompact = true },
         };
     }
 }

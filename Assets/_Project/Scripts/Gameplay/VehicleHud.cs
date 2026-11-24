@@ -5,8 +5,8 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The vehicle readout (ADR-075, ADR-558): while the local player sits in a vehicle, the instrument cluster bottom right
-    // (VehicleCluster: tachometer, gear, shift lights, speed, fuel, body).
+    // The vehicle readout (ADR-075, ADR-558): while the local player sits in a vehicle, the instrument cluster either side of
+    // the health bar (VehicleCluster: the model's style of tachometer, gear, shift lights, speed, fuel, body).
     // Above it the jerrycan line: "J 제리캔 주유" when a can could go in here, the pour's progress while pouring.
     // Installs itself next to every match like the kill feed and the team HUD; nothing refers to it.
     public class VehicleHud : MonoBehaviour
@@ -20,21 +20,19 @@ namespace Game.Gameplay
         public static VehicleHud Instance { get; private set; }
 
         // ---- Read-only state for tests ----
-        public bool PlateShown => _canvas != null && _canvas.enabled && (_side.Root.gameObject.activeSelf || _centre.Root.gameObject.activeSelf);
-        public int SpeedShown => Cluster.SpeedShown;
-        public int FuelShown => Cluster.FuelShown;
-        public int ConditionShown => Cluster.ConditionShown;
-        public bool FuelLowShown => Cluster.FuelLowShown;
-        // The cluster on screen: in the weapon panel's place for a driver with empty hands, else over the minimap.
-        public VehicleCluster Cluster => TakesWeaponPanel ? _centre : _side;
-        // The local driver has nothing in hand: Hud hides its weapon panel and the cluster takes its place (ADR-558).
-        public static bool TakesWeaponPanel { get; private set; }
+        public bool PlateShown => _canvas != null && _canvas.enabled && _cluster != null && _cluster.Root.gameObject.activeSelf;
+        public int SpeedShown => _cluster != null ? _cluster.SpeedShown : 0;
+        public int FuelShown => _cluster != null ? _cluster.FuelShown : -1;
+        public int ConditionShown => _cluster != null ? _cluster.ConditionShown : -1;
+        public bool FuelLowShown => _cluster != null && _cluster.FuelLowShown;
+        // The cluster on screen, built for the vehicle's model (rebuilt on a change of car); null before the first one.
+        public VehicleCluster Cluster => _cluster;
         public bool JerrycanShown => _canvas != null && _canvas.enabled && _can.activeSelf;
         public string JerrycanText => _canLabel != null ? _canLabel.text : "";
 
         Canvas _canvas;
         GameObject _can, _canBar;
-        VehicleCluster _side, _centre;
+        VehicleCluster _cluster;
         RectTransform _canFill;
         Text _canLabel;
 
@@ -68,7 +66,7 @@ namespace Game.Gameplay
 
         void OnDestroy()
         {
-            if (Instance == this) { Instance = null; TakesWeaponPanel = false; }
+            if (Instance == this) Instance = null;
         }
 
         void LateUpdate()
@@ -86,12 +84,9 @@ namespace Game.Gameplay
             // An event race's results table takes the screen (ADR-519): the speed, fuel and body bars go with the race.
             drawn &= !(Vehicle.EventRace && (RaceHud.Phase == Game.Core.RacePhase.Results || RaceHud.Phase == Game.Core.RacePhase.Over));
             if (_canvas.enabled != drawn) _canvas.enabled = drawn;
-            if (!drawn) { TakesWeaponPanel = false; return; }
+            if (!drawn) return;
 
-            bool centre = vehicle != null && VehicleSeat.TryGet(me, out _, out int seat) && seat == 0 && me.ActiveWeaponId == 0;
-            TakesWeaponPanel = centre;
-            Show(_side.Root.gameObject, vehicle != null && !centre);
-            Show(_centre.Root.gameObject, centre);
+            if (_cluster != null) Show(_cluster.Root.gameObject, vehicle != null);
             if (vehicle != null) TickPlate(vehicle);
 
             Show(_can, pouring || canPour);
@@ -104,7 +99,25 @@ namespace Game.Gameplay
             else if (canPour) SetText(_canLabel, "J  제리캔 주유  (" + HudDigits.IntText(cans.Count.Value) + ")");
         }
 
-        void TickPlate(Vehicle vehicle) => Cluster.Tick(vehicle);
+        void TickPlate(Vehicle v)
+        {
+            var r = v.Rules;
+            var row = VehicleHandling.ClusterFor(v.ModelName, v.IsMotorcycle);
+            float redline = v.RedlineRpm, top = VehicleCluster.SpeedMax(r.BoostMaxKmh);
+            if (_cluster == null || !_cluster.BuiltFor(row, redline, top))
+            {
+                if (_cluster != null) Destroy(_cluster.Root.gameObject);
+                _cluster = new VehicleCluster(_canvas.transform, row, redline, r.Gearbox != null ? r.Gearbox.ShiftUpShare : 0.92f, top);
+            }
+            Relayout();
+            _cluster.Tick(v);
+        }
+
+        // Places the gauges for the canvas's current width (a capture renders at another size between frames).
+        public void Relayout()
+        {
+            if (_cluster != null) _cluster.Place(((RectTransform)_canvas.transform).rect.width);
+        }
 
         static void Show(GameObject go, bool on)
         {
@@ -124,10 +137,6 @@ namespace Game.Gameplay
             _canvas.transform.SetParent(transform, false);
             var root = _canvas.transform;
             var bottom = new Vector2(0.5f, 0f);
-            var left = new Vector2(0f, 0.5f);
-
-            _side = new VehicleCluster(root, false);
-            _centre = new VehicleCluster(root, true);
 
             var can = Panel("Jerrycan", root, bottom, new Vector2(0f, PlateY + Height + Gap), new Vector2(360f, CanHeight));
             _canLabel = UiKit.Label(UiKit.Rect("Label", can, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 2f), new Vector2(340f, 26f)),

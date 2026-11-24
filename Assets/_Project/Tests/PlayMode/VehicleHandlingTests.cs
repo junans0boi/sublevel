@@ -243,20 +243,24 @@ namespace Game.Tests
             Assert.LessOrEqual(v.EngineRpm, v.RedlineRpm + 1f);
         }
 
-        // Renders the player's camera with every overlay canvas on it into a 1920x1080 PNG (batch mode has no screen).
-        static void Snap(string path)
+        // Renders the player's camera with every overlay canvas on it into a w x h PNG (batch mode has no screen): the
+        // canvases are scaled for that size and the vehicle cluster re-placed for it first.
+        static void Snap(string path, int w = 1920, int h = 1080)
         {
             var cam = PlayerController.Local.Camera;
-            var rt = new RenderTexture(1920, 1080, 24);
+            var rt = new RenderTexture(w, h, 24);
+            var before = cam.targetTexture;
+            cam.targetTexture = rt;
             var moved = new System.Collections.Generic.List<Canvas>();
             foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
             {
                 if (!c.isRootCanvas || !c.enabled || c.renderMode != RenderMode.ScreenSpaceOverlay) continue;
                 c.renderMode = RenderMode.ScreenSpaceCamera; c.worldCamera = cam; c.planeDistance = cam.nearClipPlane + 0.05f;
+                Rescale(c);
                 moved.Add(c);
             }
-            var before = cam.targetTexture;
-            cam.targetTexture = rt;
+            Canvas.ForceUpdateCanvases();
+            if (VehicleHud.Instance != null) VehicleHud.Instance.Relayout();
             Canvas.ForceUpdateCanvases();
             cam.Render();
             RenderTexture.active = rt;
@@ -266,15 +270,26 @@ namespace Game.Tests
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
             RenderTexture.active = null;
             cam.targetTexture = before;
-            foreach (var c in moved) { c.renderMode = RenderMode.ScreenSpaceOverlay; c.worldCamera = null; }
+            foreach (var c in moved) { c.renderMode = RenderMode.ScreenSpaceOverlay; c.worldCamera = null; Rescale(c); }
             UnityEngine.Object.Destroy(tex); rt.Release(); UnityEngine.Object.Destroy(rt);
         }
 
-        // Screenshots of the instrument cluster (ADR-558) under way: Logs/cluster/*.png. Tuning aid, judged by eye.
-        [UnityTest, Explicit("capture")]
-        public IEnumerator CaptureCluster()
+        // A CanvasScaler recomputes its scale on enable.
+        static void Rescale(Canvas c)
         {
-            _model = "GoblinV12";
+            var scaler = c.GetComponent<UnityEngine.UI.CanvasScaler>();
+            if (scaler == null) return;
+            scaler.enabled = false; scaler.enabled = true;
+        }
+
+        // The four cluster styles (ADR-558 amended): A SW84, B Shvan92, C GoblinV12, D LT80.
+        public static readonly string[] ClusterModels = { "FairheavenSW84", "Shvan92", "GoblinV12", "FairheavenLT80" };
+
+        // Screenshots of the instrument cluster under way: Logs/cluster/*.png at 1920x1080, 16:10 and 2560x1440. Judged by eye.
+        [UnityTest, Explicit("capture")]
+        public IEnumerator CaptureCluster([ValueSource(nameof(ClusterModels))] string model)
+        {
+            _model = model;
             yield return Load();
             var v = Car();
             yield return Board(v);
@@ -282,16 +297,18 @@ namespace Game.Tests
             yield return Roll(v, new Vector3(-180f, 0f, 0f), 0f);
             _keys.Frame = Press(1f);
             float start = Time.time;
-            foreach (float at in new[] { 0.6f, 1.6f, 3.2f, 5.5f })
+            char style = VehicleHud.Instance.Cluster != null ? VehicleHud.Instance.Cluster.Style : '?';
+            foreach (float at in new[] { 1.2f, 3.4f })
             {
                 while (Time.time - start < at) yield return null;
                 yield return null;
-                Snap($"Logs/cluster/third_{at:F1}s_{v.SpeedKmh:F0}kmh_g{v.Gear}.png");
+                style = VehicleHud.Instance.Cluster.Style;
+                Snap($"Logs/cluster/{style}_{model}_{at:F1}s_{v.SpeedKmh:F0}kmh_g{v.Gear}.png");
             }
-            _keys.Frame = new VehicleInputFrame { Seat = -1, Throttle = 1f, ToggleView = true };
-            yield return new WaitForSeconds(0.8f);
-            Snap($"Logs/cluster/first_{v.SpeedKmh:F0}kmh_g{v.Gear}.png");
+            Snap($"Logs/cluster/{style}_{model}_16x10.png", 1728, 1080);
+            Snap($"Logs/cluster/{style}_{model}_2560x1440.png", 2560, 1440);
             _keys.Frame = new VehicleInputFrame { Seat = -1 };
+            Assert.AreEqual(VehicleHandling.For(model).Cluster, style.ToString(), "the model's own style");
         }
 
         // Driving onto a 12° slope (straight, and with a little steer) at speed: the car climbs, it does not turn round.

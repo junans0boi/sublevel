@@ -248,7 +248,7 @@ namespace Game.Gameplay
             bool dead = me.Dead.Value;
             TickHealth(me, dead);
             TickWeapons(me);
-            Show(_weaponPanel, !ScopeView.HidesHudWeapon && !VehicleHud.TakesWeaponPanel);   // a driver with empty hands: the instrument cluster sits there (ADR-558)
+            Show(_weaponPanel, !ScopeView.HidesHudWeapon);
             _strip.Tick(me);
             _status.Tick(me);
             TickDoorNotice();
