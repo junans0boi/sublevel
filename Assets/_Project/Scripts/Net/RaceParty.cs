@@ -48,6 +48,20 @@ namespace Game.Net
             return s;
         }
 
+        // My place in a race ticket's snapshot (#521): the lobby request's course (1-based, RaceEvent.Courses), laps, bots, my car (model id)
+        // and paint (the room's 0..5), and the party's size. Null when the snapshot names no known course or does not list me.
+        public static (int evt, int laps, int bots, string car, int paint, int people)? QueueRequest(RaceTicketDto race, long me)
+        {
+            int evt = race == null ? 0 : Array.FindIndex(RaceEvent.Courses, c => c.Id == race.course) + 1;
+            var mine = evt > 0 && race.racers != null ? Array.Find(race.racers, r => r.account_id == me) : null;
+            if (mine == null || mine.paint < 0 || mine.paint >= RaceLobby.Paints) return null;
+            return (evt, race.laps, race.bots, CarFromWire(mine.car), mine.paint, race.racers.Length);
+        }
+
+        // Back from a race (#521): the room is everyone unready; once it is online again my ready on the backend is cleared too.
+        bool _unready;
+        public void UnreadyWhenOnline() => _unready = true;
+
         // The toast to show once (a refusal, a kick), else null.
         public string TakeToast() { var t = _toast; _toast = null; return t; }
 
@@ -66,6 +80,11 @@ namespace Game.Net
                     Online = true;
                     Quietly(() => _room.Load(ToState(p)));
                     _room.Lines.Add($"파티 방에 들어왔습니다. 방장: {_room.Member(_room.HostId)?.Name}");
+                }
+                if (_unready)
+                {
+                    _unready = false;
+                    if (_room.Member(_me)?.Ready == true) Run(() => _room.ToggleReady(_me), MyRace);
                 }
                 return true;
             }

@@ -22,6 +22,9 @@ namespace Game.Core
                 case "already_queued": return "이미 대기 중인 사람이 있다.";
                 case "nickname_required": return "닉네임을 먼저 정해야 한다. 사이트에서 설정하자.";
                 case "not_cancellable": return "이미 끝난 매칭이다.";
+                case "not_ready": return "모두 준비해야 출발할 수 있다.";   // a race ticket (#521): a member unreadied meanwhile
+                case "not_in_party": return "파티가 없어 출발할 수 없다.";
+                case "no_ticket": return "매칭이 취소되었다.";             // followed ticket gone: another member cancelled it
             }
             if (status == 401) return "로그인이 만료되었다. 런처에서 다시 실행하자.";
             if (status == 0) return "매칭 서버에 연결하지 못했다.";

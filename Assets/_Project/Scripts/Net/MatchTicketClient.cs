@@ -22,6 +22,8 @@ namespace Game.Net
         public string Host { get; private set; }
         public int Port { get; private set; }
         public int Bots { get; private set; }
+        public string Mode { get; private set; }          // the ticket's mode ("battle-royale", "race")
+        public RaceTicketDto Race { get; private set; }   // a race ticket's snapshot of the room (#521)
         public event Action Changed;
         // A party member who did not start the match still has to join it: while Watching and idle, an existing ticket of the party is adopted.
         public bool Watching;
@@ -32,7 +34,7 @@ namespace Game.Net
         public void Start(string mode, double now)
         {
             if (State == StateKind.Queued || _busy) return;
-            State = StateKind.Queued; Text = "매칭 요청 중…"; Host = null; _ticketId = null; Changed?.Invoke();
+            State = StateKind.Queued; Text = "매칭 요청 중…"; Host = null; _ticketId = null; Mode = mode; Race = null; Changed?.Invoke();
             Run(_backend.CreateTicket(mode), r => ApplyCreate(r, now), now);
         }
 
@@ -72,7 +74,9 @@ namespace Game.Net
                 }), TaskContinuationOptions.ExecuteSynchronously);
                 return;
             }
-            if (State != StateKind.Queued || _busy || _ticketId == null || now < _nextPoll) return;
+            // A matched race ticket is still followed until the race starts (Consume): a cancel by another member shows up as no ticket (#521).
+            bool follow = State == StateKind.Queued || (State == StateKind.Matched && Mode == "race");
+            if (!follow || _busy || _ticketId == null || now < _nextPoll) return;
             Run(_backend.CurrentTicket(), r => Apply(r), now);
         }
 
@@ -85,10 +89,12 @@ namespace Game.Net
 
         void Apply(ApiResult<TicketDto> r)
         {
-            if (State != StateKind.Queued) return; // cancelled while the answer was on its way
+            if (State != StateKind.Queued && State != StateKind.Matched) return; // cancelled (or consumed) while the answer was on its way
             if (!r.Ok || r.Value == null) { Fail(TicketRules.ErrorText(r.Status, r.Error)); return; }
             var t = r.Value;
             _ticketId = t.id;
+            if (!string.IsNullOrEmpty(t.mode)) Mode = t.mode;
+            Race = t.race;
             if (t.status == "matched" && t.match != null && t.match.server != null)
             {
                 State = StateKind.Matched; Host = t.match.server.host; Port = t.match.server.port; Bots = t.match.bots; Text = "판이 잡혔다. 접속 중…";

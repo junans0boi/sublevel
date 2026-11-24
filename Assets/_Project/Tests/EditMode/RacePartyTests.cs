@@ -81,6 +81,47 @@ namespace Game.Tests
         void Poll() { _now += SocialClient.PartyEvery + 0.01; Frame(); Frame(); }
         void Settle(ApiResult<PartyEnvelope> r) { _f.Pending.SetResult(r); Frame(); }
 
+        // #521: my place in the race ticket's snapshot -> the lobby request (course 1-based, laps, bots, my car as a model id, my paint, party size).
+        [Test]
+        public void QueueRequest_FromTheTicketSnapshot_TheRoomsCourseAndMyCar()
+        {
+            var race = new RaceTicketDto { course = "pass_loop", laps = 3, fill_bots = true, bots = 4,
+                racers = new[] { new RaceRacerDto { account_id = 7, car = "GoblinV12", paint = 2 }, new RaceRacerDto { account_id = 9, car = "Shvan92", paint = 5 } } };
+            var r = RaceParty.QueueRequest(race, 9).Value;
+            Assert.AreEqual(System.Array.FindIndex(RaceEvent.Courses, c => c.Id == "pass_loop") + 1, r.evt);
+            Assert.AreEqual(3, r.laps); Assert.AreEqual(4, r.bots); Assert.AreEqual(2, r.people);
+            Assert.AreEqual("Shvan92", r.car); Assert.AreEqual(5, r.paint);
+            Assert.AreEqual("GoblinV12", RaceParty.QueueRequest(race, 7).Value.car);
+            race.racers[0].car = "LT80";
+            Assert.AreEqual("FairheavenLT80", RaceParty.QueueRequest(race, 7).Value.car, "wire id -> the garage's model id");
+            Assert.IsNull(RaceParty.QueueRequest(race, 8), "not a racer of this ticket");
+            Assert.IsNull(RaceParty.QueueRequest(new RaceTicketDto(), 9), "no race in the ticket (JsonUtility's empty object)");
+            race.racers[1].paint = 9;
+            Assert.IsNull(RaceParty.QueueRequest(race, 9), "paint out of range");
+        }
+
+        // #521: back from the race the room is everyone unready; my ready on the backend is cleared once the room is online again.
+        [Test]
+        public void BackFromTheRace_ClearsMyReadyOnTheBackend()
+        {
+            Setup(9, View(7, Member(7, "Alice"), Member(9, "Bobby", ready: true)));
+            _room.BackToRoom();
+            _party.UnreadyWhenOnline();
+            Frame(); Frame();
+            Assert.IsTrue(_party.Online);
+            Assert.IsFalse(_room.Member(9).Ready, "at once");
+            CollectionAssert.AreEqual(new[] { "me LT80|0|False" }, _f.Sent);
+            Settle(ApiResult<PartyEnvelope>.Success(View(7, Member(7, "Alice"), Member(9, "Bobby"))));
+            Poll();
+            Assert.AreEqual(1, _f.Sent.Count, "once");
+
+            // the host has no ready: nothing to send
+            Setup(7, View(7, Member(7, "Alice"), Member(9, "Bobby", ready: true)));
+            _party.UnreadyWhenOnline();
+            Frame(); Frame();
+            Assert.AreEqual(0, _f.Sent.Count);
+        }
+
         [Test]
         public void PartyOfTwo_FeedsTheRoom_WithModelCarsAndTheLeaderAsHost()
         {
