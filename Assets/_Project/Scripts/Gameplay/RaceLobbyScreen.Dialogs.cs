@@ -159,7 +159,7 @@ namespace Game.Gameplay
         void GarageBox()
         {
             const float W = 1320, Hd = 837, LW = 360, PX = Pad + LW + 24, PW = W - PX - Pad;
-            var box = Frame(W, Hd, "차고", "레이스에서는 차마다 성능이 다릅니다 (밸런스 제안 수치)", 105);
+            var box = Frame(W, Hd, "차고", "레이스에서는 차마다 성능이 다릅니다", 105);
             for (int i = 0; i < Cars.Length; i++)
             {
                 int k = i;
