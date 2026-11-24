@@ -84,11 +84,11 @@ namespace Game.Core
         // battle-royale row's (dial only); MassKg is the race's 내구.
         public static VehicleHandling[] RaceDefaults() => new[]
         {
-            new VehicleHandling { Model = "GoblinV12", MaxSpeedKmh = 100f, BoostMaxKmh = 117f, EngineAccel = 6.6f, TyreGrip = 1.08f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8f, BrakeDecel = 10f, OffRoadSpeedFactor = 0.8f, MassKg = 1200f },
+            new VehicleHandling { Model = "GoblinV12", MaxSpeedKmh = 100f, BoostMaxKmh = 115f, EngineAccel = 6.6f, TyreGrip = 1.04f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8f, BrakeDecel = 10f, OffRoadSpeedFactor = 0.8f, MassKg = 1200f },
             new VehicleHandling { Model = "FairheavenLT80", MaxSpeedKmh = 94f, BoostMaxKmh = 110f, EngineAccel = 5.9f, TyreGrip = 1.15f, SteerMaxDeg = 32f, SteerAtTopSpeedDeg = 9f, BrakeDecel = 9f, OffRoadSpeedFactor = 0.85f, MassKg = 1250f },
             new VehicleHandling { Model = "FairheavenSW84", MaxSpeedKmh = 90f, BoostMaxKmh = 105f, EngineAccel = 5.5f, TyreGrip = 1.22f, SteerMaxDeg = 34f, SteerAtTopSpeedDeg = 10.5f, BrakeDecel = 9.5f, OffRoadSpeedFactor = 0.85f, MassKg = 1350f },
-            new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 88f, BoostMaxKmh = 103f, EngineAccel = 5.4f, TyreGrip = 1.18f, SteerMaxDeg = 31f, SteerAtTopSpeedDeg = 9f, BrakeDecel = 8.5f, OffRoadSpeedFactor = 1f, MassKg = 1900f },
-            new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 85f, BoostMaxKmh = 100f, EngineAccel = 5f, TyreGrip = 1.12f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8.5f, BrakeDecel = 8f, OffRoadSpeedFactor = 0.85f, MassKg = 2000f },
+            new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 88f, BoostMaxKmh = 103f, EngineAccel = 5.55f, TyreGrip = 1.24f, SteerMaxDeg = 31f, SteerAtTopSpeedDeg = 9f, BrakeDecel = 8.5f, OffRoadSpeedFactor = 1f, MassKg = 1900f },
+            new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 86f, BoostMaxKmh = 103f, EngineAccel = 5.15f, TyreGrip = 1.15f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8.5f, BrakeDecel = 8f, OffRoadSpeedFactor = 0.85f, MassKg = 2000f },
         };
     }
 }
