@@ -70,6 +70,38 @@ namespace Game.Core
         }
     }
 
+    // Gaps to the leader (#510, ADR-562): the server notes each racer's race time at fixed marks of its race progress (RaceLap.Progress,
+    // every MarkMeters from the line). A car's gap is its time at the furthest mark it has reached minus the leader's time at that mark.
+    public sealed class RaceSplits
+    {
+        public const float MarkMeters = 25f;
+        readonly List<float> _at = new List<float>();
+        public int Marks => _at.Count;
+        public float At(int mark) => _at[mark];
+
+        // `time` (seconds since GO) for every mark up to `progress` not reached before: a jump over several marks gives them all this time.
+        public void Record(float progress, float time)
+        {
+            while (progress >= _at.Count * MarkMeters) _at.Add(time);
+        }
+
+        // Seconds behind the leader for each racer in race order: 0 for the leader, -1 while not known (no mark reached yet). Finished cars
+        // by finish time; the rest at the furthest mark both they and the leader have reached. Never less than the car ahead's (the order
+        // is by where the cars are now, a mark can be up to MarkMeters old: the gap to the car ahead is never negative).
+        public static float[] Gaps(IReadOnlyList<RaceSplits> order, IReadOnlyList<bool> finished, IReadOnlyList<float> finishTime)
+        {
+            var gaps = new float[order.Count];
+            for (int i = 1; i < order.Count; i++)
+            {
+                if (finished[i] && finished[0]) { gaps[i] = Math.Max(0f, finishTime[i] - finishTime[0]); continue; }
+                int k = Math.Min(order[i].Marks, order[0].Marks) - 1;
+                gaps[i] = k < 0 ? -1f : Math.Max(0f, order[i].At(k) - order[0].At(k));
+            }
+            for (int i = 2; i < gaps.Length; i++) if (gaps[i] >= 0f && gaps[i] < gaps[i - 1]) gaps[i] = gaps[i - 1];
+            return gaps;
+        }
+    }
+
     // The room's best laps (ADR-509): one best per person (key: their connection), kept only while the room is open.
     public sealed class RaceRecords
     {
