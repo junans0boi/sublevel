@@ -21,7 +21,7 @@ namespace Game.Tests
             public Task<ApiResult<bool>> AcceptFriend(long i) => Ok(true);
             public Task<ApiResult<bool>> RemoveFriend(long i) => Ok(true);
             public Task<ApiResult<PartyEnvelope>> Party() { PartyCalls++; return Ok(PartyNow); }
-            public Task<ApiResult<bool>> InviteToParty(long i) => Ok(true);
+            public Task<ApiResult<PartyEnvelope>> InviteToParty(long i) => Ok(new PartyEnvelope());
             public Task<ApiResult<InvitesDto>> PartyInvites() => Ok(new InvitesDto { invites = new[] { new InviteDto { party_id = 3, from = new InviteFromDto { nickname = "Alice" } } } });
             public Task<ApiResult<bool>> AcceptInvite(long i) => Ok(true);
             public Task<ApiResult<bool>> DeclineInvite(long i) => Ok(true);

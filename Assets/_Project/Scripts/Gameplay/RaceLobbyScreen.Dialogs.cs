@@ -1,19 +1,21 @@
 using System;
+using System.Linq;
 using Game.Core;
+using Game.Net;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The room's garage (#514), course and settings (#515) dialogs, after the mockup's garageHTML / courseHTML / settingsHTML
-    // (880 / 880 / 520 px wide, at the stage's 1.5x). Each edits a draft; 이 차로 결정 / 이 코스로 / 저장 hand it to the RaceLobby
+    // The room's garage (#514), course and settings (#515) and invite (#520) dialogs, after the mockup's garageHTML / courseHTML /
+    // settingsHTML / inviteHTML (880 / 880 / 520 / 560 px wide, at the stage's 1.5x). Each edits a draft; 이 차로 결정 / 이 코스로 / 저장 hand it to the RaceLobby
     // command (which refuses a ready guest's car, a guest's course or settings, an empty name). Redrawn whole like the rest of the room.
     public partial class RaceLobbyScreen
     {
         // Mockup CARS[].line, in Cars order; the cluster style names are the mockup's CLN.
         static readonly string[] CarLines = { "직선 최강, 헤어핀에서 뒤가 쉽게 빠짐", "무난한 균형형", "코너가 많은 고개에서 강함", "비포장 지름길에서 속도가 덜 떨어짐", "느리지만 부딪혀도 안 밀림" };
-        static readonly Color Blue = H("#5cc8f0"), Err = H("#ff8a80"), Picked = H("#262522");   // the mockup's 8 % accent over the dialog, pre-mixed: UI blends in linear space, where 8 % reads far stronger
+        static readonly Color Ok = H("#57c785"), Blue = H("#5cc8f0"), Err = H("#ff8a80"), Picked = H("#262522");   // the mockup's 8 % accent over the dialog, pre-mixed: UI blends in linear space, where 8 % reads far stronger
         const float DlgHead = 72, DlgFoot = 78, Pad = 27, BodyTop = DlgHead + 24;
 
         int _gCar, _gPaint, _cCourse, _cLaps;
@@ -94,7 +96,65 @@ namespace Game.Gameplay
             else Render();
         }
 
+        // The invite dialog's friends: online first, then in a match, then offline (the mockup's order puts the invitable ones on top).
+        public FriendDto[] InviteList
+        {
+            get
+            {
+                var all = _menu != null && _menu.Social != null ? _menu.Social.Friends.friends : null;
+                return all == null ? new FriendDto[0] : all.OrderBy(f => f.status == "lobby" ? 0 : f.status == "in_match" ? 1 : 2).ToArray();
+            }
+        }
+
+        public void SendInvite(long id)
+        {
+            var f = InviteList.FirstOrDefault(x => x.account_id == id);
+            if (f == null) return;
+            var why = _party.Invite(id, f.nickname);
+            if (why != null) Toast(why);
+            else Render();
+        }
+
         // ---- drawing ----
+
+        void InviteBox()
+        {
+            // shortcut: no scrolling, the first 8 friends (online ones first); a ScrollRect when someone has more friends than that.
+            const float W = 840, RowH = 75, Gap = 9, BtnW = 135, BtnH = 51;
+            var friends = InviteList.Take(8).ToArray();
+            bool hostOnly = _room.Private && Me != _room.HostId;
+            int rows = Math.Max(1, friends.Length);
+            float noteY = BodyTop + rows * (RowH + Gap) - Gap + 18, Hd = noteY + 27 + 24 + DlgFoot;
+            int empty = _room.Capacity - _room.Members.Count;
+            var box = Frame(W, Hd, "친구 초대", "빈 자리 " + empty, 168);
+            if (friends.Length == 0)
+                L(box, Pad, BodyTop, W - 2 * Pad, RowH, _menu != null && _menu.Social != null ? "친구가 없습니다. 메인 메뉴의 친구 창에서 친구를 추가하세요." : "로그인하면 친구를 초대할 수 있습니다.", 21, Dim);
+            for (int i = 0; i < friends.Length; i++)
+            {
+                var f = friends[i];
+                long id = f.account_id;
+                var row = Panel(box, "Friend" + id, Pad, BodyTop + i * (RowH + Gap), W - 2 * Pad, RowH, Pn2, Line, 12);
+                Color dot = f.status == "lobby" ? Ok : f.status == "in_match" ? Acc : Mute;
+                Panel(row, "Dot", 15, (RowH - 12) / 2f, 12, 12, dot, null, 6);
+                L(row, 42, 0, 360, RowH, f.nickname, 21, Txt);
+                float bx = W - 2 * Pad - 15 - BtnW;
+                L(row, bx - 15 - 180, 0, 180, RowH, SocialRules.InviteStatus(f.status), 18, Dim, TextAnchor.MiddleRight);
+                var (label, on) = SocialRules.InviteButton(f.status, _room.Member((int)id) != null, _party.Invited(id), hostOnly);
+                if (on)
+                {
+                    var b = Btn(row, "Invite" + id, bx, (RowH - BtnH) / 2f, BtnW, BtnH, Acc, Acc, () => SendInvite(id), 9);
+                    L(b.transform, 0, 0, BtnW, BtnH, label, 21, AccInk, TextAnchor.MiddleCenter, true);
+                }
+                else
+                {
+                    var b = Panel(row, "Invite" + id, bx, (RowH - BtnH) / 2f, BtnW, BtnH, Color.clear, Line, 9);
+                    L(b, 0, 0, BtnW, BtnH, label, 21, Mute, TextAnchor.MiddleCenter);
+                }
+            }
+            L(box, Pad, noteY, W - 2 * Pad, 27, hostOnly ? "비공개 방은 방장만 초대할 수 있습니다." : "초대받은 친구가 수락하면 빈 자리에 들어옵니다. 방이 꽉 차면 초대할 수 없습니다.", 18, hostOnly ? Err : Mute);
+            var close = Btn(box, "Close", W - Pad - 96, Hd - DlgFoot + 15, 96, 48, Pn3, Line, CloseDialog, 9);
+            L(close.transform, 0, 0, 96, 48, "닫기", 21, Txt, TextAnchor.MiddleCenter);
+        }
 
         void GarageBox()
         {

@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
 using Game.Core;
@@ -12,7 +14,7 @@ using UnityEngine.UI;
 
 namespace Game.Tests
 {
-    // #514 (garage) and #515 (course, laps, room settings) on the race room screen (spec #505, ADR-562), against the mockup
+    // #514 (garage), #515 (course, laps, room settings) and #520 (invite) on the race room screen (spec #505, ADR-562), against the mockup
     // docs/research/ui_mockups/race_room.html.
     public class RaceRoomDialogTests
     {
@@ -54,6 +56,7 @@ namespace Game.Tests
             PlayerPrefs.DeleteKey(RaceLobbyScreen.PrefsKey);
             RaceLobbyScreen.ReturnPending = false;
             RaceEvent.Starting = null;
+            LobbyNet.Backend = null;
             SceneManager.LoadScene("Bootstrap");
             yield return null;
         }
@@ -219,6 +222,96 @@ namespace Game.Tests
             Assert.IsTrue(room.Room.Private);
             Assert.AreEqual(0, room.Room.BotCount);
             CollectionAssert.Contains(room.Room.Lines, "방 설정을 바꿨습니다.");
+        }
+
+        // A logged-in menu's backend for the invite dialog: three friends (online, in a match, offline); an invite answers a party of 1
+        // with the friend in its invited list, the room's pushes answer the same party.
+        sealed class FriendsBackend : IBackend
+        {
+            public readonly List<long> Invites = new List<long>();
+            public int Pushes;
+            PartyEnvelope _party = new PartyEnvelope();
+            static Task<ApiResult<T>> Ok<T>(T v) => Task.FromResult(ApiResult<T>.Success(v));
+            static FriendDto F(long id, string n, string st) => new FriendDto { account_id = id, nickname = n, status = st };
+            public Task<ApiResult<FriendsDto>> Friends() => Ok(new FriendsDto { friends = new[] { F(23, "새벽드라이버", "offline"), F(22, "도로위의사자", "in_match"), F(21, "민트초코", "lobby") } });
+            public Task<ApiResult<PartyEnvelope>> InviteToParty(long id)
+            {
+                Invites.Add(id);
+                _party = new PartyEnvelope { party = new PartyDto { id = 5, leader_id = 1, max_size = 8, race = new PartyRaceDto { name = "x", course = "snake", laps = 2, fill_bots = true },
+                    members = new[] { new PartyMemberDto { account_id = 1, nickname = "플레이어" } }, invited = new[] { F(id, "", "") } } };
+                return Ok(_party);
+            }
+            public Task<ApiResult<PartyEnvelope>> Party() => Ok(_party);
+            public Task<ApiResult<PartyEnvelope>> SetPartyRace(PartyRaceDto r) { Pushes++; return Ok(_party); }
+            public Task<ApiResult<PartyEnvelope>> SetMyRace(MemberRaceDto r) { Pushes++; return Ok(_party); }
+            public Task<ApiResult<PartyEnvelope>> KickFromParty(long id) => Ok(_party);
+            public Task<ApiResult<TicketDto>> CreateTicket(string m) => Ok<TicketDto>(null);
+            public Task<ApiResult<TicketDto>> CurrentTicket() => Ok<TicketDto>(null);
+            public Task<ApiResult<bool>> CancelTicket(string id) => Ok(true);
+            public Task<ApiResult<bool>> Presence(string st) => Ok(true);
+            public Task<ApiResult<MeDto>> Me() => Ok(new MeDto());
+            public Task<ApiResult<bool>> AddFriend(string n) => Ok(true);
+            public Task<ApiResult<bool>> AcceptFriend(long i) => Ok(true);
+            public Task<ApiResult<bool>> RemoveFriend(long i) => Ok(true);
+            public Task<ApiResult<InvitesDto>> PartyInvites() => Ok(new InvitesDto());
+            public Task<ApiResult<bool>> AcceptInvite(long i) => Ok(true);
+            public Task<ApiResult<bool>> DeclineInvite(long i) => Ok(true);
+            public Task<ApiResult<bool>> LeaveParty() => Ok(true);
+            public Task<ApiResult<string>> ServerToken() => Ok("t");
+        }
+
+        static bool Clickable(string name) { var g = GameObject.Find(name); return g != null && g.GetComponent<Button>() != null; }
+
+        // #520: online friends can be invited (the backend invite goes out, the row turns 초대 보냄); in-match and offline ones cannot; a full
+        // room toasts instead of opening; a private room's guest sees the reason and no live buttons. RACE_SHOTS set: review shots.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Invite_OnlineFriendOnly_FullToasts_PrivateGuestHostOnly()
+        {
+            string shots = System.Environment.GetEnvironmentVariable("RACE_SHOTS");
+            var api = new FriendsBackend();
+            LobbyNet.Backend = api;
+            yield return OpenRoom();
+            var room = Room;
+            yield return NetHarness.WaitUntil(() => room.InviteList.Length == 3, "friends polled", null, 10f);
+            room.Room.Join(new RaceLobbyMember { Id = 902, Name = "도로위의사자2", Level = 7, Car = "FairheavenSW84", Paint = 2 });
+            room.CloseSlot(7);
+            room.OpenDialog("invite");
+            Assert.AreEqual("invite", room.Dialog);
+            yield return null;
+            Assert.AreEqual("민트초코", room.InviteList[0].nickname, "online first");
+            Assert.IsTrue(Shows("빈 자리 5"));
+            Assert.IsTrue(Shows("온라인") && Shows("배틀로얄 중") && Shows("게임 중") && Shows("오프라인"));
+            Assert.IsTrue(Clickable("Invite21"));
+            Assert.IsFalse(Clickable("Invite22"), "in a match");
+            Assert.IsFalse(Clickable("Invite23"), "offline");
+            if (!string.IsNullOrEmpty(shots)) { Directory.CreateDirectory(shots); yield return UiShot.Save(Path.Combine(shots, "20_invite.png"), 1920, 1080); }
+
+            Button("Invite21").onClick.Invoke();
+            Assert.IsTrue(Shows("초대 보냄"), "at once, while the call is out");
+            yield return NetHarness.WaitUntil(() => api.Pushes == 2, "the room goes up with the new party", null, 5f);
+            yield return null;
+            Assert.AreEqual(new long[] { 21 }, api.Invites.ToArray());
+            Assert.IsFalse(Clickable("Invite21"));
+            Assert.IsTrue(Shows("초대 보냄"));
+            CollectionAssert.Contains(room.Room.Lines, "민트초코 님에게 초대를 보냈습니다.");
+            Assert.IsFalse(room.Online, "a party of 1 waiting on the invite is still the local room");
+            if (!string.IsNullOrEmpty(shots)) yield return UiShot.Save(Path.Combine(shots, "21_invite_sent.png"), 1920, 1080);
+
+            room.CloseDialog();
+            BeGuest(room);
+            var st = room.Room.Snapshot(); st.Private = true; room.Room.Load(st);
+            room.OpenDialog("invite");
+            yield return null;
+            Assert.IsTrue(Shows("비공개 방은 방장만 초대할 수 있습니다."));
+            Assert.IsFalse(Clickable("Invite21") || Clickable("Invite22") || Clickable("Invite23"));
+            if (!string.IsNullOrEmpty(shots)) yield return UiShot.Save(Path.Combine(shots, "22_invite_private_guest.png"), 1920, 1080);
+
+            room.CloseDialog();
+            for (int id = 903; room.Room.Members.Count < room.Room.Capacity; id++) room.Room.Join(new RaceLobbyMember { Id = id, Name = "P" + id });
+            room.Refresh();
+            room.OpenDialog("invite");
+            Assert.IsNull(room.Dialog, "full room: no dialog");
+            Assert.AreEqual("빈 자리가 없습니다.", room.ToastText);
         }
 
         // Review shots of the dialogs against the mockup:

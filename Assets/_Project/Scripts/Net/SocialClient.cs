@@ -90,7 +90,8 @@ namespace Game.Net
         public void AddFriend(string nickname) => Act(_b.AddFriend(nickname));
         public void AcceptFriend(long id) => Act(_b.AcceptFriend(id));
         public void RemoveFriend(long id) => Act(_b.RemoveFriend(id));
-        public void Invite(long id) => Act(_b.InviteToParty(id));
+        // The answer's party view (with its invited list) is shown at once; done gets null or the refusal's text.
+        public void Invite(long id, Action<string> done = null) => RaceAct(_b.InviteToParty(id), err => { LastError = err ?? ""; done?.Invoke(err); });
         public void AcceptInvite(long partyId) => Act(_b.AcceptInvite(partyId));
         public void DeclineInvite(long partyId) => Act(_b.DeclineInvite(partyId));
         public void LeaveParty() => Act(_b.LeaveParty());

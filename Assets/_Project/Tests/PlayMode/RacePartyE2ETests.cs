@@ -9,9 +9,9 @@ using UnityEngine.TestTools;
 
 namespace Game.Tests
 {
-    // #519 acceptance: two clients (the game's own HttpBackend + SocialClient + RaceParty) against a REAL local backend (sublevel-backend
+    // #519 (and #520 invite) acceptance: two clients (the game's own HttpBackend + SocialClient + RaceParty) against a REAL local backend (sublevel-backend
     // with a temp DB). Ignored unless the environment names it and two fresh accounts' session tokens (never logged):
-    //   SUBLEVEL_E2E_API, SUBLEVEL_E2E_GAME_A, SUBLEVEL_E2E_GAME_B
+    //   SUBLEVEL_E2E_API, SUBLEVEL_E2E_GAME_A, SUBLEVEL_E2E_GAME_B (#520: two more, SUBLEVEL_E2E_GAME_C, SUBLEVEL_E2E_GAME_D)
     public class RacePartyE2ETests
     {
         static string Env(string n) => Environment.GetEnvironmentVariable(n);
@@ -99,6 +99,54 @@ namespace Game.Tests
             Assert.AreEqual(b.Id, p.Result.Value.party.leader_id, "the backend handed the party over");
             Assert.IsNull(b.Party.TakeToast(), "a leader leaving is not a kick");
             yield return Ok(b.Api.LeaveParty(), "cleanup");
+        }
+        // #520: the host invites from the room (no party yet): offline until the friend's presence arrives, then 초대; the backend makes the
+        // party with the host's local room on it; the friend accepts and sits in the next free slot, unready, in the room as the host set it.
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Invite_FromTheLocalRoom_FriendAcceptsIntoAFreeSlotUnready()
+        {
+            string api = Env("SUBLEVEL_E2E_API"), tc = Env("SUBLEVEL_E2E_GAME_C"), td = Env("SUBLEVEL_E2E_GAME_D");
+            if (string.IsNullOrEmpty(api) || string.IsNullOrEmpty(tc) || string.IsNullOrEmpty(td)) Assert.Ignore("no local backend configured (SUBLEVEL_E2E_*)");
+            var a = new Client { Api = new HttpBackend(api, tc) };
+            var b = new Client { Api = new HttpBackend(api, td) };
+            yield return Login(a); yield return Login(b);
+            yield return Ok(a.Api.AddFriend(b.Nick), "friend request");
+            yield return Ok(b.Api.AcceptFriend(a.Id), "friend accept");
+
+            // only the host ticks: the friend has sent no presence yet -> offline, no invite
+            float end = Time.realtimeSinceStartup + 4f;
+            FriendDto F() => Array.Find(a.Social.Friends.friends, f => f.account_id == b.Id);
+            while (F() == null && Time.realtimeSinceStartup < end) { a.Tick(); yield return null; }
+            Assert.AreEqual(("오프라인", false), SocialRules.InviteButton(F().status, false, false, false));
+            yield return Until(a, b, () => F().status == "lobby", "the friend's presence reaches the host", 8f);
+            Assert.AreEqual(("초대", true), SocialRules.InviteButton(F().status, a.Room.Member((int)b.Id) != null, a.Party.Invited(b.Id), false));
+
+            // the host's local room: pass_loop x3, slot 1 closed
+            Assert.IsTrue(a.Party.SetCourse("pass_loop", 3));
+            Assert.IsTrue(a.Party.CloseSlot(1));
+            Assert.IsNull(a.Party.Invite(b.Id, b.Nick));
+            yield return Until(a, b, () => b.Social.Invites.invites.Length > 0 && a.Party.Invited(b.Id), "the invite reaches the friend", 6f);
+            Assert.IsFalse(a.Party.Online, "a party of 1: still the host's local room");
+            var party = a.Api.Party(); yield return Await(party);
+            Assert.AreEqual("pass_loop", party.Result.Value.party.race.course, "the local room went up with the new party");
+            Assert.AreEqual(2, party.Result.Value.party.race.closed);
+
+            b.Social.AcceptInvite(b.Social.Invites.invites[0].party_id);
+            yield return Until(a, b, () => a.Party.Online && b.Party.Online, "both rooms on the party", 8f);
+            Assert.IsFalse(a.Party.Invited(b.Id));
+            Assert.AreEqual((int)b.Id, a.Room.SeatAt(2)?.Id, "slot 1 closed: the next free slot");
+            Assert.IsFalse(a.Room.Member((int)b.Id).Ready);
+            Assert.AreEqual("pass_loop", b.Room.Course); Assert.AreEqual(3, b.Room.Laps); Assert.IsTrue(b.Room.IsClosed(1));
+            Assert.AreEqual(("방에 있음", false), SocialRules.InviteButton(F().status, a.Room.Member((int)b.Id) != null, a.Party.Invited(b.Id), false));
+
+            // full: close every other slot -> no invite goes out; the backend refuses an invite of a member
+            for (int i = 3; i < RaceLobby.Slots; i++) Assert.IsTrue(a.Party.CloseSlot(i));
+            yield return Until(a, b, () => b.Room.Capacity == 2, "the guest sees the closed slots", 6f);
+            Assert.AreEqual("빈 자리가 없습니다.", a.Party.Invite(b.Id, b.Nick));
+            var again = a.Api.InviteToParty(b.Id); yield return Await(again);
+            Assert.AreEqual(409, again.Result.Status); Assert.AreEqual("already_member", again.Result.Error);
+            yield return Ok(b.Api.LeaveParty(), "cleanup b");
+            yield return Ok(a.Api.LeaveParty(), "cleanup a");
         }
     }
 }

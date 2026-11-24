@@ -48,7 +48,7 @@ namespace Game.Gameplay
         public RaceLobby Room => _room;
         public bool Online => _party != null && _party.Online;
         public int Me { get; private set; }
-        public string Dialog { get; private set; }   // null, "leave", or a placeholder: "garage", "course", "invite", "settings"
+        public string Dialog { get; private set; }   // null, "leave", "garage", "course", "invite", "settings"
         public string ToastText => _toast;
 
         public RectTransform Build(Transform parent, MainMenu menu)
@@ -353,29 +353,18 @@ namespace Game.Gameplay
             if (Dialog == "garage") { GarageBox(); return; }
             if (Dialog == "course") { CourseBox(); return; }
             if (Dialog == "settings") { SettingsBox(); return; }
-            bool leave = Dialog == "leave";
-            const float W = 690, Hd = 240;
+            if (Dialog == "invite") { InviteBox(); return; }
+            const float W = 690, Hd = 240;   // the leave confirmation
             var box = Panel(_stage, "Dialog", (LobbyPanel.StageW - W) / 2f, (LobbyPanel.StageH - Hd) / 2f, W, Hd, H("#141a22"), Line, 15);
             box.GetComponent<Image>().raycastTarget = true;   // clicks on the card do not reach the scrim
-            string title = leave ? "방에서 나갈까요?" : Dialog == "garage" ? "차고" : Dialog == "course" ? "코스 선택" : Dialog == "invite" ? "친구 초대" : "방 설정";
-            L(box, 27, 0, W - 54, 72, title, 28, Txt, TextAnchor.MiddleLeft, true);
+            L(box, 27, 0, W - 54, 72, "방에서 나갈까요?", 28, Txt, TextAnchor.MiddleLeft, true);
             Panel(box, "Hr1", 0, 72, W, 1, Line, null, 1);
-            string body = leave ? (host && _room.Members.Count > 1 ? "방장이 나가면 다음 사람이 방장이 됩니다." : "나가면 메인 메뉴로 돌아갑니다.")
-                : "준비 중입니다. 다음 업데이트에서 열립니다.";   // TODO(초대): the real dialog
-            L(box, 27, 72, W - 54, 96, body, 21, Dim);
+            L(box, 27, 72, W - 54, 96, host && _room.Members.Count > 1 ? "방장이 나가면 다음 사람이 방장이 됩니다." : "나가면 메인 메뉴로 돌아갑니다.", 21, Dim);
             Panel(box, "Hr2", 0, 168, W, 1, Line, null, 1);
-            if (leave)
-            {
-                var stay = Btn(box, "Stay", W - 27 - 138 - 12 - 108, 183, 108, 42, Color.clear, Line, CloseDialog, 9);
-                L(stay.transform, 0, 0, 108, 42, "남기", 21, Txt, TextAnchor.MiddleCenter);
-                var go = Btn(box, "DoLeave", W - 27 - 138, 183, 138, 42, Danger, Danger, ConfirmLeave, 9);
-                L(go.transform, 0, 0, 138, 42, "나가기", 21, Color.white, TextAnchor.MiddleCenter);
-            }
-            else
-            {
-                var close = Btn(box, "Close", W - 27 - 108, 183, 108, 42, Pn3, Line, CloseDialog, 9);
-                L(close.transform, 0, 0, 108, 42, "닫기", 21, Txt, TextAnchor.MiddleCenter);
-            }
+            var stay = Btn(box, "Stay", W - 27 - 138 - 12 - 108, 183, 108, 42, Color.clear, Line, CloseDialog, 9);
+            L(stay.transform, 0, 0, 108, 42, "남기", 21, Txt, TextAnchor.MiddleCenter);
+            var go = Btn(box, "DoLeave", W - 27 - 138, 183, 138, 42, Danger, Danger, ConfirmLeave, 9);
+            L(go.transform, 0, 0, 138, 42, "나가기", 21, Color.white, TextAnchor.MiddleCenter);
         }
 
         // ---- small builders ----

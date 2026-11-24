@@ -47,7 +47,7 @@ namespace Game.Net
         Task<ApiResult<bool>> AcceptFriend(long accountId);
         Task<ApiResult<bool>> RemoveFriend(long accountId);
         Task<ApiResult<PartyEnvelope>> Party();
-        Task<ApiResult<bool>> InviteToParty(long accountId);
+        Task<ApiResult<PartyEnvelope>> InviteToParty(long accountId);
         Task<ApiResult<InvitesDto>> PartyInvites();
         Task<ApiResult<bool>> AcceptInvite(long partyId);
         Task<ApiResult<bool>> DeclineInvite(long partyId);
