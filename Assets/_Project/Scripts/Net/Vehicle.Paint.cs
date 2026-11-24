@@ -33,28 +33,37 @@ namespace Game.Net
         void ApplyPaint(int index)
         {
             if (!VehicleColors.Valid(index)) return;
-            VehicleColors.Tint(index, out float r, out float g, out float b);
             foreach (var renderer in GetComponentsInChildren<Renderer>(true))
             {
                 var mats = renderer.sharedMaterials;
                 bool changed = false;
                 for (int i = 0; i < mats.Length; i++)
                 {
-                    if (mats[i] == null || !mats[i].name.EndsWith("_Paint")) continue;
-                    var source = Unpainted.TryGetValue(mats[i], out var original) ? original : mats[i];   // a repaint tints the model's own material again
-                    if (!Painted.TryGetValue((source, index), out var painted))
-                    {
-                        painted = new Material(source) { name = source.name };
-                        var baseColor = source.HasProperty(BaseColor) ? source.GetColor(BaseColor) : Color.white;
-                        painted.SetColor(BaseColor, new Color(baseColor.r * r, baseColor.g * g, baseColor.b * b, baseColor.a));
-                        Painted[(source, index)] = painted;
-                        Unpainted[painted] = source;
-                    }
+                    var painted = PaintedMaterial(mats[i], index);
+                    if (painted == mats[i]) continue;
                     mats[i] = painted;
                     changed = true;
                 }
                 if (changed) renderer.sharedMaterials = mats;
             }
+        }
+
+        // The material a car part shows in paint `index`: a "*_Paint" material tinted (shared per material and colour), any other as it is.
+        // Also the race room's car portraits (#514), so the garage shows the race's paint.
+        public static Material PaintedMaterial(Material mat, int index)
+        {
+            if (mat == null || !mat.name.EndsWith("_Paint") || !VehicleColors.Valid(index)) return mat;
+            var source = Unpainted.TryGetValue(mat, out var original) ? original : mat;   // a repaint tints the model's own material again
+            if (!Painted.TryGetValue((source, index), out var painted))
+            {
+                VehicleColors.Tint(index, out float r, out float g, out float b);
+                painted = new Material(source) { name = source.name };
+                var baseColor = source.HasProperty(BaseColor) ? source.GetColor(BaseColor) : Color.white;
+                painted.SetColor(BaseColor, new Color(baseColor.r * r, baseColor.g * g, baseColor.b * b, baseColor.a));
+                Painted[(source, index)] = painted;
+                Unpainted[painted] = source;
+            }
+            return painted;
         }
     }
 }

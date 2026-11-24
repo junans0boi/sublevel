@@ -14,7 +14,7 @@ namespace Game.Gameplay
     // path keeps the room in PlayerPrefs (course, laps, settings, closed slots, my car and paint). 시작 (F5) starts the room's course with
     // bots in the open empty slots; after the race the menu opens on the room again (ReturnPending). Code-built like EventEntryScreen was;
     // the whole stage is rebuilt on every change, as the mockup's render() does.
-    public class RaceLobbyScreen
+    public partial class RaceLobbyScreen
     {
         public const string PrefsKey = "RaceRoom";
         public static bool ReturnPending;   // a race was started from the room: back in the menu, open the room
@@ -28,7 +28,8 @@ namespace Game.Gameplay
             ("LightbodyLifted85", "Lightbody Lifted85", "픽업", "pickup"),
             ("Shvan92", "Shvan92", "밴", "van"),
         };
-        // shortcut: the mockup's 6 swatches for the silhouettes; VehicleColors has 5 tints, the garage (#514) reconciles the two.
+        // The garage's 6 paints (mockup PAINTS) and the race tint (VehicleColors index) each one gives the real car (#514).
+        public static readonly int[] RaceTint = { 5, 0, 1, 3, 4, 2 };
         static readonly Color[] PaintColors = { H("#c8342b"), H("#e9edf1"), H("#2d6fd6"), H("#f2c230"), H("#2f9e6a"), H("#1c1f24") };
         static readonly Dictionary<string, int> Difficulty = new Dictionary<string, int> { { "snake", 2 }, { "pass_up", 4 }, { "pass_down", 4 }, { "pass_loop", 5 } };
 
@@ -112,7 +113,7 @@ namespace Game.Gameplay
             var me = _room.Member(Me);
             Save();
             ReturnPending = true;
-            _menu.StartEvent(RaceEvent.ById(_room.Course), _room.Laps, _room.BotCount, me.Car, me.Paint);
+            _menu.StartEvent(RaceEvent.ById(_room.Course), _room.Laps, _room.BotCount, me.Car, RaceTint[Mathf.Clamp(me.Paint, 0, RaceTint.Length - 1)]);
         }
 
         // Back from the race: everyone unready, the rest kept.
@@ -121,6 +122,7 @@ namespace Game.Gameplay
         public void OpenDialog(string kind)
         {
             if (kind == "invite" && _room.Members.Count >= _room.Capacity) { Toast("빈 자리가 없습니다."); return; }
+            if (!DraftFor(kind)) return;
             Dialog = kind;
             Render();
         }
@@ -190,7 +192,7 @@ namespace Game.Gameplay
             L(leave.transform, 0, 0, 108, 45, "나가기", 21, Dim, TextAnchor.MiddleCenter);
             var set = Btn(top, "Settings", 1626, 12, 120, 45, Color.clear, null, () => OpenDialog("settings"), 9);
             L(set.transform, 0, 0, 120, 45, "방 설정", 21, Dim, TextAnchor.MiddleCenter);
-            set.interactable = host;
+            Enable(set, host);
             var hostName = _room.Member(_room.HostId)?.Name ?? "";
             L(top, 900, 0, 711, 69, host ? "코스와 설정은 방장만 바꿀 수 있습니다" : "방장: " + hostName, 18, Mute, TextAnchor.MiddleRight);
         }
@@ -203,14 +205,20 @@ namespace Game.Gameplay
             img.sprite = MapSprite(info, 378, 198);
             img.raycastTarget = false;
             L(card, 15, 222, 378, 33, info.Name, 25, Txt, TextAnchor.MiddleLeft, true);
-            var c = info.Course;
-            float lo = float.MaxValue, hi = float.MinValue;
-            foreach (var p in c.Path) { lo = Mathf.Min(lo, p.Y); hi = Mathf.Max(hi, p.Y); }
-            string len = c.LapLength < 1000f ? $"{c.LapLength:0} m" : $"{c.LapLength / 1000f:0.0} km";
-            L(card, 15, 258, 378, 27, len + " · " + (hi - lo < 1f ? "평지" : $"고저차 {hi - lo:0} m"), 19, Dim);
+            var (len, elev) = CourseMeta(info);
+            L(card, 15, 258, 378, 27, len + " · " + elev, 19, Dim);
             L(card, 15, 288, 90, 27, "난이도", 18, Dim);
             Difficulty.TryGetValue(info.Id, out int diff);
             for (int i = 0; i < 5; i++) Panel(card, "Diff" + i, 75 + i * 25.5f, 297, 21, 9, i < diff ? Danger : Pn3, null, 3);
+        }
+
+        // The course's length and elevation as the cards read them: "2.3 km", "고저차 152 m" / "평지".
+        static (string len, string elev) CourseMeta(RaceEvent.CourseInfo info)
+        {
+            var c = info.Course;
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var p in c.Path) { lo = Mathf.Min(lo, p.Y); hi = Mathf.Max(hi, p.Y); }
+            return (c.LapLength < 1000f ? $"{c.LapLength:0} m" : $"{c.LapLength / 1000f:0.0} km", hi - lo < 1f ? "평지" : $"고저차 {hi - lo:0} m");
         }
 
         void Chat()
@@ -291,11 +299,13 @@ namespace Game.Gameplay
             const float Y = 942, Hb = 114;
             bool lockedGarage = me.Ready && !host;
             var garage = BarButton(450, "차고", () => OpenDialog("garage"));
-            garage.interactable = !lockedGarage;
+            Enable(garage, !lockedGarage);
             var course = BarButton(600, "코스", () => OpenDialog("course"));
-            course.interactable = host;
+            Enable(course, host);
             BarButton(750, "초대", () => OpenDialog("invite"));
-            if (lockedGarage) L(_stage, 450, Y - 30, 600, 27, "준비를 취소해야 차를 바꿀 수 있습니다", 17, Mute);
+            // The mockup's hover reasons (title), as a line in the gap above the bar.
+            if (lockedGarage) L(_stage, 450, Y - 24, 600, 24, "준비를 취소해야 차를 바꿀 수 있습니다", 16, Mute);
+            else if (!host) L(_stage, 600, Y - 24, 450, 24, "코스·방 설정: 방장만", 16, Mute);
 
             var car = Panel(_stage, "MyCar", 900, Y, 624, Hb, Pnl, Line, 12);
             Car(car, 18, (Hb - 80) / 2f, 165, me.Car, me.Paint);
@@ -312,6 +322,13 @@ namespace Game.Gameplay
             L(go.transform, 0, 66, 360, 27, g.Sub, 18, new Color(ink.r, ink.g, ink.b, 0.8f), TextAnchor.MiddleCenter);
         }
 
+        // A disabled button fades whole, label included (mockup :disabled).
+        static void Enable(Button b, bool on)
+        {
+            b.interactable = on;
+            if (!on) b.gameObject.AddComponent<CanvasGroup>().alpha = 0.45f;
+        }
+
         Button BarButton(float x, string text, UnityEngine.Events.UnityAction act)
         {
             var b = Btn(_stage, "Bar" + text, x, 942, 138, 114, Pnl, Line, act, 12);
@@ -323,6 +340,9 @@ namespace Game.Gameplay
         {
             var scrim = Btn(_stage, "Scrim", 0, 0, LobbyPanel.StageW, LobbyPanel.StageH, new Color(5 / 255f, 7 / 255f, 10 / 255f, 0.66f), null, CloseDialog, 1);
             scrim.transition = Selectable.Transition.None;
+            if (Dialog == "garage") { GarageBox(); return; }
+            if (Dialog == "course") { CourseBox(); return; }
+            if (Dialog == "settings") { SettingsBox(); return; }
             bool leave = Dialog == "leave";
             const float W = 690, Hd = 240;
             var box = Panel(_stage, "Dialog", (LobbyPanel.StageW - W) / 2f, (LobbyPanel.StageH - Hd) / 2f, W, Hd, H("#141a22"), Line, 15);
@@ -331,7 +351,7 @@ namespace Game.Gameplay
             L(box, 27, 0, W - 54, 72, title, 28, Txt, TextAnchor.MiddleLeft, true);
             Panel(box, "Hr1", 0, 72, W, 1, Line, null, 1);
             string body = leave ? (host && _room.Members.Count > 1 ? "방장이 나가면 다음 사람이 방장이 됩니다." : "나가면 메인 메뉴로 돌아갑니다.")
-                : "준비 중입니다. 다음 업데이트에서 열립니다.";   // TODO(#514 차고, #515 코스·방 설정, #516 초대): the real dialogs
+                : "준비 중입니다. 다음 업데이트에서 열립니다.";   // TODO(초대): the real dialog
             L(box, 27, 72, W - 54, 96, body, 21, Dim);
             Panel(box, "Hr2", 0, 168, W, 1, Line, null, 1);
             if (leave)
@@ -395,12 +415,21 @@ namespace Game.Gameplay
             return x + w + 15;
         }
 
-        // A car silhouette (the mockup's carSVG): the body tinted with the paint under the windows, wheels and shadow.
+        // The car in its paint: the race model's portrait (CarPortrait, #514), else the mockup's flat silhouette (carSVG) when the scene
+        // has no car prefabs.
         static void Car(Transform p, float x, float y, float w, string car, int paint)
         {
+            float h = w * 78f / 160f;
+            var portrait = CarPortrait.Get(Cars[CarIndex(car)].id, RaceTint[Mathf.Clamp(paint, 0, RaceTint.Length - 1)]);
+            if (portrait != null)
+            {
+                var ri = UiPaint.At(p, "Car", x, y, w, h).gameObject.AddComponent<RawImage>();
+                ri.texture = portrait;
+                ri.raycastTarget = false;
+                return;
+            }
             string shape = Cars[CarIndex(car)].shape;
             var (body, details) = CarSprites(shape);
-            float h = w * 78f / 160f;
             var b = UiPaint.At(p, "Body", x, y, w, h).gameObject.AddComponent<Image>();
             b.sprite = body; b.color = PaintColors[Mathf.Clamp(paint, 0, PaintColors.Length - 1)]; b.raycastTarget = false;
             var d = UiPaint.At(p, "Details", x, y, w, h).gameObject.AddComponent<Image>();
@@ -470,7 +499,7 @@ namespace Game.Gameplay
         // The course's line from its path (mockup trackSVG): a dark-green band under a light centre line, fitted into w x h.
         static Sprite MapSprite(RaceEvent.CourseInfo info, int w, int h)
         {
-            string key = "map" + info.Id;
+            string key = $"map{info.Id}{w}x{h}";
             if (Sprites.TryGetValue(key, out var s)) return s;
             var c = info.Course;
             float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
