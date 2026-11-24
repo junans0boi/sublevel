@@ -46,10 +46,9 @@ namespace Game.Tests
             }
         }
 
-        [UnityTest, Timeout(400000)]
-        public IEnumerator Solo_AfterTheIsland_NetIsLocal_DoorsOpen_LootShows()
+        // Solo from the main menu onto the waiting island, with the island cut short.
+        IEnumerator ToTheIsland(IdleInput input)
         {
-            var input = new IdleInput();
             PlayerController.InputOverride = input;
             SceneManager.LoadScene(MainMenu.SceneName);
             yield return WaitUntil(() => MainMenu.Instance != null, 10f, "the main menu");
@@ -60,6 +59,34 @@ namespace Game.Tests
 
             MainMenu.Instance.StartGame();
             yield return WaitUntil(() => PlayerController.Local != null && Combatant.LocalPlayer != null && WaitingRoom.Current != null, 60f, "the island");
+        }
+
+        // The player's view on the island and then in the elevator bay, doors shut and open (v0.3.4 news post).
+        //   ISLAND_SHOTS=<folder> tools/unity.sh test playmode Game.Tests.SoloIslandDeployPlayTests.CaptureDeployFacingTheDoors
+        [UnityTest, Explicit, Category("Capture"), Timeout(300000)]
+        public IEnumerator CaptureDeployFacingTheDoors()
+        {
+            string folder = Environment.GetEnvironmentVariable("ISLAND_SHOTS");
+            if (string.IsNullOrEmpty(folder)) folder = System.IO.Path.Combine(Application.dataPath, "../Logs/island-shots");
+            System.IO.Directory.CreateDirectory(folder);
+            yield return ToTheIsland(new IdleInput());
+            var me = Combatant.LocalPlayer;
+            yield return new WaitForSeconds(5f);
+            yield return WaitingIslandPlayTests.Shot(folder, "solo_island");
+            yield return WaitUntil(() => WaitingRoom.Current == null || !WaitingRoom.Current.Open, 40f, "the countdown ends");
+            yield return WaitUntil(() => ElevatorDoors.Instance != null && ElevatorDoors.Instance.TryFacingAt(me.transform.position, out _), 30f, "the elevator bay");
+            yield return new WaitForSeconds(1f);
+            yield return WaitingIslandPlayTests.Shot(folder, "deploy_doors_shut");
+            yield return WaitUntil(() => !ElevatorDoors.Instance.DoorsClosed, 30f, "the doors open");
+            yield return new WaitForSeconds(1.5f);
+            yield return WaitingIslandPlayTests.Shot(folder, "deploy_doors_open");
+        }
+
+        [UnityTest, Timeout(400000)]
+        public IEnumerator Solo_AfterTheIsland_NetIsLocal_DoorsOpen_LootShows()
+        {
+            var input = new IdleInput();
+            yield return ToTheIsland(input);
             var me = Combatant.LocalPlayer;
             var net = NetStatusClient.Attach(InstanceFinder.NetworkManager);
             yield return WaitUntil(() => WaitingRoom.Current == null || !WaitingRoom.Current.Open, 40f, "the countdown ends");
