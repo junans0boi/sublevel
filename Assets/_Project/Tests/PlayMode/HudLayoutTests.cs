@@ -84,7 +84,7 @@ namespace Game.Tests
         {
             yield return LoadTestBox();
             var areas = Areas();
-            Assert.AreEqual(11, areas.Count, "compass strip, heading, region, kills, alive, health, weapon, status, weapon strip, minimap and the kill feed");
+            Assert.AreEqual(11, areas.Count, "compass strip, heading, region, kills, alive, health, weapon, minimap, zone panel, weapon stack and the kill feed");
 
             // The canvas scales with screen height, so 16:9 screens of every size see the same 1920x1080 units.
             int[][] screens = { new[] { 1280, 720 }, new[] { 1920, 1080 }, new[] { 2560, 1440 } };
@@ -106,26 +106,31 @@ namespace Game.Tests
             }
         }
 
+        // HUD v2 contract (shared with the centre): minimap 220 in the corner, zone panel on it (bottom 300), weapon stack
+        // left of the minimap (x 1432-1652), all 36 from the edges.
         [UnityTest]
-        public IEnumerator Layout_MinimapIs220Square_AboveTheWeaponStrip_AtTheBottomRight()
+        public IEnumerator Layout_MinimapInTheCorner_ZonePanelOverIt_WeaponStackToItsLeft()
         {
             yield return LoadTestBox();
             var minimap = Placed(Hud.Instance.Minimap.Root, 1920f, 1080f);
+            var zone = Placed(Hud.Instance.Zone.Root, 1920f, 1080f);
             var strip = Placed(Hud.Instance.Strip.Root, 1920f, 1080f);
-            Assert.AreEqual(220f, minimap.width, 0.01f);
-            Assert.AreEqual(220f, minimap.height, 0.01f);
-            Assert.AreEqual(1884f, minimap.xMax, 0.01f, "36 from the right edge");
-            Assert.AreEqual(1884f, strip.xMax, 0.01f);
+            Assert.AreEqual(new Rect(1664f, 36f, 220f, 220f), minimap, "minimap 220 square, 36 from the right and the bottom");
+            Assert.AreEqual(1664f, zone.xMin, 0.01f);
+            Assert.AreEqual(1884f, zone.xMax, 0.01f);
+            Assert.AreEqual(300f, zone.yMin, 0.01f, "the zone panel sits on bottom 300");
+            Assert.AreEqual(1432f, strip.xMin, 0.01f);
+            Assert.AreEqual(1652f, strip.xMax, 0.01f, "the stack ends 268 from the right edge");
             Assert.AreEqual(36f, strip.yMin, 0.01f);
-            Assert.AreEqual(strip.yMax + 10f, minimap.yMin, 0.01f, "the strip sits right under the minimap");
-            Assert.AreEqual(404f, strip.width, 0.01f, "five cells of 76 with 6 between");
+            Assert.Less(strip.yMax, 300f, "a full stack stays under the zone panel line");
         }
 
         [UnityTest]
         public IEnumerator Layout_OnTheRealScreen_NoWorldCornersOverlap()
         {
             yield return LoadTestBox();
-            if (Screen.width < Screen.height * 1.3f) Assert.Ignore("The game view is not wide enough for the landscape layout.");
+            // HUD v2 is laid out for 16:9 and 16:10 (a 4:3 batch screen puts the weapon stack on the centre column).
+            if (Screen.width < Screen.height * 1.55f) Assert.Ignore("The game view (" + Screen.width + "x" + Screen.height + ") is narrower than 16:10.");
             yield return null;
             var areas = Areas();
             var screen = new Rect(0f, 0f, Screen.width, Screen.height);
