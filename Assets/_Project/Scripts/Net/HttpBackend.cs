@@ -122,5 +122,15 @@ namespace Game.Net
         public Task<ApiResult<bool>> AcceptInvite(long partyId) => Do(HttpMethod.Post, "/api/party/invites/" + partyId + "/accept", "{}");
         public Task<ApiResult<bool>> DeclineInvite(long partyId) => Do(HttpMethod.Delete, "/api/party/invites/" + partyId);
         public Task<ApiResult<bool>> LeaveParty() => Do(HttpMethod.Post, "/api/party/leave", "{}");
+
+        async Task<ApiResult<PartyEnvelope>> PartyCall(HttpMethod m, string path, string json)
+        {
+            var r = await Send(m, path, json).ConfigureAwait(false);
+            return Parse(r.status, r.body, b => JsonUtility.FromJson<PartyEnvelope>(b));
+        }
+
+        public Task<ApiResult<PartyEnvelope>> SetPartyRace(PartyRaceDto race) => PartyCall(HttpMethod.Put, "/api/party/race", JsonUtility.ToJson(race));
+        public Task<ApiResult<PartyEnvelope>> SetMyRace(MemberRaceDto race) => PartyCall(HttpMethod.Put, "/api/party/members/me/race", JsonUtility.ToJson(race));
+        public Task<ApiResult<PartyEnvelope>> KickFromParty(long id) => PartyCall(HttpMethod.Post, "/api/party/kick", "{\"account_id\":" + id + "}");
     }
 }

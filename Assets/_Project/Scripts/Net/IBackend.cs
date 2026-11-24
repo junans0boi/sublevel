@@ -10,8 +10,11 @@ namespace Game.Net
     [Serializable] public class TicketDto { public string id, mode, status; public int party_size; public QueueDto queue; public MatchDto match; }
     [Serializable] public class FriendDto { public long account_id; public string nickname; public string status; }
     [Serializable] public class FriendsDto { public FriendDto[] friends = new FriendDto[0], incoming = new FriendDto[0], outgoing = new FriendDto[0]; }
-    [Serializable] public class PartyMemberDto { public long account_id; public string nickname; public string status; }
-    [Serializable] public class PartyDto { public long id, leader_id; public int max_size; public PartyMemberDto[] members = new PartyMemberDto[0]; public FriendDto[] invited = new FriendDto[0]; }
+    // The race room on the party (#509/#519, ADR-562): the leader's settings and each member's car, paint and ready.
+    [Serializable] public class PartyRaceDto { public string name, course; public int laps; public bool @private, fill_bots; public int closed; }
+    [Serializable] public class MemberRaceDto { public string car; public int paint; public bool ready; }
+    [Serializable] public class PartyMemberDto { public long account_id; public string nickname; public string status; public MemberRaceDto race = new MemberRaceDto(); }
+    [Serializable] public class PartyDto { public long id, leader_id; public int max_size; public PartyRaceDto race = new PartyRaceDto(); public PartyMemberDto[] members = new PartyMemberDto[0]; public FriendDto[] invited = new FriendDto[0]; }
     [Serializable] public class PartyEnvelope { public PartyDto party; public bool HasParty => party != null && party.id != 0; }
     [Serializable] public class InviteFromDto { public long account_id; public string nickname; }
     [Serializable] public class InviteDto { public long party_id; public InviteFromDto from; }
@@ -49,6 +52,10 @@ namespace Game.Net
         Task<ApiResult<bool>> AcceptInvite(long partyId);
         Task<ApiResult<bool>> DeclineInvite(long partyId);
         Task<ApiResult<bool>> LeaveParty();
+        // The race room (#519): the leader's whole race state, my own car/paint/ready, and the leader's kick. Each answers the new party view.
+        Task<ApiResult<PartyEnvelope>> SetPartyRace(PartyRaceDto race);
+        Task<ApiResult<PartyEnvelope>> SetMyRace(MemberRaceDto race);
+        Task<ApiResult<PartyEnvelope>> KickFromParty(long accountId);
         // A fresh 5-minute signed token for joining a game server (POST /api/auth/token).
         Task<ApiResult<string>> ServerToken();
     }
