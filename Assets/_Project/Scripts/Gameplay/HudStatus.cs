@@ -95,7 +95,7 @@ namespace Game.Gameplay
         public const float ChipsTop = 8f, ChipsHeight = 22f, RowTop = 36f, RowHeight = 44f;
         public const float BoostTop = 86f, BoostHeight = 8f, BoostGap = 3f, HealthTop = 100f, HealthHeight = 30f;
         // The gauge's four segments as shares of the full gauge (the approved mock: 20/40/30/10).
-        public static readonly float[] BoostShares = { 0.2f, 0.4f, 0.3f, 0.1f };
+        public static readonly float[] BoostShares = { 0.25f, 0.25f, 0.25f, 0.25f };   // one cell per BoostRules step (master call, ADR-563)
         const float IconSize = 34f, IconGap = 8f, LowWear = 0.3f;
 
         // After the three stances: in a vehicle (ADR-075), the driver's seat or any other seat.

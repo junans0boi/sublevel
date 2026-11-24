@@ -57,6 +57,7 @@ namespace Game.Gameplay
         HudHazardSlot _hazard; // pollution warning, keys, chip (ADR-246)
         WeaponStrip _strip;
         MinimapView _minimap;
+        ZonePanel _zone;
         WorldMarkerView _worldMarker;
 
         // Bottom centre: the health bar of the vitals block (fill over the heal-incoming stripes over the damage trail).
@@ -146,6 +147,7 @@ namespace Game.Gameplay
         public HudHazardSlot Hazard => _hazard;
         public WeaponStrip Strip => _strip;
         public MinimapView Minimap => _minimap;
+        public ZonePanel Zone => _zone;
         public WorldMarkerView WorldMarker => _worldMarker;
         // The fixed areas of this canvas, for the layout tests (rects as placed, shown or not).
         public IReadOnlyList<RectTransform> LayoutAreas => _areas;
@@ -652,13 +654,16 @@ namespace Game.Gameplay
             _prompt.SetActive(false);
         }
 
-        // Bottom left: the player's own status. Bottom right: the minimap over the weapon strip.
+        // HUD v2 sides. Bottom left: the squad list (TeamHud, its own canvas, from the bottom margin up). Bottom right:
+        // the minimap in the corner, the zone panel on top of it (bottom 300) and the weapon stack to its left.
         void BuildBottomSides(Transform root)
         {
-            _strip = WeaponStrip.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin));
-            _areas.Add(_strip.Root);
-            _minimap = MinimapView.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin + WeaponStrip.CellHeight + StripGap));
+            _minimap = MinimapView.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin));
             _areas.Add(_minimap.Root);
+            _zone = ZonePanel.Build(root, BottomRight, BottomRight, new Vector2(-Margin, ZonePanel.Bottom));
+            _areas.Add(_zone.Root);
+            _strip = WeaponStrip.Build(root, BottomRight, BottomRight, new Vector2(-Margin - Game.Gameplay.Minimap.ViewSize - 12f, Margin));
+            _areas.Add(_strip.Root);
         }
 
         void BuildCrosshair(Transform root)

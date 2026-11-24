@@ -47,7 +47,7 @@ namespace Game.Gameplay
             if (_owner != me) { _owner = me; _swim = me.GetComponent<CombatantSwim>(); }
             if (_swim == null) return;
             bool bar = _swim.InWater && _swim.Breath < 0.999f;
-            if (_bar.gameObject.activeSelf != bar) _bar.gameObject.SetActive(bar);
+            // HUD v2 (ADR-563): the breath shows as the lungs ring in the vitals block; this centre bar stays hidden, BarShown keeps its meaning.
             BarShown = bar;
             bool wash = _swim.HeadUnder && !me.Dead.Value;
             if (_wash.enabled != wash) _wash.enabled = wash;

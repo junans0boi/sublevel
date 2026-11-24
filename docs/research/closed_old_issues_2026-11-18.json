@@ -1,0 +1,1509 @@
+[
+ {
+  "body": "Part of #283\n\n## Question\n`BulletSurfaces.Of`가 건물 이름 파싱(집 전체=Wood, 그 밖의 건물=Metal, 정거장=Concrete)을 한다. `SurfaceIdTag`로 바꾸면 벽·바닥별 재질이 되어 관통·탄흔 판정이 달라지는 룰 변경이다. ADR 먼저(규칙 5), 그다음 이름 파싱 삭제.\n\n## Done when\n- ADR, `SurfaceRules.ToBullet` 기반 판정, 기존 관통 테스트 갱신, 태그 없는 콜라이더 폴백 테스트.\n\n결정(master 2026-11-16): 이번 슬라이스는 발소리만 태그, 탄흔은 그대로.",
+  "createdAt": "2026-11-16T08:36:16Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 341,
+  "title": "[S5] T3b 탄흔·관통 표면을 SurfaceIdTag로 (룰 변경, ADR 필요)"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n각 티켓 완료 시 갱신: 서버 인자(--participants·--bots 0..49·--max-players), 동시 방 수 계산법, bots.json 인원·이름·난이도 혼합·오염/열쇠 행동 행, network.json 대역폭 실측·nd_budget, BACKLOG(차량 운전 봇·창문/옥상 NavMeshLink 후보·시야 기반 은닉). `python3 tools/bible_build.py` 실행.",
+  "createdAt": "2026-11-16T08:21:45Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 340,
+  "title": "[S8] T14 문서 갱신: DEDICATED_SERVER·bots.json·network.json·PROGRESS·BACKLOG"
+ },
+ {
+  "body": "## 2026-11-18 현행 기획 정리\n\n슬라이스 NavMesh 측정 #251을 현재 전체 청람도의 연결성·베이크·타일 분할 검증으로 통합한다. #251의 베이크 시간·파일 용량·타일 분할 필요성 판단·봇 NavMeshLink 범위 확인을 모두 보존한다. 창문은 범위 밖이며 옥상은 ADR-273/#369 반영 상태를 구분한다. 과거 21MB 기록을 최신 값으로 사용하지 않는다. 기존 완료 기준은 유지하며 이번 정리는 통과 판정이 아니다.\n\n---\n\nPart of #325 (스펙 #324)\n\n**Blocked by S1 #250(슬라이스 월드)·#251(NavMesh 측정).**\n**무엇** 승강장·건물 입구 POI 100%, 전체 POI 99% 이상이 서로 `PathComplete`임을 보는 테스트(산 능선 포함), 실패 POI 목록 출력. 베이크 시간 ≤60 s·파일 ≤30 MB 경고선 판정, 넘으면 타일 분할 저장 제안(S1 소유 구조는 master 경유). 근거 S8-A12, 06 I4.\n**완료** 연결성 테스트 통과(또는 실패 목록을 S1에 전달), 베이크·용량 수치 표.",
+  "createdAt": "2026-11-16T08:21:39Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 337,
+  "title": "[S8] T11 NavMesh 연결성 테스트·타일 분할 판단·베이크 게이트"
+ },
+ {
+  "body": "## 2026-11-18 현행 기획 정리\n\nSPEC §2·ADR-259/332: 80인, 사람은 파티 크기 그대로 한 팀이며 봇만 별도 최대 4인 팀이다. 옛 50인→12팀·슬롯60은 인수 기준으로 사용하지 않는다. 기본 편성은 #424/TeamLayout에 있으나 실제 파티 구성원 매핑·멀티 검증이 남아 있다. 봇 칩 수거·보관함 전달·소생 임무는 현행 기획이므로 계속 유지한다.\n\n---\n\nPart of #325 (스펙 #324)\n\n**Blocked by T1.** 칩 임무는 S6 #269(칩 서버 API)와 `BotController.OnRevived()` 호출(M6) 이후.\n**무엇** 솔로=봇 각자, 스쿼드=사람 스쿼드는 로비가 구성·남은 참가자는 봇 스쿼드 4명(마지막 팀 2~4). 같은 엘리베이터 투입(ADR-072) 유지, `Teams.Deploy` 50인·슬롯 60 대응 확인. 칩 임무: 사망한 팀원의 칩 줍기→90초 안 승강장 보관함, 운반 중 사망 시 재드롭.\n**완료** EditMode(팀 크기 분포 50→12팀), PlayMode(봇 스쿼드가 같이 투입·소생). 근거 S8-A10, ADR-171·179.",
+  "createdAt": "2026-11-16T08:21:36Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 335,
+  "title": "[S8] T9 80인 봇 팀·칩 임무(사람 파티 봇 채움 없음)"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n**Blocked by T7b, S6 #268(열쇠 아이템·ElevatorPanel).**\n**무엇** 줍기 우선순위 무기→열쇠(보유<1)→방어구; 경고 지역에서 열쇠를 가지면 사용 확률 `KeyUseChance`(쉬움 .5·보통 .8·어려움 1, 데이터); 승강장 도달→삽입→문 열림 30초 안에 탑승(스쿼드 동반)→15초 안에 비오염 지역 선택(최종 지역은 `knownFinal`일 때만, 아니면 오염·경고 지역과 그래프 거리가 가장 먼 안전 지역, M2). 적 동승(최대 4명) 시 교전 규칙 유지.\n**완료** PlayMode 시나리오(열쇠 줍기→사용→도착), 열쇠 이탈률 수치는 T12. 근거 S8-A9, ADR-170.",
+  "createdAt": "2026-11-16T08:21:34Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 334,
+  "title": "[S8] T8 봇 열쇠: 줍기·삽입·탑승·목적지 선택"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n**Blocked by T7a, S6 #266(PollutionDirector), #267(방독 아이템).** S6 #271(Lockdown 제거)의 선행 조건이 된다(노트 §4 M1).\n**무엇** `BotController`의 `CurrentZoneGoal`·`RoamAllowed`·`TryNearestEnemy`·`ZoneGoal` enum을 `BotPollutionPlan` 결과로 교체, `PollutionDirector`의 `RegionAt/IsPolluted/SecondsUntilFront/RegionCentre/Adjacency` 사용(M3 API를 S6에 요청 완료 전제), 전선에서 필터·해독제 사용. 끼임 통계(`BotStats`) 이유 이름 갱신.\n**완료** PlayMode 시나리오(경고→이동→오염 후 생존 수), `ZoneDirector` 참조 0건(grep), 기존 `Bot*Tests` 갱신.",
+  "createdAt": "2026-11-16T08:21:33Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 333,
+  "title": "[S8] T7b 봇 구역 목표 교체: ZoneGoal·ZoneDirector 참조 제거 → PollutionDirector, 방독 사용"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n**Blocked by T4.**\n**무엇** `DoorChanged`·`GlassShattered` Broadcast를 24 m 셀 기준 반경 `DoorMeters=150` 안 클라이언트에만 보내고, 셀에 새로 들어온 클라이언트에는 기본값과 다른 문·유리만 `Quiet` 델타로 보낸다(접속 시 전송도 같은 경로). 루팅 관찰 조건 비용이 크면 셀 사전 필터·평가 주기 연장·지연 스폰 중 하나. `InterestRules`에 `DoorMeters` 추가.\n**완료** 이벤트 수/초와 클라 대역폭 전/후 측정, 늦은 접속자 전송량(건물 수에 선형 → 셀 단위) 측정, `InterestBandwidthTests` 50인 시나리오 확장. 근거 S8-A7, 06 I9.",
+  "createdAt": "2026-11-16T08:21:29Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 331,
+  "title": "[S8] T6 관심영역: 문·유리 건물 셀 필터·진입 델타, 루팅 관찰 비용 (게이트: T4)"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n**Blocked by T4** (게이트가 걸릴 때만 구현).\n**무엇** 사람까지 거리 3단 Near<150/Mid 150~350/Far>350 m: Sense·문 스캔 주기 ×1/×2/×4, 교전·피격 중은 항상 Near. 센스 시작 위상을 봇 id로 분산. `NavMesh.CalculatePath` 프레임당 3회 예산 큐. `DoorSystem` 문 리스트 선형 탐색(`ServerBotOpen`·`ClosedBetween`)을 건물 셀 공간 해시로. 순수 `BotLod`(거리·상태→배율) EditMode.\n**완료** 같은 시드 전/후 비교에서 교전·스톨 통계가 허용 범위, 서버 봇 몫 ms가 예산 안(T4 표와 같은 시나리오). 근거 S8-A6.",
+  "createdAt": "2026-11-16T08:21:27Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 330,
+  "title": "[S8] T5 봇 AI LOD·센스 위상 분산·경로 예산·문 공간 해시 (게이트: T4)"
+ },
+ {
+  "body": "Part of #325 (스펙 #324)\n\n**Blocked by T3.**\n**무엇** P0~P3(가능하면 P4)를 실행해 표로 만들고 S8-A2·A3 예산(평균 ≤10 ms, p99 ≤25 ms, 봇 ≤4 ms, 메모리 ≤1.5 GB, 클라당 ≤15 KB/s, 서버 ≤6 Mbit/s)에 판정. 게이트: 봇 몫 >4 ms→T5, 문·유리 전송 >1 KB/s/클라 또는 문 스캔 >1 ms→T6, 관찰자 조건 >2 ms→T6 루팅 항목. 걸리지 않으면 해당 티켓에 근거를 달고 닫는다. `network.json nd_budget`(open) 값 제안.\n**완료** 측정표 `docs/research/`, PERF_BUDGET 서버 항목 제안(적용·commit은 master), 확인한 것/추정 구분.",
+  "createdAt": "2026-11-16T08:21:25Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 329,
+  "title": "[S8] T4 서버 측정 실행·판정표·PERF_BUDGET 서버 항목·게이트 결정"
+ },
+ {
+  "body": "## 2026-11-18 현행 기획 정리\n\nSPEC §2·ADR-259: 80명 / 사람 최대 64 / 최소 봇 16. ADR-332: 사람 파티 그대로 편성, 팀원 봇 채움 없음. 구 50인 스펙 #324는 SPEC·DECISIONS·PERF_BUDGET 및 봇 스펙 #368로 대체한다.\n\n유효한 하위 작업 #329 서버 측정, #330 조건부 AI 최적화, #331 관심영역, #333 오염/방독, #334 열쇠, #335 봇 칩 임무, #337 NavMesh, #339 PERF 자동화, #340 문서는 열린 상태로 유지한다. 도시 파밍/이동은 #373·#376, 통계는 #377로 통합한다. 미측정 게이트를 통과로 간주하지 않는다. 아래 50인 수치와 옛 인터페이스는 역사 기록이다.\n\n---\n\nS8 봇 50인·네트워크(WP 11·12) 지도. 스펙: #324. 전체 근거·측정 계획·S6/S1 어긋남(M1~M9)은 master 노트 `S8_bot_network_spec_and_tickets.md`. **측정이 구현보다 먼저**(T3·T4 → 게이트가 걸린 T5·T6만 구현).\n\n| 티켓 | 내용 | 선행 |\n|---|---|---|\n| #326 T1 | 인원 파라미터화(Participants·MinBots·MaxPlayers) | — |\n| #327 T2 | 봇 이름 풀·난이도 혼합 | — |\n| #328 T3 | 서버 측정 하네스 + 시나리오 | T1 |\n| #329 T4 | 측정 실행·판정·PERF 서버 항목·게이트 | T3 |\n| #330 T5 | 봇 AI LOD·위상·경로 예산·문 해시 (게이트) | T4 |\n| #331 T6 | 관심영역 문·유리·루팅 (게이트) | T4 |\n| #332 T7a | 봇 오염 계획 순수 함수 | — |\n| #333 T7b | 봇 구역 목표 교체(ZoneDirector 제거) | T7a, S6 #266·#267 |\n| #334 T8 | 봇 열쇠 줍기·사용 | T7b, S6 #268 |\n| #335 T9 | 봇 팀 구성·칩 임무 | T1, (칩) S6 #269 |\n| #336 T10 | 도시 관심 지점 소비 | S1 #249·#250 |\n| #337 T11 | NavMesh 연결성·타일 판단 | S1 #250·#251 |\n| #338 T12 | 50인 봇 통계 시나리오 | T7b, T8, T10, S6 #272 |\n| #339 T13 | PERF 판정 자동화 | T4 |\n| #340 T14 | 문서 갱신 | 각 티켓 |\n\n삭제 순서: S6 #266 → S8 #333 → S6 #271(Lockdown 제거). 범위 밖: 봇 차량 운전, 창문·옥상 NavMeshLink(후보 표시만, ADR-175).\n",
+  "createdAt": "2026-11-16T08:21:19Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 325,
+  "title": "[S8 봇·네트워크] 지도: 80인 서버·봇·네트워크 잔여 작업"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\nASSET_LEDGER(T-0001/T-0002 행 + 신규), `docs/bible/data/materials.json` 선택 상태·결정 항목, PROGRESS, `python3 tools/bible_build.py`.\n",
+  "createdAt": "2026-11-16T08:17:42Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 323,
+  "title": "[S2] T11 문서 갱신"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\n선행 T7. 저장소 밖(sublevel_staging)은 이미 분리됨. 교체되어 안 쓰는 `Art/Materials` 1K 세트(현 77 MB)는 대량 삭제라 준환 확인 후 master가 git rm.\n",
+  "createdAt": "2026-11-16T08:17:40Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJ1A",
+    "name": "ready-for-human",
+    "description": "Requires human implementation",
+    "color": "fbca04"
+   }
+  ],
+  "number": 322,
+  "title": "[S2] T10 용량 정리: 안 쓰는 173 MB·교체된 1K 소스"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\n선행 T7. URP Lit은 정점색을 쓰지 않으므로 셰이더가 필요. 건물 틴트 5색 재질 대비 SetPass 이득을 측정한 뒤에만 도입 결정(ADR 필요).\n",
+  "createdAt": "2026-11-16T08:17:39Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUF3A",
+    "name": "wayfinder:research",
+    "description": "Wayfinder research ticket",
+    "color": "1d76db"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUIVQ",
+    "name": "perf",
+    "description": "Performance budget",
+    "color": "c5def5"
+   }
+  ],
+  "number": 321,
+  "title": "[S2] T9 정점색 변주 SetPass 측정"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\n선행 T7(재질 교체 뒤 별도, m_detail 확정). 경사(rock) 층만 옆면 투영 확장, URP Decal 활성 ≤64·근거리만. 완료: 렌더 예산 판정(드로우콜·VRAM).\n",
+  "createdAt": "2026-11-16T08:17:37Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUIVQ",
+    "name": "perf",
+    "description": "Performance budget",
+    "color": "c5def5"
+   }
+  ],
+  "number": 320,
+  "title": "[S2] T8 디테일: 지형 트라이플래너·데칼(얼룩·균열·젖음)"
+ },
+ {
+  "body": "## 2026-11-18 현행 기획 정리\n\nR1+R0만 따로 만드는 슬라이스는 전체 6지역 청람도로 대체됐다(SPEC §4·ADR-204). R1·R0 대표 구도 비교, 재질·조명·실내·성능 검증은 여전히 유효하므로 종료하지 않는다. 전체 맵 적용 결과를 대상으로 아래 캡처·수치 조건을 확인한다.\n\n---\n\nPart of #308 (스펙 #306)\n\n선행 T3·T4·T6. 외벽·지붕·아스팔트·보도·흙길·식생·실내바닥·금속 P0 8분류. 완료: 게임 안 캡처(마을·골목·산·실내) + 드로우콜·SetPass·VRAM 추정 표, PERF_BUDGET 판정. 준환 확인 뒤 재질 교체 가능.\n",
+  "createdAt": "2026-11-16T08:17:35Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUIVQ",
+    "name": "perf",
+    "description": "Performance budget",
+    "color": "c5def5"
+   }
+  ],
+  "number": 319,
+  "title": "[S2] T7 전체 청람도 재질·캡처·PERF 판정(R1·R0 대표 구도)"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\nADR-193. 선행: S1 WP 4 슬라이스 마을, `WorldBuilder`·`GraphicsOptions`·URP 에셋은 S2 소유 아니므로 master 경유. 같은 구도 전/후 캡처 + 렌더 ms(p99 ≤ 10 ms). 실내 반사 누출은 건물 종류별 큐브맵 1개를 공유하는 ReflectionProbe(Custom)로. 완료: 전/후 캡처 6구도, 수치, 실내 누출 확인.\n",
+  "createdAt": "2026-11-16T08:17:33Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUIVQ",
+    "name": "perf",
+    "description": "Performance budget",
+    "color": "c5def5"
+   }
+  ],
+  "number": 318,
+  "title": "[S2] T6 맑은 낮 조명 보정(안개·앰비언트·태양·그림자·실내 프로브)"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\n선행 T2·S1 SurfaceId(#242). 테이블의 `surface` 열이 단일 진실. `SurfaceRules.ForBuilding`(현재 `SoundRules.BuildingSurface`)가 이 표를 읽게 하는 변경은 S1·S5 소유 파일이라 master 중재. 완료: 매핑 EditMode 테스트, 기존 FootstepSurface 테스트 통과.\n",
+  "createdAt": "2026-11-16T08:17:31Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 317,
+  "title": "[S2] T5 재질→표면 매핑 연동 (S1 SurfaceId)"
+ },
+ {
+  "body": "Part of #308 (스펙 #306)\n\n선행 T1·T2. `WorldMaterials`의 `SurfaceSets`/`Set(...)` 상수를 테이블 읽기로 교체, 마스크 포장을 `PackMask` 하나로(Poly Haven arm / 그 외 rough 폴백, ADR-185 (2)). 받아 둔 소스(`sublevel_staging/Textures/PBR`: asphalt_02, gravel_road, concrete_wall_003, concrete_floor_worn_001, oak_wood_planks, grass_ground)를 `Art/Materials`로 가져오며 ASSET_LEDGER T-0001 행 갱신. Unity 필요, Unity 순번 6. 완료: 임포트 로그, 재질 에셋 생성, AssetValidator·ledger 통과.\n",
+  "createdAt": "2026-11-16T08:17:28Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 315,
+  "title": "[S2] T3 WorldMaterials 테이블 구동 + 받아 둔 소스 임포트"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T4~T9\nUnity: 예\n\n삭제는 준환 확인(ADR-187). 다른 에이전트 code-review.\n\n증거(완료 기준): 전체 EditMode/PlayMode, 삭제 승인 기록, bible_build",
+  "createdAt": "2026-11-16T08:17:27Z",
+  "labels": [],
+  "number": 314,
+  "title": "[S4] T12 마감: 테스트 정리·MixamoBake 폐기·animation.json·code-review"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T7 (#305), T10 (#310)\nUnity: 예\n\nADR-186(2), ADR-190(4)(5): 코드 유지 항목은 HumanBodyBones 기준 이식, 차량 좌석 재측정(ADR-077/078).\n\n증거(완료 기준): 이슈별 수치·시퀀스",
+  "createdAt": "2026-11-16T08:17:25Z",
+  "labels": [],
+  "number": 312,
+  "title": "[S4] T11 슬라이스 후: 난간·수영·근접·권총·차량 IK (#233 #236 #219 #218)"
+ },
+ {
+  "body": "Part of #298\nBlocked by: 없음\nUnity: 아니오\n\n스프린트·점프·방향·회전·피격·권총·수영·난간·앉기·투척·치료·근접 후보(카탈로그 직접 확인, UAL 우선). ADR-165: 준환 선택 후 항목별 승인으로만 다운로드, ledger 기록 전 커밋 금지. **BLOCKED: 준환 선택**\n\n증거(완료 기준): 후보 시트 docs/research/",
+  "createdAt": "2026-11-16T08:17:24Z",
+  "labels": [],
+  "number": 310,
+  "title": "[S4] T10 격차 클립 시트(Mixamo/UAL) → 준환 선택 → ledger"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T4 (#302), S3 #260 LOD\nUnity: 예\n\nADR-189(2)(3), ADR-191(3): 접지 레이캐스트, IK 20 m 안 12명.\n\n증거(완료 기준): 경사·계단 발-지면 거리, ms 측정, PERF_BUDGET 판정",
+  "createdAt": "2026-11-16T08:17:23Z",
+  "labels": [],
+  "number": 309,
+  "title": "[S4] T9 발 IK + 50인 Animator PERF (#235)"
+ },
+ {
+  "body": "S2 재질·조명(WP 5) 지도. 스펙: #306. 티켓은 아래 순서·선행 관계로 처리한다.\n\n| 티켓 | 내용 | 선행 |\n|---|---|---|\n| T1 | arm 통일·AssetImportRules 해상도 접미사(코드·테스트 작성 완료, Unity 확인 대기) | — |\n| T2 | MaterialTable(Core)·materials.json·테스트 | master 파일 생성 승인 |\n| T3 | WorldMaterials 테이블 구동 + 받아 둔 소스 임포트 | T1, T2 |\n| T4 | 신규 추천 7종 다운로드(승인 필요) | 준환/master 승인 |\n| T5 | 재질→표면 매핑 연동 | T2, S1 SurfaceId |\n| T6 | 맑은 낮 조명 보정 | S1 WP 4 마을, master(WorldBuilder 소유) |\n| T7 | 슬라이스 R1·R0 재질 적용·캡처·PERF | T3, T4, T6 |\n| T8 | 디테일: 지형 트라이플래너·데칼 | T7 |\n| T9 | 정점색 SetPass 측정 | T7 |\n| T10 | 용량 정리(173 MB·1K 교체분) | T7, 준환 확인 |\n| T11 | 문서 갱신 | 각 티켓 |\n",
+  "createdAt": "2026-11-16T08:17:23Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 308,
+  "title": "[S2 재질·조명] 지도: WP 5"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T4 (#302), T5 (#303)\nUnity: 예\n\nLateUpdate에서 Spine/Chest/Neck 피치 분배, 기울이기는 발 고정. 회전 클립은 T10.\n\n증거(완료 기준): 피치/롤 각도 수치, 발 고정 거리",
+  "createdAt": "2026-11-16T08:17:21Z",
+  "labels": [],
+  "number": 307,
+  "title": "[S4] T8 시선 피치 분배 + 기울이기 + 제자리 회전 (#232 #234)"
+ },
+ {
+  "body": "## 목표\nWP 5. 맵 재질을 ambientCG 1K 13종에서 **Poly Haven 중심 2K PBR(표면 12분류)** 로 바꾸고, 흐린 하늘 가정으로 맞춘 조명을 맑은 낮(Kloofendal)에 맞춘다. 수직 슬라이스(R1 청람읍 + R0 북령 산악) 우선. 근거: ADR-174, ADR-184·185·193(가정), `docs/research/07_polyhaven_candidates.md`, `12_surface_tag_design.md`, `13_a1_perf_measurement.md`.\n\n## 확정 가정(준환 위임, 교체 가능)\n- 분류별 시트 추천 1개를 임시 확정. 재질 ID는 `materials.json` 데이터 테이블 한 곳(소스 ID만 바꾸면 교체).\n- 우선순위 P0(슬라이스) 외벽·지붕·아스팔트·보도·흙길·식생·실내바닥·금속 / P1 농지·학교 / P2 태양광 / 물은 자체 셰이더 유지.\n- 2K 상한, 쓰는 소스만 저장소에. 텍스처 VRAM 잠정 300 MB(미측정).\n- 디테일(트라이플래너·데칼·정점색)은 재질 교체·조명 뒤.\n\n## 범위 밖\n사운드(S5), 맵·건물 생성(S1), 캐릭터 재질(S3), 물 재질 교체, 한옥 기와·철망·차선·논 모심기 텍스처(시트 07 '없음').\n\n## 완료 기준\n1. EditMode 통과(기존 971 유지 + 신규 `MaterialTable` 테스트), `AssetValidator`·ledger 통과.\n2. 슬라이스 R1·R0 게임 안 캡처 전/후(같은 구도) + 수치(드로우콜·SetPass·렌더 ms·VRAM 추정), PERF_BUDGET 판정.\n3. 재질→표면 매핑 표가 S1 `SurfaceId`와 일치.\n4. `docs/ASSET_LEDGER.md`(T-0001/T-0002 행 갱신 + 신규), `docs/bible/data/materials.json` 상태, PROGRESS 갱신.\n5. 준환이 게임 안에서 확인.\n",
+  "createdAt": "2026-11-16T08:17:21Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 306,
+  "title": "[S2 재질·조명] 스펙: Poly Haven 2K PBR·맑은 낮 조명 (WP 5)"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T3 (#301), T10 점프 클립\nUnity: 예\n\n도약·낙하·착지 3단, 서서·달리며 구분.\n\n증거(완료 기준): 프레임 시퀀스 + 접지 시각 수치",
+  "createdAt": "2026-11-16T08:17:19Z",
+  "labels": [],
+  "number": 304,
+  "title": "[S4] T6 점프·착지 클립 (#228)"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T3 (#301)\nUnity: 예\n\n85/40/45/0.15 코드·armUp·GroundCrouchedFeet 삭제와 StanceTests·SlotDataTests 교체를 같은 WP에서.\n\n증거(완료 기준): 자세별 머리·가슴·엉덩이 높이 CSV(엎드림 머리 ≤0.45 m, 몸통 ≤15도), 총-시선 각",
+  "createdAt": "2026-11-16T08:17:18Z",
+  "labels": [],
+  "number": 303,
+  "title": "[S4] T5 웅크림·엎드림 클립화 + 코드 포즈 삭제 (#227 #225)"
+ },
+ {
+  "body": "Part of #298\nBlocked by: T3 (#301); 스프린트 클립은 T10\nUnity: 예\n\n8방향 2D 블렌드, 스프린트 로우레디, 대기 호흡. `LegHeading` 폴백 검증 후 삭제.\n\n증거(완료 기준): 8방향 발-지면·속도 수치 + 프레임 시퀀스(정지 이미지 단독 금지)",
+  "createdAt": "2026-11-16T08:17:17Z",
+  "labels": [],
+  "number": 302,
+  "title": "[S4] T4 Base: 방향 블렌드·스프린트·대기 (#223 #222 #231)"
+ },
+ {
+  "body": "## 목적\n캐릭터 애니메이션을 Humanoid 클립 구동으로 교체(ADR-173). 코드 포즈·베이크 결함·IK 포기(감사 04 (a)(b)(c)(d))의 구조 원인 제거. 재사용 감사 이슈: #218 #219 #222 #223 #225 #226 #227 #228 #231 #232 #233 #234 #235 #236 (닫힌 #220 #221 #224 #229는 회귀 금지, #230은 S3, #238은 S2, #237은 BACKLOG).\n\n## Notes\n- 스펙·설계·테스트 재작성 계획: `docs/research/15_s4_animation_spec.md`, S3 인터페이스: `docs/research/16_s3_s4_interface.md`\n- 가정 ADR-186~191(DECISIONS.md): 범위/우선순위, 직접 사용(MixamoBake 폐기 예정), 레이어 4개, IK(Animation Rigging 없음), 방향·자세·점프 처리, 검증·성능 원칙.\n- Unity 실행은 master 순번 7 (S3 #255 시험 Swat Humanoid 임포트 이후). 맹목 수정 금지, 정지 이미지 단독 판정 금지.\n\n## 의존\n```\nS3 #255 → T2 → T3 → T4,T5,T6,T7 → T8,T9 → T12\nT10(격차 클립 시트, 준환 선택) → T6, T11\nT1(인터페이스) → S3 #259\n```\n## Decisions so far\nADR-173(확정), ADR-180·181(S3), ADR-186~191.\n## Fog\n클립 커브 `LeftHandIK` 가능 여부, 16클립 루트 모션, 방향 이동·스프린트·점프 격차 클립, 50인 IK 비용.",
+  "createdAt": "2026-11-16T08:17:12Z",
+  "labels": [],
+  "number": 298,
+  "title": "[S4 애니] 지도: WP10 후반 Humanoid 애니메이션 전환 (레이어·IK·감사 #218~#238)"
+ },
+ {
+  "body": "Part of #283\n\n## Question\nUnity 6.3 오디오 설정에서 외부 의존성 없이 쓸 수 있는 공간화(HRTF) 방법이 있는지, macOS·Windows 둘 다 되는지 확인한다(audio.json a_hrtf open). 의존성 추가는 준환 승인.\n\nUnity 실행이 필요하면 master 순번.",
+  "createdAt": "2026-11-16T08:01:23Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUF3A",
+    "name": "wayfinder:research",
+    "description": "Wayfinder research ticket",
+    "color": "1d76db"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 295,
+  "title": "[S5] D1 Unity 6 HRTF/공간화 플러그인 내장 여부 확인"
+ },
+ {
+  "body": "Part of #283\n\n## Question\n교체된 소리를 게임 안에서 듣고 마음에 안 드는 소리를 `10_sound_download_checklist.md` 표에서 교체 지시한다(합성 의심: 609587, 879805, 683433 등). 소리는 텍스트로만 조사돼 누구도 들어 보지 않았다.\n\nBlocked by: T4~T7",
+  "createdAt": "2026-11-16T08:01:22Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJ1A",
+    "name": "ready-for-human",
+    "description": "Requires human implementation",
+    "color": "fbca04"
+   }
+  ],
+  "number": 294,
+  "title": "[S5] T11 준환 게임 안 청취 확인과 교체 지시"
+ },
+ {
+  "body": "Part of #283\n\n## Question\n`14_sound_ledger_draft.md`를 `ASSET_LEDGER.md`(S-0008~)와 `Credits.cs`에 반영하고 옛 S-0001~0007 교체 표시. CreditsTests 대조. 크레딧의 원 제목 상표 문제는 사람 판단(규칙 8, RISKS 등록).\n\n## Done when\n- CreditsTests·AssetValidator 통과, AUDIO.md·audio.json·PROGRESS 갱신, `python3 tools/bible_build.py`.\n\nBlocked by: T2(파일이 Assets로 옮겨질 때 같이)",
+  "createdAt": "2026-11-16T08:01:20Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 293,
+  "title": "[S5] T10 ledger·크레딧 반영(CC BY 3.0 1건)과 문서 갱신"
+ },
+ {
+  "body": "Part of #283\n\n## Question\nAudioMixer 도입(Master→SFX/Ambience/UI), 층 차폐(바닥 콜라이더 수, 층당 저역 통과·−6 dB), 벽 폐색(프레임당 광선 8·소스당 0.25 s, 60 m 밖 제외), 리버브 존. 비용은 측정 후 조정(ADR-183 가정).\n\n## Done when\n- 같은 건물 2층 발소리·총성 PlayMode 시나리오, 레이캐스트 비용 수치, PERF 판정.\n\nBlocked by: T3, S1 건물 구조, HRTF 확인 티켓",
+  "createdAt": "2026-11-16T08:01:18Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 292,
+  "title": "[S5] T9 AudioMixer·공간음향: 층 차폐·벽 폐색·실내외 리버브 존"
+ },
+ {
+  "body": "Part of #283\n\n## Question\nZoneBanner 클립 슬롯(현재 호출처 없음)을 채우고 사이렌(412171/336640)·방송 차임(879805)·가이거 3단(417424/674113)을 S6가 호출하는 인터페이스로 정의한다.\n\n## Done when\n- 인터페이스 문서 + 호출 EditMode 테스트.\n\nBlocked by: T2, S6 오염 코어",
+  "createdAt": "2026-11-16T08:01:17Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 291,
+  "title": "[S5] T8 구역 사이렌·방송·가이거 훅 (S6가 호출)"
+ },
+ {
+  "body": "Part of #283\n\n## Question\nAmbientBeds·EnvironmentView·StormFx의 합성 앰비언스를 녹음으로 교체. 긴 파일(귀뚜라미 3.7분 등)은 루프 이음 처리. 683433은 파도 소리일 수 있어 청취 확인.\n\n## Done when\n- 루프 이음 확인 수치, 지역·지붕·시간대 혼합 테스트 유지.\n\nBlocked by: T2",
+  "createdAt": "2026-11-16T08:01:15Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 290,
+  "title": "[S5] T7 환경음·날씨 교체: 비·천둥·바람·새·귀뚜라미·불, 루프 정리"
+ },
+ {
+  "body": "Part of #283\n\n## Question\nDoorFx·GlassFx·ElevatorAudio·VehicleAudio·ThrowableView의 합성 소리를 받은 파일로 교체(준환 확정: 유리 861043, 문 125958, 차량 엔진 401552, 원거리 폭발 372086). 후보 없는 항목은 합성 유지.\n\n## Done when\n- 각 이벤트 재생 테스트 + 게임 안 청취.\n\nBlocked by: T2",
+  "createdAt": "2026-11-16T08:01:13Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 289,
+  "title": "[S5] T6 월드 소리 교체: 문·유리·엘리베이터·차량·폭발·섬광탄·연막"
+ },
+ {
+  "body": "Part of #283\n\n## Question\n무음이거나 합성인 전투 소리를 받은 파일로 교체/추가(`10_sound_download_checklist.md` D). 탄 스침 합성(SF 레이저 느낌) 제거.\n\n## Done when\n- 이벤트별 재생 EditMode/PlayMode 테스트, 동시 발음 32 상한 유지.\n\nBlocked by: T2",
+  "createdAt": "2026-11-16T08:01:12Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 288,
+  "title": "[S5] T5 전투 소리 교체: 장전·빈 탄창·탄피·탄 스침·도탄·피격·근접·줍기·치료·수영"
+ },
+ {
+  "body": "Part of #283\n\n## Question\npistol(828786·253736)·smg(201672·201667)·rifle(201670·201668)·carbine(46655)·shotgun(159710)·sniper(855608·351777)·suppressed(668071)를 잘라 무기당 변형 3개+ 로 교체하고 3겹 재생·피치 ±5%를 적용한다. 저격이 소총을 낮은 피치로 재사용하는 코드를 제거.\n\n## Done when\n- 무기별 변형 수 EditMode 테스트, 근거리/원거리 교차 값 유지 테스트, 게임 안에서 준환이 청취.\n\nBlocked by: T2의 자르기 도구, Unity 순번",
+  "createdAt": "2026-11-16T08:01:09Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 287,
+  "title": "[S5] T4 총성 교체: 근거리·원거리·실내 꼬리 3겹, 무기 7종(소음기 포함)"
+ },
+ {
+  "body": "Part of #283\n\n## Question\n`CombatantAudio.SurfaceAt`·`BulletSurfaces.Of`의 Enum.TryParse·Colliders 이름·폭 0.4 m 추정을 삭제하고 S1 `SurfaceTag`·지형 레이어 표를 읽는다. 태그 없는 콜라이더는 Concrete + 개발 빌드 경고 1회.\n\n## Done when\n- 폴백·경고·태그→클립 EditMode 테스트, 월드 빌더 검증 '태그 없는 건물 콜라이더 0개', 기존 테스트 통과.\n\nBlocked by: T1, S1 빌더 태그 부착(T5)",
+  "createdAt": "2026-11-16T08:01:07Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHpA",
+    "name": "blocked",
+    "description": "Needs a human (payment/account/ToS/irreversible)",
+    "color": "b60205"
+   }
+  ],
+  "number": 286,
+  "title": "[S5] T3 표면 판정 이름 파싱 제거 (CombatantAudio·BulletSurfaces → SurfaceTag)"
+ },
+ {
+  "body": "## Destination\n\nSUBLEVEL의 소리를 합성음에서 실제 녹음으로 교체하고 표면 18종·공간음향·AudioMixer를 연결한 상태. 스펙: #282. 소스·다운로드: `docs/research/09_sound_candidates.md`·`10_sound_download_checklist.md`, 연결 설계: `13_sound_wiring_design.md`, ledger·크레딧 초안: `14_sound_ledger_draft.md`, 가정: ADR-183.\n\n## Notes\n\n- 소리 파일 약 66개가 `AssetStaging/audio/`에 있다(원본 이름). Unity 순번은 master가 지정(지금 S1 사용 중).\n- 구현은 EditMode 먼저. 소리는 사람이 게임 안에서 들어야 확정.\n- ledger·`Credits.cs`는 CreditsTests가 대조하므로 같은 티켓에서 같이 바꾼다.\n\n## Decisions so far\n\n(비어 있음 — 티켓 해결 시 추가)\n\n## Not yet specified\n\n- 부스트·방어구·무기 꺼냄·유리 파편 걸음·함석 발소리의 소리(후보 없음 → 합성 유지/Kenney 임시).\n- 공간음향 비용 한도의 최종값(측정 후).\n\n## Out of scope\n\nHRTF 외부 플러그인, Sonniss 사용, 음악, 한국어 방송 음성, 오염 코어(S6), 관심 영역(S8).\n",
+  "createdAt": "2026-11-16T08:01:01Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 283,
+  "title": "[S5 사운드] 지도: 실녹음 교체·표면 18종·공간음향"
+ },
+ {
+  "body": "## Problem Statement\n\n준환은 지금 게임의 총성·발소리·유리 깨짐이 \"스타워즈 같다\"(합성음처럼 인공적)고 느낀다. 소리의 상당수가 코드 합성이고(문·유리·탄 스침·엘리베이터·차량·폭발·천둥·앰비언스), 발소리는 표면 6종뿐이며 눈 발소리를 흙에 쓰는 식으로 어긋난다. 표면은 오브젝트 이름 파싱으로 정해져 건물 이름이 바뀌면 조용히 콘크리트가 된다. 무음인 액션(빈 탄창·탄피·수영·줍기·치료·구역 경고 등)도 많다. 같은 건물 2층의 발소리 방향·층을 구분해 들을 수 없다.\n\n## Solution\n\n실제 녹음(CC0 중심, CC-BY는 크레딧 표기)으로 소리를 교체하고, 표면을 데이터 기반 태그 18종으로 바꾸며, 공간음향(층 차폐·벽 폐색·실내외 잔향)과 AudioMixer를 도입한다. 소스와 다운로드 목록은 `docs/research/09_sound_candidates.md`, `10_sound_download_checklist.md`에 확정돼 있고 파일 약 66개가 `AssetStaging/audio/`에 받아져 있다. 연결 설계는 `13_sound_wiring_design.md`, ledger·크레딧 초안은 `14_sound_ledger_draft.md`.\n\n## User Stories\n\n1. 플레이어로서, 권총·SMG·소총·DMR·샷건·저격·소음기 총성이 서로 뚜렷이 다르고 실제 총처럼 들리길 원한다, 그래야 쏘는 맛과 적 무기 식별이 된다.\n2. 플레이어로서, 같은 총이라도 발사할 때마다 변형이 달라 반복감이 없길 원한다.\n3. 플레이어로서, 멀리서 들리는 총성이 먼 소리·잔향으로 들리길 원한다, 그래야 거리를 가늠한다.\n4. 플레이어로서, 실내에서 쏜 총성의 꼬리가 실외와 다르게 들리길 원한다.\n5. 플레이어로서, 걷는 표면(콘크리트·아스팔트·자갈·흙·진흙·풀·모래·바위·나무·데크·타일·금속·계단·함석·물·유리)마다 발소리가 달라 위치를 짐작하길 원한다.\n6. 플레이어로서, 걷기·달리기·웅크림의 발소리 크기가 다르길 원한다.\n7. 플레이어로서, 2층의 적 발소리가 바닥에 막힌 둔한 소리로 들리고 계단 소리가 단서가 되길 원한다.\n8. 플레이어로서, 벽 너머 소리가 먹먹하게 들리길 원한다.\n9. 플레이어로서, 유리 깨짐이 실제 유리 소리로 들리길 원한다.\n10. 플레이어로서, 문 열림·닫힘·부서짐이 실제 문 소리로 들리길 원한다.\n11. 플레이어로서, 장전·빈 탄창·탄피 소리가 들리길 원한다.\n12. 플레이어로서, 탄이 귓가를 스칠 때 실제 탄 스침 소리가 들리길 원한다.\n13. 플레이어로서, 폭발·섬광탄(귀울림)·연막 소리가 구분되길 원한다.\n14. 플레이어로서, 차량 엔진·경적·타이어·충돌 소리가 실물처럼 들리길 원한다.\n15. 플레이어로서, 엘리베이터 이동·도착·문 소리가 들리길 원한다.\n16. 플레이어로서, 비·천둥·바람·새·귀뚜라미·불이 녹음된 환경음으로 들리길 원한다.\n17. 플레이어로서, 오염 구역 경고 사이렌·방송 차임·가이거 계수관이 위험을 알려 주길 원한다.\n18. 플레이어로서, 줍기·치료·수영·피격 소리가 있길 원한다.\n19. 플레이어로서, 50명이 동시에 쏴도 소리가 폭주하지 않길 원한다(동시 발음 32).\n20. 개발자(준환)로서, 소리를 게임 안에서 직접 듣고 마음에 안 드는 소리를 표에서 바꿀 수 있길 원한다.\n21. 개발자로서, 새 건물·재질이 생겨도 표면 태그 표만 고치면 소리가 따라오길 원한다(이름 파싱 없음).\n22. 개발자로서, 모든 소리의 출처·라이선스가 ledger와 크레딧 화면에 일치하길 원한다.\n23. 봇 설계자로서, 표면을 바꿔도 봇 청취 반경 회귀가 없길 원한다.\n\n## Implementation Decisions\n\n- 표면 태그는 S1의 14종에 Mud·Deck·MetalStairs·TinRoof를 덧붙인 18종(번호 안정). 발소리 클립 선택은 6종 FootSurface가 아니라 표면 id로 하고, FootSurface는 봇 청취와 기존 테스트용으로 남긴다.\n- 표면 판정에서 이름 파싱(`Enum.TryParse`, `Colliders` 이름, 폭 0.4 m 계단 추정)을 삭제하고 태그 컴포넌트를 읽는다. 태그 없는 콜라이더는 Concrete + 개발 빌드 경고 1회. 지형은 레이어 id→표면 데이터 표. 탄흔도 같은 태그를 읽는다.\n- 소리 이벤트 표와 표면 음량 계수는 데이터(JSON)로 두고 EditMode 테스트가 코드와 대조한다.\n- 걸음 시퀀스 자르기는 Unity 에디터 도구(오프라인 구간 표)로 한다. 저장소 파일명은 상표 없는 일반 이름, 원본 이름은 ledger에만.\n- 총성은 근거리·원거리·실내 꼬리 3겹, 무기마다 변형 3개 이상, 피치 ±5%.\n- 공간음향: AudioMixer 도입(확정). 층 차폐는 바닥 콜라이더 수, 벽 폐색은 프레임당 광선 8개·소스당 0.25 s 갱신(가정, 측정 후 조정). HRTF는 Unity 내장 확인 후 결정. 동시 발음 32.\n- 라이선스: CC0 우선, CC-BY(3.0/4.0)는 소리별 ledger·크레딧 화면 반영 시 허용(ADR-177). 합성·AI 표기 소리와 AI 학습 비동의 문구가 있는 소리는 청취 후 교체 후보로 둔다. Sonniss는 사용하지 않는다.\n- 구역 사이렌·방송·가이거는 S6가 호출하는 인터페이스만 정의한다.\n- 근거: ADR-177, ADR-183, `docs/research/09·10·13·14`.\n\n## Testing Decisions\n\n- 좋은 테스트는 외부 행동만 본다: 표면 id → 재생 클립 폴더·음량 계수, 태그 없는 콜라이더 폴백, 표 전체(18종×클립 폴더 존재) 대조, 층 차이에 따른 저역 통과·감쇠 값.\n- 가장 높은 seam: Core 규칙(SoundRules·SurfaceRules) EditMode. 두 번째: PlayMode 시나리오(같은 건물 2층 발소리·총성).\n- Prior art: `FootstepSurfaceTests`(기존 4종 유지), 봇 청취 반경 테스트, `CreditsTests`(ledger↔크레딧 대조), `AssetValidator`.\n- 증거는 EditMode/PlayMode 통과 + 게임 안 캡처 + 수치(레이캐스트 비용). **사람이 게임 안에서 듣는 확인**이 마지막 관문이다(소리는 텍스트로만 조사됨).\n\n## Out of Scope\n\nHRTF 외부 플러그인 추가, Sonniss 번들 사용, 음악, 한국어 방송 음성, 합성음 유지 결정(엘리베이터·차량 가속 등 후보 없는 항목은 합성 유지), 네트워크 관심 영역(S8), 오염 코어(S6).\n\n## Further Notes\n\n후보를 못 찾은 항목: 부스트·방어구·무기 꺼냄·유리 파편 걸음·함석 발소리. 의심 항목: 683433(Wave_Wind, 파도일 수 있음), 609587(합성+AI 학습 비동의 문구), 879805(신스 톤). 크레딧의 CC BY 3.0 원 제목에 상표가 들어 있어 사람의 법적 판단이 필요하다(규칙 8).\n",
+  "createdAt": "2026-11-16T08:00:29Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 282,
+  "title": "[S5 사운드] 스펙: 실녹음 교체·표면 18종·공간음향"
+ },
+ {
+  "body": "Part of #273\n\n선행: #280. 50인 기준 손에 든 총+바닥 루트 총 모델 드로우·삼각형을 PERF_BUDGET로 판정.",
+  "createdAt": "2026-11-16T07:56:53Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUIVQ",
+    "name": "perf",
+    "description": "Performance budget",
+    "color": "c5def5"
+   }
+  ],
+  "number": 281,
+  "title": "[S7] T7 총기 모델 LOD·드로우콜 PERF 판정"
+ },
+ {
+  "body": "Part of #273\n\n선행: #274. 모델 불필요.\n\n`ShakeDeg`를 로컬 플레이어 조준 오프셋에 반영(ADS·힙 모두). 게임 안 캡처 + 수치(흔들림 각도), HUD 변경 없음.",
+  "createdAt": "2026-11-16T07:56:44Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 275,
+  "title": "[S7] T2 클라: 저지력 흔들림을 조준에 표시"
+ },
+ {
+  "body": "SESSION_PLAN S7 / WP 9. 근거: ADR-172, ADR-182(가정), `docs/research/s7_gun_spec.md`.\n\n## 도착점\n일반 파밍 16종 + 보급 5종이 데이터·규칙·루팅·모델까지 게임에서 동작하고, 저지력(조준 흔들림·이동 감속)이 서버에서 판정된다.\n\n## 완료됨 (커밋 대기, Unity 미실행)\n스탯 데이터 21종(`weapons.json`), 조준경·부착물 칸(`optics.json`), `WeaponDef.Stopping/SupplyOnly`, `WeaponStopping`/`StaggerState`, `WeaponStats`, 테스트 15개 + 기존 테스트 수정 4건. dotnet 하네스 43개 통과.\n\n## 길 (선행은 각 티켓 본문, 모델 없이 되는 것이 앞)\n- [ ] #274 T1 서버 저지력 (선행: S8 네트워크 구조)\n- [ ] #275 T2 클라 흔들림 표시 (선행: T1)\n- [ ] #276 T3 루팅·보급 가중 (선행: S1 루팅 가중)\n- [ ] #277 T4 루팅 분포 테스트 (선행: T3)\n- [ ] #278 T8 Unity EditMode 실행 (master 순번 9)\n- [ ] #279 T5 모델 임시 반입 (선행: Unity 순번, 다운로드 승인)\n- [ ] 297 T5b placeholder 키트배시 (선행: T5)\n- [ ] #280 T6 등록·아이콘·섬광 (선행: T5)\n- [ ] #281 T7 LOD·PERF (선행: T6)",
+  "createdAt": "2026-11-16T07:56:41Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 273,
+  "title": "[S7] 총기 로스터 16+5종·저지력 wayfinder 지도"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #271, S8 봇 오염·열쇠 행동\n\n**내용**: 판 길이 20~25분, 열쇠 이탈률(7개 25%·8개 28%) 근처 확인, 시뮬 대조표. 시뮬 몬테카를로는 JS 전용이라 PlayMode 판 통계로만 확인.\n**완료 기준**: 시뮬 대조표 문서.",
+  "createdAt": "2026-11-16T07:32:04Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 272,
+  "title": "[S6] T9 판 통계: 길이·열쇠 이탈률 PlayMode 검증"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #266\n\n**내용**: 상단 경고 배너(105초), 지도 지역 점멸+전선 윤곽, 붉은 안개·비네팅·초당 피해 숫자, 방독 남은 시간 아이콘, 가이거·사이렌 **훅만**(소리는 S5). `docs/bible/data/ui.json`에 결정 항목 추가(준환 확인).\n**완료 기준**: 게임 안 캡처 + 수치, ui.json.",
+  "createdAt": "2026-11-16T07:32:00Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 270,
+  "title": "[S6] T7 연출·최소 HUD"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #266, #268\n\n**내용**: 스쿼드 사망 시 칩 드롭(마지막 생존자 제외), 줍기·보관함 넣기(90초), 보관함 지역 오염 확정 시 파괴, 비오염 승강장 선택 부활(체력 10), 팀 HUD 한 줄. 기절 수혈 유지. ADR-171·179.\n**완료 기준**: PlayMode 시나리오 + 캡처.",
+  "createdAt": "2026-11-16T07:31:58Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 269,
+  "title": "[S6] T6 칩 드롭·승강장 보관함·부활"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #266, #264\n\n**내용**: `LootKind.Key` 재사용(통로 규칙 제거), `KeyPlan` 배치(루팅 점·보급상자), 승강장 상호작용(삽입→문 30초→선택 15초→이동), 탑승 4명·적 동승, 전력 충전 90초, 팀 쿨다운 180초, 기존 `ElevatorPanel` 확장. ADR-170·178.\n**완료 기준**: 상태 머신 PlayMode 시나리오(무효·쿨다운·충전·적 동승), 캡처.",
+  "createdAt": "2026-11-16T07:31:56Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 268,
+  "title": "[S6] T5 열쇠 아이템·배치·ElevatorPanel 열쇠 사용"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #266\n\n**내용**: 전선 안 전투원에게 0.5초 틱 피해(`DamagePerSecond`), 방독 필터·해독제 아이템(`LootKind` 추가, 루팅 표, 사용 입력·HUD 아이콘), 최종 지역 무효. ADR-178.\n**완료 기준**: PlayMode(전선 통과 피해량, 방독 지속·최종 지역 무효), 아이템 아이콘.",
+  "createdAt": "2026-11-16T07:31:55Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 267,
+  "title": "[S6] T4 오염 피해·방독 필터/해독제 아이템"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: #264, #265\n\n**내용**: 시드 + 서버 시간 결정론 계산, 매치마다 새 시드, 클라이언트에는 지역 단계·확정 시각만 복제(전선은 도달 시간 그리드 해시 확인 또는 서버 계산). 슬라이스는 지역 수 2 설정(지도 Fog).\n**완료 기준**: 멀티 PlayMode 테스트(호스트·클라이언트 지역 상태 일치), EditMode.",
+  "createdAt": "2026-11-16T07:31:53Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 266,
+  "title": "[S6] T3 서버 PollutionDirector (ZoneDirector 대체)"
+ },
+ {
+  "body": "Part of #263\n\nBlocked by: master Unity 순번 5 (S1 A1 측정 뒤)\n\n**내용**: `Core/PollutionRules·PollutionOrder·PollutionFront·KeyElevator·ChipRevive.cs`와 `Tests/EditMode/{PollutionTests,PollutionSimParityTests,KeyElevatorTests,ChipReviveTests}.cs`(+`PollutionSimFixture.txt`)를 Unity EditMode에서 실행. 코드는 작성 완료.\n**완료 기준**: EditMode 전부 통과(기존 971 유지), 다른 에이전트의 code-review(Standards+Spec), 시뮬 대조 수치 기록.\n**참고**: Unity 미실행 상태에서 dotnet 하네스로 41개 통과 확인. `.meta`는 Unity가 생성.",
+  "createdAt": "2026-11-16T07:31:49Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 264,
+  "title": "[S6] T1 코어 Unity EditMode 검증과 코드 리뷰"
+ },
+ {
+  "body": "S6 세션 wayfinder 지도. 상세는 `docs/research/s6_pollution_key_chip_spec.md`(spec·가정·시뮬 대조), 맵 데이터 형식은 `docs/research/s6_map_data_format.md`. 근거 ADR-169·170·171·178·179, SPEC §3·§5·§6.\n\n## Notes\n- 코어(순수 C#, `Core/Pollution*.cs`·`KeyElevator.cs`·`ChipRevive.cs`)와 EditMode 테스트는 작성됨. dotnet 하네스 41개 통과, Unity EditMode는 master 순번 5에서.\n- 시뮬 대조: 전선 도달 시간(시드 1·2, 33,400칸 전부 3초 이내), 확정 순서(시드 1~12), 판 길이(200시드 평균 22.13분, C# 표본 40시드 ±0.05분).\n- 슬라이스(R1+R0) 우선. 소리는 S5 범위(훅만 정의). 봇 행동은 S8.\n\n## Decisions so far\n- grilling 2026-11-16: 열쇠는 `LootKind.Key` 재사용 / 방독 필터 60초 ×0.5·해독제 25초 ×0.1 / 칩은 사망 후만, 90초 / 팀 쿨다운 180초 / 최소 HUD 6항목 (ADR-178·179).\n\n## Fog (미결)\n- 슬라이스 판은 오염 지역 수 2(R0·R1)로 돌릴지 (master 결정, 맵 형식 문서 D2).\n- 서버·클라이언트 전선 계산 방식(서버 계산+해시 확인 안).\n- 열쇠 이탈률(7개 25%·8개 28%)은 PlayMode 판 통계로만 확인 가능.\n\n## 티켓\n(아래 자식 이슈. 선행은 각 본문의 `Blocked by`.)",
+  "createdAt": "2026-11-16T07:31:48Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 263,
+  "title": "[S6 오염·열쇠·칩] 지도: WP 6~8 (오염 코어·열쇠 엘리베이터·칩 부활)"
+ },
+ {
+  "body": "Part of #252\nBlocked by: T9.\nASSET_LEDGER, characters.json, 크레딧 화면 반영. 기존 Swat은 placeholder/로 이동(릴리스 전 제거 목록).",
+  "createdAt": "2026-11-16T07:30:25Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 262,
+  "title": "[S3] T10 문서: ledger·characters.json·크레딧, Quaternius Swat placeholder 이동"
+ },
+ {
+  "body": "Part of #252\nBlocked by: T1(준환 선택), T7, T8. 관련: #195\n슬라이스 6종 → 최종 Mixamo 10 + UBC 2(8변형). 약한 틴트, 팀 완장·머리띠, Head 소켓 헬멧 소품, 시드 배정·인접 중복 금지.\n증거: 20명 스폰 캡처, PERF 판정.",
+  "createdAt": "2026-11-16T07:30:17Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 261,
+  "title": "[S3] T9 로스터 확장 + 틴트·소품·시드 배정 (#195)"
+ },
+ {
+  "body": "Part of #252\nBlocked by: T3.\n모델 스케일을 키 1.8로 정규화. HitZones는 높이 기반이라 변경 없음 — 머리/몸/다리 레이 캡처로 일치 확인.\n증거: 수치 + 캡처 3장.",
+  "createdAt": "2026-11-16T07:30:10Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 257,
+  "title": "[S3] T5 키 정규화·캡슐·눈높이 호환 (1.8/1.6 유지)"
+ },
+ {
+  "body": "## 목적\n캐릭터를 Humanoid Avatar 로스터로 교체(ADR-173). 소총 실물 비례·LOD 3단·소켓 인터페이스를 S4(애니)에 넘긴다. 감사 #230(비율)·#195(모델 1종) 재사용.\n\n## Notes\n- 시험 FBX = 기존 C-0005 Mixamo Swat과 동일 모델(head 4375 + body 5844 정점, 표준 mixamorig, Foot이 LeftLeg 자식). ADR-166의 Foot.L/R 문제는 Quaternius Swat 얘기(ADR-180).\n- 가정 A1~A5(ADR-181): 슬라이스 6종(시험 Swat+UBC 2+Mixamo 3), 최종 Mixamo 10+UBC 2 / 틴트+팀 소품 / 얼굴 보이는 캐릭터 우선·헬멧은 Head 소켓 소품 / 후보 시트→준환 선택 / LOD 자체 데시메이트.\n- Unity 실행은 master 순번(SESSION_PLAN §3 순 7). 신규 FBX 커밋 금지(AssetStaging은 git 무시).\n- 스펙·인터페이스 초안: 세션 노트 S3_character_spec_and_tickets.md\n\n## 의존\n```\nT1 후보 시트 → (준환 선택) → T9\nT2 인터페이스 문서(S4 합의) → T7\nT3 시험 Swat 임포트(Unity) → T4,T5,T7,T8\nT5 → T6 ; T7 → T9 → T10\n```\n## Decisions so far\nADR-180·181(DECISIONS.md) 참조.\n## Fog\nAvatar isValid·실제 키·삼각형 수(T3 전 추정), Mixamo 약관 비공개 저장소 문구(사람 검토, 출시 게이트).",
+  "createdAt": "2026-11-16T07:30:02Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 252,
+  "title": "[S3 캐릭터] WP10 전반 지도: Humanoid 로스터 전환 (Mixamo 10 + UBC 2)"
+ },
+ {
+  "body": "Part of #241\nG2 범위(층수·중앙 계단실·옥상 진입·창문 규칙). 건물 수·진입 수 표.\nBlocked by: #244, #243\n계획: docs/research/11_s1_map_plan.md. Unity는 master가 준 순번에만 실행. 테스트 우선, 시드 결정성·EditMode 971 유지.",
+  "createdAt": "2026-11-16T07:18:59Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 249,
+  "title": "[S1] T8 WP4a PlaceLots 블록·골목 + 건물 12종 층수·계단·옥상·창문"
+ },
+ {
+  "body": "Part of #241\n03_mountains.md T1~T14. 걷기 35도·지역 면적 88% 이상, slopeLimit(45) vs 규칙(40) 정리 ADR(A1 후), 경사 통계 수치.\nBlocked by: #244, #243(경사 ADR 판단)\n계획: docs/research/11_s1_map_plan.md. Unity는 master가 준 순번에만 실행. 테스트 우선, 시드 결정성·EditMode 971 유지.",
+  "createdAt": "2026-11-16T07:18:56Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUHPw",
+    "name": "wayfinder:task",
+    "description": "Wayfinder task ticket",
+    "color": "0052cc"
+   }
+  ],
+  "number": 247,
+  "title": "[S1] T6 WP2 산악 지형(R0): 능선·도메인 워프·테라스·협곡·절벽, T1~T14"
+ },
+ {
+  "body": "## 2026-11-18 현행 기획 정리\n\n현행 기준은 SPEC §4·ADR-204~208의 6지역·17마을·411채 전체 청람도다. R1+R0 187채 별도 슬라이스(#250)는 대체한다. WorldBuilder 재생성과 전체 EditMode 1510/1510은 확인했으나 맵 인수 완료를 뜻하지 않는다.\n\n남은 유효 요구: #247 산악 시야·엄폐, #249 건물 종류별 구조, #337 전체 맵 NavMesh. #250의 미확인 농지·소품·울타리, 마을/골목/산 게임 캡처와 지역별 드로우콜·SetPass·프레임 수치도 이 지도에 보존한다. 아래 187채 슬라이스/971건 표기는 당시 기록이다.\n\n---\n\nS1 맵 세션 wayfinder 지도. 상세·결정 기록은 docs/research/11_s1_map_plan.md, 표면 태그는 docs/research/12_surface_tag_design.md. 근거 ADR-168. 티켓은 아래 댓글/링크 참조. 확정 결정 G1~G5: 코드 조립 유지·BuildingKind 약 12종, 층수/옥상 범위, 411 확정 기준(A1 측정), 슬라이스 R1+R0 187채, SurfaceId 태그.\n\n티켓: T0 #242, T1 #243, T2 #240, T3 #244, T4 #245, T5 #246, T6 #247, T7 #248, T8 #249, T9 #250, T10 #251",
+  "createdAt": "2026-11-16T07:18:46Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUFdA",
+    "name": "wayfinder:map",
+    "description": "Wayfinder map issue",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 241,
+  "title": "[S1 맵] 지도: 청람도 전체 맵(6지역·17마을·411채) 잔여 검증"
+ },
+ {
+  "body": "## 본 것\n벽 그림자 경계가 계단, 캐릭터 그림자 테두리가 얼룩.\n\n증거(PNG, 저장소 미포함 Logs/): B_rifle_run_*_side.png, A_idle_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 부드러운 캐스케이드 그림자.\n\n## 원인(코드)\nURP 그림자 해상도/캐스케이드(성능 예산 확인).\n\n## 제안\n그림자 해상도/소프트 옵션.\n",
+  "createdAt": "2026-11-15T13:15:16Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 238,
+  "title": "[캐릭터] 그림자 해상도 낮음: 가장자리 계단 현상, 캐릭터 그림자가 점선처럼 깨짐"
+ },
+ {
+  "body": "## 본 것\n핸들 위 손가락이 장갑과 분리된 길고 연한 막대.\n\n증거(PNG, 저장소 미포함 Logs/): FairheavenLT80_06_driver_fpp.png, DirtBike_08_fpp_steer.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 장갑 낀 자연스러운 손.\n\n## 원인(코드)\nCombatantAnimation.Vehicle.cs Grip/Reach.\n\n## 제안\n손 메시/그립 컬 조정.\n",
+  "createdAt": "2026-11-15T13:15:14Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 237,
+  "title": "[캐릭터] 차량 1인칭 손: 손가락이 분리된 창백한 소시지 모양"
+ },
+ {
+  "body": "## 본 것\n수직 오프셋(GroundCrouchedFeet)만 있고 레이캐스트 IK 없음. 경사/계단 캡처는 못 찍음.\n\n증거(PNG, 저장소 미포함 Logs/): CombatantAnimation.cs LateUpdate\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 발이 지형을 따라 접지.\n\n## 원인(코드)\nCombatantAnimation.cs FootContact/_footFixTotal.\n\n## 제안\n양발 레이 IK.\n",
+  "createdAt": "2026-11-15T13:15:11Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 235,
+  "title": "[캐릭터] 발 IK 없음: 경사·계단에서 발 접지 미보장 (코드 근거)"
+ },
+ {
+  "body": "## 본 것\n프레임으로 발 스텝 확인 불가.\n\n증거(PNG, 저장소 미포함 Logs/): I_turn_*_side.png (환경이 달라 판단 불가)\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 일정 각도 이상 돌면 발 스텝.\n\n## 원인(코드)\ngrep: TurnInPlace 없음, CombatantAnimation은 모델 yaw만.\n\n## 제안\n회전 임계 + 스텝 클립.\n",
+  "createdAt": "2026-11-15T13:15:09Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 234,
+  "title": "[캐릭터] 제자리 회전에 발 움직임 없음 (코드 근거, 영상 미검증)"
+ },
+ {
+  "body": "## 본 것\n매달린 몸통이 벽면에 겹쳐 파고듦, 올라오기가 매달림 → 한 프레임에 앉은 자세 → 서기로 뚝뚝 끊김. 무기 숨김.\n\n증거(PNG, 저장소 미포함 Logs/): ledge_01_hang_side.png, ledge_12..16 (Logs/char_other/ledge)\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 부드러운 클라임 모션.\n\n## 원인(코드)\nCombatantAnimation.Ledge.cs 본 포즈.\n\n## 제안\n벽 오프셋 + 단계 블렌드.\n",
+  "createdAt": "2026-11-15T13:15:08Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 233,
+  "title": "[캐릭터] 난간 매달리기: 몸이 벽에 박히고 끌어올리기가 앉은 자세로 튐"
+ },
+ {
+  "body": "## 본 것\n머리가 몸 대비 크고 마스크로 얼굴이 전혀 안 보임. 손이 맨살색이라 장갑과 어긋남. 조끼는 검정 덩어리.\n\n증거(PNG, 저장소 미포함 Logs/): A_idle_*_front.png, B_*_quarter.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 실사 비율, 얼굴/머리 스타일, 의상 질감.\n\n## 원인(코드)\nArt/Characters/QuaterniusModularMen/Swat.fbx 1종 (변주는 #195).\n\n## 제안\n모델 스케일/머리 비율 조정 또는 모델 교체(라이선스 확인).\n",
+  "createdAt": "2026-11-15T13:15:02Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 230,
+  "title": "[캐릭터] 캐릭터 비율/외형: 머리·헬멧 과대(얼굴 없음), 맨살 손+장갑 불일치, 단색 의상"
+ },
+ {
+  "body": "## 본 것\n두 경우 모두 무릎을 들어 올린 정적 포즈, 달리기 점프에 앞 기울임·팔 뻗기 없음, 착지 포즈로 급전환.\n\n증거(PNG, 저장소 미포함 Logs/): I_jump_stand_*, I_jump_run_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 달리며 점프 시 다리가 앞뒤로 벌어지고 착지 구르기/흡수.\n\n## 원인(코드)\nCombatantAnimation TrackAir/TrackJumpPose: AirPhase 한 포즈 + 본 회전.\n\n## 제안\n속도별 공중 포즈, 착지 블렌드.\n",
+  "createdAt": "2026-11-15T13:14:59Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 228,
+  "title": "[캐릭터] 점프: 서서/달리며가 같은 웅크린 도약 자세, 총과 상체 반응 없음"
+ },
+ {
+  "body": "## 본 것\n대기에서 한쪽 발이 들려 있고 상체는 직립한 채 무릎만 크게 굽힘. 걷기 때 앞뒤 발 간격이 과장.\n\n증거(PNG, 저장소 미포함 Logs/): C_crouch_idle_front, C_crouch_walk_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 엉덩이를 낮춘 반 웅크림, 양발 접지, 상체 앞 기울임.\n\n## 원인(코드)\nCombatantAnimation 크러치: CrouchThighDeg/ShinDeg 본 회전 + GroundCrouchedFeet(수직 보정만).\n\n## 제안\n크러치 값 재조정 + 양발 접지.\n",
+  "createdAt": "2026-11-15T13:14:58Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 227,
+  "title": "[캐릭터] 웅크리기: 깊은 스쿼트 + 한 발 들림, 웅크려 걷기는 런지 같음"
+ },
+ {
+  "body": "## 본 것\nADS 때 총이 얼굴 높이로 떠 있고 스톡이 없는 짧은 총. Warden과 Ordo 3인칭 실루엣이 거의 같음. 권총 ADS는 한 팔.\n\n증거(PNG, 저장소 미포함 Logs/): D_ads_*_side/quarter.png, A_idle_rifle/smg_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 개머리판이 어깨에 닿고 뺨 용접, 총종마다 길이·실루엣이 뚜렷.\n\n## 원인(코드)\nRifleHold pose(X/Y/Z)와 총 모델 길이(Span/_supportAhead).\n\n## 제안\nADS 오프셋 교정, 소총 모델 길이/스톡 확인.\n",
+  "createdAt": "2026-11-15T13:14:56Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 226,
+  "title": "[캐릭터] 3인칭 ADS: 개머리판이 어깨에 닿지 않고 총이 얼굴 앞/헬멧에 겹침, 소총(Warden)과 SMG 모델이 구분 안 됨"
+ },
+ {
+  "body": "## 본 것\n다리를 구부려 들어 올리고 비지지 손이 바닥을 짚은 플랭크 자세. 몸이 바닥에 눕지 않고 크롤 때 팔다리가 번갈아 움직이지 않음.\n\n증거(PNG, 저장소 미포함 Logs/): C_prone_idle_*, C_prone_crawl_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 몸 전체가 바닥에 눕고 팔꿈치/무릎으로 기어간다.\n\n## 원인(코드)\nCombatantAnimation.cs 엎드리기: 걷기 클립을 느리게 + 모델 pitch(ProneModelPitchDeg)만.\n\n## 제안\n전용 프론 포즈/크롤 클립 또는 본 포즈 개선.\n",
+  "createdAt": "2026-11-15T13:14:55Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 225,
+  "title": "[캐릭터] 엎드리기가 팔굽혀펴기 같은 판자 자세, 기어가기에 팔다리 동작 없음"
+ },
+ {
+  "body": "## 본 것\n옆걸음에서 다리가 전진 달리기 클립 그대로 몸이 비스듬히 틀어지고 발이 엇갈림. 후진 첫 프레임에서 두 발이 모두 지면에서 떠 그림자와 분리.\n\n증거(PNG, 저장소 미포함 Logs/): B_rifle_strafeR_*, B_rifle_strafeL_*, B_rifle_back_0_side.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 8방향 이동 클립, 발이 지면에 고정.\n\n## 원인(코드)\nCombatantAnimation.cs 상단 주석(ADR-049): 옆걸음 클립 없음, LegHeading으로 모델 회전. 후진은 _backClipSpeed 블렌드.\n\n## 제안\n8방향 로코모션 블렌드 또는 클립 추가 + 발 접지.\n",
+  "createdAt": "2026-11-15T13:14:50Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 223,
+  "title": "[캐릭터] 좌우 이동·후진이 전진 달리기 다리를 돌려 쓴 모양, 후진에 공중에 뜬 프레임"
+ },
+ {
+  "body": "## 본 것\n달리기와 스프린트 모두 상체 직립에 총을 가슴 높이 대각선. 스프린트의 앞 기울임이 거의 안 보임.\n\n증거(PNG, 저장소 미포함 Logs/): B_rifle_run_*, B_rifle_sprint_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 스프린트에서 총을 아래로 내려 비스듬히, 상체 숙임, 팔 크게 흔들기.\n\n## 원인(코드)\nRifleHold.TorsoPitch/Pose의 스프린트 계수가 작거나 같다(rules.json RifleHold).\n\n## 제안\nRifleHold 스프린트 포즈 값 확대 + 캡처 재검증.\n",
+  "createdAt": "2026-11-15T13:14:49Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 222,
+  "title": "[캐릭터] 소총 스프린트가 달리기와 거의 같음(총 내림·몸 숙임 없음)"
+ },
+ {
+  "body": "## 본 것\n마체테가 손바닥 위가 아니라 머리 뒤/위로 뻗어 있고 손은 펴진 채. 3인칭에서는 칼날이 바늘처럼 얇고, 1인칭에서는 화면 절반을 덮는 파란 판. 휘두르기는 팔만 움직임.\n\n증거(PNG, 저장소 미포함 Logs/): A_idle_melee_{side,quarter,front,fpp}.png, F_melee_swing_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 프라이팬/마체테를 손으로 쥐고 몸 옆에 낮게, 휘두를 때 몸 전체가 돌아간다.\n\n## 원인(코드)\nCombatantAnimation.Melee.cs PoseMelee(손 회전만), WeaponVisual 근접무기 Fit/스케일이 3인칭·1인칭에서 불일치.\n\n## 제안\n손 그립 위치/각도 교정, 3인칭·1인칭 스케일 통일, 휘두르기에 몸통·하체 연동.\n",
+  "createdAt": "2026-11-15T13:14:44Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 219,
+  "title": "[캐릭터] 근접무기: 대기 시 칼이 손에서 떠 머리 위로 솟고, 3인칭 칼날은 선처럼 얇은데 1인칭은 거대한 판"
+ },
+ {
+  "body": "## 본 것\n권총은 오른손이 허벅지 옆에서 총을 세워 든 채 달리기·스프린트 내내 팔이 고정, 무릎만 높이 올라가는 행진 걸음. ADS도 한 팔 뻗기.\n\n증거(PNG, 저장소 미포함 Logs/): B_pistol_run_*, B_pistol_sprint_*, A_idle_pistol_*.png\n재현: `CHAR_SHOTS=Logs/charshots tools/unity.sh test playmode Game.Tests.CharacterCaptureTests` (docs/CHARACTER_AUDIT.md)\n\n## 배그 기대\n배그: 권총도 양손 로우레디, 이동 중 총구 아래 비스듬히, ADS는 양손.\n\n## 원인(코드)\nCombatantAnimation.Rifle.cs LongGunInHand: 0.4m 미만 총은 코드 자세 제외, 상체 레이어의 한 손 클립(Idle_Gun)을 사용.\n\n## 제안\n권총용 양손 홀드(Rifle 코드 포즈 재사용), 이동 중 자연스러운 팔 처리.\n",
+  "createdAt": "2026-11-15T13:14:42Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDrIww",
+    "name": "character-audit",
+    "description": "캐릭터 모션/모델 배그 대비 감사",
+    "color": "5319e7"
+   }
+  ],
+  "number": 218,
+  "title": "[캐릭터] 권총 휴대/이동: 한 손으로 허리 옆에 총구 위로 들고 팔이 안 흔들림"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 24/25, 영향 low, 영역 1 로비/투입)\n\n**배그 기준**: 비행기 안 대기 → 낙하 → 착륙 때까지 긴장감이 쌓이는 연출과 사운드.\n\n**현재 증거**: RegionCard.cs, ElevatorCar/ElevatorPanel/ElevatorAudio 합성음, 보호 6초(SpawnProtection). 이번 감사에서 새 투입 캡처는 못 찍음(미검증).\n\n**할 일(제안)**: 엘리베이터 문 열림 시점 조명/먼지/기계음, 승객 대기 연출, 투입 카메라 이동; 새 PlayMode 캡처로 재판정.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:29Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 213,
+  "title": "[디테일] 투입 직후 60초 연출 빈약: 엘리베이터 도착 후 카메라·페이드·지역 소개 외 분위기 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 22/25, 영향 low, 영역 8 HUD)\n\n**배그 기준**: 무기·탄약 아이콘, 체력/부스트 바 형태, 피격 비네트, 결과 화면에 배경 장면과 보상 연출.\n\n**현재 증거**: 캡처 Logs/healthrow/fire_1_ahead.png: 빈 슬롯 '—', 무기 칸 '맨손'뿐, 체력은 가는 바. 결과 화면(Logs/shots/result_dead_won.png)도 검정 배경에 표 한 장.\n\n**할 일(제안)**: 무기 칸 아이콘(ItemIcons 재사용), 피격 가장자리 붉은 화면·기절 비네트, 결과 화면 연출 보강.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:25Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 211,
+  "title": "[디테일] HUD가 단색 박스·텍스트 위주: 아이템/무기 아이콘, 피격 연출, 탄약 표기 부족"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 21/25, 영향 med, 영역 2 루트 외형)\n\n**배그 기준**: 바닥 아이템이 실제 모델과 같은 외형(같은 총이 손과 바닥에서 동일), 희귀도 광택/빛기둥.\n\n**현재 증거**: 캡처 Logs/lookdev/loot_all.png: 헬멧·조끼·탄약·총이 블록 모양 코드 도형, 손에 쥐는 Quaternius 총(Art/Weapons)과 질감·비율이 다름. loot_row*.png 동일.\n\n**할 일(제안)**: 바닥 총은 손에 드는 메시를 재사용, 방어구·가방도 같은 모델의 바닥 포즈, 희귀도별 은은한 빛 표식.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:23Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 210,
+  "title": "[디테일] 바닥 루트 모델이 복셀풍 블록: 손에 드는 총과 스타일 불일치"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 20/25, 영향 med, 영역 7 상호작용)\n\n**배그 기준**: 캐비닛·서랍을 열면 안에서 아이템이 나오고, 일부 문은 잠김/부서짐, 전등 스위치.\n\n**현재 증거**: DoorSystem.cs, GlassPane.cs, SupplyDirector.cs, DeathCrate.cs 외 열리는 컨테이너 없음. 루트는 가구 위에 '놓인' 형태(OnProp, Buildings.cs AddLoot).\n\n**할 일(제안)**: 열리는 컨테이너 소품(문 애니메이션, F로 열기, 루트 안쪽 배치), 일부 문 잠김+발로 차기/총으로 부수기, 전등 스위치(조명 이슈와 연계).\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:22Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 209,
+  "title": "[디테일] 상호작용 가능한 물체가 문·창·보급 상자뿐: 사물함·서랍·캐비닛·전등 스위치 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 17/25, 영향 low, 영역 3 야외 분위기)\n\n**배그 기준**: 총소리에 날아오르는 새, 멀리 사슴/토끼, 낙엽·꽃가루 입자.\n\n**현재 증거**: Bird/Wildlife grep 0건(GrassRenderer 등에 없음).\n\n**할 일(제안)**: 저비용 새 떼(총성/접근 시 날아감) + 소리, 바람 낙엽 입자.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:17Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 206,
+  "title": "[디테일] 야생동물·새·떠다니는 낙엽·벌레 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 16/25, 영향 med, 영역 3 야외 지형)\n\n**배그 기준**: 눈·진흙·젖은 땅에 발자국, 풀을 지나면 눌림, 물에 파문·물보라.\n\n**현재 증거**: grep footprint 없음(건물 평면 관련 이름만 일치). 캡처 world_A.png 지면 변화 없음. 물 구역 파문/웨이크 grep 0건.\n\n**할 일(제안)**: 진흙/젖은 지면 발자국 데칼(짧은 수명), 풀 밀림(플레이어 주변 셰이더 파라미터), 물 파문 입자.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:15Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 205,
+  "title": "[디테일] 발자국·풀 눌림·물결 같은 지면 반응 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 12/25, 영향 med, 영역 4 사격 감각)\n\n**배그 기준**: 폭발 근처·피격·착지에 화면이 흔들리고 흐려짐(귀울림 연출).\n\n**현재 증거**: grep: Shake는 VehicleDamageVisual.cs뿐. PlayerController.cs:683 반동 킥은 있으나 폭발 근접·피격·착지 흔들림 없음.\n\n**할 일(제안)**: 카메라 트라우마 흔들림(거리·피해 비례, 설정에서 강도 조절), 착지·폭발·피격에 연결.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:06Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 201,
+  "title": "[디테일] 자기 사격·피격·폭발에 카메라 흔들림 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 11/25, 영향 high, 영역 4 사격 애니메이션)\n\n**배그 기준**: 탄창 빼고 넣고 노리쇠 당기는 손동작, 총 꺼내기·집어넣기·점검 모션.\n\n**현재 증거**: CombatantAnimation*.cs, WeaponVisual.cs, CombatantView.cs에서 'reload' 0건(소리만 CombatantAudio). 탄창 모델 분리 없음.\n\n**할 일(제안)**: 장전·무기 교체·노리쇠 손 IK/포즈(코드), 탄창 파츠 분리, 장전 시간과 동기. 점검(Inspect) 포함.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:04Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 200,
+  "title": "[디테일] 장전·꺼내기 손 애니메이션 없음, 탄창이 보이지 않음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 10/25, 영향 med, 영역 4 사격)\n\n**배그 기준**: 총 오른쪽에서 탄피가 튀어 바닥에 구르고 짤랑 소리.\n\n**현재 증거**: casing/shell grep 0건. 총구 섬광·트레이서는 있음(CombatantView.cs).\n\n**할 일(제안)**: 무기별 탄피 풀(작은 메시, 짧은 물리/수명), 재질별 바닥 소리, 산탄은 쉘.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:03Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 199,
+  "title": "[디테일] 탄피 배출 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 9/25, 영향 med, 영역 4 사격 피격)\n\n**배그 기준**: 재질마다 다른 구멍·갈라짐 데칼, 나무 조각·콘크리트 가루·흙 덩이가 튀고, 물에 맞으면 물기둥.\n\n**현재 증거**: ImpactLooks.cs BulletMarks Count = 48, 마크는 단색 원판 Disc. BulletSurface 표에 Ground/Concrete/Wood/Metal/Glass/Vehicle/Body만 있고 Water 없음.\n\n**할 일(제안)**: 재질별 텍스처 데칼(갈라짐/구멍), 파편 입자, Water 표면 추가(물기둥·소리), 데칼 상한·수명 조정.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:46:01Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 198,
+  "title": "[디테일] 탄흔은 어두운 원판 48개 돌려쓰기, 재질별 파편(나무 조각·콘크리트 조각)·물 튀김 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 8/25, 영향 med, 영역 4 사격 피격)\n\n**배그 기준**: 맞으면 피가 튀고 바닥에 핏자국, 쓰러진 곳에 핏물.\n\n**현재 증거**: Gameplay/ImpactLooks.cs Body 항목은 빨간 먼지 + 마크 없음(alpha 0). blood grep 0건. 수류탄·화염 외 지면 흔적 없음.\n\n**할 일(제안)**: 몸 피격 시 짧은 혈흔 입자와 바닥/벽 핏자국 데칼(풀 재사용), 설정에서 끄기(저연령/취향).\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:45:59Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 197,
+  "title": "[디테일] 피 효과가 한 점 붉은 안개뿐: 출혈 흔적·혈흔·피격 파편 없음"
+ },
+ {
+  "body": "감사: docs/DETAIL_AUDIT.md (순위 7/25, 영향 high, 영역 5 캐릭터 사망)\n\n**배그 기준**: 총알 방향·위치에 따라 쓰러지고 물리로 계단/경사에서 굴러떨어지며, 시체가 밀리고 장비 상자가 열림.\n\n**현재 증거**: CombatantAnimation.cs:267 dead면 SetBase(Death) 한 클립. ragdoll grep 0건. 피격 반응도 Hit 클립 하나(:272).\n\n**할 일(제안)**: 사망 시 래그돌(저비용 캡슐 조인트)로 전환해 총알 충격량을 받아 쓰러짐, 일정 시간 뒤 고정/제거, 피격 방향별 반응 2~4종.\n\n**완료 조건**: run-gfx 캡처를 직접 보고 확인, 성능 예산(PERF_BUDGET) 위반 없음, 에셋은 CC0만 + ASSET_LEDGER 기록, 룰 변경이면 ADR 먼저.\n",
+  "createdAt": "2026-11-15T12:45:58Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOVrkEfM8AAAADDDa3wQ",
+    "name": "detail-audit",
+    "description": "DETAIL_AUDIT.md gap vs PUBG",
+    "color": "5319e7"
+   }
+  ],
+  "number": 196,
+  "title": "[디테일] 사망 연출이 단일 클립: 래그돌·타격 방향 반응·시체 상호작용 없음"
+ },
+ {
+  "body": "#169 캡처 판정(2026-11-14): (1) 업기 안내 문구가 'Y 내려놓기'인데 실제 키는 K — 문구가 키 설정을 따르게 (2) 감정 '춤'이 팔을 벌린 T자 모양으로 보임 — 동작 보강 (3) 가리키기·박수 약함 (4) 업힌 몸이 등에 붙은 모양이 어색 (5) 가까운 핑 라벨 겹침, 지도 핑 작음 (6) 1인칭에서 자기 감정 못 봄.",
+  "createdAt": "2026-11-14T00:46:25Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 173,
+  "title": "[후속] 팀 기능 캡처 판정: 업기 안내 'Y 내려놓기'가 K와 불일치·춤 포즈가 T자·업힌 몸 어색·핑 라벨 겹침"
+ },
+ {
+  "body": "1인칭 차량 실내 조명이 어둡다. 실내 조명/노출 보정. (Map: #55. 2026-11-14 캡처/플레이 관찰에서 발견한 후속 항목)",
+  "createdAt": "2026-11-13T16:19:40Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 99,
+  "title": "[후속] 1인칭 차량 내부가 너무 어두움"
+ },
+ {
+  "body": "Parent: #55 · After: #89\n\n1. 탄흔 decals (cap ~30/vehicle, oldest recycled)\n2. Glass: crack texture then shatter — reuse GlassPane\n3. Body deformation: push vertices in at impact/blast point, tuned via screenshots\n4. Detachable parts (Fairheaven LT/SW, Lightbody, Shvan): hood/trunk/bumpers dangle then fall off; Goblin & motorcycles: none\n5. Health stages (engine 100/body 75/roof 50): white smoke → black smoke → fire → explode after 5 s → charred wreck\n6. Tyre shots: flat tyre lowers wheel, reduces grip, pulls to the side\n\nServer replicates state; decals/deformation cosmetic from replicated hit events. Perf budget must hold.",
+  "createdAt": "2026-11-13T07:58:21Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUJdw",
+    "name": "ready-for-agent",
+    "description": "Fully specified, ready for an AFK agent",
+    "color": "0e8a16"
+   }
+  ],
+  "number": 90,
+  "title": "[21] 차량 피해 표현: 탄흔·유리·찌그러짐·파츠 이탈·연기/화재/폭발·타이어 펑크 (ADR-067)"
+ },
+ {
+  "body": "Fish-Net(P-0001)은 MIT/Apache/BSD가 아닌 커스텀 라이선스. 무료·로열티프리·게임 사용 허용, 경쟁 네트워킹 제품에는 사용 불가, 플로리다 관할. ADR-003(사용자 확정)에 따라 사용 중이나 상업 배포 적합성은 사람이 확인(CLAUDE.md 규칙 8). 원문: https://github.com/FirstGearGames/FishNet/blob/main/LICENSE.md",
+  "createdAt": "2026-11-12T07:46:28Z",
+  "labels": [
+   {
+    "id": "LA_kwDOVrkEfM8AAAADCeUICA",
+    "name": "needs-license-review",
+    "description": "Asset license unclear, do not use",
+    "color": "d93f0b"
+   }
+  ],
+  "number": 2,
+  "title": "라이선스 검토: Fish-Net 커스텀 라이선스"
+ }
+]

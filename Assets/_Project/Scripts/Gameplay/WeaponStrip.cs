@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
@@ -5,85 +6,100 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The five-cell weapon strip (ADR-057/058): (1)(2) primary, (3) sidearm, (4) melee (always empty for now),
-    // (5) throwable with its count. The cell in hand is outlined in the accent colour. Cells are rewritten on change only.
+    // The weapon stack (HUD v2, ADR-057/058): one row per filled slot, left of the minimap, rows hugging the bottom.
+    // (1)(2) primary, (3) sidearm, (4) melee, (5) throwable with its count. A row reads "name ammo · icon · key"; the
+    // row in hand sits on a panel with the key in the accent colour, the others are dimmed. Hidden while driving.
+    // Rows are rewritten on change only.
     public sealed class WeaponStrip
     {
         public const int Cells = HudBackend.SlotCount;
-        public const float CellWidth = 76f, CellHeight = 72f, Gap = 6f;
-        public const float Width = Cells * CellWidth + (Cells - 1) * Gap;
+        public const float Width = 220f, CellHeight = 38f, Gap = 5f;
+        public const float Height = Cells * CellHeight + (Cells - 1) * Gap;
+        const float IconWidth = 84f, IconHeight = 30f, KeyWidth = 14f, Pad = 8f;
+        const float DimAlpha = 0.5f;
 
         static readonly string[] Keys = { "1", "2", "3", "4", "5" };
 
         public RectTransform Root { get; private set; }
 
-        readonly Image[][] _frame = new Image[Cells][];
-        readonly Image[] _bar = new Image[Cells];
+        readonly RectTransform[] _row = new RectTransform[Cells];
+        readonly CanvasGroup[] _group = new CanvasGroup[Cells];
+        readonly Image[] _panel = new Image[Cells];
         readonly Text[] _key = new Text[Cells];
-        readonly Text[] _count = new Text[Cells];
-        readonly Text[] _optic = new Text[Cells];
-        readonly Text[] _empty = new Text[Cells];
-        readonly GameObject[] _iconRoot = new GameObject[Cells];
-        readonly InventoryItemIcon[] _icon = new InventoryItemIcon[Cells];
+        readonly Text[] _label = new Text[Cells];
+        readonly Image[] _icon = new Image[Cells];
+        readonly string[] _iconKey = new string[Cells];
+        static readonly Color SilhouetteTint = new Color(0.84f, 0.87f, 0.89f, 1f); // #d6dde4, the mock's weapon shape
+        static readonly Dictionary<string, Sprite> Silhouettes = new Dictionary<string, Sprite>();
         readonly int[] _shownWeapon = new int[Cells];
+        readonly int[] _shownMag = new int[Cells];
         readonly string[] _shownOptic = new string[Cells];
-        int _shownActive = int.MinValue, _shownGrenades = int.MinValue, _shownThrowKey = int.MinValue;
+        int _shownActive = int.MinValue, _shownGrenades = int.MinValue, _shownThrowKey = int.MinValue, _shownLayout = -1;
         string _shownThrowName = "";
 
         // ---- Read-only state for tests ----
 
-        public int ActiveShown => _shownActive;                                  // the highlighted cell, -1 for none
-        public int WeaponShown(int cell) => _shownWeapon[cell];                  // weapon id drawn in the cell, 0 = empty
-        public string IconKeyShown(int cell) => _icon[cell].Key;
+        public int ActiveShown => _shownActive;                                  // the highlighted row, -1 for none
+        public int WeaponShown(int cell) => _shownWeapon[cell];                  // weapon id drawn in the row, 0 = empty
+        public string IconKeyShown(int cell) => _iconKey[cell] ?? "";
+        public string RowText(int cell) => _row[cell].gameObject.activeSelf ? _label[cell].text : "";
+        public bool RowShown(int cell) => _row[cell].gameObject.activeSelf;
+        public bool Shown => Root.gameObject.activeSelf;                         // off while driving
         public int GrenadesShown => _shownGrenades;                              // count of the selected throwable
         public string ThrowableNameShown => _shownThrowName;                     // "파편 수류탄" / "연막탄", "" when empty
         public string OpticShown(int cell) => _shownOptic[cell] ?? "";
-        public bool IsHighlighted(int cell) => _bar[cell] != null && _bar[cell].enabled;
+        public bool IsHighlighted(int cell) => _panel[cell] != null && _panel[cell].enabled;
 
         public static WeaponStrip Build(Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position)
         {
             var s = new WeaponStrip();
-            var root = UiKit.Rect("WeaponStrip", parent, anchor, pivot, position, new Vector2(Width, CellHeight));
+            var root = UiKit.Rect("WeaponStrip", parent, anchor, pivot, position, new Vector2(Width, Height));
             s.Root = root;
-            var topLeft = new Vector2(0f, 1f);
-            var bottomLeft = new Vector2(0f, 0f);
-            var centre = new Vector2(0.5f, 0.5f);
+            var bottomRight = new Vector2(1f, 0f);
+            var midRight = new Vector2(1f, 0.5f);
             for (int i = 0; i < Cells; i++)
             {
-                var cell = UiKit.Rect("Cell" + (i + 1), root, topLeft, topLeft, new Vector2(i * (CellWidth + Gap), 0f), new Vector2(CellWidth, CellHeight));
-                UiKit.Box(cell, UiKit.Panel);
-                s._frame[i] = UiKit.Frame(cell, 1f, UiKit.SteelDim);
-
-                // Rows: key number on top, the weapon icon under it, the optic chip under the icon (bottom left), so
-                // the chip never sits on the icon.
-                var top = new Vector2(0.5f, 1f);
-                var iconRect = UiKit.Rect("Icon", cell, top, top, new Vector2(0f, -19f), new Vector2(CellWidth - 10f, CellHeight - 42f));
-                s._icon[i] = InventoryItemIcon.Build(iconRect);
-                s._iconRoot[i] = iconRect.gameObject;
-                s._iconRoot[i].SetActive(false);
-                s._empty[i] = UiKit.Label(UiKit.Rect("Empty", cell, centre, centre, new Vector2(0f, 2f), new Vector2(CellWidth, 30f)), "—", 22, UiKit.SteelDim, TextAnchor.MiddleCenter);
-
-                s._key[i] = UiKit.Label(UiKit.Rect("Key", cell, topLeft, topLeft, new Vector2(5f, -1f), new Vector2(24f, 22f)), Keys[i], 18, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-                s._optic[i] = UiKit.Label(UiKit.Rect("Optic", cell, bottomLeft, bottomLeft, new Vector2(5f, 4f), new Vector2(46f, 19f)), "", 16, UiKit.Text, TextAnchor.MiddleLeft);
-                s._count[i] = UiKit.Label(UiKit.Rect("Count", cell, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-5f, 5f), new Vector2(40f, 22f)), "", 20, UiKit.Text,
-                    TextAnchor.MiddleRight, FontStyle.Bold);
-                s._bar[i] = UiKit.Box(UiKit.Rect("Active", cell, bottomLeft, bottomLeft, Vector2.zero, new Vector2(CellWidth, 3f)), UiKit.Accent);
-                s._bar[i].enabled = false;
+                var row = UiKit.Rect("Row" + (i + 1), root, bottomRight, bottomRight, Vector2.zero, new Vector2(Width, CellHeight));
+                s._row[i] = row;
+                s._group[i] = row.gameObject.AddComponent<CanvasGroup>();
+                s._group[i].blocksRaycasts = false;
+                s._panel[i] = UiKit.Box(row, UiKit.Panel);
+                s._panel[i].enabled = false;
+                s._key[i] = UiKit.Label(UiKit.Rect("Key", row, midRight, midRight, new Vector2(-Pad, 0f), new Vector2(KeyWidth, CellHeight)), Keys[i], 18,
+                    UiKit.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+                var iconRect = UiKit.Rect("Icon", row, midRight, midRight, new Vector2(-Pad - KeyWidth - Pad, 0f), new Vector2(IconWidth, IconHeight));
+                s._icon[i] = iconRect.gameObject.AddComponent<Image>();
+                s._icon[i].preserveAspect = true;
+                s._icon[i].raycastTarget = false;
+                s._icon[i].color = SilhouetteTint;
+                s._icon[i].enabled = false;
+                float labelWidth = Width - 2f * Pad - KeyWidth - Pad - IconWidth - Pad;
+                s._label[i] = UiKit.Label(UiKit.Rect("Label", row, midRight, midRight, new Vector2(-Pad - KeyWidth - Pad - IconWidth - Pad, 0f),
+                    new Vector2(labelWidth, CellHeight)), "", 16, UiKit.Text, TextAnchor.MiddleRight);
+                s._label[i].horizontalOverflow = HorizontalWrapMode.Overflow; // a long name runs left rather than wrapping
                 s._shownWeapon[i] = int.MinValue;
+                s._shownMag[i] = int.MinValue;
+                row.gameObject.SetActive(false);
             }
             return s;
         }
 
         public void Tick(Combatant me)
         {
-            // The melee cell shows its weapon like the others (ADR-073).
+            // The driver's hands are on the wheel: the cluster takes this corner's job (seat 0 = number 1).
+            bool driving = HudBackend.VehicleSeatNumber(me) == 1;
+            if (Root.gameObject.activeSelf == driving) Root.gameObject.SetActive(!driving);
+            if (driving) return;
+
+            // The melee row shows its weapon like the others (ADR-073).
             for (int i = 0; i < HudBackend.Throwable; i++)
                 ShowWeapon(i, HudBackend.WeaponInSlot(me, i), me);
             ShowGrenades(HudBackend.Grenades(me));
+            Layout();
 
             int active = HudBackend.ActiveSlot(me);
             // Highlight only what is really in hand: an empty slot is no selection.
-            // The throwable cell lights when it is in hand and something is carried (ADR-144).
+            // The throwable row lights when it is in hand and something is carried (ADR-144).
             bool throwOut = active == HudBackend.Throwable && ThrowableUser.Local != null && ThrowableUser.Local.TotalCount > 0;
             if (!throwOut && (active < 0 || active >= HudBackend.Throwable || HudBackend.WeaponInSlot(me, active) == 0)) active = -1;
             if (active != _shownActive)
@@ -92,38 +108,50 @@ namespace Game.Gameplay
                 for (int i = 0; i < Cells; i++)
                 {
                     bool on = i == active;
-                    _bar[i].enabled = on;
+                    _panel[i].enabled = on;
+                    _group[i].alpha = on ? 1f : DimAlpha;
                     _key[i].color = on ? UiKit.Accent : UiKit.TextDim;
-                    var line = on ? UiKit.Accent : UiKit.SteelDim;
-                    for (int l = 0; l < 4; l++) _frame[i][l].color = line;
+                    _label[i].color = on ? UiKit.Text : UiKit.TextDim;
                 }
+            }
+        }
+
+        // Filled rows stack from the bottom up in slot order (slot 1 on top), like the mock.
+        void Layout()
+        {
+            int mask = 0;
+            for (int i = 0; i < Cells; i++) if (_shownWeapon[i] != 0) mask |= 1 << i;
+            if (mask == _shownLayout) return;
+            _shownLayout = mask;
+            float y = 0f;
+            for (int i = Cells - 1; i >= 0; i--)
+            {
+                bool on = (mask & (1 << i)) != 0;
+                if (_row[i].gameObject.activeSelf != on) _row[i].gameObject.SetActive(on);
+                if (!on) continue;
+                _row[i].anchoredPosition = new Vector2(0f, y);
+                y += CellHeight + Gap;
             }
         }
 
         void ShowWeapon(int cell, int weaponId, Combatant me)
         {
-            string optic = weaponId != 0 ? HudBackend.OpticOf(me, cell) : "";
-            if (optic != _shownOptic[cell])
-            {
-                _shownOptic[cell] = optic;
-                _optic[cell].text = optic;
-            }
-            if (_shownWeapon[cell] == weaponId) return;
+            _shownOptic[cell] = weaponId != 0 ? HudBackend.OpticOf(me, cell) : "";
+            int mag = weaponId != 0 ? HudBackend.MagInSlot(me, cell) : 0;
+            if (_shownWeapon[cell] == weaponId && _shownMag[cell] == mag) return;
+            bool changed = _shownWeapon[cell] != weaponId;
             _shownWeapon[cell] = weaponId;
-            if (weaponId == 0)
-            {
-                _iconRoot[cell].SetActive(false);
-                _empty[cell].enabled = true;
-                return;
-            }
+            _shownMag[cell] = mag;
+            if (weaponId == 0) return;
             var weapon = GameData.Weapons.Find(weaponId);
-            _icon[cell].Set(InventoryBackend.WeaponKey(weaponId), weapon != null ? weapon.Name : "");
-            _iconRoot[cell].SetActive(true);
-            _empty[cell].enabled = false;
+            string name = weapon != null ? weapon.Name : "";
+            if (changed) SetIcon(cell, InventoryBackend.WeaponKey(weaponId));
+            // Melee has no magazine: the name alone.
+            _label[cell].text = weapon != null && weapon.IsMelee ? name : name + "  " + HudDigits.IntText(mag);
         }
 
-        // The throwable cell shows the selected kind (T switches) and how many of it are left. With none of the
-        // selected kind but some of the other, the selected one shows with x0; with none at all the cell is empty.
+        // The throwable row shows the selected kind (T switches) and how many of it are left. With none of the
+        // selected kind but some of the other, the selected one shows with x0; with none at all the row is gone.
         void ShowGrenades(int grenades)
         {
             var user = ThrowableUser.Local;
@@ -140,12 +168,47 @@ namespace Game.Gameplay
             _shownGrenades = has ? count : 0;
             const int cell = HudBackend.Throwable;
             _shownWeapon[cell] = has ? 1 : 0;
-            _iconRoot[cell].SetActive(has);
-            _empty[cell].enabled = !has;
-            _count[cell].text = !has ? "" : cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count);
-            _count[cell].color = cooking ? UiKit.Danger : count > 0 ? UiKit.Text : UiKit.TextDim;
             _shownThrowName = has ? Throwables.NameOf(kind) : "";
-            if (has) _icon[cell].Set(kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : kind == ThrowableKind.Molotov ? "molotov" : "grenade", _shownThrowName);
+            if (!has) return;
+            SetIcon(cell, kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : kind == ThrowableKind.Molotov ? "molotov" : "grenade");
+            _label[cell].text = _shownThrowName + "  " + (cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count));
+        }
+    
+        void SetIcon(int cell, string key)
+        {
+            if (_iconKey[cell] == key) return;
+            _iconKey[cell] = key;
+            var sprite = Silhouette(key);
+            _icon[cell].sprite = sprite;
+            _icon[cell].enabled = sprite != null;
+        }
+
+        // The item render as a flat light shape (alpha kept, colour white; tinted by the Image), made once per key. The
+        // renders are dark metal that vanishes on the HUD's dark panels; the mock draws plain silhouettes.
+        // Blit + ReadPixels so the source texture need not be readable.
+        static Sprite Silhouette(string key)
+        {
+            if (Silhouettes.TryGetValue(key, out var made)) return made;
+            var src = ItemIcons.Get(key);
+            if (src == null) { Silhouettes[key] = null; return null; }
+            var r = src.textureRect;
+            int w = Mathf.RoundToInt(r.width), h = Mathf.RoundToInt(r.height);
+            var rt = RenderTexture.GetTemporary(src.texture.width, src.texture.height, 0, RenderTextureFormat.ARGB32);
+            Graphics.Blit(src.texture, rt);
+            var before = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, wrapMode = TextureWrapMode.Clamp };
+            tex.ReadPixels(new Rect(r.x, r.y, w, h), 0, 0);
+            RenderTexture.active = before;
+            RenderTexture.ReleaseTemporary(rt);
+            var px = tex.GetPixels32();
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(255, 255, 255, px[i].a);
+            tex.SetPixels32(px);
+            tex.Apply();
+            made = Sprite.Create(tex, new Rect(0f, 0f, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            made.hideFlags = HideFlags.HideAndDontSave;
+            Silhouettes[key] = made;
+            return made;
         }
     }
 }

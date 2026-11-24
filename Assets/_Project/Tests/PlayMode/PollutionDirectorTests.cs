@@ -211,6 +211,13 @@ namespace Game.Tests
             Assert.IsNotNull(ItemIcons.Get("gas_filter"), "the filter has its own icon");
             Assert.Greater(view.TintAlpha, 0f, "the red tint");
             StringAssert.Contains(_director.RegionNameOf(player), Hud.Instance.Hazard.LineText, "sealed names the region the player is in");
+            // HUD v2 zone panel over the minimap: the warned region and its clock, the sealed count, the gas outline and line.
+            var zone = Hud.Instance.Zone;
+            Assert.IsTrue(zone.Shown && zone.Hot, "the zone panel shows, outlined in the gas");
+            StringAssert.Contains(_director.RegionNameOf(second) + " 봉쇄까지", zone.TitleText);
+            Assert.AreEqual("봉쇄된 구역 1 / 6", zone.CountText);
+            StringAssert.Contains("방독", zone.GasText);
+            Assert.That(zone.Bar, Is.InRange(0f, 1f));
             Assert.Greater(ZoneBanner.SirenCount, sirens, "the siren hook fired on the warnings");
             Assert.Greater(PollutionHudView.GeigerClicksPerSecond, 2f, "the Geiger hook ticks in the gas");
 

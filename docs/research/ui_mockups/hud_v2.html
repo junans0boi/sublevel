@@ -1,0 +1,232 @@
+<title>SubLevel 인게임 HUD v2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one 1920x1080 game screen scaled to the page width, HUD in the game's own reference pixels; mock controls above it. Single dark look on purpose (the game's HUD). */
+:root{
+  --ground:#0b0e12; --panel:rgba(10,13,18,.72); --panel-s:rgba(10,13,18,.86); --line:rgba(160,175,190,.22);
+  --text:#eef1f4; --dim:#a3adb8; --mute:#6c7783; --steel:#80939f;
+  --hp:#e8ecef; --hp-low:#d2382e; --boost:#f2c230; --accent:#f29e26; --ok:#57c785; --water:#5cc8f0; --gas:#b06cf0;
+  --font-ui:"Noto Sans KR",system-ui,sans-serif; --font-num:"Barlow Semi Condensed","Noto Sans KR",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--ground);color:var(--text)}
+body{font-family:var(--font-ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 28px}
+.page{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;color:var(--dim)}
+.ctl .g{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctl b{color:var(--text);font-weight:500}
+.ctl button{font:inherit;color:var(--text);background:#1c242e;border:1px solid #2f3a48;border-radius:6px;padding:5px 10px;cursor:pointer}
+.ctl button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.ctl input[type=range]{width:120px}
+.keys{font-size:12px;color:var(--mute)}
+.frame{position:relative;width:100%;overflow:hidden;border-radius:10px;border:1px solid #2f3a48}
+.stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;font-size:20px}
+.stage canvas.bg{position:absolute;inset:0}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.p{position:absolute}
+/* top */
+.compass{left:660px;top:22px;width:600px;height:40px;background:var(--panel);border-radius:4px;display:flex;align-items:center;justify-content:space-around;color:var(--dim);font-size:17px}
+.compass b{color:var(--text);font-weight:700;font-size:20px}
+.bearing{left:930px;top:68px;width:60px;height:28px;background:var(--panel-s);border-radius:3px;text-align:center;font-size:20px;line-height:28px;letter-spacing:.12em}
+.stats{right:36px;top:22px;display:flex;gap:8px}
+.stats div{background:var(--panel);border-radius:4px;padding:6px 14px;display:flex;gap:14px;align-items:baseline;font-size:17px;color:var(--dim)}
+.stats b{font-family:var(--font-num);font-size:32px;color:var(--text);font-weight:700}
+/* bottom-left squad */
+.squad{left:36px;bottom:36px;width:300px;display:flex;flex-direction:column;gap:6px}
+.mate{display:grid;grid-template-columns:22px 1fr;gap:4px 10px;align-items:center;background:var(--panel);border-radius:4px;padding:7px 10px}
+.mate .tag{width:22px;height:22px;border-radius:3px;font-family:var(--font-num);font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;color:#111}
+.mate .nm{font-size:16px;display:flex;justify-content:space-between}
+.mate .nm span{color:var(--mute);font-size:13px}
+.mate .bar{grid-column:2;height:6px;background:rgba(255,255,255,.12);border-radius:1px;overflow:hidden}
+.mate .bar i{display:block;height:100%;background:var(--hp)}
+.mate.down .bar i{background:var(--hp-low)}
+.mate.down .nm::after{content:"기절";color:var(--hp-low);font-size:13px}
+.mate.dead{opacity:.45}
+/* bottom-centre vitals */
+.vitals{left:700px;bottom:36px;width:520px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;background:rgba(8,11,15,.58);border-radius:6px;padding:8px 10px 10px}
+.row1{display:flex;align-items:flex-end;gap:10px;height:44px}
+.arm{display:flex;flex-direction:column;align-items:center;gap:2px;width:44px}
+.arm svg{width:34px;height:30px}
+.arm .lv{font-size:12px;color:var(--dim)}
+.dur{width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:1px;overflow:hidden}
+.dur i{display:block;height:100%;background:var(--hp)}
+.ammo{display:flex;align-items:baseline;gap:6px;margin:0 auto;background:var(--panel);border-radius:4px;padding:2px 14px}
+.ammo b{font-family:var(--font-num);font-size:40px;font-weight:700;line-height:1}
+.ammo span{color:var(--dim);font-size:18px}
+.ammo em{font-style:normal;font-size:13px;color:var(--mute);margin-left:6px}
+.ammo.empty b{color:var(--hp-low)}
+.fx{display:flex;gap:8px;align-items:flex-end}
+.fxi{width:34px;height:34px;border-radius:50%;background:var(--panel);display:flex;align-items:center;justify-content:center;position:relative}
+.fxi svg{width:22px;height:22px}
+.fxi.off{opacity:.25}
+.fxi .ring{position:absolute;inset:-3px}
+.boost{height:8px;display:grid;grid-template-columns:20fr 40fr 30fr 10fr;gap:3px}
+.boost div{background:rgba(255,255,255,.1);border-radius:1px;overflow:hidden}
+.boost i{display:block;height:100%;width:0;background:var(--boost)}
+.hp{position:relative;height:30px;background:var(--panel-s);border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+.hp i{position:absolute;left:0;top:0;bottom:0;background:var(--hp);transition:width .2s}
+.hp .lag{background:rgba(210,56,46,.7);transition:width .9s .25s}
+.hp.low i:not(.lag){background:var(--hp-low)}
+.hp .heal{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(90deg,rgba(87,199,133,.55) 0 6px,rgba(87,199,133,.25) 6px 12px)}
+.hp b{position:absolute;left:12px;top:0;line-height:30px;font-family:var(--font-num);font-size:22px;color:#11161c;mix-blend-mode:normal;text-shadow:none}
+.hp.low b,.hp.dark b{color:var(--text)}
+.quick{display:flex;gap:6px;white-space:nowrap}
+.qk{background:rgba(255,255,255,.06);border-radius:3px;padding:3px 8px;font-size:13px;color:var(--dim)}
+.qk b{color:var(--text);font-weight:500}
+/* bottom-right */
+.zone{right:36px;bottom:300px;width:220px;background:var(--panel);border-radius:4px;padding:6px 10px;font-size:14px;color:var(--dim)}
+.zone .t{display:flex;justify-content:space-between;align-items:baseline}
+.zone .t b{font-family:var(--font-num);font-size:22px;color:var(--text)}
+.zone .bar{height:6px;background:rgba(255,255,255,.12);border-radius:1px;margin-top:5px;overflow:hidden}
+.zone .bar i{display:block;height:100%;background:var(--gas)}
+.zone.hot{outline:2px solid var(--gas)}
+.mini{right:36px;bottom:36px;width:220px;height:220px;background:#2d3a2c;border-radius:4px;overflow:hidden}
+.mini canvas{width:220px;height:220px}
+.weps{right:268px;bottom:36px;width:220px;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.wep{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:3px;opacity:.5;color:var(--dim);font-size:13px}
+.wep svg{height:30px;width:auto}
+.wep .k{font-family:var(--font-num);font-size:14px;color:var(--mute);width:12px}
+.wep.on{opacity:1;background:var(--panel);color:var(--text)}
+.wep.on .k{color:var(--accent)}
+/* vehicle cluster (style C sample) */
+.tach{left:368px;bottom:36px;width:300px;box-sizing:border-box;height:150px;background:var(--panel-s);border-radius:4px;padding:10px 12px}
+.speed{left:1236px;bottom:36px;width:200px;box-sizing:border-box;height:150px;background:var(--panel-s);border-radius:4px;padding:10px 12px;text-align:center}
+.water{position:absolute;inset:0;background:rgba(40,110,150,.28);pointer-events:none}
+.gasv{position:absolute;inset:0;box-shadow:inset 0 0 180px rgba(176,108,240,.55);pointer-events:none}
+.note{font-size:12px;color:var(--mute)}
+@media (prefers-reduced-motion:reduce){.hp i,.hp .lag{transition:none}}
+</style>
+
+<div class="page">
+  <div class="ctl" role="group" aria-label="목업 조작">
+    <div class="g"><b>판</b><button id="mSolo" aria-pressed="false">솔로</button><button id="mSquad" aria-pressed="true">스쿼드</button></div>
+    <div class="g"><b>체력</b><input type="range" id="hp" min="0" max="100" step="1" value="72" aria-label="체력"><span class="num" id="hpv">72</span><button id="hit">피격 -18</button><button id="heal">구급상자 (H)</button></div>
+    <div class="g"><b>부스트</b><button id="drink">에너지드링크 +40</button><button id="pill">진통제 +60 (J)</button></div>
+    <div class="g"><b>방어구</b><button id="hHelmet">헬멧 피격</button><button id="hVest">조끼 피격</button></div>
+    <div class="g"><b>무기</b><button id="fire">사격</button><button id="reload">재장전 (R)</button><button id="swap">무기 바꾸기 (1·2·3)</button></div>
+    <div class="g"><b>상황</b><button id="swim" aria-pressed="false">수영·잠수</button><button id="drive" aria-pressed="false">운전</button><button id="gas" aria-pressed="false">오염 안</button><button id="next">오염 다음 단계</button></div>
+    <span class="keys">키보드도 됩니다: 마우스 클릭=사격, R, 1·2·3, H, J, Space(수영 중 숨)</span>
+  </div>
+  <div class="frame" id="frame"><div class="stage" id="stage">
+    <canvas class="bg" id="bg" width="1920" height="1080" aria-hidden="true"></canvas>
+    <div class="water" id="waterv" hidden></div><div class="gasv" id="gasv" hidden></div>
+
+    <div class="p compass" aria-hidden="true"><span>북서</span><span>270</span><b>서</b><span>240</span><span>남서</span></div>
+    <div class="p bearing num">262</div>
+    <div class="p stats"><div>생존 <b id="alive">64</b></div><div>처치 <b id="kills">2</b></div></div>
+
+    <div class="p squad" id="squad" aria-label="팀원"></div>
+
+    <div class="p vitals">
+      <div class="quick"><span class="qk">H 구급상자 <b class="num" id="qMed">2</b></span><span class="qk">J 진통제 <b class="num" id="qPill">1</b></span><span class="qk">에너지드링크 <b class="num" id="qDrink">2</b></span></div>
+      <div class="row1">
+        <div class="arm" title="헬멧"><svg viewBox="0 0 34 30" aria-hidden="true"><path d="M4 22 C4 9 11 3 17 3 S30 9 30 22 L26 22 L25 17 H9 L8 22 Z" fill="#cfd6dd"/></svg><div class="dur"><i id="dHelmet"></i></div><span class="lv">Lv.2</span></div>
+        <div class="arm" title="조끼"><svg viewBox="0 0 34 30" aria-hidden="true"><path d="M9 3 L13 3 L17 8 L21 3 L25 3 L28 9 L27 28 H7 L6 9 Z" fill="#cfd6dd"/></svg><div class="dur"><i id="dVest"></i></div><span class="lv">Lv.2</span></div>
+        <div class="ammo" id="ammo"><b id="mag">30</b><span>/ <span class="num" id="res">120</span></span><em id="fmode">연사</em></div>
+        <div class="fx">
+          <div class="fxi" id="fxLung" title="숨" hidden><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="3"/><circle id="lungArc" cx="20" cy="20" r="18" fill="none" stroke="#5cc8f0" stroke-width="3" stroke-dasharray="113" stroke-dashoffset="0" transform="rotate(-90 20 20)"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M12 11c-2 0-3-3-6-3-2 0-3 4-3 8 0 3 1 5 3 5 4 0 6-3 6-10zM12 11c2 0 3-3 6-3 2 0 3 4 3 8 0 3-1 5-3 5-4 0-6-3-6-10z" fill="none" stroke="#e8ecef" stroke-width="1.6"/></svg></div>
+          <div class="fxi off" id="fxHeal" title="부스트: 체력 회복"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z" fill="#57c785"/></svg></div>
+          <div class="fxi off" id="fxRun" title="부스트: 이동 속도"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="4" r="2.2" fill="#f2c230"/><path d="M8 21l3-6 3 2v5M6 11l4-3h4l2 4 3 1M11 8l-2 6" fill="none" stroke="#f2c230" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+      </div>
+      <div class="boost" id="boost" title="부스트 게이지 (4단계)"><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div></div>
+      <div class="hp" id="hpbar" role="meter" aria-label="체력" aria-valuemin="0" aria-valuemax="100"><i class="lag" id="hpLag"></i><span class="heal" id="hpHeal"></span><i id="hpFill"></i><b class="num" id="hpNum">72</b>
+      </div>
+    </div>
+
+    <div class="p weps" id="weps" aria-label="무기"></div>
+    <div class="p zone" id="zone"><div class="t"><span id="zName">C3 구역 봉쇄까지</span><b class="num" id="zTime">1:24</b></div><div class="bar"><i id="zBar"></i></div><div class="note" id="zNote" style="margin-top:4px">봉쇄된 구역 2 / 9</div></div>
+    <div class="p mini"><canvas id="mini" width="220" height="220" aria-label="미니맵"></canvas></div>
+
+    <div class="p tach" id="tach" hidden></div>
+    <div class="p speed" id="speed" hidden></div>
+  </div></div>
+  <p class="note">배치 참고용 목업입니다. 아이콘과 무기 그림은 단순 도형이고, 실제 게임에서는 장비·무기 모델 아이콘을 씁니다. 운전 중 계기판은 차종별 A~D 중 C 디지털을 예로 넣었습니다.</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const S={squad:true,hp:72,lagHp:72,boost:0,helmet:.8,vest:.55,mag:30,res:120,wep:0,swim:false,air:1,drive:false,gas:false,zoneLeft:84,zoneTotal:120,stage:2,heal:0,
+ mates:[{n:"준환",c:"#f2c230",hp:72,me:true},{n:"민트초코",c:"#5cc8f0",hp:100},{n:"새벽세시",c:"#57c785",hp:38},{n:"감자칩",c:"#f07aa8",hp:0,down:true}]};
+const WEPS=[{k:1,n:"돌격소총",mag:30,mode:"연사",shape:"rifle"},{k:2,n:"저격소총",mag:5,mode:"단발",shape:"sniper"},{k:3,n:"권총",mag:15,mode:"단발",shape:"pistol"}];
+const AMMO=[[30,120],[5,20],[15,45]];
+function wsvg(s){const d={rifle:"M2 14h40l4-3h20l3 3h10v4H62l-2 6h-6l1-6H38l-4 8h-7l3-8H2z",sniper:"M2 14h60l6-2h16l4 2h8v3H66l-2 5h-5l1-5H34l-3 7h-7l3-7H2z",pistol:"M4 10h26l2 3v3H18l-2 9h-7l2-9H4z"}[s];
+ return `<svg viewBox="0 0 98 28" aria-hidden="true"><path d="${d}" fill="#d6dde4"/></svg>`}
+function renderWeps(){$("weps").innerHTML=WEPS.map((w,i)=>`<div class="wep${i===S.wep?" on":""}"><span>${w.n} <span class="num">${i===S.wep?S.mag:AMMO[i][0]}</span></span>${wsvg(w.shape)}<span class="k">${w.k}</span></div>`).join("")}
+function renderSquad(){const el=$("squad");if(!S.squad){el.innerHTML="";return;}
+ el.innerHTML=S.mates.map((m,i)=>`<div class="mate${m.down?" down":""}${m.hp<=0&&!m.down?" dead":""}"><span class="tag" style="background:${m.c}">${i+1}</span><span class="nm">${m.n}${m.me?"<span>나</span>":""}</span><span></span><div class="bar"><i style="width:${Math.max(m.down?30:0,m.me?S.hp:m.hp)}%"></i></div></div>`).join("")}
+function boostStep(){return S.boost<=0?0:S.boost<=20?1:S.boost<=60?2:S.boost<=90?3:4}
+function render(){
+ const hp=Math.max(0,Math.min(100,S.hp));
+ $("hpFill").style.width=hp+"%";$("hpLag").style.width=Math.max(hp,S.lagHp)+"%";
+ const healTo=Math.min(100,hp+S.heal);$("hpHeal").style.left=hp+"%";$("hpHeal").style.width=(healTo-hp)+"%";
+ $("hpNum").textContent=Math.round(hp);$("hpbar").className="hp"+(hp<25?" low":hp<12?" dark":"");$("hpbar").setAttribute("aria-valuenow",Math.round(hp));
+ $("hp").value=Math.round(hp);$("hpv").textContent=Math.round(hp);
+ const segs=[20,40,30,10];let left=S.boost;document.querySelectorAll("#boost i").forEach((e,i)=>{const f=Math.max(0,Math.min(1,left/segs[i]));e.style.width=(f*100)+"%";left-=segs[i];});
+ const st=boostStep();$("fxHeal").classList.toggle("off",st<1);$("fxRun").classList.toggle("off",st<3);
+ $("dHelmet").style.width=(S.helmet*100)+"%";$("dVest").style.width=(S.vest*100)+"%";
+ $("dHelmet").style.background=S.helmet<.3?"#d2382e":"";$("dVest").style.background=S.vest<.3?"#d2382e":"";
+ $("mag").textContent=S.mag;$("res").textContent=S.res;$("fmode").textContent=WEPS[S.wep].mode;$("ammo").className="ammo"+(S.mag===0?" empty":"");
+ $("fxLung").hidden=!S.swim;$("lungArc").setAttribute("stroke-dashoffset",(113*(1-S.air)).toFixed(1));$("lungArc").setAttribute("stroke",S.air<.25?"#d2382e":"#5cc8f0");
+ $("waterv").hidden=!S.swim;$("gasv").hidden=!S.gas;$("zone").classList.toggle("hot",S.gas);
+ const m=Math.max(0,Math.ceil(S.zoneLeft));$("zTime").textContent=Math.floor(m/60)+":"+String(m%60).padStart(2,"0");$("zBar").style.width=(100*(1-S.zoneLeft/S.zoneTotal))+"%";
+ $("zNote").textContent=`봉쇄된 구역 ${S.stage} / 9`+(S.gas?" · 오염 안: 초당 -2":"");
+ $("weps").hidden=S.drive;$("tach").hidden=!S.drive;$("speed").hidden=!S.drive;
+ document.querySelector(".row1 .ammo").style.visibility=S.drive?"hidden":"visible";
+ S.mates[0].hp=hp;renderSquad();renderWeps();
+ $("mSolo").setAttribute("aria-pressed",String(!S.squad));$("mSquad").setAttribute("aria-pressed",String(S.squad));
+ $("swim").setAttribute("aria-pressed",String(S.swim));$("drive").setAttribute("aria-pressed",String(S.drive));$("gas").setAttribute("aria-pressed",String(S.gas));
+ $("qMed").textContent=Q.med;$("qPill").textContent=Q.pill;$("qDrink").textContent=Q.drink;
+}
+const Q={med:2,pill:1,drink:2};
+function damage(n){S.lagHp=Math.max(S.lagHp,S.hp);S.hp=Math.max(0,S.hp-n);setTimeout(()=>{S.lagHp=S.hp;render()},50);render();}
+function fire(){if(S.drive)return;if(S.mag>0){S.mag--;render();}}
+function reload(){const cap=WEPS[S.wep].mag,need=cap-S.mag,take=Math.min(need,S.res);S.mag+=take;S.res-=take;render();}
+function swap(i){AMMO[S.wep]=[S.mag,S.res];S.wep=(i===undefined?(S.wep+1)%3:i);[S.mag,S.res]=AMMO[S.wep];render();}
+function useMed(){if(Q.med<1||S.hp>=75)return;Q.med--;S.heal=75-S.hp;render();}
+function useBoost(n,k){if(Q[k]<1)return;Q[k]--;S.boost=Math.min(100,S.boost+n);render();}
+$("mSolo").onclick=()=>{S.squad=false;render()};$("mSquad").onclick=()=>{S.squad=true;render()};
+$("hp").oninput=e=>{S.hp=+e.target.value;S.lagHp=S.hp;S.heal=0;render()};
+$("hit").onclick=()=>{S.heal=0;damage(18)};$("heal").onclick=useMed;
+$("drink").onclick=()=>useBoost(40,"drink");$("pill").onclick=()=>useBoost(60,"pill");
+$("hHelmet").onclick=()=>{S.helmet=Math.max(0,S.helmet-.2);damage(8)};$("hVest").onclick=()=>{S.vest=Math.max(0,S.vest-.2);damage(10)};
+$("fire").onclick=fire;$("reload").onclick=reload;$("swap").onclick=()=>swap();
+$("swim").onclick=()=>{S.swim=!S.swim;S.air=1;render()};$("drive").onclick=()=>{S.drive=!S.drive;render()};
+$("gas").onclick=()=>{S.gas=!S.gas;render()};$("next").onclick=()=>{S.stage=Math.min(9,S.stage+1);S.zoneLeft=S.zoneTotal;render()};
+$("stage").addEventListener("mousedown",fire);
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;const k=e.key.toLowerCase();
+ if(k==="r")reload();else if(k==="1"||k==="2"||k==="3")swap(+k-1);else if(k==="h")useMed();else if(k==="j")useBoost(60,"pill");else if(k===" "&&S.swim){e.preventDefault();S.air=Math.min(1,S.air+.35);render();}});
+/* scene + minimap */
+const bg=$("bg").getContext("2d");
+bg.fillStyle="#8fa9c4";bg.fillRect(0,0,1920,520);bg.fillStyle="#b7c3cc";bg.fillRect(0,440,1920,80);
+bg.fillStyle="#7b8a6a";bg.beginPath();bg.moveTo(0,520);for(let x=0;x<=1920;x+=60)bg.lineTo(x,470-40*Math.sin(x/170)-25*Math.sin(x/53));bg.lineTo(1920,520);bg.fill();
+bg.fillStyle="#6d7b4e";bg.fillRect(0,520,1920,560);bg.fillStyle="#8a8270";bg.beginPath();bg.moveTo(820,520);bg.lineTo(1100,520);bg.lineTo(1500,1080);bg.lineTo(380,1080);bg.fill();
+bg.fillStyle="#5d5a52";[[160,300,260,240],[1460,330,300,210],[1300,380,120,150]].forEach(([x,y,w,h])=>{bg.fillRect(x,y,w,h);bg.fillStyle="#3f3e3a";for(let i=0;i<4;i++)bg.fillRect(x+20+i*w/4.4,y+40,w/7,h/4);bg.fillStyle="#5d5a52";});
+bg.fillStyle="#2a2f26";bg.beginPath();bg.ellipse(960,880,90,26,0,0,7);bg.fill();bg.fillStyle="#38404a";bg.fillRect(915,700,90,190);bg.beginPath();bg.arc(960,680,42,0,7);bg.fill();
+const mc=$("mini").getContext("2d");
+function drawMini(){mc.fillStyle="#36452f";mc.fillRect(0,0,220,220);mc.strokeStyle="rgba(255,255,255,.08)";for(let i=0;i<=220;i+=44){mc.beginPath();mc.moveTo(i,0);mc.lineTo(i,220);mc.moveTo(0,i);mc.lineTo(220,i);mc.stroke();}
+ mc.fillStyle="rgba(176,108,240,.38)";mc.fillRect(0,0,88,88);mc.fillRect(176,132,44,88);
+ const p=1-S.zoneLeft/S.zoneTotal;mc.fillStyle=`rgba(176,108,240,${.12+.3*p})`;mc.fillRect(132,0,88,44);mc.strokeStyle="#b06cf0";mc.lineWidth=2;mc.setLineDash([5,4]);mc.strokeRect(133,1,86,42);mc.setLineDash([]);
+ mc.fillStyle="#8b8a86";mc.fillRect(90,100,60,4);mc.fillRect(118,40,4,140);mc.fillStyle="#9aa3ae";[[60,120],[140,70],[150,150]].forEach(([x,y])=>mc.fillRect(x,y,10,8));
+ if(S.squad){[["#5cc8f0",128,96],["#57c785",104,124],["#f07aa8",140,130]].forEach(([c,x,y])=>{mc.fillStyle=c;mc.beginPath();mc.arc(x,y,4,0,7);mc.fill();});}
+ mc.fillStyle="#f2c230";mc.beginPath();mc.moveTo(116,104);mc.lineTo(122,116);mc.lineTo(116,113);mc.lineTo(110,116);mc.fill();}
+function drawCluster(t){if(!S.drive)return;const v=Math.round(40+110*(1-Math.exp(-(t%8)/2.4)));let g=1;for(;g<6;g++)if(v<.92*220*Math.pow(g/6,.8))break;const r=Math.min(.97,v/(220*Math.pow(g/6,.8))),lit=Math.round(r*20);
+ $("tach").innerHTML=`<div style="display:flex;align-items:flex-end;gap:3px;height:70px">${Array.from({length:20},(_,i)=>`<i style="flex:1;height:${20+i*4}%;background:${i<lit?(i>=17?"#d2382e":i>=12?"#f29e26":"#57c785"):"#2b333d"}"></i>`).join("")}</div><div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px"><span class="num" style="font-size:26px">${(r*8.2).toFixed(1)}k <span style="font-size:13px;color:#a3adb8">rpm</span></span><span class="num" style="font-size:64px;font-weight:700;line-height:.9;color:${r>.9?"#e5484d":"#eef1f4"}">${g}</span></div>`;
+ $("speed").innerHTML=`<div class="num" style="font-size:72px;font-weight:700;line-height:1.1">${String(v).padStart(3,"0")}</div><div style="font-size:14px;color:#a3adb8">km/h</div><div style="height:6px;background:rgba(255,255,255,.12);margin-top:12px"><i style="display:block;height:100%;width:62%;background:#e5484d"></i></div><div style="font-size:12px;color:#a3adb8;margin-top:3px">연료 62%</div>`;}
+let last=performance.now();
+function tick(now){const dt=Math.min(.1,(now-last)/1000);last=now;let dirty=false;
+ if(S.boost>0){S.boost=Math.max(0,S.boost-dt*2.4);const st=boostStep();if(st>0&&S.hp<100){S.hp=Math.min(100,S.hp+dt*[0,.5,1,1.5,2][st]);}dirty=true;}
+ if(S.heal>0){const h=Math.min(S.heal,dt*12);S.heal-=h;S.hp=Math.min(100,S.hp+h);S.lagHp=S.hp;dirty=true;}
+ if(S.swim){S.air=Math.max(0,S.air-dt/14);if(S.air===0)S.hp=Math.max(0,S.hp-dt*6);S.lagHp=S.hp;dirty=true;}
+ if(S.gas){S.hp=Math.max(0,S.hp-dt*2);S.lagHp=S.hp;dirty=true;}
+ S.zoneLeft=Math.max(0,S.zoneLeft-dt);if(S.zoneLeft===0){S.stage=Math.min(9,S.stage+1);S.zoneLeft=S.zoneTotal;}
+ drawMini();drawCluster(now/1000);
+ if(dirty||Math.floor(S.zoneLeft)!==tick.z){tick.z=Math.floor(S.zoneLeft);render();}
+ requestAnimationFrame(tick);}
+function fit(){const fr=$("frame"),s=fr.clientWidth/1920;$("stage").style.transform=`scale(${s})`;fr.style.height=(1080*s)+"px";}
+addEventListener("resize",fit);fit();render();requestAnimationFrame(tick);
+})();
+</script>

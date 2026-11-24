@@ -21,15 +21,17 @@ namespace Game.Gameplay
     }
 
     // Everything the local player sees of its team (ADR-072), in team matches only: the member list with health
-    // bars (bottom left, above the status), name tags over teammates, teammates and their pings on the compass, the
+    // bars (bottom left), name tags over teammates, teammates and their pings on the compass, the
     // minimap and the full map, the knocked and revive overlays, and the F-held revive itself (the owner's side).
     // It also shares the local map marker with the team. Installs itself next to every match like the kill feed;
     // it reads the HUD's compass and minimap and the map screen only to hang its markers on them.
     public class TeamHud : MonoBehaviour
     {
         const int SortOrder = 2; // above the HUD and the kill feed
-        const float Margin = 36f, ListBottom = 36f + HudStatus.Height + 14f;
-        const float RowWidth = 300f, RowHeight = 34f, RowGap = 4f;
+        // HUD v2 squad list: x 36-336, from the bottom margin up, one row per member (slot 1 on top).
+        const float Margin = 36f, ListBottom = 36f;
+        const float RowWidth = 300f, RowHeight = 44f, RowGap = 6f, RowPad = 10f, TagSize = 22f;
+        const float DeadAlpha = 0.45f;
         const float TagLift = 0.55f;
         const float EnemyPingRadius = 3f; // a ping this close to an enemy marks it
         const float RequestSeconds = 0.3f;
@@ -44,6 +46,9 @@ namespace Game.Gameplay
         public bool Active => _canvas != null && _canvas.enabled;
         public int MembersShown => _members.Count;
         public string MemberText(int i) => i >= 0 && i < _rows.Count && _rows[i].Root.activeSelf ? _rows[i].Name.text : "";
+        public string MemberStateText(int i) => i >= 0 && i < _rows.Count && _rows[i].Root.activeSelf ? _rows[i].State.text : "";
+        public float MemberAlpha(int i) => i >= 0 && i < _rows.Count ? _rows[i].Group.alpha : 0f;
+        public RectTransform MemberRect(int i) => i >= 0 && i < _rows.Count ? (RectTransform)_rows[i].Root.transform : null;
         public TeamPingView PingView => _pings;
         public bool KnockedShown => _knockedBand != null && _knockedBand.activeSelf;
         public bool RevivePromptShown => _prompt != null && _prompt.activeSelf;
@@ -121,6 +126,7 @@ namespace Game.Gameplay
         sealed class Row
         {
             public GameObject Root;
+            public CanvasGroup Group;
             public Image Number;
             public Text NumberText, Name, State;
             public RectTransform Fill;
@@ -208,7 +214,7 @@ namespace Game.Gameplay
             RefreshMembers(me);
             TickReviveInput(me);
             SharePing(me);
-            TickRows();
+            TickRows(me);
             TickOverlays(me);
             TickMarkers(me);
         }
@@ -233,8 +239,10 @@ namespace Game.Gameplay
             while (_rows.Count < _members.Count) _rows.Add(BuildRow(_rows.Count));
             for (int i = 0; i < _rows.Count; i++)
             {
-                bool on = i < _members.Count;
+                bool on = i < _members.Count && _members.Count > 1; // solo: no list (HUD v2)
                 if (_rows[i].Root.activeSelf != on) _rows[i].Root.SetActive(on);
+                // The list hugs the bottom margin whatever the team size.
+                ((RectTransform)_rows[i].Root.transform).anchoredPosition = new Vector2(Margin, ListBottom + (_members.Count - 1 - i) * (RowHeight + RowGap));
                 _rows[i].ShownName = null;
                 _rows[i].ShownState = -1;
                 _rows[i].ShownFill = -1f;
@@ -261,7 +269,7 @@ namespace Game.Gameplay
             return null;
         }
 
-        void TickRows()
+        void TickRows(Combatant me)
         {
             float knockedMax = Mathf.Max(1f, TeamRules.Current.KnockedHp);
             for (int i = 0; i < _members.Count && i < _rows.Count; i++)
@@ -278,15 +286,18 @@ namespace Game.Gameplay
                     row.NumberText.text = HudDigits.IntText(slot);
                     row.Number.color = TeamColours.Of(slot);
                 }
-                int state = c.Dead.Value ? 2 : c.Knocked.Value ? 1 : 0;
+                // Knocked: red bar and "기절"; dead: the whole row dimmed; the local player's row says "나".
+                int state = (c.Dead.Value ? 2 : c.Knocked.Value ? 1 : 0) + (c == me ? 4 : 0);
                 if (state != row.ShownState)
                 {
                     row.ShownState = state;
-                    row.State.text = state == 2 ? "사망" : state == 1 ? "기절" : "";
-                    row.State.color = state == 2 ? UiKit.TextDim : UiKit.Danger;
-                    row.FillImage.color = state == 1 ? UiKit.Danger : UiKit.Health;
-                    row.Name.color = state == 2 ? UiKit.TextDim : UiKit.Text;
+                    int life = state & 3;
+                    row.State.text = life == 1 ? "기절" : (state & 4) != 0 ? "나" : "";
+                    row.State.color = life == 1 ? UiKit.Danger : UiKit.TextDim;
+                    row.FillImage.color = life == 1 ? UiKit.Danger : UiKit.Health;
+                    row.Group.alpha = life == 2 ? DeadAlpha : 1f;
                 }
+                state &= 3;
                 float fill = state == 2 ? 0f : Mathf.Clamp01(c.Hp.Value / (state == 1 ? knockedMax : 100f));
                 if (fill != row.ShownFill)
                 {
@@ -567,18 +578,22 @@ namespace Game.Gameplay
         Row BuildRow(int index)
         {
             var row = new Row();
-            var rect = UiKit.Rect("Member" + index, _root, Vector2.zero, Vector2.zero,
-                new Vector2(Margin, ListBottom + (Teams.MaxSize - 1 - index) * (RowHeight + RowGap)), new Vector2(RowWidth, RowHeight));
+            var rect = UiKit.Rect("Member" + index, _root, Vector2.zero, Vector2.zero, new Vector2(Margin, ListBottom), new Vector2(RowWidth, RowHeight));
             UiKit.Box(rect, UiKit.Panel);
-            var number = UiKit.Rect("Number", rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(4f, 0f), new Vector2(26f, 26f));
+            row.Group = rect.gameObject.AddComponent<CanvasGroup>();
+            row.Group.blocksRaycasts = false;
+            var midLeft = new Vector2(0f, 0.5f);
+            var topLeft = new Vector2(0f, 1f);
+            var number = UiKit.Rect("Number", rect, midLeft, midLeft, new Vector2(RowPad, 0f), new Vector2(TagSize, TagSize));
             row.Number = UiKit.Box(number, UiKit.Text);
-            row.NumberText = UiKit.Label(UiKit.Fill("Text", number), "", 18, Rim, TextAnchor.MiddleCenter, FontStyle.Bold);
-            row.Name = UiKit.Label(UiKit.Rect("Name", rect, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(38f, -2f), new Vector2(170f, 20f)),
-                "", 17, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            row.State = UiKit.Label(UiKit.Rect("State", rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -2f), new Vector2(80f, 20f)),
-                "", 16, UiKit.Danger, TextAnchor.MiddleRight, FontStyle.Bold);
-            var track = UiKit.Rect("Track", rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(38f, 5f), new Vector2(RowWidth - 46f, 6f));
-            UiKit.Box(track, UiKit.PanelLight);
+            row.NumberText = UiKit.Label(UiKit.Fill("Text", number), "", 16, Rim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            float left = RowPad + TagSize + RowPad;
+            row.Name = UiKit.Label(UiKit.Rect("Name", rect, topLeft, topLeft, new Vector2(left, -5f), new Vector2(190f, 22f)),
+                "", 16, UiKit.Text, TextAnchor.MiddleLeft);
+            row.State = UiKit.Label(UiKit.Rect("State", rect, Vector2.one, Vector2.one, new Vector2(-RowPad, -5f), new Vector2(60f, 22f)),
+                "", 14, UiKit.Danger, TextAnchor.MiddleRight);
+            var track = UiKit.Rect("Track", rect, Vector2.zero, Vector2.zero, new Vector2(left, 9f), new Vector2(RowWidth - left - RowPad, 6f));
+            UiKit.Box(track, new Color(1f, 1f, 1f, 0.12f));
             row.Fill = UiKit.Fill("Fill", track);
             row.FillImage = UiKit.Box(row.Fill, UiKit.Health);
             row.Root = rect.gameObject;
