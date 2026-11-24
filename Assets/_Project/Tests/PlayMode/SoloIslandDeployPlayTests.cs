@@ -19,7 +19,8 @@ namespace Game.Tests
         sealed class IdleInput : IPlayerInput
         {
             public Vector2 Move;
-            public PlayerInputFrame Read() => new PlayerInputFrame { SelectSlot = -1, Move = Move };
+            public bool Interact;
+            public PlayerInputFrame Read() => new PlayerInputFrame { SelectSlot = -1, Move = Move, Interact = Interact };
         }
 
         float _max, _countdown, _arrive;
@@ -88,6 +89,34 @@ namespace Game.Tests
             var near = loot.Where(l => (l.transform.position - p).sqrMagnitude < 60f * 60f).ToArray();
             int shown = near.Count(l => l.GetComponentsInChildren<Renderer>().Any(x => x.enabled));
             Debug.Log($"[solo-island] loot total={loot.Length} within60m={near.Length} rendered={shown}");
+
+            // A building door: stand in front of the nearest shut one, look at it, press F the player's way.
+            var doors = DoorSystem.Instance;
+            Door door = null; float bestD = float.MaxValue;
+            for (int i = 0; i < doors.Count; i++)
+            {
+                if (doors[i].State != DoorState.Closed) continue;
+                float d = (doors[i].transform.position - p).sqrMagnitude;
+                if (d < bestD) { bestD = d; door = doors[i]; }
+            }
+            Assert.IsNotNull(door, "a shut door");
+            var pc = PlayerController.Local;
+            pc.Teleport(door.transform.position + door.Forward * 1.3f + Vector3.up * 0.05f);
+            yield return new WaitForSeconds(0.5f);
+            pc.LookAt(door.transform.position + Vector3.up * 1.2f);
+            yield return null;
+            input.Interact = true;   // one frame, as a key press gives (two would toggle it back)
+            yield return null;
+            input.Interact = false;
+            yield return new WaitForSeconds(0.5f);
+            Debug.Log($"[solo-island] door {Mathf.Sqrt(bestD):F0} m away at {door.transform.position}: {door.State}");
+            Assert.AreNotEqual(DoorState.Closed, door.State, "F opens the building door");
+            input.Interact = true;   // one frame, as a key press gives (two would toggle it back)
+            yield return null;
+            input.Interact = false;
+            yield return new WaitForSeconds(0.5f);
+            Debug.Log($"[solo-island] second F: {door.State}, loot in reach {pc.NearbyLoot != null}, door first {PickupList.DoorFirst}");
+            Assert.AreEqual(DoorState.Closed, door.State, "F again shuts it");
 
             Assert.Less(net.PingMs, NetStatusRules.BadPingMs, "solo is in-process: no real ping");
             Assert.Less(net.Loss, NetStatusRules.BadLoss, "solo is in-process: no packet loss");
