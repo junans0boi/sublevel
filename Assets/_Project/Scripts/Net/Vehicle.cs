@@ -148,20 +148,20 @@ namespace Game.Net
             {
                 var rules = VehicleRules.For(_kind);
                 if (!_fit.Any) return rules;
-                // Race cars keep the type's engine and tyres whatever the model (ADR-557): a mixed grid stays fair.
-                bool handling = !IsRaceCar;
+                // Race cars take their model's race-only row (ADR-562), every other car its battle-royale row (ADR-557).
+                bool race = IsRaceCar;
                 // Tuned again whenever the data loader replaces the type's rules.
-                if (!ReferenceEquals(_tunedFrom, rules) || _tunedHandling != handling)
+                if (!ReferenceEquals(_tunedFrom, rules) || _tunedRace != race)
                 {
-                    _tuned = _fit.Apply(rules, handling);
+                    _tuned = _fit.Apply(rules, race);
                     _tunedFrom = rules;
-                    _tunedHandling = handling;
+                    _tunedRace = race;
                 }
                 return _tuned;
             }
         }
         VehicleRules _tuned, _tunedFrom;
-        bool _tunedHandling;
+        bool _tunedRace;
         GearboxState _gearbox;
 
         // The automatic gearbox (ADR-558): the simulating side steps it with the driver's throttle, every other side with the

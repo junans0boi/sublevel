@@ -40,6 +40,7 @@ namespace Game.Net
             VehicleRules.Current = rules.Vehicles;
             VehicleRules.Motorcycle = rules.Motorcycles;
             VehicleHandling.Current = rules.VehicleModels != null && rules.VehicleModels.Length > 0 ? rules.VehicleModels : VehicleHandling.Defaults();
+            VehicleHandling.Race = VehicleHandling.RaceOrDefaults(rules.RaceVehicleModels);
             TeamRules.Current = rules.Team ?? new TeamRules();
             FuelRules.Current = rules.Fuel ?? new FuelRules();
             VehicleDamageRules.Current = rules.VehicleDamage ?? new VehicleDamageRules();

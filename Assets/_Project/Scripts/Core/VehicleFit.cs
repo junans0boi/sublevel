@@ -13,22 +13,26 @@ namespace Game.Core
         public float WheelRadius;
         public float CentreOfMassHeight;
         public int SeatCount;   // the model's seats (the prefab's seat list); 0 keeps the type's
-        public string Model;    // the prefab's name: its engine and handling row in VehicleHandling (ADR-557)
+        public string Model;    // the prefab's name: its engine and handling row in VehicleHandling (ADR-557, race rows ADR-562)
 
         public bool Any => MassKg > 0f || WheelRadius > 0f || CentreOfMassHeight > 0f || SeatCount > 0 || !string.IsNullOrEmpty(Model);
 
         // A copy of `rules` with this model's numbers. The springs and dampers scale with the mass so every model
         // sits as deep on its suspension at rest as the type's numbers were tuned for.
-        // `handling` false: the type's engine and tyres (race cars, ADR-557).
-        public VehicleRules Apply(VehicleRules rules, bool handling = true)
+        // `race`: the model's race-only row (ADR-562), whose mass also replaces the prefab's.
+        public VehicleRules Apply(VehicleRules rules, bool race = false)
         {
             if (rules == null) return null;
             var tuned = Copy(rules);
-            if (handling) VehicleHandling.For(Model)?.ApplyTo(tuned);
-            if (MassKg > 0f)
+            var row = race ? VehicleHandling.RaceFor(Model) : VehicleHandling.For(Model);
+            // A race car's dial keeps its battle-royale redline unless its race row sets one (spec #505).
+            if (race) new VehicleHandling { RedlineRpm = VehicleHandling.For(Model)?.RedlineRpm ?? 0f }.ApplyTo(tuned);
+            row?.ApplyTo(tuned);
+            float mass = row != null && row.MassKg > 0f ? row.MassKg : MassKg;
+            if (mass > 0f)
             {
-                float scale = MassKg / Math.Max(1f, rules.MassKg);
-                tuned.MassKg = MassKg;
+                float scale = mass / Math.Max(1f, rules.MassKg);
+                tuned.MassKg = mass;
                 tuned.SpringStrength = rules.SpringStrength * scale;
                 tuned.SpringDamper = rules.SpringDamper * scale;
             }

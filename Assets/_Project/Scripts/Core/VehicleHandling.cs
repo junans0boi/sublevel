@@ -3,8 +3,8 @@ using System;
 namespace Game.Core
 {
     // One car model's engine and handling on top of the "Vehicles" block (준환: every car felt the same). Loaded from the
-    // "VehicleModels" list of rules.json; a value of 0 keeps the type's number. Race cars ignore it (ADR-557: a mixed grid
-    // stays fair), so only the battle royale's cars differ.
+    // "VehicleModels" list of rules.json; a value of 0 keeps the type's number. Race cars take their model's row from the
+    // race-only "RaceVehicleModels" list instead (ADR-562: within about ±10 % of the type, so no car wins every course).
     [Serializable]
     public class VehicleHandling
     {
@@ -18,6 +18,7 @@ namespace Game.Core
         public float OffRoadSpeedFactor;
         public float BrakeDecel;
         public float RedlineRpm;          // the gearbox's redline (ADR-558)
+        public float MassKg;              // race rows only: replaces the prefab's mass, the race's 내구 (ADR-562); 0 keeps it
         // The driver's instrument cluster (ADR-558 amended): "A" twin round, "B" half-moon, "C" digital sport, "D" classic
         // analog; its accent colour ("#RRGGBB"); compact = a smaller cluster (the motorcycle).
         public string Cluster;
@@ -28,13 +29,20 @@ namespace Game.Core
         public const string MotorcycleRow = "Motorcycle";
 
         public static VehicleHandling[] Current = Defaults();
+        public static VehicleHandling[] Race = RaceDefaults(); // the race cars' rows (ADR-562)
 
-        public static VehicleHandling For(string model)
+        public static VehicleHandling For(string model) => Find(Current, model);
+        public static VehicleHandling RaceFor(string model) => Find(Race, model);
+
+        static VehicleHandling Find(VehicleHandling[] rows, string model)
         {
-            if (string.IsNullOrEmpty(model) || Current == null) return null;
-            foreach (var h in Current) if (h != null && h.Model == model) return h;
+            if (string.IsNullOrEmpty(model) || rows == null) return null;
+            foreach (var h in rows) if (h != null && h.Model == model) return h;
             return null;
         }
+
+        // The loaded race list, or the defaults when rules.json has none.
+        public static VehicleHandling[] RaceOrDefaults(VehicleHandling[] rows) => rows != null && rows.Length > 0 ? rows : RaceDefaults();
 
         // The cluster row for a vehicle: the motorcycle's, else its own model's (race cars too); null when none has one.
         public static VehicleHandling ClusterFor(string model, bool motorcycle)
@@ -70,6 +78,17 @@ namespace Game.Core
             new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 130f, BoostMaxKmh = 145f, EngineAccel = 5f, RedlineRpm = 5500f, TyreGrip = 1.0f, SteerMaxDeg = 30f, BrakeDecel = 8f, Cluster = "B", ClusterAccent = "#4CD964" },
             new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 150f, BoostMaxKmh = 165f, EngineAccel = 5.8f, RedlineRpm = 6000f, TyreGrip = 1.05f, OffRoadSpeedFactor = 1f, Cluster = "D", ClusterAccent = "#FFB020" },
             new VehicleHandling { Model = MotorcycleRow, Cluster = "C", ClusterAccent = "#FFD60A", ClusterCompact = true },
+        };
+
+        // Same numbers as rules.json's "RaceVehicleModels" (spec #505's balance table). RedlineRpm and the cluster stay the
+        // battle-royale row's (dial only); MassKg is the race's 내구.
+        public static VehicleHandling[] RaceDefaults() => new[]
+        {
+            new VehicleHandling { Model = "GoblinV12", MaxSpeedKmh = 100f, BoostMaxKmh = 117f, EngineAccel = 6.6f, TyreGrip = 1.08f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8f, BrakeDecel = 10f, OffRoadSpeedFactor = 0.8f, MassKg = 1200f },
+            new VehicleHandling { Model = "FairheavenLT80", MaxSpeedKmh = 94f, BoostMaxKmh = 110f, EngineAccel = 5.9f, TyreGrip = 1.15f, SteerMaxDeg = 32f, SteerAtTopSpeedDeg = 9f, BrakeDecel = 9f, OffRoadSpeedFactor = 0.85f, MassKg = 1250f },
+            new VehicleHandling { Model = "FairheavenSW84", MaxSpeedKmh = 90f, BoostMaxKmh = 105f, EngineAccel = 5.5f, TyreGrip = 1.22f, SteerMaxDeg = 34f, SteerAtTopSpeedDeg = 10.5f, BrakeDecel = 9.5f, OffRoadSpeedFactor = 0.85f, MassKg = 1350f },
+            new VehicleHandling { Model = "LightbodyLifted85", MaxSpeedKmh = 88f, BoostMaxKmh = 103f, EngineAccel = 5.4f, TyreGrip = 1.18f, SteerMaxDeg = 31f, SteerAtTopSpeedDeg = 9f, BrakeDecel = 8.5f, OffRoadSpeedFactor = 1f, MassKg = 1900f },
+            new VehicleHandling { Model = "Shvan92", MaxSpeedKmh = 85f, BoostMaxKmh = 100f, EngineAccel = 5f, TyreGrip = 1.12f, SteerMaxDeg = 30f, SteerAtTopSpeedDeg = 8.5f, BrakeDecel = 8f, OffRoadSpeedFactor = 0.85f, MassKg = 2000f },
         };
     }
 }
