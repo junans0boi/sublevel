@@ -57,6 +57,7 @@ namespace Game.Core
         public string CourseId;
         public int Laps;
         public int Bots = -1;
+        public int People;   // the people the server expects (#513): the countdown waits for them (up to WaitForLoadSeconds); 0 = whoever is connected
         public List<Entry> Racers = new List<Entry>();
     }
 
@@ -186,6 +187,11 @@ namespace Game.Core
         public static string AverageKmh(float length, float seconds) => seconds > 0f ? (length / seconds * 3.6f).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " km/h" : "--";
 
         public static string IdForLobby(byte evt) => evt >= 1 && evt <= Courses.Length ? Courses[evt - 1].Id : null;
+        // A race request on the dedicated lobby's queue (#513, Protocol 9): a course, laps 1/2/3/5 (a sprint runs once whatever it says), bots
+        // within the room's 8 places, one of the race cars (VehicleHandling.Race index) and one of the room's paints.
+        public static bool ValidQueueRequest(int evt, int laps, int bots, int car, int paint) =>
+            evt >= 1 && evt <= Courses.Length && Array.IndexOf(RaceLobby.LapChoices, laps) >= 0 && bots >= 0 && bots < RaceLobby.Slots
+            && car >= 0 && car < VehicleHandling.Race.Length && paint >= 0 && paint < RaceLobby.Paints;
 
         public static CourseInfo ById(string id)
         {

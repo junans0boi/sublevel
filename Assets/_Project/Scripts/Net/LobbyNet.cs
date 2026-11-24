@@ -25,7 +25,9 @@ namespace Game.Net
         public MatchQueueState Queue; // matchmaking (ADR-249): who waits, how long is left
     }
     // A client asks for a place in the matchmaking queue (ADR-258): the mode and how many people its party has (1..team size).
-    public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; public long PartyId; }
+    // Protocol 9 (#513, ADR-562): a race party's request also carries Event (the course, 1-based; 0 = the battle royale), the party's Laps and
+    // Bots, and the sender's own Car (VehicleHandling.Race index) and Paint.
+    public struct LobbyQueueRequest : IBroadcast { public byte Mode; public byte PartySize; public long PartyId; public byte Event, Laps, Bots, Car, Paint; }
     public struct LobbyQueueCancel : IBroadcast { }
     public struct LobbyStart : IBroadcast
     {
@@ -35,6 +37,7 @@ namespace Game.Net
         public byte Mode;
         public int[] PartySizes;
         public byte Event;   // 0 = the battle royale; n = the event race on course n (RaceEvent.Courses[n - 1], ADR-512)
+        public byte Laps;    // the race's laps (#513); 0 = the course's
 
         public static LobbyStart FromPlan(ushort matchPort, TeamMode mode, MatchPlan plan)
         {
@@ -60,7 +63,7 @@ namespace Game.Net
         public enum PhaseKind { Idle, Connecting, InLobby, Failed }
 
         public const ushort DefaultPort = 7770;
-        public const int Protocol = 8; // the island race hall's laps (IslandLapBroadcast, WaitingRecordsBroadcast lap TOP3, ADR-509) and the event race (RaceStandings, ADR-518); 7 = the bungee's F to come down: CombatantStance.CmdBungeeLower (ADR-498); 6 = waiting-island range records broadcast (ADR-502); 5 = the lift button (ADR-490); 4 = door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
+        public const int Protocol = 9; // the race room's queue: LobbyQueueRequest race fields, LobbyStart.Laps (#513, ADR-562); 8 = the island race hall's laps (IslandLapBroadcast, WaitingRecordsBroadcast lap TOP3, ADR-509) and the event race (RaceStandings, ADR-518); 7 = the bungee's F to come down: CombatantStance.CmdBungeeLower (ADR-498); 6 = waiting-island range records broadcast (ADR-502); 5 = the lift button (ADR-490); 4 = door broadcasts carry the door's place (ADR-480); 3 = r5 waiting island, bungee/lift, key rides (ADR-322).
         const float ConnectSeconds = 6f;
         // The host waits this long before leaving the lobby itself, so its start message reaches the guests first.
         const float HostLeaveDelay = 0.6f;
@@ -69,6 +72,8 @@ namespace Game.Net
         public static string CurrentVersion => Application.version + "/" + Protocol;
 
         public string Version;
+        // The session token sent in the hello (NetSession.Token); tests give each room in one process its own.
+        public string SessionToken;
 
         // Login (#389). Client: the launcher's game token (SUBLEVEL_GAME_TOKEN) and the nickname shown for it, null without a login (dev run).
         // Server: the secret that checks tokens offline (SUBLEVEL_TOKEN_SECRET); without one nobody is asked to log in.
@@ -220,7 +225,7 @@ namespace Game.Net
             Changed?.Invoke();
         }
 
-        void Awake() { if (string.IsNullOrEmpty(Version)) Version = CurrentVersion; }
+        void Awake() { if (string.IsNullOrEmpty(Version)) Version = CurrentVersion; if (string.IsNullOrEmpty(SessionToken)) SessionToken = NetSession.Token; }
 
         void OnDestroy() => Shutdown();
 
@@ -314,7 +319,7 @@ namespace Game.Net
                 _tokenAsked = _tokenAnswered = false;
                 if (!string.IsNullOrEmpty(_freshToken)) AuthToken = _freshToken;
                 _freshToken = null;
-                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = NetSession.Token });
+                _nm.ClientManager.Broadcast(new LobbyHello { Version = Version, Name = AuthNickname ?? "", Token = AuthToken ?? "", SessionToken = SessionToken });
             }
             TickQueue();
             RetryHeldHellos();
@@ -393,6 +398,19 @@ namespace Game.Net
             return true;
         }
 
+        // Client: ask for the party's race (#513): the party's course (1-based), laps and bots, and this player's car (a race model id) and paint.
+        public bool RequestRace(int partySize, int evt, int laps, int bots, string car, int paint)
+        {
+            int model = System.Array.FindIndex(VehicleHandling.Race, r => r.Model == car);
+            if (Phase != PhaseKind.InLobby || IsHost || _nm == null || !RaceEvent.ValidQueueRequest(evt, laps, bots, model, paint)) return false;
+            _nm.ClientManager.Broadcast(new LobbyQueueRequest
+            {
+                Mode = (byte)TeamMode.Solo, PartySize = (byte)Mathf.Clamp(partySize, 1, RaceLobby.Slots), PartyId = QueuePartyId,
+                Event = (byte)evt, Laps = (byte)laps, Bots = (byte)bots, Car = (byte)model, Paint = (byte)paint,
+            });
+            return true;
+        }
+
         public bool CancelMatch()
         {
             if (Phase != PhaseKind.InLobby || IsHost || _nm == null) return false;
@@ -403,10 +421,11 @@ namespace Game.Net
         void OnQueueRequest(NetworkConnection conn, LobbyQueueRequest req, Channel channel)
         {
             if (!Dedicated || _matchStarted || !_truth.Contains(conn.ClientId)) return;
-            var mode = (TeamMode)Mathf.Clamp(req.Mode, 0, 2);
             if (_queue == null) _queue = new MatchQueue(MatchRules.Current ?? new MatchRules());
-            if (_queue.Tickets.Count == 0) _queueMode = mode; // the first one decides the mode of this match
-            else if (mode != _queueMode) return;               // another mode waits for its own window (not queued here)
+            if (req.Event != 0) { QueueRace(conn.ClientId, req); return; }
+            var mode = (TeamMode)Mathf.Clamp(req.Mode, 0, 2);
+            if (_queue.Tickets.Count == 0) { _queueMode = mode; _queueEvent = 0; } // the first one decides the mode of this match
+            else if (mode != _queueMode || _queueEvent != 0) return;              // another mode (or a race) waits for its own window (not queued here)
             int size = mode == TeamMode.Solo ? 1 : Mathf.Clamp(req.PartySize, 1, MatchComposer.TeamSizeOf(mode, TeamRules.Current));
             long party = mode == TeamMode.Solo ? 0 : req.PartyId; // in solo everybody is alone
             var added = _parties.Add(conn.ClientId, party, size);
@@ -417,6 +436,59 @@ namespace Game.Net
             else _parties.Remove(conn.ClientId, out _);
         }
 
+        // ---- The race room's queue (#513, ADR-562) ----
+
+        // The race the queue holds: its course (0 = none, a battle royale), the party's laps and bots from its first request, and each member's car and paint.
+        byte _queueEvent, _raceLaps, _raceBots;
+        long _raceParty;
+        readonly System.Collections.Generic.Dictionary<int, (byte car, byte paint)> _raceCarOf = new System.Collections.Generic.Dictionary<int, (byte, byte)>();
+        // Server: the race the match scene starts (RaceEvent.Starting), set with StartInfo when the race party is in.
+        public RaceStart RacePlan { get; private set; }
+
+        // One party only, never mixed with battle-royale requests or another party; the first request decides the course, laps and bots.
+        void QueueRace(int id, LobbyQueueRequest req)
+        {
+            if (!RaceEvent.ValidQueueRequest(req.Event, req.Laps, req.Bots, req.Car, req.Paint)) { Debug.Log($"[Server] queue: client {id} refused, race request out of range (course {req.Event}, laps {req.Laps}, bots {req.Bots}, car {req.Car}, paint {req.Paint})"); return; }
+            bool first = _queue.Tickets.Count == 0;
+            if (!first && (_queueEvent == 0 || req.PartyId == 0 || req.PartyId != _raceParty)) { Debug.Log("[Server] queue: client " + id + " refused, another match is queued"); return; }
+            var added = _parties.Add(id, req.PartyId, Mathf.Clamp(req.PartySize, 1, RaceLobby.Slots));
+            if (added == QueueParties.AddResult.Duplicate || added == QueueParties.AddResult.Refused) return;
+            _raceCarOf[id] = (req.Car, req.Paint);
+            if (added == QueueParties.AddResult.NewTicket)
+            {
+                _queueMode = TeamMode.Solo; _queueEvent = req.Event; _raceLaps = req.Laps; _raceBots = req.Bots; _raceParty = req.PartyId;
+                _queue.Enqueue(id, Mathf.Clamp(req.PartySize, 1, RaceLobby.Slots), Time.unscaledTimeAsDouble);
+            }
+            PushQueueState();
+        }
+
+        // The race starts once the whole party is in (no fill wait), or with whoever came when the window ran out.
+        bool RaceShouldStart(double now)
+        {
+            if (_queue.Tickets.Count == 0) return false;
+            var t = _queue.Tickets[0];
+            return _parties.Members(t.Id).Count >= t.Size || _queue.SecondsLeft(now) <= 0f;
+        }
+
+        void StartRaceFromQueue()
+        {
+            var members = _parties.Members(_queue.Tickets[0].Id);
+            int people = members.Count;
+            int bots = Mathf.Min(_raceBots, RaceLobby.Slots - people);
+            var start = new LobbyStart
+            {
+                MatchPort = MatchDirector.FreePort((ushort)(Port + 1)), Players = people, Bots = bots, Mode = (byte)TeamMode.Solo,
+                PartySizes = new[] { people }, Event = _queueEvent, Laps = _raceLaps,
+            };
+            var race = new RaceStart { CourseId = RaceEvent.IdForLobby(_queueEvent), Laps = _raceLaps, Bots = bots, People = people };
+            foreach (int id in members)
+                if (_sessionOf.TryGetValue(id, out var token) && _raceCarOf.TryGetValue(id, out var pick))
+                    race.Racers.Add(new RaceStart.Entry { Token = token, Car = VehicleHandling.Race[pick.car].Model, Paint = pick.paint });
+            RacePlan = race;
+            BeginQueuedMatch(start, TeamMode.Solo, members);
+            Debug.Log($"[Server] race queue closed: {people} people, {bots} bots, course {race.CourseId}, {_raceLaps} laps");
+        }
+
         void OnQueueCancel(NetworkConnection conn, LobbyQueueCancel cancel, Channel channel)
         {
             LeaveQueue(conn.ClientId);
@@ -425,6 +497,7 @@ namespace Game.Net
         // A connection leaves the queue (cancelled or dropped); its party's ticket goes only when nobody of the party is left.
         void LeaveQueue(int clientId)
         {
+            _raceCarOf.Remove(clientId);
             if (_parties.Remove(clientId, out int ticket) && _queue != null && _queue.Leave(ticket, Time.unscaledTimeAsDouble)) PushQueueState();
         }
 
@@ -441,7 +514,8 @@ namespace Game.Net
             if (!Dedicated || _queue == null || _matchStarted || Phase != PhaseKind.InLobby) return;
             double now = Time.unscaledTimeAsDouble;
             if (_queue.Tickets.Count > 0 && Time.unscaledTime >= _nextQueueState) { _nextQueueState = Time.unscaledTime + 0.5f; PushQueueState(); }
-            if (_queue.ShouldStart(_queueMode, now, TeamRules.Current)) StartFromQueue(now);
+            if (_queueEvent != 0) { if (RaceShouldStart(now)) StartRaceFromQueue(); }
+            else if (_queue.ShouldStart(_queueMode, now, TeamRules.Current)) StartFromQueue(now);
         }
 
         // The window ended: the composer decides who plays; the placed clients are told the match port, the others stay.
@@ -449,21 +523,28 @@ namespace Game.Net
         {
             var plan = _queue.Start(_queueMode, now, TeamRules.Current);
             if (plan.Humans == 0) return;
+            var start = LobbyStart.FromPlan(MatchDirector.FreePort((ushort)(Port + 1)), _queueMode, plan);
+            var placed = new System.Collections.Generic.List<int>();
+            foreach (int ticket in plan.Placed) placed.AddRange(_parties.Members(ticket));
+            RacePlan = null;
+            BeginQueuedMatch(start, _queueMode, placed);
+            Debug.Log($"[Server] queue closed: {plan.Humans} people, {plan.Bots} bots, {plan.Teams.Count} teams, mode {_queueMode}");
+        }
+
+        // The placed clients are told the match port (the others stay); the server leaves the lobby after they got it.
+        void BeginQueuedMatch(LobbyStart start, TeamMode mode, System.Collections.Generic.IEnumerable<int> placed)
+        {
             _matchStarted = true;
-            ushort matchPort = MatchDirector.FreePort((ushort)(Port + 1));
-            var start = LobbyStart.FromPlan(matchPort, _queueMode, plan);
             PlannedSessions.Clear();
-            foreach (int ticket in plan.Placed)
-                foreach (int id in _parties.Members(ticket))
-                {
-                    if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
-                    if (_sessionOf.TryGetValue(id, out var token)) PlannedSessions.Add(token);
-                }
+            foreach (int id in placed)
+            {
+                if (_nm.ServerManager.Clients.TryGetValue(id, out var conn)) _nm.ServerManager.Broadcast(conn, start);
+                if (_sessionOf.TryGetValue(id, out var token)) PlannedSessions.Add(token);
+            }
             StartInfo = start;
-            StartMode = _queueMode;
+            StartMode = mode;
             HasStarted = true;
             _hostLeaveAt = Time.unscaledTime + HostLeaveDelay;
-            Debug.Log($"[Server] queue closed: {plan.Humans} people, {plan.Bots} bots, {plan.Teams.Count} teams, mode {_queueMode}");
             Changed?.Invoke();
         }
 
