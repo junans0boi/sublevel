@@ -150,7 +150,7 @@ namespace Game.Gameplay
             if (Camera != null) Camera.fieldOfView = _rules.Aim.Hip.Fov;
             _combatant.ShotFired += OnOwnShot;
             if (GetComponent<BungeeRide>() == null) gameObject.AddComponent<BungeeRide>(); // the waiting island's jump (ADR-386); idle everywhere else
-            if (_stance != null) { _stance.ParkourRejected += OnParkourRejected; _stance.Corrected += OnParkourRejected; } // both: end any move, go back
+            if (_stance != null) { _stance.ParkourRejected += OnParkourRejected; _stance.Corrected += OnCorrected; } // both: end any move, go back
             int matchSeed = MatchDirector.Instance != null ? MatchDirector.Instance.Seed : 0;
             _recoilRng = new System.Random(unchecked(matchSeed * 131 + ObjectId * 31 + 7));
             Yaw = transform.eulerAngles.y;
@@ -192,7 +192,7 @@ namespace Game.Gameplay
             if (!_owner) return;
             _owner = false;
             _combatant.ShotFired -= OnOwnShot;
-            if (_stance != null) _stance.ParkourRejected -= OnParkourRejected;
+            if (_stance != null) { _stance.ParkourRejected -= OnParkourRejected; _stance.Corrected -= OnCorrected; }
             if (Local == this) Local = null;
             UiFocus.Close();
             if (_weaponVisual != null) _weaponVisual.ShowInHand();
@@ -668,6 +668,20 @@ namespace Game.Gameplay
         {
             if (InParkour) EndParkourLocally();
             Teleport(back);
+        }
+
+        // The server put the body somewhere. From the waiting island into an elevator bay is the deployment: face the car's doors.
+        // (On a host the server has already moved the transform when this runs, so the island is read from the HUD's last frame.)
+        void OnCorrected(Vector3 at)
+        {
+            bool fromIsland = WaitingHud.OnIsland;
+            OnParkourRejected(at);
+            if (fromIsland && ElevatorDoors.Instance != null && ElevatorDoors.Instance.TryFacingAt(at, out float yaw))
+            {
+                Yaw = yaw;
+                Pitch = 0f;
+                transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            }
         }
 
         // Tells the server about slow walking when it changes, and again if its copy still disagrees a moment later.

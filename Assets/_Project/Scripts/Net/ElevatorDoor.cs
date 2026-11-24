@@ -173,6 +173,20 @@ namespace Game.Net
         // Metres a car is below its station floor right now on this peer.
         public float CarOffsetNow => ElevatorRise.Offset(LocalSecondsToOpen, DeploymentRules.Current);
 
+        // The elevator whose bay `at` is in (feet, any height) and the way it faces, out through its doors: the owner turns to it when
+        // the server puts the body in a car (the waiting island's deployment, ADR-561); its own yaw would still face the island's board.
+        public bool TryFacingAt(Vector3 at, out float yawDeg)
+        {
+            const float BayReach = 4f;
+            foreach (var site in _sites)
+            {
+                float dx = site.Spawn.x - at.x, dz = site.Spawn.z - at.z;
+                if (dx * dx + dz * dz < BayReach * BayReach) { yawDeg = site.YawDeg; return true; }
+            }
+            yawDeg = 0f;
+            return false;
+        }
+
         // The car under station `station`, or null (a scene built before the cars, or a plain code-made door).
         public ElevatorCar CarOf(int station)
         {
