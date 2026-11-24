@@ -181,7 +181,10 @@ namespace Game.Net
         {
             var start = _lobby.StartInfo;
             TeamMatch.Mode = ServerRules.MatchTeamMode(_options.PerfSquad, _lobby.StartMode);
-            Debug.Log($"[Server] match starting: {start.Players} players, {start.Bots} bots, port {start.MatchPort}");
+            // A race party's queue (#513, ADR-562): the course's race scene with the party's course, laps, bots and cars.
+            string race = RaceEvent.SceneForLobby(start.Event);
+            RaceEvent.Starting = race != null ? _lobby.RacePlan : null;
+            Debug.Log($"[Server] match starting: {start.Players} players, {start.Bots} bots, port {start.MatchPort}" + (race != null ? $", race {RaceEvent.IdForLobby(start.Event)} ({start.Laps} laps) in {race}" : ""));
             ResultsReporter.CurrentMatchId = BackendMatchPoller.Pick(LobbyNet.AccountsBySession.Values.ToList());
             ResultsReporter.Reported = false;
             if (ResultsReporter.CurrentMatchId != null) Debug.Log("[Server] backend match " + ResultsReporter.CurrentMatchId);
@@ -193,8 +196,8 @@ namespace Game.Net
             _everHadPeople = false;
             _emptySince = -1f;
             _overSince = -1f;
-            DoorSystem.PrepareLayout(); // #491: the door plan builds on worker threads while the scene loads
-            SceneManager.LoadScene(MatchScene);
+            if (race == null) DoorSystem.PrepareLayout(); // #491: the door plan builds on worker threads while the scene loads
+            SceneManager.LoadScene(race ?? MatchScene);
             _state = StateKind.Match;
         }
 
@@ -215,6 +218,9 @@ namespace Game.Net
             _everHadPeople |= people;
             if (people) _emptySince = -1f;
             else if (_everHadPeople && _emptySince < 0f) { _emptySince = now; Debug.Log("[Server] match is empty"); }
+            // A race showed its own results (RaceEvent.ResultsSeconds) before Over: back to the lobby at once (#513).
+            var raceFlow = RaceDirector.Current != null ? RaceDirector.Current.Flow : null;
+            if (raceFlow != null && raceFlow.Phase == RacePhase.Over) { Debug.Log("[Server] race over"); EndMatch(); return; }
             if (director.State != null && director.State.ServerOver && _overSince < 0f)
             {
                 _overSince = now;

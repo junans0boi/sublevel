@@ -118,6 +118,8 @@ namespace Game.Net
                 if (!_carOf.TryGetValue(c, out var car) || car == null)
                 {
                     if (_cars.Count >= _grid.Count) continue;   // the grid is full: they watch
+                    // A queued race seats by session token, and the player may spawn before its token arrives: wait for it while the race waits (#513).
+                    if (!TokenKnown(c) && _flow.Phase == RacePhase.Waiting) continue;
                     car = SpawnCar(_cars.Count, EntryOf(c));
                     if (car == null) continue;
                     _carOf[c] = car;
@@ -129,20 +131,22 @@ namespace Game.Net
                 Put(c, car.DoorPosition(Vehicles.DriverSeat));
                 car.ServerSeatDriver(c);
             }
-            return people > 0 && seated >= people && people >= ConnectedPeople();
+            return people > 0 && seated >= people && people >= Mathf.Max(ConnectedPeople(), _start != null ? _start.People : 0);   // the server's queued people too (#513)
         }
 
         int ConnectedPeople() => _nm.ServerManager.Clients.Count;
 
         // This person's car and paint from the start config: the host's own entry, or by session token.
-        RaceStart.Entry? EntryOf(Combatant c)
+        RaceStart.Entry? EntryOf(Combatant c) => _start == null ? null : RaceEvent.EntryFor(_start, TokenOf(c), c.Owner != null && c.Owner.IsLocalClient);
+
+        string TokenOf(Combatant c)
         {
-            if (_start == null) return null;
-            bool local = c.Owner != null && c.Owner.IsLocalClient;
             var keeper = MatchDirector.Instance != null ? MatchDirector.Instance.Sessions : null;
-            string token = keeper != null && c.Owner != null && c.Owner.IsValid ? keeper.TokenOf(c.Owner.ClientId) : null;
-            return RaceEvent.EntryFor(_start, token, local);
+            return keeper != null && c.Owner != null && c.Owner.IsValid ? keeper.TokenOf(c.Owner.ClientId) : null;
         }
+
+        // Nothing to look up (no per-person entries, or the host's own player), or the token is in.
+        bool TokenKnown(Combatant c) => _start == null || _start.Racers.Count == 0 || (c.Owner != null && c.Owner.IsLocalClient) || TokenOf(c) != null;
 
         // When the countdown starts, bots take the free grid slots up to the field (people + the config's bots, or RaceEvent.Racers; ADR-514/517,
         // #508): driverless cars on autopilot, each with

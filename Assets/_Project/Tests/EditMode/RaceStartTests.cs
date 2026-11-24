@@ -20,6 +20,21 @@ namespace Game.Tests
             Assert.IsNull(RaceEvent.EntryFor(null, null, true));
         }
 
+        // #513: the dedicated lobby takes a race request only inside the room's ranges.
+        [Test]
+        public void QueueRequest_InRange_Only()
+        {
+            Assert.IsTrue(RaceEvent.ValidQueueRequest(1, 2, 6, 0, 5));
+            Assert.IsTrue(RaceEvent.ValidQueueRequest(RaceEvent.Courses.Length, 5, 0, VehicleHandling.Race.Length - 1, 0));
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(0, 2, 6, 0, 0), "course 0 is the battle royale");
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(RaceEvent.Courses.Length + 1, 2, 6, 0, 0), "no such course");
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(1, 4, 6, 0, 0), "laps 1/2/3/5 only");
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(1, 0, 6, 0, 0));
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(1, 2, RaceLobby.Slots, 0, 0), "bots beyond the room");
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(1, 2, 6, VehicleHandling.Race.Length, 0), "no such race car");
+            Assert.IsFalse(RaceEvent.ValidQueueRequest(1, 2, 6, 0, RaceLobby.Paints), "no such paint");
+        }
+
         [Test]
         public void Laps_FromTheConfig_ButASprintIsOneRun()
         {
