@@ -45,9 +45,9 @@ namespace Game.Gameplay
         TrainingEntryScreen _trainingScreen;
         GameObject _training;
         public TrainingEntryScreen TrainingEntry => _trainingScreen;
-        EventEntryScreen _eventScreen;
+        RaceLobbyScreen _eventScreen;
         GameObject _event;
-        public EventEntryScreen EventEntry => _eventScreen;
+        public RaceLobbyScreen EventEntry => _eventScreen;
         public bool EventEntryShown => _event != null && _event.activeSelf;
         public bool TrainingEntryShown => _training != null && _training.activeSelf;
         CustomScreen _customScreen;
@@ -99,6 +99,8 @@ namespace Game.Gameplay
             GameSettings.Load();
             _stage = FindFirstObjectByType<LobbyStage>();
             Build();
+            // Back from a race started in the race room (#511): the room again, everyone unready.
+            if (RaceLobbyScreen.ReturnPending) { RaceLobbyScreen.ReturnPending = false; ShowEventEntry(); _eventScreen.BackToRoom(); }
         }
 
         void OnDestroy()
@@ -162,6 +164,7 @@ namespace Game.Gameplay
             SyncBackendParty();
             SyncQueue();
             if (CharacterShown && !ModalShown) _charScreen.Tick();
+            if (EventEntryShown && !IsLoading) _eventScreen.Tick();
             if (_toastScreen != null && Time.unscaledTime > _toastUntil) { Destroy(_toastScreen.Root.gameObject); _toastScreen = null; }
             if (_modal != null && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { CloseModal(); return; }
             if (_lobbyPanel != null && !IsLoading && _main != null && _main.activeSelf) _lobbyPanel.Tick(Time.unscaledDeltaTime);
@@ -171,7 +174,7 @@ namespace Game.Gameplay
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && SettingsShown) _settingsScreen.Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CreditsShown) Back();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && CustomShown) Back();
-            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && EventEntryShown) Back();
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && EventEntryShown) _eventScreen.Escape();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && LobbyShown) _lobbyScreen.Leave();
             else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && _main != null && _main.activeSelf && !IsLoading) ShowQuit();
         }
@@ -361,11 +364,12 @@ namespace Game.Gameplay
             ShowOnly(_training);
         }
 
-        // 이벤트 tab: the event screen (the car race and its courses).
+        // 이벤트 tab: the race room (#511, spec #505).
         public void ShowEventEntry()
         {
             if (IsLoading) return;
             ShowOnly(_event);
+            _eventScreen.Refresh();
         }
 
         public void ShowQuit() => ShowModal("pop_quit");
@@ -482,7 +486,7 @@ namespace Game.Gameplay
             _trainingScreen = new TrainingEntryScreen();
             _training = _trainingScreen.Build(parent, this).gameObject;
             _training.SetActive(false);
-            _eventScreen = new EventEntryScreen();
+            _eventScreen = new RaceLobbyScreen();
             _event = _eventScreen.Build(parent, this).gameObject;
             _event.SetActive(false);
             _charScreen = new CharacterScreen();
