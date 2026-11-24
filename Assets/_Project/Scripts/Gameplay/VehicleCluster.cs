@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Net;
 using UnityEngine;
@@ -5,284 +6,505 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // The instrument cluster in a vehicle (ADR-558): a tachometer (ticks every 1,000 rpm, the red zone, a
-    // needle, the gear in the middle and a row of shift lights over it) and beside it the speed, a speed bar, the fuel
-    // and the body. All code-built: the rings are drawn into a texture once, the dial is Images and Texts.
+    // Where the driver's cluster sits (ADR-558 amended): the tachometer left of the health bar (in the gap to the gear
+    // panel), the speedometer right of it (in the gap to the hotbar), the shift lights in a row just over the health bar.
+    // Pure numbers in canvas pixels (origin bottom-left, height 1080) so a test can check it never covers the HUD.
+    public static class ClusterLayout
+    {
+        public const float Margin = 36f, Gap = 4f, HealthHalf = 280f, HealthHeight = 44f, CompactScale = 0.8f;
+        public const int LightCount = 7;
+        public const float LightW = 18f, LightH = 5f, LightGap = 4f;
+        public const float LightsWidth = LightCount * LightW + (LightCount - 1) * LightGap;
+
+        public static Vector2 TachSize(char style) => style == 'B' ? new Vector2(300f, 150f) : style == 'C' ? new Vector2(300f, 164f) : new Vector2(216f, 216f);
+        public static Vector2 SpeedSize(char style) => style == 'B' ? new Vector2(232f, 116f) : style == 'C' ? new Vector2(220f, 164f) : new Vector2(216f, 216f);
+
+        // The HUD pieces the cluster must keep clear of (Hud, HudStatus, WeaponStrip, MinimapView).
+        public static Rect GearPanel => new Rect(Margin, Margin, HudStatus.Width, HudStatus.Height);
+        public static Rect Health(float w) => new Rect(w / 2f - HealthHalf, Margin, HealthHalf * 2f, HealthHeight);
+        public static Rect WeaponPanel(float w) => new Rect(w / 2f - HealthHalf, Margin + HealthHeight + 8f, HealthHalf * 2f, 112f);
+        public static Rect Hotbar(float w) => new Rect(w - Margin - WeaponStrip.Width, Margin, WeaponStrip.Width, WeaponStrip.CellHeight);
+        public static Rect MinimapRect(float w) => new Rect(w - Margin - Minimap.ViewSize, Margin + WeaponStrip.CellHeight + 10f, Minimap.ViewSize, Minimap.ViewSize);
+        public static Rect Lights(float w) => new Rect(w / 2f - LightsWidth / 2f, Margin + HealthHeight + 1.5f, LightsWidth, LightH);
+
+        // The two gauges for a canvas `w` wide. The tachometer hugs the health bar and shrinks to fit its gap; the
+        // speedometer hugs the other side, and on a narrow screen (16:10) where the hotbar leaves too little room it
+        // stands on top of the hotbar, left of the minimap, instead.
+        public static void Place(float w, char style, bool compact, out Rect tach, out Rect speed)
+        {
+            float k = compact ? CompactScale : 1f;
+            Vector2 ts = TachSize(style) * k, ss = SpeedSize(style) * k;
+            float right = w / 2f - HealthHalf - Gap, left = GearPanel.xMax + Gap;
+            float s = Mathf.Clamp((right - left) / ts.x, 0.1f, 1f);
+            tach = new Rect(right - ts.x * s, Margin, ts.x * s, ts.y * s);
+
+            float x0 = w / 2f + HealthHalf + Gap, x1 = Hotbar(w).xMin - Gap;
+            if (x1 - x0 >= ss.x) { speed = new Rect(x0, Margin, ss.x, ss.y); return; }
+            float x2 = MinimapRect(w).xMin - Gap;
+            float s2 = Mathf.Clamp((x2 - x0) / ss.x, 0.1f, 1f);
+            speed = new Rect(x0, Hotbar(w).yMax + Gap, ss.x * s2, ss.y * s2);
+        }
+    }
+
+    // The driver's instrument cluster (ADR-558, amended): one of four styles per car model (VehicleHandling.Cluster,
+    // data in rules.json) in that model's accent colour, its dials scaled to the model's top speed and redline.
+    //   A twin round: two 270° dials, an amber rpm arc with the gear in the middle, a speed arc with big digits, fuel in the gap.
+    //   B half-moon: two semicircles on the bottom line, fuel and body as 10-segment bars in their bases.
+    //   C digital sport: a rising 24-segment LED tach with rpm and gear, a 3-digit speed with an 8-block fuel column.
+    //   D classic analog: dark faces, ticks and numbers, red zone, needles on a hub, a "D5" gear window and a fuel sub-gauge.
+    // All code-built: the rings are drawn into a texture once, the rest is Images and Texts.
     public sealed class VehicleCluster
     {
-        const float Sweep = 270f;           // the dial's arc, from bottom-left round the top to bottom-right
-        const int Lights = 7;
-        const float StackTop = 36f + WeaponStrip.CellHeight + 10f + Minimap.ViewSize + 12f; // Hud's margin, strip, gap, minimap, gap
-        const float CentreY = 36f + 44f + 8f;  // Hud's margin and health bar: the weapon panel's place
-
-        // Two placements: over the minimap (tall, a big dial) and, for a driver with empty hands, the weapon panel's
-        // place at the bottom centre (wide and low, ADR-558).
-        sealed class Layout
-        {
-            public float D, W, H, DialX, Hub, GearY, GearW, GearH, UnitY, DigitCell, DigitH, DigitY, KmhY, ModeY, SpeedBarY, FuelY, BodyY, BarH;
-            public int GearFont, UnitFont, DigitFont, KmhFont, ModeFont, BarFont, NumFont;
-            public float TickMajor, TickMinor, TickInset, NumInset;
-            public bool LightsOverDial;
-        }
-
-        static readonly Layout SideLayout = new Layout
-        {
-            D = 236f, W = 520f, H = 268f, DialX = 16f, Hub = 54f, GearY = -54f, GearW = 80f, GearH = 56f, GearFont = 46, UnitY = -88f, UnitFont = 13,
-            DigitCell = 44f, DigitH = 80f, DigitFont = 64, DigitY = 58f, KmhY = 44f, KmhFont = 18, ModeY = 72f, ModeFont = 14,
-            SpeedBarY = 8f, FuelY = -36f, BodyY = -76f, BarH = 24f, BarFont = 15, TickMajor = 14f, TickMinor = 7f, TickInset = 24f, NumInset = 30f, NumFont = 16,
-            LightsOverDial = true,
-        };
-
-        static readonly Layout CentreLayout = new Layout
-        {
-            D = 140f, W = 560f, H = 148f, DialX = 10f, Hub = 34f, GearY = -30f, GearW = 52f, GearH = 36f, GearFont = 30, UnitY = -52f, UnitFont = 11,
-            DigitCell = 38f, DigitH = 62f, DigitFont = 52, DigitY = 14f, KmhY = 4f, KmhFont = 16, ModeY = 28f, ModeFont = 13,
-            SpeedBarY = -24f, FuelY = -44f, BodyY = -62f, BarH = 18f, BarFont = 13, TickMajor = 9f, TickMinor = 5f, TickInset = 14f, NumInset = 22f, NumFont = 12,
-            LightsOverDial = false,
-        };
+        const int Leds = 24, FuelBlocks = 8, Segments = 10;
 
         public RectTransform Root { get; }
-        public bool Centre { get; }
-        public int SpeedShown => _speed.Value;
+        public RectTransform Tach { get; }
+        public RectTransform Speed { get; }
+        public char Style { get; }
+        public bool Compact { get; }
+        public Color Accent { get; }
+        public int SpeedShown { get; private set; }
         public string GearShown => _gear.text;
-        public float NeedleDeg => _needle.localEulerAngles.z;
+        public float NeedleDeg => _needle != null ? _needle.localEulerAngles.z : 0f;
         public int LightsLit { get; private set; }
-
-        readonly Layout _l;
-        readonly HudDigits _speed;
-        readonly Text _gear, _mode, _unit;
-        readonly RectTransform _needle, _speedFill, _fuelFill, _bodyFill, _gearRect;
-        readonly Image _rpmArc, _fuelImage, _bodyImage, _speedFillImage;
-        readonly Image[] _lights = new Image[Lights];
-        readonly Text _fuelText, _bodyText;
-        RectTransform _dial;
-        Image _redArc;
-        float _shownRedline = -1f;
-        int _shiftSeen = int.MinValue;
-        float _punchAt = float.NegativeInfinity;
-        readonly System.Collections.Generic.List<GameObject> _ticks = new System.Collections.Generic.List<GameObject>();
-
         public int FuelShown { get; private set; } = -1;
         public int ConditionShown { get; private set; } = -1;
         public bool FuelLowShown { get; private set; }
 
         static readonly Color Lit = new Color(1f, 0.74f, 0.32f, 1f);
         static readonly Color Cold = new Color(0.30f, 0.36f, 0.41f, 0.55f);
+        static readonly Color Green = new Color(0.35f, 0.9f, 0.45f, 1f);
+        static readonly Color Face = new Color(0.03f, 0.035f, 0.04f, 0.86f);
+        static readonly Color Rim = new Color(0.5f, 0.58f, 0.64f, 0.55f);
 
-        public VehicleCluster(Transform parent, bool centre)
+        readonly VehicleHandling _row;
+        readonly float _redline, _shiftAt, _rpmMax, _top;
+        readonly Text _gear, _speedText, _rpmText, _fuelText, _bodyText;
+        readonly RectTransform _gearRect, _needle, _speedNeedle, _fuelNeedle;
+        readonly Image _rpmArc, _speedArc, _fuelArc;
+        readonly float _rpmSweep, _speedSweep;
+        readonly Image[] _lights = new Image[ClusterLayout.LightCount];
+        Image[] _leds, _fuelBlocks, _fuelSegs, _bodySegs;
+        int _shiftSeen = int.MinValue, _rpmTenths = -1;
+        float _punchAt = float.NegativeInfinity, _placedWidth = -1f;
+
+        public VehicleCluster(Transform parent, VehicleHandling row, float redline, float shiftShare, float topKmh)
         {
-            Centre = centre;
-            var l = _l = centre ? CentreLayout : SideLayout;
-            float D = l.D;
-            if (centre)
+            _row = row;
+            Style = row != null && !string.IsNullOrEmpty(row.Cluster) ? char.ToUpperInvariant(row.Cluster[0]) : 'C';
+            if (Style < 'A' || Style > 'D') Style = 'C';
+            Compact = row != null && row.ClusterCompact;
+            Accent = row != null && ColorUtility.TryParseHtmlString(row.ClusterAccent, out var c) ? c : UiKit.Accent;
+            _redline = redline;
+            _shiftAt = redline * shiftShare;
+            _rpmMax = RpmMax(redline);
+            _top = topKmh;
+
+            Root = UiKit.Fill("Cluster" + Style, parent);
+            var corner = Vector2.zero;
+            Tach = UiKit.Rect("Tacho", Root, corner, corner, Vector2.zero, ClusterLayout.TachSize(Style));
+            Speed = UiKit.Rect("Speedo", Root, corner, corner, Vector2.zero, ClusterLayout.SpeedSize(Style));
+            BuildLights();
+
+            switch (Style)
             {
-                var bottom = new Vector2(0.5f, 0f);
-                Root = UiKit.Rect("ClusterCentre", parent, bottom, bottom, new Vector2(0f, CentreY), new Vector2(l.W, l.H));
+                case 'A': BuildTwinRound(out _gear, out _gearRect, out _rpmArc, out _speedArc, out _speedText, out _fuelArc, out _fuelText, out _bodyText); _rpmSweep = _speedSweep = 270f; break;
+                case 'B': BuildHalfMoon(out _gear, out _gearRect, out _rpmArc, out _speedArc, out _speedText, out _fuelText, out _bodyText); _rpmSweep = _speedSweep = 180f; break;
+                case 'D': BuildClassic(out _gear, out _gearRect, out _needle, out _speedNeedle, out _fuelNeedle, out _speedText, out _fuelText, out _bodyText); break;
+                default: BuildDigital(out _gear, out _gearRect, out _rpmText, out _speedText, out _fuelText, out _bodyText); break;
             }
-            else
-            {
-                // Over the bottom-right column (weapon strip, then the minimap), so neither is covered.
-                var corner = new Vector2(1f, 0f);
-                Root = UiKit.Rect("Cluster", parent, corner, corner, new Vector2(-36f, StackTop), new Vector2(l.W, l.H));
-            }
-            var plate = UiKit.Box(Root, UiKit.PanelDeep);
-            plate.color = new Color(0.045f, 0.052f, 0.06f, 0.78f);
-            UiKit.Frame(Root, 1f, UiKit.SteelDim);
+        }
 
-            // ---- Tachometer ----
-            var mid = new Vector2(0.5f, 0.5f);
-            var dial = UiKit.Rect("Tacho", Root, new Vector2(0f, 0.5f), mid, new Vector2(l.DialX + D / 2f, centre ? 0f : -6f), new Vector2(D, D));
-            _dial = dial;
-            Disc(dial, "Face", D, new Color(0.02f, 0.025f, 0.03f, 0.9f));
-            float arc = D - D * 0.076f;
-            Arc(dial, "Track", arc, Ring(0.07f), UiKit.SteelDim, 1f);
-            _rpmArc = Arc(dial, "Rpm", arc, Ring(0.07f), UiKit.Steel, 0f);
-            _redArc = Arc(dial, "Red", D - D * 0.017f, Ring(0.035f), UiKit.Danger, 0f);
-            Disc(dial, "Rim", D, new Color(0.5f, 0.58f, 0.64f, 0.5f), Ring(0.012f));
+        // The tachometer runs to the next whole thousand over the redline; the speedometer to the boost top in 20s.
+        public static float RpmMax(float redline) => Mathf.Ceil(redline / 1000f + 0.5f) * 1000f;
+        public static float SpeedMax(float boostMaxKmh) => Mathf.Max(60f, Mathf.Ceil(boostMaxKmh / 20f) * 20f);
 
-            _needle = UiKit.Rect("Needle", dial, mid, new Vector2(0.5f, 0.12f), Vector2.zero, new Vector2(centre ? 4f : 5f, D * 0.47f));
-            UiKit.Box(_needle, UiKit.Accent);
-            Disc(dial, "Hub", l.Hub, new Color(0.09f, 0.1f, 0.11f, 1f));
-            Disc(dial, "HubRim", l.Hub, UiKit.SteelDim, Ring(0.1f));
+        public bool BuiltFor(VehicleHandling row, float redline, float topKmh) =>
+            ReferenceEquals(row, _row) && Mathf.Approximately(redline, _redline) && Mathf.Approximately(topKmh, _top);
 
-            _gearRect = UiKit.Rect("Gear", dial, mid, mid, new Vector2(0f, l.GearY), new Vector2(l.GearW, l.GearH));
-            _gear = UiKit.Label(_gearRect, "N", l.GearFont, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-            _unit = UiKit.Label(UiKit.Rect("Unit", dial, mid, mid, new Vector2(0f, l.UnitY), new Vector2(100f, 16f)),
-                "x1000 rpm", l.UnitFont, UiKit.TextDim, TextAnchor.MiddleCenter);
+        // Puts the two gauges in their gaps for a canvas this wide (the canvas height is always 1080).
+        public void Place(float canvasWidth)
+        {
+            if (Mathf.Approximately(canvasWidth, _placedWidth)) return;
+            _placedWidth = canvasWidth;
+            ClusterLayout.Place(canvasWidth, Style, Compact, out var t, out var s);
+            Put(Tach, t);
+            Put(Speed, s);
+        }
 
-            float x0 = l.DialX + D + 18f, w = l.W - x0 - 16f;
-            var left = new Vector2(0f, 0.5f);
-            // Shift lights: steel -> amber -> red, all red and blinking at the shift point. Over the dial (side) or
-            // along the top of the readout (centre).
-            for (int i = 0; i < Lights; i++)
-            {
-                float t = (i - (Lights - 1) / 2f) / (Lights - 1);
-                RectTransform led;
-                if (l.LightsOverDial)
-                    led = UiKit.Rect("Light" + i, Root, left, mid, new Vector2(l.DialX + D / 2f + t * 120f, l.H / 2f - 14f - Mathf.Abs(t) * 8f), new Vector2(14f, 8f));
-                else
-                    led = UiKit.Rect("Light" + i, Root, left, mid, new Vector2(x0 + 8f + i * 22f, l.H / 2f - 12f), new Vector2(16f, 7f));
-                _lights[i] = UiKit.Box(led, Cold);
-            }
-
-            // ---- Speed and bars ----
-            _speed = HudDigits.Build("Speed", Root, left, left, new Vector2(x0, l.DigitY), 3, l.DigitCell, l.DigitH, l.DigitFont, UiKit.Text);
-            _speed.Set(0);
-            float after = x0 + 3f * l.DigitCell + 8f;
-            UiKit.Label(UiKit.Rect("Kmh", Root, left, left, new Vector2(after, l.KmhY), new Vector2(70f, 24f)), "km/h", l.KmhFont, UiKit.TextDim);
-            _mode = UiKit.Label(UiKit.Rect("Mode", Root, left, left, new Vector2(after, l.ModeY), new Vector2(90f, 22f)), "AUTO", l.ModeFont, UiKit.Accent, TextAnchor.MiddleLeft, FontStyle.Bold);
-
-            var speedTrack = UiKit.Rect("SpeedTrack", Root, left, left, new Vector2(x0, l.SpeedBarY), new Vector2(w, 6f));
-            UiKit.Box(speedTrack, UiKit.SteelDim);
-            _speedFill = UiKit.Fill("Fill", speedTrack);
-            _speedFill.anchorMax = new Vector2(0f, 1f);
-            _speedFillImage = UiKit.Box(_speedFill, UiKit.Steel);
-
-            Bar("Fuel", "연료", x0, l.FuelY, w, out _fuelFill, out _fuelImage, out _fuelText);
-            Bar("Body", "차체", x0, l.BodyY, w, out _bodyFill, out _bodyImage, out _bodyText);
+        static void Put(RectTransform rect, Rect at)
+        {
+            rect.anchoredPosition = at.position;
+            float k = at.width / rect.sizeDelta.x;
+            rect.localScale = new Vector3(k, k, 1f);
         }
 
         public void Tick(Vehicle v)
         {
-            var r = v.Rules;
-            float redline = v.RedlineRpm;
-            if (!Mathf.Approximately(redline, _shownRedline)) Retick(redline, r.Gearbox != null ? r.Gearbox.ShiftUpShare : 0.92f);
+            float rpm = v.EngineRpm;
+            float rpm01 = Mathf.Clamp01(rpm / _rpmMax);
+            bool hot = rpm >= _shiftAt;
 
-            // Needle and arc: the dial runs to the next whole thousand over the redline.
-            float max = Mathf.Ceil(redline / 1000f + 0.5f) * 1000f;
-            float rpm01 = Mathf.Clamp01(v.EngineRpm / max);
-            _needle.localRotation = Quaternion.Euler(0f, 0f, Sweep / 2f - Sweep * rpm01);
-            _rpmArc.fillAmount = rpm01 * Sweep / 360f;
-            float shiftAt = redline * (r.Gearbox != null ? r.Gearbox.ShiftUpShare : 0.92f);
-            _rpmArc.color = v.EngineRpm >= shiftAt ? UiKit.Danger : Color.Lerp(UiKit.Steel, Lit, Mathf.InverseLerp(redline * 0.5f, shiftAt, v.EngineRpm));
+            if (_rpmArc != null)
+            {
+                _rpmArc.fillAmount = rpm01 * _rpmSweep / 360f;
+                _rpmArc.color = hot ? UiKit.Danger : Style == 'A' ? Lit : Accent;
+            }
+            if (_needle != null) _needle.localRotation = Quaternion.Euler(0f, 0f, -Angle(rpm01, 270f));
+            if (_leds != null)
+            {
+                int lit = Mathf.RoundToInt(rpm01 * Leds);
+                for (int i = 0; i < Leds; i++)
+                {
+                    float at = (i + 1f) / Leds * _rpmMax;
+                    var on = at > _shiftAt ? UiKit.Danger : at > _shiftAt * 0.7f ? Lit : Green;
+                    _leds[i].color = i < lit ? on : new Color(on.r, on.g, on.b, 0.14f);
+                }
+            }
+            if (_rpmText != null)
+            {
+                int tenths = Mathf.RoundToInt(rpm / 100f);
+                if (tenths != _rpmTenths) { _rpmTenths = tenths; _rpmText.text = HudDigits.IntText(tenths / 10) + "." + HudDigits.IntText(tenths % 10) + "k"; }
+                _rpmText.color = hot ? UiKit.Danger : UiKit.Text;
+            }
 
-            // Gear: R / N / 1..6, punched up for a moment on a change.
-            string gear = v.Gear < 0 ? "R" : v.Gear == 0 ? "N" : HudDigits.IntText(v.Gear);
+            // Gear: R / N / 1..6 ("D5" in the classic window), punched up for a moment on a change.
+            string gear = v.Gear < 0 ? "R" : v.Gear == 0 ? "N" : Style == 'D' ? DGear(v.Gear) : HudDigits.IntText(v.Gear);
             if (_gear.text != gear) _gear.text = gear;
             if (v.ShiftCount != _shiftSeen) { if (_shiftSeen != int.MinValue) _punchAt = Time.unscaledTime; _shiftSeen = v.ShiftCount; }
             float p = Mathf.Clamp01((Time.unscaledTime - _punchAt) / 0.25f);
             _gearRect.localScale = Vector3.one * (1f + 0.3f * (1f - p) * (1f - p));
-            _gear.color = p < 1f ? Lit : v.Gear < 0 ? UiKit.Accent : UiKit.Text;
+            var rest = Style == 'C' ? Accent : Style == 'D' ? UiKit.Accent : UiKit.Text;
+            _gear.color = p < 1f ? Lit : v.Gear < 0 ? UiKit.Danger : rest;
 
-            // Shift lights from 65% of the shift point; all red, blinking, at it.
-            float from = shiftAt * 0.65f;
-            float lit01 = Mathf.InverseLerp(from, shiftAt, v.EngineRpm);
-            bool at = v.EngineRpm >= shiftAt && v.Gear > 0;
-            bool blinkOn = Mathf.Repeat(Time.unscaledTime * 8f, 1f) < 0.5f;
-            int lit = at ? Lights : Mathf.FloorToInt(lit01 * Lights + 0.0001f);
-            LightsLit = at && !blinkOn ? 0 : lit;
-            for (int i = 0; i < Lights; i++)
-            {
-                // Lit from the outside in, as a pair, so the row closes on the middle.
-                int rank = Mathf.Min(i, Lights - 1 - i);
-                bool on = at ? blinkOn : rank < Mathf.CeilToInt(lit / 2f);
-                var lamp = at ? UiKit.Danger : rank == Lights / 2 ? UiKit.Danger : rank >= 2 ? Lit : new Color(0.55f, 0.85f, 0.6f, 1f);
-                _lights[i].color = on ? lamp : Cold;
-            }
+            TickLights(rpm, v.Gear);
 
             // Speed.
-            _speed.Set(Mathf.RoundToInt(v.SpeedKmh));
-            float top = Vehicles.Kmh(r.BoostMaxKmh);
-            _speedFill.anchorMax = new Vector2(Mathf.Clamp01(Mathf.Abs(v.Speed) / Mathf.Max(1f, top)), 1f);
-            _speedFillImage.color = v.SpeedKmh > r.MaxSpeedKmh ? Lit : UiKit.Steel;
-            string mode = v.Gear < 0 ? "REVERSE" : v.Shifting ? "SHIFT" : "AUTO";
-            if (_mode.text != mode) _mode.text = mode;
+            int kmh = Mathf.RoundToInt(v.SpeedKmh);
+            float speed01 = Mathf.Clamp01(v.SpeedKmh / _top);
+            if (kmh != SpeedShown || _speedText.text.Length == 0)
+            {
+                SpeedShown = kmh;
+                _speedText.text = Style == 'C' ? Pad3(kmh) : HudDigits.IntText(kmh);
+            }
+            if (_speedArc != null) _speedArc.fillAmount = speed01 * _speedSweep / 360f;
+            if (_speedNeedle != null) _speedNeedle.localRotation = Quaternion.Euler(0f, 0f, -Angle(speed01, 270f));
 
             // Fuel and body.
             var state = v.State;
             float fuel = state != null ? state.Fuel01 : 1f, body = state != null ? state.Health01 : 1f;
             int percent = Fuel.Percent(fuel);
-            if (percent != FuelShown)
+            bool low = fuel < FuelRules.Current.LowShare;
+            if (percent != FuelShown || low != FuelLowShown)
             {
                 FuelShown = percent;
-                _fuelFill.anchorMax = new Vector2(Mathf.Clamp01(fuel), 1f);
-                _fuelText.text = percent > 0 ? HudDigits.IntText(percent) + "%" : "없음";
-            }
-            bool low = fuel < FuelRules.Current.LowShare;
-            if (low != FuelLowShown)
-            {
                 FuelLowShown = low;
-                _fuelImage.color = low ? UiKit.Danger : UiKit.Health;
+                var fuelColour = low ? UiKit.Danger : UiKit.Health;
+                string value = percent > 0 ? HudDigits.IntText(percent) + "%" : "없음";
+                _fuelText.text = Style == 'C' ? value : "연료 " + value;
                 _fuelText.color = low ? UiKit.Danger : UiKit.Text;
+                if (_fuelArc != null) { _fuelArc.fillAmount = Mathf.Clamp01(fuel) * 70f / 360f; _fuelArc.color = fuelColour; }
+                if (_fuelNeedle != null) _fuelNeedle.localRotation = Quaternion.Euler(0f, 0f, -(-50f + 100f * Mathf.Clamp01(fuel)));
+                if (_fuelSegs != null) Segs(_fuelSegs, fuel, fuelColour);
+                if (_fuelBlocks != null) Segs(_fuelBlocks, fuel, low ? UiKit.Danger : Green);   // not the accent: a red car's fuel must not read "low"
             }
-            int c = Mathf.Clamp(Mathf.RoundToInt(body * 100f), 0, 100);
-            if (c != ConditionShown)
+            int cond = Mathf.Clamp(Mathf.RoundToInt(body * 100f), 0, 100);
+            if (cond != ConditionShown)
             {
-                ConditionShown = c;
-                _bodyFill.anchorMax = new Vector2(Mathf.Clamp01(body), 1f);
-                _bodyText.text = HudDigits.IntText(c) + "%";
-                _bodyImage.color = body < 0.3f ? UiKit.Danger : UiKit.Health;
-                _bodyText.color = body < 0.3f ? UiKit.Danger : UiKit.Text;
+                ConditionShown = cond;
+                _bodyText.text = "차체 " + HudDigits.IntText(cond) + "%";
+                _bodyText.color = body < 0.3f ? UiKit.Danger : UiKit.TextDim;
+                if (_bodySegs != null) Segs(_bodySegs, body, body < 0.3f ? UiKit.Danger : UiKit.Health);
             }
         }
 
-        // The ticks, numbers and red zone for this redline (a car change re-draws them).
-        void Retick(float redline, float shiftShare)
+        // Shift lights from 65% of the shift point, lit from the outside in as pairs; all red and blinking at it.
+        void TickLights(float rpm, int gearNow)
         {
-            _shownRedline = redline;
-            foreach (var t in _ticks) Object.Destroy(t);
-            _ticks.Clear();
-            float max = Mathf.Ceil(redline / 1000f + 0.5f) * 1000f;
-            float radius = _l.D / 2f - _l.TickInset;
-            for (int k = 0; k <= Mathf.RoundToInt(max / 500f); k++)
+            const int n = ClusterLayout.LightCount;
+            float lit01 = Mathf.InverseLerp(_shiftAt * 0.65f, _shiftAt, rpm);
+            bool at = rpm >= _shiftAt && gearNow > 0;
+            bool blinkOn = Mathf.Repeat(Time.unscaledTime * 8f, 1f) < 0.5f;
+            int lit = at ? n : Mathf.FloorToInt(lit01 * n + 0.0001f);
+            LightsLit = at && !blinkOn ? 0 : lit;
+            for (int i = 0; i < n; i++)
             {
-                float rpm = k * 500f;
-                bool major = k % 2 == 0;
-                float deg = Sweep * (rpm / max) - Sweep / 2f;   // clockwise from 12 o'clock
-                var dir = new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad));
-                float len = major ? _l.TickMajor : _l.TickMinor;
-                var tick = UiKit.Rect("Tick" + k, _dial, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), dir * (radius - len / 2f), new Vector2(major ? 3f : 2f, len));
+                int rank = Mathf.Min(i, n - 1 - i);
+                bool on = at ? blinkOn : rank < Mathf.CeilToInt(lit / 2f);
+                var lamp = at ? UiKit.Danger : rank == n / 2 ? UiKit.Danger : rank >= 2 ? Lit : Green;
+                _lights[i].color = on ? lamp : Cold;
+            }
+        }
+
+        static void Segs(Image[] segs, float share, Color on)
+        {
+            int lit = Mathf.CeilToInt(Mathf.Clamp01(share) * segs.Length - 0.001f);
+            for (int i = 0; i < segs.Length; i++) segs[i].color = i < lit ? on : Cold;
+        }
+
+        // ---- The four styles ----
+
+        void BuildLights()
+        {
+            var bottom = new Vector2(0.5f, 0f);
+            float y = ClusterLayout.Margin + ClusterLayout.HealthHeight + 1.5f;
+            for (int i = 0; i < ClusterLayout.LightCount; i++)
+            {
+                float x = -ClusterLayout.LightsWidth / 2f + ClusterLayout.LightW / 2f + i * (ClusterLayout.LightW + ClusterLayout.LightGap);
+                var led = UiKit.Rect("Light" + i, Root, bottom, bottom, new Vector2(x, y), new Vector2(ClusterLayout.LightW, ClusterLayout.LightH));
+                _lights[i] = UiKit.Box(led, Cold);
+            }
+        }
+
+        void BuildTwinRound(out Text gear, out RectTransform gearRect, out Image rpmArc, out Image speedArc, out Text speed, out Image fuelArc, out Text fuel, out Text body)
+        {
+            const float D = 216f, band = 0.075f;
+            float arc = D - 14f;
+            var t = Square(Tach, D, false);
+            Disc(t, "Face", D, Face);
+            Disc(t, "Rim", D, Rim, Ring(0.012f));
+            Arc(t, "Track", arc, Ring(band), new Color(1f, 1f, 1f, 0.08f), -135f, 270f, 1f);
+            Arc(t, "Red", arc, Ring(band), new Color(UiKit.Danger.r, UiKit.Danger.g, UiKit.Danger.b, 0.45f), Angle(_redline / _rpmMax, 270f), 270f * (1f - _redline / _rpmMax), 1f);
+            rpmArc = Arc(t, "Rpm", arc, Ring(band), Lit, -135f, 270f, 0f);
+            Ticks(t, 270f, _rpmMax, 1000f, 0f, _redline, arc / 2f - 18f, 6f, 0f, arc / 2f - 34f, 15, 1000f);
+            gearRect = UiKit.Rect("Gear", t, Mid, Mid, new Vector2(0f, 6f), new Vector2(90f, 80f));
+            gear = UiKit.Label(gearRect, "N", 72, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            Label(t, "Unit", new Vector2(0f, -40f), new Vector2(110f, 16f), "x1000 rpm", 12, UiKit.TextDim);
+            body = Label(t, "Body", new Vector2(0f, -D / 2f + 20f), new Vector2(110f, 20f), "", 14, UiKit.TextDim);
+
+            var s = Square(Speed, D, false);
+            Disc(s, "Face", D, Face);
+            Disc(s, "Rim", D, Rim, Ring(0.012f));
+            Arc(s, "Track", arc, Ring(band), new Color(1f, 1f, 1f, 0.08f), -135f, 270f, 1f);
+            speedArc = Arc(s, "Speed", arc, Ring(band), Accent, -135f, 270f, 0f);
+            Ticks(s, 270f, _top, _top > 180f ? 40f : 20f, 0f, float.MaxValue, arc / 2f - 18f, 6f, 0f, 0f, 0, 0f);
+            speed = Label(s, "Digits", new Vector2(0f, 10f), new Vector2(150f, 64f), "0", 56, UiKit.Text, FontStyle.Bold);
+            Label(s, "Kmh", new Vector2(0f, -28f), new Vector2(80f, 18f), "km/h", 14, UiKit.TextDim);
+            // Fuel: a short arc in the dial's bottom gap, filling left to right, with its reading over it.
+            Arc(s, "FuelTrack", arc, Ring(band), new Color(1f, 1f, 1f, 0.1f), 215f, 70f, 1f, false);
+            fuelArc = Arc(s, "Fuel", arc, Ring(band), UiKit.Health, 215f, 70f, 1f, false);
+            fuel = Label(s, "FuelText", new Vector2(0f, -D / 2f + 34f), new Vector2(110f, 20f), "", 15, UiKit.Text, FontStyle.Bold);
+        }
+
+        void BuildHalfMoon(out Text gear, out RectTransform gearRect, out Image rpmArc, out Image speedArc, out Text speed, out Text fuel, out Text body)
+        {
+            const float band = 0.08f;
+            float D = 300f, arc = D - 12f;
+            var t = Square(Tach, D, true);
+            Arc(t, "Face", D, Ring(0.5f), Face, -90f, 180f, 1f);
+            Arc(t, "Rim", D, Ring(0.012f), Rim, -90f, 180f, 1f);
+            Base(Tach, D);
+            Arc(t, "Track", arc, Ring(band), new Color(1f, 1f, 1f, 0.08f), -90f, 180f, 1f);
+            Arc(t, "Red", arc, Ring(band), new Color(UiKit.Danger.r, UiKit.Danger.g, UiKit.Danger.b, 0.5f), Angle(_redline / _rpmMax, 180f), 180f * (1f - _redline / _rpmMax), 1f);
+            rpmArc = Arc(t, "Rpm", arc, Ring(band), Accent, -90f, 180f, 0f);
+            Ticks(t, 180f, _rpmMax, 1000f, 500f, _redline, arc / 2f - 14f, 9f, 5f, arc / 2f - 34f, 15, 1000f);
+            Label(t, "Unit", new Vector2(0f, 88f), new Vector2(110f, 16f), "x1000 rpm", 12, UiKit.TextDim);
+            gearRect = UiKit.Rect("Gear", t, Mid, Mid, new Vector2(0f, 50f), new Vector2(80f, 64f));
+            gear = UiKit.Label(gearRect, "N", 52, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _bodySegs = SegmentBar(t, "BodyBar", new Vector2(-86f, 10f), 100f, 8f, Segments);
+            body = LeftLabel(t, "Body", new Vector2(20f, 10f), new Vector2(80f, 18f), 13);
+
+            D = 232f; arc = D - 12f;
+            var s = Square(Speed, D, true);
+            Arc(s, "Face", D, Ring(0.5f), Face, -90f, 180f, 1f);
+            Arc(s, "Rim", D, Ring(0.012f), Rim, -90f, 180f, 1f);
+            Base(Speed, D);
+            Arc(s, "Track", arc, Ring(band), new Color(1f, 1f, 1f, 0.08f), -90f, 180f, 1f);
+            speedArc = Arc(s, "Speed", arc, Ring(band), Accent, -90f, 180f, 0f);
+            Ticks(s, 180f, _top, _top > 180f ? 40f : 20f, 0f, float.MaxValue, arc / 2f - 14f, 7f, 0f, 0f, 0, 0f);
+            speed = Label(s, "Digits", new Vector2(0f, 64f), new Vector2(130f, 48f), "0", 44, UiKit.Text, FontStyle.Bold);
+            Label(s, "Kmh", new Vector2(0f, 34f), new Vector2(80f, 16f), "km/h", 12, UiKit.TextDim);
+            _fuelSegs = SegmentBar(s, "FuelBar", new Vector2(-80f, 10f), 82f, 8f, Segments);
+            fuel = LeftLabel(s, "FuelText", new Vector2(8f, 10f), new Vector2(84f, 18f), 13);
+        }
+
+        void BuildDigital(out Text gear, out RectTransform gearRect, out Text rpm, out Text speed, out Text fuel, out Text body)
+        {
+            Plate(Tach);
+            Plate(Speed);
+            var tl = new Vector2(0f, 1f);
+            // Rising LED tach: 24 segments across the top, each a little taller than the last.
+            _leds = new Image[Leds];
+            const float x0 = 14f, w = 300f - 28f, gap = 2f;
+            float seg = (w - gap * (Leds - 1)) / Leds;
+            for (int i = 0; i < Leds; i++)
+            {
+                float h = Mathf.Lerp(10f, 44f, i / (Leds - 1f));
+                var r = UiKit.Rect("Led" + i, Tach, tl, Vector2.zero, new Vector2(x0 + i * (seg + gap), -60f), new Vector2(seg, h));
+                _leds[i] = UiKit.Box(r, Cold);
+            }
+            var left = new Vector2(0f, 0f);
+            gearRect = UiKit.Rect("Gear", Tach, left, new Vector2(0.5f, 0.5f), new Vector2(60f, 54f), new Vector2(84f, 92f));
+            gear = UiKit.Label(gearRect, "N", 84, Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            rpm = UiKit.Label(UiKit.Rect("Rpm", Tach, left, left, new Vector2(112f, 46f), new Vector2(130f, 44f)), "0.0k", 38, UiKit.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+            UiKit.Label(UiKit.Rect("RpmUnit", Tach, left, left, new Vector2(246f, 46f), new Vector2(44f, 20f)), "rpm", 13, UiKit.TextDim);
+            body = UiKit.Label(UiKit.Rect("Body", Tach, left, left, new Vector2(112f, 12f), new Vector2(174f, 20f)), "", 14, UiKit.TextDim, TextAnchor.MiddleRight);
+
+            speed = UiKit.Label(UiKit.Rect("Digits", Speed, left, left, new Vector2(10f, 62f), new Vector2(166f, 84f)), "000", 72, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiKit.Label(UiKit.Rect("Kmh", Speed, left, left, new Vector2(10f, 40f), new Vector2(166f, 20f)), "km/h", 15, UiKit.TextDim, TextAnchor.MiddleCenter);
+            fuel = UiKit.Label(UiKit.Rect("FuelText", Speed, left, left, new Vector2(10f, 10f), new Vector2(166f, 22f)), "", 16, UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiKit.Label(UiKit.Rect("FuelIcon", Speed, left, left, new Vector2(10f, 10f), new Vector2(40f, 22f)), "연료", 12, UiKit.TextDim);
+            // The fuel column: 8 blocks bottom (E) to top (F), red when low.
+            _fuelBlocks = new Image[FuelBlocks];
+            for (int i = 0; i < FuelBlocks; i++)
+                _fuelBlocks[i] = UiKit.Box(UiKit.Rect("Fuel" + i, Speed, left, left, new Vector2(186f, 28f + i * 14f), new Vector2(20f, 11f)), Cold);
+            UiKit.Label(UiKit.Rect("F", Speed, left, left, new Vector2(186f, 140f), new Vector2(20f, 18f)), "F", 13, UiKit.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiKit.Label(UiKit.Rect("E", Speed, left, left, new Vector2(186f, 6f), new Vector2(20f, 18f)), "E", 13, UiKit.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+        }
+
+        void BuildClassic(out Text gear, out RectTransform gearRect, out RectTransform needle, out RectTransform speedNeedle, out RectTransform fuelNeedle, out Text speed, out Text fuel, out Text body)
+        {
+            const float D = 216f;
+            float r = D / 2f - 10f;
+            var t = Square(Tach, D, false);
+            ClassicFace(t, D);
+            Arc(t, "Red", D - 22f, Ring(0.05f), UiKit.Danger, Angle(_redline / _rpmMax, 270f), 270f * (1f - _redline / _rpmMax), 1f);
+            Ticks(t, 270f, _rpmMax, 1000f, 500f, _redline, r, 13f, 7f, r - 26f, 16, 1000f);
+            Label(t, "Unit", new Vector2(0f, 34f), new Vector2(110f, 16f), "x1000 rpm", 11, UiKit.TextDim);
+            var window = UiKit.Rect("GearWindow", t, Mid, Mid, new Vector2(0f, -44f), new Vector2(50f, 30f));
+            UiKit.Box(window, new Color(0f, 0f, 0f, 0.9f));
+            UiKit.Frame(window, 1f, UiKit.SteelDim);
+            gearRect = UiKit.Rect("Gear", window, Mid, Mid, Vector2.zero, new Vector2(50f, 30f));
+            gear = UiKit.Label(gearRect, "N", 22, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            body = Label(t, "Body", new Vector2(0f, -D / 2f + 16f), new Vector2(110f, 18f), "", 13, UiKit.TextDim);
+            needle = Needle(t, D * 0.42f, 4f, Accent);
+            Hub(t);
+
+            var s = Square(Speed, D, false);
+            ClassicFace(s, D);
+            float major = _top > 180f ? 40f : 20f;
+            Ticks(s, 270f, _top, major, major / 2f, float.MaxValue, r, 13f, 7f, r - 26f, 14, 1f);
+            Label(s, "Kmh", new Vector2(0f, 44f), new Vector2(80f, 16f), "km/h", 11, UiKit.TextDim);
+            speed = Label(s, "Digits", new Vector2(0f, 25f), new Vector2(80f, 22f), "0", 17, UiKit.Text, FontStyle.Bold);
+            // The fuel sub-gauge: a small E-F arc low in the face with its own needle.
+            var sub = UiKit.Rect("FuelGauge", s, Mid, Mid, new Vector2(0f, -50f), new Vector2(64f, 64f));
+            Arc(sub, "Scale", 64f, Ring(0.08f), UiKit.Steel, -50f, 100f, 1f);
+            Arc(sub, "Low", 64f, Ring(0.08f), UiKit.Danger, -50f, 100f * FuelRules.Current.LowShare, 1f);
+            Label(sub, "E", new Vector2(-28f, 4f), new Vector2(16f, 16f), "E", 11, UiKit.Danger, FontStyle.Bold);
+            Label(sub, "F", new Vector2(28f, 4f), new Vector2(16f, 16f), "F", 11, UiKit.Text, FontStyle.Bold);
+            fuelNeedle = Needle(sub, 26f, 2.5f, Accent);
+            Disc(sub, "Hub", 9f, new Color(0.1f, 0.1f, 0.11f, 1f));
+            fuel = Label(s, "FuelText", new Vector2(0f, -D / 2f + 16f), new Vector2(110f, 18f), "", 13, UiKit.Text, FontStyle.Bold);
+            speedNeedle = Needle(s, D * 0.42f, 4f, Accent);
+            Hub(s);
+        }
+
+        // ---- Pieces ----
+
+        static readonly Vector2 Mid = new Vector2(0.5f, 0.5f);
+
+        // Clockwise degrees from 12 o'clock for a share of a dial `sweep` wide, centred on 12 o'clock.
+        static float Angle(float share, float sweep) => -sweep / 2f + sweep * share;
+        static Vector2 Dir(float deg) => new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad));
+
+        static string DGear(int g) => g <= 9 ? DGears[g] : "D";
+        static readonly string[] DGears = { "N", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9" };
+
+        static string[] _pad3;
+        static string Pad3(int n)
+        {
+            if (_pad3 == null) { _pad3 = new string[1000]; for (int i = 0; i < 1000; i++) _pad3[i] = i.ToString("000"); }
+            return _pad3[Mathf.Clamp(n, 0, 999)];
+        }
+
+        // The square a dial is drawn in: centred on the gauge, or (half) centred on its bottom edge.
+        static RectTransform Square(RectTransform gauge, float d, bool half) =>
+            UiKit.Rect("Dial", gauge, half ? new Vector2(0.5f, 0f) : Mid, Mid, Vector2.zero, new Vector2(d, d));
+
+        static void Base(RectTransform gauge, float d) =>
+            UiKit.Box(UiKit.Rect("Base", gauge, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(d, 2f)), Rim);
+
+        static void Plate(RectTransform gauge)
+        {
+            UiKit.Box(UiKit.Fill("Plate", gauge), new Color(0.03f, 0.035f, 0.04f, 0.86f));
+            UiKit.Frame(gauge, 1f, UiKit.SteelDim);
+        }
+
+        void ClassicFace(RectTransform dial, float d)
+        {
+            Disc(dial, "Bezel", d, new Color(0.22f, 0.25f, 0.28f, 0.95f));
+            Disc(dial, "Face", d - 8f, new Color(0.02f, 0.022f, 0.026f, 0.96f));
+            Disc(dial, "Inner", d * 0.62f, new Color(0.05f, 0.055f, 0.06f, 1f));
+        }
+
+        static RectTransform Needle(RectTransform dial, float length, float width, Color color)
+        {
+            var n = UiKit.Rect("Needle", dial, Mid, new Vector2(0.5f, 0.14f), Vector2.zero, new Vector2(width, length));
+            UiKit.Box(n, color);
+            n.localRotation = Quaternion.Euler(0f, 0f, 135f);
+            return n;
+        }
+
+        static void Hub(RectTransform dial)
+        {
+            Disc(dial, "Hub", 22f, new Color(0.09f, 0.1f, 0.11f, 1f));
+            Disc(dial, "HubRim", 22f, UiKit.Accent, Ring(0.18f));
+        }
+
+        static Image[] SegmentBar(RectTransform parent, string name, Vector2 leftCentre, float width, float height, int count)
+        {
+            const float gap = 2f;
+            var segs = new Image[count];
+            float w = (width - gap * (count - 1)) / count;
+            for (int i = 0; i < count; i++)
+            {
+                var r = UiKit.Rect(name + i, parent, Mid, new Vector2(0f, 0.5f), leftCentre + new Vector2(i * (w + gap), 0f), new Vector2(w, height));
+                segs[i] = UiKit.Box(r, Cold);
+            }
+            return segs;
+        }
+
+        static Text LeftLabel(RectTransform parent, string name, Vector2 at, Vector2 size, int font) =>
+            UiKit.Label(UiKit.Rect(name, parent, Mid, new Vector2(0f, 0.5f), at, size), "", font, UiKit.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+
+        static Text Label(RectTransform parent, string name, Vector2 at, Vector2 size, string text, int font, Color color, FontStyle style = FontStyle.Normal) =>
+            UiKit.Label(UiKit.Rect(name, parent, Mid, Mid, at, size), text, font, color, TextAnchor.MiddleCenter, style);
+
+        // Ticks every `minor` (0 = none) and `major` from 0 to `max`, red from `redFrom`, numbers (value / `divide`) inside.
+        void Ticks(RectTransform dial, float sweep, float max, float major, float minor, float redFrom, float radius, float majorLen, float minorLen, float numRadius, int numFont, float divide)
+        {
+            float step = minor > 0f ? minor : major;
+            int n = Mathf.RoundToInt(max / step);
+            for (int k = 0; k <= n; k++)
+            {
+                float value = k * step;
+                bool isMajor = Mathf.Abs(Mathf.Repeat(value + 0.01f, major)) < 0.1f;
+                float deg = Angle(value / max, sweep);
+                var dir = Dir(deg);
+                float len = isMajor ? majorLen : minorLen;
+                bool red = value >= redFrom - 0.01f;
+                var tick = UiKit.Rect("Tick" + k, dial, Mid, Mid, dir * (radius - len / 2f), new Vector2(isMajor ? 3f : 2f, len));
                 tick.localRotation = Quaternion.Euler(0f, 0f, -deg);
-                UiKit.Box(tick, rpm >= redline ? UiKit.Danger : major ? UiKit.Text : UiKit.TextDim);
-                _ticks.Add(tick.gameObject);
-                if (!major) continue;
-                var num = UiKit.Rect("Num" + k, _dial, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), dir * (radius - _l.NumInset), new Vector2(30f, 20f));
-                UiKit.Label(num, HudDigits.IntText(Mathf.RoundToInt(rpm / 1000f)), _l.NumFont, rpm >= redline ? UiKit.Danger : UiKit.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
-                _ticks.Add(num.gameObject);
+                UiKit.Box(tick, red ? UiKit.Danger : isMajor ? UiKit.Text : UiKit.TextDim);
+                if (!isMajor || numFont <= 0) continue;
+                if (sweep <= 180f && (k == 0 || k == n)) continue;   // a half-moon's end numbers would sit on its base line
+                Label(dial, "Num" + k, dir * numRadius, new Vector2(34f, 20f), HudDigits.IntText(Mathf.RoundToInt(value / divide)), numFont, red ? UiKit.Danger : UiKit.Text, FontStyle.Bold);
             }
-            // The red zone from the redline to the dial's end; the arc fills clockwise from bottom-left.
-            float red0 = redline / max;
-            _redArc.fillAmount = (1f - red0) * Sweep / 360f;
-            _redArc.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Sweep / 2f - 180f - Sweep * red0);
         }
-
-        void Bar(string name, string caption, float x, float y, float w, out RectTransform fill, out Image image, out Text value)
-        {
-            var left = new Vector2(0f, 0.5f);
-            UiKit.Label(UiKit.Rect(name + "Caption", Root, left, left, new Vector2(x, y), new Vector2(44f, _l.BarH)), caption, _l.BarFont, UiKit.TextDim);
-            var track = UiKit.Rect(name + "Track", Root, left, left, new Vector2(x + 46f, y), new Vector2(w - 46f - 58f, 8f));
-            UiKit.Box(track, UiKit.SteelDim);
-            fill = UiKit.Fill("Fill", track);
-            image = UiKit.Box(fill, UiKit.Health);
-            value = UiKit.Label(UiKit.Rect(name + "Value", Root, left, left, new Vector2(x + w - 54f, y), new Vector2(56f, _l.BarH)), "", _l.BarFont + 1, UiKit.Text, TextAnchor.MiddleRight);
-        }
-
-        // ---- Drawn shapes ----
 
         static Image Disc(RectTransform parent, string name, float size, Color color, Sprite sprite = null)
         {
-            var rect = UiKit.Rect(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
-            var image = UiKit.Box(rect, color);
+            var image = UiKit.Box(UiKit.Rect(name, parent, Mid, Mid, Vector2.zero, new Vector2(size, size)), color);
             image.sprite = sprite != null ? sprite : Ring(0.5f);
             return image;
         }
 
-        // A ring filled clockwise from the dial's start (bottom-left): fillAmount 1 = the whole circle.
-        static Image Arc(RectTransform parent, string name, float size, Sprite ring, Color color, float fill)
+        // A ring from `startDeg` (clockwise from 12 o'clock) running `sweepDeg` clockwise (or back), `fill` of it drawn.
+        static Image Arc(RectTransform parent, string name, float size, Sprite ring, Color color, float startDeg, float sweepDeg, float fill, bool clockwise = true)
         {
-            var rect = UiKit.Rect(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
-            rect.localRotation = Quaternion.Euler(0f, 0f, Sweep / 2f - 180f);   // the fill's start (6 o'clock) turned to bottom-left
+            var rect = UiKit.Rect(name, parent, Mid, Mid, Vector2.zero, new Vector2(size, size));
+            rect.localRotation = Quaternion.Euler(0f, 0f, 180f - startDeg);   // the fill's start (6 o'clock) turned to startDeg
             var image = UiKit.Box(rect, color);
             image.sprite = ring;
             image.type = Image.Type.Filled;
             image.fillMethod = Image.FillMethod.Radial360;
             image.fillOrigin = (int)Image.Origin360.Bottom;
-            image.fillClockwise = true;
-            image.fillAmount = fill * Sweep / 360f;
+            image.fillClockwise = clockwise;
+            image.fillAmount = fill * sweepDeg / 360f;
             return image;
         }
 
-        static readonly System.Collections.Generic.Dictionary<int, Sprite> Rings = new System.Collections.Generic.Dictionary<int, Sprite>();
+        static readonly Dictionary<int, Sprite> Rings = new Dictionary<int, Sprite>();
 
         // A white anti-aliased ring `thickness` (share of the radius) wide at the edge; 0.5 or more is a full disc.
         static Sprite Ring(float thickness)
@@ -298,7 +520,7 @@ namespace Game.Gameplay
             {
                 float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
                 float d = Mathf.Sqrt(dx * dx + dy * dy);
-                float aa = 2f / n;
+                const float aa = 2f / n;
                 float a = Mathf.Clamp01((1f - d) / aa) * (inner < 0f ? 1f : Mathf.Clamp01((d - inner) / aa));
                 px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
             }

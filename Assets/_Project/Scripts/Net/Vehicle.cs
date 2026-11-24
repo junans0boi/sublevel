@@ -177,6 +177,7 @@ namespace Game.Net
         public float SteerShown => _steerShown;
         public VehicleState State => _state;
         public Transform Model => _model;
+        public string ModelName => _fit.Model;   // the prefab's name: its row in VehicleHandling (handling, cluster)
         public int SeatCount => Mathf.Min(_seats.Length, MaxSeats);
         public VehicleSeat Seat(int index) => index >= 0 && index < _seats.Length ? _seats[index] : null;
         public int WheelCount => _wheelPivots.Length;
