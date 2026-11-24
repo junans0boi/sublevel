@@ -171,7 +171,7 @@ namespace Game.Gameplay
         void UpdateCursor()
         {
             if (Application.isBatchMode || InputOverride != null) return;
-            bool playing = UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay;
+            bool playing = UiFocus.Current == UiScreen.None && !ResultScreen.BlocksGameplay && !RaceResultsView.Shown;
             Cursor.lockState = playing ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !playing;
         }
