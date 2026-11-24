@@ -7,14 +7,14 @@ using UnityEngine.UI;
 namespace Game.Gameplay
 {
     // The event race on the screen (ADR-519, #445, #446): the course name while waiting, five start lights that come on one by one with the
-    // big countdown number, then GO; at the end the results table, then back to the menu. While racing, as in the approved mockup
+    // big countdown number, then GO; at the end the results dialog (RaceResultsView), then back to the menu (the race room, #516). While racing, as in the approved mockup
     // (docs/research/ui_mockups/race_room.html, ADR-562, #510; its 1280 px coordinates x1.5): the position and the lap (or the sprint's
     // metres left) top left, the standings with each car's gap to the leader under them, the lap clock top centre with the gap to the car
     // ahead under it, the course minimap with every car's dot top right and the best lap bottom left (the car's cluster, VehicleHud, keeps
     // the bottom centre). It reads Net's RaceHud (what the server said); it decides nothing. Put into any scene that has a RaceDirector.
     public sealed class RaceHudView : MonoBehaviour
     {
-        Text _top, _big, _pos, _lap, _lapKey, _clock, _gap, _best, _resultsTitle;
+        Text _top, _big, _pos, _lap, _lapKey, _clock, _gap, _best;
         GameObject _racePanels, _bestPanel;
         const int MaxRows = 12;
         readonly Image[] _rowBg = new Image[MaxRows];
@@ -27,8 +27,7 @@ namespace Game.Gameplay
             MyDot = new Color(0.95f, 0.62f, 0.15f), TrackEdge = new Color(0.23f, 0.29f, 0.24f), TrackLine = new Color(0.91f, 0.93f, 0.95f);
         const float MapW = 300f, MapH = 255f, MapPad = 18f;
         int _sprintLeft = int.MinValue;
-        readonly Text[] _cols = new Text[4];   // results: rank, name, time, best lap (one Text per column keeps them lined up)
-        GameObject _resultsPanel;
+        RaceResultsView _results;
         bool _left;
         float _builtAt = -1f, _resultsSeen = -1f, _overSeen = -1f;
         readonly Image[] _lights = new Image[5];
@@ -58,15 +57,7 @@ namespace Game.Gameplay
             _big = UiKit.Label(UiKit.Rect("Big", root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 80f), new Vector2(800f, 220f)),
                 "", 180, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
             BuildRacePanels(root);
-            // At the end: a dark table in the middle.
-            var panel = UiKit.Rect("Results", root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980f, 640f));
-            var bg = panel.gameObject.AddComponent<Image>(); bg.color = new Color(0.04f, 0.06f, 0.08f, 0.88f); bg.raycastTarget = false;
-            _resultsTitle = UiKit.Label(UiKit.Rect("Title", panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -24f), new Vector2(900f, 60f)), "", 40, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
-            float[] colX = { -420f, -320f, 120f, 300f }, colW = { 90f, 420f, 170f, 170f };
-            for (int i = 0; i < 4; i++)
-                _cols[i] = UiKit.Label(UiKit.Rect("Col" + i, panel, new Vector2(0.5f, 1f), new Vector2(0f, 1f), new Vector2(colX[i], -100f), new Vector2(colW[i], 520f)), "", 26, Color.white, TextAnchor.UpperLeft);
-            _resultsPanel = panel.gameObject;
-            _resultsPanel.SetActive(false);
+            _results = gameObject.AddComponent<RaceResultsView>();   // at the end: the results dialog (#516)
             for (int i = 0; i < 5; i++)
             {
                 var r = UiKit.Rect("Light" + i, root, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-120f + i * 60f, -150f), new Vector2(48f, 48f));
@@ -269,19 +260,19 @@ namespace Game.Gameplay
                 _builtAt = RaceHud.LastAt;
                 if (racing) Standings(m, me);
                 if (end && m.Keys != null)
-                {
-                    _resultsTitle.text = director != null ? $"{director.Info.Name}  결과" : "결과";
-                    ResultsText(m, me, _cols, director != null && director.Info.Course.Open ? director.Info.Course.LapLength : 0f);
-                }
+                    _results.Fill(m, me, director != null ? director.Info.Name : null, director != null && director.Info.Course.Open ? director.Info.Course.LapLength : 0f);
             }
-            _resultsPanel.SetActive(end && m.Keys != null);
-            // Back to the menu once the results have been up their while: a guest also by its own clock (the server's Over may be lost),
-            // the host a moment after Over so its guests get that word before its leaving ends the match.
+            _results.Tick(end && m.Keys != null, phase == RacePhase.Results ? m.SecondsLeft - RaceHud.SinceLast : 0f);
+            // Back to the menu (the room, #516) on 방으로 돌아가기 or once the results have been up their while: a guest also by its own clock
+            // (the server's Over may be lost), the host a moment after Over so its guests get that word before its leaving ends the match
+            // (a host racing alone, no guests to tell, may go at once).
             if (end && _resultsSeen < 0f) _resultsSeen = Time.unscaledTime;
             if (phase == RacePhase.Over && _overSeen < 0f) _overSeen = Time.unscaledTime;
             bool host = FishNet.InstanceFinder.IsServerStarted;
-            bool leave = host ? _overSeen >= 0f && Time.unscaledTime - _overSeen >= 1f
-                              : _overSeen >= 0f || (_resultsSeen >= 0f && Time.unscaledTime - _resultsSeen >= RaceEvent.ResultsSeconds + 2f);
+            bool alone = host && FishNet.InstanceFinder.ServerManager.Clients.Count <= 1;
+            bool leave = _results.BackPressed && (!host || alone)
+                         || (host ? _overSeen >= 0f && Time.unscaledTime - _overSeen >= 1f
+                                  : _overSeen >= 0f || (_resultsSeen >= 0f && Time.unscaledTime - _resultsSeen >= RaceEvent.ResultsSeconds + 2f));
             if (leave && !_left) { _left = true; MainMenu.LeaveMatch(); }
         }
 
@@ -309,21 +300,6 @@ namespace Game.Gameplay
                 _rowGap[i].color = i == me ? Color.white : Dim;
             }
             _board.sizeDelta = new Vector2(_board.sizeDelta.x, 12f + n * 34f);
-        }
-
-        // `sprint`: a sprint's length (its last column is the average speed instead of the best lap), 0 on a circuit.
-        static void ResultsText(RaceStandings m, int me, Text[] cols, float sprint)
-        {
-            var sb = new System.Text.StringBuilder[4];
-            string[] head = { "순위", "이름", "기록", sprint > 0f ? "평균 속도" : "최고 랩" };
-            for (int c = 0; c < 4; c++) { sb[c] = new System.Text.StringBuilder(); sb[c].AppendLine(head[c]); }
-            for (int i = 0; i < m.Keys.Length; i++)
-            {
-                string last = sprint > 0f ? (m.Done[i] ? RaceEvent.AverageKmh(sprint, m.Times[i]) : "--") : m.Best[i] > 0f ? RaceBoard.Time(m.Best[i]) : "--";
-                string[] cell = { (i + 1).ToString(), m.Names[i], m.Done[i] ? RaceBoard.Time(m.Times[i]) : "DNF", last };
-                for (int c = 0; c < 4; c++) sb[c].AppendLine(i == me ? $"<b><color=#FFB347>{cell[c]}</color></b>" : cell[c]);
-            }
-            for (int c = 0; c < 4; c++) cols[c].text = sb[c].ToString();
         }
     }
 }
