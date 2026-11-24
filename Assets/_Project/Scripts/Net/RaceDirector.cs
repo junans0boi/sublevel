@@ -35,12 +35,14 @@ namespace Game.Net
 
         public static RaceDirector Current { get; private set; }
         public RaceEvent.CourseInfo Info { get; private set; }
+        public int Laps { get; private set; }   // of this race: the start config's or the course's (#508)
         public RaceFlow Flow => _flow;
         public int CarCount => _cars.Count;
         public Vehicle CarOf(Combatant c) => c != null && _carOf.TryGetValue(c, out var v) ? v : null;
 
         NetworkManager _nm;
         RaceFlow _flow;
+        RaceStart _start;
         readonly List<(float x, float z, float yaw)> _grid = new List<(float, float, float)>();
         readonly List<Vehicle> _cars = new List<Vehicle>();
         readonly Dictionary<Combatant, Vehicle> _carOf = new Dictionary<Combatant, Vehicle>();
@@ -59,13 +61,17 @@ namespace Game.Net
         RacePhase _sentPhase = (RacePhase)255;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Current = null; Vehicle.EventRace = false; }
+        static void ResetStatics() { Current = null; Vehicle.EventRace = false; RaceEvent.Starting = null; }
 
         void Awake()
         {
-            // The course picked in the menu or the lobby when it is one of this scene's (the pass's two directions share a scene).
-            var chosen = RaceEvent.ById(RaceEvent.Chosen);
-            Info = chosen != null && chosen.Scene == gameObject.scene.name ? chosen : RaceEvent.ById(CourseId) ?? RaceEvent.Courses[0];
+            // The race started from the menu or the lobby when its course is one of this scene's (the pass's two directions share a scene).
+            var start = RaceEvent.Starting;
+            var chosen = RaceEvent.ById(start?.CourseId);
+            bool ours = chosen != null && chosen.Scene == gameObject.scene.name;
+            Info = ours ? chosen : RaceEvent.ById(CourseId) ?? RaceEvent.Courses[0];
+            _start = ours ? start : null;
+            Laps = RaceEvent.LapsOf(_start, Info);
             Current = this;
             Vehicle.EventRace = true;
             _grid.AddRange(Info.Course.GridSpots(RaceEvent.GridSlots));
@@ -112,7 +118,7 @@ namespace Game.Net
                 if (!_carOf.TryGetValue(c, out var car) || car == null)
                 {
                     if (_cars.Count >= _grid.Count) continue;   // the grid is full: they watch
-                    car = SpawnCar(_cars.Count);
+                    car = SpawnCar(_cars.Count, EntryOf(c));
                     if (car == null) continue;
                     _carOf[c] = car;
                     var name = MatchState.Instance != null ? MatchState.Instance.ServerNameOf(c) : "";
@@ -128,7 +134,18 @@ namespace Game.Net
 
         int ConnectedPeople() => _nm.ServerManager.Clients.Count;
 
-        // When the countdown starts, bots take the free grid slots up to RaceEvent.Racers (ADR-514/517): driverless cars on autopilot, each with
+        // This person's car and paint from the start config: the host's own entry, or by session token.
+        RaceStart.Entry? EntryOf(Combatant c)
+        {
+            if (_start == null) return null;
+            bool local = c.Owner != null && c.Owner.IsLocalClient;
+            var keeper = MatchDirector.Instance != null ? MatchDirector.Instance.Sessions : null;
+            string token = keeper != null && c.Owner != null && c.Owner.IsValid ? keeper.TokenOf(c.Owner.ClientId) : null;
+            return RaceEvent.EntryFor(_start, token, local);
+        }
+
+        // When the countdown starts, bots take the free grid slots up to the field (people + the config's bots, or RaceEvent.Racers; ADR-514/517,
+        // #508): driverless cars on autopilot, each with
         // a name, a skill between 0.80 and 0.95 of the grip limit and a side of the fork.
         bool _botsIn;
         public int BotResets { get; private set; }   // tests: how often a bot had to be put back on the course
@@ -136,16 +153,17 @@ namespace Game.Net
         {
             _botsIn = true;
             var rng = new System.Random(_cars.Count * 7919 + Info.Id.GetHashCode());
-            for (int i = 0; _cars.Count < Mathf.Min(RaceEvent.Racers, _grid.Count); i++)
+            int field = RaceEvent.FieldSize(_start, _carOf.Count, _grid.Count);
+            for (int i = 0; _cars.Count < field; i++)
             {
-                var car = SpawnCar(_cars.Count);
+                var car = SpawnCar(_cars.Count, null);
                 if (car == null) break;
                 car.Autopilot = true;
                 car.ServerSetEngine(true);
                 _racers.Add(new Racer
                 {
                     Car = car, Name = BotNames.For(Info.Id.GetHashCode(), i), Lap = new RaceLap(Info.Course), Grid = car.transform.position,
-                    Bot = true, Skill = RaceBotDriver.Skill(i, RaceEvent.Racers - 1, Info.Id.GetHashCode()), Cut = rng.NextDouble() < 0.5,
+                    Bot = true, Skill = RaceBotDriver.Skill(i, Mathf.Max(1, field - 1), Info.Id.GetHashCode()), Cut = rng.NextDouble() < 0.5,
                 });
             }
             Debug.Log($"[RaceDirector] {_racers.Count} racers ({_racers.Count - _carOf.Count} bots)");
@@ -222,16 +240,24 @@ namespace Game.Net
             return _racers.Count > 0 && done >= _racers.Count;
         }
 
-        int LapsFor(Racer r) => Info.Laps + (r.FalseStart && !Info.Course.Open ? 1 : 0);
+        int LapsFor(Racer r) => Laps + (r.FalseStart && !Info.Course.Open ? 1 : 0);
 
-        Vehicle SpawnCar(int slot)
+        // The car on grid slot `slot`: the entry's model and paint, else (or for a model the scene lacks) the slot's model and paint.
+        Vehicle SpawnCar(int slot, RaceStart.Entry? entry)
         {
             var prefabs = VehicleSpawner.Instance != null ? VehicleSpawner.Instance.CarPrefabs() : null;
             if (prefabs == null || prefabs.Count == 0) { Debug.LogWarning("[RaceDirector] no car models in the scene"); return null; }
             var (x, z, yaw) = _grid[slot];
-            var nob = Instantiate(prefabs[slot % prefabs.Count], new Vector3(x, Info.Course.RoadHeight(x, z) + 0.3f, z), Quaternion.Euler(0f, yaw, 0f));
+            int model = slot % prefabs.Count;
+            if (entry != null)
+            {
+                int found = prefabs.FindIndex(p => p.GetComponent<Vehicle>().ModelName == entry.Value.Car);
+                if (found >= 0) model = found;
+                else if (!string.IsNullOrEmpty(entry.Value.Car)) Debug.LogWarning($"[RaceDirector] no car model {entry.Value.Car} in the scene: slot car");
+            }
+            var nob = Instantiate(prefabs[model], new Vector3(x, Info.Course.RoadHeight(x, z) + 0.3f, z), Quaternion.Euler(0f, yaw, 0f));
             var v = nob.GetComponent<Vehicle>();
-            v.ServerSetPaint(VehicleColors.Pick(slot, slot % prefabs.Count));
+            v.ServerSetPaint(entry != null && VehicleColors.Valid(entry.Value.Paint) ? entry.Value.Paint : VehicleColors.Pick(slot, model));
             _nm.ServerManager.Spawn(nob);
             _cars.Add(v);
             return v;
@@ -273,7 +299,7 @@ namespace Game.Net
             int n = _order.Count;
             var m = new RaceStandings
             {
-                Phase = (byte)_flow.Phase, Countdown = _flow.CountdownLeft(now), SecondsLeft = _flow.SecondsLeft(now), Laps = (byte)Info.Laps,
+                Phase = (byte)_flow.Phase, Countdown = _flow.CountdownLeft(now), SecondsLeft = _flow.SecondsLeft(now), Laps = (byte)Laps,
                 RaceTime = _flow.GoAt >= 0 ? (float)(now - _flow.GoAt) : 0f,
                 Keys = new int[n], Names = new string[n], LapsDone = new byte[n], Done = new bool[n], Times = new float[n], Best = new float[n], Running = new float[n], LapsToGo = new byte[n],
             };

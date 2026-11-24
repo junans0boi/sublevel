@@ -22,7 +22,7 @@ namespace Game.Tests
         {
             MoveGuard.TrustTeleports = true;
             PlayerController.InputOverride = new NoPlayerInput();
-            RaceEvent.Chosen = id;
+            RaceEvent.Starting = new RaceStart { CourseId = id };
             SceneManager.LoadScene(RaceEvent.ById(id).Scene);
             yield return Until(() => PlayerController.Local != null && Combatant.LocalPlayer != null && RaceDirector.Current != null, 60f, "pass scene loaded");
             Assert.AreEqual(id, RaceDirector.Current.Info.Id, "the director runs the chosen direction");
@@ -33,7 +33,7 @@ namespace Game.Tests
         {
             MoveGuard.TrustTeleports = false;
             PlayerController.InputOverride = null;
-            RaceEvent.Chosen = null;
+            RaceEvent.Starting = null;
             SceneManager.LoadScene("Bootstrap");
             yield return null;
             yield return null;
