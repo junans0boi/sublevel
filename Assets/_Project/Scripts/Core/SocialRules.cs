@@ -22,6 +22,13 @@ namespace Game.Core
                 case "leave_current_party_first": return "먼저 지금 파티를 나가야 한다.";
                 case "already_queued": return "매칭 대기 중에는 바꿀 수 없다.";
                 case "not_in_party": return "파티에 속해 있지 않다.";
+                // the race room (#519)
+                case "ready_locked": return "준비를 취소해야 차를 바꿀 수 있습니다.";
+                case "slot_occupied": return "사람이 앉은 자리는 닫을 수 없습니다.";
+                case "invalid_name": return "방 이름은 1~20자입니다.";
+                case "sprint_laps": return "스프린트 코스는 1회만 달립니다.";
+                case "cannot_kick_self": return "자기 자신은 내보낼 수 없습니다.";
+                case "not_member": return "이미 방에 없는 사람입니다.";
             }
             return TicketRules.ErrorText(status, error);
         }

@@ -28,6 +28,9 @@ namespace Game.Tests
             public Task<ApiResult<bool>> LeaveParty() => Ok(true);
             public Task<ApiResult<MeDto>> Me() => Ok(new MeDto());
             public Task<ApiResult<string>> ServerToken() => Ok("t");
+            public Task<ApiResult<PartyEnvelope>> SetPartyRace(PartyRaceDto r) => Ok(new PartyEnvelope());
+            public Task<ApiResult<PartyEnvelope>> SetMyRace(MemberRaceDto r) => Ok(new PartyEnvelope());
+            public Task<ApiResult<PartyEnvelope>> KickFromParty(long i) => Ok(new PartyEnvelope());
         }
 
         [Test]

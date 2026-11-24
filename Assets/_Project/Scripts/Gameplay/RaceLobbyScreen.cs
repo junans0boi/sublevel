@@ -41,10 +41,12 @@ namespace Game.Gameplay
         MainMenu _menu;
         RectTransform _stage;
         RaceLobby _room;
+        RaceParty _party;   // the room on the backend party when it has 2+ members (#519), else local
         string _toast;
         float _toastUntil;
 
         public RaceLobby Room => _room;
+        public bool Online => _party != null && _party.Online;
         public int Me { get; private set; }
         public string Dialog { get; private set; }   // null, "leave", or a placeholder: "garage", "course", "invite", "settings"
         public string ToastText => _toast;
@@ -68,6 +70,7 @@ namespace Game.Gameplay
             var me = new RaceLobbyMember { Id = LobbyNet.AccountId != 0 ? (int)LobbyNet.AccountId : 1, Name = string.IsNullOrEmpty(LobbyNet.AuthNickname) ? "플레이어" : LobbyNet.AuthNickname, Car = Cars[1].id };
             Me = me.Id;
             _room = new RaceLobby(me) { CarName = id => Cars[CarIndex(id)].name };
+            _party = new RaceParty(() => _menu != null ? _menu.Social : null, _room, Me);
             RaceLobbyState saved = null;
             try { saved = JsonUtility.FromJson<RaceLobbyState>(PlayerPrefs.GetString(PrefsKey, "")); } catch (ArgumentException) { }
             if (saved != null && RaceEvent.ById(saved.Course) != null && !string.IsNullOrEmpty(saved.Name))
@@ -85,7 +88,7 @@ namespace Game.Gameplay
 
         void Save() => PlayerPrefs.SetString(PrefsKey, JsonUtility.ToJson(_room.Snapshot()));
 
-        void Changed() { Save(); Render(); }
+        void Changed() { if (!Online) Save(); Render(); }   // the party's room lives on the backend, not in my prefs
 
         static int CarIndex(string id) => Math.Max(0, Array.FindIndex(Cars, c => c.id == id));
 
@@ -93,23 +96,24 @@ namespace Game.Gameplay
 
         public void Refresh() => Render();
 
-        public void CloseSlot(int slot) { if (_room.CloseSlot(Me, slot)) Changed(); }
+        public void CloseSlot(int slot) { if (_party.CloseSlot(slot)) Changed(); }
 
         public void OpenSlot(int slot)
         {
-            if (_room.OpenSlot(Me, slot)) Changed();
+            if (_party.OpenSlot(slot)) Changed();
             else Toast("방장만 자리를 열 수 있습니다.");
         }
 
-        public void Kick(int id) { if (_room.Kick(Me, id)) Changed(); }
+        public void Kick(int id) { if (_party.Kick(id)) Changed(); }
 
         // The big button (and F5): the host's 시작, a guest's 준비 / 준비 취소. Solo: build the race start and load the course.
         public void Go()
         {
             if (Dialog != null || _menu.IsLoading) return;
             var go = _room.GoFor(Me);
-            if (!go.Start) { _room.ToggleReady(Me); Render(); return; }
+            if (!go.Start) { _party.ToggleReady(); Render(); return; }
             if (!go.Enabled) { Toast($"{string.Join(", ", go.NotReady)} 님이 아직 준비하지 않았습니다."); return; }
+            if (Online) { Toast("여럿이 출발하기는 다음 업데이트에서 열립니다."); return; }   // TODO(#521): the race ticket on the dedicated server
             var me = _room.Member(Me);
             Save();
             ReturnPending = true;
@@ -135,6 +139,7 @@ namespace Game.Gameplay
         public void ConfirmLeave()
         {
             Dialog = null;
+            _party.Leave();
             Render();
             _menu.Back();
         }
@@ -151,6 +156,11 @@ namespace Game.Gameplay
         {
             var k = Keyboard.current;
             if (k != null && k.f5Key.wasPressedThisFrame) Go();
+            // The login's account id can arrive after the room was built (LoginEnv asks /api/me): rebuild the local room under it.
+            if (!Online && LobbyNet.AccountId != 0 && Me != (int)LobbyNet.AccountId) { Load(); Render(); }
+            if (_party.Sync()) Render();
+            var refused = _party.TakeToast();
+            if (refused != null) Toast(refused);
             if (_toast != null && Time.unscaledTime > _toastUntil) { _toast = null; Render(); }
         }
 

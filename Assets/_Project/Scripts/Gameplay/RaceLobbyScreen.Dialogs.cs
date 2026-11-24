@@ -55,7 +55,7 @@ namespace Game.Gameplay
         public void SaveCar()
         {
             Dialog = null;
-            if (_room.SetCar(Me, Cars[_gCar].id, _gPaint)) Changed();
+            if (_party.SetCar(Cars[_gCar].id, _gPaint)) Changed();
             else Toast("준비를 취소해야 차를 바꿀 수 있습니다.");
         }
 
@@ -65,7 +65,7 @@ namespace Game.Gameplay
         public void SaveCourse()
         {
             Dialog = null;
-            if (_room.SetCourse(Me, RaceEvent.Courses[_cCourse].Id, _cLaps)) Changed();
+            if (_party.SetCourse(RaceEvent.Courses[_cCourse].Id, _cLaps)) Changed();
             else Render();
         }
 
@@ -90,7 +90,7 @@ namespace Game.Gameplay
                 return;
             }
             Dialog = null;
-            if (_room.SetSettings(Me, _sName, _sPrivate, _sBots)) Changed();
+            if (_party.SetSettings(_sName, _sPrivate, _sBots)) Changed();
             else Render();
         }
 

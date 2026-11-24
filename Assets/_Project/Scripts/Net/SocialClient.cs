@@ -15,6 +15,7 @@ namespace Game.Net
         readonly ConcurrentQueue<Action> _done = new ConcurrentQueue<Action>();
         double _nextPresence, _nextParty, _nextFriends;
         int _busy; // bit per poll in flight: 1 party, 2 invites, 4 friends
+        int _acting, _gen; // actions in flight; bumped when one lands, so a party poll sent before it cannot bring back the old view
 
         public FriendsDto Friends { get; private set; } = new FriendsDto();
         public PartyDto Party { get; private set; }          // null = no party
@@ -35,7 +36,8 @@ namespace Game.Net
             if (now >= _nextParty)
             {
                 _nextParty = now + PartyEvery;
-                Poll(1, _b.Party(), r => { Party = r.Value != null && r.Value.HasParty ? r.Value.party : null; });
+                int gen = _gen;
+                Poll(1, _b.Party(), r => { if (_acting == 0 && gen == _gen) Party = r.Value != null && r.Value.HasParty ? r.Value.party : null; });
                 Poll(2, _b.PartyInvites(), r => Invites = r.Value ?? new InvitesDto());
             }
             if (now >= _nextFriends) { _nextFriends = now + FriendsEvery; Poll(4, _b.Friends(), r => Friends = r.Value ?? new FriendsDto()); }
@@ -56,13 +58,34 @@ namespace Game.Net
         // Actions: run the call, show the backend's reason when it fails, and refresh everything at the next Tick.
         void Act(Task<ApiResult<bool>> call)
         {
+            _acting++;
             call.ContinueWith(t => _done.Enqueue(() =>
             {
+                _acting--; _gen++;
                 LastError = t.IsFaulted ? TicketRules.ErrorText(0, "") : t.Result.Ok ? "" : SocialRules.ErrorText(t.Result.Status, t.Result.Error);
                 _nextParty = _nextFriends = 0;
                 Changed?.Invoke();
             }), TaskContinuationOptions.ExecuteSynchronously);
         }
+
+        // Race room commands (#519): the answer's party view is shown at once; done gets null, or the refusal's text for a toast.
+        void RaceAct(Task<ApiResult<PartyEnvelope>> call, Action<string> done)
+        {
+            _acting++;
+            call.ContinueWith(t => _done.Enqueue(() =>
+            {
+                _acting--; _gen++;
+                bool ok = !t.IsFaulted && t.Result.Ok && t.Result.Value != null;
+                if (ok) Party = t.Result.Value.HasParty ? t.Result.Value.party : null;
+                else _nextParty = 0;
+                done?.Invoke(ok ? null : t.IsFaulted ? TicketRules.ErrorText(0, "") : SocialRules.ErrorText(t.Result.Status, t.Result.Error));
+                Changed?.Invoke();
+            }), TaskContinuationOptions.ExecuteSynchronously);
+        }
+
+        public void SetPartyRace(PartyRaceDto race, Action<string> done) => RaceAct(_b.SetPartyRace(race), done);
+        public void SetMyRace(MemberRaceDto race, Action<string> done) => RaceAct(_b.SetMyRace(race), done);
+        public void Kick(long accountId, Action<string> done) => RaceAct(_b.KickFromParty(accountId), done);
 
         public void AddFriend(string nickname) => Act(_b.AddFriend(nickname));
         public void AcceptFriend(long id) => Act(_b.AcceptFriend(id));

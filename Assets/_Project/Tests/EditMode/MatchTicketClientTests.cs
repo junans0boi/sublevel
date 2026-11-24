@@ -29,6 +29,9 @@ namespace Game.Tests
             public Task<ApiResult<bool>> LeaveParty() => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<MeDto>> Me() => Task.FromResult(ApiResult<MeDto>.Success(new MeDto { nickname = "a" }));
             public Task<ApiResult<string>> ServerToken() => Task.FromResult(ApiResult<string>.Success("t"));
+            public Task<ApiResult<PartyEnvelope>> SetPartyRace(PartyRaceDto r) => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
+            public Task<ApiResult<PartyEnvelope>> SetMyRace(MemberRaceDto r) => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
+            public Task<ApiResult<PartyEnvelope>> KickFromParty(long i) => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
         }
 
         [SetUp] public void Fresh() => MatchTicketClient.ForgetConsumed();
