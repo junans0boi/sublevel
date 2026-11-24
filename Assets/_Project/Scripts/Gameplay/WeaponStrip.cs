@@ -17,6 +17,7 @@ namespace Game.Gameplay
         public const float Height = Cells * CellHeight + (Cells - 1) * Gap;
         const float IconWidth = 84f, IconHeight = 30f, KeyWidth = 14f, Pad = 8f;
         const float DimAlpha = 0.75f;
+        const int LabelFont = 16, MinLabelFont = 11;
 
         static readonly string[] Keys = { "1", "2", "3", "4", "5" };
 
@@ -49,6 +50,7 @@ namespace Game.Gameplay
         public int GrenadesShown => _shownGrenades;                              // count of the selected throwable
         public string ThrowableNameShown => _shownThrowName;                     // "파편 수류탄" / "연막탄", "" when empty
         public string OpticShown(int cell) => _shownOptic[cell] ?? "";
+        public bool LabelFits(int cell) => _label[cell].preferredWidth <= _label[cell].rectTransform.rect.width + 0.5f;
         public bool IsHighlighted(int cell) => _panel[cell] != null && cell == _shownActive;
 
         public static WeaponStrip Build(Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position)
@@ -75,7 +77,7 @@ namespace Game.Gameplay
                 s._icon[i].enabled = false;
                 float labelWidth = Width - 2f * Pad - KeyWidth - Pad - IconWidth - Pad;
                 s._label[i] = UiKit.Label(UiKit.Rect("Label", row, midRight, midRight, new Vector2(-Pad - KeyWidth - Pad - IconWidth - Pad, 0f),
-                    new Vector2(labelWidth, CellHeight)), "", 16, UiKit.Text, TextAnchor.MiddleRight);
+                    new Vector2(labelWidth, CellHeight)), "", LabelFont, UiKit.Text, TextAnchor.MiddleRight);
                 s._label[i].horizontalOverflow = HorizontalWrapMode.Overflow; // a long name runs left rather than wrapping
                 s._shownWeapon[i] = int.MinValue;
                 s._shownMag[i] = int.MinValue;
@@ -147,7 +149,7 @@ namespace Game.Gameplay
             string name = weapon != null ? weapon.Name : "";
             if (changed) SetIcon(cell, InventoryBackend.WeaponKey(weaponId));
             // Melee has no magazine: the name alone.
-            _label[cell].text = weapon != null && weapon.IsMelee ? name : name + "  " + HudDigits.IntText(mag);
+            SetLabel(cell, weapon != null && weapon.IsMelee ? name : name + "  " + HudDigits.IntText(mag));
         }
 
         // The throwable row shows the selected kind (T switches) and how many of it are left. With none of the
@@ -171,7 +173,16 @@ namespace Game.Gameplay
             _shownThrowName = has ? Throwables.NameOf(kind) : "";
             if (!has) return;
             SetIcon(cell, kind == ThrowableKind.Smoke ? "smoke" : kind == ThrowableKind.Flash ? "flash" : kind == ThrowableKind.Molotov ? "molotov" : "grenade");
-            _label[cell].text = _shownThrowName + "  " + (cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count));
+            SetLabel(cell, _shownThrowName + "  " + (cooking ? (cookTenths / 10f).ToString("0.0") + "초" : "x" + HudDigits.IntText(count)));
+        }
+
+        // A long name shrinks (down to 11) to stay on its row's backing instead of running out to the left.
+        void SetLabel(int cell, string text)
+        {
+            var label = _label[cell];
+            label.text = text;
+            float room = label.rectTransform.rect.width;
+            for (label.fontSize = LabelFont; label.fontSize > MinLabelFont && label.preferredWidth > room; ) label.fontSize--;
         }
     
         void SetIcon(int cell, string key)

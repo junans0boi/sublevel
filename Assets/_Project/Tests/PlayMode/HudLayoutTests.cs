@@ -179,6 +179,12 @@ namespace Game.Tests
             Assert.IsTrue(me.ServerSelectSlot(0));
             yield return WaitUntil(() => hud.Strip.ActiveShown == 0, 2f, "highlight back on cell 1");
             Assert.AreEqual("연사", hud.FireModeText, "the rifle fires automatically");
+
+            // The longest rows (a named grenade with its count) shrink to stay on their backing.
+            me.ServerGive(new LootEntry { Kind = LootKind.Grenade, Amount = 12 });
+            yield return WaitUntil(() => hud.Strip.RowShown(4), 2f, "throwable row");
+            for (int i = 0; i < WeaponStrip.Cells; i++)
+                if (hud.Strip.RowShown(i)) Assert.IsTrue(hud.Strip.LabelFits(i), "row " + (i + 1) + " text runs off its backing: " + hud.Strip.RowText(i));
         }
 
         [UnityTest]
