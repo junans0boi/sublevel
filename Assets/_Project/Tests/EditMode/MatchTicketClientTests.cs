@@ -21,7 +21,8 @@ namespace Game.Tests
             public Task<ApiResult<bool>> AddFriend(string n) => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<bool>> AcceptFriend(long i) => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<bool>> RemoveFriend(long i) => Task.FromResult(ApiResult<bool>.Success(true));
-            public Task<ApiResult<PartyEnvelope>> Party() => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
+            public PartyEnvelope PartyNow = new PartyEnvelope();
+            public Task<ApiResult<PartyEnvelope>> Party() => Task.FromResult(ApiResult<PartyEnvelope>.Success(PartyNow));
             public Task<ApiResult<PartyEnvelope>> InviteToParty(long i) => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
             public Task<ApiResult<InvitesDto>> PartyInvites() => Task.FromResult(ApiResult<InvitesDto>.Success(new InvitesDto()));
             public Task<ApiResult<bool>> AcceptInvite(long i) => Task.FromResult(ApiResult<bool>.Success(true));
@@ -133,6 +134,125 @@ namespace Game.Tests
             q.Tick(0); q.Tick(1e6); q.Tick(1e6 + 1); // RequestStart reads the real clock
             Assert.AreEqual("100.97.58.29:7770", joined); Assert.AreEqual(2, size);
             Assert.IsFalse(q.Waiting);
+        }
+
+        static ApiResult<TicketDto> RaceMatched() => ApiResult<TicketDto>.Success(new TicketDto { id = "t-r", mode = "race", status = "matched",
+            match = new MatchDto { id = "m-r", server = new ServerDto { host = "127.0.0.1", port = 7770 }, bots = 6, players = 2 },
+            race = new RaceTicketDto { course = "snake", laps = 1, fill_bots = true, bots = 6,
+                racers = new[] { new RaceRacerDto { account_id = 1, car = "GoblinV12", paint = 3 }, new RaceRacerDto { account_id = 2, car = "Shvan92", paint = 1 } } } });
+
+        [Test]
+        public void WireJson_RaceSnapshot_Parses()
+        {
+            var e = UnityEngine.JsonUtility.FromJson<TicketEnvelope>("{\"ticket\":{\"id\":\"t-9\",\"mode\":\"race\",\"status\":\"queued\",\"party_size\":2,\"race\":{\"course\":\"pass_loop\",\"laps\":3,\"fill_bots\":true,\"bots\":4,\"racers\":[{\"account_id\":7,\"car\":\"GoblinV12\",\"paint\":2},{\"account_id\":8,\"car\":\"Shvan92\",\"paint\":5}]}}}");
+            Assert.AreEqual("race", e.ticket.mode);
+            Assert.AreEqual("pass_loop", e.ticket.race.course); Assert.AreEqual(3, e.ticket.race.laps); Assert.AreEqual(4, e.ticket.race.bots);
+            Assert.AreEqual(2, e.ticket.race.racers.Length); Assert.AreEqual(8, e.ticket.race.racers[1].account_id); Assert.AreEqual("Shvan92", e.ticket.race.racers[1].car);
+        }
+
+        // #521: a race ticket keeps being polled after it is matched (until the race starts and it is consumed), so a member hears of the host's
+        // cancel; a battle-royale ticket is consumed at once and never polled while matched.
+        [Test]
+        public void RaceTicket_PolledWhileMatched_CancelElsewhereFails()
+        {
+            var f = new Fake(); f.Answers.Enqueue(RaceMatched());
+            var c = new MatchTicketClient(f);
+            c.Start("race", 0); c.Tick(0.1);
+            Assert.AreEqual(MatchTicketClient.StateKind.Matched, c.State);
+            Assert.AreEqual("race", c.Mode); Assert.AreEqual("snake", c.Race.course);
+            c.Tick(2.1); c.Tick(2.2);
+            Assert.AreEqual(1, f.Polls, "still followed");
+            Assert.AreEqual(MatchTicketClient.StateKind.Matched, c.State);
+            f.Answers.Enqueue(ApiResult<TicketDto>.Fail(404, "no_ticket"));
+            c.Tick(4.2); c.Tick(4.3);
+            Assert.AreEqual(MatchTicketClient.StateKind.Failed, c.State);
+            Assert.AreEqual(TicketRules.ErrorText(404, "no_ticket"), c.Text);
+
+            var br = new Fake(); br.Answers.Enqueue(Matched());
+            var d = new MatchTicketClient(br);
+            d.Start("battle-royale", 0); d.Tick(0.1); d.Tick(2.1); d.Tick(4.2);
+            Assert.AreEqual(0, br.Polls);
+        }
+
+        // #521: the host's Start makes the race ticket; matched -> join the server with the party's size; the room shows 출발 준비 중 until
+        // the race starts (RaceStarted). A refusal (not_ready) or a cancel at the backend fails it with a toast and nothing held.
+        [Test]
+        public void BackendQueue_Race_JoinsOnce_StartingUntilStarted()
+        {
+            var f = new Fake(); f.Answers.Enqueue(RaceMatched());
+            string joined = null; int size = 0, joins = 0;
+            var q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), new SocialClient(f), (h, p, n) => { joined = h + ":" + p; size = n; joins++; }, null, () => 2);
+            Assert.IsFalse(q.RaceStarting);
+            q.StartRace(0);
+            Assert.IsTrue(q.RaceStarting, "출발 준비 중 at once");
+            q.Tick(0.1); q.Tick(0.2);
+            Assert.AreEqual("127.0.0.1:7770", joined); Assert.AreEqual(2, size); Assert.AreEqual(1, joins);
+            Assert.IsTrue(q.RaceStarting);
+            q.Tick(2.1); q.Tick(2.2);
+            Assert.AreEqual(1, joins, "joined once");
+            q.RaceStarted();
+            Assert.IsFalse(q.RaceStarting);
+            Assert.AreEqual(MatchTicketClient.StateKind.Idle, q.TicketState);
+        }
+
+        [Test]
+        public void BackendQueue_Race_RefusedOrCancelled_FailsWithAToast()
+        {
+            var f = new Fake(); f.Answers.Enqueue(ApiResult<TicketDto>.Fail(409, "not_ready"));
+            string failed = null;
+            var q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), new SocialClient(f), (h, p, n) => Assert.Fail("no join"), null, () => 2);
+            q.RaceFailed += t => failed = t;
+            q.StartRace(0); q.Tick(0.1);
+            Assert.AreEqual(TicketRules.ErrorText(409, "not_ready"), failed);
+            Assert.IsFalse(q.RaceStarting);
+            Assert.AreEqual(MatchTicketClient.StateKind.Idle, q.TicketState, "nothing held for the next Start");
+
+            // matched, then the host cancelled at the backend: the member's poll finds no ticket
+            f.Answers.Enqueue(RaceMatched()); failed = null;
+            int joins = 0;
+            q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), new SocialClient(f), (h, p, n) => joins++, null, () => 2);
+            q.RaceFailed += t => failed = t;
+            q.StartRace(0); q.Tick(0.1);
+            Assert.AreEqual(1, joins);
+            f.Answers.Enqueue(ApiResult<TicketDto>.Fail(404, "no_ticket"));
+            q.Tick(2.1); q.Tick(2.2);
+            Assert.AreEqual(TicketRules.ErrorText(404, "no_ticket"), failed);
+            Assert.IsFalse(q.RaceStarting);
+        }
+
+        [Test]
+        public void BackendQueue_Race_HostCancel_TellsTheBackend_NotAMember()
+        {
+            var f = new Fake(); f.Answers.Enqueue(RaceMatched());
+            var q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), new SocialClient(f), (h, p, n) => { }, null, () => 1);
+            string failed = null; q.RaceFailed += t => failed = t;
+            q.StartRace(0); q.Tick(0.1);
+            q.CancelRace(1, "출발을 취소했습니다.");
+            Assert.AreEqual("t-r", f.Cancelled);
+            Assert.AreEqual("출발을 취소했습니다.", failed);
+            Assert.IsFalse(q.RaceStarting);
+
+            f.Answers.Enqueue(RaceMatched());
+            q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), new SocialClient(f), (h, p, n) => { }, null, () => 5);
+            failed = null; q.RaceFailed += t => failed = t;
+            q.StartRace(0); q.Tick(0.1);
+            Assert.IsNotNull(failed, "I am not one of the ticket's racers");
+            Assert.IsFalse(q.RaceStarting);
+        }
+
+        [Test]
+        public void BackendQueue_PartyMember_AdoptsTheRaceTicket()
+        {
+            var f = new Fake(); f.Answers.Enqueue(RaceMatched());
+            f.PartyNow = new PartyEnvelope { party = new PartyDto { id = 12, leader_id = 1, members = new[] { new PartyMemberDto { account_id = 1 }, new PartyMemberDto { account_id = 2 } } } };
+            var social = new SocialClient(f);
+            social.Tick(0); social.Tick(0.01);
+            Assert.IsNotNull(social.Party);
+            int joins = 0;
+            var q = new Game.Gameplay.BackendMatchQueue(new MatchTicketClient(f), social, (h, p, n) => joins++, null, () => 2);
+            q.Tick(0); q.Tick(0.1);
+            Assert.AreEqual(1, joins);
+            Assert.IsTrue(q.RaceStarting);
         }
     }
 }

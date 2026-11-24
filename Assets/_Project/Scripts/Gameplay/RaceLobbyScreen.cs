@@ -44,6 +44,7 @@ namespace Game.Gameplay
         RaceParty _party;   // the room on the backend party when it has 2+ members (#519), else local
         string _toast;
         float _toastUntil;
+        bool _startingShown;   // drawn with 출발 준비 중
 
         public RaceLobby Room => _room;
         public bool Online => _party != null && _party.Online;
@@ -110,10 +111,13 @@ namespace Game.Gameplay
         public void Go()
         {
             if (Dialog != null || _menu.IsLoading) return;
+            // 출발 준비 중 (#521): the host's button cancels for everyone; a guest waits.
+            if (_menu.RaceStarting) { if (Me == _room.HostId) _menu.CancelRace("출발을 취소했습니다."); Render(); return; }
             var go = _room.GoFor(Me);
             if (!go.Start) { _party.ToggleReady(); Render(); return; }
             if (!go.Enabled) { Toast($"{string.Join(", ", go.NotReady)} 님이 아직 준비하지 않았습니다."); return; }
-            if (Online) { Toast("여럿이 출발하기는 다음 업데이트에서 열립니다."); return; }   // TODO(#521): the race ticket on the dedicated server
+            // 2+ people: the party's race ticket on the dedicated server (ADR-562 (4)).
+            if (Online) { _menu.StartRace(); Render(); return; }
             var me = _room.Member(Me);
             Save();
             ReturnPending = true;
@@ -121,7 +125,7 @@ namespace Game.Gameplay
         }
 
         // Back from the race: everyone unready, the rest kept.
-        public void BackToRoom() { _room.BackToRoom(); Render(); }
+        public void BackToRoom() { _room.BackToRoom(); _party.UnreadyWhenOnline(); Render(); }
 
         public void OpenDialog(string kind)
         {
@@ -139,6 +143,7 @@ namespace Game.Gameplay
         public void ConfirmLeave()
         {
             Dialog = null;
+            _menu.CancelRace(null);   // leaving while it starts gives the start up for everyone
             _party.Leave();
             Render();
             _menu.Back();
@@ -159,6 +164,7 @@ namespace Game.Gameplay
             // The login's account id can arrive after the room was built (LoginEnv asks /api/me): rebuild the local room under it.
             if (!Online && LobbyNet.AccountId != 0 && Me != (int)LobbyNet.AccountId) { Load(); Render(); }
             if (_party.Sync()) Render();
+            if (_menu.RaceStarting != _startingShown) { _startingShown = !_startingShown; Render(); }
             var refused = _party.TakeToast();
             if (refused != null) Toast(refused);
             if (_toast != null && Time.unscaledTime > _toastUntil) { _toast = null; Render(); }
@@ -325,6 +331,8 @@ namespace Game.Gameplay
             L(car, 201, 54, 400, 33, Cars[CarIndex(me.Car)].name, 22, Txt, TextAnchor.MiddleLeft, true);
 
             var g = _room.GoFor(Me);
+            if (_menu != null && _menu.RaceStarting)   // the race ticket and the server's queue (#521, ADR-562 (7): the room shows only this)
+                g = new RaceGo { Start = true, Enabled = host, Label = "출발 준비 중", Sub = host ? "누르면 취소 (F5)" : "방장이 출발시키는 중" };
             Color fill = !g.Start ? (_room.Member(Me).Ready ? Pn3 : Ready) : g.Enabled ? Acc : Pn3;
             Color ink = !g.Start ? (_room.Member(Me).Ready ? Txt : ReadyInk) : g.Enabled ? AccInk : Dim;
             var go = Btn(_stage, "Go", 1536, Y, 360, Hb, fill, !g.Start && _room.Member(Me).Ready ? Ready : (Color?)null, Go, 12);

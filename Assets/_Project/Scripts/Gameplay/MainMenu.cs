@@ -121,12 +121,20 @@ namespace Game.Gameplay
             _social = new SocialClient(LobbyNet.Backend);
             _backendQueue = new BackendMatchQueue(new MatchTicketClient(LobbyNet.Backend), _social, (host, port, size) =>
             {
+                // A race room's start (#521): the queue asks the server's race itself once in the lobby; the room stays up meanwhile.
+                if (_backendQueue.RaceStarting) { _lobbyScreen.JoinQuietly(host, (ushort)port); return; }
                 LobbyNet.QueuePartyId = _social.Party != null ? _social.Party.id : 0;
                 _afterJoin = (size > 1 ? TeamMode.Squad : TeamMode.Solo, size);
                 _quietJoin = true;
                 _lobbyScreen.JoinQuietly(host, (ushort)port);
-            });
+            }, () => _lobbyScreen != null ? _lobbyScreen.Lobby : null);
+            _backendQueue.RaceFailed += text => { if (EventEntryShown) _eventScreen.Toast(text); else Toast(text); };
         }
+
+        // The race room on the dedicated server (#521): the host's 시작 / cancel; true from the ticket until the race scene loads.
+        public bool RaceStarting => _backendQueue != null && _backendQueue.RaceStarting;
+        public void StartRace() => _backendQueue?.StartRace(Time.unscaledTimeAsDouble);
+        public void CancelRace(string toast) => _backendQueue?.CancelRace(Time.unscaledTimeAsDouble, toast);
 
         string _partyShown;
 
@@ -238,6 +246,8 @@ namespace Game.Gameplay
         public void StartLobbyMatch(LobbyNet lobby)
         {
             if (IsLoading) return;
+            // The race room's race (#521): its ticket is done with, and after the results the menu opens the room again.
+            if (RaceStarting) { _backendQueue.RaceStarted(); RaceLobbyScreen.ReturnPending = true; }
             NetSession.Begin(lobby);
             lobby.Shutdown();
             _lobbyScreen.gameObject.SetActive(false);

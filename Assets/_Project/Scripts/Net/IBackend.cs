@@ -7,7 +7,10 @@ namespace Game.Net
     [Serializable] public class ServerDto { public string host; public int port; }
     [Serializable] public class MatchDto { public string id; public string status; public ServerDto server; public int bots; public int players; }
     [Serializable] public class QueueDto { public int players, tickets, oldest_wait_s, active_matches, max_matches, position, fill_in_s; public string reason; }
-    [Serializable] public class TicketDto { public string id, mode, status; public int party_size; public QueueDto queue; public MatchDto match; }
+    // A race ticket's snapshot of the room at creation (#512/#521, ADR-562): the leader's course/laps, the bots to fill, each racer's car and paint.
+    [Serializable] public class RaceRacerDto { public long account_id; public string car; public int paint; }
+    [Serializable] public class RaceTicketDto { public string course; public int laps; public bool fill_bots; public int bots; public RaceRacerDto[] racers = new RaceRacerDto[0]; }
+    [Serializable] public class TicketDto { public string id, mode, status; public int party_size; public QueueDto queue; public MatchDto match; public RaceTicketDto race; }
     [Serializable] public class FriendDto { public long account_id; public string nickname; public string status; }
     [Serializable] public class FriendsDto { public FriendDto[] friends = new FriendDto[0], incoming = new FriendDto[0], outgoing = new FriendDto[0]; }
     // The race room on the party (#509/#519, ADR-562): the leader's settings and each member's car, paint and ready.
