@@ -111,7 +111,7 @@ namespace Game.Net
             return Parse(r.status, r.body, b => JsonUtility.FromJson<PartyEnvelope>(b));
         }
 
-        public Task<ApiResult<bool>> InviteToParty(long id) => Do(HttpMethod.Post, "/api/party/invites", "{\"account_id\":" + id + "}");
+        public Task<ApiResult<PartyEnvelope>> InviteToParty(long id) => PartyCall(HttpMethod.Post, "/api/party/invites", "{\"account_id\":" + id + "}");
 
         public async Task<ApiResult<InvitesDto>> PartyInvites()
         {

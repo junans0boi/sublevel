@@ -17,7 +17,7 @@ namespace Game.Core
                 case "not_friends": return "친구만 파티에 초대할 수 있다.";
                 case "not_party_leader": return "파티장만 할 수 있다.";
                 case "already_member": return "이미 파티에 있다.";
-                case "party_full": return "파티가 가득 찼다 (최대 " + MaxPartySize + "명).";
+                case "party_full": return "빈 자리가 없습니다.";   // the race room's 8 less its closed slots (ADR-562); a battle royale ticket refuses 5+ itself
                 case "invite_not_found": return "초대가 만료되었다.";
                 case "leave_current_party_first": return "먼저 지금 파티를 나가야 한다.";
                 case "already_queued": return "매칭 대기 중에는 바꿀 수 없다.";
@@ -37,6 +37,20 @@ namespace Game.Core
         public static string StatusText(string status)
         {
             switch (status) { case "lobby": return "로비"; case "in_match": return "판 중"; default: return "오프라인"; }
+        }
+
+        // The race room's invite dialog (#520, mockup inviteHTML): a friend's presence as the row shows it ...
+        public static string InviteStatus(string status) => status == "lobby" ? "온라인" : status == "in_match" ? "배틀로얄 중" : "오프라인";
+
+        // ... and the row's button: its label and whether it sends an invite. Only an online friend not in the room and not yet invited
+        // can be invited, and in a private room only by the host.
+        public static (string label, bool enabled) InviteButton(string status, bool inRoom, bool sent, bool hostOnly)
+        {
+            if (inRoom) return ("방에 있음", false);
+            if (sent) return ("초대 보냄", false);
+            if (status == "in_match") return ("게임 중", false);
+            if (status != "lobby") return ("오프라인", false);
+            return ("초대", !hostOnly);
         }
     }
 }

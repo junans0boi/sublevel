@@ -22,7 +22,7 @@ namespace Game.Tests
             public Task<ApiResult<bool>> AcceptFriend(long i) => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<bool>> RemoveFriend(long i) => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<PartyEnvelope>> Party() => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
-            public Task<ApiResult<bool>> InviteToParty(long i) => Task.FromResult(ApiResult<bool>.Success(true));
+            public Task<ApiResult<PartyEnvelope>> InviteToParty(long i) => Task.FromResult(ApiResult<PartyEnvelope>.Success(new PartyEnvelope()));
             public Task<ApiResult<InvitesDto>> PartyInvites() => Task.FromResult(ApiResult<InvitesDto>.Success(new InvitesDto()));
             public Task<ApiResult<bool>> AcceptInvite(long i) => Task.FromResult(ApiResult<bool>.Success(true));
             public Task<ApiResult<bool>> DeclineInvite(long i) => Task.FromResult(ApiResult<bool>.Success(true));

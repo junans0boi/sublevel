@@ -37,7 +37,7 @@ namespace Game.Tests
             public Task<ApiResult<bool>> AddFriend(string n) => Ok(true);
             public Task<ApiResult<bool>> AcceptFriend(long i) => Ok(true);
             public Task<ApiResult<bool>> RemoveFriend(long i) => Ok(true);
-            public Task<ApiResult<bool>> InviteToParty(long i) => Ok(true);
+            public Task<ApiResult<PartyEnvelope>> InviteToParty(long i) => Command("invite " + i);
             public Task<ApiResult<InvitesDto>> PartyInvites() => Ok(new InvitesDto());
             public Task<ApiResult<bool>> AcceptInvite(long i) => Ok(true);
             public Task<ApiResult<bool>> DeclineInvite(long i) => Ok(true);
@@ -257,6 +257,101 @@ namespace Game.Tests
             Poll();
             Assert.IsNull(_party.TakeToast());
             Assert.IsFalse(_room.Lines.Contains("방에서 내보내졌습니다."));
+        }
+
+        // ---- #520 the invite dialog ----
+
+        [Test]
+        public void InviteButton_FollowsTheMockup()
+        {
+            Assert.AreEqual(("초대", true), SocialRules.InviteButton("lobby", false, false, false));
+            Assert.AreEqual(("게임 중", false), SocialRules.InviteButton("in_match", false, false, false));
+            Assert.AreEqual(("오프라인", false), SocialRules.InviteButton("offline", false, false, false));
+            Assert.AreEqual(("오프라인", false), SocialRules.InviteButton(null, false, false, false));
+            Assert.AreEqual(("방에 있음", false), SocialRules.InviteButton("lobby", true, false, false));
+            Assert.AreEqual(("초대 보냄", false), SocialRules.InviteButton("lobby", false, true, false));
+            Assert.AreEqual(("초대", false), SocialRules.InviteButton("lobby", false, false, true), "private room, guest: disabled");
+            Assert.AreEqual("온라인", SocialRules.InviteStatus("lobby"));
+            Assert.AreEqual("배틀로얄 중", SocialRules.InviteStatus("in_match"));
+            Assert.AreEqual("오프라인", SocialRules.InviteStatus("offline"));
+        }
+
+        [Test]
+        public void FirstInvite_MakesTheParty_AndSendsMyLocalRoomWithIt()
+        {
+            Setup(9, new PartyEnvelope());
+            Frame(); Frame();
+            _room.SetCourse(9, "pass_loop", 3);
+            _room.CloseSlot(9, 6);
+            Assert.IsNull(_party.Invite(11, "Carol"));
+            Assert.AreEqual("invite 11", _f.Sent.Single());
+            Assert.IsTrue(_party.Invited(11), "초대 보냄 while the call is out");
+            var made = View(9, Member(9, "Bobby"));
+            made.party.race.name = "Bobby의 레이스";
+            made.party.invited = new[] { new FriendDto { account_id = 11, nickname = "Carol" } };
+            Settle(ApiResult<PartyEnvelope>.Success(made));
+            Assert.IsFalse(_party.Online, "a party of 1 is still my local room");
+            Assert.IsTrue(_party.Invited(11), "the party's invited list");
+            Assert.AreEqual("pass_loop", _room.Course);
+            Assert.Contains("Carol 님에게 초대를 보냈습니다.", _room.Lines);
+            Assert.AreEqual(new[] { "invite 11", "race Bobby의 레이스|pass_loop|3|False|True|64", "me LT80|0|False" }, _f.Sent.ToArray());
+        }
+
+        [Test]
+        public void WaitingOnInvites_LocalChangesGoToTheParty()
+        {
+            var v = View(9, Member(9, "Bobby"));
+            v.party.invited = new[] { new FriendDto { account_id = 11, nickname = "Carol" } };
+            Setup(9, v);
+            Frame(); Frame();
+            Assert.IsFalse(_party.Online);
+            Assert.IsTrue(_party.SetCourse("pass_loop", 2));
+            Assert.AreEqual("race Bobby의 레이스|pass_loop|2|False|True|0", _f.Sent.Single(), "the friend who accepts joins the room as I set it");
+        }
+
+        [Test]
+        public void Accepted_TheFriendSitsInAFreeSlotUnready()
+        {
+            var v = View(9, Member(9, "Bobby"));
+            v.party.invited = new[] { new FriendDto { account_id = 11, nickname = "Carol" } };
+            Setup(9, v);
+            _room.CloseSlot(9, 1);
+            Frame(); Frame();
+            var joined = View(9, Member(9, "Bobby"), Member(11, "Carol"));
+            joined.party.race.closed = 2;
+            _f.PartyNow = joined;
+            Poll();
+            Assert.IsTrue(_party.Online);
+            Assert.IsFalse(_party.Invited(11));
+            Assert.AreEqual(11, _room.SeatAt(2).Id, "slot 1 is closed: the next free one");
+            Assert.IsFalse(_room.Member(11).Ready);
+        }
+
+        [Test]
+        public void Invite_FullRoom_PrivateGuest_NoLogin_AreRefusedWithoutACall()
+        {
+            Setup(); Frame(); Frame();
+            for (int i = 2; i < RaceLobby.Slots; i++) Assert.IsTrue(_room.Join(new RaceLobbyMember { Id = 100 + i, Name = "P" + i }));
+            Assert.AreEqual("빈 자리가 없습니다.", _party.Invite(11, "Carol"));
+            Setup(); Frame(); Frame();
+            var s = _room.Snapshot(); s.Private = true; _room.Load(s);
+            Assert.AreEqual("비공개 방은 방장만 초대할 수 있습니다.", _party.Invite(11, "Carol"));
+            Assert.AreEqual(0, _f.Sent.Count);
+            var solo = new RaceParty(() => null, _room, 9);
+            Assert.IsNotNull(solo.Invite(11, "Carol"), "no login, no friends to invite");
+        }
+
+        [Test]
+        public void InviteRefused_Toasts_AndIsNotMarkedSent()
+        {
+            Setup(); Frame(); Frame();
+            int lines = _room.Lines.Count;
+            Assert.IsNull(_party.Invite(11, "Carol"));
+            Settle(ApiResult<PartyEnvelope>.Fail(409, "party_full"));
+            Assert.AreEqual("빈 자리가 없습니다.", _party.TakeToast());
+            Assert.IsFalse(_party.Invited(11));
+            Assert.AreEqual(lines, _room.Lines.Count);
+            Assert.AreEqual(1, _f.Sent.Count, "a guest's invite sends nothing else");
         }
 
         [Test]

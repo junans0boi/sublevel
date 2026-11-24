@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Game.Core;
 
 namespace Game.Net
@@ -18,6 +20,7 @@ namespace Game.Net
         readonly Func<SocialClient> _social;
         readonly RaceLobby _room;
         readonly int _me;
+        readonly HashSet<long> _sending = new HashSet<long>();   // invites still on their way
         PartyDto _seen;
         bool _dirty;
         string _toast;
@@ -27,7 +30,15 @@ namespace Game.Net
         public RaceParty(Func<SocialClient> social, RaceLobby room, int me) { _social = social; _room = room; _me = me; }
 
         // A party the room can be read from: 2+ members and race state (an older backend has none).
-        public static bool IsRoom(PartyDto p) => p != null && p.members != null && p.members.Length >= 2 && p.race != null && RaceEvent.ById(p.race.course) != null;
+        public static bool IsRoom(PartyDto p) => p != null && p.members != null && p.members.Length >= 2 && HasRace(p);
+        static bool HasRace(PartyDto p) => p?.race != null && RaceEvent.ById(p.race.course) != null;
+
+        // My party of 1 waiting on invites (#520): the room is still mine and local, but its changes go to the party too, so a friend who
+        // accepts joins the room as I set it up rather than the backend's defaults.
+        bool Waiting
+        {
+            get { var p = _social()?.Party; return !Online && HasRace(p) && p.invited != null && p.invited.Length > 0; }
+        }
 
         public static RaceLobbyState ToState(PartyDto p)
         {
@@ -92,6 +103,32 @@ namespace Game.Net
             if (_room.Lines.Count > n) _room.Lines.RemoveRange(n, _room.Lines.Count - n);
         }
 
+        // ---- invites (#520) ----
+
+        public bool Invited(long id) => _sending.Contains(id) || (_social()?.Party?.invited?.Any(f => f.account_id == id) ?? false);
+
+        // Invites a friend; the backend makes the party on the first invite and my local room goes up with it. Null, or why not (a toast).
+        // Who may be invited (online, not in the room) is the dialog's (SocialRules.InviteButton); the backend checks it all again.
+        public string Invite(long id, string nick)
+        {
+            var social = _social();
+            if (social == null) return "로그인해야 친구를 초대할 수 있습니다.";
+            if (_room.Members.Count >= _room.Capacity) return "빈 자리가 없습니다.";
+            if (_room.Private && _me != _room.HostId) return "비공개 방은 방장만 초대할 수 있습니다.";
+            _sending.Add(id);
+            social.Invite(id, err =>
+            {
+                _sending.Remove(id);
+                _dirty = true;
+                if (err != null) { _toast = err; return; }
+                _room.Lines.Add($"{nick} 님에게 초대를 보냈습니다.");
+                if (!Online) { RoomRace(Refused); MyRace(Refused); }
+            });
+            return null;
+        }
+
+        void Refused(string err) { if (err != null) { _toast = err; _dirty = true; } }
+
         // ---- commands: the room's own rules first, then the backend ----
 
         public bool SetCar(string car, int paint) => Run(() => _room.SetCar(_me, car, paint), MyRace);
@@ -117,7 +154,7 @@ namespace Game.Net
         // Optimistic: the change shows now; a refusal puts the room (and its lines) back as they were and leaves the reason as a toast.
         bool Run(Func<bool> local, Action<Action<string>> send)
         {
-            if (!Online || _social() == null) return local();
+            if ((!Online && !Waiting) || _social() == null) return local();
             var before = _room.Snapshot();
             int lines = _room.Lines.Count;
             if (!local()) return false;
