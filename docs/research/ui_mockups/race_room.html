@@ -1,0 +1,448 @@
+<title>SubLevel 레이스 방</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one 1280x720 game screen (16:9) scaled to the page width; dialogs live inside the screen like the game's own overlays. Single dark look on purpose: it is the game's UI. */
+:root{
+  --ground:#0b0e12; --panel:rgba(16,20,26,.92); --panel-2:#1a212b; --panel-3:#232c38; --line:#2f3a48;
+  --text:#e9edf1; --dim:#9aa5b1; --mute:#66717e; --steel:#80939f;
+  --accent:#f29e26; --accent-ink:#2b1a02; --ready:#f2c230; --ready-ink:#3a2a00; --host:#3fb8c9; --host-ink:#05343b;
+  --danger:#d2382e; --ok:#57c785; --blue:#5cc8f0;
+  --font-ui:"Noto Sans KR",system-ui,sans-serif; --font-num:"Barlow Semi Condensed","Noto Sans KR",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--ground);color:var(--text)}
+body{font-family:var(--font-ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 28px}
+.page{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.demo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--dim)}
+.demo b{color:var(--text);font-weight:500}
+.demo button{font:inherit;color:var(--text);background:var(--panel-3);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+.demo button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.frame{position:relative;width:100%;max-width:100%;overflow:hidden;border-radius:10px;border:1px solid var(--line)}
+.stage{position:absolute;left:0;top:0;width:1280px;height:720px;transform-origin:0 0;background:#141a22;overflow:hidden;font-size:15px}
+button{font-family:var(--font-ui)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.bgscene{position:absolute;inset:0;background:linear-gradient(180deg,#1d2633 0%,#141a22 60%)}
+/* room */
+.top{position:absolute;left:16px;right:16px;top:14px;height:46px;display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:0 12px}
+.top h1{font-size:18px;font-weight:700;margin:0;letter-spacing:.01em}
+.pill{font-size:13px;color:#cdd6df;background:var(--panel-3);border-radius:4px;padding:3px 9px}
+.pill.acc{color:var(--accent);background:rgba(242,158,38,.12)}
+.sp{flex:1}
+.tbtn{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent;color:var(--dim);font-size:14px;padding:6px 10px;border-radius:6px;cursor:pointer}
+.tbtn:hover{color:var(--text);border-color:var(--line)}
+.left{position:absolute;left:16px;top:72px;width:272px;bottom:16px;display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.course{padding:10px;display:flex;flex-direction:column;gap:6px}
+.course svg{width:100%;height:132px;border-radius:6px;background:#1f2e24;display:block}
+.course .nm{font-size:17px;font-weight:700}
+.course .meta{font-size:13px;color:var(--dim)}
+.diff{display:flex;gap:3px;align-items:center;font-size:12px;color:var(--dim)}
+.diff i{width:14px;height:6px;border-radius:2px;background:var(--panel-3)}
+.diff i.on{background:var(--danger)}
+.chat{flex:1;display:flex;flex-direction:column;min-height:0}
+.log{flex:1;overflow:auto;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:4px;color:#cdd6df}
+.log .sys{color:var(--accent)}
+.log b{font-weight:500;color:var(--text)}
+.chatin{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.chatin input{flex:1;min-width:0;background:var(--panel-3);border:1px solid var(--line);border-radius:6px;color:var(--text);font:inherit;font-size:13px;padding:6px 8px}
+.grid{position:absolute;left:300px;right:16px;top:72px;height:540px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:1fr 1fr;gap:8px}
+.slot{position:relative;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;overflow:hidden}
+.slot.me{border-color:var(--host)}
+.slot .hd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px 0;font-size:15px;font-weight:500}
+.slot .lv{font-size:12px;color:var(--mute);font-weight:400}
+.slot .x{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:4px;border:none;background:transparent;color:var(--mute);cursor:pointer;font-size:16px;line-height:1}
+.slot .x:hover{color:var(--text);background:var(--panel-3)}
+.slot .carv{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 8px}
+.slot .carv svg{width:92%;height:auto}
+.slot .cn{font-size:13px;color:var(--dim)}
+.slot .st{height:34px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:15px;letter-spacing:.04em}
+.st.ready{background:var(--ready);color:var(--ready-ink)}
+.st.wait{background:var(--panel-3);color:var(--dim);font-weight:500}
+.st.host{background:var(--host);color:var(--host-ink)}
+.st.bot{background:transparent;color:var(--mute);font-weight:500;border-top:1px dashed var(--line)}
+.slot.empty{background:rgba(26,33,43,.55);border-style:dashed;cursor:pointer}
+.slot.empty:hover{border-color:var(--steel)}
+.slot.empty .carv{color:var(--mute);font-size:13px;text-align:center}
+.slot.empty .carv svg{width:40px;height:40px}
+.slot.closed{background:repeating-linear-gradient(135deg,rgba(26,33,43,.6) 0 10px,rgba(20,26,34,.6) 10px 20px)}
+.bubble{position:absolute;left:10px;top:34px;background:#f4f6f8;color:#1b2230;font-size:12px;padding:5px 8px;border-radius:6px;max-width:80%;z-index:2}
+.bar{position:absolute;left:300px;right:16px;bottom:16px;height:76px;display:flex;align-items:stretch;gap:8px}
+.bbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:92px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:#cdd6df;font-size:13px;cursor:pointer;padding:0 12px}
+.bbtn:hover:not(:disabled){border-color:var(--steel);color:var(--text)}
+.bbtn:disabled{opacity:.45;cursor:not-allowed}
+.bbtn svg{width:24px;height:24px}
+.mycar{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:0 12px;flex:1;min-width:0;font-size:13px;color:var(--dim)}
+.mycar b{color:var(--text);font-weight:500;font-size:15px}
+.mycar svg{width:110px;height:auto;flex:none}
+.go{width:240px;border:none;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:22px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.go small{font-size:12px;font-weight:500;opacity:.8}
+.go.off{background:var(--panel-3);color:var(--dim);cursor:not-allowed}
+.go.unready{background:var(--ready);color:var(--ready-ink)}
+.go.cancel{background:var(--panel-3);color:var(--text);border:1px solid var(--ready)}
+/* overlays */
+.ov{position:absolute;inset:0;background:rgba(5,7,10,.66);display:flex;align-items:center;justify-content:center;z-index:20}
+.dlg{background:#141a22;border:1px solid var(--line);border-radius:10px;width:880px;max-height:640px;display:flex;flex-direction:column;overflow:hidden}
+.dlg header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dlg header h2{margin:0;font-size:19px;font-weight:700}
+.dlg header .sp{flex:1}
+.dlg .body{padding:16px 18px;overflow:auto;flex:1}
+.dlg footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.btn{font:inherit;font-size:14px;border-radius:6px;padding:8px 16px;cursor:pointer;border:1px solid var(--line);background:var(--panel-3);color:var(--text)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.ghost{background:transparent}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:500}
+.garage{display:grid;grid-template-columns:240px 1fr;gap:16px}
+.clist{display:flex;flex-direction:column;gap:6px}
+.citem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:pointer;text-align:left;color:var(--text)}
+.citem[aria-selected="true"]{border-color:var(--accent);background:rgba(242,158,38,.08)}
+.citem svg{width:64px;height:auto;flex:none}
+.citem .t{display:flex;flex-direction:column;font-size:14px}
+.citem .t span{font-size:12px;color:var(--dim)}
+.preview{display:flex;flex-direction:column;gap:12px}
+.pv{background:radial-gradient(ellipse at 50% 80%,#2a3442 0%,#151b23 70%);border-radius:8px;height:200px;display:flex;align-items:center;justify-content:center}
+.pv svg{width:70%;height:auto}
+.pvh{display:flex;align-items:baseline;gap:10px}
+.pvh h3{margin:0;font-size:22px}
+.pvh span{color:var(--dim);font-size:14px}
+.stats{display:grid;grid-template-columns:72px 1fr 34px;gap:6px 10px;align-items:center;font-size:13px;color:var(--dim)}
+.sbar{height:8px;background:var(--panel-3);border-radius:4px;overflow:hidden}
+.sbar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .25s}
+.swatches{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim)}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.sw[aria-pressed="true"]{border-color:var(--text)}
+.note{font-size:12px;color:var(--mute)}
+.ccards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.cc{display:flex;gap:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:pointer;text-align:left;color:var(--text)}
+.cc[aria-selected="true"]{border-color:var(--accent);background:rgba(242,158,38,.08)}
+.cc svg{width:150px;height:90px;flex:none;border-radius:6px;background:#1f2e24}
+.cc .t{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--dim)}
+.cc .t b{font-size:16px;color:var(--text)}
+.row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;color:var(--dim)}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;background:transparent;color:var(--dim);padding:6px 12px;cursor:pointer;font:inherit;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--panel-3);color:var(--text)}
+.flist{display:flex;flex-direction:column;gap:6px}
+.fr{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);font-size:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.dot.on{background:var(--ok)}.dot.busy{background:var(--accent)}
+.fr .s{color:var(--dim);font-size:12px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--dim);margin-bottom:14px}
+.field input[type=text]{background:var(--panel-3);border:1px solid var(--line);border-radius:6px;color:var(--text);font:inherit;padding:8px 10px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);margin-bottom:10px}
+.err{color:#ff8a80;font-size:12px;min-height:16px}
+.toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--panel-3);border:1px solid var(--line);color:var(--text);font-size:14px;padding:8px 14px;border-radius:6px;z-index:30;transition:opacity .3s}
+.count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-num);font-size:200px;font-weight:700;color:var(--text);background:rgba(5,7,10,.55);z-index:25}
+/* menu */
+.menu{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.menu h2{font-size:30px;margin:0}
+/* race HUD */
+.race{position:absolute;inset:0;overflow:hidden}
+.race svg.scene{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;background:rgba(10,13,18,.82);border-radius:6px}
+.pos{left:16px;top:16px;width:220px;height:84px;display:flex;align-items:center;gap:22px;padding:0 16px}
+.pos .k{font-size:12px;color:var(--dim)}
+.pos .v{font-family:var(--font-num);font-size:50px;font-weight:700;line-height:1}
+.pos .v small{font-size:22px;color:var(--dim)}
+.board{left:16px;top:108px;width:240px;padding:4px 0;font-size:14px}
+.board div{display:grid;grid-template-columns:26px 1fr 66px;padding:3px 10px;align-items:center}
+.board .me{background:#1f6fd1}
+.board .g{text-align:right;color:var(--dim);font-family:var(--font-num)}
+.board .me .g{color:var(--text)}
+.laptime{left:50%;top:16px;transform:translateX(-50%);padding:6px 18px;font-family:var(--font-num);font-size:32px;font-weight:600}
+.gap{left:50%;top:66px;transform:translateX(-50%);background:transparent;color:var(--ready);font-size:14px}
+.mini{right:16px;top:16px;width:200px;height:170px}
+.best{left:16px;bottom:16px;padding:8px 14px;font-size:13px;color:var(--dim)}
+.best b{display:block;font-family:var(--font-num);font-size:24px;color:var(--text);font-weight:600}
+.clus{left:50%;bottom:16px;transform:translateX(-50%);width:420px;height:104px;display:flex;align-items:center;gap:14px;padding:0 16px}
+.clus .gear{font-family:var(--font-num);font-size:64px;font-weight:700;width:44px;text-align:center}
+.clus .led{display:flex;align-items:flex-end;gap:3px;height:60px;flex:1}
+.clus .led i{flex:1;background:#2b333d;border-radius:1px}
+.clus .spd{font-family:var(--font-num);font-size:54px;font-weight:700;width:104px;text-align:right}
+.clus .u{font-size:12px;color:var(--dim);align-self:flex-end;margin-bottom:22px}
+.esc{right:16px;bottom:16px;padding:0}
+@media (prefers-reduced-motion:reduce){.sbar i{transition:none}}
+</style>
+
+<div class="page">
+  <div class="demo" role="group" aria-label="목업 조작">
+    <b>목업 조작</b>
+    <span>시점</span>
+    <button id="asHost" aria-pressed="true">방장</button>
+    <button id="asGuest" aria-pressed="false">참가자</button>
+    <span style="margin-left:8px">친구 상태</span>
+    <button id="friendsReady">친구 모두 준비</button>
+    <button id="reset">처음 상태로</button>
+    <span class="note">버튼은 모두 실제로 동작합니다. 초대한 친구는 잠시 뒤 들어오고 스스로 준비합니다.</span>
+  </div>
+  <div class="frame" id="frame"><div class="stage" id="stage"></div></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const CARS=[
+ {id:"GoblinV12",name:"GoblinV12",kind:"스포츠카",shape:"sport",top:220,red:8200,cl:"C",acc:"#e5484d",stats:{속도:10,가속:9,코너링:5,접지:6,내구:4},line:"직선 최강, 헤어핀에서 뒤가 쉽게 빠짐"},
+ {id:"LT80",name:"Fairheaven LT80",kind:"세단",shape:"sedan",top:175,red:7200,cl:"D",acc:"#ff7a1a",stats:{속도:8,가속:7,코너링:7,접지:7,내구:6},line:"무난한 균형형"},
+ {id:"SW84",name:"Fairheaven SW84",kind:"왜건",shape:"wagon",top:160,red:6500,cl:"A",acc:"#5cc8f0",stats:{속도:7,가속:6,코너링:8,접지:7,내구:7},line:"코너가 많은 고개에서 강함"},
+ {id:"Lifted85",name:"Lightbody Lifted85",kind:"픽업",shape:"pickup",top:150,red:6000,cl:"D",acc:"#f29e26",rugged:true,stats:{속도:6,가속:6,코너링:6,접지:9,내구:8},line:"비포장 지름길에서 속도가 덜 떨어짐"},
+ {id:"Shvan92",name:"Shvan92",kind:"밴",shape:"van",top:130,red:5500,cl:"B",acc:"#57c785",stats:{속도:5,가속:5,코너링:5,접지:6,내구:10},line:"느리지만 부딪혀도 안 밀림"}
+];
+const PAINTS=["#c8342b","#e9edf1","#2d6fd6","#f2c230","#2f9e6a","#1c1f24"];
+const COURSES=[
+ {id:"circuit",name:"섬 서킷",mode:"loop",len:"543 m",elev:"평지",diff:2,path:"M30 70 C30 30 60 20 90 22 S150 20 150 50 S130 80 100 78 S60 92 30 70 Z"},
+ {id:"up",name:"고개 업힐",mode:"sprint",len:"1.9 km",elev:"고저차 152 m",diff:4,path:"M14 80 C34 80 32 52 52 52 S68 76 88 72 S96 30 116 28 S146 42 142 12"},
+ {id:"down",name:"고개 다운힐",mode:"sprint",len:"1.9 km",elev:"고저차 152 m",diff:4,path:"M142 12 C146 42 116 28 116 28 S96 30 88 72 S68 76 52 52 S34 80 14 80"},
+ {id:"loop",name:"고개 순환",mode:"loop",len:"4.9 km",elev:"고저차 152 m",diff:5,path:"M20 80 C40 82 36 50 58 50 S76 78 96 70 S104 26 126 24 S150 40 140 60 S100 92 60 90 S20 92 20 80 Z"}
+];
+const FRIENDS=[
+ {n:"민트초코",lv:12,st:"on"},{n:"도로위의사자",lv:7,st:"on"},{n:"새벽세시",lv:21,st:"busy"},{n:"감자칩",lv:3,st:"off"},{n:"한강라이더",lv:15,st:"on"}
+];
+const BOTN=["Flint","Glint","여울","Wren","Birch","Zephyr","Jade"];
+const $=(s,r=document)=>r.querySelector(s);
+const stage=$("#stage"),frame=$("#frame");
+let S;
+function fresh(){return{screen:"room",view:"host",room:"준환의 레이스",privateRoom:false,fillBots:true,course:1,laps:2,
+ slots:[{p:{n:"준환",lv:8,car:0,paint:0,ready:false,me:true,host:true}},{p:{n:"민트초코",lv:12,car:4,paint:2,ready:true}},{p:{n:"도로위의사자",lv:7,car:1,paint:1,ready:false,say:"차 고르는 중"}},{},{},{},{},{closed:true}],
+ chat:[["sys","준환 님이 방을 만들었습니다."],["민트초코","ㄱㄱ"],["도로위의사자","차 고르는 중"]],invited:{},dlg:null,toast:null,count:0,best:null};}
+S=fresh();
+function me(){return S.slots.find(s=>s.p&&s.p.me).p}
+function hostP(){return S.slots.find(s=>s.p&&s.p.host).p}
+function humans(){return S.slots.filter(s=>s.p).map(s=>s.p)}
+function esc(t){return String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function carSVG(shape,paint,w){
+ const c=PAINTS[paint]||paint,g="#9fb3c6",t="#11151b";
+ const body={sport:"M10 52 L22 40 L58 30 L92 30 L118 40 L148 44 L152 54 L150 60 L10 60 Z",
+  sedan:"M8 54 L16 42 L44 40 L60 26 L104 26 L122 40 L148 44 L152 60 L8 60 Z",
+  wagon:"M8 54 L14 40 L40 38 L54 24 L140 24 L146 40 L152 46 L152 60 L8 60 Z",
+  pickup:"M6 56 L12 36 L52 34 L60 18 L94 18 L100 34 L152 34 L154 58 L6 58 Z",
+  van:"M8 58 L10 30 L22 14 L146 14 L152 22 L154 58 Z"}[shape];
+ const win={sport:"M60 32 L90 32 L110 40 L48 40 Z",sedan:"M64 29 L102 29 L116 40 L52 40 Z",wagon:"M58 27 L136 27 L140 38 L46 38 Z",pickup:"M63 21 L91 21 L95 33 L57 33 Z",van:"M26 18 L60 18 L60 32 L16 32 Z"}[shape];
+ const wy=shape==="pickup"||shape==="van"?58:60;
+ return `<svg viewBox="0 0 160 78" ${w?`style="width:${w}px"`:""} aria-hidden="true"><ellipse cx="80" cy="72" rx="70" ry="4" fill="#000" opacity=".35"/><path d="${body}" fill="${c}"/><path d="${win}" fill="${g}" opacity=".75"/><circle cx="38" cy="${wy}" r="11" fill="${t}"/><circle cx="38" cy="${wy}" r="5" fill="#5d6874"/><circle cx="124" cy="${wy}" r="11" fill="${t}"/><circle cx="124" cy="${wy}" r="5" fill="#5d6874"/></svg>`;
+}
+function trackSVG(c,big){return `<svg viewBox="0 0 160 96" aria-hidden="true"><path d="${c.path}" fill="none" stroke="#3b4a3e" stroke-width="${big?10:8}" stroke-linejoin="round" stroke-linecap="round"/><path d="${c.path}" fill="none" stroke="#e9edf1" stroke-width="${big?3:2.5}" stroke-linejoin="round" stroke-linecap="round"/></svg>`}
+const ICON={
+ garage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10 12 4l9 6v10H3z"/><path d="M7 20v-6h10v6M7 17h10"/></svg>',
+ course:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 19c3 0 2-6 6-6s3 4 6 4 2-8 2-12"/><circle cx="5" cy="19" r="1.6"/><path d="M19 5l-3 2h6z"/></svg>',
+ invite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M18 8v6M15 11h6"/></svg>',
+ gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>',
+ exit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="18" height="18"><path d="M14 4H5v16h9M10 12h10M17 9l3 3-3 3"/></svg>',
+ crown:'<svg viewBox="0 0 24 24" width="16" height="16" fill="#f2c230" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>'
+};
+function toast(t){S.toast=t;render();clearTimeout(toast.h);toast.h=setTimeout(()=>{S.toast=null;render()},1800)}
+function say(n,t){S.chat.push([n,t]);if(S.chat.length>40)S.chat.shift()}
+/* ---------- room ---------- */
+function slotHTML(s,i){
+ const iAmHost=me().host;
+ if(s.closed)return `<div class="slot empty closed" data-act="open" data-i="${i}" role="button" tabindex="0" aria-label="닫힌 자리 ${i+1}"><div class="carv"><span>닫힌 자리</span>${iAmHost?'<span class="note">눌러서 열기</span>':''}</div></div>`;
+ if(!s.p){const pend=Object.values(S.invited).includes(i);
+  return `<div class="slot empty" data-act="invite" data-i="${i}" role="button" tabindex="0" aria-label="빈 자리 ${i+1}, 친구 초대"><div class="carv">${pend?'<span style="color:var(--accent)">초대 수락 기다리는 중…</span>':`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M18 8v6M15 11h6"/></svg><span>친구 초대</span>`}</div><div class="st bot">${S.fillBots?"출발 때 봇이 채움":"비워 둠"}</div>${iAmHost?`<button class="x" data-act="close" data-i="${i}" aria-label="자리 닫기">×</button>`:""}</div>`;}
+ const p=s.p,c=CARS[p.car];
+ const st=p.host?`<div class="st host">${ICON.crown} 방장</div>`:p.ready?'<div class="st ready">준비 완료</div>':'<div class="st wait">대기 중</div>';
+ const kick=iAmHost&&!p.me?`<button class="x" data-act="kick" data-i="${i}" aria-label="${esc(p.n)} 내보내기">×</button>`:"";
+ return `<div class="slot${p.me?" me":""}">${p.say?`<div class="bubble">${esc(p.say)}</div>`:""}<div class="hd"><span>${esc(p.n)}</span><span class="lv num">Lv.${p.lv}</span></div>${kick}<div class="carv">${carSVG(c.shape,p.paint)}<span class="cn">${esc(c.name)}</span></div>${st}</div>`;
+}
+function goState(){
+ const m=me();
+ if(m.host){const wait=humans().filter(p=>!p.host&&!p.ready).length;
+  return wait?{cls:"go off",label:"시작",sub:`준비 안 한 사람 ${wait}명`,act:"nostart"}:{cls:"go",label:"시작 (F5)",sub:humans().length===1?"나머지는 봇으로 출발":"모두 준비 완료",act:"start"};}
+ return m.ready?{cls:"go cancel",label:"준비 취소",sub:"방장이 시작하면 출발",act:"ready"}:{cls:"go unready",label:"준비 (F5)",sub:"차를 고른 뒤 준비",act:"ready"};
+}
+function roomHTML(){
+ const c=COURSES[S.course],m=me(),car=CARS[m.car],g=goState();
+ const diff=Array.from({length:5},(_,i)=>`<i class="${i<c.diff?"on":""}"></i>`).join("");
+ const laps=c.mode==="loop"?`${S.laps}랩`:"스프린트";
+ return `<div class="bgscene"></div>
+ <div class="top"><h1>${esc(S.room)}</h1><span class="pill acc">${c.mode==="loop"?"순환":"스프린트"}</span><span class="pill">${laps}</span><span class="pill num">사람 ${humans().length} · 봇 ${S.fillBots?S.slots.filter(s=>!s.p&&!s.closed).length:0}</span>${S.privateRoom?'<span class="pill">비공개</span>':""}<span class="sp"></span><span class="note">${m.host?"코스와 설정은 방장만 바꿀 수 있습니다":"방장: "+esc(hostP().n)}</span>
+ <button class="tbtn" data-act="settings" ${m.host?"":"disabled"}>${ICON.gear}방 설정</button><button class="tbtn" data-act="leave">${ICON.exit}나가기</button></div>
+ <div class="left"><div class="card course">${trackSVG(c,true)}<div class="nm">${c.name}</div><div class="meta">${c.len} · ${c.elev}</div><div class="diff">난이도 ${diff}</div></div>
+ <div class="card chat"><div class="log" id="log">${S.chat.map(([n,t])=>n==="sys"?`<span class="sys">${esc(t)}</span>`:`<span><b>${esc(n)}</b> ${esc(t)}</span>`).join("")}</div>
+ <form class="chatin" id="chatf"><input id="chatin" placeholder="메시지 입력" maxlength="60" aria-label="채팅 메시지"><button class="btn" type="submit">보내기</button></form></div></div>
+ <div class="grid">${S.slots.map(slotHTML).join("")}</div>
+ <div class="bar">
+  <button class="bbtn" data-act="garage" ${m.ready&&!m.host?"disabled":""} title="${m.ready&&!m.host?"준비를 취소해야 차를 바꿀 수 있습니다":"차고"}">${ICON.garage}차고</button>
+  <button class="bbtn" data-act="course" ${m.host?"":"disabled"} title="${m.host?"코스 선택":"방장만 코스를 고릅니다"}">${ICON.course}코스</button>
+  <button class="bbtn" data-act="inviteAny">${ICON.invite}초대</button>
+  <div class="mycar">${carSVG(car.shape,m.paint)}<div><span>내 차</span><br><b>${esc(car.name)}</b> <span class="num">· 최고 ${car.top} km/h</span></div></div>
+  <button class="${g.cls}" data-act="${g.act}"><span>${g.label}</span><small>${g.sub}</small></button>
+ </div>`;
+}
+/* ---------- dialogs ---------- */
+function statRows(c){return Object.entries(c.stats).map(([k,v])=>`<span>${k}</span><div class="sbar"><i style="width:${v*10}%"></i></div><span class="num">${v}</span>`).join("")}
+function garageHTML(){const d=S.dlg,c=CARS[d.car];
+ return `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="gt"><header><h2 id="gt">차고</h2><span class="note">레이스에서는 차마다 성능이 다릅니다 (밸런스 제안 수치)</span><span class="sp"></span><button class="btn ghost" data-act="close-dlg" aria-label="닫기">×</button></header>
+ <div class="body"><div class="garage"><div class="clist" role="listbox" aria-label="차 목록">${CARS.map((x,i)=>`<button class="citem" role="option" aria-selected="${i===d.car}" data-act="pick-car" data-i="${i}">${carSVG(x.shape,d.paint)}<span class="t">${esc(x.name)}<span>${x.kind} · ${x.top} km/h</span></span></button>`).join("")}</div>
+ <div class="preview"><div class="pv">${carSVG(c.shape,d.paint)}</div><div class="pvh"><h3>${esc(c.name)}</h3><span>${c.kind} · 최고 <span class="num">${c.top}</span> km/h</span></div><div class="note" style="font-size:13px;color:var(--dim)">${c.line} · 계기판 <b style="color:${c.acc};font-weight:500">${CLN[c.cl]}</b></div>
+ <div class="stats">${statRows(c)}</div>
+ <div class="swatches">색상 ${PAINTS.map((p,i)=>`<button class="sw" style="background:${p}" aria-label="색상 ${i+1}" aria-pressed="${i===d.paint}" data-act="paint" data-i="${i}"></button>`).join("")}</div></div></div></div>
+ <footer><button class="btn ghost" data-act="close-dlg">취소</button><button class="btn pri" data-act="save-car">이 차로 결정</button></footer></div>`;}
+function courseHTML(){const d=S.dlg,c=COURSES[d.course];
+ return `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="ct"><header><h2 id="ct">코스 선택</h2><span class="sp"></span><button class="btn ghost" data-act="close-dlg" aria-label="닫기">×</button></header>
+ <div class="body"><div class="ccards" role="listbox" aria-label="코스">${COURSES.map((x,i)=>`<button class="cc" role="option" aria-selected="${i===d.course}" data-act="pick-course" data-i="${i}">${trackSVG(x)}<span class="t"><b>${x.name}</b>${x.mode==="loop"?"순환":"스프린트"} · ${x.len}<br>${x.elev}<span class="diff">난이도 ${Array.from({length:5},(_,k)=>`<i class="${k<x.diff?"on":""}"></i>`).join("")}</span></span></button>`).join("")}</div>
+ ${c.mode==="loop"?`<div class="row">랩 수 <div class="seg">${[1,2,3,5].map(n=>`<button data-act="laps" data-i="${n}" aria-pressed="${n===d.laps}">${n}랩</button>`).join("")}</div></div>`:`<div class="row note">스프린트: 출발점에서 결승점까지 한 번</div>`}</div>
+ <footer><button class="btn ghost" data-act="close-dlg">취소</button><button class="btn pri" data-act="save-course">이 코스로</button></footer></div>`;}
+function inviteHTML(){
+ const inRoom=new Set(humans().map(p=>p.n));
+ return `<div class="dlg" style="width:560px" role="dialog" aria-modal="true" aria-labelledby="it"><header><h2 id="it">친구 초대</h2><span class="note">빈 자리 ${S.slots.filter(s=>!s.p&&!s.closed).length}</span><span class="sp"></span><button class="btn ghost" data-act="close-dlg" aria-label="닫기">×</button></header>
+ <div class="body"><div class="flist">${FRIENDS.map((f,i)=>{const sent=S.invited[f.n]!==undefined,here=inRoom.has(f.n);
+  const lbl=here?"방에 있음":sent?"초대 보냄":f.st==="off"?"오프라인":f.st==="busy"?"게임 중":"초대";
+  const dis=here||sent||f.st!=="on";
+  return `<div class="fr"><span class="dot ${f.st==="on"?"on":f.st==="busy"?"busy":""}"></span><span>${esc(f.n)} <span class="s num">Lv.${f.lv}</span></span><span class="sp" style="flex:1"></span><span class="s">${f.st==="on"?"온라인":f.st==="busy"?"배틀로얄 중":"오프라인"}</span><button class="btn${dis?" ghost":" pri"}" data-act="send-invite" data-i="${i}" ${dis?"disabled":""}>${lbl}</button></div>`}).join("")}</div>
+ <p class="note">초대받은 친구가 수락하면 빈 자리에 들어옵니다. 방이 꽉 차면 초대할 수 없습니다.</p></div>
+ <footer><button class="btn" data-act="close-dlg">닫기</button></footer></div>`;}
+function settingsHTML(){const d=S.dlg;
+ return `<form class="dlg" style="width:520px" id="setf" role="dialog" aria-modal="true" aria-labelledby="st"><header><h2 id="st">방 설정</h2><span class="sp"></span><button class="btn ghost" type="button" data-act="close-dlg" aria-label="닫기">×</button></header>
+ <div class="body"><label class="field" for="rname">방 이름<input type="text" id="rname" value="${esc(d.room)}" maxlength="20"></label><div class="err" id="rerr"></div>
+ <label class="chk"><input type="checkbox" id="rpriv" ${d.privateRoom?"checked":""}> 비공개 (초대한 친구만 입장)</label>
+ <label class="chk"><input type="checkbox" id="rbots" ${d.fillBots?"checked":""}> 빈 자리는 출발할 때 봇으로 채우기</label></div>
+ <footer><button class="btn ghost" type="button" data-act="close-dlg">취소</button><button class="btn pri" type="submit">저장</button></footer></form>`;}
+function leaveHTML(){const m=me();
+ return `<div class="dlg" style="width:460px" role="alertdialog" aria-modal="true" aria-labelledby="lt"><header><h2 id="lt">방에서 나갈까요?</h2></header><div class="body" style="font-size:14px;color:var(--dim)">${m.host&&humans().length>1?"방장이 나가면 다음 사람이 방장이 됩니다.":"나가면 메인 메뉴로 돌아갑니다."}</div>
+ <footer><button class="btn ghost" data-act="close-dlg">남기</button><button class="btn danger" data-act="do-leave">나가기</button></footer></div>`;}
+function resultHTML(){const r=S.dlg.rows;
+ return `<div class="dlg" style="width:560px" role="dialog" aria-modal="true" aria-labelledby="rt"><header><h2 id="rt">결과 · ${COURSES[S.course].name}</h2></header><div class="body"><div class="board" style="position:static;font-size:15px">${r.map((x,i)=>`<div class="${x.me?"me":""}" style="border-radius:4px"><span class="num">${i+1}</span><span>${esc(x.n)}</span><span class="g num">${x.t}</span></div>`).join("")}</div></div>
+ <footer><button class="btn pri" data-act="back-room">방으로 돌아가기</button></footer></div>`;}
+/* ---------- race ---------- */
+function raceHTML(){
+ const field=raceField();
+ return `<div class="race"><svg class="scene" viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true"><rect width="1280" height="720" fill="#7b97b9"/><rect y="320" width="1280" height="400" fill="#4f6d40"/><polygon points="520,320 760,320 1180,720 100,720" fill="#3a3e45"/><polygon points="636,320 644,320 664,720 616,720" fill="#e9edf1" opacity=".5"/><g transform="translate(560 380)">${carSVG(CARS[field[0].car].shape,field[0].paint,160).replace("<svg","<svg x='0' y='0' width='160' height='78'")}</g></svg>
+ <div class="hud pos"><div><div class="k">순위</div><div class="v" id="rp">2<small>/8</small></div></div><div><div class="k">랩</div><div class="v" id="rl" style="font-size:34px">1<small>/${COURSES[S.course].mode==="loop"?S.laps:1}</small></div></div></div>
+ <div class="hud board" id="rb"></div>
+ <div class="hud laptime" id="rt">0:00.000</div><div class="hud gap" id="rg">앞 차와 +0.754</div>
+ <div class="hud mini">${trackSVG(COURSES[S.course],true).replace("<svg",'<svg style="width:100%;height:100%"')}</div>
+ <div class="hud best">베스트 랩<b id="rbest">-:--.---</b></div>
+ <canvas id="clc" width="1280" height="720" style="position:absolute;inset:0;width:1280px;height:720px;pointer-events:none"></canvas>
+ <div class="hud esc"><button class="btn" data-act="finish">결승 (목업: 결과 보기)</button></div></div>`;}
+function raceField(){
+ const list=humans().map(p=>({n:p.n,car:p.car,paint:p.paint,me:!!p.me}));
+ let b=0;S.slots.forEach(s=>{if(!s.p&&!s.closed&&S.fillBots){list.push({n:BOTN[b%BOTN.length]+" (봇)",car:b%CARS.length,paint:(b+2)%PAINTS.length});b++}});
+ return list;}
+let raf=0,t0=0;
+function raceLoop(){
+ const field=raceField(),n=field.length;
+ const order=[field[1]||field[0],field[0],...field.slice(2)];
+ $("#rb").innerHTML=order.map((x,i)=>`<div class="${x.me?"me":""}"><span class="num">${i+1}</span><span>${esc(x.n)}</span><span class="g num">${i===0?"":"+"+(i*1.37+0.75*(i>0)).toFixed(3)}</span></div>`).join("");
+ $("#rp").innerHTML=`2<small>/${n}</small>`;
+ t0=performance.now();cancelAnimationFrame(raf);
+ const cx=$("#clc").getContext("2d"),car=CARS[me().car];
+ (function f(){if(S.screen!=="race")return;const t=(performance.now()-t0)/1000,ms=Math.floor(t*1000);
+  $("#rt").textContent=Math.floor(ms/60000)+":"+String(Math.floor(ms/1000)%60).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");
+  drawCluster(cx,car,simCar(car,t));
+  raf=requestAnimationFrame(f);})();
+}
+/* ---------- per-car cluster (1920x1080 HUD coordinates, drawn at 2/3) ---------- */
+const CLN={A:"A 원형 쌍",B:"B 반원",C:"C 디지털 스포츠",D:"D 클래식 아날로그"};
+const D2R=Math.PI/180,K={panel:"rgba(12,15,20,0.86)",edge:"#3c4654",text:"#e9edf2",dim:"#8b96a5",amber:"#f0a63a",red:"#e5484d",green:"#57c785",track:"#38414d"};
+function simCar(c,t){const T=t%10,top=c.top*0.92;let v=T<7?top*(1-Math.exp(-T/2.4))/(1-Math.exp(-7/2.4)):top*(1-(T-7)/3*0.7);v=Math.max(0,v);
+ let g=1;for(;g<6;g++){if(v<0.92*c.top*Math.pow(g/6,.8))break;}const gt=c.top*Math.pow(g/6,.8);const rpm=Math.min(c.red*0.97,900+(v/gt)*(c.red-900));return{v,g,rpm,fuel:.53,body:1};}
+function arc(x,cx,cy,r,a0,a1,w,col){x.beginPath();x.arc(cx,cy,r,a0,a1);x.strokeStyle=col;x.lineWidth=w;x.stroke();}
+function txt(x,s,cx,y,font,col,al){x.font=font;x.fillStyle=col;x.textAlign=al||"center";x.fillText(s,cx,y);x.textAlign="left";}
+function needle(x,cx,cy,r,a,col,w){x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(cx-Math.cos(a)*12,cy-Math.sin(a)*12);x.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);x.stroke();x.fillStyle=col;x.beginPath();x.arc(cx,cy,7,0,7);x.fill();}
+function ticks(x,cx,cy,r0,r1,a0,sw,n,col,w){for(let i=0;i<=n;i++){const a=(a0+sw*i/n)*D2R;x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(cx+Math.cos(a)*r0,cy+Math.sin(a)*r0);x.lineTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);x.stroke();}}
+function lights(x,c,s,y){const n=Math.max(0,Math.min(7,Math.round((s.rpm/c.red-0.6)/0.32*7)));for(let i=0;i<7;i++){x.fillStyle=i<n?(i<3?K.green:i<5?K.amber:K.red):"#39414c";x.fillRect(960-3*28+i*28-9,y,18,8);}}
+function health(x){x.fillStyle=K.panel;x.fillRect(680,1000,560,44);x.strokeStyle=K.edge;x.lineWidth=2;x.strokeRect(680,1000,560,44);txt(x,"100",712,1033,"500 28px Barlow Semi Condensed,sans-serif",K.text,"left");x.fillStyle="#d8dde4";x.fillRect(770,1018,446,8);}
+function drawCluster(x,c,s){x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,1280,720);x.setTransform(2/3,0,0,2/3,0,0);health(x);
+ const RM=Math.ceil(c.red/1000)+1,F="Barlow Semi Condensed,sans-serif",acc=c.acc;
+ if(c.cl==="A"){const r=108,L=[518,936],R=[1360,936];for(const[cx,cy]of[L,R]){x.fillStyle=K.panel;x.beginPath();x.arc(cx,cy,r,0,7);x.fill();arc(x,cx,cy,r,0,7,2,K.edge);arc(x,cx,cy,r-14,135*D2R,405*D2R,10,K.track);}
+  let[cx,cy]=L;arc(x,cx,cy,r-14,135*D2R,(135+270*s.rpm/(RM*1000))*D2R,10,K.amber);arc(x,cx,cy,r-14,(135+270*c.red/(RM*1000))*D2R,405*D2R,10,"rgba(229,72,77,.55)");
+  for(let i=0;i<=RM;i++){const a=(135+270*i/RM)*D2R;txt(x,String(i),cx+Math.cos(a)*(r-38),cy+Math.sin(a)*(r-38)+7,"18px "+F,i*1000>=c.red?K.red:K.dim);}
+  txt(x,String(s.g),cx,cy+18,"700 58px "+F,K.text);txt(x,"x1000 rpm",cx,cy+50,"15px sans-serif",K.dim);
+  [cx,cy]=R;arc(x,cx,cy,r-14,135*D2R,(135+270*s.v/(c.top+40))*D2R,10,acc);txt(x,String(Math.round(s.v)),cx,cy+14,"700 52px "+F,K.text);txt(x,"km/h",cx,cy+40,"15px sans-serif",K.dim);
+  arc(x,cx,cy,r-14,60*D2R,120*D2R,8,K.track);arc(x,cx,cy,r-14,(120-60*s.fuel)*D2R,120*D2R,8,K.green);txt(x,"연료 "+Math.round(s.fuel*100)+"%",cx,cy+78,"15px sans-serif",K.dim);}
+ else if(c.cl==="B"){const r=150,rr=116,y=1044,L=518,R=1360;x.fillStyle=K.panel;x.beginPath();x.arc(L,y,r,Math.PI,0);x.fill();arc(x,L,y,r,Math.PI,0,2,K.edge);x.beginPath();x.arc(R,y,rr,Math.PI,0);x.fill();arc(x,R,y,rr,Math.PI,0,2,K.edge);
+  arc(x,L,y,r-16,Math.PI,2*Math.PI,12,K.track);arc(x,L,y,r-16,Math.PI,Math.PI*(1+s.rpm/(RM*1000)),12,K.amber);arc(x,L,y,r-16,Math.PI*(1+c.red/(RM*1000)),2*Math.PI,12,"rgba(229,72,77,.55)");
+  for(let i=0;i<=RM;i++){const a=Math.PI*(1+i/RM);txt(x,String(i),L+Math.cos(a)*(r-42),y+Math.sin(a)*(r-42)+7,"17px "+F,i*1000>=c.red?K.red:K.dim);}
+  txt(x,String(s.g),L,y-26,"700 60px "+F,K.text);arc(x,R,y,rr-14,Math.PI,2*Math.PI,10,K.track);arc(x,R,y,rr-14,Math.PI,Math.PI*(1+s.v/(c.top+30)),10,acc);
+  txt(x,String(Math.round(s.v)),R,y-24,"700 46px "+F,K.text);txt(x,"km/h",R,y-4,"14px sans-serif",K.dim);
+  txt(x,"연료",690,982,"16px sans-serif",K.dim,"left");for(let i=0;i<10;i++){x.fillStyle=i<Math.round(s.fuel*10)?K.green:"#39414c";x.fillRect(736+i*22,970,18,14);}
+  txt(x,"차체",972,982,"16px sans-serif",K.dim,"left");for(let i=0;i<10;i++){x.fillStyle=i<Math.round(s.body*10)?"#d8dde4":"#39414c";x.fillRect(1018+i*22,970,18,14);}}
+ else if(c.cl==="C"){x.fillStyle=K.panel;x.fillRect(368,880,300,164);x.strokeStyle=K.edge;x.lineWidth=2;x.strokeRect(368,880,300,164);const n=24,lit=Math.round(s.rpm/(RM*1000)*n),rz=n*c.red/(RM*1000);
+  for(let i=0;i<n;i++){const h=10+i*2.2;x.fillStyle=i<lit?(i>=rz?K.red:i>=n*.6?K.amber:K.green):"#323a44";x.fillRect(382+i*9.4,940-h,6.5,h);}
+  txt(x,"RPM",382,972,"15px sans-serif",K.dim,"left");txt(x,(s.rpm/1000).toFixed(1)+"k",382,1002,"600 28px "+F,K.text,"left");txt(x,String(s.g),620,1024,"700 88px "+F,s.rpm>c.red*.9?acc:K.text);txt(x,"GEAR",620,946,"14px sans-serif",K.dim);
+  x.fillStyle=K.panel;x.fillRect(1252,880,220,164);x.strokeRect(1252,880,220,164);x.fillStyle=acc;x.fillRect(1252,880,220,4);txt(x,String(Math.round(s.v)).padStart(3,"0"),1350,992,"700 78px "+F,K.text);txt(x,"km/h",1350,1024,"15px sans-serif",K.dim);
+  for(let i=0;i<8;i++){x.fillStyle=i<Math.round(s.fuel*8)?acc:"#323a44";x.fillRect(1440,1024-i*17,20,13);}txt(x,"F",1450,898,"14px sans-serif",K.dim);txt(x,"E",1450,1042,"13px sans-serif",K.dim);}
+ else{const r=110,L=[518,934],R=[1360,934],face=c.rugged?"#1a1712":"#0c0e12",rim=c.rugged?"#7a6a4c":"#59626e",ink=c.rugged?"#efe2c4":"#f2f4f7";
+  for(const[cx,cy]of[L,R]){x.fillStyle=face;x.beginPath();x.arc(cx,cy,r,0,7);x.fill();arc(x,cx,cy,r,0,7,5,rim);}
+  let[cx,cy]=L;ticks(x,cx,cy,r-20,r-8,135,270,RM,ink,3);ticks(x,cx,cy,r-14,r-8,135,270,RM*2,"#9aa3ae",1.5);arc(x,cx,cy,r-12,(135+270*c.red/(RM*1000))*D2R,405*D2R,6,K.red);
+  for(let i=0;i<=RM;i++){const a=(135+270*i/RM)*D2R;txt(x,String(i),cx+Math.cos(a)*(r-34),cy+Math.sin(a)*(r-34)+7,"18px "+F,i*1000>=c.red?K.red:ink);}
+  x.fillStyle="#1b2028";x.fillRect(cx-26,cy+28,52,32);x.strokeStyle=rim;x.lineWidth=1.5;x.strokeRect(cx-26,cy+28,52,32);txt(x,"D"+s.g,cx,cy+53,"700 24px "+F,acc);needle(x,cx,cy,r-18,(135+270*s.rpm/(RM*1000))*D2R,acc,4);
+  [cx,cy]=R;const SM=Math.ceil((c.top+30)/20)*20,n=SM/20;ticks(x,cx,cy,r-20,r-8,135,270,n,ink,3);for(let i=0;i<=n;i+=2){const a=(135+270*i/n)*D2R;txt(x,String(i*20),cx+Math.cos(a)*(r-36),cy+Math.sin(a)*(r-36)+6,"15px "+F,ink);}
+  txt(x,String(Math.round(s.v)),cx,cy-22,"600 22px "+F,ink);txt(x,"km/h",cx,cy-4,"12px sans-serif","#9aa3ae");const fx=cx,fy=cy+52;arc(x,fx,fy,30,200*D2R,340*D2R,3,rim);
+  txt(x,"E",fx-34,fy+4,"12px sans-serif",K.red);txt(x,"F",fx+34,fy+4,"12px sans-serif",ink);needle(x,fx,fy,26,(200+140*s.fuel)*D2R,ink,2);needle(x,cx,cy,r-18,(135+270*s.v/SM)*D2R,acc,4);}
+ lights(x,c,s,c.cl==="B"?952:986);}
+/* ---------- render ---------- */
+function render(){
+ const keepChat=document.activeElement&&document.activeElement.id==="chatin"?$("#chatin").value:null;
+ let h="";
+ if(S.screen==="room")h=roomHTML();
+ else if(S.screen==="menu")h=`<div class="bgscene"></div><div class="menu"><h2>메인 메뉴</h2><p class="note">목업: 레이스 방을 나왔습니다.</p><button class="btn pri" data-act="new-room">레이스 방 만들기</button></div>`;
+ else h=raceHTML();
+ if(S.dlg){const k=S.dlg.k;h+=`<div class="ov" data-act="ov">${k==="garage"?garageHTML():k==="course"?courseHTML():k==="invite"?inviteHTML():k==="settings"?settingsHTML():k==="leave"?leaveHTML():resultHTML()}</div>`;}
+ if(S.count)h+=`<div class="count" aria-live="assertive">${S.count}</div>`;
+ if(S.toast)h+=`<div class="toast" role="status">${esc(S.toast)}</div>`;
+ stage.innerHTML=h;
+ const log=$("#log");if(log)log.scrollTop=log.scrollHeight;
+ if(keepChat!==null&&$("#chatin")){$("#chatin").value=keepChat;$("#chatin").focus();}
+ const f=$("#chatf");if(f)f.onsubmit=e=>{e.preventDefault();const v=$("#chatin").value.trim();if(!v)return;say(me().n,v);$("#chatin").value="";render();$("#chatin").focus();};
+ const sf=$("#setf");if(sf){$("#rname").oninput=()=>{$("#rerr").textContent=""};sf.onsubmit=e=>{e.preventDefault();const v=$("#rname").value.trim();if(!v){$("#rerr").textContent="방 이름을 입력하세요.";$("#rname").focus();return;}
+  S.room=v;S.privateRoom=$("#rpriv").checked;S.fillBots=$("#rbots").checked;S.dlg=null;say("sys","방 설정을 바꿨습니다.");render();};}
+ document.querySelectorAll("#asHost,#asGuest").forEach(b=>b.setAttribute("aria-pressed",String((b.id==="asHost")===(S.view==="host"))));
+}
+function freeSlot(){return S.slots.findIndex((s,i)=>!s.p&&!s.closed&&!Object.values(S.invited).includes(i))}
+function act(a,i,el,ev){
+ const m=me();
+ switch(a){
+ case"garage":S.dlg={k:"garage",car:m.car,paint:m.paint};break;
+ case"pick-car":S.dlg.car=i;break;
+ case"paint":S.dlg.paint=i;break;
+ case"save-car":m.car=S.dlg.car;m.paint=S.dlg.paint;S.dlg=null;say("sys",`${m.n} 님이 ${CARS[m.car].name}을(를) 골랐습니다.`);break;
+ case"course":S.dlg={k:"course",course:S.course,laps:S.laps};break;
+ case"pick-course":S.dlg.course=i;break;
+ case"laps":S.dlg.laps=i;break;
+ case"save-course":{const changed=S.course!==S.dlg.course||S.laps!==S.dlg.laps;S.course=S.dlg.course;S.laps=S.dlg.laps;S.dlg=null;
+  if(changed){humans().forEach(p=>{if(!p.host)p.ready=false});say("sys",`코스가 ${COURSES[S.course].name}(으)로 바뀌어 모두 다시 준비해야 합니다.`);}break;}
+ case"invite":case"inviteAny":if(freeSlot()<0){toast("빈 자리가 없습니다.");return;}S.dlg={k:"invite"};break;
+ case"send-invite":{const f=FRIENDS[i],slot=freeSlot();if(slot<0){toast("빈 자리가 없습니다.");return;}S.invited[f.n]=slot;say("sys",`${f.n} 님에게 초대를 보냈습니다.`);
+  setTimeout(()=>{if(S.invited[f.n]===undefined)return;const s=S.slots[slot];delete S.invited[f.n];if(s.p||s.closed){render();return;}
+   s.p={n:f.n,lv:f.lv,car:(i+2)%CARS.length,paint:(i+3)%PAINTS.length,ready:false,say:"안녕"};say("sys",`${f.n} 님이 들어왔습니다.`);render();
+   setTimeout(()=>{if(s.p&&s.p.n===f.n){s.p.ready=true;s.p.say=null;say(f.n,"준비 완료");render();}},2600);},1500);break;}
+ case"close":S.slots[i]={closed:true};break;
+ case"open":if(!m.host){toast("방장만 자리를 열 수 있습니다.");return;}S.slots[i]={};break;
+ case"kick":{const p=S.slots[i].p;S.slots[i]={};say("sys",`${p.n} 님을 내보냈습니다.`);break;}
+ case"settings":S.dlg={k:"settings",room:S.room,privateRoom:S.privateRoom,fillBots:S.fillBots};break;
+ case"leave":S.dlg={k:"leave"};break;
+ case"do-leave":S.dlg=null;S.screen="menu";break;
+ case"new-room":{const v=S.view;S=fresh();S.view=v;applyView();break;}
+ case"close-dlg":S.dlg=null;break;
+ case"ov":if(ev&&el===ev.target&&S.dlg&&S.dlg.k!=="result")S.dlg=null;else return;break;
+ case"ready":m.ready=!m.ready;say(m.n,m.ready?"준비 완료":"준비 취소");
+  clearTimeout(act.auto);if(m.ready)act.auto=setTimeout(()=>{if(S.screen==="room"&&!me().host&&me().ready&&humans().every(p=>p.host||p.ready)){say(hostP().n,"출발!");startRace();}},2200);break;
+ case"nostart":{const w=humans().filter(p=>!p.host&&!p.ready).map(p=>p.n);toast(`${w.join(", ")} 님이 아직 준비하지 않았습니다.`);return;}
+ case"start":startRace();return;
+ case"finish":{const field=raceField();const rows=field.map((x,k)=>({n:x.n,me:x.me,t:""}));const mine=rows.findIndex(r=>r.me);const meRow=rows.splice(mine,1)[0];rows.splice(1,0,meRow);
+  rows.forEach((r,k)=>r.t=k===0?"1:44.812":"+"+(k*1.37+0.75).toFixed(3));cancelAnimationFrame(raf);S.dlg={k:"result",rows};break;}
+ case"back-room":S.dlg=null;S.screen="room";humans().forEach(p=>{if(!p.host)p.ready=false});say("sys","레이스가 끝났습니다. 다시 준비해 주세요.");break;
+ default:return;}
+ render();
+}
+function startRace(){S.count=3;render();const tick=()=>{S.count--;if(S.count>0){render();setTimeout(tick,700);}else{S.screen="race";render();raceLoop();}};setTimeout(tick,700);}
+stage.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el||el.disabled)return;act(el.dataset.act,el.dataset.i!==undefined?+el.dataset.i:-1,el,e);});
+stage.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches(".slot[role=button]")){e.preventDefault();e.target.click();}
+ if(e.key==="Escape"&&S.dlg&&S.dlg.k!=="result"){S.dlg=null;render();}});
+document.addEventListener("keydown",e=>{if(e.key==="F5"&&S.screen==="room"&&!S.dlg){e.preventDefault();const g=goState();act(g.act,-1,null);}});
+function applyView(){
+ const host=S.slots[0].p,guest=S.slots[2].p;
+ if(!host||!guest)return;
+ if(S.view==="guest"){host.me=false;guest.me=true;host.n="민지";guest.n="준환";}else{host.me=true;guest.me=false;host.n="준환";guest.n="도로위의사자";}
+ host.ready=false;guest.ready=false;
+}
+$("#asHost").onclick=()=>{S.view="host";applyView();render()};
+$("#asGuest").onclick=()=>{S.view="guest";applyView();render()};
+$("#friendsReady").onclick=()=>{humans().forEach(p=>{if(!p.me&&!p.host){p.ready=true;p.say=null}});render()};
+$("#reset").onclick=()=>{cancelAnimationFrame(raf);S=fresh();render()};
+function fit(){const w=frame.clientWidth,s=w/1280;stage.style.transform=`scale(${s})`;frame.style.height=(720*s)+"px"}
+addEventListener("resize",fit);fit();render();
+})();
+</script>
