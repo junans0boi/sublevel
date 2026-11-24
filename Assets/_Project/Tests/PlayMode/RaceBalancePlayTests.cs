@@ -41,7 +41,7 @@ namespace Game.Tests
             Time.timeScale = 1f;
             MoveGuard.TrustTeleports = false;
             PlayerController.InputOverride = null;
-            RaceEvent.Chosen = null;
+            RaceEvent.Starting = null;
             SceneManager.LoadScene("Bootstrap");
             yield return null;
             yield return null;
@@ -57,7 +57,7 @@ namespace Game.Tests
         static IEnumerator Run(string id)
         {
             var info = RaceEvent.ById(id);
-            RaceEvent.Chosen = id;
+            RaceEvent.Starting = new RaceStart { CourseId = id };
             SceneManager.LoadScene(info.Scene);
             float end = Time.realtimeSinceStartup + 90f;
             Vehicle mine = null;

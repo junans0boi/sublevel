@@ -16,7 +16,7 @@ namespace Game.Gameplay
         public const float Width = 220f, CellHeight = 38f, Gap = 5f;
         public const float Height = Cells * CellHeight + (Cells - 1) * Gap;
         const float IconWidth = 84f, IconHeight = 30f, KeyWidth = 14f, Pad = 8f;
-        const float DimAlpha = 0.5f;
+        const float DimAlpha = 0.75f;
 
         static readonly string[] Keys = { "1", "2", "3", "4", "5" };
 
@@ -29,6 +29,7 @@ namespace Game.Gameplay
         readonly Text[] _label = new Text[Cells];
         readonly Image[] _icon = new Image[Cells];
         readonly string[] _iconKey = new string[Cells];
+        static readonly Color IdlePanel = new Color(UiKit.Panel.r, UiKit.Panel.g, UiKit.Panel.b, 0.5f);
         static readonly Color SilhouetteTint = new Color(0.84f, 0.87f, 0.89f, 1f); // #d6dde4, the mock's weapon shape
         static readonly Dictionary<string, Sprite> Silhouettes = new Dictionary<string, Sprite>();
         readonly int[] _shownWeapon = new int[Cells];
@@ -48,7 +49,7 @@ namespace Game.Gameplay
         public int GrenadesShown => _shownGrenades;                              // count of the selected throwable
         public string ThrowableNameShown => _shownThrowName;                     // "파편 수류탄" / "연막탄", "" when empty
         public string OpticShown(int cell) => _shownOptic[cell] ?? "";
-        public bool IsHighlighted(int cell) => _panel[cell] != null && _panel[cell].enabled;
+        public bool IsHighlighted(int cell) => _panel[cell] != null && cell == _shownActive;
 
         public static WeaponStrip Build(Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position)
         {
@@ -63,8 +64,7 @@ namespace Game.Gameplay
                 s._row[i] = row;
                 s._group[i] = row.gameObject.AddComponent<CanvasGroup>();
                 s._group[i].blocksRaycasts = false;
-                s._panel[i] = UiKit.Box(row, UiKit.Panel);
-                s._panel[i].enabled = false;
+                s._panel[i] = UiKit.Box(row, IdlePanel);   // every row on a backing: a dimmed name must stay readable over a bright scene
                 s._key[i] = UiKit.Label(UiKit.Rect("Key", row, midRight, midRight, new Vector2(-Pad, 0f), new Vector2(KeyWidth, CellHeight)), Keys[i], 18,
                     UiKit.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
                 var iconRect = UiKit.Rect("Icon", row, midRight, midRight, new Vector2(-Pad - KeyWidth - Pad, 0f), new Vector2(IconWidth, IconHeight));
@@ -108,7 +108,7 @@ namespace Game.Gameplay
                 for (int i = 0; i < Cells; i++)
                 {
                     bool on = i == active;
-                    _panel[i].enabled = on;
+                    _panel[i].color = on ? UiKit.Panel : IdlePanel;
                     _group[i].alpha = on ? 1f : DimAlpha;
                     _key[i].color = on ? UiKit.Accent : UiKit.TextDim;
                     _label[i].color = on ? UiKit.Text : UiKit.TextDim;
