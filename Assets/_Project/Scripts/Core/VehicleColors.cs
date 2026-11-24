@@ -16,9 +16,10 @@ namespace Game.Core
             new[] { 0.35f, 0.35f, 0.37f },
             new[] { 0.95f, 0.9f, 0.55f },
             new[] { 0.5f, 0.7f, 0.55f },
+            new[] { 1f, 0.32f, 0.28f },   // red: chosen in the race garage only (#514), never picked for a spawn spot
         };
 
-        public static int Count => Tints.Length;
+        public static int Count => 5;   // the spawn palette (Pick); Valid also takes the garage-only tints after it
 
         // Same spot and model always give the same colour; the spots of one map spread over all of them.
         public static int Pick(int spot, int model)
@@ -27,7 +28,7 @@ namespace Game.Core
             {
                 uint h = (uint)spot * 2654435761u ^ (uint)(model + 1) * 40503u;
                 h ^= h >> 15;
-                return (int)(h % (uint)Tints.Length);
+                return (int)(h % (uint)Count);
             }
         }
 

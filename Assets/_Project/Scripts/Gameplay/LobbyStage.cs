@@ -20,6 +20,7 @@ namespace Game.Gameplay
         float YawFor(int slot) => _closeup && slot == LocalSlot ? 20f : slot == LocalSlot ? 14f : slot < LocalSlot ? 6f : -8f;
 
         public GameObject[] RosterPrefabs;      // in PlayerAppearance.ModelIds order (set by the builder)
+        public GameObject[] CarPrefabs;         // the race cars, for the race room's CarPortrait (set by the builder, #514)
         public GameObject RifleTemplate;        // inactive model with its grip at its origin (set by the builder)
         public RuntimeAnimatorController IdleController; // the game's Character.controller: Humanoid rifle idle + breathing (set by the builder)
         public Camera Camera;

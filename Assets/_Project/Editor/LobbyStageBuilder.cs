@@ -155,6 +155,8 @@ public static class LobbyStageBuilder
         stage.RosterPrefabs = new GameObject[PlayerAppearance.ModelIds.Length];
         for (int i = 0; i < stage.RosterPrefabs.Length; i++)
             stage.RosterPrefabs[i] = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/Roster/Roster_{PlayerAppearance.ModelIds[i]}.prefab");
+        // The race cars, by model name, for the race room's car portraits (#514).
+        stage.CarPrefabs = System.Array.ConvertAll(RaceLobbyScreen.Cars, c => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Project/Prefabs/M1/Vehicles/{c.id}.prefab"));
         var rifle = CharacterKit.InstantiateWeapon(CharacterKit.Weapons[2]);
         rifle.name = "RifleTemplate";
         rifle.transform.SetParent(root.transform, false);
