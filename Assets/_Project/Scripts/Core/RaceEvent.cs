@@ -49,6 +49,17 @@ namespace Game.Core
         }
     }
 
+    // The start of one race (#508, ADR-562): the course, its laps (0 = the course's), the bots (-1 = fill to RaceEvent.Racers) and each
+    // person's car model (VehicleHandling row) and paint (VehicleColors index).
+    public sealed class RaceStart
+    {
+        public struct Entry { public string Token; public string Car; public int Paint; }   // Token null = the local player
+        public string CourseId;
+        public int Laps;
+        public int Bots = -1;
+        public List<Entry> Racers = new List<Entry>();
+    }
+
     public static class RaceEvent
     {
         public const int Laps = 2;            // a lap is about 2.3 km, ~2.5 min
@@ -141,8 +152,19 @@ namespace Game.Core
             new CourseInfo { Id = "pass_down", Name = "고개 다운힐", Scene = "Race_Pass", Course = PassDown, Laps = 1 },
             new CourseInfo { Id = "pass_loop", Name = "고개 순환", Scene = "Race_Pass", Course = PassLoop, Laps = 1 },
         };
-        // The course the menu or the lobby is loading a race scene for (its Id); a scene's director takes it when the scene is its own.
-        public static string Chosen;
+        // The race the menu or the lobby is loading a scene for (#508, ADR-562); a scene's director takes it when its course is the scene's
+        // own. Null = today's race: the scene's course, its laps, bots to Racers, slot cars.
+        public static RaceStart Starting;
+        public static int LapsOf(RaceStart s, CourseInfo c) => s == null || s.Laps <= 0 || c.Course.Open ? c.Laps : s.Laps;
+        // How many cars race: the people plus the config's bots (bots unset: up to Racers), never more than the grid.
+        public static int FieldSize(RaceStart s, int people, int grid) => Math.Min(grid, s == null || s.Bots < 0 ? Racers : people + s.Bots);
+        // A person's entry: the host's own (no token) or by session token; null = today's slot car.
+        public static RaceStart.Entry? EntryFor(RaceStart s, string token, bool local)
+        {
+            if (s?.Racers == null) return null;
+            foreach (var e in s.Racers) if (string.IsNullOrEmpty(e.Token) ? local : e.Token == token) return e;
+            return null;
+        }
         public const float FalseStartPenaltySeconds = 5f;   // an open course has no lap to take away: the time instead (ADR-559)
         public static CourseInfo ByScene(string scene)
         {

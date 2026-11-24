@@ -184,7 +184,15 @@ namespace Game.Gameplay
         public void StartTraining() => Load(TrainingScene, TeamMode.Solo);
 
         // 이벤트 (ADR-512): a local race on the chosen course, always solo (the event's bots fill the grid).
-        public void StartEvent(Game.Core.RaceEvent.CourseInfo course) { Game.Core.RaceEvent.Chosen = course.Id; Load(course.Scene, TeamMode.Solo); }
+        // The solo race (#508, ADR-562): the local choice as the race's start config. Defaults = today's race (course laps, bots to Racers,
+        // a slot car).
+        public void StartEvent(Game.Core.RaceEvent.CourseInfo course, int laps = 0, int bots = -1, string car = null, int paint = Game.Core.VehicleColors.None)
+        {
+            var start = new Game.Core.RaceStart { CourseId = course.Id, Laps = laps, Bots = bots };
+            if (car != null || paint != Game.Core.VehicleColors.None) start.Racers.Add(new Game.Core.RaceStart.Entry { Car = car, Paint = paint });
+            Game.Core.RaceEvent.Starting = start;
+            Load(course.Scene, TeamMode.Solo);
+        }
 
         void Load(string scene, TeamMode mode)
         {
@@ -232,7 +240,7 @@ namespace Game.Gameplay
             _lobbyScreen.gameObject.SetActive(false);
             // The host may have started the event race instead (ADR-512, #448): everyone goes to that course's scene.
             string race = Game.Core.RaceEvent.SceneForLobby(lobby.StartInfo.Event);
-            if (race != null) { Game.Core.RaceEvent.Chosen = Game.Core.RaceEvent.IdForLobby(lobby.StartInfo.Event); Load(race, TeamMode.Solo); return; }
+            if (race != null) { Game.Core.RaceEvent.Starting = new Game.Core.RaceStart { CourseId = Game.Core.RaceEvent.IdForLobby(lobby.StartInfo.Event) }; Load(race, TeamMode.Solo); return; }
             Load(MatchScene, (TeamMode)Mathf.Clamp(lobby.StartInfo.Mode, 0, 2)); // a queue match carries its mode
         }
 
