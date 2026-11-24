@@ -13,7 +13,7 @@ namespace Game.Gameplay
     // Layout (reference 1920x1080; every area is a direct child of the canvas with a point anchor, so the
     // layout tests can place them at any resolution):
     //   top centre  compass            top left   region card          top right  alive/kill cards + kill feed
-    //   bottom left player status      bottom centre  weapon + health  bottom right  minimap over the weapon strip
+    //   bottom left squad list          bottom centre  vitals block     bottom right  minimap, weapon stack, zone
     public class Hud : MonoBehaviour
     {
         public static Hud Instance { get; private set; }
@@ -30,8 +30,10 @@ namespace Game.Gameplay
         const float DamageSegmentDeg = 9f;
         const string Dash = "—";
 
-        // Bottom centre geometry: a bottom-anchored stack of health, weapon, then the transient prompts.
-        const float CentreWidth = 560f, HealthHeight = 44f, WeaponHeight = 112f, StackGap = 8f;
+        // Bottom centre (HUD v2, ADR-563): the vitals block (HudStatus) and the transient prompts above it.
+        const float StackGap = 8f, AmmoWidth = 210f;
+        // The damage trail holds this long after a hit, then drains.
+        const float TrailHold = 0.25f;
         const float StatWidth = 150f, StatHeight = 44f, TopMargin = 24f;
         const float StripGap = 10f;
 
@@ -57,31 +59,26 @@ namespace Game.Gameplay
         MinimapView _minimap;
         WorldMarkerView _worldMarker;
 
-        // Bottom centre.
-        RectTransform _healthFill;
+        // Bottom centre: the health bar of the vitals block (fill over the heal-incoming stripes over the damage trail).
+        RectTransform _healthFill, _healthLag, _healIncoming, _healProgressFill;
         Image _healthFillImage;
-        Image[] _healthFrame;
-        HudDigits _healthDigits;
-        GameObject _healing, _reload, _prompt;
-        Text _healingLabel;
-        GameObject _healProgress;
-        RectTransform _healProgressFill;
+        RawImage _healStripes;
+        Texture2D _stripeTexture;
+        Text _healthNumber;
+        GameObject _reload, _prompt;
         string _shownHealName;
+        float _lagHp = -1f, _lagHoldUntil, _shownHealTo = -1f;
         Text _promptLabel;
         GameObject _promptIconRoot;
         InventoryItemIcon _promptIcon;
         LootItem _promptFor;
         float _shownHp = float.NaN;
         int _shownHpInt = int.MinValue;
-        float _healingUntil;
         bool _lowShown;
 
-        // Weapon in hand (bottom centre).
-        Text _weaponName, _fireMode, _caliber, _slash;
-        GameObject _caliberBox;
-        HudDigits _magDigits, _reserveDigits;
-        GameObject _activeWeaponIconRoot;
-        InventoryItemIcon _activeWeaponIcon;
+        // Ammo of the weapon in hand (in the vitals row; the weapon pictures are in the weapon stack, bottom right).
+        Text _mag, _reserve, _fireMode;
+        string _weaponName = "", _weaponIconKey = "";
         int _shownActive = int.MinValue, _shownAmmoWeapon = int.MinValue, _shownMag = int.MinValue, _shownReserve = int.MinValue;
         string _shownFireMode;
 
@@ -91,7 +88,7 @@ namespace Game.Gameplay
 
         // Centre.
         GameObject _crosshair, _dot, _bars;
-        GameObject _weaponPanel; // hidden while a magnified scope is up (ADR-060 (5)): the ammo shows under the lens
+        GameObject _weaponPanel; // the ammo box: hidden while a magnified scope is up (ADR-060 (5)) and while driving
         RectTransform _barLeft, _barRight, _barUp, _barDown;
         float _gap = -1f, _placedGap = -1f;
         GameObject _hitMarker;
@@ -116,9 +113,9 @@ namespace Game.Gameplay
         public string AmmoText { get; private set; } = Dash;     // "mag / reserve" of the weapon in hand
         public string AmmoTypeText { get; private set; } = "맨손";
         public string FireModeText => _shownFireMode ?? "";
-        public string ActiveWeaponIconKey => _activeWeaponIcon != null ? _activeWeaponIcon.Key : "";
+        public string ActiveWeaponIconKey => _weaponIconKey;
         public int ActiveSlotShown => _shownActive;
-        public string ActiveWeaponName => _shownAmmoWeapon > 0 ? _weaponName.text : "";
+        public string ActiveWeaponName => _shownAmmoWeapon > 0 ? _weaponName : "";
         public bool CrosshairVisible => Visible && _crosshair.activeSelf;
         public bool WeaponPanelVisible => Visible && _weaponPanel.activeSelf;
         public bool HitMarkerVisible => _hitMarker != null && _hitMarker.activeSelf;
@@ -134,11 +131,14 @@ namespace Game.Gameplay
         public bool DoorNoticeShown => _doorNoticeRoot.activeSelf;
         public int AliveShown => _shownAlive;
         public int KillsShown => _shownKills;
-        public bool HealingShown => _healing.activeSelf;
-        // A timed heal is under way: the thin bar under the health track fills toward done (0..1).
-        public bool HealProgressShown => _healProgress != null && _healProgress.activeSelf;
+        // A timed heal is under way: green stripes from the health to where it will end, a solid line in them fills toward done.
+        public bool HealingShown => _healIncoming.gameObject.activeSelf;
+        public bool HealProgressShown => HealingShown;
         public float HealProgress { get; private set; }
-        public string HealingText => _healingLabel != null ? _healingLabel.text : "";
+        public string HealingText => _shownHealName ?? "";
+        public float HealIncomingTo => _shownHealTo / MaxHp;      // 0..1, where the heal under way ends (negative: none)
+        public float DamageTrailFill => _lagHp / MaxHp;           // 0..1, the red trail behind the health after a hit
+        public bool AmmoEmptyShown => _mag.color == UiKit.Danger;
         public CompassStrip Compass => _compass;
         public RegionCard Region => _region;
         public ElevatorPanel Elevator => _elevator;
@@ -227,6 +227,7 @@ namespace Game.Gameplay
             if (_fadeRight != null) Destroy(_fadeRight);
             if (_fadeUpTexture != null) Destroy(_fadeUpTexture);
             if (_fadeRightTexture != null) Destroy(_fadeRightTexture);
+            if (_stripeTexture != null) Destroy(_stripeTexture);
         }
 
         // After the player controller has placed the camera for this frame.
@@ -248,9 +249,12 @@ namespace Game.Gameplay
             bool dead = me.Dead.Value;
             TickHealth(me, dead);
             TickWeapons(me);
-            Show(_weaponPanel, !ScopeView.HidesHudWeapon);
+            bool driving = VehicleSeat.IsDriver(me);
+            Show(_weaponPanel, !ScopeView.HidesHudWeapon && !driving);
+            Show(_strip.Root.gameObject, !driving); // the speedometer stands where the weapon stack is (ADR-563)
             _strip.Tick(me);
-            _status.Tick(me);
+            var swim = me.GetComponent<CombatantSwim>();
+            _status.Tick(me, swim != null && swim.InWater && !dead, swim != null ? swim.Breath : 1f);
             TickDoorNotice();
             TickTopRight();
             TickPrompt(me, player, dead);
@@ -273,53 +277,63 @@ namespace Game.Gameplay
         void TickHealth(Combatant me, bool dead)
         {
             float hp = me.Hp.Value;
+            float now = Time.unscaledTime;
             if (hp != _shownHp)
             {
-                // A rise (medkit, regeneration) shows "회복 중" for a moment.
-                // Not the knock bar refilling the health on a knock-down (ADR-072).
-                if (!float.IsNaN(_shownHp) && hp > _shownHp && !me.Knocked.Value) _healingUntil = Time.unscaledTime + 1.2f;
+                // A drop holds the trail where the health was; a rise (or the first frame) takes it along.
+                if (!float.IsNaN(_shownHp) && hp < _shownHp) _lagHoldUntil = now + TrailHold;
                 _shownHp = hp;
                 HealthFill = Mathf.Clamp01(hp / MaxHp);
                 _healthFill.anchorMax = new Vector2(HealthFill, 1f);
-                _healthFillImage.color = hp < LowHp ? UiKit.Danger : UiKit.Health;
                 int shown = Mathf.CeilToInt(hp);
                 if (shown != _shownHpInt)
                 {
                     _shownHpInt = shown;
-                    _healthDigits.Set(shown);
+                    _healthNumber.text = IntText(Mathf.Max(0, shown));
                 }
                 bool low = hp < LowHp;
                 if (low != _lowShown)
                 {
-                    // Low health is shown by the frame turning red rather than by blinking.
                     _lowShown = low;
-                    var line = low ? UiKit.Danger : UiKit.SteelDim;
-                    for (int i = 0; i < _healthFrame.Length; i++) _healthFrame[i].color = line;
-                    _healthDigits.SetColor(low ? UiKit.Danger : UiKit.Text);
+                    _healthFillImage.color = low ? UiKit.Danger : UiKit.Health;
+                    _healthNumber.color = low ? UiKit.Text : NumberOnBar;
                 }
             }
-            // A timed heal (bandage, kit, medkit) under way: its name and a bar that fills until it is done.
+            // The red trail: drains toward the health once the hold after the last hit is over.
+            float lag = _lagHp < hp ? hp : _lagHp;
+            if (lag > hp && now >= _lagHoldUntil) lag = Mathf.MoveTowards(lag, hp, Mathf.Max(25f, (lag - hp) * 3f) * Time.unscaledDeltaTime);
+            if (lag != _lagHp)
+            {
+                _lagHp = lag;
+                _healthLag.anchorMax = new Vector2(Mathf.Clamp01(lag / MaxHp), 1f);
+            }
+
+            // A timed heal (bandage, kit, medkit) under way: stripes up to where it will end, a line that fills until done.
             var heal = CombatantHealing.Local;
-            bool healing = !dead && heal != null && heal.Using;
+            var item = !dead && heal != null && heal.Using ? Healing.For(heal.Kind, HealRules.Current) : null;
+            float healTo = item != null && item.Amount > 0f ? Mathf.Min(MaxHp, Mathf.Min(item.MaxHp, hp + item.Amount)) : -1f;
+            bool healing = healTo > hp;
             if (healing)
             {
                 HealProgress = heal.Progress01;
                 _healProgressFill.anchorMax = new Vector2(HealProgress, 1f);
-                string name = heal.ItemName;
-                if (name != _shownHealName)
+                _shownHealName = heal.ItemName;
+                if (healTo != _shownHealTo || _healIncoming.anchorMin.x != HealthFill)
                 {
-                    _shownHealName = name;
-                    _healingLabel.text = name; // fits the label; the bar says it is under way
+                    _shownHealTo = healTo;
+                    float to = healTo / MaxHp;
+                    _healIncoming.anchorMin = new Vector2(HealthFill, 0f);
+                    _healIncoming.anchorMax = new Vector2(to, 1f);
+                    _healStripes.uvRect = new Rect(0f, 0f, HudStatus.Inner * (to - HealthFill) / 12f, 1f);
                 }
             }
-            else if (_shownHealName != null)
+            else if (_shownHealTo >= 0f)
             {
+                _shownHealTo = -1f;
                 _shownHealName = null;
                 HealProgress = 0f;
-                _healingLabel.text = "회복 중";
             }
-            Show(_healProgress, healing);
-            Show(_healing, healing || (Time.unscaledTime < _healingUntil && !dead));
+            Show(_healIncoming.gameObject, healing);
 
             // Stronger the closer to zero, with a slow pulse; a canvas group fades it without rebuilding meshes.
             float vignette = 0f;
@@ -344,53 +358,27 @@ namespace Game.Gameplay
             _shownMag = mag;
             _shownReserve = reserve;
             _shownFireMode = mode;
-            if (weapon == null)
+            if (weapon == null || weapon.IsMelee)
             {
+                // Empty hands or a melee weapon (ADR-073): no rounds.
                 AmmoText = Dash;
-                AmmoTypeText = "맨손";
-                _weaponName.text = "맨손";
-                _weaponName.color = UiKit.TextDim;
-                _fireMode.text = "";
-                _caliberBox.SetActive(false);
-                _magDigits.Set(-1);
-                _magDigits.SetColor(UiKit.TextDim);
-                _reserveDigits.Set(-1);
-                _slash.enabled = false;
-                _activeWeaponIcon.Set("", "맨손");
-                _activeWeaponIconRoot.SetActive(false);
+                AmmoTypeText = weapon == null ? "맨손" : "근접";
+                _weaponName = weapon == null ? "맨손" : weapon.Name;
+                _weaponIconKey = weapon == null ? "" : InventoryBackend.WeaponKey(id);
+                _mag.text = Dash;
+                _mag.color = UiKit.TextDim;
+                _reserve.text = "";
+                _fireMode.text = weapon == null ? "" : "근접";
                 return;
             }
-            if (weapon.IsMelee)
-            {
-                // A melee weapon (ADR-073): its name and icon, no rounds.
-                AmmoText = Dash;
-                AmmoTypeText = "근접";
-                _weaponName.text = weapon.Name;
-                _weaponName.color = UiKit.Text;
-                _fireMode.text = "";
-                _caliberBox.SetActive(false);
-                _magDigits.Set(-1);
-                _magDigits.SetColor(UiKit.TextDim);
-                _reserveDigits.Set(-1);
-                _slash.enabled = false;
-                _activeWeaponIcon.Set(InventoryBackend.WeaponKey(id), weapon.Name);
-                _activeWeaponIconRoot.SetActive(true);
-                return;
-            }
-            int ammoIndex = InventoryBackend.AmmoIndex(weapon);
             AmmoText = IntText(mag) + " / " + IntText(reserve);
-            AmmoTypeText = InventoryBackend.AmmoName(ammoIndex);
-            _weaponName.text = weapon.Name;
-            _weaponName.color = UiKit.Text;
+            AmmoTypeText = InventoryBackend.AmmoName(InventoryBackend.AmmoIndex(weapon));
+            _weaponName = weapon.Name;
+            _weaponIconKey = InventoryBackend.WeaponKey(id);
+            _mag.text = IntText(mag);
+            _mag.color = mag == 0 ? UiKit.Danger : UiKit.Text;
+            _reserve.text = "/ " + IntText(reserve);
             _fireMode.text = mode;
-            _caliber.text = AmmoTypeText;
-            _caliberBox.SetActive(true);
-            _magDigits.Set(mag);
-            _magDigits.SetColor(mag == 0 ? UiKit.Danger : UiKit.Text);
-            _reserveDigits.Set(reserve);
-            _slash.enabled = true;
-            _activeWeaponIcon.Set(InventoryBackend.WeaponKey(id), weapon.Name);
-            _activeWeaponIconRoot.SetActive(true);
         }
 
         void TickTopRight()
@@ -601,58 +589,55 @@ namespace Game.Gameplay
             return digits;
         }
 
+        static readonly Color NumberOnBar = new Color(0.067f, 0.086f, 0.11f, 1f);
+        static readonly Color TrailRed = new Color(0.82f, 0.22f, 0.18f, 0.7f);
+
+        // The vitals block (HUD v2, ADR-563): 520 wide, centred, 36 off the bottom. HudStatus builds the chips, armour,
+        // effects and boost gauge; the ammo box and the health bar are built here.
         void BuildHealthAndWeapon(Transform root)
         {
             var bottom = new Vector2(0.5f, 0f);
+            var block = UiKit.Rect("Vitals", root, bottom, bottom, new Vector2(0f, Margin), new Vector2(HudStatus.Width, HudStatus.Height));
+            _status = HudStatus.Build(block);
+            _areas.Add(block);
 
-            // Health: thin wide bar, the number in fixed-width digits, a frame that turns red when low.
-            var health = Panel("Health", root, bottom, new Vector2(0f, Margin), new Vector2(CentreWidth, HealthHeight));
-            _healthFrame = UiKit.Frame(health, 1.5f, UiKit.SteelDim);
-            _healthDigits = HudDigits.Build("Value", health, MidLeft, MidLeft, new Vector2(12f, 0f), 3, 20f, 40f, 28, UiKit.Text);
-            _healthDigits.Set(100);
-            var track = UiKit.Rect("Track", health, MidLeft, MidLeft, new Vector2(84f, 0f), new Vector2(330f, 8f));
-            UiKit.Box(track, UiKit.SteelDim);
-            _healthFill = UiKit.Fill("Fill", track);
-            _healthFillImage = UiKit.Box(_healthFill, UiKit.Health);
-            var healing = Label("Healing", health, MidRight, new Vector2(-12f, 0f), new Vector2(110f, 36f), "회복 중", 18, UiKit.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
-            _healingLabel = healing;
-            _healing = healing.gameObject;
-            _healing.SetActive(false);
-            // Timed healing: a thin accent bar under the health track.
-            var healTrack = UiKit.Rect("HealProgress", health, MidLeft, MidLeft, new Vector2(84f, -12f), new Vector2(330f, 4f));
-            UiKit.Box(healTrack, UiKit.SteelDim);
-            _healProgressFill = UiKit.Fill("Fill", healTrack);
+            // Ammo, centred in the row: the magazine large, "/ reserve" and the fire mode small.
+            var top = new Vector2(0.5f, 1f);
+            var ammo = UiKit.Rect("Ammo", block, top, top, new Vector2(0f, -HudStatus.RowTop), new Vector2(AmmoWidth, HudStatus.RowHeight));
+            HudStatus.Rounded(UiKit.Box(ammo, HudStatus.Plate), 4);
+            _mag = Label("Mag", ammo, MidLeft, new Vector2(4f, 0f), new Vector2(84f, 44f), Dash, 40, UiKit.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+            _reserve = Label("Reserve", ammo, MidLeft, new Vector2(94f, -4f), new Vector2(70f, 30f), "", 18, UiKit.TextDim);
+            _fireMode = Label("FireMode", ammo, MidLeft, new Vector2(160f, -5f), new Vector2(46f, 26f), "", 13, HudStatus.Mute);
+            _weaponPanel = ammo.gameObject;
+
+            // Health: the red trail of the last hit, over it the heal stripes, over those the health fill.
+            var health = _status.HealthSlot;
+            HudStatus.Rounded(UiKit.Box(health, HudStatus.PlateStrong), 3);
+            var inside = UiKit.Fill("Inside", health, 1f);
+            _healthLag = UiKit.Fill("Trail", inside);
+            UiKit.Box(_healthLag, TrailRed);
+            _healIncoming = UiKit.Fill("HealIncoming", inside);
+            _stripeTexture = new Texture2D(12, 1, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Point, hideFlags = HideFlags.HideAndDontSave };
+            for (int i = 0; i < 12; i++) _stripeTexture.SetPixel(i, 0, new Color(1f, 1f, 1f, i < 6 ? 0.55f : 0.25f));
+            _stripeTexture.Apply();
+            _healStripes = _healIncoming.gameObject.AddComponent<RawImage>();
+            _healStripes.texture = _stripeTexture;
+            _healStripes.color = HudStatus.HealGreen;
+            _healStripes.raycastTarget = false;
+            var line = UiKit.Rect("Progress", _healIncoming, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            line.anchorMax = new Vector2(1f, 0f);
+            line.sizeDelta = new Vector2(0f, 3f);
+            _healProgressFill = UiKit.Fill("Fill", line);
             _healProgressFill.anchorMax = new Vector2(0f, 1f);
-            UiKit.Box(_healProgressFill, UiKit.Accent);
-            _healProgress = healTrack.gameObject;
-            _healProgress.SetActive(false);
-            _areas.Add(health);
+            UiKit.Box(_healProgressFill, HudStatus.HealGreen);
+            _healIncoming.gameObject.SetActive(false);
+            _healthFill = UiKit.Fill("Fill", inside);
+            _healthFillImage = UiKit.Box(_healthFill, UiKit.Health);
+            UiKit.Frame(health, 1f, HudStatus.Line);
+            _healthNumber = Label("Value", health, MidLeft, new Vector2(12f, 0f), new Vector2(60f, 30f), "100", 22, NumberOnBar, TextAnchor.MiddleLeft, FontStyle.Bold);
 
-            // The weapon in hand: name, fire mode, calibre badge and the magazine / reserve digits.
-            float weaponY = Margin + HealthHeight + StackGap;
-            var weapon = Panel("Weapon", root, bottom, new Vector2(0f, weaponY), new Vector2(CentreWidth, WeaponHeight));
-            var iconRect = UiKit.Rect("WeaponIcon", weapon, TopLeft, TopLeft, new Vector2(12f, -12f), new Vector2(100f, 64f));
-            _activeWeaponIcon = InventoryItemIcon.Build(iconRect);
-            _activeWeaponIconRoot = iconRect.gameObject;
-            _activeWeaponIconRoot.SetActive(false);
-            _weaponName = Label("Name", weapon, TopLeft, new Vector2(124f, -10f), new Vector2(214f, 32f), "맨손", 26, UiKit.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-            _fireMode = Label("FireMode", weapon, TopLeft, new Vector2(124f, -48f), new Vector2(80f, 28f), "", 20, UiKit.Text);
-            var badge = UiKit.Rect("Caliber", weapon, TopLeft, TopLeft, new Vector2(206f, -49f), new Vector2(120f, 26f));
-            UiKit.Frame(badge, 1f, UiKit.Steel);
-            _caliber = UiKit.Label(UiKit.Fill("Text", badge), "", 18, UiKit.Text, TextAnchor.MiddleCenter);
-            _caliberBox = badge.gameObject;
-            _caliberBox.SetActive(false);
-            _magDigits = HudDigits.Build("Mag", weapon, TopLeft, TopLeft, new Vector2(344f, -14f), 3, 32f, 64f, 54, UiKit.TextDim);
-            _magDigits.Set(-1);
-            _slash = Label("Slash", weapon, TopLeft, new Vector2(440f, -26f), new Vector2(16f, 40f), "/", 28, UiKit.TextDim, TextAnchor.MiddleCenter);
-            _slash.enabled = false;
-            _reserveDigits = HudDigits.Build("Reserve", weapon, TopLeft, TopLeft, new Vector2(458f, -26f), 3, 26f, 40f, 30, UiKit.TextDim);
-            _reserveDigits.Set(-1);
-            _areas.Add(weapon);
-            _weaponPanel = weapon.gameObject;
-
-            // Transient prompts above the stack (not part of the fixed layout).
-            float reloadY = weaponY + WeaponHeight + StackGap;
+            // Transient prompts above the block (not part of the fixed layout).
+            float reloadY = Margin + HudStatus.Height + StackGap;
             var reload = Panel("Reloading", root, bottom, new Vector2(0f, reloadY), new Vector2(200f, 32f));
             UiKit.Label(UiKit.Fill("Label", reload), "재장전 중", 18, UiKit.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             _reload = reload.gameObject;
@@ -670,10 +655,6 @@ namespace Game.Gameplay
         // Bottom left: the player's own status. Bottom right: the minimap over the weapon strip.
         void BuildBottomSides(Transform root)
         {
-            // [RESERVED] The squad member list (team mode, M5) goes in the free block directly above this card.
-            _status = HudStatus.Build(root, Vector2.zero, new Vector2(Margin, Margin));
-            _areas.Add(_status.Root);
-
             _strip = WeaponStrip.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin));
             _areas.Add(_strip.Root);
             _minimap = MinimapView.Build(root, BottomRight, BottomRight, new Vector2(-Margin, Margin + WeaponStrip.CellHeight + StripGap));

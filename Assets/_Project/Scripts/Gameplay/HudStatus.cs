@@ -84,131 +84,223 @@ namespace Game.Gameplay
         }
     }
 
-    // Bottom left: how the local player stands (stance glyph, armour tiers and wear, spawn protection, medkits).
-    // Only what the server replicated; text is rewritten when a value changes.
-    // [RESERVED] Squad member list (team mode, M5): the block above this card is left free on purpose. Not rendered.
+    // Bottom centre (HUD v2, ADR-563): the vitals block. Top to bottom: the quick-use chips, a row of the armour (icon,
+    // wear bar, level), the ammo (Hud puts it in `Row`) and the effect icons, the four-segment boost gauge, and the
+    // health bar (Hud builds it in `HealthSlot`). Only what the server replicated; texts change only with their value.
+    // Stance, spawn protection and burning are still tracked for the tests; protection and burning show as a tag at the
+    // right end of the chip row.
     public sealed class HudStatus
     {
-        public const float Width = 320f, Height = 200f;
-        const int Pips = 3;
+        public const float Width = 520f, Height = 140f, PadX = 10f, Inner = Width - 2f * PadX;
+        public const float ChipsTop = 8f, ChipsHeight = 22f, RowTop = 36f, RowHeight = 44f;
+        public const float BoostTop = 86f, BoostHeight = 8f, BoostGap = 3f, HealthTop = 100f, HealthHeight = 30f;
+        // The gauge's four segments as shares of the full gauge (the approved mock: 20/40/30/10).
+        public static readonly float[] BoostShares = { 0.2f, 0.4f, 0.3f, 0.1f };
+        const float IconSize = 34f, IconGap = 8f, LowWear = 0.3f;
 
         // After the three stances: in a vehicle (ADR-075), the driver's seat or any other seat.
         public const int DrivingShown = 3, RidingShown = 4;
-        static readonly string[] StanceNames = { "서기", "앉기", "엎드림", "운전", "탑승" };
+
+        public static readonly Color Block = new Color(8f / 255f, 11f / 255f, 15f / 255f, 0.58f);
+        public static readonly Color Plate = new Color(10f / 255f, 13f / 255f, 18f / 255f, 0.72f);
+        public static readonly Color PlateStrong = new Color(10f / 255f, 13f / 255f, 18f / 255f, 0.86f);
+        public static readonly Color Line = new Color(160f / 255f, 175f / 255f, 190f / 255f, 0.22f);
+        public static readonly Color Mute = new Color(0.424f, 0.467f, 0.514f, 1f);
+        public static readonly Color BoostYellow = new Color(0.949f, 0.761f, 0.188f, 1f);
+        public static readonly Color HealGreen = new Color(0.341f, 0.780f, 0.522f, 1f);
+        public static readonly Color Water = new Color(0.361f, 0.784f, 0.941f, 1f);
 
         public RectTransform Root { get; private set; }
+        public RectTransform Row { get; private set; }
+        public RectTransform HealthSlot { get; private set; }
 
-        // Boost gauge (ADR-099): four segments filling bottom up in steps, and how many boost items are carried.
         readonly RectTransform[] _boostFill = new RectTransform[Boost.Steps];
-        readonly Image[] _boostImage = new Image[Boost.Steps];
-        Text _boostCount;
-        int _shownBoostKey = int.MinValue;
-        int _boostItemsShown = -1;
-        public float BoostFillShown(int step) => _boostFill[step].anchorMax.x;
-        public int BoostItemsShown => _boostItemsShown;
-
-        RectTransform _glyphA, _glyphB;
-        Text _stanceLabel, _protectLabel, _medkitLabel;
-        readonly Image[][] _pip = new Image[2][];
-        readonly Text[] _gearValue = new Text[2];
-        readonly RectTransform[] _gearFill = new RectTransform[2];
+        readonly Image[] _armourIcon = new Image[2];
+        readonly RectTransform[] _wearFill = new RectTransform[2];
+        readonly Image[] _wearImage = new Image[2];
+        readonly Text[] _level = new Text[2];
         readonly int[] _shownGearHash = { int.MinValue, int.MinValue };
         readonly int[] _shownTier = { -1, -1 };
-        int _shownStance = -1, _shownProtect = int.MinValue, _shownMedkits = int.MinValue;
+        readonly int[] _chipShown = { int.MinValue, int.MinValue, int.MinValue };
+        readonly Text[] _chipCount = new Text[3];
+        Text _protectLabel;
+        GameObject _lung;
+        Image _lungArc;
+        CanvasGroup _healFx, _runFx;
+        int _shownBoostKey = int.MinValue, _boostItemsShown = -1, _shownStep = -1;
+        int _shownStance = -1, _shownProtect = int.MinValue;
+        float _shownBreath = -1f;
 
+        public float BoostFillShown(int segment) => _boostFill[segment].anchorMax.x;
+        public int BoostItemsShown => _boostItemsShown;
         public int StanceShown => _shownStance;           // Stance as int
         public int ProtectionSecondsShown => _shownProtect > 0 ? _shownProtect : 0;
         public bool BurningShown => _shownProtect == int.MinValue + 1;
-        public int MedkitsShown => _shownMedkits;
+        public int MedkitsShown => _chipShown[0];
         public int ArmourTierShown(int slot) => _shownTier[slot]; // -1 before the first tick, 0 = nothing worn
+        public bool LungShown => _lung.activeSelf;
+        public float BreathShown => _shownBreath;
+        public bool HealEffectLit => _healFx.alpha > 0.5f;
+        public bool RunEffectLit => _runFx.alpha > 0.5f;
 
-        public static HudStatus Build(Transform parent, Vector2 anchor, Vector2 position)
+        static Vector2 TopLeft => new Vector2(0f, 1f);
+        static Vector2 Mid => new Vector2(0.5f, 0.5f);
+
+        // Fills `block` (Width x Height, already placed by the HUD) with its parts.
+        public static HudStatus Build(RectTransform block)
         {
-            var s = new HudStatus();
-            var root = UiKit.Rect("Status", parent, anchor, anchor, position, new Vector2(Width, Height));
-            UiKit.Box(root, UiKit.Panel);
-            UiKit.Frame(root, 1f, UiKit.SteelDim);
-            s.Root = root;
-            var topLeft = new Vector2(0f, 1f);
+            var s = new HudStatus { Root = block };
+            Rounded(UiKit.Box(block, Block), 6);
 
-            // Stance glyph: plain bars, no figure.
-            var glyph = UiKit.Rect("Glyph", root, topLeft, topLeft, new Vector2(14f, -10f), new Vector2(32f, 32f));
-            s._glyphA = UiKit.Rect("A", glyph, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(8f, 28f));
-            UiKit.Box(s._glyphA, UiKit.Text);
-            s._glyphB = UiKit.Rect("B", glyph, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 6f));
-            UiKit.Box(s._glyphB, UiKit.Text);
-            s._stanceLabel = UiKit.Label(UiKit.Rect("Stance", root, topLeft, topLeft, new Vector2(54f, -10f), new Vector2(90f, 32f)), StanceNames[0], 20, UiKit.Text);
-            s._protectLabel = UiKit.Label(UiKit.Rect("Protect", root, topLeft, topLeft, new Vector2(140f, -10f), new Vector2(170f, 32f)), "", 18, UiKit.Accent,
-                TextAnchor.MiddleRight, FontStyle.Bold);
+            // Quick-use chips.
+            string[] chip = { "H " + HealRules.MedkitName, "J " + HealRules.PillName, HealRules.DrinkName };
+            float x = PadX;
+            for (int i = 0; i < chip.Length; i++)
+            {
+                var c = UiKit.Rect("Chip" + i, block, TopLeft, TopLeft, new Vector2(x, -ChipsTop), new Vector2(100f, ChipsHeight));
+                Rounded(UiKit.Box(c, new Color(1f, 1f, 1f, 0.06f)), 3);
+                var name = UiKit.Label(UiKit.Rect("Name", c, MidLeftV, MidLeftV, new Vector2(8f, 0f), new Vector2(200f, ChipsHeight)), chip[i], 13, UiKit.TextDim);
+                float labelW = Mathf.Ceil(name.preferredWidth) + 5f, w = labelW + 26f;
+                name.rectTransform.sizeDelta = new Vector2(labelW, ChipsHeight);
+                c.sizeDelta = new Vector2(w, ChipsHeight);
+                s._chipCount[i] = UiKit.Label(UiKit.Rect("Count", c, MidLeftV, MidLeftV, new Vector2(8f + labelW, 0f), new Vector2(20f, ChipsHeight)), "0", 14, UiKit.Text,
+                    TextAnchor.MiddleLeft, FontStyle.Bold);
+                x += w + 6f;
+            }
+            s._protectLabel = UiKit.Label(UiKit.Rect("Protect", block, Vector2.one, Vector2.one, new Vector2(-PadX, -ChipsTop), new Vector2(130f, ChipsHeight)), "", 14,
+                UiKit.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
             s._protectLabel.gameObject.SetActive(false);
 
+            // The row: armour left, ammo (Hud) in the middle, effects right.
+            var row = UiKit.Rect("Row", block, TopLeft, TopLeft, new Vector2(PadX, -RowTop), new Vector2(Inner, RowHeight));
+            s.Row = row;
             for (int slot = 0; slot < 2; slot++)
             {
-                float y = -52f - slot * 36f;
-                string name = slot == InventoryBackend.HelmetSlot ? "헬멧" : "조끼";
-                UiKit.Label(UiKit.Rect(name, root, topLeft, topLeft, new Vector2(16f, y), new Vector2(60f, 30f)), name, 20, UiKit.TextDim);
-                s._pip[slot] = new Image[Pips];
-                for (int p = 0; p < Pips; p++)
-                    s._pip[slot][p] = UiKit.Box(UiKit.Rect("Pip" + p, root, topLeft, topLeft, new Vector2(84f + p * 20f, y - 8f), new Vector2(14f, 14f)), UiKit.SteelDim);
-                var track = UiKit.Rect("Wear", root, topLeft, topLeft, new Vector2(152f, y - 12f), new Vector2(70f, 5f));
-                UiKit.Box(track, UiKit.SteelDim);
-                s._gearFill[slot] = UiKit.Fill("Fill", track);
-                UiKit.Box(s._gearFill[slot], UiKit.Steel);
-                s._gearFill[slot].anchorMax = new Vector2(0f, 1f);
-                s._gearValue[slot] = UiKit.Label(UiKit.Rect("Value", root, topLeft, topLeft, new Vector2(228f, y), new Vector2(84f, 30f)), "—", 18, UiKit.TextDim, TextAnchor.MiddleRight);
+                var arm = UiKit.Rect(slot == InventoryBackend.HelmetSlot ? "Helmet" : "Vest", row, TopLeft, TopLeft, new Vector2(slot * 54f, 0f), new Vector2(44f, RowHeight));
+                // The picture reaches a little above the row, as in the mock (the chips end 6 units higher).
+                var icon = UiKit.Box(UiKit.Rect("Icon", arm, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 5f), new Vector2(44f, 33f)), UiKit.Health);
+                icon.preserveAspect = true;
+                s._armourIcon[slot] = icon;
+                var track = UiKit.Rect("Wear", arm, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -29f), new Vector2(36f, 4f));
+                UiKit.Box(track, new Color(1f, 1f, 1f, 0.15f));
+                s._wearFill[slot] = UiKit.Fill("Fill", track);
+                s._wearFill[slot].anchorMax = new Vector2(0f, 1f);
+                s._wearImage[slot] = UiKit.Box(s._wearFill[slot], UiKit.Health);
+                s._level[slot] = UiKit.Label(UiKit.Rect("Level", arm, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(44f, 13f)), "—", 12,
+                    UiKit.TextDim, TextAnchor.MiddleCenter);
             }
 
-            UiKit.Label(UiKit.Rect("MedkitName", root, topLeft, topLeft, new Vector2(16f, -124f), new Vector2(100f, 30f)), "구급상자", 20, UiKit.TextDim);
-            s._medkitLabel = UiKit.Label(UiKit.Rect("MedkitCount", root, topLeft, topLeft, new Vector2(124f, -124f), new Vector2(70f, 30f)), "x0", 22, UiKit.TextDim,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            UiKit.Label(UiKit.Rect("MedkitKey", root, topLeft, topLeft, new Vector2(240f, -124f), new Vector2(64f, 30f)), "[H]", 20, UiKit.TextDim, TextAnchor.MiddleRight);
-            UiKit.Label(UiKit.Rect("BoostName", root, topLeft, topLeft, new Vector2(16f, -160f), new Vector2(70f, 30f)), "부스트", 20, UiKit.TextDim);
+            // Effects, right-aligned: breath (only in the water), boost heal (step 1+), boost speed (step 3+).
+            var run = Effect(row, "Run", 0);
+            s._runFx = run.gameObject.AddComponent<CanvasGroup>();
+            RunGlyph(run);
+            var heal = Effect(row, "Heal", 1);
+            s._healFx = heal.gameObject.AddComponent<CanvasGroup>();
+            UiKit.Box(UiKit.Rect("A", heal, Mid, Mid, Vector2.zero, new Vector2(16f, 5f)), HealGreen);
+            UiKit.Box(UiKit.Rect("B", heal, Mid, Mid, Vector2.zero, new Vector2(5f, 16f)), HealGreen);
+            var lung = Effect(row, "Breath", 2);
+            s._lung = lung.gameObject;
+            Disc(lung, "Back", new Vector2(40f, 40f), Vector2.zero, new Color(1f, 1f, 1f, 0.15f), VehicleCluster.Ring(0.075f));
+            s._lungArc = Disc(lung, "Arc", new Vector2(40f, 40f), Vector2.zero, Water, VehicleCluster.Ring(0.075f));
+            s._lungArc.type = Image.Type.Filled;
+            s._lungArc.fillMethod = Image.FillMethod.Radial360;
+            s._lungArc.fillOrigin = (int)Image.Origin360.Top;
+            s._lungArc.fillClockwise = true;
+            Disc(lung, "L", new Vector2(8f, 13f), new Vector2(-4.5f, -2f), UiKit.Health, null);
+            Disc(lung, "R", new Vector2(8f, 13f), new Vector2(4.5f, -2f), UiKit.Health, null);
+            UiKit.Box(UiKit.Rect("Pipe", lung, Mid, Mid, new Vector2(0f, 6f), new Vector2(2f, 8f)), UiKit.Health);
+            s._lung.SetActive(false);
+
+            // Boost gauge: four segments sized by their share of the gauge.
+            float usable = Inner - BoostGap * (Boost.Steps - 1);
+            x = PadX;
             for (int i = 0; i < Boost.Steps; i++)
             {
-                var track = UiKit.Rect("Boost" + i, root, topLeft, topLeft, new Vector2(92f + i * 50f, -170f), new Vector2(46f, 10f));
-                UiKit.Box(track, UiKit.SteelDim);
+                float w = usable * BoostShares[i];
+                var track = UiKit.Rect("Boost" + i, block, TopLeft, TopLeft, new Vector2(x, -BoostTop), new Vector2(w, BoostHeight));
+                UiKit.Box(track, new Color(1f, 1f, 1f, 0.1f));
                 s._boostFill[i] = UiKit.Fill("Fill", track);
                 s._boostFill[i].anchorMax = new Vector2(0f, 1f);
-                s._boostImage[i] = UiKit.Box(s._boostFill[i], UiKit.Accent);
+                UiKit.Box(s._boostFill[i], BoostYellow);
+                x += w + BoostGap;
             }
-            s._boostCount = UiKit.Label(UiKit.Rect("BoostCount", root, topLeft, topLeft, new Vector2(296f - 56f, -160f), new Vector2(60f, 30f)), "x0 [J]", 18, UiKit.TextDim, TextAnchor.MiddleRight);
+
+            s.HealthSlot = UiKit.Rect("Health", block, TopLeft, TopLeft, new Vector2(PadX, -HealthTop), new Vector2(Inner, HealthHeight));
             return s;
         }
 
-        void ShowBoost(Combatant me)
+        static Vector2 MidLeftV => new Vector2(0f, 0.5f);
+
+        // Effect icon `index` from the right end of the row: a dark disc, 34 across, bottom-aligned.
+        static RectTransform Effect(RectTransform row, string name, int index)
         {
-            var heal = me.GetComponent<CombatantHealing>();
-            float gauge = heal != null ? heal.Gauge.Value : 0f;
-            int items = heal != null ? heal.Drinks.Value + heal.Pills.Value + heal.Syringes.Value : 0;
-            int key = Mathf.RoundToInt(gauge * 4f) * 100 + items;
-            if (key == _shownBoostKey) return;
-            _shownBoostKey = key;
-            var rules = BoostRules.Current;
-            float per = rules.MaxGauge / Boost.Steps;
-            int step = Boost.Step(gauge, rules);
-            for (int i = 0; i < Boost.Steps; i++)
-            {
-                _boostFill[i].anchorMax = new Vector2(Mathf.Clamp01((gauge - i * per) / per), 1f);
-                // The steps that speed the body up read stronger.
-                _boostImage[i].color = i >= 2 ? UiKit.Text : UiKit.Accent;
-            }
-            if (items != _boostItemsShown)
-            {
-                _boostItemsShown = items;
-                _boostCount.text = "x" + HudDigits.IntText(items) + " [J]";
-                _boostCount.color = items > 0 ? UiKit.Text : UiKit.TextDim;
-            }
+            var rect = UiKit.Rect(name, row, Vector2.right, Vector2.right, new Vector2(-index * (IconSize + IconGap), 0f), new Vector2(IconSize, IconSize));
+            Disc(rect, "Plate", new Vector2(IconSize, IconSize), Vector2.zero, Plate, null);
+            return rect;
         }
 
-        public void Tick(Combatant me)
+        static Image Disc(RectTransform parent, string name, Vector2 size, Vector2 at, Color color, Sprite sprite)
         {
-            ShowStance(VehicleSeat.TryGet(me, out _, out int seat) ? (seat == Vehicles.DriverSeat ? DrivingShown : RidingShown) : (int)HudBackend.StanceOf(me));
+            var image = UiKit.Box(UiKit.Rect(name, parent, Mid, Mid, at, size), color);
+            image.sprite = sprite != null ? sprite : VehicleCluster.Ring(0.5f);
+            return image;
+        }
 
-            // In the elevator: a countdown to the doors; after that the protection time.
+        // A little running figure out of bars (no icon asset needed).
+        static void RunGlyph(RectTransform icon)
+        {
+            Disc(icon, "Head", new Vector2(5f, 5f), new Vector2(3.5f, 8f), BoostYellow, null);
+            Bar(icon, "Body", new Vector2(1f, 1f), 9f, -20f);
+            Bar(icon, "LegA", new Vector2(-3f, -7f), 9f, -35f);
+            Bar(icon, "LegB", new Vector2(4f, -7f), 9f, 30f);
+            Bar(icon, "ArmA", new Vector2(-3f, 2f), 7f, 60f);
+            Bar(icon, "ArmB", new Vector2(5f, 1f), 7f, -60f);
+        }
+
+        static void Bar(RectTransform parent, string name, Vector2 at, float length, float deg)
+        {
+            var bar = UiKit.Rect(name, parent, Mid, Mid, at, new Vector2(2.4f, length));
+            bar.localRotation = Quaternion.Euler(0f, 0f, deg);
+            UiKit.Box(bar, BoostYellow);
+        }
+
+        static readonly System.Collections.Generic.Dictionary<int, Sprite> RoundedSprites = new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        // A white rounded rectangle, nine-sliced, `radius` canvas units at the corners.
+        public static Image Rounded(Image image, int radius)
+        {
+            if (!RoundedSprites.TryGetValue(radius, out var sprite) || sprite == null)
+            {
+                int k = 4, r = radius * k, n = r * 2 + 4;
+                var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+                var px = new Color32[n * n];
+                for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float cx = Mathf.Clamp(x + 0.5f, r, n - r), cy = Mathf.Clamp(y + 0.5f, r, n - r);
+                    float d = Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(r - d + 0.5f) * 255f));
+                }
+                tex.SetPixels32(px);
+                tex.Apply(false, true);
+                // k texels per canvas unit: the sprite's pixels-per-unit is k times the canvas reference (100).
+                sprite = Sprite.Create(tex, new Rect(0, 0, n, n), Mid, 100f * k, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
+                sprite.hideFlags = HideFlags.HideAndDontSave;
+                RoundedSprites[radius] = sprite;
+            }
+            image.sprite = sprite;
+            image.type = Image.Type.Sliced;
+            return image;
+        }
+
+        public void Tick(Combatant me, bool swimming, float breath)
+        {
+            _shownStance = VehicleSeat.TryGet(me, out _, out int seat) ? (seat == Vehicles.DriverSeat ? DrivingShown : RidingShown) : (int)HudBackend.StanceOf(me);
+
+            // In the elevator: a countdown to the doors; after that the protection time. On fire (ADR-110): "화상" in red.
             bool doors = HudBackend.DoorsClosed;
             float left = doors ? HudBackend.DoorSecondsLeft : HudBackend.SpawnProtectionLeft(me);
             int seconds = left > 0f ? Mathf.CeilToInt(left) : 0;
-            // On fire (ADR-110) the label says so, in red, ahead of the other messages.
             bool burning = me.Burning.Value;
             int key = burning ? int.MinValue + 1 : doors ? -1 - seconds : seconds;
             if (key != _shownProtect)
@@ -220,15 +312,58 @@ namespace Game.Gameplay
                 _protectLabel.color = burning ? UiKit.Danger : UiKit.Accent;
             }
 
-            ShowBoost(me);
-            int medkits = me.Medkits.Value;
-            if (medkits != _shownMedkits)
-            {
-                _shownMedkits = medkits;
-                _medkitLabel.text = "x" + HudDigits.IntText(medkits);
-                _medkitLabel.color = medkits > 0 ? UiKit.Text : UiKit.TextDim;
-            }
+            var heal = me.GetComponent<CombatantHealing>();
+            Chip(0, me.Medkits.Value);
+            Chip(1, heal != null ? heal.Pills.Value : 0);
+            Chip(2, heal != null ? heal.Drinks.Value : 0);
+            ShowBoost(heal);
+            ShowBreath(swimming, breath);
+            ShowArmour(me);
+        }
 
+        void Chip(int i, int count)
+        {
+            if (count == _chipShown[i]) return;
+            _chipShown[i] = count;
+            _chipCount[i].text = HudDigits.IntText(count);
+            _chipCount[i].color = count > 0 ? UiKit.Text : Mute;
+        }
+
+        void ShowBoost(CombatantHealing heal)
+        {
+            float gauge = heal != null ? heal.Gauge.Value : 0f;
+            int items = heal != null ? heal.Drinks.Value + heal.Pills.Value + heal.Syringes.Value : 0;
+            int key = Mathf.RoundToInt(gauge * 4f) * 100 + items;
+            if (key == _shownBoostKey) return;
+            _shownBoostKey = key;
+            _boostItemsShown = items;
+            var rules = BoostRules.Current;
+            float leftOver = rules.MaxGauge > 0f ? gauge / rules.MaxGauge : 0f;
+            for (int i = 0; i < Boost.Steps; i++)
+            {
+                _boostFill[i].anchorMax = new Vector2(Mathf.Clamp01(leftOver / BoostShares[i]), 1f);
+                leftOver -= BoostShares[i];
+            }
+            int step = Boost.Step(gauge, rules);
+            if (step == _shownStep) return;
+            _shownStep = step;
+            _healFx.alpha = step >= 1 ? 1f : 0.25f;
+            _runFx.alpha = step >= 3 ? 1f : 0.25f;
+        }
+
+        void ShowBreath(bool swimming, float breath)
+        {
+            if (_lung.activeSelf != swimming) _lung.SetActive(swimming);
+            if (!swimming) { _shownBreath = -1f; return; }
+            breath = Mathf.Clamp01(breath);
+            if (Mathf.Abs(breath - _shownBreath) < 0.005f) return;
+            _shownBreath = breath;
+            _lungArc.fillAmount = breath;
+            _lungArc.color = breath < 0.25f ? UiKit.Danger : Water;
+        }
+
+        void ShowArmour(Combatant me)
+        {
             for (int slot = 0; slot < 2; slot++)
             {
                 var gear = InventoryBackend.Gear(me, slot);
@@ -237,43 +372,17 @@ namespace Game.Gameplay
                 if (hash == _shownGearHash[slot]) continue;
                 _shownGearHash[slot] = hash;
                 _shownTier[slot] = tier;
-                for (int p = 0; p < Pips; p++)
-                    _pip[slot][p].color = gear.Has && p < gear.Tier ? UiKit.Text : UiKit.SteelDim;
-                _gearFill[slot].anchorMax = new Vector2(gear.Has ? Mathf.Clamp01(gear.Fraction) : 0f, 1f);
-                _gearValue[slot].text = gear.Has ? HudDigits.IntText(gear.Durability) + "/" + HudDigits.IntText(gear.MaxDurability) : "—";
-                _gearValue[slot].color = gear.Has ? UiKit.Text : UiKit.TextDim;
+                string prefix = slot == InventoryBackend.HelmetSlot ? "helmet_" : "vest_";
+                var sprite = ItemIcons.Get(prefix + Mathf.Max(1, tier));
+                _armourIcon[slot].sprite = sprite;
+                // No picture: a plain light tile stands in. Nothing worn: the level-1 picture, faint.
+                _armourIcon[slot].color = gear.Has ? Color.white : new Color(1f, 1f, 1f, 0.2f);
+                if (sprite == null) _armourIcon[slot].color = gear.Has ? UiKit.Health : new Color(1f, 1f, 1f, 0.12f);
+                float wear = gear.Has ? Mathf.Clamp01(gear.Fraction) : 0f;
+                _wearFill[slot].anchorMax = new Vector2(wear, 1f);
+                _wearImage[slot].color = wear < LowWear ? UiKit.Danger : UiKit.Health;
+                _level[slot].text = gear.Has ? "Lv." + HudDigits.IntText(tier) : "—";
             }
-        }
-
-        void ShowStance(int stance)
-        {
-            if (stance == _shownStance) return;
-            _shownStance = stance;
-            _stanceLabel.text = stance >= 0 && stance < StanceNames.Length ? StanceNames[stance] : StanceNames[0];
-            switch (stance)
-            {
-                case (int)Stance.Crouch:
-                case DrivingShown:
-                case RidingShown:
-                    Place(_glyphA, new Vector2(-5f, -4f), new Vector2(8f, 18f));
-                    Place(_glyphB, new Vector2(2f, -13f), new Vector2(22f, 6f));
-                    _glyphB.gameObject.SetActive(true);
-                    break;
-                case (int)Stance.Prone:
-                    Place(_glyphA, new Vector2(0f, -8f), new Vector2(30f, 8f));
-                    _glyphB.gameObject.SetActive(false);
-                    break;
-                default:
-                    Place(_glyphA, Vector2.zero, new Vector2(8f, 28f));
-                    _glyphB.gameObject.SetActive(false);
-                    break;
-            }
-        }
-
-        static void Place(RectTransform rect, Vector2 position, Vector2 size)
-        {
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
         }
     }
 }

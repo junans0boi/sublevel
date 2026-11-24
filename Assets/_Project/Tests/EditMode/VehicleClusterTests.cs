@@ -64,8 +64,8 @@ namespace Game.Tests
             var lights = ClusterLayout.Lights(w);
             var hud = new[]
             {
-                ("gear panel", ClusterLayout.GearPanel), ("health bar", ClusterLayout.Health(w)), ("weapon panel", ClusterLayout.WeaponPanel(w)),
-                ("hotbar", ClusterLayout.Hotbar(w)), ("minimap", ClusterLayout.MinimapRect(w)),
+                ("squad list", ClusterLayout.Squad), ("vitals block", ClusterLayout.Vitals(w)),
+                ("minimap", ClusterLayout.MinimapRect(w)), ("zone panel", ClusterLayout.Zone(w)),
             };
             foreach (var (name, gauge) in new[] { ("tachometer", tach), ("speedometer", speed), ("shift lights", lights) })
             {
@@ -73,11 +73,20 @@ namespace Game.Tests
                 Assert.IsTrue(gauge.xMin >= 0f && gauge.xMax <= w && gauge.yMin >= 0f && gauge.yMax <= 1080f, $"{name} on screen at {w}");
             }
             Assert.IsFalse(tach.Overlaps(speed));
-            Assert.Less(tach.xMax, ClusterLayout.Health(w).xMin, "the tachometer is left of the health bar");
-            Assert.Greater(speed.xMin, ClusterLayout.Health(w).xMax, "the speedometer is right of it");
+            Assert.Less(tach.xMax, ClusterLayout.Vitals(w).xMin, "the tachometer is left of the vitals block");
+            Assert.Greater(speed.xMin, ClusterLayout.Vitals(w).xMax, "the speedometer is right of it");
             float full = ClusterLayout.TachSize(style).x * (compact ? ClusterLayout.CompactScale : 1f);
             Assert.GreaterOrEqual(tach.width / full, 0.65f, "still readable");
-            if (w >= 1920f) Assert.AreEqual(ClusterLayout.Margin, speed.yMin, "on 16:9 both sit on the bottom line");
+            Assert.AreEqual(ClusterLayout.Margin, tach.yMin, "both sit on the bottom line");
+            Assert.AreEqual(ClusterLayout.Margin, speed.yMin);
+            if (w == 1920f && style == 'C' && !compact)
+            {
+                // The HUD v2 contract at 1920: tachometer x 368-668, speedometer from x 1236, at most 200 wide.
+                Assert.AreEqual(368f, tach.xMin, 0.01f);
+                Assert.AreEqual(668f, tach.xMax, 0.01f);
+                Assert.AreEqual(1236f, speed.xMin, 0.01f);
+                Assert.LessOrEqual(speed.xMax, 1436.01f);
+            }
         }
 
         [Test]
