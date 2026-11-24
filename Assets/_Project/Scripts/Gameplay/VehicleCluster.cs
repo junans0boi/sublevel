@@ -6,12 +6,17 @@ using UnityEngine.UI;
 
 namespace Game.Gameplay
 {
-    // Where the driver's cluster sits (ADR-558 amended): the tachometer left of the health bar (in the gap to the gear
-    // panel), the speedometer right of it (in the gap to the hotbar), the shift lights in a row just over the health bar.
+    // Where the driver's cluster sits (ADR-558, re-placed for HUD v2 / ADR-563): the tachometer in the gap between the
+    // squad list and the vitals block, the speedometer right of the vitals block where the weapon stack stood (that
+    // stack is hidden while driving), the shift lights in a row just over the vitals block.
     // Pure numbers in canvas pixels (origin bottom-left, height 1080) so a test can check it never covers the HUD.
+    // The HUD rects are the HUD v2 layout contract (1920 reference; left pieces hug the left edge, right pieces the
+    // right edge, the vitals block the centre).
     public static class ClusterLayout
     {
-        public const float Margin = 36f, Gap = 4f, HealthHalf = 280f, HealthHeight = 44f, CompactScale = 0.8f;
+        public const float Margin = 36f, Gap = 4f, CompactScale = 0.8f;
+        public const float SquadWidth = 300f, SquadHeight = 300f, TachGap = 32f, SpeedGap = 16f, SpeedWidth = 200f;
+        public const float SideWidth = 220f, ZoneBottom = 300f, ZoneHeight = 60f, StackRight = 268f;
         public const int LightCount = 7;
         public const float LightW = 18f, LightH = 5f, LightGap = 4f;
         public const float LightsWidth = LightCount * LightW + (LightCount - 1) * LightGap;
@@ -19,30 +24,26 @@ namespace Game.Gameplay
         public static Vector2 TachSize(char style) => style == 'B' ? new Vector2(300f, 150f) : style == 'C' ? new Vector2(300f, 164f) : new Vector2(216f, 216f);
         public static Vector2 SpeedSize(char style) => style == 'B' ? new Vector2(232f, 116f) : style == 'C' ? new Vector2(220f, 164f) : new Vector2(216f, 216f);
 
-        // The HUD pieces the cluster must keep clear of (Hud, HudStatus, WeaponStrip, MinimapView).
-        public static Rect GearPanel => new Rect(Margin, Margin, HudStatus.Width, HudStatus.Height);
-        public static Rect Health(float w) => new Rect(w / 2f - HealthHalf, Margin, HealthHalf * 2f, HealthHeight);
-        public static Rect WeaponPanel(float w) => new Rect(w / 2f - HealthHalf, Margin + HealthHeight + 8f, HealthHalf * 2f, 112f);
-        public static Rect Hotbar(float w) => new Rect(w - Margin - WeaponStrip.Width, Margin, WeaponStrip.Width, WeaponStrip.CellHeight);
-        public static Rect MinimapRect(float w) => new Rect(w - Margin - Minimap.ViewSize, Margin + WeaponStrip.CellHeight + 10f, Minimap.ViewSize, Minimap.ViewSize);
-        public static Rect Lights(float w) => new Rect(w / 2f - LightsWidth / 2f, Margin + HealthHeight + 1.5f, LightsWidth, LightH);
+        // The HUD pieces the cluster must keep clear of.
+        public static Rect Squad => new Rect(Margin, Margin, SquadWidth, SquadHeight);
+        public static Rect Vitals(float w) => new Rect(w / 2f - HudStatus.Width / 2f, Margin, HudStatus.Width, HudStatus.Height);
+        public static Rect WeaponStack(float w) => new Rect(w - StackRight - SideWidth, Margin, SideWidth, 200f); // hidden while driving
+        public static Rect MinimapRect(float w) => new Rect(w - Margin - SideWidth, Margin, SideWidth, SideWidth);
+        public static Rect Zone(float w) => new Rect(w - Margin - SideWidth, ZoneBottom, SideWidth, ZoneHeight);
+        public static Rect Lights(float w) => new Rect(w / 2f - LightsWidth / 2f, Margin + HudStatus.Height + 2f, LightsWidth, LightH);
 
-        // The two gauges for a canvas `w` wide. The tachometer hugs the health bar and shrinks to fit its gap; the
-        // speedometer hugs the other side, and on a narrow screen (16:10) where the hotbar leaves too little room it
-        // stands on top of the hotbar, left of the minimap, instead.
+        // The two gauges for a canvas `w` wide. The tachometer is right-aligned to the vitals block and shrinks to fit
+        // the gap left of it (16:10); the speedometer starts right of the vitals block, at most 200 wide.
         public static void Place(float w, char style, bool compact, out Rect tach, out Rect speed)
         {
             float k = compact ? CompactScale : 1f;
             Vector2 ts = TachSize(style) * k, ss = SpeedSize(style) * k;
-            float right = w / 2f - HealthHalf - Gap, left = GearPanel.xMax + Gap;
+            float right = Vitals(w).xMin - TachGap, left = Squad.xMax + TachGap;
             float s = Mathf.Clamp((right - left) / ts.x, 0.1f, 1f);
             tach = new Rect(right - ts.x * s, Margin, ts.x * s, ts.y * s);
-
-            float x0 = w / 2f + HealthHalf + Gap, x1 = Hotbar(w).xMin - Gap;
-            if (x1 - x0 >= ss.x) { speed = new Rect(x0, Margin, ss.x, ss.y); return; }
-            float x2 = MinimapRect(w).xMin - Gap;
-            float s2 = Mathf.Clamp((x2 - x0) / ss.x, 0.1f, 1f);
-            speed = new Rect(x0, Hotbar(w).yMax + Gap, ss.x * s2, ss.y * s2);
+            float x0 = Vitals(w).xMax + SpeedGap, room = Mathf.Min(SpeedWidth, MinimapRect(w).xMin - Gap - x0);
+            float s2 = Mathf.Clamp(room / ss.x, 0.1f, 1f);
+            speed = new Rect(x0, Margin, ss.x * s2, ss.y * s2);
         }
     }
 
@@ -247,7 +248,7 @@ namespace Game.Gameplay
         void BuildLights()
         {
             var bottom = new Vector2(0.5f, 0f);
-            float y = ClusterLayout.Margin + ClusterLayout.HealthHeight + 1.5f;
+            float y = ClusterLayout.Lights(0f).y;
             for (int i = 0; i < ClusterLayout.LightCount; i++)
             {
                 float x = -ClusterLayout.LightsWidth / 2f + ClusterLayout.LightW / 2f + i * (ClusterLayout.LightW + ClusterLayout.LightGap);
@@ -507,7 +508,7 @@ namespace Game.Gameplay
         static readonly Dictionary<int, Sprite> Rings = new Dictionary<int, Sprite>();
 
         // A white anti-aliased ring `thickness` (share of the radius) wide at the edge; 0.5 or more is a full disc.
-        static Sprite Ring(float thickness)
+        internal static Sprite Ring(float thickness)
         {
             int key = Mathf.RoundToInt(thickness * 1000f);
             if (Rings.TryGetValue(key, out var cached) && cached != null) return cached;

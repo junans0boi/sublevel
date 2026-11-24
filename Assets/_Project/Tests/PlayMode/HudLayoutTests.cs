@@ -84,7 +84,7 @@ namespace Game.Tests
         {
             yield return LoadTestBox();
             var areas = Areas();
-            Assert.AreEqual(11, areas.Count, "compass strip, heading, region, kills, alive, health, weapon, status, weapon strip, minimap and the kill feed");
+            Assert.AreEqual(9, areas.Count, "compass strip, heading, region, kills, alive, vitals block, weapon strip, minimap and the kill feed");
 
             // The canvas scales with screen height, so 16:9 screens of every size see the same 1920x1080 units.
             int[][] screens = { new[] { 1280, 720 }, new[] { 1920, 1080 }, new[] { 2560, 1440 } };
