@@ -21,6 +21,7 @@ namespace Game.Net
         // the best clean lap (0 = none yet) and how far into the lap in progress the clock is (-1 = not on a clean lap).
         public int[] Keys; public string[] Names; public byte[] LapsDone; public bool[] Done; public float[] Times; public float[] Best; public float[] Running;
         public byte[] LapsToGo;   // the laps this driver must do: the race's, one more after a false start (ADR-516)
+        public float[] Gaps;      // seconds behind the leader (#510, RaceSplits.Gaps): 0 for the leader, -1 while not known
     }
 
     // The event race of a Race_<course> scene (ADR-512..519, #445, #446). Every side: all vehicles of the scene are race cars
@@ -54,6 +55,7 @@ namespace Game.Net
             public bool FalseStart, Finished; public float FinishTime, Best;
             public bool Bot, Cut; public float Skill, StuckSince = -1f;     // a bot racer (ADR-517): how good, which way at the fork
             public float GoodS = float.NaN;                                  // where a bot was last on a hill road (RaceCourse.Follow)
+            public readonly RaceSplits Splits = new RaceSplits();            // race times at the progress marks: the gaps (#510)
         }
         readonly List<Racer> _racers = new List<Racer>();
         readonly List<RaceEvent.Standing> _order = new List<RaceEvent.Standing>();
@@ -227,7 +229,9 @@ namespace Game.Net
                 }
                 if (r.Finished) { done++; continue; }
                 if (!racing) continue;
-                float lap = r.Lap.Step(Info.Course.Project(p.x, p.z).s, now);
+                float s = Info.Course.Project(p.x, p.z).s;
+                float lap = r.Lap.Step(s, now);
+                r.Splits.Record(r.Lap.Progress(s), (float)(now - _flow.GoAt));
                 if (lap > 0f && (r.Best <= 0f || lap < r.Best)) r.Best = lap;
                 if (r.Lap.Laps >= LapsFor(r))
                 {
@@ -297,6 +301,7 @@ namespace Game.Net
         void SendStandings(double now)
         {
             int n = _order.Count;
+            var splits = new RaceSplits[n];
             var m = new RaceStandings
             {
                 Phase = (byte)_flow.Phase, Countdown = _flow.CountdownLeft(now), SecondsLeft = _flow.SecondsLeft(now), Laps = (byte)Laps,
@@ -310,7 +315,9 @@ namespace Game.Net
                 m.Done[k] = r.Finished; m.Times[k] = r.FinishTime; m.Best[k] = r.Best;
                 m.Running[k] = r.Lap.Timing && !r.Finished ? (float)(now - r.Lap.Start) : -1f;
                 m.LapsToGo[k] = (byte)LapsFor(r);
+                splits[k] = r.Splits;
             }
+            m.Gaps = RaceSplits.Gaps(splits, m.Done, m.Times);
             _nm.ServerManager.Broadcast(m, true, Channel.Unreliable);
         }
     }

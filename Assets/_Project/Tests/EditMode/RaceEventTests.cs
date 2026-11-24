@@ -431,3 +431,66 @@ namespace Game.Tests
         }
     }
 }
+
+namespace Game.Tests
+{
+    // #510 (ADR-562): gaps to the leader from the race times at fixed marks of progress.
+    public class RaceGapTests
+    {
+        // A racer driving at a steady `speed` from the line (progress 0 at t = start), sampled every 0.1 s up to `until`.
+        static RaceSplits Steady(float speed, float start, float until)
+        {
+            var s = new RaceSplits();
+            for (float t = 0f; t <= until; t += 0.1f) s.Record((t - start) * speed - 0.01f, t);   // -0.01: on the grid just behind the line
+            return s;
+        }
+
+        [Test]
+        public void TheLeaderIsZero_TheRestTheirTimeBehindAtTheSameMark()
+        {
+            var lead = Steady(25f, 0f, 30f);
+            var second = Steady(25f, 1.5f, 30f);   // the same pace, 1.5 s later
+            var third = Steady(20f, 0f, 30f);      // slower: after 600 m it is 6 s behind
+            var g = RaceSplits.Gaps(new[] { lead, second, third }, new[] { false, false, false }, new[] { 0f, 0f, 0f });
+            Assert.AreEqual(0f, g[0]);
+            Assert.AreEqual(1.5f, g[1], 0.11f);
+            int k = third.Marks - 1;   // its furthest mark: k * 50 m at 20 vs 25 m/s
+            Assert.AreEqual(k * RaceSplits.MarkMeters / 20f - k * RaceSplits.MarkMeters / 25f, g[2], 0.21f);
+            Assert.Greater(g[2], 5f, "about 6 s behind after 600 m");
+        }
+
+        [Test]
+        public void FinishedCars_AreByFinishTime_AndANotYetMovingCarIsUnknown()
+        {
+            var a = Steady(25f, 0f, 30f); var b = Steady(25f, 2f, 30f);
+            var still = new RaceSplits(); still.Record(-30f, 5f);   // still on the grid: no mark
+            var g = RaceSplits.Gaps(new[] { a, b, still }, new[] { true, true, false }, new[] { 100f, 103.25f, 0f });
+            Assert.AreEqual(3.25f, g[1], 1e-4f, "by finish times");
+            Assert.AreEqual(-1f, g[2], "no mark yet");
+        }
+
+        [Test]
+        public void AJumpOverSeveralMarks_GivesThemAllThatTime_AndNoGapIsNegative()
+        {
+            var s = new RaceSplits();
+            s.Record(0f, 1f); s.Record(160f, 2f);
+            Assert.AreEqual(Mathf.FloorToInt(160f / RaceSplits.MarkMeters) + 1, s.Marks, "every mark from 0 to 160 m");
+            Assert.AreEqual(2f, s.At(s.Marks - 1));
+            var behind = new RaceSplits(); behind.Record(0f, 0.5f);   // ordered behind but reached the line first
+            var g = RaceSplits.Gaps(new[] { s, behind }, new[] { false, false }, new[] { 0f, 0f });
+            Assert.AreEqual(0f, g[1]);
+        }
+
+        [Test]
+        public void AGap_IsNeverLessThanTheCarAheads()
+        {
+            // Third in the order (further round now) but its last mark was better than second's: shown level with second, not ahead.
+            var lead = Steady(25f, 0f, 30f);
+            var second = Steady(25f, 2f, 30f);
+            var third = Steady(25f, 1f, 28f);
+            var g = RaceSplits.Gaps(new[] { lead, second, third }, new[] { false, false, false }, new[] { 0f, 0f, 0f });
+            Assert.AreEqual(g[1], g[2], 1e-4f);
+            Assert.Greater(g[1], 1.5f);
+        }
+    }
+}
